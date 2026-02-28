@@ -1,0 +1,6 @@
+[submodule "mis-proxy"]
+	path = mis-proxy
+	url = https://github.com/mdssoft/mis-proxy.git
+[submodule "analysis-temp"]
+	path = analysis-temp
+	url = https://github.com/mdssoft/ehrdeep-analysis-temp.git

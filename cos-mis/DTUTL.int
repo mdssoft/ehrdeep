@@ -1,0 +1,336 @@
+ 1:45 PM  23-FEB-26
+
+DTUTL
+DTUTL ;Процедуры даты, времени (MJ) [ 07/27/2023  12:57 PM ]
+DWEEK(HH) ; день недели
+ S NN=$P(HH,",",1)-50768,NN=1+(NN#7)
+ Q NN
+WKNUM(HH) ; неделя месяца
+ N M,W
+ S HH=$P(HH,",",1)
+ S M=+$P($$DT^DTUTL(HH),".",1),W=$$DWEEK(HH),M=M-W
+ I M<1 Q 1
+ S W=(M+7-(M#7))/7
+ Q W+1
+GMT(X,T)        ;($H,timezone)
+ N K,Y,D,M S T=$P(X,",",2)+(-T*3600) S:T<0 X=X-1,T=T+86400 S:T>86400 X=X+1,T=T-86400
+ S K=X>21608+305+X,Y=4*K+3\1461,D=K*4+3-(1461*Y)+4\4,M=5*D-3\153,D=5*D-3-(153*M)+5\5,M=M+2,Y=M\12+Y-60,M=M#12+1,DT=1900+Y*100+M*100+D
+ S D=$P("Mon,Tue,Wed,Thu,Fri,Sat,Sun",",",X+3#7+1)_", "_D_" "_$P("Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec",",",M)_" "_(1900+Y)
+ S M=T\60,M=$E(M\60+100,2,3)_":"_$E(M#60+100,2,3)_":"_$E(T#60+100,2,3) Q D_" "_M_" GMT"
+DTIME(X) ;($H)
+ Q:X="" ""
+ N K,Y,D,M,T S T=$P(X,",",2) S:T<0 X=X-1,T=T+86400 S:T>86400 X=X+1,T=T-86400
+ S K=X>21608+305+X,Y=4*K+3\1461,D=K*4+3-(1461*Y)+4\4,M=5*D-3\153,D=5*D-3-(153*M)+5\5,M=M+2,Y=M\12+Y-60,M=M#12+1 ;,DT=1900+Y*100+M*100+D
+ S D=D_" "_$P("Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec",",",M)_" "_(1900+Y)
+ S M=T\60,M=$E(M\60+100,2,3)_":"_$E(M#60+100,2,3)_":"_$E(T#60+100,2,3) Q D_" "_M
+DTM(X) ;($H)
+ Q:X="" ""
+ N K,Y,D,M,T
+ S T=$P(X,",",2) S:T<0 X=X-1,T=T+86400 S:T>86400 X=X+1,T=T-86400
+ S K=X>21608+305+X,Y=4*K+3\1461,D=K*4+3-(1461*Y)+4\4,M=5*D-3\153,D=5*D-3-(153*M)+5\5,M=M+2,Y=M\12+Y-60,M=M#12+1 ;,DT=1900+Y*100+M*100+D
+ S D=$E("0",1,2-$L(D))_D_"."_$E("0",1,2-$L(M))_M_"."_(1900+Y)
+ S M=T\60,M=$E(M\60+100,2,3)_":"_$E(M#60+100,2,3)_":"_$E(T#60+100,2,3)
+ Q D_" "_M
+DTM2(X,Y4) ; ($H), Y4-four digit year
+ Q:X="" ""
+ N K,Y,D,M,T
+ S T=$P(X,",",2) S:T<0 X=X-1,T=T+86400 S:T>86400 X=X+1,T=T-86400
+ S K=X>21608+305+X,Y=4*K+3\1461,D=K*4+3-(1461*Y)+4\4,M=5*D-3\153,D=5*D-3-(153*M)+5\5,M=M+2,Y=M\12+Y-60,M=M#12+1
+ S Y=1900+Y,Y=$S('$G(Y4):$E(Y,3,4),1:Y)
+ S D=$E("0",1,2-$L(D))_D_"."_$E("0",1,2-$L(M))_M_"."_Y
+ S M=T\60,M=$E(M\60+100,2,3)_":"_$E(M#60+100,2,3)
+ Q D_", "_M
+DTEXT(X,NY) ; Simple text date
+ S X=$$DT(X)
+ Q $P(X,".",1)_" "_$$MNNM(+$P(X,".",2))_" "_$P(X,".",3)_$S($G(NY):"",1:" г.")
+TIME(X) ; Time (HH:MM:SS)
+ Q:X="" ""
+ N M,T,S S T=X S:X["," T=$P(X,",",2) S:T<0 T=T+86400
+ S M=T\60,S=$E(T#60+100,2,3),T=M\60
+ Q $S(T<10:"0"_T,1:T)_":"_$E(M#60+100,2,3)_":"_S
+TM(X) ; Time (HH:MM)
+ Q:X="" ""
+ N M,T S T=X S:X["," T=$P(X,",",2) S:T<0 T=T+86400 ; w. 25-hour
+ S M=T\60,T=M\60 Q $S(T<10:"0"_T,1:T)_":"_$E(M#60+100,2,3)
+DT(X) ; Date w. 4-digits year
+ Q:X="" ""
+ N Y,D,M,T S T=$P(X,",",2),X=+X S:T<0 X=X-1,T=T+86400 S:T>86400 X=X+1
+ S X=X>21608+305+X,Y=4*X+3\1461,D=X*4+3-(1461*Y)+4\4,M=5*D-3\153,D=5*D-3-(153*M)+5\5,M=M+2,Y=M\12+Y-60,M=M#12+1
+ Q $E(D+100,2,3)_"."_$E(M+100,2,3)_"."_(1900+Y)
+DT2(X) ; Date w. 2-digits year
+ Q:X="" ""
+ N Y,D,M,T S T=$P(X,",",2),X=+X S:T<0 X=X-1,T=T+86400 S:T>86400 X=X+1
+ S X=X>21608+305+X,Y=4*X+3\1461,D=X*4+3-(1461*Y)+4\4,M=5*D-3\153,D=5*D-3-(153*M)+5\5,M=M+2,Y=M\12+Y-60,M=M#12+1
+ Q $E(D+100,2,3)_"."_$E(M+100,2,3)_"."_$E((1900+Y),3,4)
+DTISO(X) ; Date to ISO8601
+ Q:X="" ""
+ N Y,D,M,T S T=$P(X,",",2),X=+X S:T<0 X=X-1,T=T+86400 S:T>86400 X=X+1
+ S X=X>21608+305+X,Y=4*X+3\1461,D=X*4+3-(1461*Y)+4\4,M=5*D-3\153,D=5*D-3-(153*M)+5\5,M=M+2,Y=M\12+Y-60,M=M#12+1
+ Q (1900+Y)_"-"_$E(M+100,2,3)_"-"_$E(D+100,2,3)
+DIISO(X) ; Date from ISO8601
+ S X=$P(X," ",1) 
+ Q $$DI($P(X,"-",3)_"."_$P(X,"-",2)_"."_$P(X,"-",1))
+TMISO(X) ; Time to ISO AM/PM
+ S X=$$TM(X) Q:X="" ""
+ Q (+$P(X,":",1)#12)_":"_$P(X,":",2)_$S($P(X,":",1)<13:"AM",1:"PM")
+IISO(X) ; Date and Time from ISO
+ Q:X="" ""
+ Q $$DIISO($P(X,"T",1))_","_$$TI($P($P(X,"T",2),"+",1))
+DTMISO24(X,TZ) ; Date+Time(24h format) to ISO
+ Q $$DTISO(X)_"T"_$$TIME($P(X,",",2))_$S($G(TZ)="":"Z",1:"+"_TZ_":00")
+YEAR(X) ; Year 4-digit
+ Q:X="" ""
+ N Y,M S M=$P(X,",",2),X=+X S:M<0 X=X-1,M=M+86400 S:M>86400 X=X+1
+ S X=X>21608+305+X,Y=4*X+3\1461,M=(5*(X*4+3-(1461*Y)+4\4)-3\153)+2
+ Q 1900+(M\12+Y-60)
+MONTH(X) ; Month
+ Q:X="" ""
+ N D S D=$P(X,",",2),X=+X S:D<0 X=X-1,D=D+86400 S:D>86400 X=X+1
+ S X=X>21608+305+X,D=X*4+3-(1461*(4*X+3\1461))+4\4
+ Q (5*D-3\153+2)#12+1
+DAY(X) ; Day
+ Q:X="" ""
+ N Y,D,M S M=$P(X,",",2),X=+X S:M<0 X=X-1,M=M+86400 S:M>86400 X=X+1
+ S X=X>21608+305+X,Y=4*X+3\1461,D=X*4+3-(1461*Y)+4\4,M=5*D-3\153
+ Q 5*D-3-(153*M)+5\5
+DAYMN(X) ; Days from month (zero-based)
+ Q:X="" ""
+ Q $E($$DAY(X)+100,2,3)
+EOFMN(X) ; Is Last day of month
+ Q:X="" ""
+ N D,D1
+ S X=X>21608+305+X
+ S D=X*4+3-(1461*(4*X+3\1461))+4\4,D=(5*D-3\153+2)#12+1
+ S X=X+1 ; next day
+ S D1=X*4+3-(1461*(4*X+3\1461))+4\4,D1=(5*D1-3\153+2)#12+1
+ Q D'=D1
+EOFM(X) ; Last day of month
+ N D
+ S D=$$DI("01."_$P($$DT(X+32),".",2,3))-1
+ Q D
+DTI(X) ; Date and Time input
+ S X=$$DBLSP^TXTU($TR(X,","," ")) Q:X="" ""
+ Q $$DI($P(X," ",1))_","_$$TI($P(X," ",2))
+DIH(X) ; Во внутренний формат, с датой по умолчанию
+ Q:$L(X)<6 +$H G DI1
+DI(X) ; Во внутренний формат 
+DI1 K %DN N %A,%1,%2,%3,%4,%5,%6,%7,%8 S %5=$L(X) Q:%5<5 "" ;+$H
+ I %5=8,X'[".",X["/" S X=$TR(X,"/",".")
+ I %5=6!(%5=8),X'["." S %5=$E(X,3,4)_"/"_$E(X,1,2)_"/",%A=$E(X,5,6) G DII
+ I %5>4 S X=$TR(X,".-\ ","////"),%A=$P(X,"/",3),%5=$P(X,"/",2),%6=$P(X,"/",1) S:$L(%A)=1 %A="0"_%A S:$L(%5)=1 %5="0"_%5 S:$L(%6)=1 %6="0"_%6 Q:%5=""!(%6="") "" S %5=%5_"/"_%6_"/",%6=""
+DII Q:%A="" "" S:$L(%A)=2&(+%A>(($H-65379)/365+25)) %A=1900+%A ; 5y from $H
+ S %5=%5_%A,%A=%5 F %1=32,44:1:46 S %6=$C(%1) D R
+ S %6="//" D R S %7=$P(%5,"/",1) D S 
+ G:%6<2 E S %4=%6,%1=%7,%7=$P(%5,"/",2) 
+ D S G:'%6 E S %2=%7,%7=$P(%5,"/",3),%5=%6 
+ ;D S 
+ G E:%6=4!'%6,C:%6=1,E:%5#2,G
+C I %5=1 G D:%4=4,F:%4=2 S %7=%1,(%2,%1)=-6 G H
+ G E:%4=3,G:%5#3 S %7=%2
+D S %2=%1,%1=-6 G H
+F S %2=0 G H
+G I %5=4 G E:%4>2,H
+ S %6=%2,%2=%1,%1=%6
+H ;W !,!,"H:",! W  W !,!
+ G:(%2>12)!(%1>31) E I %7="" S %DN=$ZD(+$H) S %7=$P(%DN,"/",3) S:'%2 %2=+%DN
+ S:%7<100 %7=$$CENTURY()_%7 K %DN I %2=-6 S %DN=%7 G Q
+ ;I %1=-6 S %DN=$E("JANFEBMARAPRMAYJUNJULAUGSEPOCTNOVDEC",%2*3-2,%2*3)_" "_%7 G Q
+ G:%2<1 E
+ S %4=%7-1\4-(%7-1\100)+(%7-1\400)-446,%DN=366*%4+(%7-1841-%4*365)+%1
+ F %4=31,$S(%7#4:28,%7#100:29,%7#400:28,1:29),31,30,31,30,31,31,30,31,30,31 S %2=%2-1 Q:%2=0  S %DN=%DN+%4
+ I $L(%DN)<5 S %DN=$E("0000",1,5-$L(%DN))_%DN
+ G:%1'>%4*%1>0 Q
+E K %DN
+Q I $G(%DN)'?5.N K %DN
+ K %1,%2,%3,%4,%5,%6,%7,%8 Q:'$D(%DN) "" Q +$G(%DN)
+R Q:%5'[%6  S %5=$P(%5,%6,1)_"/"_$P(%5,%6,2,256) G R
+S ;I %7="" S %6=1 Q
+ ;S:%7?1N %7=0_%7 
+ I %7?2N S %6=2 Q
+ I %7?4N,%7<4890 S %6=3 Q
+ ; text month  
+ I '%7 S %7=$TR(%7,"janfebmrpyulgsoctvd","JANFEBMRPYULGSOCTVD"),%7=$F("JANFEBMARAPRMAYJUNJULAUGSEPOCTNOVDEC",$E(%7,1,3)),%6=0 Q:'%7  S %7=%7-1/3,%6=2 Q 
+ S %6=0
+ Q
+IGMT(DTM) ; Convert GMT datetime to $H (RFC 822)
+ I DTM["  " S DTM=$$DBLSP^TXTU(DTM)
+ I DTM["," S DTM=$P(DTM," ",2,9)
+ N D,M,Y,TM,TZ
+ S D=$P(DTM," ",1),M=","_$P(DTM," ",2)
+ ; TODO - RFC 1036
+ S M=$F(",Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec",M)
+ Q:M=0 "" S M=M-1/4
+ S Y=$P(DTM," ",3),TM=$P(DTM," ",4)
+ S TZ=+$TR($P(DTM," ",5),0,"") ; TODO
+ Q $$DI(D_"/"_M_"/"_Y)_","_$$TI(TM)
+DIT(X) ; Из текстового формата даты
+ N D,M,Y
+ S X=$$DBLSP^TXTU(X)
+ S D=$$NNUM^TXTU($P(X," ",1)),M=$P(X," ",2),Y=$$NNUM^TXTU($P(X," ",3))
+ Q:D="" "" Q:Y="" ""
+ S M=","_$$UL^TXTU($E(M,1,3)) S:M=",мая" M=",май"
+ S M=$F(",янв,фев,мар,апр,май,июн,июл,авг,сен,окт,ноя,дек",M)
+ Q:M=0 ""  S M=M-1/4
+ Q $$DI^DTUTL(D_"."_M_"."_Y)
+CENTURY() 
+ Q:$H<21550 18
+ Q:$H>131122 22
+ Q:$H>94598 21
+ Q:$H>58073 20
+ Q 19
+TI(X) ; Время -> $H
+ Q:X'[":" ""
+ S:$E(X,1,2)="++" X="25"_$E(X,3,5) Q $P(X,":",1)*3600+($P(X,":",2)*60)+$P(X,":",3)
+YLEAP(year) ; Високосный год
+ S:year>9999 year=$$YEAR(year) ; if $H
+ Q:(year#4'=0) 0
+ Q:(year#400=0) 1
+ Q:(year#100=0) 0
+ Q 1
+AGE(D1,D2) ; Age D1 from D2
+ I $G(D2)=D1 Q 0
+ N M1,M2,A
+ S:$G(D2)="" D2=+$H
+ I (D2-D1)<365 Q "0."_(D2-D1)
+ S D1=$$DT(D1),D2=$$DT(D2)
+ S M1=+$P(D1,".",2),M2=+$P(D2,".",2)
+ S A=(+$P(D2,".",3))-$P(D1,".",3)
+ S:M2<M1!((M2=M1)&((+$P(D2,".",1))<(+$P(D1,".",1)))) A=A-1
+ Q A
+AGET(D1,D2) ; Age D1 from D2 (text format)
+ I D2=D1 Q 0
+ N M1,M2,X1,X2,A,T1,T2
+ S:$G(D2)="" D2=+$H
+ I (D2-D1)<29 Q $$DAYT(D2-D1)
+ S T1=$$DT(D1),T2=$$DT(D2)
+ S X1=+$P(T1,".",1),X2=+$P(T2,".",1)
+ S M1=+$P(T1,".",2),M2=+$P(T2,".",2)
+ S T1=+$P(T1,".",3),T2=+$P(T2,".",3)
+ S A=T2-T1
+ S:M2<M1!((M2=M1)&(X2<X1)) A=A-1
+ Q:A $$YEART(A)
+ S:T1'=T2 M2=12+M2
+ Q:M1=M2 $$DAYT(D2-D1)
+ S M2=M2-M1
+ Q:M2=0 $$DAYT(D2-D1)
+ Q $$MONTHT(M2)
+AFTERYY(X,Year) ; date + year = $H
+ Q:X="" ""
+ N Y,D,M,T S T=$P(X,",",2) S:T<0 X=X-1,T=T+86400 S:T>86400 X=X+1
+ S X=X>21608+305+X,Y=4*X+3\1461,D=X*4+3-(1461*Y)+4\4,M=5*D-3\153,D=5*D-3-(153*M)+5\5,M=M+2,Y=M\12+Y-60,M=M#12+1
+ Q $$DI($E(D+100,2,3)_"."_$E(M+100,2,3)_"."_(1900+Y+$G(Year,1)))
+AFTERYD(X,Year) ; date + year = text date
+ Q:X="" ""
+ N Y,D,M,T S T=$P(X,",",2) S:T<0 X=X-1,T=T+86400 S:T>86400 X=X+1
+ S X=X>21608+305+X,Y=4*X+3\1461,D=X*4+3-(1461*Y)+4\4,M=5*D-3\153,D=5*D-3-(153*M)+5\5,M=M+2,Y=M\12+Y-60,M=M#12+1
+ Q $E(D+100,2,3)_"."_$E(M+100,2,3)_"."_(1900+Y+$G(Year,1))
+AFTERY(X,Year) ; date + year = $H date
+ Q:X="" ""
+ N Y,D,M,T S T=$P(X,",",2) S:T<0 X=X-1,T=T+86400 S:T>86400 X=X+1
+ S X=X>21608+305+X,Y=4*X+3\1461,D=X*4+3-(1461*Y)+4\4,M=5*D-3\153,D=5*D-3-(153*M)+5\5,M=M+2,Y=M\12+Y-60,M=M#12+1
+ Q $$DI($E(D+100,2,3)_"."_$E(M+100,2,3)_"."_(1900+Y+$G(Year,1)))
+AFTERMN(X,P) ; date + month
+ Q:X="" ""
+ N Y,D,M,T S T=$P(X,",",2) S:T<0 X=X-1,T=T+86400 S:T>86400 X=X+1
+ S X=X>21608+305+X,Y=4*X+3\1461,D=X*4+3-(1461*Y)+4\4,M=5*D-3\153,D=5*D-3-(153*M)+5\5,M=M+2,Y=M\12+Y+1840,M=$E(M#12+101,2,3)
+ S M=M+$G(P,1)
+ S:M>12 M=1,Y=Y+1 S:M<1 M=12,Y=Y-1
+ S D=$E(D+100,2,3) I M=2,D>28 S D=28 ; TODO Faka!!!
+ Q $$DI(D_"."_M_"."_Y)
+AFTERD(DTM,D) ; After days -> $H
+ Q ($P(DTM,",",1)+D)_","_$P(DTM,",",2)
+MNBTW(H1,H2) ; Minutes, between time1 and time2
+ N D1,D2 S D1=+H1,D2=+H2,H1=+$P(H1,",",2),H2=+$P(H2,",",2)
+ S D1=(D1-D2)*1440 Q D1+((H1-H2)/60)
+TMBTW(H1,H2) ; Seconds, between time1 and time2
+ N D1,D2 S D1=+H1,D2=+H2,H1=+$P(H1,",",2),H2=+$P(H2,",",2)
+ S D1=(D1-D2)*86400 Q D1+(H1-H2)
+BTW(H1,H2) ; $H between time1 and time2
+ I +H1=(+H2) Q "0,"_$$TMBTW(H1,H2)
+ N D1,D2 S D1=+H1,D2=+H2,H1=+$P(H1,",",2),H2=+$P(H2,",",2)
+ S D1=D1-D2
+ S:(H1-H2)<0 D1=D1-1,H1=86400+H1-H2,H2=0
+ Q D1_","_(H1-H2)
+SECINDAY(H1,H2) ; Разница в секундах, если в один день
+ N D1,D2
+ S D1=+H1,D2=+H2,H1=+$P(H1,",",2),H2=+$P(H2,",",2)
+ Q:(D1-D2)>2 "" Q:(D2-D1)>2 ""
+ S D1=(D1-D2)*86400 Q D1+(H1-H2) 
+MONTHS(D1,D2) ; Число месяцев между датами
+ N X
+ S X=1 F  S D1=$$AFTERMN(D1) Q:D1>D2  Q:D1=""  S X=X+1
+ Q X
+MNNM(M) ; Month name
+ Q:M=1 "Январь"
+ Q:M=2 "Февраль"
+ Q:M=3 "Март"
+ Q:M=4 "Апрель"
+ Q:M=5 "Май"
+ Q:M=6 "Июнь"
+ Q:M=7 "Июль"
+ Q:M=8 "Август"
+ Q:M=9 "Сентябрь"
+ Q:M=10 "Октябрь"
+ Q:M=11 "Ноябрь"
+ Q:M=12 "Декабрь"
+ Q ""
+DWKNM(D) ; DayOfWeek name
+ Q:D=1 "Понедельник"
+ Q:D=2 "Вторник"
+ Q:D=3 "Среда"
+ Q:D=4 "Четверг"
+ Q:D=5 "Пятница"
+ Q:D=6 "Суббота"
+ Q:D=7 "Воскресенье"
+ Q ""
+DWKNML(D) ; DayOfWeek name
+ Q:D=1 "Пн"
+ Q:D=2 "Вт"
+ Q:D=3 "Ср"
+ Q:D=4 "Чт"
+ Q:D=5 "Пт"
+ Q:D=6 "Сб"
+ Q:D=7 "Вс"
+ Q ""
+QDT(D) ; Квартал по дате
+ S D=$$MONTH(D)
+ Q:D<4 1
+ Q:D<7 2
+ Q:D<10 3
+ Q 4
+CMPDTM(DTM1,DTM2) ; Сравнить 2 даты,времени
+ I DTM1="",DTM2="" Q 0
+ I DTM1="",DTM2'="" Q -1
+ I DTM2="",DTM1'="" Q 1
+ I +DTM1<(+DTM2) Q -1
+ I +DTM1>(+DTM2) Q 1
+ S DTM1=$P(DTM1,",",2),DTM2=$P(DTM2,",",2)
+ Q $S(DTM1<DTM2:-1,DTM1>DTM2:1,1:0)
+TMT(TM) ; Текстовое время
+ N T,T1
+ S T=$$TM(TM),T1=+$P(T,":",2),T=+$P(T,":",1)
+ Q $S(T:T_" ч.",1:"")_$S(T&T1:" ",1:"")_$S(T1:T1_" мин.",1:"")
+TXTP(D1,D2) ; Текстовый период
+ I D1=D2 Q "на "_$$DT(D1)
+ Q "за период "_$$DT2^DTUTL(D1)_"-"_$$DT2^DTUTL(D2)
+DAYT(VAL) ; Текстовых дней
+ N X1,X2
+ S X1=VAL#10,X2=VAL#100
+ I X1=1,X2'=11 Q VAL_" день"
+ I X1'<2,X1'>4,(X2<10)!(X2'<20) Q VAL_" дня"
+ Q VAL_" дней"
+MONTHT(VAL) ; Текстовых месяцев
+ N X1,X2
+ S X1=VAL#10,X2=VAL#100
+ I X1=1,X2'=11 Q VAL_" месяц"
+ I X1'<2,X1'>4,(X2<10)!(X2'<20) Q VAL_" месяца"
+ Q VAL_" месяцев"
+YEART(VAL) ; Текстовый возраст
+ N X1,X2
+ S X1=VAL#10,X2=VAL#100
+ I X1=1,X2'=11 Q VAL_" год"
+ I X1'<2,X1'>4,(X2<10)!(X2'<20) Q VAL_" года"
+ Q VAL_" лет"
+
+
+

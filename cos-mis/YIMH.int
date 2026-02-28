@@ -1,0 +1,952 @@
+ 4:40 PM  23-FEB-26
+
+YIMH
+A ; История болезни [ 11/13/2024  5:32 PM ]
+INIT 
+ D INIT^NEPR
+ Q
+GDL(OTD,TN,SP)        ; Перечень создаваемых документов
+ N SL,ID,R,TNX,FLD,X,FF,RN,E,C
+ S FF=0,SP=$G(SP)
+ I $D(^LOG(%LOG,"lcl","epr")) S R=^("epr"),FF=+$G(^LCL("epr",R,"nnflt")) Q:$G(^("new"))=0 
+ S:SP="" SP=$$SPEC^IKADRY(TN)
+ S OTD="|"_OTD_"|",SP="|"_SP_"|",TNX="|"_TN_"|"
+ D OWF^RWU(".txt")
+ S ID=0 F  S ID=$O(^DTYPE(ID)) Q:ID=""  D
+ .Q:$G(^(ID,"use"))=0   Q:$G(^("hidden")) 
+ .I 'FF,$D(^("otd")) S R=^("otd") I R'="*",R'="","|"_R_"|"'[OTD Q 
+ .I 'FF,$D(^("tn")) S R=^("tn") I R'="*",R'="","|"_R_"|"'[TNX Q 
+ .I 'FF,$D(^("spec")) S R=^("spec") I R'="*",R'="","|"_R_"|"'[SP Q 
+ .S X=$G(^("owner")) I $L(X),X'=TN Q 
+ .S X=$G(^("rights"))
+ .I "aw"'[$E(X,1),"aw"'[$E(X,3) Q 
+ .S FLD=$G(^("folder"))
+ .S RN=$G(^("rank")) S:RN="" RN=$C(255)
+ .S SL($S(FLD="":-1,1:FLD),RN_"/"_ID)="" ; todo - full tree (multilayer)
+ S FLD="" F  S FLD=$O(SL(FLD)) Q:FLD=""  D
+ .D:FLD>-1 WC^RWU($G(^DFLD(FLD,"name"))_"||1"_CR) D
+ .S X="" F  S X=$O(SL(FLD,X)) Q:X=""  D
+ ..S ID=$P(X,"/",2)
+ ..S E=$G(^DTYPE(ID,"ext")),R=$$GDSTR^IEPR(ID)
+ ..Q:$P(R,"|",1)=""  ; no name
+ ..D WC^RWU($C(9)_R_"|"_$$ICOID^IEPR(E)_CR)
+ D C^RWU
+ Q
+GDST(ID,OTD,TN,SP)        ; Строка для создаваемого документа с проверкой прав
+ N R,TNX,X,FF,RN,N,C
+ S FF=0,SP=$G(SP)
+ I $D(^LOG(%LOG,"lcl","epr")) S R=^("epr"),FF=+$G(^LCL("epr",R,"nnflt")) Q:$G(^("new"))=0 
+ S:SP="" SP=$$SPEC^IKADRY(TN)
+ S OTD="|"_OTD_"|",SP="|"_SP_"|",TNX="|"_TN_"|"
+ Q:$G(^DTYPE(ID,"use"))=0 
+ I 'FF,$D(^("otd")) S R=^("otd") I R'="*",$L(R) Q:"|"_R_"|"'[OTD 
+ I 'FF,$D(^("tn")) S R=^("tn") I R'="*",$L(R) Q:"|"_R_"|"'[TNX 
+ I 'FF,$D(^("spec")) S R=^("spec") I R'="*",$L(R) Q:"|"_R_"|"'[SP 
+ S X=$G(^("owner")) I $L(X) Q:X'=TN 
+ S X=$G(^("rights")) I "aw"'[$E(X,1),"aw"'[$E(X,3) Q 
+ D MSG^RWU($$GDSTR^IEPR(ID))
+ Q
+LNEW(NIB,TP,PRF) ; Load pattern of new document
+ ; TP - type, PRF - profile
+ Q:NIB=""!(TP="") 
+ N EXT,PL,R,A,I
+ S EXT=$G(^DTYPE(TP,"ext"))
+ I $S($G(^cfg("epr","onlyone")):1,1:$$LCL^IUSER("epr","onlyone")),$G(^DTYPE(TP,"dtp"))=1 D  Q:$$IsMSG^RWU() 
+ .S I="",A=+$H,R=$$KDR^IUSER()
+ .F  S I=$O(^EPRI("t",NIB,TP,I)) Q:I=""  I ^(I)=R,+$P($G(^EPR(NIB,I,"dt")),"|",1)=A D MSG("Такой документ сегодня уже создан.") Q 
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<mhist><init>")
+ 
+ D:+$G(^DTYPE(TP,"sbstype")) WTAG^RWU("sbstype",^("sbstype"))
+ S A=$G(^DTYPE(TP,"altvsbs"))
+ D:A'="" WTAG^RWU("altvsbs",$S(A:1,1:0))
+ D:$G(PRF)'="" WTAG^RWU("dprofile",PRF),WTAGC^RWU("nprofile",$G(^DTYPE(TP,"profiles",PRF)))
+ 
+ I EXT'="rpt",$D(^DTYPE(TP,"list")) D
+ .D W^RWU("<list>") S A=""
+ .F I=1:1  S R=$G(^DTYPE(TP,"list",I)) Q:R=""  D WC^RWU(A_$$TAG^TXTU(^(I))) S A=CR
+ .D W^RWU("</list>")
+ D W^RWU("</init>")
+ 
+ D:EXT="rpt" W^RWU("<erpt>"),LRPTs(TP,0,NIB),W^RWU("</erpt>")
+ D W^RWU("</mhist></nb_console>")
+ D C^RWU
+ Q
+LRPT(TP,NIB,PRF) ; Load 'clear' pattern of rpt document
+ D OWF^RWU(".xml")
+ D W^RWU("<?xml version=""1.0"" encoding=""Windows-1251""?>")
+ I $L(TP) D LRPTs(TP,$S(NIB="":1,1:0),NIB) D:NIB="" W^RWU("</streport>")
+ D C^RWU
+ Q
+LRPTs(TP,NODT,NIB,NM,FK) ; Шаблон для streport
+ N I,R,P,A,K,SRC,L,RR,LST,VR,F,TPX,LP
+ S LP=$$^I("ilpu"),I="T"_$TR($J(LP,3,0)," ",0)_$TR($J(TP,4,0)," ",0)_NIB
+ S A=$S($D(NM):NM,$D(^DTYPE(TP,"cap")):^("cap"),1:$G(^("tname")))
+ S FK=$G(FK),NODT=+$G(NODT)
+ S VR=$$KDR^IUSER() ; sub var
+ D WC^RWU("<streport nm="""_A_""" id="""_I_"""><fields>")
+ S P=""
+ I $L(FK) F  S P=$O(^DTYPE(TP,"fieldkey",FK,P)) Q:P=""  D LRPTflw
+ I '$L(FK) F  S P=$O(^DTYPE(TP,"fields",P)) Q:P=""  D LRPTflw
+ S I="" F  S I=$O(L(I)) Q:I=""  S P=L(I) D
+ .I $D(PRF),PRF'="",$G(^DTYPE(TP,"profiles",PRF,"fields",P,"u"))=0 Q 
+ .S A="<field nm="""_P_"""",K="@"
+ .I $L(FK) F  S K=$O(^DTYPE(TP,"fieldkey",FK,P,K)) Q:K'["@"  D LRPTfls
+ .I '$L(FK) F  S K=$O(^DTYPE(TP,"fields",P,K)) Q:K'["@"  D LRPTfls
+ .I NODT,$G(^DTYPE(TP,"fields",P,"@sv"))'=0 K SRC(P)
+ .D WC^RWU(A_"/>")
+ D W^RWU("<field tp=""n"" nm=""ehruid""/>")
+ D W^RWU("</fields><lists>")
+ ; fixed lists
+ G:+$G(NODT) LRPTs1
+ ; личный справочник
+ S P="" F  S P=$O(^EPRPT(VR,TP,"default"," list",P)) Q:P=""  D
+ .D WC^RWU("<list nm="""_P_""" tag=""prv"">") S (LST(P),A)=""
+ .I $E(P,1,4)="fnc:" X ("S K="_$E(P,5,99)) D WC^RWU($$TAG^TXTU(K)_"</list>") Q
+ .S K="" F  S K=$O(^EPRPT(VR,TP,"default"," list",P,K)) Q:K=""  D WC^RWU(A_$$TAG^TXTU(^(K))) S A=CR
+ .D W^RWU("</list>")
+ ; общий справочник
+ S P="" F  S P=$O(^DTYPE(TP,"list",P)) Q:P=""  D:'$D(LST(P))
+ .D WC^RWU("<list nm="""_P_""">") S A=""
+ .I $E(P,1,4)="fnc:" X ("S K="_$E(P,5,99)) D WC^RWU($$TAG^TXTU(K)_"</list>") Q
+ .S K="" F  S K=$O(^DTYPE(TP,"list",P,K)) Q:K=""  D WC^RWU(A_$$TAG^TXTU(^(K))) S A=CR
+ .D W^RWU("</list>")
+ ; autolists
+ D autoLI
+ K LST
+LRPTs1 D W^RWU("</lists>")
+ ; default pattern
+ D:'NODT
+ .I $D(^EPRPT(" ",TP,"default")) S P="" F  S P=$O(^EPRPT(" ",TP,"default",P)) Q:P=""  I $E(P,1)'=" ",'$D(SRC(P)) S SRC(P)="pat:default"
+ .I $D(^EPRPT(VR,TP,"default")) S P="" F  S P=$O(^EPRPT(VR,TP,"default",P)) Q:P=""  I $E(P,1)'=" ",'$D(SRC(P)) S SRC(P)="ppat:default"
+ ; dynamic data
+ I $L($G(NIB)),$D(SRC) D
+ .D W^RWU("<data>")
+ .S P="" F  S P=$O(SRC(P)) Q:P=""  D
+ ..S R=SRC(P),K=""
+ ..D:$E(R,1,4)="doc:"  ; todo - other doc
+ ...S RR=$E(R,5,999),A=$P(RR,"\",1),TPX=""
+ ...I A="this" S TPX=TP,A=""
+ ...I A="last" S A=$P(RR,"\",2),I=$$FNDFL^IEPR(NIB,A,1),K=$S(I="":"",1:$G(^EPRD(NIB,I,A))) Q 
+ ...I +A=A S:$D(^DTYPE(A)) TPX=A,A=""
+ ...I A'="" S TPX=$$FNDUID^YIMHS(A)
+ ...Q:TPX=""
+ ...S (I,K)="",A=$P(RR,"\",2) Q:A=""
+ ...F  S I=$O(^EPR(NIB,I),-1) Q:I=""  I $G(^(I,"t"))=TPX S K=$G(^EPRD(NIB,I,A)) Q 
+ ..I $E(R,1,4)="pac:" S K=$$GETE^IPAC(NIB,$E(R,5,999),+$H)
+ ..I $E(R,1,6)="kadry:" S K=$$GETE^IKADRY(VR,$E(R,6,999),+$H)
+ ..I $E(R,1,4)="pat:" S K=$$GETPL^NEPRPT(" ",TP,$E(R,5,99),P)
+ ..I $E(R,1,5)="ppat:" S K=$$GETPL^NEPRPT(VR,TP,$E(R,6,99),P)
+ ..I $E(R,1,5)="hosp:" S K=$$GETL^IHOSP(NIB,$E(R,6,999),+$H)
+ ..I $E(R,1,4)="fnc:" X ("S K="_$E(R,5,99))
+ ..I $E(R,1,5)="data:" S K=$E(R,6,99)
+ ..D:$L(K) WTAGC^RWU(P,K)
+ .D W^RWU("</data>")
+ S K=$G(^DTYPE(TP,"print"))
+ D W^RWU("<print>")
+ I K="" F I=1:1 S R=$G(^DTYPE(TP,"print",I)) Q:R=""  D WC^RWU(R)
+ D W^RWU("</print><printlist>")
+ I K="m" D WC^RWU($$PRNTPs^YIMHS(TP))
+ D W^RWU("</printlist>")
+ D:'+$G(NODT) W^RWU("</streport>")
+ Q
+LRPTflw ; вывод поля 1
+ S A=$G(^(P)) S:A="" A=999
+ S A=$E("000",1,4-$L(A))_A,L(A_" "_P)=P
+ Q
+LRPTfls ; вывод поля 2
+ S R=$$TRIM^TXTU(^(K))
+ I K="@src",$L(R) S SRC(P)=R Q:"pac:pat:fnc:"[$E(R,1,4)  Q:"data:"=$E(R,1,5) 
+ I K="@lst" D:$L(R)
+ .S F=$E(R,1,4)
+ .I "fnc:prc:"[F S LST(R)=P_"@lst",R=P_"@lst"
+ .I F="lib:" S LST("prc:GETROOT^IMHU("""_$E(R,5,99)_""")")=P_"@lst",R=P_"@lst"
+ S A=A_" "_$E(K,2,99)_"="""_$$TURLLT^TXTU(R)_""""
+ Q
+LRPTdt(TP) 
+ N R,P
+ S P="" F  S P=$O(^DTYPE(TP,"fields",P)) Q:P=""  D
+ .S R=$$TRIM^TXTU($G(^(P,"@src"))) Q:R="" 
+ .I $E(R,1,5)="data:" D WTAGC^RWU(P,$E(R,6,99)) 
+ Q
+LRPTp(TP,NM,ID) ; only print pattern
+ N I,R
+ S ID=$G(ID),NM=$G(NM)
+ D WC^RWU("<streport nm="""_$S(NM'="":NM,$D(^DTYPE(TP,"cap")):^("cap"),1:$G(^("tname")))_"""><print>")
+ I ID="" F I=1:1 S R=$G(^DTYPE(TP,"print",I)) Q:R=""  D WC^RWU(R)
+ I $L(ID) F I=1:1 S R=$G(^DTYPE(TP,"print",ID,I)) Q:R=""  D WC^RWU(R)
+ D W^RWU("</print></streport>")
+ Q
+LRPTLI(TP,ID,VR,NIB) ; Загрузка справочника по полю
+ N I,R,P,A,K,L,FL,LST,V
+ ; S ID=$$WD^TXTU(ID) ?
+ ; scan fields for dinamic lists
+ S P="" F  S P=$O(^DTYPE(TP,"fields",P)) Q:P=""  D:$D(^(P,"@lst"))
+ .S R=$$TRIM^TXTU(^("@lst")) Q:R=""
+ .I "fnc:prc:"[$E(R,1,4) S LST(R)=P_"@lst",R=P_"@lst"
+ .I $E(R,1,4)="lib:" S LST("prc:GETROOT^IMHU("""_$E(R,5,99)_""")")=P_"@lst",R=P_"@lst"
+ D OWF^RWU(".xmlb")
+ D W^RWU(^PP(0,2)_"<mhist><erpt><streport><lists>")
+ ; fixed lists:
+ ; личный справочник
+ S I=$P(ID,"@",1)
+ S V=$S(I=2:$P(ID,"@",2),1:VR),FL=$S(I=2:$P(ID,"@",3),1:"default")
+ I I=1!(I=2) S P="" F  S P=$O(^EPRPT(V,TP,FL," list",P)) Q:P=""  D
+ .D WC^RWU("<list nm="""_P_""" tag=""prv"">") S (LST(P),A,K)=""
+ .I $E(P,1,4)="fnc:" X ("S K="_$E(P,5,99)) D WC^RWU($$TAG^TXTU(K)_"</list>") Q
+ .F  S K=$O(^EPRPT(V,TP,FL," list",P,K)) Q:K=""  D WC^RWU(A_$$TAG^TXTU(^(K))) S A=CR
+ .D W^RWU("</list>")
+ ; общий справочник
+ I I=0 S P="" F  S P=$O(^DTYPE(TP,"list",P)) Q:P=""  D:'$D(LST(P))
+ .D WC^RWU("<list nm="""_P_""" tag="""">") S (K,A)=""
+ .I $E(P,1,4)="fnc:" X ("S K="_$E(P,5,99)) D WC^RWU($$TAG^TXTU(K)_"</list>") Q
+ .F  S K=$O(^DTYPE(TP,"list",P,K)) Q:K=""  D WC^RWU(A_$$TAG^TXTU(^(K))) S A=CR
+ .D W^RWU("</list>")
+ ; autolists
+ D autoLI
+ K LST
+ D W^RWU("</lists></streport></erpt></mhist></nb_console>")
+ D C^RWU
+ Q
+autoLI ; Autolists subroutine
+ Q:'$D(LST) 
+ N %NoFN
+ S P="" F  S P=$O(LST(P)) Q:P=""  D:$L(LST(P))
+ .D WC^RWU("<list nm="""_LST(P)_""" tag=""ro"">") S R=$E(P,1,4)
+ .I R="fnc:" X ("S K="_$E(P,5,999)) D WC^RWU($$TAG^TXTU(K))
+ .I R="prc:" K %L S %NoFN=1 D @$E(P,5,999) I $$IsMSG^RWU() D W^RWU($$TAG^TXTU(%L)) K %L,%B
+ .D W^RWU("</list>")
+ Q
+S ; СОХРАНЕНИЕ 
+ N XML,pXFL,%J,A,LVL,ID,VER,NM,L,LP,N,TP,EXT,NIB,K,H,PRF,SDT,SDTL,REZ,SBS,LNG,AFL,SP,OT
+ S LP=$$^I("ilpu"),(NIB,SDT)="",VER=0,SBS=0
+ D ORH^RWU,OEV^XMLR("TAGS^YIMH","TAGD^YIMH","TAGE^YIMH")
+ F %J=1:1 S A=$$RA^RWU Q:%IFN["Z"  D REV^XMLR(A)
+ D CEV^XMLR,CR^RWU
+ I $D(REZ) D MSG(REZ) Q 
+ S ID=$G(XML("id")),N=$G(XML("pid")),EXT=$G(XML("ext"))
+ Q:N=""  
+ S NM=$TR($G(XML("name")),CR," ")
+ S TP=$G(XML("tp")),PRF=$G(XML("dprofile"))
+ S LNG=$G(XML("lang")),SP=$G(XML("spec")),OT=$G(XML("otd"))
+ S K=$S($L($G(XML("owner"))):XML("owner"),1:$$KDR^IUSER()),H=$H
+ D DO^ITRIG("epr","save")
+ D:VER=0
+ .S:TP="" TP=$$FNDUID^YIMHS("sys/"_EXT) ; для документов-файлов
+ .M:TP'="" ^EPR(N,ID)=^DTYPE(TP,"pattern")
+ .S:EXT="txt"!(EXT="rtf")!(EXT="jpg") ^EPR(N,ID,"fil")=$G(XML("unique"))
+ .S:$L(TP) ^EPRI("t",N,TP,ID)=K,$P(^EPRI("nd",N,+SDTL,ID),"|",1)=TP
+ S VER=VER+1,^EPR(N,ID,"v")=VER
+ I NM="",TP S NM=$G(^DTYPE(TP,"pattern","n"))
+ S:NM'=$G(^EPR(N,ID,"n")) ^("n")=NM
+ S:EXT'="" ^EPR(N,ID,"e")=EXT
+ S:PRF'="" ^EPR(N,ID,"dp")=PRF
+ S:LNG'="" ^EPR(N,ID,"lng")=LNG
+ S A=$G(XML("srd")) S:A'="" ^EPR(N,ID,"srd")=A
+ S A="D|"_K_$S(+LP:"|"_LP,1:"")
+ S:SP'="" $P(A,"|",4)=SP
+ S:OT'="" $P(A,"|",5)=OT
+ S ^EPR(N,ID,"o")=A
+ S:VER>1 ^EPR(N,ID,"dt",H)=$$USR^IUSER()
+ I +TP,$L($G(XML("owner"))) S ^EPRI("t",N,TP,ID)=K ; если изм. owner
+ S:$D(XML("f")) ^EPR(N,ID,"f")=XML("f") ; доп. файл
+ D:$D(^EPR(N,ID,"sys-exec")) SYSExec(N,ID,"save")
+ Q:$$IsMSG^RWU() 
+ I $G(^cfg("epr-viewlog"))=2 S ^EPRLOG(N,ID,"e",H)="W|"_$$KDR^IUSER()_"||"_$$^I("ilpu") D GL^IEXCH("^EPRLOG",N,ID,"e",H)
+ D OWF^RWU(".xmlb")
+ D W^RWU(^PP(0,2)_"<mhist><init><id>"_ID_"</id>")
+ D WTAG^RWU("ehruid",$$UID^IEPR(N,ID)) ; return created UID
+ 
+ S AFL=""
+ D DO^ITRIG("epr","saveend")
+ 
+ D:$D(^DTYPE(+TP,"autofields")) ; автозаполнение полей при сохр.
+ .N X,P,F,NI
+ .S (A,F)="",NI=N
+ .F  S F=$O(^DTYPE(TP,"autofields",F)) Q:F=""  D
+ ..S P=^(F),X=$G(^EPRD(N,ID,F)),K=""
+ ..X:$E(P)="@" ("S K="_$E(P,2,999))
+ ..S:$E(P)="=" K=$E(P,2,999)
+ ..S:$L(K) ^EPRD(N,ID,F)=K,A=A_"<"_F_">"_$$TAG^TXTU(K)_"</"_F_">"
+ .S AFL=AFL_A
+ D W^RWU("</init>")
+ D:AFL'="" WC^RWU("<erpt xmldata=""<streport><data>"_$$TURLLT^TXTU(AFL)_"</data></streport>""/>")
+ D W^RWU("</mhist></nb_console>")
+ D C^RWU
+ D UPD(N,ID)
+ Q
+pl(FL) ; Внутренняя функция для получения значения поля
+ Q $G(^EPRD(N,ID,FL))
+MKDOCsys ; Internal, for Save (S)
+ S NIB=$G(XML("pid")) Q:NIB=""  
+ I '$D(^BTN(NIB)) S (NIB,XML("pid"))="" Q 
+ N ID,L
+ S ID=$G(XML("id")),SDT=$$DI^DTUTL($G(XML("sdt")))
+ G:ID="" MKDOCs1
+ S SBS=$$ISSBS^IEPR(NIB,ID)
+ I SBS=1 S REZ="Документ уже подписан." Q
+ S VER=+$G(^EPR(NIB,ID,"v"))
+ I SBS=2 D  Q  ; чистка неподписанных полей
+ .N F S F=""
+ .F  S F=$O(^EPRD(NIB,ID,F)) Q:F=""  I '$P($G(^EPR(NIB,ID,"s",F)),"|",1),$O(^EPRD(NIB,ID,F,""))="" K ^EPRD(NIB,ID,F)
+ S L=$G(XML("lang"))
+ I L="" K ^EPRD(NIB,ID) Q
+ ; TODO - правильное удаление
+ N BK,F,Z
+ S F="" F  S F=$O(^EPRD(NIB,ID,F)) Q:F=""  D
+ .S Z="" F  S Z=$O(^EPRD(NIB,ID,F,Z)) Q:Z=""  I Z'=L M BK(F,Z)=^EPRD(NIB,ID,F,Z)
+ K ^EPRD(NIB,ID)
+ M ^EPRD(NIB,ID)=BK
+ Q 
+MKDOCs1 N L,K,UR
+ S K=$S($L($G(XML("owner"))):XML("owner"),1:$$KDR^IUSER())
+ S L=$$GID^I(LP)
+ S SDTL=$S(SDT="":$H,1:SDT_","_$P($H,",",2))
+ S UR=$$GET^IINKR("epr","uidrec")
+ L +^EPR(NIB)
+ S ID=$O(^EPR(NIB,""),-1)
+ S ID=$S(L="":ID+1,1:($E(ID,1,$L(ID)-3)+1)_L)
+ S ^EPR(NIB,ID,"dt")=SDTL_"|"_K_"|"_$H
+ S ^EPR(NIB,ID,"ur")=UR
+ L -^EPR(NIB)
+ S ^EPRI("dt",+SDTL,NIB,ID)=LP
+ S ^EPRI("nd",NIB,+SDTL,ID)="|"_K ; пока без типа
+ S VER=0,XML("id")=ID
+ Q 
+TAGS ; Tag start
+ Q:%XM(2)="xml"
+ I $O(%XM(4,""),-1)=1,%XM(2)'="content" S XML(%XM(2))="" 
+ Q
+TAGD ; Tag data
+ S pXFL=%XM(2)
+ Q:pXFL="xml"  
+ S LVL=$O(%XM(4,""),-1)
+ I LVL=1,pXFL'="content" S XML(pXFL)=XML(pXFL)_%XD Q 
+ Q:%XD=""  Q:NIB=""  Q:$D(REZ) 
+ I SBS=2,$P($G(^EPR(NIB,XML("id"),"s",pXFL)),"|",1) Q ; fl is sbs
+ N I,X,L
+ S L=$G(XML("lang"))
+ S X="^EPRD("""_NIB_""","_XML("id")
+ F I=$S($G(XML("ext"))="rpt":4,1:2):1:LVL S X=X_","""_$$WD^TXTU(%XM(4,I))_""""
+ I L="",$D(@(X_")")) S X=X_","_($O(@(X_","""")"),-1)+1)
+ ;S:L="ru" L="" TODO
+ S:L'="" X=X_","""_L_""""
+ X "S "_X_")=%XD"
+ Q
+TAGE ; Tag end
+ Q:%XM(2)="xml"   
+ I $O(%XM(4,""),-1)=1,%XM(2)="id" D MKDOCsys  Q 
+ Q
+SBSFLST(NI,ID) ; Перечень подписанных полей
+ N F,T,A
+ S (F,A)="",T=+$G(^EPR(NI,ID,"t"))
+ F  S F=$O(^EPR(NI,ID,"s",F)) Q:F=""  S A=A_$S(A="":"",1:CR)_F_"|"_$G(^DTYPE(T,"fields",F,"@tit"))
+ D MSG^RWU(A)
+ Q
+SEQES ; Сохранить УКЭП для документа
+ ; NI|ID|base64 sign
+ N NI,ID,SS,A,R,M
+ 
+ D ORH^RWU
+ S A="" F  S A=A_$$R^RWU Q:%IFN["Z"   
+ D CR^RWU
+ S NI=$P(A,"|",1),ID=$P(A,"|",2),M=$P(A,"|",3),SS=$P(A,"|",4,999)
+ S:'M M=1
+ Q:NI=""  Q:ID=""
+ 
+ Q:$P($G(^EPR(NI,ID,"s")),"|",1)'=1  ; нет обычной подписи
+ S ^EPRD(NI,ID,"__s")=SS
+ S R=^EPR(NI,ID,"s")
+ S $P(R,"|",4,6)=M_"|"_$$USRH^IUSER()
+ S ^EPR(NI,ID,"s")=R
+ S A=$H,^EPRLOG(NI,ID,"e",A)="Q|"_$$KDR^IUSER()_"||"_$$^I("ilpu") D GL^IEXCH("^EPRLOG",NI,ID,"e",A)
+ Q
+GSIGN(NI,ID,MOD) ; Получить хэш или ЭП для документа
+ Q:$G(NI)=""  Q:$G(ID)="" 
+ S MOD=$G(MOD),MOD=$S('MOD:"__d",1:"__s")
+ D MSG^RWU($G(^EPRD(NI,ID,MOD)))
+ Q
+CHKUSBS(NI,ID) ; Проверить на права расподписи
+ N R,U
+ S U=0
+ I NI=""!(ID="") D MSG^RWU(0) Q 
+ I $D(^EPR(NI,ID,"t")),$L($G(^DTYPE(^("t"),"rproc"))) D MSG^RWU(0) Q 
+ I $D(^LOG(%LOG,"lcl","epr")) S U=+$G(^LCL("epr",^("epr"),"unsbsc")) I 'U D MSG^RWU(0) Q
+ I U=2 S R="D|"_$$KDR^IUSER() I $P($G(^EPR(NI,ID,"o")),"|",1,2)'=R D MSG^RWU(0) Q ; только свои документы
+ S R=$$LCL^IUSER("epr","unsbs_days")
+ I R'="",R+$P($G(^EPR(NI,ID,"dt")),"|",1)-1<(+$H) D MSG^RWU("!Превышено число дней, допустимых для снятия подписи.") Q
+ S R=$$LCL^IUSER("epr","unsbs_time")
+ I R'="" S U=$P($G(^EPR(NI,ID,"dt")),"|",1),R=R*60 I $S(+U'=+$H:1,R+$P(U,",",2)<$P($H,",",2):1) D MSG^RWU("!Превышено время снятия подписи.")
+ S R=$$LCL^IUSER("epr","unsbs_prn")
+ I R'="",$$ISPRN^IEPR(NI,ID) D MSG^RWU(0) Q 
+ S R=+$$LCL^IUSER("epr","unsbs_cnt")
+ I R,R'>$$EVCNT(NI,ID,"U") D MSG^RWU("!Превышено число снятий подписи.") Q 
+ D MSG^RWU(1)
+ Q
+UNSBSC(NI,ID,HALF,FL,TXT) ; Расподписать
+ ; FL - Field list, HALF - Subsclibe not all fields
+ N R,U
+ S U=0
+ I $D(^LOG(%LOG,"lcl","epr")) S R=^("epr") S U=+$G(^LCL("epr",R,"unsbsc")) I 'U D MSG("Нет прав для изменения подписи документа.") Q
+ I NI=""!(ID="")!('$D(^EPR(NI,ID))) D MSG("Документ отсутствует.") Q 
+ I $D(^EPR(NI,ID,"t")),$L($G(^DTYPE(^("t"),"rproc"))) D MSG("Для данного типа документа убрать подпись невозможно.") Q 
+ I U=2 S R="D|"_$$KDR^IUSER() I $P($G(^EPR(NI,ID,"o")),"|",1,2)'=R D MSG("Вы можете убрать подпись только у документов, созданных лично.") Q 
+ S R=$$LCL^IUSER("epr","unsbs_olp") ; owner lpu
+ I R,$P($G(^EPR(NI,ID,"o")),"|",3)'=$$^I("ilpu") D MSG^RWU("Карта была создана не в Вашем ЛПУ.") Q 
+ S R=$$LCL^IUSER("epr","unsbs_days")
+ I R'="",R+$P($G(^EPR(NI,ID,"dt")),"|",1)<(+$H) D MSG("Превышено число дней, допустимых для снятия подписи.") Q
+ S R=$$LCL^IUSER("epr","unsbs_time")
+ I R'="" S U=$P($G(^EPR(NI,ID,"dt")),"|",1),R=R*60 I $S(+U'=+$H:1,R+$P(U,",",2)<$P($H,",",2):1) D MSG^RWU("Превышено время снятия подписи.")
+ S R=$$LCL^IUSER("epr","unsbs_prn")
+ I R'="",$$ISPRN^IEPR(NI,ID) D MSG("Документ был отпечатан.") Q 
+UNSBsys 
+ N I,TP,F,L
+ S I=$H,TP=$G(^EPR(NI,ID,"t")),L=$$^I("ilpu")
+ D WD^ISSG("^EPR("_NI_","_ID_",""s"")")
+ ; Копия пред. состояния
+ I $G(^cfg("epr","usbs-bk")) M ^EPRBK(NI,ID,I,"i")=^EPR(NI,ID),^EPRBK(NI,ID,I,"d")=^EPRD(NI,ID)
+ 
+ S ^EPRLOG(NI,ID,"e",I)="U|"_$$KDR^IUSER()_"|"_$S($D(TXT):$$WD^TXTU(TXT),1:"")_"|"_L
+ D GL^IEXCH("^EPRLOG",NI,ID,"e",I)
+ S I=$S('TP:0,1:$D(^DTYPE(TP,"lockfl")))
+ I $G(HALF) S FL=$$WD^TXTU($G(FL)) F I=1:1:99 S F=$P(FL,"|",I) Q:F=""  K:$S('I:1,1:'$D(^DTYPE(TP,"lockfl",F))) ^EPR(NI,ID,"s",F) 
+ I 'I,'$G(HALF)!($L($D(^EPR(NI,ID,"s")))<2) K ^("s") S ^("s")=0_"|"_$H
+ G:'I UNSBend
+ ; за искл. заблокированных полей
+ S ^EPR(NI,ID,"s")=2_"|"_$H,F=""
+ F  S F=$O(^DTYPE(TP,"lockfl",F)) Q:F=""  I $G(^DTYPE(TP,"fields",F,"@tp"))'="n",$G(^("@sw"))'=0 S ^EPR(NI,ID,"s",F)=2_"|"_$H
+ S ^EPRLOG(NI,ID,"e",I)="Y|"_$$KDR^IUSER()_"|"_$S($D(TXT):$$WD^TXTU(TXT),1:"")_"|"_L
+UNSBend 
+ D UPD(NI,ID)
+ Q
+SBSC(NI,ID,HALF,FL,WHO)        ; ПОДПИСАТЬ 
+ ; FL - Field list, HALF - Subsclibe not all fields
+ N R,TP,P,I,WTP,K,OW,LP,OT
+ S WTP=0
+ S OW=$P($G(^EPR(NI,ID,"o")),"|",2),K=$$KDR^IUSER(),LP=$$^I("ilpu")
+ S OT=$G(^JOB(%JOB,"epr-otd"))
+ S HALF=$G(HALF),FL=$G(FL),WHO=$G(WHO)
+ I $D(^LOG(%LOG,"lcl","epr")) S R=^("epr") D  Q:$$IsMSG^RWU()  
+ .I $G(^LCL("epr",R,"sbsc"))=0 D MSG("Нет прав для подписи документа.") Q
+ .S WTP=+$G(^("selsbs"))
+ .I WTP=1,WHO'=K,WHO'=OW D MSG("Нет прав для подписи документа.") Q 
+ S:'WTP WHO="" ; если нет прав - кто подписывает не меняем
+ I NI=""!(ID="") D MSG("Системная ошибка при подписании документа.") Q 
+ Q:$P($G(^EPR(NI,ID,"s")),"|",1)=1  ; полностью подпис.
+ S TP=$G(^EPR(NI,ID,"t")),P="",FL=$$WD^TXTU($G(FL)),I=$H
+ D DO^ITRIG("epr","presbsc")
+ Q:$$IsMSG^RWU()
+ D:$D(^EPR(NI,ID,"sys-exec")) SYSExec(NI,ID,"sbs")
+ Q:$$IsMSG^RWU() 
+ S ^EPRLOG(NI,ID,"e",I)=$S(HALF:"H",1:"S")_"|"_$S($L(WHO):WHO,1:K)_"|"_$S(WHO'=K&$L(WHO):K,1:"")_"|"_LP
+ D GL^IEXCH("^EPRLOG",NI,ID,"e",I)
+ S ^EPRD(NI,ID,"__d")=$$DIGEST^IEPR(NI,ID,FL)
+ D:$$LCL^IUSER("epr","setowsb") SETOW^IEPR(NI,ID,K,OT,$G(^JOB(%JOB,"epr-spec")),LP,0)
+ ; частичная подпись
+ I +HALF D  G SBSCE
+ .N F
+ .F I=1:1:99 S F=$P(FL,"|",I) Q:F=""  S ^EPR(NI,ID,"s",F)=2_"|"_$H_$S(OW'=K&WHO:"|"_WHO,1:"")
+ I TP'="" F  S P=$O(^DTYPE(TP,"sbproc",P)) Q:P=""  X "S I=$L($T("_P_"))" D:I @P
+ Q:$$IsMSG^RWU() 
+ ; TODO G:+$G(^EPR(NI,ID,"mu")) SBSCM
+ K ^EPR(NI,ID,"s")
+ S ^EPR(NI,ID,"s")=1_"|"_$H_$S(OW'=K&WHO:"|"_WHO,1:"") G SBSCE
+SBSCM ;N U S U=+$$KDR^IUSER()
+ ;I $G(^EPR(NI,ID,"owner"))'=U S ^EPR(NI,ID,"subscr",U)=1 G SBSCE
+ ; todo - автоподпись при подписи всех участников кроме основн. ?
+ ;S U="" F  S U=$O(^EPR(NI,ID,"subscr",U)) Q:U=""  S:^(U)=0 %L=CR_$$FIOSH^IKADRY(U)
+ ;I $L(%L) D MSG("Подпись документа невозможна,"_CR_"его должны подписать:"_%L) Q 
+ ;S ^EPR(NI,ID,"subscr")=1
+SBSCE D UPD(NI,ID)
+ D DO^ITRIG("epr","sbsc")
+ D VREND^IEVLOG(+LP,OT,K,+$H,NI,"")
+ D EXPORT^IEPR(NI,ID)
+ Q
+LSBS(NI,ID,TP) ; Загрузить данные для подписи
+ N T,K,O,AV
+ S T=+$$LCL^IUSER("epr","selsbs")
+ S AV=$G(^DTYPE(+$G(TP),"altvsbs"))
+ Q:'T&('AV) 
+ S K=$$KDR^IUSER(),O=$P($G(^EPR(NI,ID,"o")),"|",2)
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<mhsbs"_$S(T=2:"sel>",1:"2>"))
+ G:T=2 LSBS1
+ S:'T&AV O=AV
+ I T=3 S O=$$LCL^IUSER("epr","altvsbs") S:O="" O=AV
+ D WC^RWU("<bt_sel1 title="""_$$FIOSH^IKADRY(K)_""" userdata="""_K_"|"_$$FIO^IKADRY(K)_"""/>")
+ S K=$$FIOSH^IKADRY(O)
+ D WC^RWU("<bt_sel2 title="""_K_""" userdata="""_O_"|"_$$FIO^IKADRY(O)_"""/>")
+ D W^RWU("</mhsbs2></nb_console>"),C^RWU
+ Q
+LSBS1 
+ S K=$$FIOSH^IKADRY(O)
+ D WC^RWU("<bt_sel2 title="""_K_""" userdata="""_O_"""/>")
+ D W^RWU("</mhsbssel></nb_console>"),C^RWU
+ Q
+CHKUSB(NIB,VR) ; Проверить неподписанные
+ N ID,TP,R,X
+ S TP="",X=0
+ F  S TP=$O(^EPRI("t",NIB,TP)) Q:TP=""  S ID="" F  S ID=$O(^EPRI("t",NIB,TP,ID)) Q:ID=""  I ^(ID)=VR,$D(^EPR(NIB,ID)),'+$P($G(^(ID,"s")),"|",1) S X=1 Q 
+ Q X
+CHKUSBDT(NIB,VR,DT) ; Проверить неподписанные на дату
+ N ID,R,X
+ S ID="",X=0
+ F  S ID=$O(^EPRI("nd",NIB,DT,ID)) Q:ID=""  I $P(^(ID),"|",2)=VR,$D(^EPR(NIB,ID)),$P($P($G(^(ID,"dt")),"|",1),",",1)=DT,'+$P($G(^("s")),"|",1) S X=1 Q 
+ Q X
+CNTUSB(NIB,VR) ; Проверить число неподписанных
+ N ID,TP,R,X
+ S TP="",X=0
+ F  S TP=$O(^EPRI("t",NIB,TP)) Q:TP=""  S ID="" F  S ID=$O(^EPRI("t",NIB,TP,ID)) Q:ID=""  I ^(ID)=VR,$D(^EPR(NIB,ID)),'+$P($G(^(ID,"s")),"|",1) S X=X+1
+ Q X
+LASTUSB(NIB,VR,DT,CD) ; ID последнего неподписанного док-та
+ ; NIB - пациент
+ ; VR - врач
+ ; DT - дата для поиска (или пустота)
+ ; CD - учитывать общие документы
+ N ID,R,X,F
+ S DT=$G(DT),CD=+$G(CD),ID="",X=0
+ I DT="" F  S DT=$O(^EPRI("nd",NIB,DT),-1) Q:DT=""!X  F  S ID=$O(^EPRI("nd",NIB,DT,ID)) Q:ID=""  S F=($P(^(ID),"|",2)=VR) I $S(CD:1,1:F),$D(^EPR(NIB,ID)),'+$P($G(^(ID,"s")),"|",1),$S('CD:1,$G(^("cm")):1,1:F) S X=ID Q
+ I DT="" Q:'X "" Q X
+ F  S ID=$O(^EPRI("nd",NIB,DT,ID)) Q:ID=""  S F=($P(^(ID),"|",2)=VR) I $S(CD:1,1:F),$D(^EPR(NIB,ID)),'+$P($G(^(ID,"s")),"|",1),$S('CD:1,$G(^("cm")):1,1:F) S X=ID Q
+ Q:'X "" Q X
+REDOC(NI,ID,DTM) ; Восстановить документ из предыдущей копии
+ S DTM=$P(DTM,",",1,2)
+ I '$$LCL^IUSER("epr","restore") D MSG("Нет прав на восстановление документов") Q 
+ I '$D(^EPRBK(NI,ID,DTM)) D MSG("Отсутствует резервная копия") Q
+ K ^EPR(NI,ID),^EPRD(NI,ID)
+ M ^EPR(NI,ID)=^EPRBK(NI,ID,DTM,"i"),^EPRD(NI,ID)=^EPRBK(NI,ID,DTM,"d")
+ D UPD(NI,ID)
+ Q
+ADDF(NI,TN,ID)      ; Добавить в ИЗБРАННЫЕ ДОКУМЕНТЫ
+ Q:NI=""!(TN="")!(ID="") 
+ Q:'$$CHECK^IKADRY(TN) 
+ S ^FPR(NI,TN,ID)=""
+ D GL^IEXCH("^FPR",NI,TN,ID)
+ Q
+DELF(NI,TN,ID)      ; Удалить из ИЗБРАННЫХ ДОКУМЕНТОВ
+ Q:NI=""!(TN="")!(ID="") 
+ Q:'$$CHECK^IKADRY(TN) 
+ K ^FPR(NI,TN,ID)
+ D KGL^IEXCH("^FPR",NI,TN,ID)
+ Q
+LI(N,TIP,DTT,ORD) ; Show patient EPR tree
+ N BUF,R,A,ID,OW,X,D,C,T,E,DS,DE,AWF,VA,OC,RR,OD,SWD,nnm,CLP,vCM,OTD,SP,II,H,AL,IC,TL,TLX,TLL,ALT,ADT
+ S OW=$$KDR^IUSER(),(VA,AWF,SWD)=0 S:OW="" OW=%LOG
+ I $D(^LOG(%LOG,"lcl","epr")) S R=^("epr"),AWF=+$G(^LCL("epr",R,"awdoc")),VA=+$G(^("waview")),SWD=+$G(^("sw-day-wrk"))
+ S:+$G(^("sw-wrk")) SWD=2
+ Q:$G(^("show"))=0  
+ S DTT=$G(DTT),ORD=+$G(ORD),C=$$^I("ilpu")
+ I $$LCL^IUSER("epr","clpuvr")=2,'$$USEInLPU^IKADRY(VR,+C,+$H) Q 
+ S CLP=$$LCL^IUSER("epr","clpu") S:CLP CLP=C
+ S DS=$$DI^DTUTL($P(DTT,"-",1)),DE=$$DI^DTUTL($P(DTT,"-",2))
+ S AL=$$LCL^IUSER("epr","acclevel")
+ S ALT=$$LCL^IUSER("epr","acctag") ; TODO - разрешенные теги
+ S ADT=+$$LCL^IUSER("epr","accdays") S:ADT ADT=$H-ADT
+ S vCM=$G(^cfg("epr","cmm-rights"))
+ S OTD=^JOB(%JOB,"epr-otd")
+ S SP=^JOB(%JOB,"epr-spec")
+ I TIP'=2 S ID="" F  S ID=$O(^EPR(N,ID)) Q:ID=""  D
+ .Q:$G(^(ID,"h"))  ; скрытый
+ .S R=+$P($G(^("s")),"|",1) ; подпись
+ .I TIP=3 Q:R  ; рабочие
+ .I TIP'=3 Q:R=0 
+ .S D=$P($G(^("dt")),"|",1),H=D S:D'="" D=+D
+ .I D'="",$L(DS) Q:D<DS 
+ .I D'="",$L(DE) Q:D>DE
+ .I ADT,D<ADT Q 
+ .Q:$G(^("al"))>AL ; access level
+ .S OO=$S(TIP=3:+$G(^("cm")),1:0) ; общий документ
+ .S RR=$G(^("r")),OD=""
+ .I TIP=6!(TIP=3),'AWF!(TIP=3),'VA,'OO S OD=$G(^("o")) I SWD'=2,TIP=6!('SWD)!(D'=+$H) Q:$P(OD,"|",1,2)'=("D|"_OW) 
+ .I RR'="","ra"'[$E(RR,3) S:OD="" OD=$G(^("o")) Q:"ra"[$E(RR)&($P(OD,"|",1,2)'=("D|"_OW))  ; права на "все" или персонально TODO - группа
+ .I TIP=5 Q:$G(^("nn"))=""  ; без напр.
+ .I TIP=8!(TIP=9) S:OD="" OD=$G(^("o")) Q:$P(OD,"|",1)'="D"  S X=+$P(OD,"|",2) ; только сотрудники
+ .S TLX=$G(^("srd"))
+ .I TIP=10 S TL=TLX,TL=$S(TL="":"",$D(TLL(TL)):TLL(TL),1:TL),X=$S(TL="":ID,1:TL) S:TL'="" TLL(ID)=TL
+ .I CLP S:OD="" OD=$G(^("o")) S R=$P(OD,"|",3) I R'="",R'=CLP Q 
+ .S X=$S(+$G(^("bd")):-1,TIP=1:+$G(^("t")),TIP=4:+$P($G(^("p")),"|",1),TIP=8:$S($P(OD,"|",4)="":+$$SPEC^IKADRY(X),1:$P(OD,"|",4)),TIP=9:X,TIP=10:X,ORD:99999-D,1:+D)
+ .I X=-1,TIP=6 Q  ; в персональных - без "листов"
+ .I TIP=10,X'=-1,TL="" S BUF(X)=$$DT^DTUTL(D)_" "_$P($G(^EPRD(N,ID,"diag"))," ",1) ; TODO conf
+ .I OO,vCM,'$$ALLOWD^IMHS(N,ID,OTD,SP,OW) Q  ; запрет изменения
+ .I TIP=3,SWD,$P(OD,"|",1,2)'=("D|"_OW) S X=999995 ; отд. папка
+ .S:H'["," H=H_",0"
+ .S R=D_"|"_TLX_$S(X=999995:"|1",1:"")
+ .I TIP=10,X=-1 S BUF(ID)=R Q  ; уник. по случаям
+ .S BUF(X,H_","_ID)=R
+ I TIP=2 S ID="" F  S ID=$O(^FPR(N,OW,ID)) Q:ID=""  D
+ .S D=$P($G(^EPR(N,ID,"dt")),"|",1),H=D S:D'="" D=+D
+ .I D'="",$L(DS) Q:D<DS 
+ .I D'="",$L(DE) Q:D>DE
+ .S X=$S(+$G(^("bd")):-1,ORD:99999-D,1:+D)
+ .S:H'["," H=H_",0"
+ .S BUF(X,H_","_ID)=D ; TODO - SWD,TLX
+LI1 D OWF^RWU(".txt")
+ 
+ S (X,C)=""
+ S nnm="Прочие документы"
+ I "0147"[TIP,$D(^PNF(N))!$D(^EPR(N)) S BUF(-2,"zCOM")=$$FNDTIT^YIMHDOC() ; Титул
+ I "0147"[TIP,$D(^PNF(N)) S BUF(-1,"zE")="" ; Краткий эпикриз
+ I "0147"[TIP,$$AGE^IPAC(N)<48 S BUF(-1,"zV")=$$FNDVAC^YIMHDOC() ; прививки 
+ F  S X=$O(BUF(X)) Q:X=""  D
+ .I TIP'=7,X>-1 D WC^RWU(C_$S(TIP=1:$S($D(^DTYPE(X)):$G(^(X,"tname")),1:nnm),TIP=4:$S($D(^DFLD(X)):$G(^(X,"name")),1:nnm),TIP=8:$$GSPEC^YISPRAV(X),TIP=9:$S('X:"Не указан",1:$$FIO^IKADRY(X)),X=999995:"Чужие документы",TIP=10:$G(BUF(X)),1:$$DT^DTUTL($S(ORD:99999-X,1:X)))_"||1") S C=CR
+ .S II="" F  S II=$O(BUF(X,II)) Q:II=""  D
+ ..S D=BUF(X,II)
+ ..I II="zCOM" D WC^RWU(C_"Сводная информация|tp:"_D_"~~txt~~1~0|3") S C=CR Q
+ ..I II="zV" D WC^RWU(C_"Календарь прививок|tp:"_D_"~~tab~~1~0|5") S C=CR Q
+ ..I II="zE" D WC^RWU(C_"Краткий эпикриз|~~evt~mhist_bt_serv_list_link~1~0|6") S C=CR Q 
+ ..S OW=+$P(D,"|",3),TLX=$P(D,"|",2),D=$P(D,"|",1),ID=$P(II,",",3)
+ ..S R=$S(X<0:"",TIP=7:$$DT2^DTUTL(D)_" ",1:$C(9))_$S(TIP=1!(TIP=4)!(TIP=8)!(TIP=9)!(TIP=10):$$DT2^DTUTL(D)_" ",1:"")
+ ..S R=R_$G(^EPR(N,ID,"n"))
+ ..S T=$G(^("t")),E=$G(^("e")),IC=$G(^("ic")) ;S:'OW OW=+$P($G(^("s")),"|",1)>0
+ ..I $G(^("lng"))'="" S R=R_" (m)"
+ ..I TLX'="" S R=R_" (продолжение"_$S(TIP=10:"",1:" "_$TR($P($G(^EPRD(N,TLX,"diag")),CR," ")," ",1))_")"
+ ..S A=ID_"~"_T_"~"_E
+ ..S RR=$S(E="tab"!(E="rep")!(E="frm")!(E="exe")!(E="amr"):$G(^DTYPE(+T,"pfile")),1:"")
+ ..S:E="frm" OW=1
+ ..S:RR'="" $P(A,"~",4)=RR S:OW $P(A,"~",5)=OW ; TODO - visible
+ ..S:IC="" IC=$G(^DTYPE(+T,"ico")) S:IC="" IC=$$ICOID^IEPR(E)
+ ..D WC^RWU(C_R_"|"_A_"|"_IC)
+ ..S C=CR
+ D C^RWU
+ Q
+LT(N,TIP,STR,ORD) ; ВЫВОД ДЕРЕВА ИСТОРИИ ПО ПОИСКУ
+ ; Только подписанные документы
+ N BUF,R,RR,ID,II,OW,X,A,D,C,T,E,S,CLP,OD,H
+ I $D(^LOG(%LOG,"lcl","epr")) S R=^("epr") Q:$G(^LCL("epr",R,"show"))=0 
+ S STR=$TR($$WD^TXTU(STR),"|"," "),STR=$$LU^TXTU(STR),ORD=+$G(ORD)
+ S OW=$$KDR^IUSER() S:OW="" OW=%LOG
+ S C=$$^I("ilpu")
+ I $$LCL^IUSER("epr","clpuvr")=2,'$$USEInLPU^IKADRY(VR,+C,+$H) Q
+ S CLP=$$LCL^IUSER("epr","clpu") S:CLP CLP=C
+ I TIP'=2 S ID="" F  S ID=$O(^EPR(N,ID)) Q:ID=""  D
+ .S OD=""
+ .S R=+$P($G(^(ID,"s")),"|",1)
+ .I TIP=3 Q:R  ; рабочие
+ .I TIP'=3 Q:R=0 
+ .I TIP=6!(TIP=3) S OD=$G(^("o")) Q:"D|"_OW'=$P(OD,"|",1,2) 
+ .I CLP S:OD="" OD=$G(^("o")) S R=$P(OD,"|",3) I R'="",R'=CLP Q
+ .I TIP=5,$G(^("nn"))="" Q 
+ .S S=$$LU^TXTU($G(^("n"))) Q:S'[STR 
+ .S D=$P($G(^("dt")),"|",1),H=D,X=$S(+$G(^("bd")):-1,TIP=1:+$G(^("t")),TIP=4:+$P($G(^("p")),"|",1),1:+D)
+ .S:H'["," H=H_",0"
+ .S BUF(X,H_","_ID)=D
+ I TIP=2 S ID="" F  S ID=$O(^FPR(N,OW,ID)) Q:ID=""  D
+ .S D=$P($G(^EPR(N,ID,"dt")),"|",1),H=D,X=$S(+$G(^("bd")):-1,1:+D)
+ .S S=$$LU^TXTU($G(^("n"))) Q:S'[STR 
+ .S:H'["," H=H_",0"
+ .S BUF(X,H_","_ID)=D
+ G LI1
+LDVinf 
+ N A,Z,P,R,EE,CF,FT
+ S A=$P(OW,"|",2)
+ S FT="<field name=""",R=""" split=""line"" break=""no""/>"
+ S Z=$S($P(OW,"|",1)="P":$$FIOSH^IPACN(A),1:$$FIOSH^IKADRY(A))
+ S A="<vinfo><field name=""owner"" title="""_Z_R
+ S A=A_FT_"dtm"" title="""_$$DTM2^DTUTL(DT)_R
+ S:'SB A=A_FT_"sbsc"" fontcolor=""#FF1111"" title="""_$S($D(^EPR(N,ID,"s"))>1:"частично подписан",1:"не подписан")_R
+ S:$P($G(^EPR(N,ID,"s")),"|",4) A=A_FT_"qs"" href=""mhist_cqs"" fontcolor=""#007700"" title=""УКЭП"_R
+ 
+ S CF=$S('$D(^EPRLOG(N,ID,"e")):0,$$LCL^IUSER("epr","evlog")=0:0,1:1)
+ S:CF A=A_FT_"evlog"" href=""mhist_vevens"" title=""События"_R
+ 
+ D:$G(^cfg("epr","doc-comm"))  ; Комментирование
+ .S Z=$D(^EPRLOG(N,ID,"c"))
+ .S P=$G(^DTYPE(TP,"iscomm"))!$$LCL^IUSER("epr","iscomm")
+ .Q:'P&'Z 
+ .S A=A_FT_"comm"" href=""mhist_vcomm"""_$S(Z:" fontcolor=""#FFFF00""",1:"")_" title="""_$S(Z:"Комментарии ("_$$CommCNT^IEPR(N,ID)_")",1:"Комментировать")_R
+ 
+ D:$G(^cfg("epr","doc-estim")) ; Оценка
+ .Q:$G(^EPR(N,ID,"bd"))  ; для основн. не действ
+ .S Z=$$LCL^IUSER("epr","estimation") Q:Z=0 
+ .S A=A_FT_"est"" "_$S(Z:"href=""mhist_vestim"" ",1:"")_"title="""_$S($D(^EPR(N,ID,"est")):"Оценка "_$P(^("est"),"|",1),Z:"Оценить",1:"Оценки нет")_R
+ 
+ ; Дополнительные кнопки
+ S Z="" F  S Z=$O(^DTYPE(TP,"btns",Z)) Q:Z=""  D
+ .S P=^(Z),EE=$P(P,"|",2,99),P=$P(P,"|",1)
+ .I $E(EE)="@" X ("S EE="_$E(EE,2,99))
+ .S A=A_FT_Z_""" href="""_EE_""" title="""_P_R
+ D WC^RWU(A_"</vinfo>")
+ Q
+LDV(N,ID,PRM1,PRM2)          ; ВЫВОД ДОКУМЕНТА
+ I N=""!(ID="") Q 
+ N EXT,P,ND,TP,R,RO,Z,D,V,SB,OW,DT,oTP,RR,pID,LNG,PRT,TLX,X,UID
+ I $D(^LOG(%LOG,"lcl","epr")) S R=^("epr") I $G(^LCL("epr",R,"show"))=0 D MSG("Нет прав для просмотра.") Q 
+ S oTP="",PRM1=$G(PRM1),PRM2=$G(PRM2)
+ S:$P(ID,":",1)="tp" oTP=$P(ID,":",2),TP=oTP
+ S LNG=$G(^EPR(N,ID,"lng")) ; def.lang
+ I $P(ID,":",2)="en"!($P(ID,":",2)="ru") S LNG=$P(ID,":",2),ID=$P(ID,":",1) ; TODO lang
+ I oTP="",$G(^cfg("epr-viewlog")),$L(ID) S D=$H,^EPRLOG(N,ID,"e",D)="V|"_$$KDR^IUSER()_"||"_$$^I("ilpu") D GL^IEXCH("^EPRLOG",N,ID,"e",D)
+ S:oTP="" R=$G(^EPR(N,ID,"n")),EXT=$G(^("e")),TP=+$G(^("t"))
+ S RR=$G(^EPR(N,ID,"r")),TLX=$G(^("srd"))
+ S:RR="" RR=$G(^DTYPE(TP,"rights"))
+ ; TODO - rights
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<mhist><viewer>")
+ S:oTP'="" (SB,D)=1,DT=$H,OW="",R=$S($G(^DTYPE(TP,"cap"))'="":^("cap"),1:$G(^("tname"))),EXT=$G(^("ext"))
+ S:oTP="" D=+$G(^EPR(N,ID,"bd")),SB=+$P($G(^("s")),"|",1),DT=$G(^("dt")),OW=$G(^("o"))
+ S D=$S(D:"",1:", "_$$DT2^DTUTL(+DT))
+ S P=$G(^DTYPE(TP,"rproc")),pID=ID,PRT=""
+ I $E(P)="@" S PRT=$P(P,"@",2),P=$P(P,"@",3,99) ; параметр вызова/часть данных
+ S Z=$S(EXT="tab":"vtable",EXT="rpt":"vrpt",1:"")
+ I TLX'="" S TLX=$P($G(^EPRD(N,TLX,"diag"))," ",1) S:TLX'="" TLX=" по "_TLX
+ D WTAGC^RWU("name",R_D_TLX)
+ D WTAGC^RWU("realname",R)
+ D WTAG^RWU("subscr",SB)
+ D WTAG^RWU("dprofile",$G(^EPR(N,ID,"dp")))
+ S UID=$$UID^IEPR(N,ID)
+ D WTAG^RWU("ehruid",UID)
+ S X=$G(^DTYPE(TP,"printfn"))
+ D:X'="" WTAGC^RWU("printfn",X)
+ D:'SB
+ .S (V,X)=""
+ .F  S X=$O(^EPR(N,ID,"s",X)) Q:X=""  S V=$S(V="":"",1:V_CR)_X
+ .Q:V="" 
+ .D WTAGC^RWU("subscr_fl",V)
+ 
+ D WTAG^RWU("tp",TP),WTAG^RWU("ext",EXT)
+ S V=$G(^EPR(N,ID,"dp"))
+ D:V'="" WTAG^RWU("dprofile",V)
+ D:$P(OW,"|",1)="D" WTAG^RWU("owner",$P(OW,"|",2))
+ S RO=$S(P'="":1,$E(RR)="r":1,1:0) ; TODO - rights
+ D WTAGC^RWU("ro",RO) ; read only
+ ; подписи
+ S D=+$G(^DTYPE(TP,"sbstype")),V=$G(^("altvsbs"))
+ D:D WTAG^RWU("sbstype",D)
+ D:$L(V) WTAG^RWU("altvsbs",$S(V:1,1:0))
+ 
+ I Z="" D W^RWU("<content>")
+ I $L(Z) D W^RWU("</viewer><"_Z_">")
+ I EXT="rpt",P=""!(PRT="data") D LRPTs(TP,1,N,R,$G(^EPR(N,ID,"fk"))),W^RWU("<data>")
+ I $L(P) D @(P)
+ S ID=pID
+ I P="" D:EXT'="rpt" LDVdata(EXT="exe") D:EXT="rpt" LRPTdt(TP),LDVfield(0)
+ I EXT="rpt",P=""!(PRT="data") D WTAG^RWU("ehruid",UID),W^RWU("</data></streport>")
+ D:Z="" W^RWU("</content></viewer>")
+ D:$L(Z) W^RWU("</"_Z_">")
+ D LDVinf
+LDV1 D W^RWU("</mhist></nb_console>"),C^RWU
+ Q
+LDVD(N,ID,CLR)          ; ВЫВОД ДАННЫХ ДОКУМЕНТА
+ ; CLR - без служебных полей
+ I N=""!(ID="") Q 
+ N EXT,P,ND,TP,R,Z
+ D OWF^RWU(".bin"),W^RWU(^PP(0,1))
+ S R=$G(^EPR(N,ID,"n")),EXT=$G(^("e")),TP=+$G(^("t"))
+ S P=$G(^DTYPE(TP,"rproc"))
+ S Z=$S(EXT="tab":"vtable",EXT="rpt":"vrpt",1:"")
+ D:EXT="rpt" W^RWU("<streport><data>")
+ I $L(Z),$L(P) D @(P)
+ I P="",EXT'="rpt" D LDVdata(EXT="exe")
+ I P="",EXT="rpt" S CLR=$G(CLR) D:'CLR LRPTdt(TP) D LDVfield(CLR)
+ D:EXT="rpt" W^RWU("</data></streport>")
+ D C^RWU
+ Q
+LDVdata(ULN) ; ULN - вывод единичной строки	
+ S P=$D(^EPRD(N,ID)) Q:'P 
+ D:P'[0 WC^RWU($$TAG^TXTU(^(ID)))
+ Q:$G(ULN)
+ S P="" F  S P=$O(^EPRD(N,ID,P)) Q:P=""  D:P'="__d"&(P'="__s") WC^RWU($$TAG^TXTU(^(P)))
+ Q
+LDVfield(CLR) 
+ ; CLR - только данные из ^EPRD	
+ N K,PF,R
+ S PF=$S($D(^DTYPE(TP,"privatefl")):1,1:0),CLR=$G(CLR)
+ S:$$LCL^IUSER("epr","no-priv-fl") PF=0
+ I PF N VR,SP,OT,CV S VR=$P($G(^EPR(N,ID,"o")),"|",2),SP=$$SPEC^IKADRY(VR),OT=$$OTD^IKADRY(VR),CV=$$KDR^IUSER()
+ S LNG=$G(LNG)
+ S P="" F  S P=$O(^EPRD(N,ID,P)) Q:P=""  D
+ .I CLR Q:P="__d"  Q:P="__s"  Q:P="pid"  
+ .I LNG'=""  S K=$G(^EPRD(N,ID,P,LNG)) S:K=""&('$D(^EPRD(N,ID,P,LNG))) K=$G(^EPRD(N,ID,P))
+ .E  S K=$G(^EPRD(N,ID,P))
+ .I PF,$D(^DTYPE(TP,"privatefl",P)) S R=^(P) Q:$S(R["O":OT'=$$OTD^IKADRY(CV),R["S":$$SPEC^IKADRY(CV)'=SP,R["D":CV'=VR,1:0) 
+ .D WC^RWU("<"_P_$S(CLR:"",$P($G(^EPR(N,ID,"s",P)),"|",1)=2:" subscr=""1""",1:"")_">"_$$TAG^TXTU(K))
+ .S K="" F  S K=$O(^EPRD(N,ID,P,K)) Q:K=""  I K'="ru",K'="en" D WC^RWU($$TAG^TXTU(^(K)))
+ .D WC^RWU("</"_P_">")
+ Q
+LDPRN(N,ID,IDP,TP) ; Load print pattern
+ ; IDP - ID of print
+ S TP=$G(TP)
+ I N=""!((ID="")&(TP="")) Q 
+ N R
+ I $L(ID),$G(^cfg("epr-viewlog")) S R=$H,^EPRLOG(N,ID,"e",R)="P|"_$$KDR^IUSER() D GL^IEXCH("^EPRLOG",N,ID,"e",R)
+ D OWF^RWU(".xml"),W^RWU(^PP(0,1))
+ S R="" S:$L(ID) R=$G(^EPR(N,ID,"n")),TP=$S(TP="":+$G(^("t")),1:TP)
+ D LRPTp(TP,R,IDP)
+ D C^RWU
+ Q
+LDPRNL(N,ID) ; Load print pattern's list
+ N R,TP
+ S R=$G(^EPR(N,ID,"n")),TP=+$G(^("t"))
+ D PRNTP^YIMHS(TP)
+ Q
+COMMLST(NIB,ID) ; Список комментариев
+ N A,T,R,K
+ S T="",A="|Новый комментарий"
+ F  S T=$O(^EPRLOG(NIB,ID,"c",T)) Q:T=""  S R=^(T),K=$P(T,",",3),R=$P(R,"|",2,99),A=A_CR_T_"|"_$$DTM2^DTUTL($P(T,",",1,2))_$C(9)_$$FIO^IKADRY(K)_$C(9)_R
+ D MSG^RWU(A)
+ Q
+EVLIST(N,ID) ; Список событий по пациенту
+ N A,T,R,K
+ S (T,A)=""
+ F  S T=$O(^EPRLOG(N,ID,"e",T)) Q:T=""  D
+ .S R=^(T),K=$P(R,"|",1),L=$P(R,"|",4),R=$P(R,"|",2)
+ .S A=A_$S(A="":"",1:CR)_T_","_K_"|"_$S(K="S":"Подписан",K="Q":"Подписан УКЭП",K="H":"Частично подписан",K="U":"Убрана подпись",K="P":"Напечатан",K="V":"Просмотрен",K="W":"Сохранен",1:K)_$C(9)_$$DTM2^DTUTL(T)_$C(9)_$$FIO^IKADRY(R)_$S(L'="":", "_$$NAME^ICONTR(L),1:"")
+ D MSG^RWU(A)
+ Q
+EVCNT(N,ID,TP) ; Число событий опред. типа
+ N TM,C
+ S TM="",C=0
+ F  S TM=$O(^EPRLOG(N,ID,"e",TM)) Q:TM=""  S:$P(^(TM),"|",1)=TP C=C+1
+ Q C
+TPLST(N,SEC) ; Перечень типов документов
+ ; SEC - флаг, не показывать "особые" документы - TODO
+ Q:N="" 
+ N R,A,T
+ S (A,T)=""
+ F  S T=$O(^EPRI("t",N,T)) Q:T=""  S R=$G(^DTYPE(T,"tname")) S:R'="" A=$S(A="":"",1:A_CR)_T_"|"_R
+ D MSG^RWU(A)
+ Q
+DELD(N,ID) ; УДАЛЕНИЕ ДОКУМЕНТА
+ N FL,R,X,K,T,D
+ I $D(^LOG(%LOG,"lcl","epr")) S R=^("epr") I $G(^LCL("epr",R,"del"))=0 D MSG("Нет прав для удаления документа.") Q 
+ I $$LCL^IUSER("epr","delusbs"),$$ISDOSB^IEPR(N,ID) D MSG("Запрещено удаление расподписанного документа.") Q 
+ I '$D(^EPR(N,ID)) D MSG("Документ отсутствует.") Q 
+ I +$P($G(^(ID,"s")),"|",1) D MSG("Документ подписан.") Q 
+DELsys S K=$G(^EPR(N,ID,"o"))
+ S R=$G(^("r")),FL=$G(^("f"))
+ D RMIDX^IEPR(N,ID)
+ D K^ISSG("^EPR("_N_","_ID_")")
+ D:$D(^EPR(N,ID,"sys-exec")) SYSExec(N,ID,"del")
+ S X=$H
+ M ^EPRBKD(N,ID,X,"i")=^EPR(N,ID),^EPRBKD(N,ID,X,"d")=^EPRD(N,ID)
+ M ^EPRBKD(N,ID,X,"l")=^EPRLOG(N,ID)
+ S ^EPRBKD(N,ID,X)=%LOG
+ K ^EPR(N,ID),^EPRD(N,ID)
+ ; удаляем избранное
+ S X="" F  S X=$O(^FPR(N,X)) Q:X=""  I $D(^(X,ID)) K ^(ID) D KGL^IEXCH("^FPR",N,X,ID) Q 
+ D:+$G(^cfg("exch"))
+ .D UPD(N,ID)
+ .D:$L(FL) DELUPD^IEXCH("DISK",FL)
+ .D:$D(^EPRLOG(N,ID)) KGL^IEXCH("^EPRLOG",N,ID)
+ .D:$D(^EPRBK(N,ID)) KGL^IEXCH("^EPRBK",N,ID)
+ K ^EPRLOG(N,ID),^EPRBK(N,ID)
+ Q:FL="" 
+ S FL=$$FNDIR^YYBPAS(FL),FL=%DISK_FL ; todo - in UNIX
+ D DEL^FIL(FL)
+ ; todo - IEXCH del file
+ Q
+SYSExec(Nib,Id,Action) ; Процедуры, выполняемые при изменении документа
+ N PRC,Data
+ S PRC="" F  S PRC=$O(^EPR(Nib,Id,"sys-exec",PRC)) Q:PRC=""  S Data=^(PRC) D @PRC
+ Q
+MKDOC(NIB,TP,NAME,SBSC,DT,KDR) ; Создать документ на основе типа
+ G MKDOC+1^IEPR
+SETEST(NIB,ID,VAL) ; Установить оценку
+ Q:'$$LCL^IUSER("epr","estimation") 
+ D SET^IEPR(NIB,ID,"est",VAL,1)
+ Q
+SETCOMM(NIB,ID,IDX,TXT) ; Добавить комментарий
+ S TXT=$TR($$WD^TXTU(TXT),"|"," ")
+ N K
+ S K=$$KDR^IUSER()
+ I IDX'="",$P($P(IDX,",",3),"@",1)'=$P(K,"@",1) D MSG^RWU("Вы не вправе изменить этот комментарий.") Q 
+ S:IDX="" IDX=$H_","_K
+ S ^EPRLOG(NIB,ID,"c",IDX)="|"_TXT_"|"_$$KDR^IUSER()_"|"_$$^I("ilpu")
+ D GL^IEXCH("^EPRLOG",NIB,ID,"e",IDX)
+ Q
+SETDT(NIB,ID,DT) ; set date of doc.
+ Q:NIB=""!(ID="") 
+ N D,OW,R
+ S D=$P($G(^EPR(NIB,ID,"dt")),"|",1)
+ Q:D=DT  
+ I D'="" K ^EPRI("dt",+D,NIB,ID),^EPRI("nd",NIB,+D,ID) D KGL^IEXCH("^EPRI","dt",+D,NIB,ID),KGL^IEXCH("^EPRI","nd",NIB,+D,ID)
+ S D=$G(^EPR(NIB,ID,"t")),OW=$$USR^IUSER()
+ S R=$G(^EPR(NIB,ID,"dt")),$P(R,"|",1)=DT,$P(R,"|",2)=OW
+ S ^EPR(NIB,ID,"dt")=R
+ S ^EPRI("dt",+DT,NIB,ID)=$P($G(^EPR(NIB,ID,"o")),"|",3)
+ S ^EPRI("nd",NIB,+DT,ID)=D_"|"_OW
+ Q
+FLTYPE(NIB,ID,FL) ; Получить тип поля
+ Q:FL="" ""
+ S ID=$G(^EPR(NIB,ID,"t")) Q:ID="" ""
+ Q $G(^DTYPE(ID,"fields",FL,"@tp"))
+FLLST(NIB,ID) ; Получить все поля
+ S ID=$G(^EPR(NIB,ID,"t")) I ID="" Q 
+ D FIELDS^YIMHS(ID)
+ Q
+FLSET(NIB,ID,FL,R,UPD) ; Установить поле
+ Q:NIB=""  Q:ID=""   
+ ; TODO - rights
+ S:$L(FL) ^EPRD(NIB,ID,FL)=$$WD^TXTU(R)
+ S:'$L(FL) ^EPRD(NIB,ID)=$$WD^TXTU(R)
+ D:$G(UPD) UPD(NIB,ID)
+ Q
+FLGET(NIB,ID,FL) ; Получить поле
+ Q:NIB=""  Q:ID=""  Q:FL="" 
+ D MSG^RWU($S(FL="":$G(^EPRD(NIB,ID)),1:$G(^EPRD(NIB,ID,FL))))
+ Q
+LASTFL(NIB,FLN,TPX,NSBS) ; Получить последнее значение поля по имени
+ ; TPX - тип, ="" из любого типа
+ ; NSBS - неподпис.
+ N TP,ID,D,F,LT
+ S (TP,F,D)="",TPX=$G(TPX),NSBS=$G(NSBS) S:TPX LT(TPX)=""
+ I TPX="" F  S TP=$O(^DTYPEI("fields",FLN,TP)) Q:TP=""  S LT(TP)=""
+ Q:'$D(LT) ""
+ F  S D=$O(^EPRI("nd",NIB,D),-1) Q:D=""!(F'="")  S ID="" F  S ID=$O(^EPRI("nd",NIB,D,ID)) Q:ID=""  S TP=+$P(^(ID),"|",1) I $D(LT(TP)),$S(NSBS:1,1:$P($G(^EPR(NIB,ID,"s")),"|",1)),$D(^EPRD(NIB,ID,FLN))'[0 S F=^(FLN) Q:F'="" 
+ Q F
+LASTFLD(NIB,FLN,TPX,WVAR,NSBS) ; Получить последние значения поля по имени на дату
+ ; TPX - тип, ="" из любого типа
+ ; NSBS - неподпис.
+ N TP,ID,D,F,LT,FD
+ S (TP,F,D,FD)="",TPX=$G(TPX),NSBS=$G(NSBS) S:TPX LT(TPX)=""
+ I TPX="" F  S TP=$O(^DTYPEI("fields",FLN,TP)) Q:TP=""  S LT(TP)=""
+ Q:'$D(LT) 0
+ F  S D=$O(^EPRI("nd",NIB,D),-1) Q:D=""!F  D
+ .S ID="" F  S ID=$O(^EPRI("nd",NIB,D,ID)) Q:ID=""  S TP=+$P(^(ID),"|",1) I $D(LT(TP)),$S(NSBS:1,1:$P($G(^EPR(NIB,ID,"s")),"|",1)),$D(^EPRD(NIB,ID,FLN))'[0 S F=^(FLN),FD=D,@WVAR@(ID)=F,F=1
+ Q:$D(@WVAR) 1
+ Q 0
+GETDATA(NIB,ID,FL) ; Получить поле структурированного документа (или txt)
+ Q:NIB=""!(ID="")!(FL="") ""
+ N A,P S P=""
+ I $L(FL) S A=$G(^EPRD(NIB,ID,FL)) F  S P=$O(^EPRD(NIB,ID,FL,P)) Q:P=""  S A=A_^(P) ; rpt
+ I FL="" S A=$G(^EPRD(NIB,ID)) F  S P=$O(^EPRD(NIB,ID,P)) Q:P=""  S A=A_^(P)  ; txt, rtf
+ Q A
+NEWPAC(DT) ; Пациенты с новыми документами на дату
+ S DT=$$DIH^DTUTL(DT)
+ D OWF^RWU(".txt")
+ D C^RWU
+ Q
+UPD(NI,ID) 
+ Q:'+$G(^cfg("exch"))
+ D UPD^IEXCH("YIMH",NI_","_ID)
+ Q
+MSG(X) 
+ D MSG^RWU(X)
+ Q
+WXCH(NI) 
+ N ID,GL,TP
+ S ID=$P(NI,",",2),NI=$P(NI,",",1)
+ ; common
+ S GL("E0")="-^EPR("_NI_","_ID_")"
+ S GL("E1")="^EPR("_NI_","_ID
+ ; data
+ S GL("D0")="-^EPRD("_NI_","_ID_")"
+ S GL("D1")="^EPRD("_NI_","_ID
+ ; index
+ S TP=$G(^EPR(NI,ID,"t")) D:$L(TP) ; type
+ .I '$D(^EPRI("t",NI,TP,ID)) S GL("T")="-^EPRI(""t"","_NI_","_TP_","_ID_")"
+ .E  S GL("T")="^EPRI(""t"","_NI_","_TP_","_ID_")"
+ S TP=$P($G(^EPR(NI,ID,"dt")),"|",1) D:TP'="" ; date
+ .S TP=+TP ; only date
+ .I '$D(^EPRI("nd",NI,TP,ID)) S GL("ND")="-^EPRI(""nd"","_NI_","_TP_","_ID_")"
+ .E  S GL("ND")="^EPRI(""nd"","_NI_","_TP_","_ID_")"
+ .I '$D(^EPRI("dt",TP,NI,ID)) S GL("DT")="-^EPRI(""dt"","_TP_","_NI_","_ID_")"
+ .E  S GL("DT")="^EPRI(""dt"","_TP_","_NI_","_ID_")"
+ 
+ D S^XGUNET("GL","exp.nb-data")
+ ; K GL S GL=$G(^EPR(NI,ID,"f"))
+ ; D:GL'="" UFIL^IEXCH(GL)
+ Q
+RXCH 
+ D R^XGUNET("hpar")
+ Q
+
+
+

@@ -1,0 +1,67 @@
+11:27 PM  9-FEB-26
+
+NIPPCAB
+NIPPCAB ; Утилиты интеграции с личным каб. пациента [ 02/10/2026  12:05 AM ]
+
+USRLST(LOGFROM,LIM,ORG) ; Получить порцию пользователей для синхронизации
+ ; LOGFROM - логин, после которого выбираем пользователей
+ ; LIM - максимальное количество записей (не более 100)
+ ; ORG - идентификатор организации
+ N CR,CNT,PASS,NIB,FIOF,FIOI,FIOO,DATAR,SEX,PAGER,BIRTHDATE,EXTDATE,GENDER,FIO,A,OUT
+ S LIM=+$G(LIM) S:LIM'>0 LIM=100 S:LIM>100 LIM=100
+ S LOGFROM=$$WD^TXTU($G(LOGFROM)),ORG=+$G(ORG),CNT=0,CR=$C(13,10),OUT=""
+ F  S LOGFROM=$O(^PPCAB(LOGFROM)) Q:LOGFROM=""  Q:CNT'<LIM  D
+ .S PASS=$G(^PPCAB(LOGFROM)),NIB=$G(^PPCAB(LOGFROM,"n"))
+ .I NIB'="" D
+ ..S FIOF=$$GET^IPAC(NIB,"fiof"),FIOI=$$GET^IPAC(NIB,"fioi"),FIOO=$$GET^IPAC(NIB,"fioo")
+ ..S DATAR=$$GET^IPAC(NIB,"datar"),SEX=$$GET^IPAC(NIB,"pol"),PAGER=$$GET^IPAC(NIB,"pager")
+ ..S BIRTHDATE="" I DATAR'="" S EXTDATE=$$DT^DTUTL(DATAR),BIRTHDATE=$P(EXTDATE,".",3)_"-"_$P(EXTDATE,".",2)_"-"_$P(EXTDATE,".",1)
+ ..S GENDER=$S(SEX=1:"M",SEX=2:"F",1:"")
+ .E  D
+ ..S FIO=$G(^PPCAB(LOGFROM,"fio")),FIOF=$P(FIO," ",1),FIOI=$P(FIO," ",2),FIOO=$P(FIO," ",3)
+ ..S BIRTHDATE="",GENDER="",PAGER=$G(^PPCAB(LOGFROM,"phn"))
+ .S A=LOGFROM_"|"_PASS_"|"_FIOI_"|"_FIOF_"|"_FIOO_"|"_BIRTHDATE_"|"_GENDER_"|"_$$MPHN^TXTU(PAGER)_"|"_ORG_"|"_NIB
+ .S OUT=OUT_$S(OUT="":"",1:CR)_A,CNT=CNT+1
+ I OUT'="" D MSG^RWU(OUT)
+ Q
+GENOTP(PHN,EML,LOG)     ; создать и сохранить OTP код
+ ; PHN - или телефон для идентификации
+ ; EML - или email для идентификации
+ ; LOG - логин пациента
+ N KEY,CODE,DT,EXP,EXPSEC
+ S PHN=$TR($G(PHN),"+ -()"),EML=$$WD^TXTU($G(EML)),LOG=$$WD^TXTU($G(LOG))
+ I LOG="" D MSG^RWU("ERROR:EMPTY_LOGIN") Q 
+ S KEY=LOG
+ I KEY="" S KEY=$S(PHN'="":"P:"_PHN,EML'="":"E:"_EML,1:"")
+ I KEY="" D MSG^RWU("ERROR:IDENT_REQUIRED") Q 
+ ; Временный код 4 знака
+ S CODE=$E($J($R(10000),4),1,4)
+ S DT=$H
+ S ^XTMP("NIPPCAB","OTP",KEY,"code")=CODE
+ S EXPSEC=$P(DT,",",2)+600,EXP=+DT
+ I EXPSEC'<86400 S EXP=$$AFTERD^DTUTL(EXP,1),EXPSEC=EXPSEC-86400
+ S ^XTMP("NIPPCAB","OTP",KEY,"exp")=EXP_","_EXPSEC
+ S ^XTMP("NIPPCAB","OTP",KEY,"dt")=DT
+ D MSG^RWU(CODE)
+ Q
+CHGPWD(PHN,EML,LOG,PWD,OTP,BDATE) ; Обновить пароль по OTP и EML/PHN/логину
+ N KEY,SCODE,EXP,NOW,NIB,DATAR,IBDATE
+ S PHN=$TR($G(PHN),"+ -()"),EML=$$WD^TXTU($G(EML)),LOG=$$WD^TXTU($G(LOG))
+ S OTP=$TR($G(OTP)," "),PWD=$G(PWD),BDATE=$G(BDATE)
+ I LOG="" D MSG^RWU("ERROR:EMPTY_LOGIN") Q 
+ S KEY=LOG
+ S SCODE=$G(^XTMP("NIPPCAB","OTP",KEY,"code"))
+ S EXP=$G(^XTMP("NIPPCAB","OTP",KEY,"exp"))
+ S NOW=$H
+ I SCODE=""!(EXP="")!($$CMPDTM^DTUTL(NOW,EXP)=1) D MSG^RWU("ERROR:OTP_EXPIRED") Q 
+ I SCODE'=OTP D MSG^RWU("ERROR:OTP_INVALID") Q 
+ ; Доп.проверка даты рождения по сохраненным данным
+ S NIB=$G(^PPCAB(LOG,"n"))
+ I NIB'="",BDATE'="" D  I IBDATE'=BDATE D MSG^RWU("ERROR:BIRTHDATE_MISMATCH") Q 
+ .N EXTDATE
+ .S DATAR=$$GET^IPAC(NIB,"datar"),IBDATE=""
+ .I DATAR'="" S EXTDATE=$$DT^DTUTL(DATAR),IBDATE=$P(EXTDATE,".",3)_"-"_$P(EXTDATE,".",2)_"-"_$P(EXTDATE,".",1)
+ S ^PPCAB(LOG)=PWD
+ K ^XTMP("NIPPCAB","OTP",KEY)
+ D MSG^RWU("OK")
+ Q

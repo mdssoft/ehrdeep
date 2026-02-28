@@ -1,0 +1,109 @@
+11:59 PM  23-FEB-26
+
+MECRAG
+MECRAG ; Routines for anonymized EPR export for RAG [ 02/23/2026  11:59 PM ]
+
+ANONDOCS(DS,DE,LIM,CURSOR,DIAG) ; Export anonymized EPR documents as JSON
+ ; DS - date from (DD.MM.YYYY)
+ ; DE - date to (DD.MM.YYYY)
+ ; LIM - max records
+ ; CURSOR - "DT|NI|ID" of last delivered record
+ ; DIAG - optional diagnosis filter (comma separated ICD-10)
+ N D1,D2,DT,NI,ID,CNT,ITEM,HM,NEXT,DIAGALL,DIAGP,TXT1,TXT2,TXT3,AN,TP
+ N CDT,CNI,CID,CDS
+ 
+ S D1=$$DI^DTUTL($G(DS)),D2=$$DI^DTUTL($G(DE))
+ I D1="" S D1=0
+ I D2="" S D2=+$H
+ S LIM=+$G(LIM) S:LIM'>0 LIM=100 S:LIM>1000 LIM=1000
+ S DIAG=$$UP^TXTU($$TRIM^TXTU($G(DIAG)))
+ 
+ S CDS=$S($G(CURSOR)'="":1,1:0)
+ S CDT=+$P($G(CURSOR),"|",1),CNI=$P(CURSOR,"|",2),CID=$P(CURSOR,"|",3)
+ 
+ D OWF^RWU(".txt")
+ D W^RWU("{""items"":[")
+ S (CNT,HM)=0,NEXT=""
+ S DT=D1-1
+ F  S DT=$O(^EPRI("dt",DT)) Q:DT=""!(DT>D2)!(HM)  D
+ .S NI="" F  S NI=$O(^EPRI("dt",DT,NI)) Q:NI=""!(HM)  D
+ ..S ID="" F  S ID=$O(^EPRI("dt",DT,NI,ID)) Q:ID=""!(HM)  D
+ ...Q:'$$CURSOROK(DT,NI,ID,CDS,CDT,CNI,CID)
+ ...Q:'$D(^EPR(NI,ID))
+ ...S TP=$G(^EPR(NI,ID,"t")) Q:TP=""
+ ...Q:$P($G(^EPR(NI,ID,"s")),"|",1)=0
+ ...S DIAGP=$$TRIM^TXTU($G(^EPRD(NI,ID,"diag")))
+ ...S DIAGALL=$$DIAG^IEPR(NI,ID)
+ ...I DIAG'="",'$$DIAGOK(DIAGALL_","_DIAGP,DIAG) Q
+ ...S TXT1=$$GETFL(NI,ID,"жалобы;chief_complaints;complaints")
+ ...S TXT2=$$GETFL(NI,ID,"анамнез;anamnesis;history")
+ ...S TXT3=$$GETFL(NI,ID,"объективно;status;findings")
+ ...S AN=$$ANON(NI)
+ ...S ITEM="{""sample_id"":"""_$$JSE(AN_"-"_ID)_"""",""patient_ref"":"""_$$JSE(AN)_"""",""doc_id"":"""_$$JSE(ID)_"""",""doc_date"":"""_$$JSE($$DT^DTUTL(DT))_"""",""doc_name"":"""_$$JSE($G(^EPR(NI,ID,"n")))_"""",""diag_primary"":"""_$$JSE(DIAGP)_"""",""diag_all"":"""_$$JSE(DIAGALL)_"""",""complaints"":"""_$$JSE(TXT1)_"""",""anamnesis"":"""_$$JSE(TXT2)_"""",""findings"":"""_$$JSE(TXT3)_""""}" 
+ ...D WC^RWU($S(CNT=0:"",1:",")_ITEM)
+ ...S CNT=CNT+1,NEXT=DT_"|"_NI_"|"_ID
+ ...I CNT'<LIM D  Q
+ ....S HM=0
+ ....I $$HASNEXT(DT,NI,ID,D2) S HM=1
+ D WC^RWU("],""nextCursor"":"""_$$JSE($S(HM:NEXT,1:""))_"""",""hasMore"":"_$S(HM:1,1:0)_"}")
+ D C^RWU
+ Q
+
+HASNEXT(DT,NI,ID,D2) ; Is there at least one record after current position
+ N NXDT,NXNI,NXID
+ S NXID=$O(^EPRI("dt",DT,NI,ID))
+ I NXID'="" Q 1
+ S NXNI=$O(^EPRI("dt",DT,NI))
+ I NXNI'="" Q 1
+ S NXDT=$O(^EPRI("dt",DT))
+ I NXDT'="",NXDT'>D2 Q 1
+ Q 0
+
+CURSOROK(DT,NI,ID,CDS,CDT,CNI,CID) ; cursor filter
+ I 'CDS Q 1
+ I DT>CDT Q 1
+ I DT<CDT Q 0
+ I NI>CNI Q 1
+ I NI'=CNI Q 0
+ I ID>CID Q 1
+ Q 0
+
+DIAGOK(ALL,FILTER) ; any diagnosis code intersection
+ N A,F,I,OK,X
+ S A=$$UP^TXTU($TR($G(ALL)," ","")),F=$$UP^TXTU($TR($G(FILTER)," ","")),OK=0
+ S A=","_A_"," 
+ F I=1:1:$L(F,",") S X=$P(F,",",I) I X'="",A[(","_X_",") S OK=1 Q
+ Q OK
+
+GETFL(NI,ID,FLST) ; First non-empty field from list
+ N I,F,R
+ S R=""
+ F I=1:1:$L(FLST,";") S F=$P(FLST,";",I) Q:F=""  I $D(^EPRD(NI,ID,F)) S R=$G(^(F)) Q:R'=""
+ Q $$SAFE(R)
+
+SAFE(X) ; strip control chars for transport
+ S X=$G(X)
+ S X=$TR(X,$C(13)," ")
+ S X=$TR(X,$C(10)," ")
+ S X=$TR(X,$C(9)," ")
+ S X=$$TRIM^TXTU($$DBLSP^TXTU(X))
+ Q $E(X,1,12000)
+
+ANON(NI) ; stable pseudonym by NI
+ N H
+ S H=$$CALC^IMD5("MECRAG|"_NI)
+ Q "P"_$E(H,1,12)
+
+JSE(X) ; JSON string escape
+ N I,C,R
+ S X=$G(X),R=""
+ F I=1:1:$L(X) S C=$E(X,I) D
+ .I C="""" S R=R_"\"" Q
+ .I C="\" S R=R_"\\\\" Q
+ .Q:$A(C)<32
+ .S R=R_C
+ Q R
+
+MSG(X)
+ D MSG^RWU(X)
+ Q

@@ -1,0 +1,30 @@
+{
+  "name": "ehrdeep",
+  "version": "0.1.0",
+  "description": "EHR pattern analysis infrastructure (MIS -> NLP -> Vector DB -> OpenRouter)",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node bin/cli.js",
+    "ingest": "node bin/cli.js ingest",
+    "analyze": "node bin/cli.js analyze --text-file ./sample-new-case.txt --diagnosis K74.6",
+    "proxy:server": "node mis-proxy/bin/proxy-server.js",
+    "proxy:agent": "node mis-proxy/bin/proxy-agent.js",
+    "proxy:gateway": "node mis-proxy/bin/proxy-gateway.js",
+    "proxy:smoke": "node mis-proxy/scripts/local-smoke.js",
+    "openrouter:smoke": "node bin/openrouter-default-smoke.js",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.9.1",
+    "dotenv": "^16.4.7",
+    "iconv-lite": "^0.6.3",
+    "zod": "^3.24.2"
+  },
+  "optionalDependencies": {
+    "@lancedb/lancedb": "^0.20.0"
+  }
+}

@@ -1,0 +1,314 @@
+11:29 PM  9-FEB-26
+
+YIMHH
+YIMHH ; ИСТОРИЯ БОЛЕЗНИ - HTML [ 08/25/2025  2:40 AM ]
+VIEW(NI,DS,DE,RDIR) ; View EPR in HTML
+ ; RDIR - reverce direction
+ N A,ID,TP,R,P,DT,OW,NM,PLL,X,K,Z,T,I,B,VR,FK,CLP,D,LST,BR,AL,ADT
+ S DS=$$DI^DTUTL(DS),DE=$$DI^DTUTL(DE),RDIR=$S($G(RDIR):-1,1:1)
+ S CLP=$$LCL^NUSER("epr","clpu")
+ S:'CLP CLP=$$LCL^NUSER("epr","clpult")
+ S:CLP CLP=$$^I("ilpu")
+ S AL=$$LCL^IUSER("epr","acclevel")
+ S ADT=+$$LCL^IUSER("epr","accdays") S:ADT ADT=$H-ADT
+ D vhhdr
+ S A=$$GET^IPAC(NI,"apin")
+ I A'="",A'=$$GS^IUSER("epr","apin") G VIEWe
+ I $$GET^IPAC(NI,"epracclevel")>AL G VIEWe
+ S ID="" F  S ID=$O(^EPR(NI,ID)) Q:ID=""  D
+ .S D=+$P($G(^(ID,"dt")),"|",1)
+ .I DS'="",D<DS Q 
+ .I DE'="",D>DE Q 
+ .I ADT,D<ADT Q 
+ .Q:$G(^("h")) 
+ .Q:$G(^("al"))>AL ; access level
+ .I CLP S R=$P($G(^("o")),"|",3) I R'="",R'=CLP Q 
+ .S LST(D_"|"_ID)=""
+ S ID="" F  S ID=$O(LST(ID),RDIR) Q:ID=""  D VIEWsys(NI,$P(ID,"|",2),DS,DE)
+VIEWe 
+ D WC^RWU("</body></html>")
+ D C^RWU
+ Q
+VIEWsys(NI,ID,DS,DE,NSBS,SYS,BKID) ; Вывод документа
+ ; NSBS - и неподписанного
+ ; SYS - системная информация
+ ; BKID - идентификатор предыдущей копии
+ N GRP,GRPR,G,PG,Lab
+ S TP=$G(^EPR(NI,ID,"t")) Q:TP=""  
+ S Lab=0
+ I $P($G(^DTYPE(TP,"uid")),"/",1)="lab" S Lab=1
+ I $G(^EPR(NI,ID,"e"))'="rpt",'Lab Q 
+ I '$G(NSBS),+$P($G(^("s")),"|",1)=0 Q 
+ ; TODO - неподпись отдельных полей
+ S SYS=+$G(SYS),BKID=$G(BKID)
+ S DT=$P($G(^("dt")),",",1)
+ I DS'="",DT<DS Q 
+ I DE'="",DT>DE Q 
+ S NM=$G(^("n")),OW=$P($G(^("o")),"|",1,2),FK=$G(^("fk"))
+ S K=$P(OW,"|",2),T=$P(OW,"|",1)
+ S OW=$$Vget("dfio")
+ S:OW="" OW=$S(T="D":$$FIO^IKADRY(K),T="P":$$FIO^IPAC(K),1:"")
+ S A="<b>"_$$DT^DTUTL(DT)_"</b> "_$$TAG^TXTU(NM)
+ D WC^RWU(CR_"<p class=""hdr"">"_A_"</p>")
+ G:Lab VIEWlab
+ K PLL
+ S P=""
+ I '$L(FK) F  S P=$O(^DTYPE(TP,"fields",P)) Q:P=""  D VIEWflp
+ I $L(FK) F  S P=$O(^DTYPE(TP,"fieldkey",FK,P)) Q:P=""  D VIEWflp
+ S B=0,PG=""
+ S X="" F  S X=$O(PLL(X)) Q:X=""  D
+ .S P=PLL(X),R=$$Vget(P)
+ .Q:R=""
+ .S T=PLL(X,2),G=PLL(X,3)
+ .I T="cpl" S K=R,R="" F I=1:1:$L(K,CR) S Z=$P(K,CR,I),R=$S(R="":"",1:R_"<br>")_$S(Z["|":$P(Z,"|",2),1:Z)
+ .S:T="chk" R=$S(R:"Да",1:"Нет")
+ .S BR=$G(^DTYPE(TP,"fields",P,"@br")) S:BR="" BR=1
+ .S R=$$TAG^TXTU(R)
+ .S:T="stof" R=$$destof(R) ; after $$TAG
+ .S:T="m" R=$$TRT^TXTU(R,CR,"<br>")
+ .I G'=PG D WC^RWU(CR_"<div class=""gray"">"_$$TAG^TXTU(G)_"</div>") S B=0
+ .D WC^RWU(CR_$S('B:"",BR:"<br>",1:"&nbsp;")_"<b>"_PLL(X,1)_":</b> "_R)
+ .S B=1,PG=G
+ S X=OW S:X'="" X="<b>"_OW_"</b>"
+ S:SYS X=$S(X="":"",1:X_"<br>")_$$DTM^DTUTL($G(^EPR(NI,ID,"dt")))
+ D:X'="" WC^RWU(CR_"<div class=""right"">"_X_"</div><br>")
+ Q
+VIEWlab 
+ N IDL
+ S IDL=$G(^EPR(NI,ID,"data"))
+ D WHTML^NMLABR(IDL,"",0,2)
+ Q
+VIEWDOC(NIB,ID,NSBS,SYS) ; Вывод единичного документа
+ N A,TP,R,P,DT,OW,NM,PLL,X,K,Z,T,I,B,VR,FK,BR
+ D vhhdr
+ D VIEWsys(NIB,ID,"","",$G(NSBS),$G(SYS))
+ D WC^RWU("</body></html>")
+ D C^RWU
+ Q
+VIEWDOCV(NIB,ID,NSBS,SYS) ; Вывод единичного документа с версиями
+ N A,TP,R,P,DT,OW,NM,PLL,X,K,Z,T,I,B,VR,FK,BR,BIX
+ D vhhdr
+ D VIEWsys(NIB,ID,"","",$G(NSBS),$G(SYS))
+ S BIX="" F  S BIX=$O(^EPRBK(NIB,ID,BIX)) Q:BIX=""  D
+ .D WC^RWU(CR_"<p class=""red"">Копия от "_$$DTM^DTUTL(BIX)_"</p>")
+ .D VIEWsys(NIB,ID,"","",$G(NSBS),$G(SYS),BIX)
+ D WC^RWU("</body></html>")
+ D C^RWU
+ Q
+Vget(P) 
+ Q:BKID'="" $G(^EPRBK(NI,ID,BKID,"d",P))
+ Q $G(^EPRD(NI,ID,P))
+VIEWflp ; Fill field info
+ S A=$G(^(P)) Q:A="" 
+ S T=$G(^(P,"@tp")) Q:T="n"  Q:T="i" 
+ Q:$G(^("@sw"))=0 
+ S PLL(A)=P,PLL(A,1)=$G(^("@tit")),PLL(A,2)=T,PLL(A,3)=$G(^("@grp"))
+ Q
+vhhdr ; 
+ D MINHDR^IHTML("")
+ D WC^RWU(CR_"<style type=""text/css""><!--")
+ D WC^RWU(CR_".hdr { background-color: #66CCFF; }")
+ D WC^RWU(CR_".red { background-color: #DD8888; }")
+ D WC^RWU(CR_".gray { background-color: #CCCCCC; margin-top: 6px; font-weight: bold; }")
+ D WC^RWU(CR_".silver { background-color: #EEEEEE; }")
+ D WC^RWU(CR_".right { text-align: right; }")
+ D WC^RWU(CR_"--></style></head><body>")
+ Q
+destof(X) ; Расшифровка зубной формулы
+ N I,TAB,RET,CM,R,Z,ZD
+ S CM=0 ; взрослые
+ F I=1:1:$L(X,",") S R=$P(X,",",I),Z=$P(R,"(",1),ZD=$P($P(R,"(",2),")",1) S:Z'="" TAB(Z)=ZD
+ D:CM=0
+ .S I=0 F Z=18,17,16,15,14,13,12,11,21,22,23,24,25,26,27,28 S RET(1,I)=Z,RET(0,I)=$$stof2txt($G(TAB(Z))),I=I+1
+ .S I=0 F Z=48,47,46,45,44,43,42,41,31,32,33,34,35,36,37,38 S RET(2,I)=Z,RET(3,I)=$$stof2txt($G(TAB(Z))),I=I+1
+ S R="<br><table border=""1"">"
+ F Z=0,1,2,3 S I="",R=R_"<tr>" D  S R=R_"</tr>"
+ .F  S I=$O(RET(Z,I)) Q:I=""  S ZD=$G(RET(Z,I)),R=R_"<td"_$S(Z=1!(Z=2):" class=""silver""",1:"")_">"_$S(ZD="":"&nbsp;",1:ZD)_"</td>"
+ Q R_"</table>"
+stof2txt(X) ;
+ ; поверхность:состояние;.. , поверхность=0 - весь зуб
+ Q:X="" ""
+ N I,R,T,S,LL
+ S R="" F I=1:1:$L(X,";") S T=$P(X,";",I),S=$P(T,":",2) I S'="" S:'$D(LL(S)) R=R_$S(R="":"",1:"<br>")_S S LL(S)="" ; TODO - отрисовка поверхности
+ Q R
+GENDTP(TP,VR) ; Generate HTML DType
+ N FL,A,T,R,LST,I,L
+ S A=$G(^DTYPE(TP,"tname")),VR=$G(VR)
+ D MINHDR^IHTML(A)
+ D WC^RWU(CR_"<style type=""text/css"">")
+ D WC^RWU(CR_"<!-- .fl { background-color: #CCCCCC; } -->")
+ D WC^RWU(CR_"</style></head><body>")
+ D WC^RWU(CR_"<h1>"_A_"</h1><br>")
+ 
+ S FL="" F  S FL=$O(^DTYPE(TP,"fields",FL)) Q:FL=""  S A=$G(^(FL)) I A'="",$G(^(FL,"@sw"))'=0 S LST(A)=FL,LST(A,"t")=$G(^("@tp"))
+ 
+ S I="" F  S I=$O(LST(I)) Q:I=""  D
+ .S T=LST(I,"t"),FL=LST(I)
+ .S A="<b>"_I_". "_$G(^DTYPE(TP,"fields",FL,"@tit"))_"</b>"
+ .S R=$S(TP="i":"изображение",TP="d":"дата",TP="tm":"время",TP="chk":"ячейка состояния",TP="tbl":"таблица",1:"")
+ .S:R'="" A=A_" ("_R_")"
+ .D WC^RWU(CR_"<p class=""fl"">"_A_"</p>")
+ .S L=$G(^DTYPE(TP,"fields",FL,"@lst"))
+ .D:L'="" GENDTlst(TP,L,VR)
+ .;D WC^RWU(CR_"<br>")
+ D END^IHTML
+ Q
+GENDTPP(TP,VR) ; Generate HTML DType with patterns
+ N FL,A,T,R,LST,I,L
+ S A=$G(^DTYPE(TP,"tname")),VR=$G(VR)
+ D MINHDR^IHTML(A)
+ D WC^RWU(CR_"<style type=""text/css"">")
+ D WC^RWU(CR_"<!-- .fl { background-color: #CCCCCC; } -->")
+ D WC^RWU(CR_"</style></head><body>")
+ D WC^RWU(CR_"<h1>"_A_"</h1><br>")
+ 
+ S FL="" F  S FL=$O(^DTYPE(TP,"fields",FL)) Q:FL=""  S A=$G(^(FL)) I A'="",$G(^(FL,"@sw"))'=0 S LST(A)=FL,LST(A,"t")=$G(^("@tp"))
+ 
+ S I="" F  S I=$O(LST(I)) Q:I=""  D
+ .S T=LST(I,"t"),FL=LST(I)
+ .S A="<b>"_I_". "_$G(^DTYPE(TP,"fields",FL,"@tit"))_"</b>"
+ .S R=$S(TP="i":"изображение",TP="d":"дата",TP="tm":"время",TP="chk":"ячейка состояния",TP="tbl":"таблица",1:"")
+ .S:R'="" A=A_" ("_R_")"
+ .D WC^RWU(CR_"<p class=""fl"">"_A_"</p>")
+ .D GENDTpt(TP,FL,VR)
+ .;D WC^RWU(CR_"<br>")
+ D END^IHTML
+ Q
+GENDTlst(TP,L,VR) ; Справочники
+ N X,A,F
+ S F=$S(VR="":0,1:$D(^EPRPT(VR,TP,"default"," list",L)))
+ D W^RWU(CR_"<pre>")
+ I 'F S X=0 F  S X=$O(^DTYPE(TP,"list",L,X)) Q:X=""  D
+ .S A=$P(^(X),"|",1)
+ .D WC^RWU($S(X>1:CR,1:"")_A)
+ I F S X=0 F  S X=$O(^EPRPT(VR,TP,"default"," list",L,X)) Q:X=""  D
+ .S A=$P(^(X),"|",1)
+ .D WC^RWU($S(X>1:CR,1:"")_A)
+ D W^RWU("</pre>")
+ Q
+GENDTpt(TP,FL,VR) ; Текстовые шаблоны
+ N X,A,PT
+ 
+ S PT="" F  S PT=$O(^EPRPT(VR,TP,PT)) Q:PT=""  D
+ .I $D(^EPRPT(VR,TP,PT,FL)) D
+ ..D WC^RWU(CR_"<b>"_$$TAG^TXTU(PT)_"</b>") S F=1
+ ..D WC^RWU(CR_"<div>"_$$TAG^TXTU($G(^EPRPT(VR,TP,PT,FL)))_"</div>")
+ 
+ S VR=" "
+ S PT="" F  S PT=$O(^EPRPT(VR,TP,PT)) Q:PT=""  D
+ .I $D(^EPRPT(VR,TP,PT,FL)) D
+ ..D WC^RWU(CR_"<b>"_$$TAG^TXTU(PT)_" (общий)</b>")
+ ..D WC^RWU(CR_"<div>"_$$TAG^TXTU($G(^EPRPT(VR,TP,PT,FL)))_"</div>")
+ 
+ Q
+JSPP(USR,DS,DE,VMOD,RDIR) ; JSON for PPCAB
+ N NI
+ I USR="" D MSG^RWU("[]") Q 
+ S NI=$G(^PPCAB(USR,"n"))
+ I NI="" D MSG^RWU("[]") Q
+ G JSON+1
+JSON(NI,DS,DE,VMOD,RDIR,FLL) ; В виде JSON
+ ; NI - код пациента
+ ; DS - дата с
+ ; DE - дата по
+ ; VMOD - =1 только направления и рекомендации
+ ; RDIR - направление экспорта
+ ; FLL - перечень полей для вывода
+ N DT,ID,D,LST,F,E,TP
+ S DS=$$DI^DTUTL(DS),DE=$$DI^DTUTL(DE),RDIR=$S($G(RDIR):-1,1:1)
+ S VMOD=+$G(VMOD),FLL=$G(FLL)
+ I $$FLinFL^TXTU($$GET^IPAC(NI,"state",+$H),"nwww") D MSG^RWU("[]") Q 
+ D OWF^RWU(".txt")
+ D W^RWU("[")
+ S ID="" F  S ID=$O(^EPR(NI,ID)) Q:ID=""  D
+ .S D=+$P($G(^(ID,"dt")),"|",1)
+ .I DS'="",D<DS Q 
+ .I DE'="",D>DE Q 
+ .S TP=$G(^("t")),E=$G(^("e"))
+ .I $P($G(^DTYPE(TP,"uid")),"/",1)="lab" S LST(D_"|"_ID)=1 Q 
+ .Q:E'="rpt" 
+ .S LST(D_"|"_ID)=""
+ S ID="",F="" F  S ID=$O(LST(ID),RDIR) Q:ID=""  D
+ .Q:'$$json(NI,$P(ID,"|",2),F,VMOD,"","",FLL) 
+ .S F=","
+ D W^RWU("]")
+ D C^RWU
+ Q
+json(NI,ID,PRE,VMOD,NSBS,RAW,FLL) 
+ ; PRE - предваряющий символ
+ ; VMOD - 1=только направления и рекомм.
+ ; NSBS - и неподписанного
+ ; RAW - без преобразования данных
+ ; FLL - разрешенные поля
+ N R,F,T,I,FL,PLL,P,K,X,TP,OW,NM,DT,JS,Lab,TGL
+ S VMOD=+$G(VMOD),RAW=+$G(RAW),FLL=$G(FLL)
+ S:FLL'="" FLL="|"_FLL_"|"
+ S TP=$G(^EPR(NI,ID,"t")) Q:TP="" 0
+ S Lab=0 I $P($G(^DTYPE(TP,"uid")),"/",1)="lab" S Lab=1
+ I $G(^EPR(NI,ID,"e"))'="rpt",'Lab Q 0
+ I '$G(NSBS),+$P($G(^("s")),"|",1)=0 Q 0
+ ; TODO - неподпись отдельных полей
+ S DT=$G(^("dt"))
+ I DS'="",+DT<DS Q 0
+ I DE'="",+DT>DE Q 0
+ S NM=$G(^("n")),OW=$P($G(^("o")),"|",1,2),FK=$G(^("fk"))
+ S K=$P(OW,"|",2),T=$P(OW,"|",1),F=0
+ S OW=$G(^EPRD(NI,ID,"dfio"))
+ S:OW="" OW=$S(T="D":$$FIO^IKADRY(K),T="P":$$FIO^IPAC(K),1:"")
+ G:Lab jsonl
+ S P=""
+ I '$L(FK) F  S P=$O(^DTYPE(TP,"fields",P)) Q:P=""  D VIEWflp
+ I $L(FK) F  S P=$O(^DTYPE(TP,"fieldkey",FK,P)) Q:P=""  D VIEWflp
+ S (JS,X)="" F  S X=$O(PLL(X)) Q:X=""  D
+ .S P=PLL(X)
+ .I VMOD=1,P'="назначения",P'="назначено",P'="направления",P'="рекомендации",P'="консультации" Q 
+ .I FLL'="",FLL'[("|"_P_"|") Q 
+ .S R=$G(^EPRD(NI,ID,P)) Q:R=""
+ .S T=PLL(X,2)
+ .I 'RAW,T="cpl" S K=R,R="" F I=1:1:$L(K,CR) S Z=$P(K,CR,I),R=$S(R="":"",1:R_CR)_$S(Z["|":$P(Z,"|",2),1:Z)
+ .S:'RAW&(T="chk") R=$S(R:"Да",1:"Нет")
+ .S F=1
+ .D B^IJSON()
+ .D W^IJSON("field",P)
+ .D W^IJSON("name",PLL(X,1))
+ .D W^IJSON("break",$S($G(^DTYPE(TP,"fields",P,"@br"))=0:0,1:1))
+ .D W^IJSON("data",R)
+ .S JS=$S(JS="":"",1:JS_",")_$$E^IJSON()
+jsone 
+ Q:'F 0
+ D B^IJSON()
+ D W^IJSON("name",NM)
+ ;D W^IJSON("type",TP) ; возможно записывать текст 
+ D W^IJSON("key",NI_","_ID) ; !ADD
+ D W^IJSON("tp",TP)
+ D W^IJSON("sbsc",+$P($G(^EPR(NI,ID,"s")),"|",1))
+ D W^IJSON("version",+$G(^EPR(NI,ID,"v"))) ; !ADD
+ D W^IJSON("date",$$DT^DTUTL(DT))
+ D W^IJSON("time",$$TM^DTUTL($P(DT,",",2)))
+ D W^IJSON("vr",K)
+ S X=$P($G(^EPR(NI,ID,"o")),"|",4) S:X="" X=$$SPEC^IKADRY(K)
+ D W^IJSON("sp",X)
+ S X=+$P($G(^EPR(NI,ID,"o")),"|",3)
+ D W^IJSON("lpu",X) ; !ADD
+ D W^IJSON("vrname",$S(OW="":$$FIO^IKADRY(K),1:OW))
+ D W^IJSON("spname",$$GSPEC^YISPRAV(X))
+ D WR^IJSON("epr","["_JS_"]")
+ D WC^RWU($G(PRE)_$$E^IJSON())
+ Q 1
+jsonl ; lab
+ S T=$G(^EPR(NI,ID,"data")),JS=""
+ K TGL
+ ;D WHTML^NMLABR(T,"",0,"TGL")
+ D WHTML^NMLABR(T,"","TGL",2)
+ S (R,T)="" F  S T=$O(TGL(T)) Q:T=""  S R=R_TGL(T) Q:$L(R)>20000
+ 
+ D B^IJSON()
+ D W^IJSON("field","result")
+ D W^IJSON("name","Результаты")
+ D W^IJSON("break",0)
+ D W^IJSON("data",R)
+ S JS=$S(JS="":"",1:JS_",")_$$E^IJSON(),F=1
+ G jsone
+
+
+
