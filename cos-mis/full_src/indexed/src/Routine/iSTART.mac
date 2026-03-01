@@ -1,0 +1,28 @@
+%ZSTART ; User startup routine.   ; Compiled December 2, 2006 19:57:39
+    ; cannot be invoked directly
+    quit
+SYSTEM ;
+    ; Cache starting
+    J LOCSTART^%ZSTART
+    quit
+LOGIN ;
+    ; a user logs into Cache (user account or telnet)
+    I $USERNAME="Admin"!($USERNAME="admin") D $SYSTEM.License.Login($USERNAME)
+    quit
+JOB ;
+    ; JOB'd process begins
+    quit
+CALLIN ;
+    ; a process enters via CALLIN interface
+    quit
+LOCSTART 
+	;S ^SYSLOG($H,"LOC")=1 
+	H 10
+    ZN "USER"
+    D $System.License.DeferUserIdentification(0)
+    D $System.License.Login($S($D(^WWW("test")):"127.0.0.1",1:"webusr1"))
+    H 35
+    S ^SJOB("WWWSRV")=0
+    D ZSTU^WWWSRV
+    D START^ICRON
+    Q

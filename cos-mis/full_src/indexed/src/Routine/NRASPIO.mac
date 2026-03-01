@@ -1,0 +1,66 @@
+NRASPIO ; Ввод-вывод данных расписания [ 06/30/2021  4:12 PM ]
+NOTIFY(MSG,DT,LPUS,OTDS,SPS) 
+ ; CIDX - тип сообщения из CMM 
+ ; LPUS - перечень филиалов через |
+ ; OTDS - перечень отделений через |
+ ; SPS - перечень специальностей через |
+ N LPU,OT,VR,SP,TM,TIM,NI,K,R,TL
+ S LPUS=$G(LPUS),OTDS=$G(OTDS),SPS=$G(SPS)
+ S:LPUS'="" LPUS="|"_LPUS_"|"
+ S:OTDS'="" OTDS="|"_OTDS_"|"
+ S:SPS'="" SPS="|"_SPS_"|"
+ K ^BUF($J,"dsh")
+ S LPU="" F  S LPU=$O(^DSH(LPU)) Q:LPU=""  D:$S(LPUS="":1,1:LPUS[("|"_LPU_"|"))
+ .S OT="" F  S OT=$O(^DSH(LPU,OT)) Q:OT=""  D:$S(OTDS="":1,1:OTDS[("|"_OT_"|"))
+ ..I $$FLinFL^TXTU($$GETPL^ISPRAV("otd",OT,"flg"),"nsms") Q 
+ ..S VR="" F  S VR=$O(^DSH(LPU,OT,VR)) Q:VR=""  D
+ ...S SP="" F  S SP=$O(^DSH(LPU,OT,VR,SP)) Q:SP=""  D:$S(SPS="":1,1:SPS[("|"_SP_"|"))
+ ....Q:'$D(^DSH(LPU,OT,VR,SP,DT))
+ ....I $$FLinFL^TXTU($$GETPL^ISPRAV("spec",OT,"flg"),"nsms") Q
+ ....S TM="" F  S TM=$O(^DSH(LPU,OT,VR,SP,DT,TM)) Q:TM=""  D
+ .....Q:TM>89999  ; без доп. времени
+ .....S K=$G(^(TM)) Q:K=""  Q:K="*"
+ .....S NI=$P(K,"|",1)
+ .....Q:'$$EXIST^IPAC(NI)
+ .....S TTM=$S(TM>89999:"",1:$$TM^DTUTL(TM))
+ .....S K=LPU_"|"_OT_"|"_VR_"|"_$P(SP,"|",1)
+ .....S X=$O(^BUF($J,"dsh",NI,K,"t",""))
+ .....I X'="",X<TM Q  ; с меньшим временем
+ .....S ^BUF($J,"dsh",NI,K,"t")=TTM,^("d")=$$DT2^DTUTL(DT),^("t",TM)=""
+ 
+ S NI="" F  S NI=$O(^BUF($J,"dsh",NI)) Q:NI=""  D
+ .S TL=$$GET^IPAC(NI,"pager")
+ .S:TL="" TL=$$GET^IPAC(NI,"tel1")
+ .S TL=$TR(TL," /-()+","")
+ .Q:TL=""  
+ .I $E(TL,1,2)'="89",$E(TL,1,2)'="79"  Q  ; not cellphones
+ .S K="" F  S K=$O(^BUF($J,"dsh",NI,K)) Q:K=""  D
+ ..S LPU=$P(K,"|",1),OT=$P(K,"|",2),VR=$P(K,"|",3),SP=$P(K,"|",4)
+ ..S TM=^(K,"t"),DT=^("d")
+ ..D send(TL,MSG,LPU,OT,VR,SP,DT,TM,NI)
+ 
+ K ^BUF($J,"dsh")
+ Q
+send(TL,MSG,LPU,OT,VR,SP,DT,TM,NIB) ; Преобразование текста и отправка
+ N R,LL
+ S VR=$$FIOSH^IKADRY(VR)
+ S OT=$$GOTD^YISPRAV(OT)
+ S SP=$$GSPEC^YISPRAV(SP)
+ S:DT'["." DT=$$DT2^DTUTL(DT)
+ S:TM'[":" TM=$$TM^DTUTL(TM)
+ S LL("date")=DT
+ S LL("time")=TM
+ S LL("lpu")=$$NAME^ICONTR(LPU)
+ S LL("lpuaddr")=$$ADDR^ICONTR(LPU,,1)
+ S LL("otd")=OT
+ S LL("ophn")=$$MPHN^TXTU(OT)
+ S LL("spec")=SP
+ S LL("vr")=VR
+ S LL("fioi")=$$GET^IPAC(NIB,"fioi",DT)
+ S LL("fioo")=$$GET^IPAC(NIB,"fioo",DT)
+ D fill^NCONTP($G(NIB)) ; общие реквизиты
+ S MSG=$$AST^ITEMPLT(MSG,"LL")
+ S R=$$ADDSEND^IMSGHUB("sms","","",TL,MSG,"")
+ Q
+EXP(LPU,OTD,SP,VR,DS,DE) 
+ Q

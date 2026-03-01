@@ -1,0 +1,41 @@
+INAZLEK ; Лекарственные назначения [ 04/26/2012  1:02 AM ]
+FNDLEK(NI,IWRH,ILEK) ; Найти назначение по лекарству
+ ; IWRH - из номенклатеры склада
+ ; ILEK - из реестра лекарств. средств
+ N ID,R,F
+ S F=0
+ I IWRH="" S ID="" F  S ID=$O(^NAZI("n",NI,ID)) Q:ID=""  D:$P(^(ID),"|",1)="r"  Q:F
+ .I $P($G(^NAZ(ID,"d")),"|",1)=ILEK S F=1 Q
+ Q ID
+DOLEK(ID,DTM) ; Отметить факт выполнения назначения
+ Q:'$D(^NAZ(ID)) 
+ Q:'$D(^(ID,"d"))
+ N T,DT,CNT,C
+ S T=$O(^("d",""),-1)
+ I T'="",$$TMBTW^DTUTL(DTM,T)<5 Q 
+ S D=$P(DTM,",",1),CNT=$P(^NAZ(ID,"d"),"|",5),C=0
+ I CNT S T=D_",0" F  S T=$O(^NAZ(ID,"d",T)) Q:T=""!(+T'=D)  S C=C+1
+ I CNT,C'<CNT Q  ; TODO - оповещение о превышении в сутки
+ S ^NAZ(ID,"d",DTM)=1
+ K ^NAZTMP(ID)
+ D GL^IEXCH("^NAZ",ID,"d",DTM)
+ Q
+DSC(ID) ; Получить текстовое описание
+ N R,NM,X
+ S R=$G(^NAZ(ID,"d")) Q:R="" ""
+ S NM=$P($G(^RLS(+$P(R,"|",1))),"|",1)
+ S:NM="" NM=$P(R,"|",2)
+ S X="по "_$P(R,"|",3)_" "_$P(R,"|",4)_" "_$P(R,"|",5)_" раз "_$P(R,"|",6)_" дней, "_$G(^RLSS("pvv",+$P(R,"|",8)))
+ Q NM_" "_X
+DSCLT(ID) 
+ N R,NM,X
+ S R=$G(^NAZ(ID,"d")) Q:R="" ""
+ S NM=$P($G(^RLS(+$P(R,"|",1))),"|",1)
+ S:NM="" NM=$P(R,"|",2)
+ S X=" "_$P(R,"|",3)_" "_$P(R,"|",4)_", "_$G(^RLSS("pvv",+$P(R,"|",8)))
+ Q NM_" "_X
+MKSMS 
+ N X,ID
+ S ID="" F  S ID=$O(^NAZTMP(ID)) Q:ID=""  D
+ .S X=$$ADDSEND^IMSGHUB("sms","medmon","",$$GET^IPAC($$NIB^INAZN(ID),"pager"),$$DSCLT(ID),"")
+ Q

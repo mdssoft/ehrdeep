@@ -1,0 +1,147 @@
+NBIOID ; Процедуры биометрии [ 11/11/2017  5:09 PM ]
+REG ; Save 
+ N A,ID,T,I,L,TP
+ S TP=$G(^cfg("bioid-alg")) S:TP="" TP="b"
+ D ORH^RWU
+ F I=1:1 S A=$$R^RWU Q:%IFN["Z"  D
+ .S:I=1 ID=A
+ .S:I=2 T=A
+ D CR^RWU
+ I ID'="",T'="" D
+ .S I=$G(^FINGERI("i",ID))
+ .S L=$$^I("ilpu") S:L'="" L=$E("00",1,3-$L(L))_L
+ .S:I="" I=$O(^FINGER(""),-1),I=$S(L="":I+1,1:($E(I,1,$L(I)-3)+1)_L)
+ .S ^FINGER(I,$S(TP["b":"b",TP["g":"g",1:"b"))=T,^(1)=ID,^FINGERI("i",ID)=I
+ .D REG^YICARDS(I,ID)
+ D MSG^RWU("OK")
+ Q
+FND ; Find
+ N A1,A2,TP
+ S %L="",TP=$G(^cfg("bioid-alg")) S:TP="" TP="b"
+ D ORH^RWU
+ S A1=$$TRIM^TXTU($$R^RWU()) ; first line
+ S A2=$$TRIM^TXTU($$R^RWU()) ; second line
+ D CR^RWU
+ I A1'="",TP["b" S %L=$$COMPARE(A1,"b")
+ I A2'="",%L'="",TP["g" S %L=$$COMPARE(A1,"g")
+ S:%L'="" %L=$P($G(^CARD(%L)),"|",1,2) S:%L="" %L="ER"
+ Q
+CMP ; Register
+ N A1,A2,TP,A
+ S A="",%L="ER",TP=$G(^cfg("bioid-alg")) S:TP="" TP="b"
+ D ORH^RWU
+ S A1=$$TRIM^TXTU($$R^RWU()) ; first line
+ S A2=$$TRIM^TXTU($$R^RWU()) ; second line
+ D CR^RWU
+ I A1'="",TP["b" S A=$$COMPARE(A1,"b")
+ I A2'="",A="",TP["g" S A=$$COMPARE(A2,"g")
+ D:A'="" CRD^YISEC(A,+$G(^LOG(%LOG,"secid")))
+ Q
+COMPARE(X,TP) ; Client routine
+ N I,R,Q
+ L:20 ^IPCOM("BIOID","I")
+ S I=$O(^IPCOM("BIOID","I",""),-1)+1,^(I)=X,^(I,9)=$G(TP)
+ L -^IPCOM("BIOID","I")
+ S R="",Q=0 F X=1:1:60 H 1 D  Q:Q 
+ .L +^IPCOM("BIOID","I",I)
+ .I $D(^IPCOM("BIOID","O",I)) S R=^(I),Q=1 K ^(I)
+ .L -^IPCOM("BIOID","I",I)
+ Q R
+IDENTITY(X,TP) ; compare two templates
+ N I,T,R,ST
+ S (R,I)="",ST=$G(^cfg("bio-stat"))
+ I TP["b" F  S I=$O(^FINGER(I)) Q:I=""  S T=^(I,"b") S:$L(T)>255 R=$$Compare^BIOID(X,T) Q:R>0 
+ I ST,R>0 S ^BIOSTAT("b0")=$G(^BIOSTAT("b0"))+1
+ G:R>0 IDENTe
+ S R=""
+ I TP["g" F  S I=$O(^FINGER(I)) Q:I=""  S T=$G(^(I,"g")) S:$L(T)>255 R=$$Compare^BIOIDG(X,T) Q:R>0 
+ I ST,R>0 S ^BIOSTAT("g")=$G(^BIOSTAT("g"))+1
+ G:R>0 IDENTe
+ S R=""
+ I R="",TP["b"  F  S I=$O(^FINGER(I)) Q:I=""  S T=^(I,"b") S:$L(T)>255 R=$$Compare^BIOID(X,T,1) Q:R>0 
+ I ST,R>0 S ^BIOSTAT("b1")=$G(^BIOSTAT("b1"))+1
+ S:R'>0 R=""
+IDENTe 
+ I ST,'R S ^BIOSTAT("err",$H)=TP_"|"_X
+ S:R R=I
+ Q R
+LOOP ; fetch loop
+ D:$D(^$R("WWWSRV")) USRCONN^WWWSRV ; for Cache
+ S TP=$G(^cfg("bioid-alg")) S:TP="" TP="b"
+ D:TP["b" LoadLib^BIOID(),Open^BIOID()
+ D:TP["g" LoadLib^BIOIDG(),Open^BIOIDG()
+ 
+ F  Q:$D(^SYNCJ("LOOP^NBIOID"))  D  H 1
+ .Q:$L($D(^IPCOM("BIOID","I")))<2 
+ .L +^IPCOM("BIOID","I")
+ .S ID="" F  S ID=$O(^IPCOM("BIOID","I",ID)) Q:ID=""  D
+ ..L +^IPCOM("BIOID","I",ID)
+ ..S R=^IPCOM("BIOID","I",ID),T=$G(^(ID,9)) S:T="" T="b"
+ ..S ^IPCOM("BIOID","O",ID)=$S($L(R)<500:"",1:$$IDENTITY(R,T)) ; If wrong data - ignore
+ ..K ^IPCOM("BIOID","I",ID)
+ ..L -^IPCOM("BIOID","I",ID)
+ .L -^IPCOM("BIOID","I")
+ D:TP["b" Close^BIOID(),UnloadLib^BIOID()
+ D:TP["g" Close^BIOIDG(),UnloadLib^BIOIDG()
+ K ^SYNCJ("LOOP^NBIOID")
+ Q
+START ; start process
+ K ^SYNCJ("LOOP^NBIOID")
+ J LOOP^NBIOID
+ Q
+STOP ; stop process
+ S ^SYNCJ("LOOP^NBIOID")=1
+ N I F I=1:1:16 H 1 Q:'$D(^SYNCJ("LOOP^NBIOID")) 
+ Q
+MKFIMG ; Make from images
+ N X,R,FN,DIR,F,DEV
+ S TP=$G(^cfg("bioid-alg")) S:TP="" TP="b"
+ D:TP["b" LoadLib^BIOID(),Open^BIOID()
+ D:TP["g" LoadLib^BIOIDG(),Open^BIOIDG()
+ 
+ D FILESVAR^NFILES("/bioid","DIR")
+ S F="" F  S F=$O(^FINGER(F)) Q:F=""  D
+ .S FN=$G(^(F,1)) Q:FN=""  
+ .S FN=$TR(FN,"|","-")_".bmp" Q:'$D(DIR(FN))  ; такого файла нет
+ .Q:'$$OR^NFILES("/bioid/"_FN) 
+ .S DEV=$$OW^FIL("finger.bmp"),L=0
+ .F  S R=$$R^NFILES() Q:R=""  D W^FIL(R,DEV) S L=L+$L(R)
+ .D CR^NFILES,C^FIL(DEV)
+ .I TP["g" S R=$$Load^BIOIDG("finger.bmp") S:$L(R)>255 ^FINGER(F,"g")=R W !,$L(R)
+ .D DEL^FIL("finger.bmp")
+ 
+ D:TP["b" Close^BIOID(),UnloadLib^BIOID()
+ D:TP["g" Close^BIOIDG(),UnloadLib^BIOIDG()
+ Q
+CONVOLD ; Convert old struct
+ K ^TEMP
+ S I="" F  S I=$O(^FINGER(I)) Q:I=""  D
+ .S T=$G(^(I)) Q:T="" 
+ .S ^TEMP(I,"b")=T
+ .M ^TEMP(I,1)=^FINGER(I,1)
+ K ^FINGER
+ M ^FINGER=^TEMP
+ K ^TEMP
+ Q
+TSTEQ ; Find equal fingers in database
+ N X1,X2
+ D LoadLib^BIOID()
+ D Open^BIOID()
+ S X="" F  S X=$O(^FINGER(X)) Q:X=""  S Y=X F  S Y=$O(^FINGER(Y)) Q:Y=""  D
+ .S X1=^FINGER(X,"b"),X2=^FINGER(Y,"b")
+ .Q:$L(X1)<255  Q:$L(X2)<255 
+ .S R=$$Compare^BIOID(X1,X2) Q:R=0 
+ .W !,X_" & "_Y_" = "_R
+ D Close^BIOID()
+ D UnloadLib^BIOID()
+ Q
+TSTEQG ; Find equal fingers in database (griaule alroritm)
+ D LoadLib^BIOIDG()
+ D Open^BIOIDG()
+ S X="" F  S X=$O(^FINGER(X)) Q:X=""  S Y=X F  S Y=$O(^FINGER(Y)) Q:Y=""  D
+ .Q:'$D(^FINGER(X,"g"))  Q:'$D(^FINGER(Y,"g"))
+ .S R=$$Compare^BIOIDG(^FINGER(X,"g"),^FINGER(Y,"g")) Q:R=0 
+ .W !,X_" & "_Y_" = "_R
+ D Close^BIOIDG()
+ D UnloadLib^BIOIDG()
+ Q

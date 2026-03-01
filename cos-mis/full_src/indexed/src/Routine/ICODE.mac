@@ -1,0 +1,14 @@
+ICODE   ; Code utilites [ 03/23/2016  10:38 PM ]
+E(PROC) ; Procedure exists
+ I $ZV'["Cache" X "S PROC=$T("_PROC_")" Q PROC'=""
+ N P,L
+ S P=$S(PROC["^":$P(PROC,"^",2),1:PROC)
+ S L=$S(PROC["^":$P(PROC,"^",1),1:"")
+ Q:'$D(^$R(P)) 0
+ Q:L="" 0
+ w !,"L="_L
+ w !,"ZLOAD "_P_" S L=$ZNAME(L,2)",!
+ X "ZLOAD "_P_" S L=$ZNAME(L,2)"
+ Q L
+CLRINT  ; Clear .int
+ Q

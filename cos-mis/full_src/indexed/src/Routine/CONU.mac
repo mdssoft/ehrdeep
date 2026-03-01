@@ -1,0 +1,42 @@
+CONU ; Conversion utility [ 11/07/2015  2:58 AM ]
+HEX(X) ; Hexadecimal
+ Q $ZHEX(X) ; MSM,Cache
+ ; GT.M
+BIN2HEX(X) ; Binary to Hexadecimal
+ N I,R
+ S R="" F I=1:1:$L(X) S R=R_$$HEX16($A($E(X,I)))
+ Q R
+HEX1(X) 
+ N H S H=""
+ I $E(X,1)=0 S X=$E(X,2,99) G fHEX ; ZHEX compatible
+ F  Q:'X  S H=$E("0123456789ABCDEF",X#16+1)_H,X=X\16
+ Q H
+FHEX(X) ; From hexadecimal
+ Q $ZHEX(X) ; MSM,Cache
+ ; GT.M
+FHEX1(X) 
+ N H S H=""
+fHEX 
+ N I,Z S X=$TR(X,"abcdef","ABCDEF")
+ F I=1:1:$L(X) S Z=$F("0123456789ABCDEF",$E(X,I)) Q:'Z  S H=H*16+(Z-2)
+ Q H
+HEX16(str) 
+ S str=$ZHEX(str)
+ S:$L(str)=1 str="0"_str
+ q str
+ZB(X1,X2,OP) 
+ Q $ZBOOLEAN(X1,X2,OP)
+ANDB(X1,X2) 
+ Q $$ZB(X1,X2,1)
+ORB(X1,X2) 
+ Q $$ZB(X1,X2,7)
+XORB(X1,X2) 
+ Q $$ZB(X1,X2,6)
+NOTB(X) 
+ Q $$ZB(X,0,12)
+NOTAND(X1,X2) 
+ Q $$ZB(X1,X2,4)
+ANDNOT(X1,X2) 
+ Q $$ZB(X1,X2,2)
+ORNOT(X1,X2) 
+ Q $$ZB(X1,X2,11)

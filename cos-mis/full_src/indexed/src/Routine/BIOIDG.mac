@@ -1,0 +1,39 @@
+BIOIDG ; Griaule Fingerprint Identification
+LoadLib() 
+	Q:$d(%slib("bioidg")) 
+	n filename,deflocation,tmp
+	s tmp=$zu(86)
+	s deflocation=$P(tmp,"\",1,$L(tmp,"\")-1)
+	s filename=deflocation_"\bin\bioidg.dll"
+	s %slib("bioidg","lib")=$zf(-4,1,filename)
+	s %slib("bioidg","func","version")=$zf(-4,3,%slib("bioidg","lib"),"version")
+	s %slib("bioidg","func","open")=$zf(-4,3,%slib("bioidg","lib"),"open")
+	s %slib("bioidg","func","load")=$zf(-4,3,%slib("bioidg","lib"),"load")
+	s %slib("bioidg","func","close")=$zf(-4,3,%slib("bioidg","lib"),"close")
+	s %slib("bioidg","func","compare")=$zf(-4,3,%slib("bioidg","lib"),"compare")
+	q
+UnloadLib() 
+	d:$d(%slib("bioidg")) $zf(-4,2,%slib("bioidg","lib"))
+	K %slib("bioidg")
+	Q
+Open()
+	D:'$D(%slib("bioidg")) LoadLib()
+	Q $zf(-5,%slib("bioidg","lib"),%slib("bioidg","func","open"))
+Close()
+	D $zf(-5,%slib("bioidg","lib"),%slib("bioidg","func","close"))
+	Q
+Load(FN) ; Load and create template from file
+	Q $zf(-5,%slib("bioidg","lib"),%slib("bioidg","func","load"),FN,"")
+Compare(X1,X2,Mode)
+	; Mode not used
+	Q $zf(-5,%slib("bioidg","lib"),%slib("bioidg","func","compare"),X1,X2)
+Version()
+	Q $zf(-5,%slib("bioidg","lib"),%slib("bioidg","func","version"))
+TEST(X)
+	D LoadLib()
+	W !,"Ver="_$$Version()
+	D Open()
+	W !,"Res="_$$Compare(X,X)
+	D Close()
+	D UnloadLib()
+	Q

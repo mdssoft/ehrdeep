@@ -1,0 +1,288 @@
+RDHFAKT ; Общие отчеты по услугам [ 07/31/2014  10:59 PM ]
+RPUDG(DS,DE) ; Отчет по услугам за период (по договорам)
+ N ViTP S ViTP=1 G RPU1
+RPU(DS,DE) ; Отчет по услугам за период (по типам договоров)
+ N ViTP S ViTP=0
+RPU1 S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N DT,TM,L,CM,SUM,OPE,TP,SSTAT,STOTD,LP,PLST,SS,C9,NI,OT,DS1,DE1,I
+ N TRS,TRE,TD2,TD3,X1,X2,TRS1,TRS2,VTP
+ S I=$G(^cfg("stom-otd")),C9=$C(9),DS1=2*DS-DE-1,DE1=DS-1
+ S:I'="" STOTD(I)="" M STOTD=^cfg("stom-otd")
+ S VTP(1)="по факту",VTP(2)="по абонементам",VTP(3)="по страховым компаниям",VTP(4)="по юридическим лицам",VTP(5)="ОМС"
+ 
+ D MKULST(DS,DE,1,0,ViTP),MKULST(DS1,DE1,2,0,ViTP)
+ 
+ S TRS="<tr class=""s3""><td class=""s4"">",TRE="</td></tr>"
+ S TD2="</td><td>",TRS1="<tr class=""s3""><td class=""s5"">"
+ S TD3="</td><td class=""s6"">"
+ S TRS2="<tr class=""s3""><td class=""s7"">"
+ D OWF^RWU(".htm")
+ F I=1:1:18 D WC^RWU($E($T(RPUH1+I),4,999)_CR)
+ D WC^RWU($$DT^DTUTL(DS)_"-"_$$DT^DTUTL(DE)_"</div></td></tr></table>")
+ D WC^RWU($E($T(RPUH2+1),4,999)_CR)
+ D WC^RWU("<td rowspan=""2"">Выполненные услуги (руб.)</td><td rowspan=""2"">"_$$DT^DTUTL(DS)_" - "_$$DT^DTUTL(DE)_"</td><td rowspan=""2"">"_$$DT^DTUTL(DS1)_" - "_$$DT^DTUTL(DE1)_"</td><td colspan=""2"">отклонения</td></tr>")
+ D WC^RWU($E($T(RPUH3+1),4,999)_CR)
+ S X1=+$G(SS(1)),X2=+$G(SS(2)) D WC^RWU(CR_TRS_"Москва (всего)"_TD3_$$FFN(X1)_$$KSSDFN()_TRE)
+ S X1=+$G(SS(1,1)),X2=+$G(SS(2,1)) D WC^RWU(CR_TRS1_"Поликлиника"_TD3_$$FFN(X1)_$$KSSDFN()_TRE)
+ S I="" F  S I=$O(SS(1,1,I)) Q:I=""  S X1=+SS(1,1,I),X2=+$G(SS(2,1,I)) D WC^RWU(CR_TRS2_$$GNAME(I)_$$FFN(X1)_$$KSSDFN()_TRE)
+ S X1=+$G(SS(1,2)),X2=+$G(SS(2,2)) D WC^RWU(CR_TRS1_"Стоматология"_TD3_$$FFN(X1)_$$KSSDFN())
+ S I="" F  S I=$O(SS(1,2,I)) Q:I=""  S X1=+SS(1,2,I),X2=+$G(SS(2,2,I)) D WC^RWU(CR_TRS2_$$GNAME(I)_$$FFN(X1)_$$KSSDFN()_TRE)
+ ; ---------------- output --------
+ S LP="" F  S LP=$O(SSTAT(LP)) Q:LP=""  D
+ .S X1=+$G(SSTAT(LP,1)),X2=+$G(SSTAT(LP,2)) D WC^RWU(CR_TRS_$$NAME^ICONTR(LP)_" (всего)"_TD3_$$FFN(X1)_$$KSSDFN()_TRE)
+ .S X1=+$G(SSTAT(LP,1,1)),X2=+$G(SSTAT(LP,2,1))
+ .D WC^RWU(CR_TRS1_"Поликлиника"_TD3_$$FFN(X1)_$$KSSDFN()_TRE)
+ .S I="" F  S I=$O(SSTAT(LP,1,1,I)) Q:I=""  S X1=+SSTAT(LP,1,1,I),X2=+$G(SSTAT(LP,2,1,I)) D WC^RWU(CR_TRS2_$$GNAME(I)_$$FFN(X1)_$$KSSDFN())
+ .S X1=+$G(SSTAT(LP,1,2)),X2=+$G(SSTAT(LP,2,2))
+ .D WC^RWU(CR_TRS1_"Стоматология"_TD3_$$FFN(X1)_$$KSSDFN()_TRE)
+ .S I="" F  S I=$O(SSTAT(LP,1,2,I)) Q:I=""  S X1=+SSTAT(LP,1,2,I),X2=+$G(SSTAT(LP,2,2,I)) D WC^RWU(CR_TRS2_$$GNAME(I)_$$FFN(X1)_$$KSSDFN()_TRE)
+ D W^RWU("</table></body></html>")
+ D C^RWU
+ Q
+RPUT(DS,DE) ; Отчет по услугам за период (по типам договоров) - table
+ N ViTP S ViTP=0
+RPT1 S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N DT,TM,L,CM,SUM,OPE,TP,SSTAT,STOTD,STACLP,PLST,SS,C9,NI,OT,DS1,DE1,I
+ N X1,X2,VTP
+ S I=$G(^cfg("stom-otd")),C9=$C(9),DS1=2*DS-DE-1,DE1=DS-1
+ S:I'="" STOTD(I)="" M STOTD=^cfg("stom-otd")
+ M STAC=^cfg("stac-otd")
+ S VTP(1)="по факту",VTP(2)="по абонементам",VTP(3)="по страховым компаниям",VTP(4)="по юридическим лицам",VTP(5)="ОМС"
+ 
+ D MKULST(DS,DE,1,0,ViTP),MKULST(DS1,DE1,2,0,ViTP)
+ 
+ D OWF^RWU(".txt")
+ D WC^RWU("Выполненные услуги (руб.)|"_$$DT^DTUTL(DS)_"-"_$$DT^DTUTL(DE)_"|"_$$DT^DTUTL(DS1)_" - "_$$DT^DTUTL(DE1)_"|Абс. отклонение|% отклонения")
+ G:'$$FR^I() RPUTf
+ S X1=+$G(SS(1)),X2=+$G(SS(2))
+ D WC^RWU(CR_"Все клиники (итого)|"_$$FFN(X1)_$$KSSDFNT())
+ S X1=+$G(SS(1,1)),X2=+$G(SS(2,1)) D WC^RWU(CR_"Поликлиника|"_$$FFN(X1)_$$KSSDFNT())
+ S I="" F  S I=$O(SS(1,1,I)) Q:I=""  S X1=+SS(1,1,I),X2=+$G(SS(2,1,I)) D WC^RWU(CR_"  -"_$$GNAMET(I)_$$FFN(X1)_$$KSSDFNT())
+ S X1=+$G(SS(1,2)),X2=+$G(SS(2,2))
+ D WC^RWU(CR_"Стоматология|"_$$FFN(X1)_$$KSSDFNT())
+ S I="" F  S I=$O(SS(1,2,I)) Q:I=""  S X1=+SS(1,2,I),X2=+$G(SS(2,2,I)) D WC^RWU(CR_"  -"_$$GNAMET(I)_$$FFN(X1)_$$KSSDFNT())
+ D:$D(SS(1,3))
+ .S X1=+$G(SS(1,3)),X2=+$G(SS(2,3))
+ .D WC^RWU(CR_"Стационар|"_$$FFN(X1)_$$KSSDFNT())
+ .S I="" F  S I=$O(SS(1,3,I)) Q:I=""  S X1=+SS(1,3,I),X2=+$G(SS(2,3,I)) D WC^RWU(CR_"  -"_$$GNAMET(I)_$$FFN(X1)_$$KSSDFNT())
+ 
+RPUTf ; ---------------- output --------
+ S LP="" F  S LP=$O(SSTAT(LP)) Q:LP=""  D
+ .S X1=+$G(SSTAT(LP,1)),X2=+$G(SSTAT(LP,2)) D WC^RWU(CR_" "_$$NAME^ICONTR(LP)_" (всего)|"_$$FFN(X1)_$$KSSDFNT())
+ .S X1=+$G(SSTAT(LP,1,1)),X2=+$G(SSTAT(LP,2,1))
+ .D WC^RWU(CR_"  Поликлиника|"_$$FFN(X1)_$$KSSDFNT())
+ .S I="" F  S I=$O(SSTAT(LP,1,1,I)) Q:I=""  S X1=+SSTAT(LP,1,1,I),X2=+$G(SSTAT(LP,2,1,I)) D WC^RWU(CR_"  -"_$$GNAMET(I)_$$FFN(X1)_$$KSSDFNT())
+ .S X1=+$G(SSTAT(LP,1,2)),X2=+$G(SSTAT(LP,2,2))
+ .D WC^RWU(CR_"  Стоматология|"_$$FFN(X1)_$$KSSDFNT())
+ .S I="" F  S I=$O(SSTAT(LP,1,2,I)) Q:I=""  S X1=+SSTAT(LP,1,2,I),X2=+$G(SSTAT(LP,2,2,I)) D WC^RWU(CR_"  -"_$$GNAMET(I)_$$FFN(X1)_$$KSSDFNT())
+ .Q:'$D(SS(1,3))
+ .S X1=+$G(SSTAT(LP,1,3)),X2=+$G(SSTAT(LP,2,3))
+ .D WC^RWU(CR_"  Стационар|"_$$FFN(X1)_$$KSSDFNT())
+ .S I="" F  S I=$O(SSTAT(LP,1,3,I)) Q:I=""  S X1=+SSTAT(LP,1,3,I),X2=+$G(SSTAT(LP,2,3,I)) D WC^RWU(CR_"  -"_$$GNAMET(I)_$$FFN(X1)_$$KSSDFNT())
+ D C^RWU
+ Q
+GNAME(X) 
+ Q $S(ViTP=0:$G(VTP(X)),1:$$NAME^IINSC(X))_TD3
+GNAMET(X) 
+ Q $S(ViTP=0:$G(VTP(X)),1:$$NAME^IINSC(X))_"|"
+DOTPU ; SYStem proc for TPUx
+ S I=$G(^cfg("stom-otd")),C9=$C(9),DS1=2*DS-DE-1,DE1=DS-1
+ S:I'="" STOTD(I)="" M STOTD=^cfg("stom-otd")
+ S VTP(1)="по факту",VTP(2)="по абонементам",VTP(3)="по страховым компаниям",VTP(4)="по предоплатным страховым компаниям",VTP(5)="по юридическим лицам",VTP(6)="ОМС"
+ 
+ D MKULST(DS,DE,1,0,2)
+ D CALCLO^RZARP(DS,DE,0,2)
+ S LP="" ; SSTAT(LPU,column,STOM()/P-KA(),Type)
+ F  S LP=$O(STAT(LP)) Q:LP=""  S I="" F  S I=$O(STAT(LP,I)) Q:I=""  D
+ .S TP=+$P(I,",",1),TM=$P(I,",",2) S:TM="" TM=1
+ .S L=$G(STAT(LP,I)),SS(2)=$G(SS(2))+L
+ .S SS(2,TP,TM)=$G(SS(2,TP,TM))+L,SS(2,TP)=$G(SS(2,TP))+L
+ .S SSTAT(LP,2,TP,TM)=$G(SSTAT(LP,2,TP,TM))+L
+ .S SSTAT(LP,2,TP)=$G(SSTAT(LP,2,TP))+L,SSTAT(LP,2)=$G(SSTAT(LP,2))+L
+ .S L=$G(STAT(LP,I,0)),SS(3)=$G(SS(3))+L
+ .S SS(3,TP,TM)=$G(SS(3,TP,TM))+L,SS(3,TP)=$G(SS(3,TP))+L
+ .S SSTAT(LP,3,TP,TM)=$G(SSTAT(LP,3,TP,TM))+L
+ .S SSTAT(LP,3,TP)=$G(SSTAT(LP,3,TP))+L,SSTAT(LP,3)=$G(SSTAT(LP,3))+L
+ .S:$G(SSTAT(LP,1,TP,TM))="" SSTAT(LP,1,TP,TM)=0
+ Q
+TPU(DS,DE) ; Отчет по типам услуг за период
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N DT,TM,L,CM,SUM,OPE,TP,SSTAT,STOTD,LP,PLST,SS,C9,NI,OT,I
+ N TRS,TRE,TD2,TD3,X1,X2,TRS1,TRS2,VTP,STAT
+ D DOTPU
+ S TRS="<tr class=""s3""><td class=""s4"">",TRE="</td></tr>"
+ S TD2="</td><td>",TRS1="<tr class=""s3""><td class=""s5"">"
+ S TD3="</td><td class=""s6"">"
+ S TRS2="<tr class=""s3""><td class=""s7"">"
+ D OWF^RWU(".htm")
+ F I=1:1:18 D WC^RWU($E($T(RPUT1+I),4,999)_CR)
+ D WC^RWU($$DT^DTUTL(DS)_"-"_$$DT^DTUTL(DE)_"</div></td></tr></table>")
+ D WC^RWU($E($T(RPUT2+1),4,999)_CR)
+ D WC^RWU($E($T(RPUT3+1),4,999)_CR)
+ D WC^RWU(CR_TRS_"Все клиники (итого)"_TD3_$$FFN(+$G(SS(1)))_TD3_$$FFN(+$G(SS(2)))_TD3_$$FFN(+$G(SS(3)))_TRE)
+ D WC^RWU(CR_TRS1_"Поликлиника"_TD3_$$FFN(+$G(SS(1,1)))_TD3_$$FFN(+$G(SS(2,1)))_TD3_$$FFN(+$G(SS(3,1)))_TRE)
+ S I=""
+ F  S I=$O(SS(1,1,I)) Q:I=""  D WC^RWU(CR_TRS2_$G(VTP(I))_TD3_$$FFN(+SS(1,1,I))_TD3_$$FFN(+$G(SS(2,1,I)))_TD3_$$FFN(+$G(SS(3,1,I)))_TRE)
+ D WC^RWU(CR_TRS1_"Стоматология"_TD3_$$FFN(+$G(SS(1,2)))_TD3_$$FFN(+$G(SS(2,2)))_TD3_$$FFN(+$G(SS(3,2)))_TRE)
+ S I=""
+ F  S I=$O(SS(1,2,I)) Q:I=""  D WC^RWU(CR_TRS2_$G(VTP(I))_TD3_$$FFN(+SS(1,2,I))_TD3_$$FFN(+$G(SS(2,2,I)))_TD3_$$FFN(+$G(SS(3,2,I)))_TRE)
+ ; ---------------- output --------
+ S LP="" F  S LP=$O(SSTAT(LP)) Q:LP=""  D
+ .D WC^RWU(CR_TRS_$$NAME^ICONTR(LP)_" (всего)"_TD3_$$FFN(+$G(SSTAT(LP,1)))_TD3_$$FFN(+$G(SSTAT(LP,2)))_TD3_$$FFN(+$G(SSTAT(LP,3)))_TRE)
+ .D WC^RWU(CR_TRS1_"Поликлиника"_TD3_$$FFN(+$G(SSTAT(LP,1,1)))_TD3_$$FFN(+$G(SSTAT(LP,2,1)))_TD3_$$FFN(+$G(SSTAT(LP,3,1)))_TRE)
+ .S I="" F  S I=$O(SSTAT(LP,1,1,I)) Q:I=""  D WC^RWU(CR_TRS2_$G(VTP(I))_TD3_$$FFN(+SSTAT(LP,1,1,I))_TD3_$$FFN(+$G(SSTAT(LP,2,1,I)))_TD3_$$FFN(+$G(SSTAT(LP,3,1,I)))_TRE)
+ .D WC^RWU(CR_TRS1_"Стоматология"_TD3_$$FFN(+$G(SSTAT(LP,1,2)))_TD3_$$FFN(+$G(SSTAT(LP,2,2)))_TD3_$$FFN(+$G(SSTAT(LP,3,2)))_TRE)
+ .S I="" F  S I=$O(SSTAT(LP,1,2,I)) Q:I=""  D WC^RWU(CR_TRS2_$G(VTP(I))_TD3_$$FFN(+SSTAT(LP,1,2,I))_TD3_$$FFN(+$G(SSTAT(LP,2,2,I)))_TD3_$$FFN(+$G(SSTAT(LP,3,2,I)))_TRE)
+ D W^RWU("</table></body></html>")
+ D C^RWU
+ Q
+TPUT(DS,DE) ; Таблица по типам услуг за период
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N DT,TM,L,CM,SUM,OPE,TP,SSTAT,STOTD,LP,PLST,SS,C9,NI,OT,I
+ N X1,X2,VTP,STAT
+ D DOTPU
+ D OWF^RWU(".txt")
+ D WC^RWU("По филиалу, типу договора|Выполненные|Кассовые|Кассовые;"_CR)
+ D WC^RWU("За период "_$$DT^DTUTL(DS)_"-"_$$DT^DTUTL(DE)_"|по договору|фактически|с 100% покрытием")
+ G:'$$FR^I() TPUT1
+ D WC^RWU(CR_"Все клиники (итого)|"_$$FFN(+$G(SS(1)))_"|"_$$FFN(+$G(SS(2)))_"|"_$$FFN(+$G(SS(3))))
+ D WC^RWU(CR_" - Поликлиника|"_$$FFN(+$G(SS(1,1)))_"|"_$$FFN(+$G(SS(2,1)))_"|"_$$FFN(+$G(SS(3,1))))
+ S I=""
+ F  S I=$O(SS(1,1,I)) Q:I=""  D WC^RWU(CR_"     "_$G(VTP(I))_"|"_$$FFN(+SS(1,1,I))_"|"_$$FFN(+$G(SS(2,1,I)))_"|"_$$FFN(+$G(SS(3,1,I))))
+ D WC^RWU(CR_" - Стоматология|"_$$FFN(+$G(SS(1,2)))_"|"_$$FFN(+$G(SS(2,2)))_"|"_$$FFN(+$G(SS(3,2))))
+TPUT1 S I=""
+ F  S I=$O(SS(1,2,I)) Q:I=""  D WC^RWU(CR_"     "_$G(VTP(I))_"|"_$$FFN(+SS(1,2,I))_"|"_$$FFN(+$G(SS(2,2,I)))_"|"_$$FFN(+$G(SS(3,2,I))))
+ ; ---------------- output --------
+ S LP="" F  S LP=$O(SSTAT(LP)) Q:LP=""  D
+ .D WC^RWU(CR_$$NAME^ICONTR(LP)_" (всего)|"_$$FFN(+$G(SSTAT(LP,1)))_"|"_$$FFN(+$G(SSTAT(LP,2)))_"|"_$$FFN(+$G(SSTAT(LP,3))))
+ .D WC^RWU(CR_" - Поликлиника|"_$$FFN(+$G(SSTAT(LP,1,1)))_"|"_$$FFN(+$G(SSTAT(LP,2,1)))_"|"_$$FFN(+$G(SSTAT(LP,3,1))))
+ .S I="" F  S I=$O(SSTAT(LP,1,1,I)) Q:I=""  D WC^RWU(CR_"     "_$G(VTP(I))_"|"_$$FFN(+SSTAT(LP,1,1,I))_"|"_$$FFN(+$G(SSTAT(LP,2,1,I)))_"|"_$$FFN(+$G(SSTAT(LP,3,1,I))))
+ .D WC^RWU(CR_" - Стоматология|"_$$FFN(+$G(SSTAT(LP,1,2)))_"|"_$$FFN(+$G(SSTAT(LP,2,2)))_"|"_$$FFN(+$G(SSTAT(LP,3,2))))
+ .S I="" F  S I=$O(SSTAT(LP,1,2,I)) Q:I=""  D WC^RWU(CR_"     "_$G(VTP(I))_"|"_$$FFN(+SSTAT(LP,1,2,I))_"|"_$$FFN(+$G(SSTAT(LP,2,2,I)))_"|"_$$FFN(+$G(SSTAT(LP,3,2,I))))
+ D C^RWU
+ Q
+KSSDFN() ; Get line for KSSD
+ Q TD3_$$FFN(X2)_TD3_$$FFN(X1-X2)_TD2_$S(X2=0:"0,0",X1=0:"-100,0",1:$$FFN1((100*(X1-X2))/X1))
+KSSDFNT() ; Get line for KSSD (table)
+ Q "|"_$$FFN(X2)_"|"_$$FFN(X1-X2)_"|"_$S(X2=0:"0,0",X1=0:"-100,0",1:$$FFN1((100*(X1-X2))/X1))
+KSSDFP() ; Get line for KSSD
+ Q TD2_X2_TD2_$$FFN(X1-X2)_TD2_$S(X2=0:"0,0",X1=0:"-100,0",1:$$FFN1((100*(X1-X2))/X1))
+KSSLN(X1,X2,X3) ; Get line
+ Q TD3_$$FFN(X1)_TD3_$$FFN(X2)_TD3_$$FFN(X3)
+RPUH1 
+ ; <html><head>
+ ; <title>Отчет по выполненным услугам</title>
+ ; <meta http-equiv="Content-Type" content="text/html; charset=windows-1251">
+ ; <style type="text/css">
+ ; <!--
+ ; .s1{  font-family: "Times New Roman", Times, serif; font-size: 22px; font-weight: bold}
+ ; .s2 {  font-family: Arial, Helvetica, sans-serif; font-size: 14px; font-weight: bold; text-align: center}
+ ; .s3 {  font-family: Arial, Helvetica, sans-serif; font-size: 12px; text-align: center}
+ ; .s4 {  font-style: italic; font-weight: bold; text-align: right}
+ ; .s5 {  font-style: italic; text-decoration: underline; font-weight: none; text-align: right}
+ ; .s6 {  text-align: right }
+ ; .s7 {  font-style: italic; font-weight: none; text-align: right; font-size: 10px }
+ ; -->
+ ; </style>
+ ; </head>
+ ; <body bgcolor="#FFFFFF" text="#000000">
+ ; <table width="100%" border="0" class="s1">
+ ; <tr><td>Отчет по выполненным услугам - за период</td><td><div align="right">
+RPUH2 
+ ; <table width="100%" border="1" cellspacing="0"><tr class="s2" bgcolor="#CCCCCC">
+RPUH3 
+ ; <tr class="s2" bgcolor="#CCCCCC"><td>абсолют.</td><td>относит.</td></tr>
+RPUT1 
+ ; <html><head>
+ ; <title>Отчет по типам оказания услуг</title>
+ ; <meta http-equiv="Content-Type" content="text/html; charset=windows-1251">
+ ; <style type="text/css">
+ ; <!--
+ ; .s1{  font-family: "Times New Roman", Times, serif; font-size: 22px; font-weight: bold}
+ ; .s2 {  font-family: Arial, Helvetica, sans-serif; font-size: 14px; font-weight: bold; text-align: center}
+ ; .s3 {  font-family: Arial, Helvetica, sans-serif; font-size: 12px; text-align: center}
+ ; .s4 {  font-style: italic; font-weight: bold; text-align: right}
+ ; .s5 {  font-style: italic; font-weight: none; text-align: right}
+ ; .s6 {  text-align: right }
+ ; .s7 {  font-style: italic; font-weight: none; text-align: right; font-size: 10px }
+ ; -->
+ ; </style>
+ ; </head>
+ ; <body bgcolor="#FFFFFF" text="#000000">
+ ; <table width="100%" border="0" class="s1">
+ ; <tr><td>Отчет по типам оказания услуг - за период</td><td><div align="right">
+RPUT2 
+ ; <table width="100%" border="1" cellspacing="0"><tr class="s2" bgcolor="#CCCCCC">
+RPUT3 
+ ; <tr class="s2" bgcolor="#CCCCCC"><td rowspan="2">Филиал, тип договора</td><td rowspan="2" width="18%">Выполненные по договору</td><td colspan="2">Кассовые</td></tr><tr class="s2" bgcolor="#CCCCCC"><td width="18%">фактически</td><td width="18%">обеспеченные средствами</td></tr>
+MKULST(DS,DE,XI,NOKSS,TYPE) ; Type: 0-by type, 1-by DGN name
+ N DGTPS,NMPROC
+ S NMPROC=$S(+$G(TYPE)=0:"USLPROC^RDHFAKT",+$G(TYPE)=2:"USLPROC3^RDHFAKT",1:"USLPROC2^RDHFAKT")
+ D MKALLPRC^IUSLSC(DS,DE,1,NMPROC,"",'+$$FR^I(),,1)
+ ; Fill zeros:
+ I $G(TYPE)=1 S LP="" F  S LP=$O(SSTAT(LP)) Q:LP=""  S X1="" F  S X1=$O(SSTAT(LP,XI,X1)) Q:X1=""  S X2="" F  S X2=$O(^DGN(X2)) Q:X2=""  S:+$G(SSTAT(LP,XI,X1,X2))=0 SSTAT(LP,XI,X1,X2)=0
+ 
+ S LP="" F  S LP=$O(SSTAT(LP)) Q:LP=""  S X1="" F  S X1=$O(SSTAT(LP,XI,X1)) Q:X1=""  S X2="" F  S X2=$O(SSTAT(LP,XI,X1,X2)) Q:X2=""  D
+ .S L=+$G(SSTAT(LP,XI,X1,X2))
+ .S SSTAT(LP,XI,X1)=$G(SSTAT(LP,XI,X1))+L,SSTAT(LP,XI)=$G(SSTAT(LP,XI))+L
+ .S SS(XI,X1,X2)=$G(SS(XI,X1,X2))+L,SS(XI,X1)=$G(SS(XI,X1))+L
+ .S SS(XI)=$G(SS(XI))+L
+ Q
+USLPROC ; for callback IUSLSC
+ I $G(NOKSS),STAT=2 Q 
+ N TP,K,L,X S TP=$G(DGTPS(+CSTC,DT))
+ I TP="" D  S DGTPS(+CSTC,DT)=TP
+ .I $D(^BTPLS("stc",+CSTC)) S TP=2 Q
+ .S K=$$GET^YNDOG(+CSTC,"dvid",DT) ; todo - timeline
+ .I K=0!(K=1) S TP=3 Q 
+ .I K=2!(K=4) S TP=4 Q 
+ .I K=6 S TP=5 Q ; OMC
+ .S TP=1 
+ S X=$S(SUMM="":$$PRICEH^IPRICE(U,PRC,DT)*KSKD,1:SUMM)*$G(UL(U))
+ S K=1,L=+$G(LPU)
+ S:$D(STOTD(+OTD)) K=2
+ S:$D(STAC(+OTD)) K=3
+ S SSTAT(L,XI,K,TP)=$G(SSTAT(L,XI,K,TP))+X
+ Q
+USLPROC3 ; for callback IUSLSC - TPU
+ I $G(NOKSS),STAT=2 Q 
+ N TP,K,L,X S TP=$G(DGTPS(+CSTC,DT))
+ I TP="" D  S DGTPS(+CSTC,DT)=TP
+ .I $D(^BTPLS("stc",+CSTC)) S TP=2 Q
+ .S K=$$GET^YNDOG(+CSTC,"dvid",DT) ; todo - timeline
+ .I K=0 S TP=3 Q 
+ .I K=1 S TP=4 Q
+ .I K=2!(K=4) S TP=5 Q 
+ .I K=6 S TP=6 Q ; OMC
+ .S TP=1 
+ S X=$S(SUMM="":$$PRICEH^IPRICE(U,PRC,DT)*KSKD,1:SUMM)*$G(UL(U))
+ S K=1,L=+$G(LPU)
+ S:$D(STOTD(+OTD)) K=2
+ S:$D(STAC(+OTD)) K=3
+ S SSTAT(L,XI,K,TP)=$G(SSTAT(L,XI,K,TP))+X
+ Q
+USLPROC2 ; for callback IUSLSC, by DGN
+ I $G(NOKSS),STAT=2 Q 
+ N K,L,X
+ S X=$S(SUMM="":$$PRICEH^IPRICE(U,PRC,DT)*KSKD,1:SUMM)*$G(UL(U))
+ S K=1,L=+$G(LPU)
+ S:$D(STOTD(+OTD)) K=2
+ S:$D(STAC(+OTD)) K=3
+ S SSTAT(L,XI,K,+CSTC)=$G(SSTAT(L,XI,K,+CSTC))+X
+ Q
+USLERRP ; for callback IUSLSC
+ Q
+FFN(X) 
+ Q $TR($TR($FN(X,",",2),","," "),".",",")
+FFN1(X) 
+ Q $TR($TR($FN(X,",",1),","," "),".",",")
+REGIPROC 
+ ; Q:+$$FR^I()=0
+ N D S D="Общие отчеты"
+ S ^IPROC(D,"Отчет по выполненным услугам за период")="RPU_RDHFAKT,3,2,d,Начальная дата отчета,d,Конечная дата отчета"
+ S ^IPROC(D,"Таблица по выполненным услугам за период")="RPUT_RDHFAKT,1,2,d,Начальная дата отчета,d,Конечная дата отчета"
+ S ^IPROC(D,"Выполненные услуги по договорам за период")="RPUDG_RDHFAKT,3,2,d,Начальная дата отчета,d,Конечная дата отчета"
+ S ^IPROC(D,"Отчет по типам оказания услуг за период")="TPU_RDHFAKT,3,2,d,Начальная дата отчета,d,Конечная дата отчета"
+ S ^IPROC(D,"Таблица по типам оказания услуг за период")="TPUT_RDHFAKT,1,2,d,Начальная дата отчета,d,Конечная дата отчета"
+ Q
+ 

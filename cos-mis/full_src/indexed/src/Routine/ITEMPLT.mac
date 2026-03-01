@@ -1,0 +1,17 @@
+ITEMPLT ; Шаблонизаторы [ 01/06/2021  0:40 AM ]
+AST(TXT,LISTF) ; Поля указываются: *поле*
+ ; TXT - текст
+ ; LISTF - массив переменных с содержанием
+ N FL,R,FN
+ Q:TXT'["*" TXT
+ S FL="" F  S FL=$O(@LISTF@(FL)) Q:FL=""  D
+ .S R=@LISTF@(FL),FN="*"_FL_"*"
+ .F  Q:TXT'[FN  S TXT=$$TRT^TXTU(TXT,FN,R)
+ Q TXT
+FREQ(LISTF) ; Fill requizites
+ N I
+ D MERGE^I(LISTF)
+ S I="" F  S I=$O(@LISTF@(I)) Q:I=""  K:$D(@LISTF@(I))=10 @LISTF@(I)
+ K @LISTF@("log"),@LISTF@("i")
+ S @LISTF@("orgphn")=$$PHONES^I()
+ Q

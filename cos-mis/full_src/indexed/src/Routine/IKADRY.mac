@@ -1,0 +1,344 @@
+IKADRY ; Кадры [ 10/03/2022  3:03 PM ]
+GET(TN,PL,DT) 
+ Q:TN=""!(PL="") "" S:$G(DT)="" DT=+$H
+ S DT=$O(^KDR(TN,PL,DT+1),-1) Q:DT="" "" Q $G(^(DT))
+GETE(TN,PL,DT) 
+ Q:TN=""!(PL="") "" S:$G(DT)="" DT=+$H
+ N R
+ S DT=$O(^KDR(TN,PL,DT+1),-1)
+ S:DT="" R="" S:DT'="" R=$G(^(DT))
+ I PL="lpu" D  Q R
+ .N I,K,X
+ .S K="" F I=1:1:$L(R,"|") S K=$S(K="":"",1:K_", ")_$$NAME^ICONTR($P(R,"|",I))
+ .S R=K
+ Q:$E(PL,1,4)="spec" $$GSPEC^YISPRAV(R)
+ Q:$E(PL,1,3)="otd" $$GOTD^YISPRAV(R)
+ Q:$E(PL,1,5)="doljn" $$GET^ISPRAV("doljn",R)
+ Q:PL="attk" $$NAME^ISPRAV("vrattk",R)
+ Q:PL="ust" $$NAME^ISPRAV("scirank",R)
+ Q:PL="mwtp" $$NAME^ISPRAV("kadrymwtp",R)
+ Q:PL="vdoc" $$NAME^ISPRAV("kdoctype",R)
+ Q:$$flDT(PL) $$DT^DTUTL(R)
+ Q R
+SET(TN,PL,DT,R,UPD) 
+ Q:TN=""!(PL="")  D SET^XMLU("^KDR",TN,PL,DT,R)
+ D:$G(UPD) UPD^IEXCH("YIKADRY",TN)
+ Q
+EXIST(TN,DT) ; same as CHECK
+ G CHECK+1
+CHECK(TN,DT) ; Проверка на наличие
+ Q:TN="" 0 Q:'$D(^KDR(TN)) 0 Q 1
+USED(TN,DT) 
+ Q:TN="" 0 Q:'$D(^KDR(TN)) 0 S:$G(DT)="" DT=+$H
+ Q:$O(^(TN,"f",DT+1),-1)="" 0 ; не сущ.
+ S DT=$O(^KDR(TN,"ofor",DT+1),-1) Q:DT="" 1 Q $S('^(DT):0,1:1)
+ Q
+USEInLPU(TN,LPU,DT,NOF) ; Врач оформлен в данном филиале
+ ; NOF - не проверять оформление
+ Q:TN="" 0
+ Q:'$D(^KDR(TN)) 0 S:$G(DT)="" DT=+$H
+ N R
+ I '$G(NOF) S R=$O(^(TN,"ofor",DT+1),-1) I R'="",'^(R) Q 0
+ Q:LPU="" 1
+ S DT=$O(^KDR(TN,"lpu",DT+1),-1) Q:DT="" 1
+ S R=^(DT) Q:R="" 1
+ Q "|"_R_"|"[("|"_LPU_"|")
+NEXT(TN) ; Iterator
+ Q $O(^KDR(TN))
+SPEC(TN,DT,IDX) ; Специальность
+ Q:TN="" "" S:$G(DT)="" DT=+$H
+ S DT=$O(^KDR(TN,"spec"_$G(IDX),DT+1),-1) Q:DT="" 0 Q +^(DT)
+OTD(TN,DT,IDX) ; Отделение
+ Q:TN="" "" S:$G(DT)="" DT=+$H
+ S DT=$O(^KDR(TN,"otd"_$G(IDX),DT+1),-1) Q:DT="" 0 Q +^(DT)
+LPU(TN,DT) ; Филиал (по умолчанию)
+ Q:TN="" "" S:$G(DT)="" DT=+$H
+ S DT=$O(^KDR(TN,"lpu",DT+1),-1) Q:DT="" 0 Q ^(DT)
+BASELPU(TN,DT) ; Основной филиал
+ Q:TN="" "" S:$G(DT)="" DT=+$H
+ N D
+ S D=$O(^KDR(TN,"blpu",DT+1),-1) I D'="" S D=^(D) Q:D'="" D
+ S D=$O(^KDR(TN,"lpu",DT+1),-1) Q:D="" "" Q $P(^(D),"|",1) ; 1-й эл-т
+RATE(TN,DT,LPU,OTD,RATE) ; Ставка по сотруднику
+ N R,I,X,RR
+ S R=$$GET(TN,"rates",DT) Q:R="" ""
+ S RATE=LPU_","_OTD_","_RATE,RR=""
+ F I=1:1:$L(R,"|") S X=$P(R,"|",I) I $P(X,":",1)=RATE S RR=$P(X,":",2) Q
+ Q RR
+IsOTD(TN,OT,DT) ; Сотрудник есть в отделении
+ Q:TN="" 0
+ N D,A
+ S:'$G(DT) DT=+$H S DT=DT+1
+ S D=$O(^KDR(TN,"otd",DT),-1)
+ I D S A=^(D) Q:A=OT 1
+ S D=$O(^KDR(TN,"otd2",DT),-1)
+ I D S A=^(D) Q:A=OT 2
+ S D=$O(^KDR(TN,"otd3",DT),-1)
+ I D S A=^(D) Q:A=OT 3
+ S D=$O(^KDR(TN,"otd4",DT),-1)
+ I D S A=^(D) Q:A=OT 4
+ Q 0
+IsSPEC(TN,SP,DT) ; У сотрудника есть специальность
+ Q:TN="" 0
+ N D
+ S:'$G(DT) DT=+$H S DT=DT+1
+ S D=$O(^KDR(TN,"spec",DT),-1)
+ I D,^(D)=SP Q 1
+ S D=$O(^KDR(TN,"spec2",DT),-1)
+ I D,^(D)=SP Q 2
+ S D=$O(^KDR(TN,"spec3",DT),-1)
+ I D,^(D)=SP Q 3
+ S D=$O(^KDR(TN,"spec4",DT),-1)
+ I D,^(D)=SP Q 4
+ Q 0
+IsSPECL(TN,VAL,DT) ; У сотрудника есть специальность (из списка)
+ Q:TN="" 0
+ N D
+ S:'$G(DT) DT=+$H S DT=DT+1
+ S D=$O(^KDR(TN,"spec",DT),-1)
+ I D S D=^(D) I D'="",$D(@VAL@(D)) Q 1
+ S D=$O(^KDR(TN,"spec2",DT),-1)
+ I D S D=^(D) I D'="",$D(@VAL@(D)) Q 2
+ S D=$O(^KDR(TN,"spec3",DT),-1)
+ I D S D=^(D) I D'="",$D(@VAL@(D)) Q 3
+ S D=$O(^KDR(TN,"spec4",DT),-1)
+ I D S D=^(D) I D'="",$D(@VAL@(D)) Q 4
+ Q 0
+IsDL(TN,DL,DT) ; У сотрудника есть должность
+ Q:TN="" 0
+ N D
+ S:'$G(DT) DT=+$H S DT=DT+1
+ S D=$O(^KDR(TN,"doljn",DT),-1)
+ I D,^(D)=DL Q 1
+ S D=$O(^KDR(TN,"doljn2",DT),-1)
+ I D,^(D)=DL Q 1
+ ; только две должности
+ Q 0
+IsLPU(TN,LPU,DT,STRICT) ; Врач есть в данном филиале
+ ; STRICT - строгое наличие в филиале
+ Q:TN="" 0
+ Q:'$D(^KDR(TN)) 0 S:$G(DT)="" DT=+$H
+ Q:LPU="" 1
+ N R
+ S DT=$O(^KDR(TN,"lpu",DT+1),-1)
+ I DT="" Q:$G(STRICT) 0 Q 1
+ S R=^(DT)
+ I R="" Q:$G(STRICT) 0 Q 1
+ Q "|"_R_"|"[("|"_LPU_"|")
+FNDOTDS(TN,OTDL,DT) ; Найти первое отделение из списка 
+ N I,R
+ S R=""
+ F I=1:1:$L(OTDL,"|") S R=$$IsOTD(TN,$P(OTDL,"|",I),DT) Q:R 
+ Q $S(R=1:"",1:R) ; доп индекс "",1,2
+SPbyOTD(TN,OTD,DT) ; Специальность по отделению
+ Q:TN="" ""
+ N D
+ S:'$G(DT) DT=+$H
+ S D=$O(^KDR(TN,"otd",DT+1),-1)
+ I D,OTD=^(D) Q $$SPEC(TN,DT)
+ S D=$O(^KDR(TN,"otd2",DT+1),-1)
+ I D,OTD=^(D) Q $$GET(TN,"spec2",DT)
+ S D=$O(^KDR(TN,"otd3",DT+1),-1)
+ I D,OTD=^(D) Q $$GET(TN,"spec3",DT)
+ S D=$O(^KDR(TN,"otd4",DT+1),-1)
+ I D,OTD=^(D) Q $$GET(TN,"spec4",DT)
+ Q ""
+OTDbySP(TN,SP,DT) ; Отделение по специальности 
+ Q:TN="" ""
+ N D
+ S:'$G(DT) DT=+$H
+ S D=$O(^KDR(TN,"spec",DT+1),-1)
+ I D,SP=^(D) Q $$OTD(TN,DT)
+ S D=$O(^KDR(TN,"spec2",DT+1),-1)
+ I D,SP=^(D) Q $$GET(TN,"otd2",DT)
+ S D=$O(^KDR(TN,"spec3",DT+1),-1)
+ I D,SP=^(D) Q $$GET(TN,"otd3",DT)
+ S D=$O(^KDR(TN,"spec4",DT+1),-1)
+ I D,SP=^(D) Q $$GET(TN,"otd4",DT)
+ Q ""
+DLJbyOTD(TN,OTD,DT) ; Должность по отделению
+ Q:TN="" ""
+ N D
+ S:'$G(DT) DT=+$H
+ S D=$O(^KDR(TN,"otd",DT+1),-1)
+ I D,OTD=^(D) Q $$GET(TN,"doljn",DT)
+ S D=$O(^KDR(TN,"otd2",DT+1),-1)
+ I D,OTD=^(D) Q $$GET(TN,"doljn2",DT)
+ S D=$O(^KDR(TN,"otd3",DT+1),-1)
+ I D,OTD=^(D) Q $$GET(TN,"doljn3",DT)
+ 
+ Q $$GET(TN,"doljn4",DT)
+IsMED(TN,DT) ; Сотрудник является медработником
+ Q:TN="" 0
+ N D,A
+ S:'$G(DT) DT=+$H
+ S D=$O(^KDR(TN,"otd",DT+1),-1)
+ I D S A=^(D) Q:$$GETPL^ISPRAV("otd",A,"med") 1
+ S D=$O(^KDR(TN,"otd2",DT+1),-1)
+ I D S A=^(D) Q:$$GETPL^ISPRAV("otd",A,"med") 1
+ S D=$O(^KDR(TN,"otd3",DT+1),-1)
+ I D S A=^(D) Q:$$GETPL^ISPRAV("otd",A,"med") 1
+ S D=$O(^KDR(TN,"otd4",DT+1),-1)
+ I D S A=^(D) Q:$$GETPL^ISPRAV("otd",A,"med") 1
+ Q 0
+OSIDX(TN,DT,OT,SP) ; Номер позиции (совмещения) по отделению, спец.
+ N A
+ N D,A
+ S:'$G(DT) DT=+$H
+ S D=$O(^KDR(TN,"otd",DT+1),-1)
+ I D,OT=^(D),$$SPEC(TN,DT)=SP Q 1
+ S D=$O(^KDR(TN,"otd2",DT+1),-1)
+ I D,OT=^(D),$$GET(TN,"spec2",DT)=SP Q 2
+ S D=$O(^KDR(TN,"otd3",DT+1),-1)
+ I D,OT=^(D),$$GET(TN,"spec3",DT)=SP Q 3
+ S D=$O(^KDR(TN,"otd4",DT+1),-1)
+ I D,OT=^(D),$$GET(TN,"spec4",DT)=SP Q 4
+ Q 0
+GUID(TN,DT,OT,SP) ; Получить внешний GUID по сотруднику
+ N X,I
+ S X=$$GET(TN,"guid",DT)
+ Q:X'["|" X
+ S OT=$G(OT),SP=$G(SP)
+ I OT=""!SP="" Q $P(X,"|",1)
+ S I=$$OSIDX(TN,DT,OT,SP)
+ S I=$P(X,"|",I) Q:I'="" I
+ Q $P(X,"|",1)
+FIO(TN) ; Полная фамилия
+ Q:TN="" "" N D S D=+$H
+ S TN=$$GET(TN,"f",D)_" "_$$GET(TN,"i",D)_" "_$$GET(TN,"o",D)
+ Q:TN="  " ""
+ Q TN 
+FIOSH(TN,DT) ; Сокращенная фамилия
+ Q:TN="" ""
+ N F,I,O
+ S:$G(DT)="" DT=+$H
+ S F=$$GET(TN,"f",DT),I=$E($$GET(TN,"i",DT),1),O=$E($$GET(TN,"o",DT),1)
+ S:$L(I) F=F_" "_I_"." S:I=""&$L(O) F=F_" ." S:O'="" F=F_" "_O_"."
+ Q F
+FIODT(TN,D) ; Полная фамилия по дате
+ Q:TN="" ""
+ Q $$GET(TN,"f",D)_" "_$$GET(TN,"i",D)_" "_$$GET(TN,"o",D)
+PHONES(TN,DT) ; Все телефоны врача
+ N D,A,X
+ S:'$G(DT) DT=+$H
+ S D=$O(^KDR(TN,"tel_int",DT+1),-1),A=""
+ S:D'="" A=^(D)
+ S D=$O(^KDR(TN,"tel",DT+1),-1)
+ I D'="" S X=^(D) S:X'="" A=$S(A="":"",1:A_", ")_X
+ S D=$O(^KDR(TN,"mphone",DT+1),-1)
+ I D'="" S X=^(D) S:X'="" A=$S(A="":"",1:A_", ")_X
+ Q A
+IsIDX(PL) ; Индексное поле (не даты)
+ Q:PL="docs"!(PL="zarp") 1
+ Q 0
+ANYDATA(TN) ; Проверка наличия данных у врача
+ I $D(^ZNF(TN)) Q "услуги"
+ I $$CHKRASP(TN) Q "расписание"
+ I $D(^EPRPT(TN)) Q "шаблоны ЭМК"
+ I $$ANYOW^IEPR(TN) Q "документы ЭМК"
+ I $D(^CMS("D",TN)) Q "задачи"
+ N LP,OT,F
+ S LP="",F=0 F  S LP=$O(^ZARP(LP)) Q:LP=""  Q:F
+ .S OT="" F  S OT=$O(^ZARP(LP,OT)) Q:OT=""  I $D(^ZARP(LP,OT,TN)) S F=1 Q
+ I 'F S LP="" F  S LP=$O(^ZARV(LP)) Q:LP=""  I $D(^ZARV(LP,TN)) S F=1 Q
+ I F Q "зарплата"
+ Q ""
+DEL(VR) ; Удалить сотрудника
+ D DELVR^ISCARD(TN)
+ D K^ISSG("^KDR("_TN_")")
+ K ^KDR(TN)
+ D KGL^IEXCH("^KDR",TN)
+ Q
+CHKRASP(TN) 
+ N X,Y,Q
+ S X="",Q=0
+ F  S X=$O(^DSH(X)) Q:Q!(X="")  S Y="" F  S Y=$O(^DSH(X,Y)) Q:Q!(Y="")  I $D(^(Y,TN)) S Q=1 Q 
+ Q Q
+MOVE(FVR,TVR) ; Переместить все данные с врача на врача
+ N IDX,LL,I,R,F
+ ; участки прикрепления
+ S IDX=$$IDX^ISPRAV("uchastok"),F=0
+ I IDX S I="" F  S I=$O(^MN(IDX,I)) Q:I=""  S:^(I)=FVR ^(I)=TVR 
+ D:F UPD^IEXCH("YISPRAV","uchastok")
+ 
+ D MOVVR^ISNMP(FVR,TVR)
+ D MOVVR^IUSLUTL(FVR,TVR)
+ D MOVVR^IEPR(FVR,TVR)
+ D MOVVR^ISCARD(FVR,TVR)
+ D MOVVR^NPRICEZ(FVR,TVR)
+ D MOVVR^ICMS(FVR,TVR)
+ ; объединение
+ M LL=^KDR(FVR)
+ M LL=^KDR(TVR)
+ M ^KDR(TVR)=LL
+ K ^KDR(FVR)
+ D KGL^IEXCH("^KDR",FVR)
+ Q
+MOVLP(FLP,TLP) ; Изменить филиал с на
+ N N,R,D
+ S N="" F  S N=$O(^KDR(N)) Q:N=""  D
+ .S D="" F  S D=$O(^KDR(N,"blpu",D)) Q:D=""  I ^(D)=FLP S ^(D)=TLP
+ .S D="" F  S D=$O(^KDR(N,"lpu",D)) Q:D=""  D
+ ..S R=^(D) Q:R="" 
+ ..I $$FLinFL^TXTU(R,FLP) S ^KDR(N,"lpu",D)=$$STFLG^TXTU($$EXFLG^TXTU(R,FLP),TLP)
+ Q
+DEUSER(DT) ; Блокировка неоформленных пользователей
+ N ID
+ S DT=$G(DT) S:DT="" DT=+$H
+ S ID="" F  S ID=$O(^KDR(ID)) Q:ID=""  D
+ .I $$GET^IKADRY(ID,"ofor",DT)=0,'$$IsDENY^IUSER(ID) D DENY^IUSER(ID,1)
+ Q
+ZARPPR(TN,LPU) ; Период по умолчанию для зарплаты
+ Q:TN="" ""
+ S LPU=+$G(LPU)
+ S TN=$G(^KDR(TN,"zarp",LPU))
+ Q $P(TN,"|",$L(TN,"|"))
+flDT(FL) ; Поле является датой
+ S FL="|"_FL_"|"
+ Q:"|bdate|dofor|duvol|k_from|k_to|up_kv_d|obr_d|vdtdoc|ostaj|vlstaj|dstaj|nordstaj|mstaj|ustaj|pstaj|"[FL 1
+ Q 0
+CONVDT ; Конвертировать все поля с датами
+ N FL,D,K,R
+ S K="" F  S K=$O(^KDR(K)) Q:K=""  D
+ .S FL="" F  S FL=$O(^KDR(K,FL)) Q:FL=""  D:$$flDT(FL)
+ ..S D="" F  S D=$O(^KDR(K,FL,D)) Q:D=""  D
+ ...S R=$G(^(D)) Q:R=""  Q:+R=R 
+ ...I R=".  ." S R=""
+ ...I R["." S R=$$DI^DTUTL(R)
+ ...S ^KDR(K,FL,D)=R
+ ...D GL^IEXCH("^KDR",K,FL,D)
+ ..w "."
+ Q
+CDOTD(DT,F,T) ; Изменить отделение у врача
+ N K,X
+ S DT=$$DI^DTUTL(DT) Q:DT="" 
+ S K="" F  S K=$O(^KDR(K)) Q:K=""   D
+ .Q:'$$USED(K,DT) 
+ .S X=$$GET(K,"otd",DT) I X=F D SET(K,"otd",DT,T,1)
+ .S X=$$GET(K,"otd1",DT) I X=F D SET(K,"otd1",DT,T,1)
+ .S X=$$GET(K,"otd2",DT) I X=F D SET(K,"otd2",DT,T,1)
+ Q
+INITDB 
+ N I 
+ S ^MN("root","kadrydoc")="Документы, приказы по сотрудникам"
+ S ^MN("root","vrattk")="Аттестационная категория сотрудника"
+ S ^MN("root","scirank")="Ученая степень и звание"
+ S ^MN("root","kadryflg")="Флаги в кадрах"
+ S ^MN("root","kadryflg","kname")="Флаг",^("ktype")="S"
+ S ^MN("root","kadrymwtp")="Место (вид) работы сотрудника"
+ S ^MN("root","kdoctype")="Документ, удостоверяющий личность"
+ S ^MN("root","staffrates")="Виды ставок персонала"
+ 
+ D:'$D(^MN("kadrymwtp"))
+ .S I=$$NEWIDX^YISPRAV("kadrymwtp")
+ .S ^MN(I,1)="Основное"
+ .S ^MN(I,2)="Неосновное"
+ .S ^MN(I,9)="Не оформлен"
+ D:'$D(^MN("kdoctype"))
+ .S I=$$NEWIDX^YISPRAV("kdoctype")
+ .S ^MN(I,1)="Паспорт РФ"
+ .S ^MN(I,2)="Паспорт РБ"
+ D:'$D(^MN("staffrates"))
+ .S I=$$NEWIDX^YISPRAV("staffrates")
+ .S ^MN(I,1)="Хозрасчет"
+ Q

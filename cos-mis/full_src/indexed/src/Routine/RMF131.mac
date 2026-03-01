@@ -1,0 +1,134 @@
+RMF131 ; Форма 131 [ 01/13/2022  5:05 PM ]
+DO(DS,DE) 
+ N ARR,NI,DT,AG,PL,DG,PI,X,K,G,RXX,XX
+ N LNRUN,UER,F2,F3,F4
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ K ^BUF($J,13)
+ S ARR("year")=$$YEAR^DTUTL(DE)
+ S ARR("lpuname")=$$^I("iname")
+ S DG=692 ; OMS
+ D init
+ S LNRUN="psc^RMF131"
+ S NI="" F  S NI=$$NEXT^IPAC(NI,"stc",DG) Q:NI=""  D
+ .S PI=$$PIDXN^IPAC(NI,DG,DS) Q:PI=-1 
+ .S AG=$$AGE^IPAC(NI,DS)
+ .S X=$$ageidx(AG)
+ .S K="cnt0"_X
+ .S ARR(K_3)=$G(ARR(K_3))+1
+ .S G=$$GET^IPAC(NI,"pol",DS)
+ .I G=1 S ARR(K_7)=$G(ARR(K_7))+1
+ .I G=2 S ARR(K_11)=$G(ARR(K_11))+1
+ .S DT=$O(^PROFP(NI,"pat",DS-1)) Q:DT=""  Q:DT>DE 
+ .Q:$G(^PROFP(NI,"pat",DT))'=38 
+ .S ARR(K_4)=$G(ARR(K_4))+1
+ .I G=1 S ARR(K_8)=$G(ARR(K_8))+1
+ .I G=2 S ARR(K_12)=$G(ARR(K_12))+1
+ .D DOSC^NPACSC(NI,DS,DE,0) K UER
+ 
+ D summ
+ 
+ S NI="" F  S NI=$O(^PROFP(NI)) Q:NI=""  D
+ .S DT=$O(^PROFP(NI,"pat",DS-1)) Q:DT="" 
+ .Q:DT>DE 
+ .Q:$G(^PROFP(NI,"pat",DT))'=38 
+ .S AG=$$AGE^IPAC(NI,DT)
+ K ^BUF($J,13)
+ D MAKE^IDOCGEN("f131.docx","ARR")
+ Q
+ageidx(V) 
+ Q:V>75 7
+ Q:V>64 6
+ Q:V>59 5
+ Q:V>54 4
+ Q:V>39 3
+ Q:V>34 2
+ Q:V>17 1
+ Q 0
+psc 
+ S PAT=$$FLinFL^TXTU(FLG,1) ; выявлен впервые
+ S DIA=$G(DIA)
+ S U="" F  S U=$O(UL(U)) Q:U=""  D
+ .I $D(F2(U)) S RXX=F2(U) F J=1:1:$L(RXX,"|") D
+ ..S XX=$P(RXX,"|",J)
+ ..S ARR("t2"_XX)=$G(ARR("t2"_XX))+1
+ ..S:PAT ARR("t2"_XX_"d")=$G(ARR("t2"_XX_"d"))+1
+ .I $D(F3(U)) S RXX=F3(U) F J=1:1:$L(RXX,"|") D
+ ..S XX=$P(RXX,"|",J)
+ ..S ARR("t3"_XX_"b")=$G(ARR("t2"_XX_"b"))+1
+ ..S:PAT ARR("t3"_XX_"e")=$G(ARR("t3"_XX_"e"))+1
+ 
+ ; TODO - один диаг на пациента или уточнен
+ ; 65 + 60 - возраст трудоспособности
+ I DIA'="",$D(F4(DIA)) D
+ .S XX=F4(DIA),K="t4"_XX
+ .S ARR(K_"a")=$G(ARR(K_"a"))+1
+ .I G=1 S ARR(K_"d")=$G(ARR(K_"d"))+1 
+ .I G=2 S ARR(K_"g")=$G(ARR(K_"g"))+1
+ .I G=1,AG<66 S ARR(K_"e")=$G(ARR(K_"e"))+1,ARR(K_"b")=$G(ARR(K_"b"))+1 
+ .I G=1,AG>65 S ARR(K_"f")=$G(ARR(K_"f"))+1,ARR(K_"c")=$G(ARR(K_"c"))+1
+ .I G=2,AG<61 S ARR(K_"h")=$G(ARR(K_"h"))+1,ARR(K_"b")=$G(ARR(K_"b"))+1 
+ .I G=2,AG>60 S ARR(K_"i")=$G(ARR(K_"i"))+1,ARR(K_"c")=$G(ARR(K_"c"))+1
+ 
+ Q
+init 
+ S F2("B01.047.001.7")="01|02|03|06|07|18|19|201|202"
+ S F2("A09.05.026")="04"
+ S F2("А09.05.023")="05"
+ S F2("А06.09.007.002")="08"
+ S F2("А05.10.006.3")="09"
+ S F2("B01.029.001.1")=10
+ S F2("В01.001.001.6")=11
+ S F2("А08.20.017.3")=12
+ S F2("А06.20.004.007")=13
+ S F2("А09.19.001.001")=141
+ S F2("А09.19.001.001")=142
+ S F2("А09.05.130")=15
+ S F2("А11.16.002")=16
+ S F2("А03.016.003")=17
+ S F2("В01.027.001")=20
+ 
+ S F3("В01.023.001.2")="01"
+ S F3("А01.12.005.003")="02"
+ S F3("В01.053.001")="03"
+ S F3("В01.057.001")="03"
+ S F3("В01.018.001")="04" ; + 2nd
+ S F3("А03.19.002")="04"
+ S F3("А11.19.001")="05"
+ S F3("А11.16.002")="06"
+ S F3("А06.09.007.002")="07"
+ S F3("А06.09.005")="08"
+ S F3("А12.09.005.1")="09"
+ S F3("В01.001.001.6")=10
+ S F3("В01.028.001.5")=11
+ S F3("В01.029.001.3")=12
+ S F3("B01.047.001.7")="13|131|132|133|134" ; w diag
+ S F3("В01.047.001.7")=14
+ S F3("В01.027.001")=15
+ 
+ S F4("E78")="01"
+ S F4("R73.9")="02"
+ S F4("Z72.0")="03"
+ S F4("Z72.4")="04"
+ S F4("R63.5")="05"
+ S F4("E66")="06"
+ S F4("Z72.3")="07"
+ S F4("Z72.1")="08"
+ S F4("Z72.2")="09"
+ S F4("Z82.4")=10
+ S F4("Z83.2")=11
+ S F4("Z80.0")=12
+ S F4("Z80.9")=13
+ S F4("Z82.5")=14
+ S F4("Z83.3")=15
+ S F4("R54")=18
+ Q
+summ 
+ N L,I,X,X1,X2,X3,X4,X5,X6,SS
+ ; T1001
+ F I=3:1:14 D
+ .F L=1:1:7 S ARR("cnt08"_I)=$G(ARR("cnt08"_I))+$G(ARR("cnt0"_L_I))
+ 
+ Q
+REGIPROC 
+ S ^IPROC("Медстатистика","Форма 131")="DO_RMF131,15,2,d,Начальная дата периода,d,Конечная дата периода"
+ Q

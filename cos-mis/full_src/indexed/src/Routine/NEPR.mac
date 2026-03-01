@@ -1,0 +1,75 @@
+NEPR ; Electronic Patient Record [ 01/09/2018  6:21 PM ]
+INIT ; Init mhist.frm
+ N R,V,I,X,FV
+ S R=+$G(^LOG(%LOG,"lcl","epr")),V=" visible=""no""/>"
+ S FV=$P($$LCL^IUSER("epr","find-var"),"|",1)
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<mhist>")
+ D:$G(^LCL("epr",R,"hist_old"))=0 W^RWU("<bt_hist_old"_V)
+ D:$G(^LCL("epr",R,"hist_new"))=0 W^RWU("<bt_hist_new"_V)
+ D:$G(^LCL("epr",R,"serv_edit"))=0 W^RWU("<bt_add_serv"_V)
+ D:$G(^LCL("epr",R,"serv_count"))=0 W^RWU("<serv_count"_V)
+ D:$G(^LCL("epr",R,"view"))=0 W^RWU("<bt_pac_mview"_V)
+ D:$G(^LCL("epr",R,"edit"))=0 W^RWU("<bt_pac_sel"_V)
+ D:$G(^LCL("epr",R,"nokvt")) W^RWU("<bt_serv_kvit"_V)
+ D:$D(^LCL("epr",R,"uslcols")) WC^RWU("<table_usl default="""_^("uslcols")_"""/>")
+ S X=$G(^LCL("epr",R,"seldate"))
+ D:X W^RWU("<bt_pac_date visible=""yes""/>")
+ D:FV'="" WTAGUC^RWU("pac_fndtxt",FV)
+ S X=$$LCL^IUSER("ed","ulang")
+ D:X'="" W^RWU("<serv lang="""_X_"""/>")
+ S X=$G(^LCL("epr",R,"btns-replace"))
+ F I=1:1 S V=$P(X,";",I) Q:V=""  D WC^RWU("<"_$P(V,":",1)_$S($P(V,":",2)="":"",1:" title="""_$P(V,":",2)_"""")_$S($P(V,":",3)="":"",1:" glypf="""_$P(V,":",3)_"""")_$S($P(V,":",4)="":"",1:" link="""_$P(V,":",4)_"""")_" visible=""yes"" hint="""_$P(V,":",2)_"""/>")
+ 
+ D W^RWU("<cfg>")
+ S X=$G(^LCL("epr",R,"seldate"))
+ D:X WTAGD^RWU("seldate",X)
+ S V=$G(^LCL("epr",R,"unsbsc")),X=$G(^("tasksbs"))
+ D:V!X WTAGD^RWU("unsbs",$S(V:"allow",1:"")_$S(X:"task",1:""))
+ D:$G(^LCL("epr",R,"noautokv")) WTAGD^RWU("autokv","no")
+ D:$G(^LCL("epr",R,"kvprint"))'="" WTAGD^RWU("kvprint",^("kvprint"))
+ D:$G(^LCL("epr",R,"edit_coder"))=0 WTAGD^RWU("codercfg","no")
+ D:$G(^LCL("epr",R,"speak")) WTAGD^RWU("speak",+^("speak"))
+ D:$G(^LCL("epr",R,"splash")) WTAGD^RWU("splash",+^("splash"))
+ D:$G(^LCL("epr",R,"kssalert")) WTAGD^RWU("kssalert",+^("kssalert"))
+ D:$G(^LCL("epr",R,"findtype")) WTAGD^RWU("findtype",+^("findtype"))
+ D:$G(^LCL("epr",R,"find-otd")) WTAGD^RWU("findotd",+^("find-otd"))
+ D:$G(^LCL("epr",R,"eds")) WTAGD^RWU("eds",+^("eds"))
+ D:$G(^LCL("epr",R,"stom")) WTAGD^RWU("stom","1")
+ D:$G(^LCL("epr",R,"medguide"))'="" WTAGD^RWU("medguide",^("medguide"))
+ S X=$S($G(^LCL("epr",R,"find-user")):+^("find-user"),1:FV'="")
+ D:X WTAGD^RWU("finduser",X)
+ S X=$G(^LCL("epr",R,"singleserv"))
+ D:X=1 WTAGD^RWU("singleserv",1)
+ 
+ F FL="editdoc","selvr","prnnosbs","prnnoall","prndlg","docclipb","dochtml","clipbrd_pset" D:$G(^LCL("epr",R,FL)) WTAGD^RWU(FL,1)
+ 
+ F FL="fstate","lastdiag","epradm","servsort","uinfo_prg","selsbs","viewsort","coder_ins_tp" D:$G(^LCL("epr",R,FL)) WTAGD^RWU(FL,+^(FL))
+ 
+ D:$G(^LCL("epr",R,"show-prog-dsc")) WTAGD^RWU("progdsc",+^("show-prog-dsc"))
+ S X=$G(^LCL("epr",R,"new-doc-tp"))
+ D:X'="" WTAGDC^RWU("autodoc",$$GDSTR^IEPR(X))
+ S R=$G(^LCL("epr",R,"sbsall"))
+ D WTAGD^RWU("sbsall",$S(R=0:0,1:1))
+ S R=+$G(^cfg("pac-prog-htm"))
+ D:R WTAGD^RWU("prog_type","htm")
+ D:+$G(^cfg("ed","usercrm")) WTAGD^RWU("usercrm",1)
+ S R=$$LCL^IUSER("ed","chkms")
+ D:R&(R'=4) WTAGD^RWU("chkms",1)
+ D:$$LCL^IUSER("ed","setsumm") WTAGD^RWU("setsumm",1)
+ D W^RWU("</cfg><menuctrl name=""wfnd"">")
+ D:FV'="" WC^RWU("<item id=""uf"" name="""_FV_"""/>")
+ D W^RWU("</menuctrl></mhist>")
+ D:$$LCL^IUSER("epr","curms") W^RWU("<script_variable><ms_id>"_$$RKDR^IUSER()_"</ms_id></script_variable>")
+ D W^RWU("</nb_console>"),C^RWU
+ Q
+ENAME(NIB,ID,NM) ; Изменить имя
+ ; TODO - отдельные права
+ D ENAME^NPACADM(NIB,ID,NM,1)
+ Q
+EDATE(NIB,ID,NDT)       ; Изменить дату документа
+ ; TODO - отдельные права
+ D EDATE^NPACADM(NIB,ID,NDT,1)
+ Q
+EMOV(NIB,ID,NNIB) ; Переместить на другого пациента
+ D EMOV^NPACADM(NIB,ID,NNIB,1)
+ Q

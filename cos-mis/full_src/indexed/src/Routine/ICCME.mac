@@ -1,0 +1,258 @@
+ICCME ; Call-center management events [ 12/12/2023  1:25 PM ]
+ADDIN(NIB,TP,REZ,COMM,F,I,O,BORN,PHN,RSC,SYS,SYSI,iFN) ; Добавить входящий контакт
+ ; TP - тип контакта
+ ; RSC - источник рекламы
+ ; SYS - системные данные
+ ; SYSI - индексировать системные данные
+ ; iFN - возврат индекса записи
+ N DT,TM,J,L,R,G
+ S DT=$H,TM=$P(DT,",",2),DT=+DT,J=1,L=$$^I("ilpu"),G=$$GID^I(L)
+ S R=$G(%LOG)_$S(L'="":"@"_L,1:"")
+ S SYS=$G(SYS)
+ S R="1|2|"_NIB_"|"_$S(NIB="":5,1:3)_"|||"_TP_"|"_REZ_"|"_R_"|"_$H_"|"_L
+ L +^CME(DT,TM)
+ S J=$O(^CME(DT,TM,""),-1),J=$S(G="":J+1,1:($E(J,1,$L(J)-3)+1)_G),^(J)=R
+ L -^CME(DT,TM)
+ S R=F
+ S:I'="" $P(R,"|",2)=I S:O'="" $P(R,"|",3)=O S:BORN'="" $P(R,"|",4)=BORN
+ S:R'="" ^(J," f")=R
+ S:COMM'="" ^CME(DT,TM,J," c")=COMM
+ S:PHN'="" ^CME(DT,TM,J," ph")=PHN
+ S:RSC'="" ^CME(DT,TM,J,"rsource")=RSC
+ D:SYS'=""
+ .S ^CME(DT,TM,J," s")=SYS
+ .S:$G(SYSI) ^CMEI("ts",TP,SYS,DT_"|"_TM_"|"_J)=""
+ ; index
+ D:NIB'=""
+ .S ^CMEI("p",NIB,DT,TM,J)=""
+ .D GL^IEXCH("^CMEI","p",NIB,DT,TM,J)
+ .Q:'TP 
+ .S ^CMEI("t",TP,NIB,DT_"|"_TM_"|"_J)=""
+ .D GL^IEXCH("^CMEI","t",TP,NIB,DT_"|"_TM_"|"_J)
+ D GL^IEXCH("^CME",DT,TM,J)
+ Q:$G(iFN) DT_","_TM_","_J
+ Q
+SETSYS(ID,SYS) ; Set system filed after creation
+ Q:SYS=""  N DT,TM,I
+ S DT=$P(ID,",",1),TM=$P(ID,",",2),I=$P(ID,",",3)
+ Q:DT=""!(TM="")!(I="") 
+ S ^CME(DT,TM,I," s")=SYS
+ D GL^IEXCH("^CME",ID)
+ Q
+ADDLT(NIB,TP,CON,REZ,TO,COMM,FL,FLT,SYS,DTM) ; Сокращенно
+ ; TP - тип события, CON - тип контакта
+ ; FL - имя доп. поля. FLT - данные доп. поля
+ N DT,TM,J,L,R,G
+ S SYS=$G(SYS),FL=$G(FL),COMM=$G(COMM),TO=$G(TO)
+ S:$G(DTM)="" DTM=$H
+ S DT=DTM,TM=$P(DT,",",2),DT=+DT,J=1,L=$$^I("ilpu"),R=$$USR^IUSER()
+ S G=$$GID^I(L)
+ S:+TP'=TP TP=$$FNDUTP(TP) ; если тип не ID
+ S R="1|"_CON_"|"_NIB_"|"_$S(NIB="":5,1:3)_"|"_TO_"||"_$TR(TP,"|","~")_"|"_$TR(REZ,"|","~")_"|"_R_"|"_DTM_"|"_L
+ L +^CME(DT,TM)
+ S J=$O(^CME(DT,TM,""),-1),J=$S(G="":J+1,1:($E(J,1,$L(J)-3)+1)_G),^(J)=R
+ L -^CME(DT,TM)
+ S:COMM'="" ^CME(DT,TM,J," c")=COMM
+ S:FL'="" ^CME(DT,TM,J,FL)=FLT
+ S:SYS'="" ^CME(DT,TM,J," s")=SYS
+ ; index
+ D:NIB'=""
+ .S ^CMEI("p",NIB,DT,TM,J)=""
+ .D GL^IEXCH("^CMEI","p",NIB,DT,TM,J)
+ .Q:'TP 
+ .S ^CMEI("t",TP,NIB,DT_"|"_TM_"|"_J)=""
+ .D GL^IEXCH("^CMEI","t",TP,NIB,DT_"|"_TM_"|"_J)
+ S R=DT_","_TM_","_J
+ D GL^IEXCH("^CME",DT,TM,J)
+ Q R
+ADDOUTf(NIB,TP,REZ,COMM,PHN,SYS,DTM,iSYS) 
+ N QQ S QQ=1 G ADDOUT1
+ADDOUT(NIB,TP,REZ,COMM,PHN,SYS,DTM,iSYS) ; Добавить исход. контакт
+ ; SYS - системные данные
+ ; DTM - дата, время контакта
+ ; iSYS - создавать индекс для системных данных
+ N QQ S QQ=0
+ADDOUT1 N DT,TM,J,L,R,K,G
+ S DT=$G(DTM) S:DT="" DT=$H
+ S TM=$P(DT,",",2),DT=+DT,J=1,L=$$^I("ilpu"),G=$$GID^I(L)
+ I TM=""!(DT="") Q:QQ 0 Q 
+ S COMM=$G(COMM),PHN=$G(PHN)
+ S R=$G(%LOG)_$S(L'="":"@"_L,1:"")
+ S R="2|2|"_$$KDR^IUSER()_"|1|"_NIB_"|"_$S(NIB?1.N:3,1:5)_"|"_TP_"|"_REZ_"|"_R_"|"_$H_"|"_L
+ L +^CME(DT,TM)
+ S J=$O(^CME(DT,TM,""),-1),J=$S(G="":J+1,1:($E(J,1,$L(J)-3)+1)_G),^(J)=R
+ L -^CME(DT,TM)
+ S K=DT_"|"_TM_"|"_J
+ S:COMM'="" ^(J," c")=COMM
+ S:PHN'="" ^CME(DT,TM,J," ph")=PHN
+ I SYS'="" S ^CME(DT,TM,J," s")=SYS I $G(iSYS) S ^CMEI("ts",TP,SYS,K)="" D GL^IEXCH("^CMEI","ts",TP,SYS,K)
+ D:NIB'=""
+ .S ^CMEI("p",NIB,DT,TM,J)=""
+ .D GL^IEXCH("^CMEI","p",NIB,DT,TM,J)
+ .Q:'TP 
+ .S ^CMEI("t",TP,NIB,K)=""
+ .D GL^IEXCH("^CMEI","t",TP,NIB,K)
+ D GL^IEXCH("^CME",DT,TM,J)
+ Q:QQ DT_"@"_TM_"@"_J Q 
+CNT(DS,DE,NIB,TP,REZ) ; Подсчет числа контактов за период
+ ; TP - тип, REZ - результат
+ N DT,TM,I,R,N
+ S DT=DS-1,N=0
+ S:REZ'="" REZ="|"_REZ_"|"
+ F  S DT=$O(^CMEI("p",NIB,DT)) Q:DT=""!(DT>DE)  S TM="" F  S TM=$O(^CMEI("p",NIB,DT,TM)) Q:TM=""  S I="" F  S I=$O(^CMEI("p",NIB,DT,TM,I)) Q:I=""  D
+ .S R=$G(^CME(DT,TM,I)) Q:R=""  Q:TP'=$P(R,"|",7) 
+ .I REZ'="",REZ'[("|"_$P(R,"|",8)_"|") Q 
+ .S N=N+1
+ Q N
+FIND(DS,DE,NIB,TP,REZ) ; Поиск последнего контакта
+ N DT,TM,I,KX,R,F
+ S:DE="" DE=99999
+ S KX=DE_"|99999|Z",F=0
+ F  S KX=$O(^CMEI("t",TP,NIB,KX),-1),DT=$P(KX,"|",1) Q:KX=""!(DT<DS)  D  Q:F 
+ .S R=$G(^CME(DT,$P(KX,"|",2),$P(KX,"|",3))) Q:R="" 
+ .I $P(R,"|",1)=1,$P(R,"|",8)=REZ S F=1 Q 
+ Q:F $TR(KX,"|","@") Q ""
+FINDLST(DS,DE,NIB,TP,REZ,pLST) ; Поиск контактов -> LST
+ N DT,TM,I,KX,R,F
+ S:DE="" DE=99999
+ S KX=DE_"|99999|999",F=0
+ F  S KX=$O(^CMEI("t",TP,NIB,KX),-1) Q:KX=""!($P(KX,"|",1)<DS)  D
+ .S DT=$P(KX,"|",1) Q:DT<DS
+ .S R=^CME(DT,$P(KX,"|",2),$P(KX,"|",3))
+ .I $P(R,"|",1)=1,$P(R,"|",8)=REZ S F=1,@pLST@($TR(KX,"|","@"))="",F=1 
+ Q F
+FLGREZ(TP,FLG) ; Получить список (через |) результатов по указанному флагу
+ N I,A,R S (A,I)="",FLG=","_FLG_","
+ F  S I=$O(^CMM("result",TP,I)) Q:I=""  S R=$P(^(I),"|",2) I ","_R_","[FLG S A=$S(A="":"",1:A_"|")_I
+ Q A
+COMM(ID) ; Получить комментарий
+ Q:ID="" ""
+ Q $G(^CME($P(ID,"@",1),$P(ID,"@",2),$P(ID,"@",3)," c"))
+DTM(ID) ; Получить дату/время события
+ Q:ID="" ""
+ Q $P($G(^CME($P(ID,"@",1),$P(ID,"@",2),$P(ID,"@",3))),"|",10)
+USERDTM(ID) ; Получить пользователя и дату/время события
+ Q:ID="" ""
+ Q $P($G(^CME($P(ID,"@",1),$P(ID,"@",2),$P(ID,"@",3))),"|",9,10)
+PFIO(DT,TM,ID) ; Получить ФИО пациента
+ N NI,T,R
+ S R=$G(^CME(DT,TM,ID)),T=$P(R,"|",1),NI=$P(R,"|",$S(T=1:3,1:5))
+ Q:NI'="" $$FIO^IPAC(NI)
+ S R=$G(^(ID," f")) Q:R="" ""
+ Q $$TRIM^TXTU($TR($P(R,"|",1,3),"|"," "))
+FNDTP(X,UID) ; Тип по имени, если нет - по UID
+ N I S I="",X=$P($$LU^TXTU(X),"|",1)
+ F  S I=$O(^CMM("start",I)) Q:I=""  I $$LU^TXTU($P(^(I),"|",1))=X S X=I Q 
+ Q:I="" $$FNDUTP($G(UID)) Q X
+FNDUTP(X) ; Тип по UID
+ Q:X="" ""
+ N I S I="",X=$P($$UL^TXTU(X),"|",1)
+ F  S I=$O(^CMM("start",I)) Q:I=""  I $$UL^TXTU($P(^(I),"|",4))=X S X=I Q 
+ Q:I="" "" Q X
+FNDREZ(TP,X) ; Найти результат по имени
+ N I S I="",X=$$LU^TXTU(X)
+ F  S I=$O(^CMM("result",TP,I)) Q:I=""  I $$LU^TXTU($P(^(I),"|",1))=X S X=I Q 
+ Q:I="" "" Q X
+FNDREZA(TP,X) ; Найти результат по имени и атрибуту 
+ N I S I="",X=$$LU^TXTU(X)
+ F  S I=$O(^CMM("result",TP,I)) Q:I=""  I $$LU^TXTU($P(^(I),"|",1))=X S X=I Q 
+ Q:I="" "" Q X
+FNDATP(X) ; Тип по имени, добавить, если нет
+ N I S I=$$FNDTP($P(X,"|",1))
+ I I="" S I=$O(^CMM("start",""),-1)+1,^(I)=X D GL^IEXCH("^CMM","start",I)
+ Q I
+NAME(N,X) 
+ Q:X=""!(N="") 
+ Q $P($G(^CMM(N,X)),"|",1)
+NMREZ(TP,ID) ; Наименование результата
+ Q:ID="" "" Q:TP="" ""
+ Q $P($G(^CMM("result",TP,ID)),"|",1)
+MOVPAC(FNIB,TNIB) ; Переместить события одного на другого пациента
+ N DT,TM,J,R,T,N
+ S DT="" F  S DT=$O(^CMEI("p",FNIB,DT)) Q:DT=""  D
+ .S TM="" F  S TM=$O(^CMEI("p",FNIB,DT,TM)) Q:TM=""  D
+ ..S J="" F  S J=$O(^CMEI("p",FNIB,DT,TM,J)) Q:J=""  D
+ ...D RMIDX(DT,TM,J)
+ ...S R=$G(^CME(DT,TM,J)) Q:R="" 
+ ...S T=$P(R,"|",1)
+ ...S $P(^CME(DT,TM,J),"|",$S(T=1:3,1:5))=TNIB
+ ...D GL^IEXCH("^CME",DT,TM,J)
+ ...D MKIDX(DT,TM,J)
+ Q
+DELNI(NI) ; Удаление событий по пациенту
+ N DT,TM,J
+ S DT="" F  S DT=$O(^CMEI("p",NI,DT)) Q:DT=""  D
+ .S TM="" F  S TM=$O(^CMEI("p",NI,DT,TM)) Q:TM=""  D
+ ..S J="" F  S J=$O(^CMEI("p",NI,DT,TM,J)) Q:J=""  D DELID(DT,TM,J)
+ Q
+DEL(KEY) ; Удалить по ключу
+ N DT,TM,J
+ S DT=$P(KEY,"@",1),TM=$P(KEY,"@",2),J=$P(KEY,"@",3)
+ D RMIDX(DT,TM,J)
+ K ^CME(DT,TM,J)
+ D KGL^IEXCH("^CME",DT,TM,J) 
+ Q
+DELID(DT,TM,ID) ; Удалить по параметрам
+ D RMIDX(DT,TM,ID)
+ K ^CME(DT,TM,ID)
+ D KGL^IEXCH("^CME",DT,TM,ID) 
+ Q
+RMIDX(DT,TM,ID) ; Удалить индекс по записи
+ N R,X,N,K,T
+ S R=$G(^CME(DT,TM,ID))
+ S T=$P(R,"|",1),X=$P(R,"|",7),N=$P(R,"|",$S(T=1:3,1:5))
+ D:N'=""
+ .K ^CMEI("p",N,DT,TM,ID)
+ .D KGL^IEXCH("^CMEI","p",N,DT,TM,ID)
+ S K=DT_"|"_TM_"|"_ID
+ I X'="",$D(^CMEI("t",X,N,K)) D
+ .K ^CMEI("t",X,N,K)
+ .D KGL^IEXCH("^CMEI","t",X,N,K)
+ S R=$G(^CME(DT,TM,ID," s"))
+ I R'="",$D(^CMEI("ts",X,R,K)) D
+ .K ^CMEI("ts",X,R,K)
+ .D KGL^IEXCH("^CMEI","ts",X,R,K)
+ Q
+MKIDX(DT,TM,ID) ; Создать индекс по записи
+ N R,TP,NI,T
+ S R=^CME(DT,TM,ID)
+ S T=$P(R,"|",1),NI=$P(R,"|",$S(T=1:3,1:5)),TP=$P(R,"|",7)
+ D:NI'="" 
+ .S ^CMEI("p",NI,DT,TM,ID)=""
+ .D GL^IEXCH("^CMEI","p",NI,DT,TM,ID)
+ D:'TP 
+ .S ^CMEI("t",TP,NI,DT_"|"_TM_"|"_ID)=""
+ .D GL^IEXCH("^CMEI","t",TP,NI,DT_"|"_TM_"|"_ID)
+ Q
+REIDX ; Переиндексация
+ N DT,TM,ID
+ K ^CMEI
+ S DT="" F  S DT=$O(^CME(DT)) Q:DT=""  D
+ .S TM="" F  S TM=$O(^CME(DT,TM)) Q:TM=""  D
+ ..S ID="" F  S ID=$O(^CME(DT,TM,ID)) Q:ID=""  D MKIDX(DT,TM,ID)
+ .W "."
+ D REGL^IEXCH("^CMEI")
+ Q
+DOAUTO(IDX) ; Инициировать системные сообщения
+ I $G(IDX)'="" D DOAUTOs Q
+ S IDX="" F  S IDX=$O(^CMM("start",IDX)) Q:IDX=""  D DOAUTOs
+ Q
+DOAUTOs 
+ N EXE,DATA,PRM,EX,DT,RD,XD,J,PD,DWK
+ S EXE=$G(^CMM("start",IDX,"exe")) Q:EXE=""  ; TODO - другой фактор, не только exe
+ S DATA=$G(^("data"))
+ S RD=$G(^("trday")) ; замена дней
+ S DWK=$$DWEEK^DTUTL(+$H)
+ S:RD="" $P(RD,"|",DWK)=DWK
+ S XD=$P(RD,"|",DWK)
+ Q:XD="" 
+ F J=1:1:$L(XD,",") S PD=$P(XD,",",J) D 
+ .S DT=+$H-DWK+PD
+ .S PRM="" F  S PRM=$O(^CMM("start",IDX,"exeprm",PRM)) Q:PRM=""  D
+ ..S EX="D "_EXE_PRM
+ ..X EX
+ Q
+INIT 
+ S ^CMM("start",1)="Информационный звонок в call-центр|i",^(2)="Запись к врачу|i",^(3)="Заказ абонемента|io"
+ D INIT^ICRM
+ Q

@@ -1,0 +1,51 @@
+NUSERS ; Управление пользователями [ 01/30/2018  6:46 PM ]
+LST(ROLE) ; Вывод списка
+ N US,PS,VR,OT,SP,RL
+ D OWF^RWU(".txt"),WC^RWU("Имя|Пароль|Ф.И.О.|Таб.№|Кадровый №|Роль|Специальность|Отделение")
+ S US="",ROLE=$G(ROLE)
+ F  S US=$O(^LOG(US)) Q:US=""  D:'$G(^(US,"SYS"))
+ .S VR=$G(^("kadry")),OT=$G(^("otd")),RL=$G(^("role")),DTM=$G(^("log")),PS=$G(^PAS(US))
+ .I ROLE'="",RL'=ROLE Q 
+ .S SP=$S(VR="":"",1:$$GSPEC^YISPRAV($$SPEC^IKADRY(VR)))
+ .S OT=$$GOTD^YISPRAV($S(OT=""&(VR'=""):$$OTD^IKADRY(VR),1:OT))
+ .S:RL'="" RL=$G(^WWW("roles",RL))
+ .D WC^RWU(CR_US_"|"_PS_"|"_$$FIOSH^IKADRY(VR)_"|"_VR_"|"_$$GET^IKADRY(VR,"knum")_"|"_RL_"|"_SP_"|"_OT_"|"_$$DTM^DTUTL($P(DTM,"|",2))_CR)
+ D C^RWU
+ Q
+LSTsys 
+ N U,K,C S U="",C=""
+ F  S U=$O(^LOG(U)) Q:U=""  S K=$G(^(U,"kadry")) D WC^RWU(C_U_"|"_$S(K="":U,1:$$FIOSH^IKADRY(K))) S C=CR
+ Q
+LSTUSR ; Простой список пользователей
+ N US,V,C
+ D OWF^RWU(".txt")
+ S (US,C)="" F  S US=$O(^LOG(US)) Q:US=""  D:'$G(^(US,"SYS"))
+ .S V=$G(^("kadry")) Q:V="" 
+ .D WC^RWU(C_US_"|"_$$FIO^YIKADRY(V))
+ D C^RWU
+ Q
+REROLES(SEL) ; Обновить роли пользователей
+ ; SEL - обновить конкретную роль
+ I $$LCL^IUSER("users","save")=0 D MSG^RWU("Нет прав") Q
+ N L,R
+ S SEL=$G(SEL)
+ S L="" F  S L=$O(^LOG(L)) Q:L=""  S R=$G(^(L,"role")) D:R'=""
+ .I SEL'="",SEL'=R Q 
+ .M ^LOG(L)=^WWW("roles",R,"log")
+ Q
+ADDLCL(ROLE,LCL,VAL) ; Добавить пользователям с ролью вариант прав
+ Q:ROLE=""  Q:LCL="" 
+ I $$LCL^IUSER("users","save")=0 D MSG^RWU("Нет прав") Q 
+ N L
+ S L="" F  S L=$O(^LOG(L)) Q:L=""  D:$G(^(L,"role"))=ROLE
+ .S ^LOG(L,"lcl",LCL)=VAL
+ .D GL^IEXCH("^LOG",L,"lcl",LCL) 
+ Q
+REGLCLI ; Регистрация областей прав
+ N P,X S P=""
+ K ^LCLI
+ F  S P=$O(^$R(P)) Q:P=""  I P'["." X "S X=$T(REGLCL^"_P_")" D:X'="" @("REGLCL^"_P)
+ Q
+REGIPROC 
+ S ^IPROC("Система","Перечень пользователей")="LST_NUSERS,1,1,t@net:LST_NROLES("""")@1,Роль пользователей"
+ Q

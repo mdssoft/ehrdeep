@@ -1,0 +1,438 @@
+NZARPS ; Настройки расчета зарплаты [ 10/18/2024  4:41 PM ]
+INITDB 
+ S ^ZARM("oper","+")="Плюс",^("-")="Минус",^("*")="Умножить"
+ S ^("/")="Разделить",^("%")="Процент",^("#")="Ост.от дел."
+ S ^("+%")="+Процент",^("-%")="-Процент"
+ S ^("stop")="Стоп",^("=")="Присвоить",^("%%")="Обр.Процент"
+ S ^("step")="Шаг через",^("stopa")="Стоп, не расчет"
+ S ^("stopz")="Стоп, обнулить",^("stops")="Стоп, присвоить"
+ S ^("go")="Переход"
+ S ^ZARM("cond","null")="",^(">")=">",^("<")="<",^("=")="=",^("'=")="<>"
+ S ^("'<")=">=",^("'>")="<=",^("[")="Включает",^("'[")="Не включает",^("f[")="Включает флаг",^("m[")="Есть в множестве",^("btw")="Между значениями"
+ S ^ZARM("rprm","-")="Нет"
+ S ^("hh-p")="Часов на приеме"
+ S ^("hh-pnd")="Часов на ПНД"
+ S ^("hh-pr")="Час.на пр. работах"
+ S ^("hh-ms")="Часов медсестры"
+ S ^("hh-msp")="Процент работы м.с."
+ S ^("hh-all")="Часов, всего"
+ S ^("vr-ms")="Врач медсестры"
+ S ^("vr-mss")="Врачи медсестры"
+ S ^("sp-ms")="Специальность врача медсестры"
+ S ^("sp-mss")="Специальности врачей медсестры"
+ S ^("tbl")="По табелю, час."
+ S ^("grf")="По графику, час."
+ S ^("tbld")="По табелю, дней"
+ S ^("grfd")="По графику, дней"
+ S ^("timed")="Отработано, дней"
+ S ^("trperiod")="Период по табелю"
+ S ^("dsh-all")="Время по расписанию, мин."
+ S ^("dsh-nw")="Не раб. время по расписанию, мин."
+ S ^("intrpr")="Расчет в периоде по табелю"
+ S ^("time")="Время работы"
+ S ^("time-o")="Время работы с окр."
+ S ^("fd-dsh")="Дней с начала работы филиала"
+ S ^("prdcal")="Часов по производственному календарю"
+ S ^("usl")="Выручка"
+ S ^("usl-o")="Выручка по отделению"
+ S ^("usl-l")="Выручка по ЛПУ"
+ S ^("v4-o")="Сумма 4 по отделению"
+ S ^("v4-l")="Сумма 4 по ЛПУ"
+ S ^("kss")="По кассе"
+ S ^("plan")="План"
+ S ^("plan-otd")="План по отделению"
+ S ^("plan-lpu")="План ЛПУ"
+ S ^("matt")="Материалы"
+ S ^("okl")="Значение оклада"
+ S ^("ndb")="Значение надбавки"
+ S ^("spec")="Специальность"
+ S ^("doljn")="Должность"
+ S ^("katt")="Категория врача"
+ S ^("kdrnb")="Начисления по сотруднику"
+ S ^("kdrvc")="Удержания по сотруднику"
+ S ^("kdrpnb")="Процент начисления по сотруднику"
+ S ^("kdrpvc")="Процент удержания по сотруднику"
+ S ^("kdrofd")="Дней в организации"
+ S ^("agpl")="Агентские по абонементам"
+ S ^("agplc")="Продано абонементов"
+ S ^("agnz")="Агентские по назначениям"
+ S ^("agnz1")="Агентские по назначениям 1 кат."
+ S ^("agnz2")="Агентские по назначениям 2 кат."
+ S ^("agnzc")="Продано назначений"
+ S ^("agnzcs")="Продано назначений (сумма)"
+ S ^("bcrdssm")="Сумма сертификатов (менеджер)"
+ S ^("bcrdssa")="Сумма сертификатов (агент)"
+ S ^("wrhprofit")="Прибыль продажи товаров"
+ S ^("wrhpay")="Выручка продажи товаров"
+ S ^("isznf")="Существуют личные услуги" ; не соисполнительство
+ S ^("isepr")="Существуют документы ЭМК"
+ S ^("daymn")="День месяца"
+ S ^("month")="Месяц"
+ S ^("dweek")="День недели"
+ S ^("dmlast")="Последн. день месяца"
+ S ^("vr")="Сотрудник"
+ S ^("otd")="Отделение"
+ S ^("lpu")="Филиал"
+ S ^("dsh-ot")="Отделение в расписании"
+ S ^("dsh-sp")="Специальность в расписании"
+ S ^("dsh-cab")="Кабинет в расписании"
+ S ^("period")="Вид периода расчета"
+ S ^ZARM("vprm","otd")="Отделение"
+ S ^("dgn")="Договор"
+ S ^("dvid")="Вид договора"
+ S ^("dgtype")="Раздел договора"
+ S ^("flg")="Флаги"
+ S ^("stat")="Статус услуги"
+ S ^("spec")="Специальность"
+ S ^("doljn")="Должность"
+ S ^("prc")="Прейскурант"
+ S ^("diag")="Диагноз"
+ S ^("cnt")="Кол-во"
+ S ^("stom")="Стоматология"
+ S ^("abon")="Абонемент"
+ S ^("nzub")="N зуба"
+ S ^("ush")="Участник"
+ S ^("ms")="Медсестра"
+ S ^("msv")="Медсестра с врачем" ; факт что это медсестра
+ S ^("pay")="Усл.оплачена"
+ S ^("ucls")="Класс услуги"
+ S ^("ugcls")="Класс группы услуги"
+ S ^("uacu")="Аналитический код услуги"
+ S ^("sum")="Сумма"
+ S ^("cenn")="Цена"
+ S ^("cen")="Цена основного прейск."
+ S ^("skd")="Скидка"
+ S ^("sbs")="Себестоимость"
+ S ^("matt")="Учет материалов"
+ S ^("ismatt")="Есть материалы"
+ S ^("smatt")="Стоим. материалов"
+ S ^("pmatt")="Продажа материалов"
+ S ^("scmatt")="Себестоимость материалов"
+ S ^("zpprice:")="Зарп. прейск."
+ S ^("vnaz")="Назначил"
+ S ^("vnazsp")="Назначил специалист"
+ S ^("vmake")="Выполнил"
+ S ^("fnaz")="По назначению"
+ S ^("inaz")="Услуга назначена"
+ S ^("nazcat")="Категория назначения" ; для шаблонов
+ S ^("fcw")="По совмещению"
+ S ^("cwp")="Процент совместителя"
+ S ^("cws")="Сумма совместителя"
+ S ^("cwc")="Доп.код совместителя"
+ S ^("cwv")="Совместитель с врачем (код врача)"
+ S ^("icw")="Есть совмещение"
+ S ^("cwl")="Число соисполнителей"
+ S ^("nlab")="Создана заявка КДЛ"
+ S ^("kss")="Касса"
+ S ^("uc")="Код услуги"
+ S ^("agc")="Агент по услуге"
+ S ^("bill")="Баланс счете пациента"
+ S ^("cbill")="Баланс на дату счете пациента"
+ S ^("ubill")="Баланс на услугу"
+ S ^("billnr")="Платеж рядом"
+ S ^("billnrt")="Тип платежа рядом"
+ S ^("rez")="Результат"
+ S ^("fn:1")="Fn: Оплата в офисе"
+ S ^("fn:2")="Fn: VIP статус"
+ S ^("fn:3")="Fn: Неоплата абонемента"
+ S ^("isagn")="По агентскому назначению"
+ S ^("isagnv")="Вид начисления по назначению"
+ S ^("nazend")="Завершение назначения"
+ S ^("nazsum")="Сумма назначения"
+ S ^("daymn")="День месяца"
+ S ^("dweek")="День недели"
+ S ^("lpu")="Филиал"
+ S ^("con")="Контрагент"
+ S ^("conss")="Сумма контрагента"
+ S ^("zisum")="Сумма в заказ-наряде"
+ S ^("zak")="Заказчик"
+ S ^("ush")="Участок"
+ S ^("ushv")="Врач участка"
+ S ^("dsh-cab")="Кабинет в расписании"
+ S ^("period")="Вид периода расчета"
+ S ^ZARM("vzprm","yes")="Да"
+ S ^("no")="Нет"
+ S ^("tnum")="Врач"
+ S ^("ctnum")="Таб. номер"
+ S ^("otd")="Отделение"
+ S ^("spec")="Специальность"
+ S ^("otd2")="Совм.отд."
+ S ^("spec2")="Совм.спец."
+ S ^("otd3")="Совм.отд.2"
+ S ^("spec3")="Совм.спец.2"
+ S ^("zpprice:")="Зарп. прейск."
+ S ^("vnaz")="Назначил"
+ S ^("vnazsp")="Назначил специалист"
+ S ^("vmake")="Выполнил"
+ S ^ZARM("trvar",1)="Оклад (значение)"
+ S ^(2)="Надбавка (значение)"
+ S ^("V1")="Переменная з.п. 1"
+ S ^("V2")="Переменная з.п. 2"
+ S ^("V3")="Переменная з.п. 3"
+ S ^ZARM("zprm","zpprice:")="Зарп. прейск."
+ S ^("sum")="Сумма"
+ S ^("cenn")="Цена"
+ S ^("cen")="Цена основного прейскуранта"
+ S ^("skd")="Скидка"
+ S ^("cnt")="Количество"
+ S ^("sbs")="Себестоимость"
+ S ^("smatt")="Стоим. материалов"
+ S ^("pmatt")="Продажа. материалов"
+ S ^("scmatt")="Себестоимость материалов"
+ S ^("cwp")="Процент совместителя"
+ S ^("cws")="Сумма совместителя"
+ S ^("conss")="Сумма контрагента"
+ S ^("zisum")="Сумма в заказ-наряде"
+ 
+ S ^MN("root","zargrp")="Группы алгоритмов з.п."
+ Q
+INIT 
+ N I,X
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<tzrp>")
+ D WTAGU^RWU("atab","prompt|trvar,prm|oper|rprm,prm,rfn,const|rprm,zprm|cond|rprm,rfn,const|zprm,const|zprm|prompt")
+ D WTAGU^RWU("vtab","prompt|vprm|cond|vzprm,const|oper|zprm,const|zprm,const|vars")
+ D W^RWU("<tree>"),TREEsys
+ D W^RWU("</tree><argrp>")
+ D LSTs^NSPRAV("zargrp")
+ D W^RWU("</argrp></tzrp></nb_console>"),C^RWU
+ Q
+TREE 
+ D OWF^RWU(".txt")
+ D TREEsys
+ D C^RWU
+ Q
+TREEsys N I,G,L
+ D WC^RWU("Параметры|prm")
+ D WC^RWU(CR_"Константы|const")
+ D WC^RWU(CR_"Таблица|tbl")
+ D WC^RWU(CR_"Печать таблицы|ptbl")
+ D WC^RWU(CR_"Алгоритмы|alg")
+ S I="" F  S I=$O(^ZARM("ar",I)) Q:I=""  S G=$G(^(I,"grp")),L($S(G:G,1:0),I)=$C(9)_$P(^ZARM("ar",I),"|",1)_"|a"_I
+ S G="" F  S G=$O(L(G)) Q:G=""  D
+ .D:G WC^RWU(CR_$C(9)_$$NAME^ISPRAV("zargrp",G))
+ .S I="" F  S I=$O(L(G,I)) Q:I=""  D WC^RWU(CR_$S(G:$C(9),1:"")_$$TAG^TXTU(L(G,I)))
+ Q
+LST(NMS,ND) ; Список параметров 
+ ; ND=1 - no delete
+ S ND=+$G(ND)
+ D OWF^RWU(".txt")
+ D:'ND WC^RWU("|Удалить данные")
+ N I,ID,R,X,T,J,C
+ S C=$S(ND:"",1:CR)
+ F I=1:1:99 S R=$P(NMS,",",I) Q:R=""  D
+ .I R="zprm" S NMS=NMS_",p"
+ .I R="rprm" S NMS=NMS_",p"
+ .I R="vprm" S NMS=NMS_",p,vfn"
+ .I R="p" D WC^RWU(CR_"prompt|Число"_CR_"promptt|Значение")
+ .I R="vzprm" D WC^RWU(CR_"prompt|Число"_CR_"promptt|Значение"_CR_"|NULL")
+ .I R="vars" S NMS=NMS_",p"
+ .S X="" S:R="prm" R="p"
+ .F  S X=$O(^ZARM(R,X)) Q:X=""  D
+ ..S T=$P(^(X),"|",1)
+ ..Q:$G(^ZARM(R,X,"use"))=0  ; not used
+ ..S:R="const" T="const"_T
+ ..I $E(X,$L(X))'=":" D WC^RWU(C_$S(R="p":"P",R="const":"const:",R="rfn":"fn:",R="vfn":"fn:",1:"")_X_"|"_T) S C=CR Q
+ ..S ID=+$G(^MN($E(X,1,$L(X)-1))) Q:ID=0 
+ ..S J="" F  S J=$O(^MN(ID,J)) Q:J=""  D WC^RWU(C_$TR(X,"@",":")_J_"|"_T_":"_$P(^(J),"|",1))
+ .I R="zprm"!(R="vars")!(R="vzprm") D WC^RWU(CR_"V1|Переменная 1"_CR_"V2|Переменная 2"_CR_"V3|Переменная 3"_CR_"V4|Переменная 4 (общ)"_CR_"V5|Переменная 5 (общ)")
+ .I R="vars" D WC^RWU(CR_"bs|Базовая сумма")
+ D C^RWU
+ Q
+LTBL(NM) ; Загрузить таблицы
+ N H,X,I,K,T
+ S (H,I)=""
+ S:NM="prm" H="|Наименование параметра|Тип|Источник",X="p"
+ S:NM="tbl" H="|Имя колонки|Наименование параметра|Ручн. ввод|Размер",X="t"
+ S:NM="const" H="|Наименование константы|Значение",X="const"
+ S:NM="ptbl" H="",X="prn"
+ D OWF^RWU(".txt") D:$L(H) WC^RWU(H)
+ I $L(X) F  S I=$O(^ZARM(X,I)) Q:I=""  D
+ .S H=^(I) Q:H="" 
+ .D:X="prn" WC^RWU(CR_H)
+ .D:X="p" WC^RWU(CR_I_"|"_H)
+ .D:X="const" WC^RWU(CR_I_"|"_H)
+ .I X="t" S T=$P(H,"|",1),K=$P(H,"|",2) D WC^RWU(CR_K_"|"_T_"|"_$S(K?1.1"P"1.N:$P($G(^ZARM("p",$E(K,2,99))),"|",1),1:$G(^ZARM("rprm",K)))_"|"_$P(H,"|",3,4))
+ D C^RWU
+ Q
+SPRN ; Сохранить печатный отчет
+ N I,A
+ D ORH^RWU
+ K ^ZARM("prn")
+ F I=1:1 S A=$$R^RWU Q:%IFN["Z"  S ^ZARM("prn",I)=$$WD^TXTU(A)
+ D CR^RWU
+ D KGL^IEXCH("^ZARM","prn")
+ D GL^IEXCH("^ZARM","prn")
+ Q
+NNUM(NM,TXT,ID) ; Добавить/сохранить значение
+ N X
+ S X=$S(NM="prm":"p",NM="tbl":"t",NM="const":"const",1:""),ID=$G(ID)
+ I X="" D MSG^RWU("Неверный справочник.") Q 
+ S TXT=$$WD^TXTU(TXT)
+ I ID'="" S ^ZARM(X,ID)=TXT D MSG^RWU(ID) D GL^IEXCH("^ZARM",X,ID) Q 
+ L +^ZARM(X)
+ S ID=$O(^ZARM(X,9999999),-1)+1,^(ID)=TXT
+ L -^ZARM(X)
+ D GL^IEXCH("^ZARM",X,ID)
+ D MSG^RWU(ID)
+ Q
+DELNUM(NM,ID) ; Удалить значение
+ S NM=$S(NM="prm":"p",NM="tbl":"t",NM="const":"const",1:"") Q:NM=""!(ID="") 
+ K ^ZARM(NM,ID)
+ D KGL^IEXCH("^ZARM",NM,ID)
+ Q
+DELLN(NM,ID) ; Удалить линию со сдвигом вверх
+ S NM=$S(NM="prm":"p",NM="tbl":"t",1:"") Q:NM=""!(ID="") 
+ N X
+ S X=ID F  S X=$O(^ZARM(NM,X)) Q:X=""  S ^ZARM(NM,ID)=^ZARM(NM,X),ID=X 
+ S:X="" X=ID
+ K ^ZARM(NM,X)
+ D KGL^IEXCH("^ZARM",NM,X)
+ Q
+EXNUM(NM,X1,X2) 
+ S NM=$S(NM="prm":"p",NM="tbl":"t",1:"") Q:NM=""!(X1="")!(X2="") 
+ S NM=$G(^ZARM(NM,X1)),^(X1)=$G(^(X2)),^(X2)=NM
+ D GL^IEXCH("^ZARM",NM,X2)
+ Q
+SAR ; Сохранить алгоритм расчета
+ N %J,A,ID
+ D ORH^RWU
+ F %J=1:1 S A=$$WD^TXTU($$R13^RWU) Q:%IFN["Z"  D XML^YIXMLRR
+ D CR^RWU
+ D WAR,CLOSE^YIXMLRR
+ D MSG^RWU(^PP(0,2)_"<tzrp><id data="""_ID_"""/></tzrp></nb_console>",".xmlb")
+ Q
+WAR ; Записать алгоритм расчета
+ N R,NB,FM,I,X,L,LV,LR
+ S NB="nb_console",FM="tzrp"
+ S ID=$G(XML(NB,FM,"id")),R=$G(XML(NB,FM,"anm"))
+ K XML(NB,FM,"id"),XML(NB,FM,"anm")
+ I $L(ID) S $P(^ZARM("ar",ID),"|",1)=R
+ I ID="" L +^ZARM("ar") S ID=$O(^ZARM("ar",""),-1)+1,^(ID)=R L -^ZARM("ar")
+ S R=$G(XML(NB,FM,"aarch")),^ZARM("ar",ID,"use")=$S(R:0,1:1)
+ S R=$G(XML(NB,FM,"argrp")),^ZARM("ar",ID,"grp")=R
+ S R=$G(XML(NB,FM,"prc")),^ZARM("ar",ID,"v","p")=+R
+ S R=$G(XML(NB,FM,"pkf")),^ZARM("ar",ID,"v","k")=+R
+ ; S R=$G(XML(NB,FM,"vcalc")),^ZARM("ar",ID,"v","a")=+R - not used
+ S A=$G(XML(NB,FM,"atab"))
+ K ^ZARM("ar",ID,"r")
+ F %J=1:1:999 S R=$P(A,CR,%J) Q:R=""  D
+ .S R=$TR(R,"@","|"),L=$P(R,"|",1),R=$P(R,"|",2,99)
+ .F I=1:1:$L(R,"|") S X=$P(R,"|",I) I $E(X)=0 S $P(R,"|",I)=+$$NNUM^TXTU(X) ; corr. numeric
+ .S ^ZARM("ar",ID,"r",%J)=R
+ .K:L="" ^ZARM("ar",ID,"r",%J,"l")
+ .S:L'="" ^ZARM("ar",ID,"r",%J,"l")=L,LR(L)=%J
+ S A=$G(XML(NB,FM,"vtab"))
+ K ^ZARM("ar",ID,"v")
+ F %J=1:1:999 S R=$P(A,CR,%J) Q:R=""  D
+ .S R=$TR(R,"@","|"),L=$P(R,"|",1),R=$P(R,"|",2,99)
+ .F I=1:1:$L(R,"|") S X=$P(R,"|",I) I $E(X)=0 S $P(R,"|",I)=+X ; corr. numeric
+ .S ^ZARM("ar",ID,"v",%J)=R
+ .K:L="" ^ZARM("ar",ID,"v",%J,"l")
+ .S:L'="" ^ZARM("ar",ID,"v",%J,"l")=L,LV(L)=%J
+ K ^ZARM("ar",ID,"lbr") M ^ZARM("ar",ID,"lbr")=LR
+ K ^ZARM("ar",ID,"lb") M ^ZARM("ar",ID,"lb")=LV
+ S ^ZARM("ar",ID,"log")=$$USRH^IUSER()
+ ; TODO - check go operator labels
+ D KGL^IEXCH("^ZARM","ar",ID)
+ D GL^IEXCH("^ZARM","ar",ID)
+ Q
+LAR(ID) ; Загрузить алгоритм расчета
+ Q:ID=""  
+ N R,T,I,A,X,P,V,L
+ S ID=$E(ID,2,99)
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<tzrp>")
+ S R=$G(^ZARM("ar",ID))
+ D WTAGDC^RWU("id",ID)
+ D WTAGDC^RWU("anm",$P(R,"|",1))
+ D WTAGDC^RWU("aarch",$S($G(^ZARM("ar",ID,"use"))=0:1,1:0))
+ D WTAGDC^RWU("argrp",$G(^ZARM("ar",ID,"grp")))
+ D WTAGDC^RWU("prc",$G(^ZARM("ar",ID,"v","p")))
+ D WTAGDC^RWU("pkf",+$G(^ZARM("ar",ID,"v","k")))
+ D W^RWU("<atab>")
+ S T="trvar|oper|rprm|rprm|cond|rprm|zprm|zprm|prompt"
+ S I="" F  S I=$O(^ZARM("ar",ID,"r",I)) Q:I=""  D
+ .S R=^(I),L=$G(^(I,"l")),A=L_"@"_$TR(R,"|","@")_"|"_L
+ .F X=1:1:9 S P=$P(R,"|",X),V=$P(T,"|",X),A=A_"|"_$$getLAR(V,P,"r")
+ .D WC^RWU(CR_$$TAG^TXTU(A))
+ D W^RWU("</atab><vtab>")
+ S T="vprm|cond|vzprm|oper|zprm|zprm|vars"
+ S I="" F  S I=$O(^ZARM("ar",ID,"v",I)) Q:I=""!(I'?1.N)  D
+ .S R=^(I),L=$G(^(I,"l")),A=L_"@"_$TR(R,"|","@")_"|"_L
+ .F X=1:1:7 S P=$P(R,"|",X),V=$P(T,"|",X),A=A_"|"_$$getLAR(V,P,"v")
+ .D WC^RWU(CR_$$TAG^TXTU(A))
+ D W^RWU("</vtab></tzrp></nb_console>"),C^RWU
+ Q
+getLAR(V,P,T) ; Расшифровка параметра алгоритма
+ Q:P="" ""
+ Q:P?1.1"V"1.N "Переменная "_$E(P,2)
+ I P="bs" Q "Базовая сумма"
+ I V="prompt" Q P
+ I V="zprm"!(V="rprm")!(V="vzprm")!(V="vprm"),+P=P Q P
+ I V="zprm"!(V="rprm")!(V="vzprm")!(V="vprm"),$E(P)="=" Q $E(P,2,99)
+ I $E(P,1,6)="const:" Q "const"_$P(^ZARM("const",$E(P,7,99)),"|",1)
+ I T="r",$E(P,1,3)="fn:" Q $P(^ZARM("rfn",$E(P,4,9)),"|",1)
+ I T="v",$E(P,1,3)="fn:",$E(P,4,9)>3 Q $P(^ZARM("vfn",$E(P,4,9)),"|",1)
+ Q:P?1.1"P"1.N $P($G(^ZARM("p",$E(P,2,99))),"|",1)
+ I P[":",P'["fn:" Q $G(^ZARM(V,$P(P,":",1)_":"))_":"_$$GET^ISPRAV($P(P,":",1),$P(P,":",2))
+ Q $G(^ZARM(V,P))
+DELALG(ID) ; Удалить алгоритм расчета
+ I ID="" D MSG^RWU("Ошибочный код алгоритма.") Q
+ S ID=$E(ID,2,99)
+ K ^ZARM("ar",ID)
+ D KGL^IEXCH("^ZARM","ar",ID)
+ Q
+CPYALG(FID,TID) ; Копировать алгоритм на другой
+ N NM
+ S FID=$E(FID,2,99),TID=$E(TID,2,99)
+ I FID=""!(TID="") D MSG^RWU("Ошибочный код алгоритма.") Q 
+ S NM=^ZARM("ar",TID)
+ K ^ZARM("ar",TID)
+ M ^ZARM("ar",TID)=^ZARM("ar",FID)
+ S ^ZARM("ar",TID)=NM
+ D REGL^IEXCH("^ZARM","ar",TID)
+ Q
+PGRPLST(X,PTR) ; Список групп прайса для ЗП - TEMP
+ N R,I,C,Idx,LST,LLT
+ D OWF^RWU(".txt")
+ F I=1:1 S R=$P(X,";",I) Q:R=""  S C=$P(R,":",1) S:C'="" LST(C)=$P(R,":",2)
+ S PTR=$G(PTR)
+ I PTR'="",$D(^ZARM("user",PTR)) M LLT=^ZARM("user",PTR) G PGRPLST1
+ G:PTR="gprice" PGRPLST2
+PGRPLST1 
+ N LL,R
+ S I="" F  S I=$O(LLT(I)) Q:I=""  S R=$E(LLT(I),1,64)_"|"_I,LL(R)=I_"|"_LLT(I)_"|"_$G(LST(I))
+ S I="" F  S I=$O(LL(I)) Q:I=""  D WC^RWU(CR_LL(I))
+ D C^RWU
+ Q
+PGRPLST2 
+ S Idx=+$G(^MN("gprice")),I=""
+ F  S I=$O(^MN(Idx,I)) Q:I=""  S R=^(I) I $P(R,"|",3)=""!($P(R,"|",3)=I) D WC^RWU(CR_I_"|"_$P(R,"|",1)_"|"_$G(LST(I)))
+ D C^RWU
+ Q
+LARR(NM) ; Список пользовательских параметров
+ N I,R
+ D OWF^RWU(".txt")
+ S I="" F  S I=$O(^ZARM("user",NM,I)) Q:I=""  D WC^RWU(CR_I_"|"_^(I))
+ D C^RWU
+ Q
+AARR(NM,TXT) ; Add
+ Q:NM="" 
+ N I
+ S TXT=$$WD^TXTU(TXT)
+ S ^ZARM("user",NM)=$H,I=$O(^ZARM("user",NM,""),-1)+1,^(I)=TXT
+ D REGL^IEXCH("^ZARM","user",NM)
+ D LARR(NM)
+ Q
+SARR(NM,ID,TXT) ; Save (расчетный массив)
+ Q:ID=""  Q:'$D(^MN(NM)) 
+ S TXT=$$WD^TXTU(TXT)
+ S:TXT["|" ^ZARM("user",NM,ID)=TXT
+ S:TXT'["|" $P(^ZARM("user",NM,ID),"|",1)=TXT
+ D REGL^IEXCH("^ZARM","user",NM)
+ D LARR(NM)
+ Q
+DARR(NM,ID) ; Delete (расчетный массив)
+ I ID="" D MSG^RWU("Неверный код") Q 
+ K ^ZARM("user",NM,ID)
+ D KGL^IEXCH("^ZARM","user",NM,ID)
+ Q

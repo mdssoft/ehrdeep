@@ -1,0 +1,107 @@
+XGU ; eXtended Global Utilities [ 07/26/2013  4:01 PM ]
+S ; Save globals
+ N G,GL,GLL,I,FN,CR,L,R,DEV,WW,%Ww
+ S CR=$C(13,10),WW=1
+ W "--= eXtended Global Save =--",!,!
+SRL1 W "Select global ^" R G
+ G:G="" SRS G:G="*" SELALL G:$E(G,1)="-" SELDEL S G="^"_G
+ I '$D(@G) W " Global "_G_" - Not Found",! G SRL1
+ S:'$D(GLL(G)) GL($O(GL(""),-1)+1)=G S GLL(G)="" W ! G SRL1
+SRS G:'$D(GL) SRE
+ W !,"----------------------------",!,"Select "_$O(GL(""),-1)_" globals",!
+ W !,"File name: " R FN G:FN="" SRE W !
+ I $$CHECK^FIL(FN) W !,"File exists, overwrite ? <N>:" R R#1 S R=$TR(R,"y1","YY") G:$E(R,1)'="Y" SRE D DEL^FIL(FN) W !
+SRSFN S DEV=$$OW^FIL(FN) I DEV="" U 0 W "Error in opening file !",! G SRE
+ W:WW "Saving..",!
+ U DEV
+ S L="XGS"_CR_"Ver:1"_CR_"DateTime:"_$$DTM^DTUTL($H)_CR_"Comment:"_CR_"<<end>>"
+ s %Ww=""
+ D WW(L)
+ S R="" F  S R=$O(GL(R)) Q:R=""  D
+ .S G=GL(R) I WW U 0 W G,$C(9) U DEV
+ .F  S I=$D(@G) D:I'[0 WW(G),WW($G(@G)) S G=$Q(@G) Q:G=""  
+ D FLUSH
+ C DEV I WW U 0 W "..OK",!
+SRE Q
+SFN(GLptr,FN) ; From function
+ N GL
+ M GL=@GLptr
+ N G,GLL,I,CR,L,R,DEV,WW S CR=$C(13,10),WW=0
+ G SRSFN
+SELDEL 
+ S G="^"_$E(G,2,999),I=""
+ F  S I=$O(GL(I)) Q:I=""  I GL(I)=G K GL(I) W " - Global deselect",! Q 
+ W:I="" " - Global not found",!
+ G SRL1
+SELALL 
+ S I=1
+ S X="" F  S X=$O(^$GLOBAL(X)) Q:X=""  S GL($O(GL(""),-1)+1)=X,I=I+1
+ ;GT.M: S X="^%" F  S X=$O(@X) Q:X=""  S GL($O(GL(""),-1)+1)=X,I=I+1
+ W " Selected "_(I-1)_" globals",!
+ G SRL1
+SLIST ; Save from list
+ N G,GL,GLL,I,FN,CR,L,R,DEV S CR=$C(13,10)
+ W "--= eXtended Global Save =--",!,!
+SRL2 W "Select place of global list ^" R G
+ G:G="" SRS S G="^"_G
+ I '$D(@G) W " Global "_G_" - Not Found",! G SRL1
+ W !,"Check globals:"
+ S R="",I=1
+ F  X "S R=$O("_G_"(R))" Q:R=""  W !,R_$C(9)_" - "_$S('$D(@R):"Not found",1:"") I $D(@G) W "Found" S GL(I)=R,I=I+1
+ W !,"Continue ? <Y>:" R G#1 Q:$TR(G,"n","N")="N" 
+ G SRS
+R ; Read globals
+ N FN,DEV,L,R,G,PG,I,GL,CR,L1,SGL 
+ S CR=$C(13,10),GL="",L1=$C(9,9)_"..OK",DEV="",SGL=0
+ W "--= eXtended Global Read =--",!,!
+ W "File name:" R FN G:FN="" REND W !
+ I $$CHECK^FIL(FN)=0 W !,"File not found !",! G REND
+ S DEV=$$OR^FIL(FN) I DEV="" W !,"Error - open file",! G REND
+ ; Header
+ U DEV R L#4 I $$ST^FIL=0 U 0 W !,"Error - read header",! G REND
+ S L=$$FHEX^CONU(L) R R#L
+ I $$ST^FIL=0 U 0 W !,"Error - read header",! G REND
+ U 0 W ! F I=1:1:99 S G=$P($P(R,$C(10),I),$C(13),1) Q:G=""  D
+ .I $F(G,"DateTime:")=10 W "Saved: "_$P(G,":",2,255),!
+ .I $F(G,"GL:")=4 W "Globals: "_$P(G,":",2,255),!
+ W !,"Continue <Y>, Select Globals <S> or Select one <G> ? " 
+ R R#1 S R=$TR(R,"n0","NN") I $E(R,1)="N" C DEV G REND
+ S PG=""
+ I R="S"!(R="s") S SGL=1 G RLOOP
+ G:R'="G"&(R'="g") RLOOP
+ S SGL=5 W !,"Global name ^" R PG(1) I PG(1)="" C DEV G REND
+ S PG(1)="^"_$P(PG(1),"(",1)
+ ; Read loop
+RLOOP U DEV R L#4 I $$ST^FIL=0 G ROKL 
+ S L=$$FHEX^CONU(L) R G#L
+ I $$ST^FIL=0!(G="") U 0 W !,"Error - read data 1",! G REND 
+ I 'SGL S R=$P(G,"(",1) I R'=GL U 0 W:GL'="" L1 S GL=R W !,"Restore - "_GL
+ U DEV R:1 L#4
+ I $$ST^FIL=0 U 0 W !,"Error - read data 2",!,A,! G REND
+ U DEV S L=$$FHEX^CONU(L),R=""
+ I L>0 R R#L I $$ST^FIL=0 U 0 W !,"Error - read data 3",! G REND
+ I SGL>0&(SGL<5) I $P(PG,"(",1)'=$P(G,"(",1) D
+ .U 0 W !,"Restore "_$P(G,"(",1)_" Yes/No/Quit <Y/N/Q>: "
+ .R L#1 S PG=G,L=$TR(L,"ynq10","YNQYN"),SGL=$S(L="N":2,L="Q":3,1:1)
+ .W:SGL=1 " ...processing"
+ I SGL>4 I $P(PG,"(",1)'=$P(G,"(",1) D
+ .S PG=G,SGL=$S(PG(1)=$P(G,"(",1):6,SGL=6:3,1:5)
+ .U 0 W $S(SGL=3:"..OK",1:".")
+ G:SGL=2!(SGL=5) RLOOP G:SGL=3 ROKL
+ S @G=R,PG=G
+ Q:$$EOF^FIL(DEV) 
+ G RLOOP
+ROKL U 0 W:GL'="" L1 W !,"Successfully !!!",!
+REND I DEV'="" C DEV
+ Q
+MKL(X) 
+ S X=$$HEX^CONU(+X) S X=$E("000",1,4-$L(X))_X Q X
+WW(X) 
+ S X=$$MKL($L(X))_X
+ I $L(%Ww)+$L(X)>32000 W %Ww,X s %Ww="" Q
+ s %Ww=%Ww_X
+ Q
+FLUSH 
+ Q:%Ww=""
+ W %Ww
+ Q

@@ -1,0 +1,19 @@
+RKFUND ; Отчеты по коечному фонду [ 07/23/2024  2:34 PM ]
+STAT(DT) ; Статус по палатам на день
+ N LP,KEY,K,R,D,DE,NI,T,DX,J
+ S D=$$DI^DTUTL(DT),DE=D,D=D_",0"
+ S LP=$$^I("ilpu")
+ D OWF^RWU(".txt")
+ D WC^RWU("П.п.|Палата|Койка|Пациент|Лечащий врач|Ист. госпитализации|Время с|Примечание")
+ S KEY="" F  S KEY=$O(^UBOX(LP,KEY)) Q:KEY=""  D
+ .S K="" F  S K=$O(^UBOX(LP,KEY,K)) Q:K=""  D
+ ..S DX=D F  S DX=$O(^UBOX(LP,KEY,K,DX),-1) Q:DX=""!(DX>DE)  S R=$G(^(DX)) Q:(+DX<DE)&(R="")  D
+ ...Q:R=""
+ ...S NI=$P(R,"|",2) Q:NI=""
+ ...S T=$G(^PLPU(LP,$P(KEY,".",1),$P(KEY,".",2),"cab",$P(KEY,".",3)))
+ ...S T=$P(T,"|",3)
+ ...S BUF(KEY_","_K_","_NI)=T_"|"_K_"|"_NI_" "_$$FIO^IPAC(NI)_"|"_$$GETE^IPAC(NI,"ush",DX)_"|"_$$GET^IPAC(NI,"menj",DX)_"|"_$S(+DX=(+D):$$TM^DTUTL($P(DX,",",2)),1:"")_"|"_$$OWF^TXTU($P(R,"|",4),60)
+ S I=1
+ S K="" F  S K=$O(BUF(K)) Q:K=""  D WC^RWU(CR_I_"|"_BUF(K)) s I=I+1
+ D C^RWU
+ Q

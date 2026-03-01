@@ -1,0 +1,58 @@
+NBBS ; Whiteboard [ 03/22/2023  11:49 PM ]
+INIT 
+ D UREG^YISYNC("upd^NBBS")
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<bbs><msgs>")
+ D WC^RWU("1|Call-центр")
+ D W^RWU("</msgs></bbs></nb_console>"),C^RWU
+ Q
+CLOSE 
+ D UREG^YISYNC("upd^NBBS")
+ Q
+ADD(AREA,TEXT) 
+ N ID
+ S ID=$O(^BBS(AREA,""),-1)+1
+ S ^BBS(AREA,ID)=$H_"|"_$$KDR^IUSER()_"|"_$$USR^IUSER()
+ S ^BBS(AREA,ID,"t")=$$WD^TXTU(TEXT)
+ D UPD^YISYNC("upd^NBBS","("_AREA_")")
+ D msg($$DW^TXTU("Новое объявление: ")_TEXT)
+ ; TODO - всплывающая
+ Q
+DEL(AREA,ID) 
+ Q:AREA=""  Q:ID="" 
+ S:$E(ID)="f" $E(ID,1)=""
+ K ^BBS(AREA,ID)
+ D UPD^YISYNC("upd^NBBS","("_AREA_")")
+ Q
+SAVE(AREA,ID,TEXT) 
+ S:$E(ID)="f" $E(ID,1)=""
+ S ^BBS(AREA,ID)=$H_"|"_$$KDR^IUSER()_"|"_$$USR^IUSER()
+ S ^BBS(AREA,ID,"t")=$$WD^TXTU(TEXT)
+ D UPD^YISYNC("upd^NBBS","("_AREA_")")
+ D msg($$DW^TXTU("Изменили объявление: ")_TEXT)
+ Q
+LST(AREA) 
+ N ID,R,T,FL,RR,F
+ D REG^YISYNC("upd^NBBS","("_AREA_")")
+ 
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<bbs><board>")
+ ;D W^RWU("<?xml version=""1.0"" encoding=""Windows-1251""?>")
+ D WC^RWU("<streport nm=""bbs"" id="""_AREA_""">")
+ S (FL,RR)=""
+ S ID="" F  S ID=$O(^BBS(AREA,ID)) Q:ID=""  D
+ .S R=^(ID)
+ .S F="f"_ID
+ .S FL=FL_CR_"<field tp=""m"" h=""v"" nm="""_F_""" tit="""_$$DTM^DTUTL($P(R,"|",1))_", "_$$FIO^IKADRY($P(R,"|",2))_"""/>"
+ .S RR=RR_CR_"<"_F_">"_$$TAG^TXTU($G(^BBS(AREA,ID,"t")))_"</"_F_">"
+ D WC^RWU("<fields>")
+ D WC^RWU(FL)
+ D WC^RWU("</fields><data>")
+ D WC^RWU(RR)
+ D W^RWU("</data></streport></board></bbs></nb_console>"),C^RWU
+ Q
+msg(TXT) 
+ N U,J
+ S J="" F  S J=$O(^AS("upd^NBBS",J)) Q:J=""  D SENDJOB^YISYNC("MSGU^NISUTL","("""_TXT_""")",J)
+ Q
+upd(AREA) ; SynC Update
+ D MSG^RWU(^PP(0,2)_"<run>bbs_update(0,0);"_CR_"</run></nb_console>",".xmlb")
+ Q

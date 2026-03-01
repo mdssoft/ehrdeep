@@ -1,0 +1,250 @@
+NLDC1IN
+INSPR ; Справочники
+	N conn,sc,res,CL,A,I,i,ID,last,sql,ID,DB,ri,LL,II,ID
+	d init
+	
+	s sql="select * from BRANCH"
+	w !,sql
+	D exec
+	S II=$$NEWIDX^YISPRAV("otd")
+	K ^MN(II)
+	While res.Next() 
+	{
+		F ri=1:1:CL S $P(R,"|",ri)=$$getPL(res,ri)
+		w !,R
+		S i=i+1,ID=$P(R,"|",1)
+		S ^MN(II,ID,"fname")=$P(R,"|",3)
+		S ^MN(II,ID,"sname")=$P(R,"|",3)
+		S ^MN(II,ID,"use")=1
+	}
+	d res.Close()
+	; ---------------------------
+	s sql="select * from SPEC"
+	w !,sql
+	D exec
+	S II=$$NEWIDX^YISPRAV("spec")
+	K ^MN(II)
+	While res.Next() 
+	{
+		F ri=1:1:CL S $P(R,"|",ri)=$$getPL(res,ri)
+		w !,R
+		S i=i+1,ID=$P(R,"|",1)
+		S ^MN(II,ID,"fname")=$P(R,"|",4)
+		S ^MN(II,ID,"sname")=$P(R,"|",4)
+		S ^MN(II,ID,"otd")=$P(R,"|",3)
+		S ^MN(II,ID,"use")=1
+	}
+	d res.Close()
+	; ---------------------------
+	s sql="select * from POST"
+	w !,sql
+	D exec
+	S II=$$NEWIDX^YISPRAV("doljn")
+	K ^MN(II)
+	While res.Next() 
+	{
+		F ri=1:1:CL S $P(R,"|",ri)=$$getPL(res,ri)
+		w !,R
+		S i=i+1,ID=$P(R,"|",1)
+		S ^MN(II,ID)=$P(R,"|",3)
+	}
+	d res.Close()
+	; ---------------------------
+	s sql="select * from FIRM"
+	w !,sql
+	D exec
+	S II=5
+	K ^M(II)
+	While res.Next() 
+	{
+		F ri=1:1:CL S $P(R,"|",ri)=$$getPL(res,ri)
+		w !,R
+		S i=i+1,ID=$P(R,"|",1)
+		S ^M(II,ID)=$P(R,"|",3)
+	}
+	d res.Close()
+	; ---------------------------
+	s sql="select * from STATUS"
+	w !,sql
+	D exec
+	While res.Next() 
+	{
+		F ri=1:1:CL S $P(R,"|",ri)=$$getPL(res,ri)
+		w !,R
+		S i=i+1,ID="s."_$P(R,"|",1)
+		S ^M(II,ID)=$P(R,"|",3)
+	}
+	d res.Close()
+	; ---------------------------
+	s sql="select * from CATEGORY"
+	w !,sql
+	D exec
+	S II=5
+	K ^M(II)
+	While res.Next() 
+	{
+		F ri=1:1:CL S $P(R,"|",ri)=$$getPL(res,ri)
+		w !,R
+		S i=i+1,ID="c."_$P(R,"|",1)
+		S ^M(II,ID)=$P(R,"|",3)
+	}
+	d res.Close()
+	
+	s sc=conn.Disconnect()
+	If '$P(sc," ",1) do $System.Status.DisplayError(sc)
+	Q
+INSTAFF ; Персонал
+	N conn,sc,res,CL,A,I,i,ID,last,sql,ID,DB,ri,LL,II,ID,HH,CAB,X,USH
+	d init
+	
+	s sql="select * from STAFF"
+	w !,sql
+	D exec
+	K ^KDR
+	D prepstaff
+	S HH=$$DI^DTUTL("01.01.15")
+	While res.Next() 
+	{
+		F ri=1:1:CL S $P(R,"|",ri)=$$getPL(res,ri)
+		w !,R
+		S i=i+1,ID=$P(R,"|",1)
+		D SET^IKADRY(ID,"f",HH,$P(R,"|",7))
+		D SET^IKADRY(ID,"i",HH,$P(R,"|",8))
+		D SET^IKADRY(ID,"o",HH,$P(R,"|",9))
+		
+		D SET^IKADRY(ID,"otd",HH,$P(R,"|",2))
+		D SET^IKADRY(ID,"spec",HH,$P(R,"|",3))
+		D SET^IKADRY(ID,"spec1",HH,$P(R,"|",4))
+		D SET^IKADRY(ID,"doljn",HH,$P(R,"|",5))
+		
+		D SET^IKADRY(ID,"tnum",HH,$P(R,"|",6))
+		
+		S X=$P(R,"|",10) ; cab
+		I X'="" S CAB(X)="" D SET^IKADRY(ID,"cab",HH,X)
+		
+		I +$P(R,"|",12) D SET^IKADRY(ID,"flg",HH,"pnd")
+		I +$P(R,"|",13) S USH(ID)=""
+		
+		D SET^IKADRY(ID,"tel_int",HH,$P(R,"|",14))
+		D SET^IKADRY(ID,"tel",HH,$P(R,"|",15))
+	}
+	
+	D updcab
+	D ush
+	
+	s sc=conn.Disconnect()
+	If '$P(sc," ",1) do $System.Status.DisplayError(sc)
+	Q
+updcab ; Присвоить кабинеты
+	N L,C
+	S L=+$$^I("ilpu")
+	S:'$D(^PLPU(L,1)) ^PLPU(L,1)="Основной корпус"
+	S:'$D(^PLPU(L,1,1)) ^PLPU(L,1,1)="Первый этаж" ; TODO
+
+	S C="" F  S C=$O(CAB(C)) Q:C=""  D
+	.S ^PLPU(L,1,1,C)="0|"_C_"|"_C
+	Q
+ush ; Создать участки прикрепления
+	N V,I,J
+	S I=+$$MKIDX^YISPRAV("uchastok"),J=1
+	S V="" F  S V=$O(USH(V)) Q:V=""  D
+	.s ^MN(I,J)=V,J=J+1
+	Q
+prepstaff ; Подготовить справочники для кадров
+	N I
+	S I=$$NEWIDX^YISPRAV("kadryflg")
+	S ^MN(I,"pnd")="Помощь на дому"
+	Q
+INPRICE ; Импорт прейскуранта
+	N conn,sc,res,CL,A,I,i,ID,last,sql,ID,DB,ri,LL,II,ID,DT,U,LL,DTT,N1,N2
+	d init
+	
+	S II=+$$MKIDX^YISPRAV("tprice")
+	S ^MN(II,1)="Основной"
+	S DTT=$$DI^DTUTL("01.01.16")
+	
+	s sql="select * from PRICE"
+	w !,sql
+	D exec
+	While res.Next() 
+	{
+		S ID=$$getPL(res,1)
+		S U=$$getPL(res,2)
+		S LL(ID)=U
+		S DT=$$DIISO^DTUTL($$getPL(res,3))
+		D SETPRICE^IPRICE(U,1,DT,$$NNUM^TXTU($$getPL(res,4)))
+		D SET^IPRICE(U,"eid",1,DT,ID)
+	}
+	d res.Close()
+	; ---------------------------
+	s sql="select * from SERVICE"
+	w !,sql
+	D exec
+	While res.Next() 
+	{
+		S ID=$$getPL(res,1)
+		S U=$G(LL(ID))
+		I U'="" {
+			S A=$$getPL(res,2)
+			D:A'="" SET^IPRICE(U,"otd",1,DT,"|"_A_"|")
+			
+			S N1=$$getPL(res,3)
+			S N2=$$getPL(res,4)
+			S:N1=""&(N2'="") N1=N2
+			S:N2=""&(N1'="") N2=N1
+			D SET^IPRICE(U,"cname",1,DT,N1)
+			D SET^IPRICE(U,"name",1,DT,N2)
+			
+			S A=$$getPL(res,5) ; огр. по полу
+			D:A'="" SET^IPRICE(U,"dsex",1,DT,A)
+			S A=$$NNUM^TXTU($$getPL(res,6)) ; кол-во на прием
+			D:A SET^IPRICE(U,"cnt",1,DT,A)
+		}
+	}
+	d res.Close()
+	Q
+INDSH(FROM) ; Импорт графика приемов
+	N conn,sc,res,CL,A,I,i,ID,last,sql,ID,DB,ri,VR,DT,TS,TE,TL,CAB,OT,SP,LPU
+	d init
+	
+	s sql="select * from SCHEDULE where time_from>'"_$$DTISO^DTUTL(FROM)_"'"
+	w !,sql
+	D exec
+	S LPU=+$$^I("ilpu")
+	While res.Next() 
+	{
+		S VR=$$getPL(res,2)
+		S TS=$$getPL(res,3)
+		S TE=$$getPL(res,4)
+		S CAB=$$getPL(res,5)
+		S TL=$$getPL(res,6)
+		S OT=$$OTD^IKADRY(VR),SP=$$SPEC^IKADRY(VR)
+		S DT=$$dti(TS)
+		S TS=$$TI^DTUTL($P(TS," ",2)),TE=$$TI^DTUTL($P(TE," ",2))
+		S ^DSH(LPU,OT,VR,SP,DT)="|"_CAB
+		D CREATM^IMRASP(LPU,OT,VR,SP,DT,TS,TE,TL)
+	}
+	D MKI^IMRASP(LPU,FROM,FROM,FROM+60)
+	d res.Close()
+	Q
+init
+	Set CR=$C(13,10),%LOG="sys",%JOB=777
+	S DB="BASE"
+	Set conn=##class(%SQLGatewayConnection).%New()
+	Set sc=conn.Connect(DB,"sa","")
+	U 0 If '$P(sc," ",1) do $System.Status.DisplayError(sc) quit
+	Set res=##class(%ResultSet).%New("%DynamicQueryGW:SQLGW")
+	Q
+exec
+	S stat=res.Prepare(sql,,conn)
+	I 'stat D $System.OBJ.DisplayError(stat) Q 
+	S stat=res.Execute()
+	I 'stat D $System.OBJ.DisplayError(stat) D res.Close() Q
+	S CL=res.GetColumnCount(),i=0
+	Q
+dti(X)
+	S X=$P(X," ",1)
+	I X'["-" Q $$DI^DTUTL(X)
+	Q $$DI^DTUTL($P(X,"-",3)_"."_$P(X,"-",2)_"."_$P(X,"-",1))
+getPL(res,ID)
+	Q $$TRIM^TXTU($TR(res.GetData(ID),$C(0),""))

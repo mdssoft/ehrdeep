@@ -1,0 +1,62 @@
+IBARS ;	Импорт данных БАРС [ 11/02/2017  3:27 PM ]
+INPAC 
+ N NI,R,R1,R2,DT,ID,X,DS
+ ;D infn("patients.lst","pac",1)
+ U 0 W "."
+ ;D infn("patients_cart.lst","pacn",9)
+ U 0 W "."
+ ;D infn("patients_contact.lst","pact",2)
+ U 0 W "."
+ S DS=$$DI^DTUTL("01.01.17")
+ S ID="" F  S ID=$O(^BUF("pac",ID)) Q:ID=""  D
+ .S R=^(ID) Q:$P(R,"|",6)'=1 
+ .S R1=$G(^BUF("pacn",ID)) Q:R1=""  
+ .S R2=$G(^BUF("pact",ID))
+ .S NI=$P(R1,"|",7) Q:NI=""  Q:NI[" " 
+ .I $D(^BTN(NI)),$$GET^IPAC(NI,"eid")="" S ^BUF("pacerr",ID)=NI Q 
+ .S DT=$$DI^DTUTL($P(R1,"|",5)) S:DT="" DT=DS
+ .D SET^IPAC(NI,"eid",DT,ID)
+ .D SET^IPAC(NI,"ofor",DT,1)
+ .D SET^IPAC(NI,"stc",DT,1) ; TODO
+ .D SET^IPAC(NI,"fiof",DT,$P(R,"|",11))
+ .D SET^IPAC(NI,"fioi",DT,$P(R,"|",10))
+ .D SET^IPAC(NI,"fioo",DT,$P(R,"|",12))
+ .D SET^IPAC(NI,"datar",DT,$$DI^DTUTL($P(R,"|",13)))
+ .S X=$P(R,"|",14)
+ .D:X'="" SET^IPAC(NI,"pol",DT,$S(X=0:2,X=1:1,1:""))
+ .S X=$P(R,"|",18)
+ .D:X'="" SET^IPAC(NI,"snils",DT,X)
+ .S X=$P(R2,"|",4)
+ .D:X'="" SET^IPAC(NI,"tel1",DT,X)
+ .S X=$P(R2,"|",5)
+ .D:X'="" SET^IPAC(NI,"pager",DT,X)
+ .S X=$P(R2,"|",6)
+ .D:X'="" SET^IPAC(NI,"email",DT,X)
+ Q
+DAGENT 
+ N FN,IO,R,X,NI
+ S FN="pac.lst"
+ S IO=$$ORT^FIL(FN_FL) Q:IO=""
+ U IO F  R R Q:$$ST^FIL()=0  D:R'=""
+ .
+ C IO
+ Q
+DAGENTC 
+ Q
+DMEDCRD 
+ Q
+infn(FN,NM,KEY) ; Загрузить файл
+ N IO,R,X,XX,L,I,J,K,JJ
+ K ^BUF(NM)
+ S IO=$$ORT^FIL(FN) Q:IO=""
+ S XX="" U IO F  R X Q:$$ST^FIL()=0  D:X'=""  
+ .S XX=X_$C(10)
+ .F  Q:'$F(XX,$C(10))  D
+ ..S R=$P(XX,$C(10),1),XX=$P(XX,$C(10),2,999)  Q:R="" 
+ ..S R=$$WD^TXTU($$U8W^TXTU(R))
+ ..S L=$L(R,"|"),RR=""
+ ..F I=1:1:L S $P(RR,"|",I)=$$TRIM^TXTU($P(R,"|",I))
+ ..S K=$P(RR,"|",KEY) Q:K=""  
+ ..S ^BUF(NM,K)=RR
+ C IO
+ Q

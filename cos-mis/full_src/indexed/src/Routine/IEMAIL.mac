@@ -1,0 +1,71 @@
+IEMAIL ; Email messages
+DOSEND(ID) ; Из каталога отправки сообщений
+ N SRV,USR,PAS,PORT,I,R,IDX,FR,TO,F,TIT,MFR,FIL
+ S SRV=$G(^MSGHUB("mail",ID,"server")),PORT=$G(^("port")) ; first
+ S USR=$G(^("login")),PAS=$G(^("passwd")),MFR=$G(^("from"))
+ Q:SRV=""  Q:USR=""  Q:PAS="" 
+ S:MFR="" MFR=USR
+ S F=0 
+ S IDX="" F  S IDX=$O(^MSGOUT("mail",ID,IDX)) Q:IDX=""  D
+ .S R=^(IDX),FR=$P(R,"|",1),TO=$P(R,"|",2),TIT=$P(R,"|",3)
+ .Q:TO="" 
+ .Q:$G(^(IDX,"chkfn"))'=""  Q:$G(^("wait")) 
+ .S FIL=$G(^("sub"))
+ .Q:$$timeout^IMSGHUB("mail",ID,IDX) 
+ .S (I,R)="" F  S I=$O(^MSGOUT("mail",ID,IDX,"data",I)) Q:I=""  S R=R_^(I)
+ .Q:R=""
+ .S:FR="" FR=MFR
+ .S:TIT="" TIT="none"
+ .Q:'$$SEND(USR,PAS,SRV,PORT,FR,TO,TIT,R,FIL) 
+ .S R=$G(^MSGOUT("mail",ID,IDX,"endprc"))
+ .D:R'="" @R
+ .K ^MSGOUT("mail",ID,IDX)
+ Q
+DORECV(ID)
+ Q
+SEND(USR,PAS,SRV,PORT,FROM,TO,SBJ,MSG,FN)
+ n smtp,email,auth,sc1,sc2,a
+ S:PORT="" PORT=25
+ S smtp=##class(%Net.SMTP).%New()
+ s smtp.smtpserver=SRV
+ S smtp.port=PORT
+ 
+ //Create object to carry authentication
+ Set auth=##class(%Net.Authenticator).%New()
+ Set auth.UserName=USR
+ Set auth.Password=PAS
+  
+ Set smtp.authenticator=auth
+ Set smtp.AuthFrom=auth.UserName
+ 
+ S email=##class(%Net.MailMessage).%New()
+ S email.Subject=SBJ
+ S email.From=FROM
+ D email.To.Insert(TO)
+ S email.Charset="windows-1251"
+ s email.IsHTML=1
+ ; s email.IsMultiPart=1
+ ; s email.MultiPartType="related" 
+ 
+ d email.TextData.Write(MSG)
+ ;d email.TextData.Write("<img src=""cid:phcell.gif"">")
+ 
+ s FN=$G(FN)
+ D:FN'=""
+ .N DIR
+ .S FN=$TR(FN,"\","/"),DIR=$P(FN,"/",1,$L(FN,"/")-1)_"/"
+ .S FN=$P(FN,"/",$L(FN,"/"))
+ .S sc1=email.AttachFile(DIR,FN)
+ /*S sc1=email.AttachFile("e:\temp\","phcell.gif")
+ w !,##class(%Status).LogicalToOdbc(sc1)
+ S part=email.Parts.GetAt(1)
+ D part.Headers.SetAt("phcell.gif","Content-ID")
+ D part.Headers.SetAt("image/gif","Content-Type")*/
+ S sc2=smtp.Send(email)
+ If 'sc2 Q 0
+ ;s a=##class(%Status).LogicalToOdbc(sc2)
+ ;Do $System.Status.DisplayError(sc2)
+ Q 1
+INITDB
+ S ^MSGHUB("mail")="IEMAIL"
+ Q

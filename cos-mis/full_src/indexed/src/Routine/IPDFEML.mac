@@ -1,0 +1,46 @@
+IPDFEML ; Отправка pdf по почте (gmail)
+DOSEND(ID)
+ N SRV,USR,PAS,PORT,I,R,IDX,FR,TO,F,TIT,MFR,FIL,FF,NET,MSG
+ S F=0 
+ S IDX="" F  S IDX=$O(^MSGOUT("pdf",ID,IDX)) Q:IDX=""  D
+ .S R=^(IDX),FR=$P(R,"|",1),TO=$P(R,"|",2),TIT=$P(R,"|",3),MSG=$P(R,"|",5)
+ .Q:TO="" 
+ .Q:$G(^(IDX,"chkfn"))'=""  Q:$G(^("wait")) 
+ .D DEL^FIL("c:\node\email\input.xml")
+ .D DEL^FIL("c:\node\email\mail.txt")
+ .D DEL^FIL("c:\node\email\text.txt")
+ .D DEL^FIL("c:\node\email\title.txt")
+ .S FN=$$OW^FIL("c:\node\email\mail.txt") Q:FN="" 
+ .U FN W TO C FN U 0
+ .S FN=$$OW^FIL("c:\node\email\text.txt") Q:FN="" 
+ .U FN W $$WU8^TXTU(MSG) C FN U 0
+ .S FN=$$OW^FIL("c:\node\email\title.txt") Q:FN="" 
+ .U FN W $$WU8^TXTU(TIT) C FN U 0
+ .S NET=$$OPEN^WWWCLI("127.0.0.1",9128) Q:NET="" 
+ .D OWBUF^WWWCLI(NET)
+ .S I="" F  S I=$O(^MSGOUT("pdf",ID,IDX,"data",I)) Q:I=""  D WBUF^WWWCLI(NET,^(I))
+ .D CBUF^WWWCLI(NET)
+ .S X=$$POST^WWWCLI(NET,"/generate-send")
+ .D CLOSE^WWWCLI(NET)
+ .Q:X'=200 
+ .S R=$G(^MSGOUT("pdf",ID,IDX,"endprc"))
+ .D:R'="" @R
+ .K ^MSGOUT("pdf",ID,IDX) 
+ .Q
+ .S FN=$$OW^FIL("c:\node\email\input.xml") Q:FN="" 
+ .U FN
+ .S I="" F  S I=$O(^MSGOUT("pdf",ID,IDX,"data",I)) Q:I=""  W ^(I)
+ .C FN U 0
+ .S FN=$$OW^FIL("c:\node\email\mail.txt") Q:FN="" 
+ .U FN W TO C FN U 0
+ .S FN=$$OW^FIL("c:\node\email\text.txt") Q:FN="" 
+ .U FN W $$WU8^TXTU(TIT) C FN U 0
+ .d $zf(-1,"c:\node\email\send.cmd")
+ .K ^MSGOUT("pdf",ID,IDX)
+ Q
+ Q
+DORECV(ID)
+ Q
+INITDB
+ S ^MSGHUB("pdf")="IPDFEML"
+ Q

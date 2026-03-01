@@ -1,0 +1,61 @@
+NSNMPE ; Экспорт данных СНМП [ 07/31/2014  11:07 PM ]
+EXP(DS,DE) ; Экспорт в DBF
+ d out(DS,DE,0)
+ Q
+REP(DS,DE) ; Вывод в таблице
+ d out(DS,DE,1)
+ Q
+out(DS,DE,MOD) 
+ ; MOD=1 - только названия без форматов
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N ID,DT,NI,RO,BR,DTMB,X
+ D OWF^RWU(".txt")
+ S:'MOD X="FAM_INC:C:30|NAI_FIR:C:20|NOM_POL:C:25|DAT_ROG:N:2|POL_KLI:C:1|ADR_KLI:C:70|TEL_DOM:C:12|TEL_RAB:C:12|POV_VIZ:C:40|DIA_KLI:C:40|DEG_VRA:C:18|DEG_FEL:C:18|DEG_VOD:C:18|DEG_DIS:C:18|MAR_DVI:C:24|NAI_SKO:C:24|DAT_VIZ:D:8|VRE_VIZ:C:5|VRE_RAB:C:29|NAI_AVT:C:18|PRO_AVT:N:5|RAS_MKD:N:5|VRE_OPL:C:5|PRI_SCH:C:1|TEK_KOM:C:30|BUF_000:C:1|KOD10:C:10"
+ S:MOD X="FAM_INC|NAI_FIR|NOM_POL|DAT_ROG|POL_KLI|ADR_KLI|TEL_DOM|TEL_RAB|POV_VIZ|DIA_KLI|DEG_VRA|DEG_FEL|DEG_VOD|DEG_DIS|MAR_DVI|NAI_SKO|DAT_VIZ|VRE_VIZ|VRE_RAB|NAI_AVT|PRO_AVT|RAS_MKD|VRE_OPL|PRI_SCH|TEK_KOM|BUF_000|KOD10"
+ D W^RWU(X)
+ S ID="" F  S ID=$O(^EMKV(ID)) Q:ID=""  D
+ .S DT=$G(^(ID,"kvd")) Q:DT=""
+ .Q:DT<DS  Q:DT>DE  
+ .S NI=$G(^EMKV(ID,"nib"))
+ .S RO=$E($$FIO^IPAC(NI),1,30) ; FAM_INC:C:30
+ .S $P(RO,"|",2)=$E($$NAME^IINSC($$GET^IPAC(NI,"stc",DT)),1,20) ; NAI_FIR:C:20
+ .S $P(RO,"|",3)=$E($G(^EMKV(ID,"polis")),1,25) ; NOM_POL:C:25
+ .S $P(RO,"|",4)=$E($$GETE^IPAC(NI,"datar"),9,10) ; DAT_ROG:N:2
+ .S X=$$GET^IPAC(NI,"pol")
+ .S $P(RO,"|",5)=$S(X=1:"М",X=2:"Ж",1:"*") ; POL_KLI:C:1
+ .S $P(RO,"|",6)=$E($$ADDRSH^ISNMP(ID),1,70) ; ADR_KLI:C:70
+ .S $P(RO,"|",7)=$E($G(^EMKV(ID,"tel1")),1,12) ; TEL_DOM:C:12
+ .S $P(RO,"|",8)=$E($$GET^IPAC(NI,"tel2"),1,12) ; TEL_RAB:C:12
+ .S $P(RO,"|",9)=$E($$NMPV^NSNMPSP($G(^EMKV(ID,"pvv")),1),1,40) ; POV_VIZ:C:40
+ .S $P(RO,"|",10)=$E($G(^EMKV(ID,"dtext")),1,40) ; DIA_KLI:C:40
+ .S BR=$G(^EMKV(ID,"brig")),DTMB=$$GETDTM^ISNMP(ID,"brig",-1)
+ .S $P(RO,"|",11)=$E($P($$FIO^IKADRY($$VRGRP^ISNMPSP(BR,"vr",DTMB))," ",1),1,18) ; DEG_VRA:C:18
+ .S $P(RO,"|",12)=$E($P($$FIO^IKADRY($$VRGRP^ISNMPSP(BR,"fl",DTMB))," ",1),1,18) ; DEG_FEL:C:18
+ .S $P(RO,"|",13)=$E($P($$FIO^IKADRY($$VRGRP^ISNMPSP(BR,"vd",DTMB))," ",1),1,18) ; DEG_VOD:C:18
+ .S $P(RO,"|",14)=$E($P($$FIO^IKADRY($G(^EMKV(ID,"disp")))," ",1),1,18) ; DEG_DIS:C:18
+ .S $P(RO,"|",15)=$E($G(^EMKV(ID,"reztv")),1,24) ; MAR_DVI:C:24
+ .S $P(RO,"|",16)=$E("МЕДЭП",1,24) ; NAI_SKO:C:24
+ .S $P(RO,"|",17)=$$DT^DTUTL(DT) ; DAT_VIZ:D:8
+ .S $P(RO,"|",18)=$E($$tm(ID,"t_priv"),1,5) ; VRE_VIZ:C:5
+ .S X=$$tm(ID,"t_prv")_"->"_$$tm(ID,"t_pbv")_"->"_$$tm(ID,"t_ov")_"->"_$$tm(ID,"t_vv")
+ .S $P(RO,"|",19)=$E(X,1,29) ; VRE_RAB:C:29
+ .S X=$$GAVT^NSNMPSP($$GETGRP^ISNMPSP(BR,"auto",DTMB),DTMB)
+ .S $P(RO,"|",20)=$E(X,1,18) ; NAI_AVT:C:18
+ .S $P(RO,"|",21)=$E($G(^EMKV(ID,"road")),1,5) ; PRO_AVT:N:5
+ .S $P(RO,"|",22)=$E($G(^EMKV(ID,"roadm")),1,5) ; RAS_MKD:N:5
+ .S X=$G(^EMKV(ID,"t_ov"))-$G(^EMKV(ID,"t_prv"))
+ .S $P(RO,"|",23)=$E($P($$TM^DTUTL(X),":",1,2),1,5) ; VRE_OPL:C:5
+ .S $P(RO,"|",24)=$E("",1,1) ; PRI_SCH:C:1
+ .S $P(RO,"|",25)=$E("",1,30) ; TEK_KOM:C:30
+ .S $P(RO,"|",26)="" ; BUF_000:C:1
+ .S $P(RO,"|",27)=$E($G(^EMKV(ID,"diag")),1,10) ; KOD10:C:10"
+ .D WC^RWU(CR_RO)
+ D C^RWU
+ Q
+tm(ID,FL) 
+ Q $P($$TM^DTUTL($G(^EMKV(ID,FL))),":",1,2)
+REGIPROC 
+ Q:'+$G(^cfg("snmp")) 
+ S ^IPROC("Отчеты СНМП","Выгрузка по скорой (отчет)")="REP_NSNMPE,1,2,d,Период вызовов с,d,Период вызовов по"
+ S ^IPROC("Отчеты СНМП","Выгрузка по скорой (формирование файла)")="EXP_NSNMPE,9,2,d,Период вызовов с,d,Период вызовов по"
+ Q

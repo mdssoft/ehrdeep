@@ -1,0 +1,179 @@
+A ; ЗАГРУЗКА ШИФРАТОРОВ [ 10/19/2020  4:30 PM ]
+ N DT,ND,N,NAM,L,R,i,ii,TN,ITE,LPU,OTD
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,1))_"<storage>")
+ S ITE=" type=""plain"" action=""new"""
+ S LPU=+$$^I("ilpu"),OTD=$$OTD^IUSER()
+ 
+ D STORww^ICHIFR("dog",1) ; Договора
+ D STORww^ICHIFR("tprice",1) ; Прейскуранты
+ D STORww^ICHIFR("newpac",1) ; Шаблоны нового пациента
+ D STORww^ICHIFR("region",1) ; Выбранные регионы
+ D STORww^ICHIFR("lprog",1) ; Актуальные программы обслуживания
+ D STORww^ICHIFR("aprog",1) ; Все программы обслуживания
+ D STORww^ICHIFR("uchastok",1) ; Участок (личный врач)
+ D STORww^ICHIFR("addpfn",1)
+ D STORww^ICHIFR("rastxt",1)
+ D STORww^ICHIFR("jobtitle",1) ; Место работы
+ D STORww^ICHIFR("doljn",1) ; Должность
+ D STORww^ICHIFR("rsource",1) ; Источник рекламы
+ D STORww^ICHIFR("ofor",1) ; Оформление пациента
+ D STORww^ICHIFR("pricecls",1) ; Классы услуг прайса
+ D STORww^ICHIFR("whocart",1) ; Местонахождение карты пациента
+ D STORww^ICHIFR("dgtype",1) ; Виды договоров
+ D STORww^ICHIFR("stof",1) ; Зубная формула
+ D STORww^ICHIFR("stof-ort",1) ; Зубная формула ортод.
+ D STORww^ICHIFR("stof-ort-a",1) ; доп. вариант 1
+ D STORww^ICHIFR("stof-ort-b",1) ; 2 
+ D STORww^ICHIFR("stof-ort-c",1) ; 3
+ D STORww^ICHIFR("lpu",1) ; Филиалы
+ D STORww^ICHIFR("skd",1) ; Скидки
+ 
+ D STORww^ICHIFR("mectorab",1) ; Место работы пациента
+ D STORww^ICHIFR("status1",1) ; Статус 1 пациента
+ D STORww^ICHIFR("status1",1) ; Статус 2 пациента
+ D STORww^ICHIFR("pdoctype",1) ; Тип документа
+ D STORww^ICHIFR("gender",1) ; Пол
+ D STORww^ICHIFR("otd",1) ; Отделения
+ D STORww^ICHIFR("spec",1) ; Специальности
+ 
+ D:$D(^$R("ISNMP")) CHIFR^ISNMP
+ D:$D(^$R("NFTASKU")) CHIFR^NFTASKU
+ 
+ D SEC
+ 
+ ; По текущей организации TODO - тоже с автоизменениями
+ S NAM="orgname",N=$$^I("iname")
+ D tag(NAM,N)
+ 
+ S TN=$$KDR^IUSER()
+ D kdr
+ 
+Ak ; Касса
+ S N=$G(^LOG(%LOG,"kmpassword")),L=$$KKM^IUSER()
+ S:$L(L) L=$$GET^ISPRAV("kkm",L)
+ S:'$L(N)&$L(L) N=$P(L,"|",6) ; если не указан - сист. пароль
+ D:$L(N) tag("kmpassword",N)
+ G:'$L(L) Ao
+ D tag("kkmname",$P(L,"|",1))
+ D tag("kkmregp",$P(L,"|",4))
+ D tag("kkmregr",$P(L,"|",5))
+ D:$D(^cfg("fpac-color")) tag("fpac-color",1)
+Ao ; Отчеты
+ S NAM="iproc" D MPROC
+ ; Сообщения пользователям
+Am D:$D(^$R("NMYMSG")) INST^NMYMSG
+ S L=$$LCL^NUSER("uinit","exec")
+ D:L'="" tag("exec",L)
+ D WC^RWU("</storage>")
+ S L=$$LCL^NUSER("uinit","menuhide")
+ D:L'="" 
+ .D W^RWU("<nb_console><configuration><menuctrl>")
+ .N T,X,F
+ .F i=1:1:$L(L,"|") D
+ ..S X=$P(L,"|",i),T=$P(X,":",1),X=$P(X,":",2),F=(X="")
+ ..I X'="",@X S F=1
+ ..D:F WC^RWU("<"_T_" visible=""no""/>")
+ .D W^RWU("</menuctrl></configuration></nb_console>")
+ S L=$G(^message)
+ D:$L(L) msg^NISUTL(L)
+ D C^RWU
+ Q
+kdr ; Данные, зависящие от сотрудника/отделения
+ S N=$$PHONES^I(),NAM="orgphn"
+ S L=$$GOTD^YISPRAV(OTD,"phones")
+ D:N'="" tag("lpuphn",N)
+ S:L'="" N=L
+ D:N'="" tag(NAM,N)
+ 
+ S NAM="yaddr",L=$$ADDRY^YCONTR(+LPU,+$H)
+ S:L="" L=$$^I("iaddr")
+ D tag(NAM,L)
+ 
+ S N=$$^I("iaddr"),NAM="iaddr"
+ S L=$$GOTD^YISPRAV(OTD,"addr")
+ D:N'="" tag("lpuaddr",N)
+ S:L'="" N=L
+ D:N'="" tag(NAM,N)
+ 
+ S NAM="orgmname",L=$$GET^ICONTR(+LPU,"mname",+$H)
+ D tag(NAM,L)
+ S NAM="orglicense",L=$$GET^ICONTR(+LPU,"license",+$H)
+ D tag(NAM,L)
+ 
+ D MERGE^I("ii")
+ S:'$D(ii("city")) ii("city")="г.Москва"
+ K ii("iname"),ii("log"),ii("iaddr")
+ S NAM="" F  S NAM=$O(ii(NAM)) Q:NAM=""  D:+NAM'=NAM&($E(NAM)'="^") tag(NAM,ii(NAM))
+ F L="iglvr","iglbh","igldr","icmdr" S R=$$^I(L) I R'="" S R=$$GET^PADEJ($$NRMFIO^YIFAM(R)) D tag(L_"rp",R),tag(L_"srp",$$FIOSHF^TXTU(R))
+As ; Выбранный сотрудник
+ S NAM="kadry_id"
+ D tag(NAM,TN)
+ S NAM="kadry_name",L=$$FIO^IKADRY(TN)
+ D tag(NAM,L)
+ S NAM="kadry_name_rod" ; в род. падеже
+ S N=$$GET^IKADRY(TN,"pol")
+ D tag(NAM,$$GET^PADEJ(L,N))
+ S NAM="kadry_license",L=$$GET^IKADRY(TN,"license") ; доверенн./лиценз. 
+ D:L'="" tag(NAM,L)
+ S L=$$GET^IKADRY(TN,"ust"),NAM="kadry_ust"
+ D:L'="" tag(NAM,$$NAME^ISPRAV("scirank",L))
+ S NAM="otd_id"
+ D tag(NAM,OTD)
+ D tag("otd_name",$$GOTD^YISPRAV(OTD))
+ S NAM="spec_id",L=$$SPEC^IUSER(TN)
+ D tag(NAM,L)
+ D tag("spec_name",$$GSPEC^YISPRAV(L))
+ Q
+MM(N,NAM,SYS) 
+ D:'$G(SYS) WC^RWU("<"_NAM_ITE_">")
+ S ND=""
+ F  S ND=$O(^M(N,ND)) Q:ND=""  D WC^RWU($$TAG^TXTU(ND_"|"_^(ND))_CR)
+ D:'$G(SYS) WC^RWU("</"_NAM_">")
+ Q
+MMZ D WC^RWU("<"_NAM_ITE_">") ; w. first zero item
+ S ND="" F  S ND=$O(^M(N,ND)) Q:ND=""  D WC^RWU(CR_$$TAG^TXTU(ND_"|"_^(ND)))
+ D WC^RWU("</"_NAM_">")
+ Q
+ 
+MPROC D WC^RWU("<"_NAM_ITE_">")
+ D LST^IPROC(0)
+ D WC^RWU("</"_NAM_">")
+ Q
+MPR(GL,PROC) ;
+ Q:GL=""!(PROC="")  N STK,ISTK,CSTK,GD,ZPT
+ S STK(0)="^"_GL_"(",STK(1)=STK(0)_$O(@("^"_GL_"("""")")),ISTK=1,TBL=""
+ F I=1:1:64 S TBL=TBL_$C(9)
+ F  Q:ISTK=0  S CSTK=STK(ISTK),GD=$D(@(CSTK_")")) D
+ .I GD S A=$G(@(CSTK_")")) D @PROC
+ .I GD=11 S STK(ISTK+1)=CSTK_","_$O(@(CSTK_","""")")),ISTK=ISTK+1 Q
+ .I GD=1 S NCT=$O(@(CSTK_")")) I NCT'="" S STK(ISTK)=STK(ISTK-1)_","_NCT Q
+ .I GD=0 K STK(ISTK)
+ .S ISTK=ISTK-1 Q:ISTK=0  S:ISTK=1 ZPT="" S:ISTK>1 ZPT="," S STK(ISTK)=STK(ISTK-1)_ZPT_$O(@(STK(ISTK)_")"))
+ K STK,ISTK,CSTK,ZPT,NST Q
+MPRW S A=$E(TBL,1,ISTK-1)_A
+ I $P(A,"|",2)=""!(FPR="") D WC^RWU(A_CR)
+ I FPR'="",FPR'[$P($P(A,"|",2),",",1) D WC^RWU(A_CR)
+ Q
+SEC D WC^RWU("<secproc type=""plain"" action=""new"">")
+ D WC^RWU("KTON_YISEC|Кто не пользуется картами")
+ D WC^RWU(CR_"TIME_YISEC|Учет времени")
+ D WC^RWU(CR_"KTO_YISEC|Кто сейчас в здании</secproc>")
+ Q
+tag(NAM,VAL) 
+ D WC^RWU("<"_NAM_ITE_">"_$$TAG^TXTU(VAL)_"</"_NAM_">")
+ Q
+COTD(TN,OTD) ; Изменение отделения в процессе работы
+ N DT,ND,N,NAM,L,i,ii,ITE,LPU
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,1))_"<storage>")
+ S ITE=" type=""plain"""
+ S LPU=+$$^I("ilpu")
+ D kdr
+ D WC^RWU("</storage>")
+ D C^RWU
+ Q
+REGLCL ;
+ K ^LCLI("uinit")
+ S ^LCLI("uinit")="Инициализация пользователей"
+ S ^LCLI("uinit","exe")="Автозапуск на клиенте"
+ S ^LCLI("uinit","menuhide")="Скрыть пункты меню по ID id:<процедура>"
+ Q

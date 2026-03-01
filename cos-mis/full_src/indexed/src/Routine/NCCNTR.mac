@@ -1,0 +1,480 @@
+NCCNTR ; Контакт-центр [ 07/21/2021  3:47 PM ]
+INIT ; Инициализация формы
+ N I,A,R
+ S:'$D(^cfg("xpac","phnidx")) ^("phnidx")=1
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<ccntr>")
+ D W^RWU("<task>")
+ D WC^RWU("C|Обзвон по расписанию")
+ D WC^RWU(CR_"R|Повторный обзвон")
+ D WC^RWU(CR_"www|Записаны с сайта")
+ D WC^RWU(CR_"eid|Внешняя запись")
+ D WC^RWU(CR_"A|Все пациенты")
+ D WC^RWU(CR_"last|Записаны от даты")
+ D WC^RWU(CR_"wl|Лист ожидания")
+ S I="" F  S I=$O(^CMM("start",I)) Q:I=""  D:$D(^(I,"ccn"))
+ .D WC^RWU(CR_"ccn:"_I_"|"_$P($G(^("ccn")),"|",1))
+ S I="" F  S I=$O(^CCNL(I)) Q:I=""  D
+ .S R=^(I) Q:$P(R,"|",3)  Q:$P(R,"|",5) 
+ .D WC^RWU(CR_"lst:"_I_"|"_$P(R,"|",1))
+ D W^RWU("</task><lpu>")
+ S (I,A)="" F  S I=$O(^DSH(I)) Q:I=""  S A=$S(A="":"",1:A_CR)_I_"|"_$$NAME^ICONTR(I)
+ D WC^RWU(A_"</lpu>")
+ S A=$$LCL^IUSER("ccntr","action")
+ D:A'="" WTAGU^RWU("table",A)
+ D W^RWU("</ccntr></nb_console>"),C^RWU
+ Q
+LST ; Перечень списков
+ N I,A,R
+ D OWF^RWU(".txt")
+ D WC^RWU("C|Обзвон по расписанию")
+ D WC^RWU(CR_"R|Повторный обзвон")
+ D WC^RWU(CR_"www|Записаны с сайта")
+ D WC^RWU(CR_"eid|Внешняя запись")
+ D WC^RWU(CR_"A|Все пациенты")
+ D WC^RWU(CR_"last|Записаны за дату")
+ D WC^RWU(CR_"wl|Лист ожидания")
+ S I="" F  S I=$O(^CMM("start",I)) Q:I=""  D:$D(^(I,"ccn"))
+ .D WC^RWU(CR_"ccn:"_I_"|"_$P($G(^("ccn")),"|",1))
+ S I="" F  S I=$O(^CCNL(I)) Q:I=""  D
+ .S R=^(I) Q:$P(R,"|",3)  Q:$P(R,"|",5) 
+ .D WC^RWU(CR_"lst:"_I_"|"_$P(R,"|",1))
+ D C^RWU
+ Q
+TAB(DT,TSK,LPU,TXT) ; Вывод таблицы
+ S DT=$$DI^DTUTL(DT),TXT=$G(TXT)
+ D OWF^RWU(".txt")
+ D WC^RWU("|Пациент|Телефон|Статус|Информация")
+ D:TSK="C" rasp(DT,LPU,1,TXT)
+ D:TSK="R" rasp(DT,LPU,2,TXT)
+ D:TSK="A" rasp(DT,LPU,5,TXT)
+ D:TSK="www" rasp(DT,LPU,3,TXT)
+ D:TSK="eid" rasp(DT,LPU,4,TXT)
+ D:TSK="wl" wlist(DT,LPU)
+ D:$E(TSK,1,4)="lst:" ccnl(DT,$P(TSK,":",2))
+ D:$E(TSK,1,4)="ccn:" tapcnn^NCMS(DT,$P(TSK,":",2))
+ D C^RWU 
+ Q
+INF(KEY) ; Информация по записи
+ N NI,FIO,T,TEL,F,R,REC,R,RECL,PID,KX,COMM
+ S NI=$P(KEY,"@",1),T=$P(KEY,"@",2),KEY=$P(KEY,"@",3)
+ S (TEL,REC,FIO)=""
+ D:"RC"[T
+ .N LP,OT,VR,SP,DT,TM,COM
+ .S LP=$P(KEY,"~",1),OT=$P(KEY,"~",2),VR=$P(KEY,"~",3)
+ .S SP=$P(KEY,"~",4),DT=$P(KEY,"~",5),TM=$P(KEY,"~",6)
+ .S F=$G(^DSH(LP,OT,VR,SP,DT,TM)),NI=$P(F,"|",1),COMM=$P(F,"|",2)
+ .S TEL=$P($G(^(TM,"i")),"|",1),PID=NI
+ .S:'$$EXIST^IPAC(NI) FIO=NI,NI="",PID=$P(F,"|",7)
+ .S REC=$$TIMET^IRASP2(TM)_","_$$DT^DTUTL(DT)_", "_$$GSPEC^YISPRAV(SP)_", "_$$VFIO^IRASP2(VR)_", "_$$OWF^TXTU($$NAME^ICONTR(LP),50)
+ .S T="" F  S T=$O(^DSHP(PID,DT,T)) Q:T=""  D
+ ..S KX="" F  S KX=$O(^DSHP(PID,DT,T,KX)) Q:KX=""  D:T'=TM&(KX'=VR)
+ ...S R=^(KX)
+ ...S R=$$TIMET^IRASP2(T)_","_$$DT^DTUTL(DT)_", "_$$GSPEC^YISPRAV($P(R,"|",3))_", "_$$VFIO^IRASP2(KX)_", "_$$OWF^TXTU($$NAME^ICONTR($P(R,"|",1)),50)
+ ...S RECL(R)=""
+ S:NI'="" FIO=$$FIO^IPAC(NI)
+ I NI'="" S R=$$TELS^IPAC(NI) S:R'="" TEL=$S(TEL="":"",1:TEL_", ")_R S:$$GET^IPAC(NI,"ofor")=10 TEL="Запрет обзвона" ; Почил - не отзваниваем
+ 
+ D MINHDR^IHTML(NI_" "_$$FIO^IPAC(NI))
+ D CSS^IHTML
+ D W^RWU(CR_".hdr { background-color: #66CCFF; }")
+ D W^RWU(CR_".right { text-align: right; }")
+ D W^RWU(CR_".th { background-color: #BBBBBB; text-align: center; }")
+ D W^RWU(CR_".ln1 { background-color: #FFE099 }")
+ D W^RWU(CR_".ln2 { background-color: #99EE99 }")
+ D W^RWU(CR_".ln3 { background-color: #DDC077 }")
+ D CSSE^IHTML
+ D W^RWU(CR_"</head><body>")
+ D WTAGC^RWU("b",FIO_$S(NI'="":" и.б.№ "_NI,1:""))
+ D W^RWU("<br><br>")
+ 
+ D:T="wl" vhtml^NWLRASP(KEY)
+ 
+ S REC=$$TAG^TXTU(REC)
+ D:REC'="" WC^RWU("<div class=""ln1""><b>Запись на:</b> "_REC_"</div>")
+ S R="" F  S R=$O(RECL(R)) Q:R=""  D WC^RWU("<div class=""ln3""><b>Следующая на:</b> "_R_"</div>")
+ D:TEL'="" WC^RWU("<div class=""ln2""><b>Контакты:</b> "_TEL_"</div>")
+ D:COMM'="" WC^RWU("<div class=""ln1""><b>Примечание:</b> "_COMM_"</div>")
+ D W^RWU("<hr>")
+ S R=$$TAG^TXTU($$GETE^IPAC(NI,"stc"))
+ D:R'="" WC^RWU(CR_"<b>Договор:</b> "_R_"<br>")
+ S R=$$TAG^TXTU($$GETE^IPAC(NI,"prog"))
+ D:R'="" WC^RWU(CR_"<b>Программа:</b> "_R_"<br>")
+ S R=$$GETE^IPAC(NI,"dog_from")_"-"_$$GETE^IPAC(NI,"dog_to")
+ D:R'="-" WC^RWU(CR_"<b>Сроки:</b> "_R_"<br>")
+ D W^RWU("<hr>")
+ S R=$$TAG^TXTU($$ADR^YIPACN(NI))
+ D:R'="" WC^RWU(CR_"<b>Адрес:</b> "_R_"<br>")
+ S R=$$TAG^TXTU($$GET^IPAC(NI,"parents"))
+ D:R'="" WC^RWU(CR_"<b>Родители:</b> "_R_"<br>")
+ S R=$$TAG^TXTU($$GET^IPAC(NI,"text"))
+ D:R'="" WC^RWU(CR_"<b>Примечание пациента:</b> "_R_"<br>")
+ 
+ D prasp(NI)
+ 
+ D cont(NI)
+ 
+ D END^IHTML
+ Q
+INFL(KEY) ; Информация по записи (списки)
+ N NI,FIO,T,TEL,F,R,RECL,PID,KX,ID,X
+ S NI=$P(KEY,"@",1),ID=$P(KEY,"@",4),KEY=$P(KEY,"@",3)
+ S R=$G(^CCNL(KEY,ID))
+ 
+ S FIO=$S($P(R,"|",2)'="":$P(R,"|",2)_" "_$P(R,"|",3)_" "_$P(R,"|",4),1:$$FIO^IPAC(NI))
+ S TEL=$P(R,"|",5)
+ S:TEL="" TEL=$$TELS^IPAC(NI)
+ 
+ I NI'="" S R=$$TELS^IPAC(NI) S:R'="" TEL=$S(TEL="":"",1:TEL_", ")_R S:$$GET^IPAC(NI,"ofor")=10 TEL="Запрет обзвона" ; Почил - не отзваниваем
+ 
+ D MINHDR^IHTML(NI_" "_$$FIO^IPAC(NI))
+ D CSS^IHTML
+ D W^RWU(CR_".hdr { background-color: #66CCFF; }")
+ D W^RWU(CR_".right { text-align: right; }")
+ D W^RWU(CR_".th { background-color: #BBBBBB; text-align: center; }")
+ D W^RWU(CR_".ln1 { background-color: #FFE099 }")
+ D W^RWU(CR_".ln2 { background-color: #99EE99 }")
+ D W^RWU(CR_".ln3 { background-color: #DDC077 }")
+ D CSSE^IHTML
+ D W^RWU(CR_"</head><body>")
+ D WTAGC^RWU("b",FIO_$S(NI'="":" и.б.№ "_NI,1:""))
+ D W^RWU("<br><br>")
+ D WC^RWU(CR_"<b>Список:</b> "_$P($G(^CCNL(KEY)),"|",1)_"<br>")
+ 
+ D:TEL'="" WC^RWU("<div class=""ln2""><b>Контакты:</b> "_$$TAG^TXTU(TEL)_"</div>")
+ S X=$P(R,"|",6)
+ D:X'="" WC^RWU("<div class=""ln2""><b>Контакты:</b> "_$$TAG^TXTU(X)_"</div>")
+ D W^RWU("<hr>")
+ S R=$$TAG^TXTU($$GETE^IPAC(NI,"stc"))
+ D:R'="" WC^RWU(CR_"<b>Договор:</b> "_R_"<br>")
+ S R=$$TAG^TXTU($$GETE^IPAC(NI,"prog"))
+ D:R'="" WC^RWU(CR_"<b>Программа:</b> "_R_"<br>")
+ S R=$$GETE^IPAC(NI,"dog_from")_"-"_$$GETE^IPAC(NI,"dog_to")
+ D:R'="-" WC^RWU(CR_"<b>Сроки:</b> "_R_"<br>")
+ D W^RWU("<hr>")
+ S R=$$TAG^TXTU($$ADR^YIPACN(NI))
+ D:R'="" WC^RWU(CR_"<b>Адрес:</b> "_R_"<br>")
+ S R=$$TAG^TXTU($$GET^IPAC(NI,"parents"))
+ D:R'="" WC^RWU(CR_"<b>Родители:</b> "_R_"<br>")
+ S R=$$TAG^TXTU($$GET^IPAC(NI,"text"))
+ D:R'="" WC^RWU(CR_"<b>Примечание:</b> "_R_"<br>")
+ 
+ D prasp(NI)
+ 
+ D cont(NI)
+ 
+ D END^IHTML
+ Q
+PHN(KEY,CELL) ; Получить номер телефона
+ ; CELL - только сотовый
+ N NI,T,TTC,LL
+ S NI=$P(KEY,"@",1),T=$P(KEY,"@",2),KEY=$P(KEY,"@",3),TTC=""
+ S CELL=$G(CELL)
+ I T'="" D:"RC"[T
+ .N LP,OT,VR,SP,DT,TM
+ .S LP=$P(KEY,"~",1),OT=$P(KEY,"~",2),VR=$P(KEY,"~",3)
+ .S SP=$P(KEY,"~",4),DT=$P(KEY,"~",5),TM=$P(KEY,"~",6)
+ .S TTC=$P($G(^DSH(LP,OT,VR,SP,DT,TM,"i")),"|",1)
+ .S TTC=$$MPHN^TXTU(TTC)
+ .S:TTC'="" LL(TTC)=""
+ S TTC=$$MPHN^TXTU($$GET^IPAC(NI,"pager"))
+ S:TTC'="" LL(TTC)=""
+ D:'CELL
+ .S TTC=$$MPHN^TXTU($$GET^IPAC(NI,"tel1"))
+ .S:TTC'="" LL(TTC)=""
+ .S:TTC="" TTC=$$MPHN^TXTU($$GET^IPAC(NI,"tel2")) ; раб. если нет дом. 
+ .S:TTC'="" LL(TTC)=""
+ S (TTC,T)="" F  S T=$O(LL(T)) Q:T=""  S TTC=$S(TTC="":"",1:TTC_CR)_T
+ S:$$GET^IPAC(NI,"ofor")=10 TTC="" ; Почил - не отзваниваем
+ D MSG^RWU(TTC_"|"_NI)
+ Q
+SMS(KEY,PHN,TXT) ; Отправить SMS на номер
+ Q:PHN=""  Q:TXT="" 
+ S TXT=$$WD^TXTU(TXT)
+ S KEY=$$ADDSEND^IMSGHUB("sms","rasp","",PHN,TXT,"",,,1)
+ Q
+REZLST(KEY) ; Перечень результатов по обзвону
+ N TP
+ S TP=$P(KEY,"@",2)
+ I TP="lst" D cmlst Q
+ I TP="wl" D ccmerez^NWLRASP  Q
+ D RCALL^NRASP
+ Q
+DOCALL(KEY,TP,TXT) ; Регистрация звонка
+ N NI,T,ID,T1
+ S NI=$P(KEY,"@",1),T=$P(KEY,"@",2),ID=$P(KEY,"@",4),KEY=$P(KEY,"@",3)
+ S T1=$$WD^TXTU(TXT)
+ 
+ I T="lst" S:TP=1 $P(^CCNL(KEY,ID),"|",9)=1 D ccmel(KEY_","_ID,TP,T1,"") Q  ; TODO ICCME, comm
+ I T="wl" D ccme^NWLRASP(KEY,TP,T1,"") Q  ; TODO - PHN
+ 
+ D RCALLB^NSPRASP($P(KEY,"~",1,5),"",$$TM^DTUTL($P(KEY,"~",6)),"",TP,TXT,0)
+ Q
+DOCALLA(KEY,TP,TXT) ; Регистрация звонка (все записи за день)
+ S NI=$P(KEY,"@",1),KEY=$P(KEY,"@",3)
+ D RCALLB^NSPRASP($P(KEY,"~",1,5),"",$$TM^DTUTL($P(KEY,"~",6)),"",TP,TXT,1)
+ Q
+rasp(DT,LPU,CC,TXT) ; По расписанию, CC - статус (1-отзвон,2-недозвон,3-web)
+ N LP,OT,SP,VR,TM,R,NI,F,T,EI,II
+ S TXT=$$UL^TXTU(TXT)
+ S:LPU'="" LPU="|"_LPU_"|" 
+ S LP="" F  S LP=$O(^DSH(LP)) Q:LP=""  D:$S(LPU="":1,1:LPU[("|"_LP_"|"))
+ .S OT="" F  S OT=$O(^DSH(LP,OT)) Q:OT=""  D
+ ..S VR="" F  S VR=$O(^DSH(LP,OT,VR)) Q:VR=""  D
+ ...S SP="" F  S SP=$O(^DSH(LP,OT,VR,SP)) Q:SP=""  D:$D(^(SP,DT)) 
+ ....S TM="" F  S TM=$O(^DSH(LP,OT,VR,SP,DT,TM)) Q:TM=""!(TM>86340)  D
+ .....S F=$G(^(TM)) Q:F=""  Q:F="*" 
+ .....S II=$G(^(TM,"i")),EI=""
+ .....I CC=3,'$P(II,"|",11) Q  ; флаг внешн. записи 
+ .....I CC=3 S EI=$P(II,"|",10) Q:$E(EI,1,3)="api"  ; не API
+ .....I CC<3 S R=$G(^("b"))
+ .....I CC=1,$P(R,"|",4)'="" Q
+ .....I CC=2,$P(R,"|",4)'=4 Q  ; TODO - autoid
+ .....I CC=4 S EI=$P(II,"|",10) Q:$E(EI,1,3)'="api"    
+ .....S T=$P(II,"|",1)
+ .....S NI=$P(F,"|",1) S:'$$EXIST^IPAC(NI) NI=""
+ .....S R=$$TIMET^IRASP2(TM)_", "_$$GSPEC^YISPRAV(SP)_", "_$$VFIOSH^IRASP2(VR)_", "_$$OWF^TXTU($$NAME^ICONTR(LP),32)
+ .....D tline(NI,$S(NI="":$P(F,"|",1),1:""),NI_"@"_$S(CC=2:"R",CC=1:"C",1:"")_"@"_LP_"~"_OT_"~"_VR_"~"_SP_"~"_DT_"~"_TM,$S(CC=4:$TR(EI,"@"," "),1:""),R,T)
+ Q
+tline(NI,FIO,KEY,STAT,TXT,TEL) ; Вывод строки
+ N T
+ S T=$S($G(TEL)="":$$OWF^TXTU($$TELS^IPAC(NI),50),1:TEL)
+ S:$$GET^IPAC(NI,"ofor")=10 T="Запрет обзвона" ; Почил - не отзваниваем
+ S NI=$S(NI="":FIO,1:$$FIO^IPAC(NI))
+ D WC^RWU(CR_KEY_"|"_NI_"|"_T_"|"_STAT_"|"_TXT)
+ Q
+last(DT,LPU) 
+ N DTM,LP,OT,VR,SP,D,TM,R,F,NI
+ S:LPU'="" LPU="|"_LPU_"|"
+ S DTM=DT_"," F  S DTM=$O(^DSHW(DTM)) Q:DTM=""!(+DTM'=DT)  D
+ .S LP="" F  S LP=$O(^DSHW(DTM,LP)) Q:LP=""  D:$S(LPU="":1,1:LPU[("|"_LP_"|"))
+ ..S OT="" F  S OT=$O(^DSHW(DTM,LP,OT)) Q:OT=""  D
+ ...S VR="" F  S VR=$O(^DSHW(DTM,LP,OT,VR)) Q:VR=""  D
+ ....S SP="" F  S SP=$O(^DSHW(DTM,LP,OT,VR,SP)) Q:SP=""  S D="" F  S D=$O(^DSHW(DTM,LP,OT,VR,SP,D)) Q:D=""  D
+ .....S TM="" F  S TM=$O(^DSHW(DTM,LP,OT,VR,SP,D,TM)) Q:TM=""!(TM>86340)  D
+ ......S R=^(TM) Q:$P(R,"|",2)="K"
+ ......S R=$P(R,"|",1) Q:R=""
+ ......S F=$G(^DSH(LP,OT,VR,SP,D,TM)) Q:F=""
+ ......Q:$P(F,"|",1)'=R  ; разные
+ ......S T=$P($G(^(TM,"i")),"|",1)
+ ......S NI=$P(F,"|",1) S:'$$EXIST^IPAC(NI) NI=""
+ ......S R=$$TIMET^IRASP2(TM)_", "_$$GSPEC^YISPRAV(SP)_", "_$$VFIOSH^IRASP2(VR)_", "_$$OWF^TXTU($$NAME^ICONTR(LP),32)
+ ......D tline(NI,$S(NI="":$P(F,"|",1),1:""),NI_"@@"_LP_"~"_OT_"~"_VR_"~"_SP_"~"_D_"~"_TM,"",R,T)
+ Q
+wlist(DT,LPU) ; Лист ожидания
+ ; TODO - multi lpu
+ D ccn^NWLRASP(DT,DT,LPU,0)
+ Q
+ccnl(DT,IDX) ; Списки обзвона (произвольные)
+ N I,R,NI,FIO,ST
+ S I="" F  S I=$O(^CCNL(IDX,I)) Q:I=""  D
+ .S R=^(I),NI=$P(R,"|",1),ST=$P(R,"|",9)
+ .Q:ST  ; status
+ .S FIO=$P(R,"|",2)
+ .S:FIO'="" FIO=FIO_" "_$P(R,"|",3)_" "_$P(R,"|",4)
+ .; TODO - ST
+ .D tline(NI,FIO,NI_"@lst@"_IDX_"@"_I,"",$P(R,"|",6),$P(R,"|",5))
+ Q
+prasp(NIB) 
+ Q
+cont(NIB) 
+ Q:'$D(^CMEI("p",NIB))
+ N DT,TM,I,R,TP,SS,CM,IDX
+ S TP=$$FNDTP^ICCME("Обзвон пациентов","dsh-call")
+ D W^RWU("<hr>")
+ D TAB^IHTML(0,2,"100%")
+ D TABLN^IHTML("Дата, время|Результат|В графике|Примечание","th|th|th|th")
+ S IDX=0
+ S DT="" F  S DT=$O(^CMEI("p",NIB,DT),-1) Q:DT=""  D  Q:IDX>15
+ .S TM="" F  S TM=$O(^CMEI("p",NIB,DT,TM)) Q:TM=""  S I="" F  S I=$O(^CMEI("p",NIB,DT,TM,I)) Q:I=""  D  Q:IDX>15
+ ..S R=$G(^CME(DT,TM,I)) Q:$P(R,"|",7)'=TP
+ ..S SS=$G(^(I," s")),CM=$G(^(" c"))
+ ..S R=$G(^CMM("result",TP,+$P(R,"|",8)))
+ ..; Q:","_$P(R,"|",2)_","'[",del,"  ; только события с удалением
+ ..S A=$$DT2^DTUTL($P(SS,"|",2))_","_$$TM^DTUTL($P(SS,"|",3))_", "
+ ..S A=A_$$FIOSH^IKADRY($P(SS,"|",6))_", "_$$GSPEC^YISPRAV($P(SS,"|",1))
+ ..S A=A_", "_$$OWF^TXTU($$NAME^ICONTR($P(SS,"|",4)),32)
+ ..S R=$P(R,"|",1)
+ ..D TABLN^IHTML($$DTM^DTUTL(DT_","_TM)_"|"_R_"|"_A_"|"_CM)
+ ..S IDX=IDX+1
+ D W^RWU("</table>")
+ Q
+CHKLN(KEY,TSK) ; Проверить строку таблицы
+ N LP,OT,VR,SP,DT,TM,F,R,NI,T
+ I TSK="www"!(TSK="last") D MSG^RWU("ER") Q
+ I TSK="wl" D MSG^RWU($S($$chkOK^NWLRASP($P(KEY,"@",3)):"",1:"ER")) Q 
+ I $P(TSK,":",1)="lst" D MSG^RWU($S($P($G(^CCNL($P(KEY,"@",3),$P(KEY,"@",4))),"|",9):"",1:"ER")) Q 
+ S KEY=$P(KEY,"@",3)
+ S LP=$P(KEY,"~",1),OT=$P(KEY,"~",2),VR=$P(KEY,"~",3),SP=$P(KEY,"~",4),DT=$P(KEY,"~",5),TM=$P(KEY,"~",6)
+ S F=$G(^DSH(LP,OT,VR,SP,DT,TM)) Q:F=""  Q:F="*" 
+ S R=$G(^(TM,"b"))
+ I TSK=1,$P(R,"|",4)'="" Q
+ I TSK=2,$P(R,"|",4)'=4 Q  ; TODO - autoid
+ S T=$P($G(^("i")),"|",1)
+ S NI=$P(F,"|",1) S:'$$EXIST^IPAC(NI) NI=""
+ S R=$$TIMET^IRASP2(TM)_", "_$$GSPEC^YISPRAV(SP)_", "_$$VFIOSH^IRASP2(VR)_", "_$$OWF^TXTU($$NAME^ICONTR(LP),32)
+ D OWF^RWU(".txt")
+ D tline(NI,$S(NI="":$P(F,"|",1),1:""),NI_"@"_$S(TSK=2:"R",1:"R")_"@"_KEY,"",R,T)
+ D C^RWU
+ Q
+INITL 
+ D OWF^RWU(".xmlb")
+ D WC^RWU(^PP(0,2)_"<ccntrl><sptp>")
+ D LSTs^NSPRAV("dshlrsn")
+ D WC^RWU("</sptp></ccntrl></nb_console>"),C^RWU
+ Q
+ ; name|date|arch|type
+LSTL(DS,DE,TP,AR) 
+ N IDX,R,F,C,DT
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),AR=+$G(AR)
+ D OWF^RWU(".txt")
+ S IDX="",F=0,C="" F  S IDX=$O(^CCNL(IDX)) Q:IDX=""  D
+ .S R=^(IDX),DT=+$P(R,"|",2)
+ .I DT<DS Q 
+ .I DT>DE Q 
+ .Q:AR'=(+$P(R,"|",3))  ; архив
+ .I TP'="",TP'=$P(R,"|",4) Q 
+ .D WC^RWU(C_IDX_"|"_$P(R,"|",1))
+ .S C=CR
+ D C^RWU
+ Q
+SETL(IDX,NM,TP) 
+ Q:IDX="" 
+ S NM=$$WD^TXTU(NM)
+ S $P(^CCNL(IDX),"|",1)=NM
+ S $P(^CCNL(IDX),"|",4)=TP
+ d GL^IEXCH("^CCNL",IDX)
+ Q
+GETL(IDX) 
+ N R
+ S R=$G(^CCNL(IDX))
+ D OWF^RWU(".xmlb")
+ D WC^RWU(^PP(0,2)_"<ccntrl>")
+ D WTAGDC^RWU("spnm",$P(R,"|",1))
+ D WTAGDC^RWU("sptp",$P(R,"|",4))
+ D WC^RWU("</ccntrl></nb_console>"),C^RWU
+ Q
+ADDLI(IDX,NI,SYS) ; Добавить существующего пациента в список
+ N ID
+ S ID=$O(^CCNL(IDX,""),-1)+1
+ S ^CCNL(IDX,ID)=NI
+ d GL^IEXCH("^CCNL",IDX,ID)
+ D:'$G(SYS) TABL(IDX)
+ Q:$G(SYS) ID
+ Q
+ADDPLI(TP,NI,FF,FI,FO,PHN) ; Добавить пациента в список по типу
+ Q:TP="" 
+ N ID,I
+ S ID=$$FNDTPL(TP)
+ I ID="" S ID=$O(^CCNL(""),-1)+1,^(ID)="Новый список|"_$H_"||"_TP
+ S FF=$$WD^TXTU(FF),FI=$$WD^TXTU(FI),FO=$$WD^TXTU(FO)
+ I NI'="",$$FNDNI(ID,NI)'="" D MSG^RWU("DBL") Q 
+ S I=$O(^CCNL(ID,""),-1)+1
+ S ^CCNL(ID,I)=NI_"|"_FF_"|"_FI_"|"_FO_"|"_PHN
+ d GL^IEXCH("^CCNL",ID,I)
+ D MSG^RWU("OK")
+ Q
+FNDTPL(TP) ; Поиск списка по типу
+ N ID
+ S ID="" F  S ID=$O(^CCNL(ID),-1) Q:ID=""  I $P(^(ID),"|",4)=TP Q 
+ Q ID
+FNDNI(IDX,NI) ; Поиск но номеру истории
+ N I
+ S I="" F  S I=$O(^CCNL(IDX,I)) Q:I=""  I $P(^(I),"|",1)=NI Q 
+ Q I
+SETPHLI(IDX,ID,PH) ; Установить телефон
+ Q:IDX=""  Q:ID="" 
+ S $P(^CCNL(IDX,ID),"|",5)=$$WD^TXTU(PH)
+ d GL^IEXCH("^CCNL",IDX,ID)
+ Q
+SETCMLI(IDX,ID,CM) ; Установить примечание
+ Q:IDX=""  Q:ID="" 
+ S $P(^CCNL(IDX,ID),"|",6)=$$WD^TXTU(CM)
+ d GL^IEXCH("^CCNL",IDX,ID)
+ Q
+DELLI(IDX,LN) ; Удалить запись в списке
+ K ^CCNL(IDX,LN)
+ D KGL^IEXCH("^CCNL",IDX,LN)
+ D TABL(IDX)
+ Q
+TABL(IDX) ; Вывод таблицы
+ N I,R,A,NI,FIO,PH
+ D OWF^RWU(".txt")
+ D WC^RWU("|Пациент|Телефон|Примечание|Дата отзвона|Оператор|Результат")
+ S I="" F  S I=$O(^CCNL(IDX,I)) Q:I=""  D
+ .S A=^(I),NI=$P(A,"|",1)
+ .S R=NI_"@"_I_"|"
+ .S FIO=$S(NI="":$P(A,"|",2)_" "_$P(A,"|",3)_" "_$P(A,"|",4),1:$$FIO^IPAC(NI))
+ .S PH=$S($P(A,"|",5)'="":$P(A,"|",5),1:$$TELS^IPAC(NI))
+ .D WC^RWU(CR_NI_"@"_I_"|"_FIO_"|"_PH_"|"_$P(A,"|",6)_"|"_$$DTM^DTUTL($P(A,"|",7))_"|"_$$FIOSH^IKADRY($P(A,"|",8))_"|"_$S($P(A,"|",9):"OK",1:""))
+ D C^RWU
+ Q
+SETARL(IDX,AR) ; В архив, из архива
+ Q:IDX="" 
+ S $P(^CCNL(IDX),"|",3)=+AR
+ d GL^IEXCH("^CCNL",IDX)
+ Q
+ADDL(NM) ; Добавить список 
+ N IDX
+ S IDX=$O(^CCNL(""),-1)+1
+ S ^CCNL(IDX)=$$WD^TXTU(NM)_"|"_$H_"|0|"_$$USR^IUSER()
+ d GL^IEXCH("^CCNL",IDX)
+ Q
+DELL(IDX) ; Удалить список
+ Q:IDX="" 
+ K ^CCNL(IDX)
+ D KGL^IEXCH("^CCNL",IDX)
+ Q
+CLRL(ID) ; Очистить список
+ Q:IDX="" 
+ N R
+ S R=$G(^CCNL(IDX))
+ K ^CCNL(IDX)
+ S ^CCNL(IDX)=R
+ d REGL^IEXCH("^CCNL",IDX)
+ Q
+SL ; Импорт пациентов в список
+ N NI,A,%J,IDX
+ D ORH^RWU
+ S I=1,IDX=""
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  D
+ .I %J=1 S IDX=A Q
+ .I %J=2 Q 
+ .Q:IDX="" 
+ .S NI=$P(A,"|",2) Q:'$$EXIST^IPAC(NI) 
+ .Q:$$TELS^IPAC(NI)="" 
+ .S ^CCNL(IDX,I)=NI,I=I+1
+ D GL^IEXCH("^CCNL",IDX)
+ D CR^RWU
+ Q
+cmlst ; Вывод вариантов результата
+ N TPX,A,I,R,C
+ S TPX=$$FNDTP^ICCME("Списки обзвона","ccntrl")
+ S:TPX="" TPX=$$initcmm()
+ S (A,I,C)="" F  S I=$O(^CMM("result",TPX,I)) Q:I=""  S R=^(I),A=A_C_I_"|"_$P(R,"|",1),C=CR
+ D MSG^RWU(A)
+ Q
+initcmm() 
+ N X
+ S X=$O(^CMM("start",""),-1)+1
+ S ^CMM("start",X)="Списки обзвона"
+ S ^CMM("link","ccntrl")=X
+ S ^CMM("result",X,1)="Обзвон выполнен"
+ S ^CMM("result",X,2)="Обзвон не выполнен"
+ S ^CMM("result",X,3)="Пациент недоступен"
+ Q X
+ccmel(KEY,REZ,TXT,PHN)   ; Регистрировать событие отзвона
+ N TPX,IDX,ID,NI,R,X
+ S TPX=$$FNDTP^ICCME("Списки обзвона","ccntrl")
+ S:TPX="" TPX=$$initcmm()
+ S IDX=$P(KEY,",",1),ID=$P(KEY,",",2)
+ S R=$G(^CCNL(IDX,ID)),NI=$P(R,"|",1)
+ S X=$$ADDOUTf^ICCME(NI,TPX,REZ,TXT,PHN,"ccntrl|"_KEY,$H,1)
+ Q:X=""
+ ;S ^DSHWL(DT,ID,"cme",X)=$H
+ Q
+fndsUID(UID) ; Найти последний список по UID
+ N I,TP,F
+ S TP=$$FINDN^ISPRAV("dshlrsn",2,"stac.naz.perv") Q:TP="" ""
+ S (I,F)="" F  S I=$O(^CCNL(I),-1) Q:I=""  D  Q:F 
+ .I $P($G(^(I)),"|",4)=TP S F=I
+ Q F

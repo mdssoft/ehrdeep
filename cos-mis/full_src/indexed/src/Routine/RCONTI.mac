@@ -1,0 +1,263 @@
+RCONTI ; Отчеты по контингенту [ 04/25/2023  3:16 PM ]
+DBLFIO(DF) ; Двойное ФИО в рамках пациента
+ ; DF - введено после
+ N NI,R,P,FL,D,I,F,FLF,DT
+ S DT=$$DIH^DTUTL(DF)
+ D OWF^RWU(".txt")
+ D WC^RWU("№ И.Б.|Ф.И.О.|Дата рожд.|Договор|Полис")
+ S NI=0 F  S NI=$$NEXT^IPAC(NI) Q:NI=""  D
+ .D GETM^IPAC(NI,"fiof","FL")
+ .S D=$O(FL("")) Q:D=""  Q:D<DT 
+ .K FLF
+ .S (D,P)="" F  S D=$O(FL(D)) Q:D=""  D
+ ..S R=$$LU^TXTU(FL(D))
+ ..I $L(P),P'=R S FLF(D)=""
+ ..S P=R
+ .Q:'$D(FLF) 
+ .S FLF($O(FL("")))="" ; начальное состояние
+ .S P=NI,D="" F  S D=$O(FLF(D)) Q:D=""  D
+ ..D WC^RWU(CR_P_"|"_$$GETE^IPAC(NI,"fio",D)_"|"_$$GETE^IPAC(NI,"datar",D)_"|"_$$GETE^IPAC(NI,"stc",D)_"|"_$$GET^IPAC(NI,"polis",D))
+ ..S P=""
+ D C^RWU
+ Q
+NOSTC(DTS,DTE) ; Без страховой компании
+ S DTS=$$DIH^DTUTL(DTS),DTE=$$DIH^DTUTL(DTE)
+ N NI,DTMI,DTMX,ID,X,POL,IDX
+ S CID=$C(9)_"s",NI="",IDX=1
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|П.п.|№ И.Б.|Ф.И.О. пациента|Дата прикр.|Пол|Дата рожд.")
+ F  S NI=$O(^BTN(NI)) Q:NI=""!(NI[$C(9))  D
+ .S DTMI=99999,DTMX=0,ID=""
+ .Q:$$GET^IPAC(NI,"stc",DTE)'="" 
+ .Q:$$GET^IPAC(NI,"stc1",DTE)'="" 
+ .Q:$$GET^IPAC(NI,"stc2",DTE)'=""
+ .F  S ID=$O(^BTN(NI,ID)) Q:ID=""  S DT=$O(^(ID,-1)) S:DT'=""&(DT<DTMI) DTMI=DT 
+ .Q:DTMI<DTS!(DTMI>DTE) 
+ .D WC^RWU(CR_NI_"|"_IDX_"|"_NI_"|"_$$FIO^IPAC(NI,DTMI)_"|"_$$DT^DTUTL(DTMI)_"|"_$$GETE^IPAC(NI,"pol",DTMI)_"|"_$$DT^DTUTL($$GET^IPAC(NI,"datar",DTMI)))
+ .S IDX=IDX+1
+ D C^RWU
+ Q
+NORMDT(MOD) ; Нормализовать по датам прикрепления
+ N N,DGN,DV,DF,DC,PL,J,A,POL,DE
+ S J=0
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|№ И.Б.|Ф.И.О.|Дата рождения|Договор|Срок с|Срок по|Оформление|Полис|Создан")
+ S N="" F  S N=$$NEXT^IPAC(N) Q:N=""  D
+ .S DGN=$$GET^IPAC(N,"stc") Q:DGN=""
+ .S DV=$$GET^YNDOG(DGN,"dvid") I DV'=0,DV'=1 Q  ; only SK
+ .S DF=$$GET^IPAC(N,"dog_from") Q:'DF
+ .S DC=$$CREATED^IPAC(N) Q:'DC 
+ .I DF=$$GET^IPAC(N,"dog_from",DF),DC'<DC Q 
+ .S POL=$$GET^IPAC(N,"polis")
+ .S DE=$$GET^IPAC(N,"dog_to")
+ .D WC^RWU(CR_N_"|"_N_"|"_$$FIO^IPAC(N)_"|"_$$GETE^IPAC(N,"datar")_"|"_$$NAME^IINSC(N)_"|"_$$DT2^DTUTL(DF)_"|"_$$DT2^DTUTL(DE)_"|"_$$GETE^IPAC(N,"ofor")_"|"_POL_"|"_$$DT2^DTUTL(DC)) 
+ .S J=J+1
+ .Q:'MOD
+ .I DC>DF D  Q 
+ ..S PL="" F  S PL=$O(^BTN(N,PL)) Q:PL=""  M ^BTN(N,PL,DF)=^BTN(N,PL,DC)
+ ..S J=J+1
+ .I DF=$$GET^IPAC(N,"dog_from",DF) Q
+ .D SET^IPAC(N,"stc",DF,$$GET^IPAC(N,"stc"))
+ .D SET^IPAC(N,"dog_from",DF,DF)
+ .D SET^IPAC(N,"dog_to",DF,DE)
+ .D SET^IPAC(N,"polis",DF,POL,1)
+ .S J=J+1
+ D:J W^RWU(CR_"|Z="_J)
+ D C^RWU
+ Q
+CHKP(DT,TYP,OFR,DVID) ; Контроль пациентов
+ ; TYP - 1/2/3/4 - без договора/без сроков/без программы/англ.фио
+ ; OFR - статус оформления
+ ; DVID - вид договора (опционально)
+ N NI,D1,D2,D3,iD1,iD2,iD3,iOF,R,X,IDX
+ S DT=$$DIH^DTUTL(DT)
+ D PRETZR^IPAC
+ S iD1=$G(TZRBTN("stc")),iD2=$G(TZRBTN("stc1")),iD3=$G(TZRBTN("stc2"))
+ S iOF=$G(TZRBTN("ofor"))
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|№ И.Б.|Ф.И.О. на "_$$DT^DTUTL(DT)_"|Дата рождения|Договор|Срок с|Срок по|Оформление|Полис|Создан")
+ S NI="" F  S NI=$$NEXT^IPAC(NI) Q:NI=""  D
+ .S D1=$$GETTZ^IPAC(NI,iD1,DT)
+ .I OFR'="",$$GETTZ^IPAC(NI,iOF,DT)'=OFR Q 
+ .I TYP=1 Q:D1'=""  Q:$$GETTZ^IPAC(NI,iD2,DT)'=""  Q:$$GETTZ^IPAC(NI,iD3,DT)'=""  D CHKPln(NI,1) Q
+ .S D2=$$GETTZ^IPAC(NI,iD2,DT)
+ .S D3=$$GETTZ^IPAC(NI,iD3,DT)
+ .I DVID'="",$S(D1="":1,1:$$GET^IINSC(D1,"dvid",DT)'=DVID),$S(D2="":1,1:$$GET^IINSC(D2,"dvid",DT)'=DVID),$S(D3="":1,1:$$GET^IINSC(D3,"dvid",DT)'=DVID) Q
+ .S IDX=0
+ .I TYP=2 S IDX=$$CHKPdt(NI,DT) Q:'IDX 
+ .I TYP=3 S IDX=$$CHKPprg(NI,DT) Q:'IDX
+ .D CHKPln(NI,IDX)
+ D C^RWU 
+ Q
+CHKPln(N,I) 
+ S I=$S(I=1:"",I=2:1,I=3:2,1:"")
+ S R=$$FIO^IPAC(N)
+ I TYP=4,'$$MIXRE^TXTU(R) Q 
+ S R=R_"|"_$$GETE^IPAC(N,"datar",DT)_"|"
+ S R=R_$$GETE^IPAC(N,"stc"_I,DT)_"|"_$$GETE^IPAC(N,"dog_from"_I,DT)_"|"
+ S R=R_$$GETE^IPAC(N,"dog_to"_I,DT)_"|"_$$GETE^IPAC(N,"ofor",DT)_"|"
+ S R=R_$$GETE^IPAC(N,"polis"_I,DT)_"|"_$$DT2^DTUTL($$CREATED^IPAC(N))
+ D WC^RWU(CR_N_"|"_N_"|"_R)
+ Q
+CHKPdt(N,DT) 
+ I D1'="",$$GET^IPAC(N,"dog_from",DT)=""!($$GET^IPAC(N,"dog_to",DT)="") Q 1
+ I D2'="",$$GET^IPAC(N,"dog_from1",DT)=""!($$GET^IPAC(N,"dog_to1",DT)="") Q 2
+ I D3'="",$$GET^IPAC(N,"dog_from2",DT)=""!($$GET^IPAC(N,"dog_to2",DT)="") Q 3
+ Q 0
+CHKPprg(N,DT) 
+ I D1'="",$$GET^IPAC(N,"prog",DT)="" Q 1
+ I D2'="",$$GET^IPAC(N,"prog1",DT)="" Q 2
+ I D3'="",$$GET^IPAC(N,"prog2",DT)="" Q 3
+ Q 0
+TOXML(DGN,STAT,CNT) ; Выгрузка в XML
+ ; STAT - статус
+ ; CNT - число пациентов
+ N NI,J,R,A,ST,I
+ S DGN=+DGN
+ S:STAT'="" STAT="|"_STAT_"|"
+ D OWF^RWU(".xml")
+ D W^RWU(^PP(0,1)_"<patients>")
+ S NI="",J=0
+ F  S NI=$O(^BTI(" s",DGN,NI)) Q:NI=""  D  I CNT'="",J>CNT Q
+ .Q:$$GET^IPAC(NI,"stc")'=DGN 
+ .S ST=$$GET^IPAC(NI,"status")
+ .I STAT'="","|"_ST_"|"'[STAT Q 
+ .S A="<item><nib>"_NI_"</nib><fio>"_$$TAG^TXTU($$FIO^IPAC(NI))_"</fio>"
+ .S A=A_"<born>"_$$GETE^IPAC(NI,"datar")_"</born>"
+ .S R=$$GET^IPAC(NI,"jobtitle")
+ .S:+R=R R=$$NAME^ISPRAV("jobtitle",R)
+ .S:R'="" A=A_"<jobtitle>"_$$TAG^TXTU(R)_"</jobtitle>"
+ .S R=$$GETE^IPAC(NI,"work")
+ .S:R'="" A=A_"<department>"_$$TAG^TXTU(R)_"</department>"
+ .S A=A_"<status>"_ST_"</status><lpu>2</lpu>"
+ .D WC^RWU(CR_A_"</item>")
+ .S J=J+1
+ D W^RWU("</patients>")
+ D C^RWU
+ Q
+TOXML2(DGN,DT,STAT,CNT) ; Выгрузка в XML, v2 (UTF8)
+ ; STAT - статус
+ ; CNT - число пациентов
+ N NI,J,R,A,ST,I
+ S DGN=+DGN
+ S:STAT'="" STAT="|"_STAT_"|"
+ S DT=$$DIH^DTUTL(DT)
+ D OWF^RWU(".xml")
+ S A="<?xml version=""1.0"" encoding=""utf-8""?>"_CR
+ S A=A_"<InterchangeEnvelope version=""1.0"">"_CR
+ S A=A_"<Head><DocID>Сведения о пациентах</DocID>"
+ S A=A_"<SourceID>"_$$^I("iname")_"</SourceID>"
+ S I=$H,R=$$DTISO^DTUTL(I)
+ S A=A_"<Timestamp>"_R_"T"_$$TIME^DTUTL(I)_".000</Timestamp></Head>"
+ S A=A_CR_"<Body><Сведения_о_пациентах>"
+ D W^RWU($C(239,187,191)_$$WU8^TXTU($$DW^TXTU(A)))
+ S NI="",J=0
+ F  S NI=$$NEXT^IPAC(NI,"stc",DGN) Q:NI=""  D  I CNT'="",J>CNT Q
+ .Q:$$GET^IPAC(NI,"stc",DT)'=DGN 
+ .S ST=$$GET^IPAC(NI,"status",DT)
+ .I STAT'="","|"_ST_"|"'[STAT Q 
+ .Q:$$GET^IPAC(NI,"ofor",DT)>1 
+ .S A="<пациент><номер_карты>"_NI_"</номер_карты>"
+ .S A=A_"<уникальный_код>"_$$TAG^TXTU($$GET^IPAC(NI,"anib"))_"</уникальный_код>"
+ .S A=A_"<фамилия>"_$$TAG^TXTU($$GET^IPAC(NI,"fiof"))_"</фамилия>"
+ .S A=A_"<имя>"_$$TAG^TXTU($$GET^IPAC(NI,"fioi"))_"</имя>"
+ .S A=A_"<отчество>"_$$TAG^TXTU($$GET^IPAC(NI,"fioo"))_"</отчество>"
+ .S A=A_"<дата_рождения>"_$$DTISO^DTUTL($$GET^IPAC(NI,"datar"))_"</дата_рождения>"
+ .S A=A_"<пол>"_$E($$GETE^IPAC(NI,"pol"))_"</пол>"
+ .S R=$$TextSTAT(ST)
+ .S A=A_"<степень_родства>"_$$TAG^TXTU($$GETE^IPAC(NI,"familyr"))_"</степень_родства>"
+ .S A=A_"<дата_постановки_на_учет>"_$$TAG^TXTU($$GETE^IPAC(NI,"dog_from"))_"</дата_постановки_на_учет>"
+ .S A=A_"<дата_снятия_с_учета>"_$$TAG^TXTU($$GETE^IPAC(NI,"dog_to"))_"</дата_снятия_с_учета>"
+ .S R=$$GETE^IPAC(NI,"polis")
+ .S:R'="" A=A_"<полис>"_$$TAG^TXTU(R)_"</полис>"
+ .S:R'="" A=A_"<статус>"_$$TAG^TXTU(R)_"</статус>"
+ .S R=$$GETE^IPAC(NI,"work")
+ .S:$P(R," ",1)?1.N R=$P(R," ",2,99) ; число впереди
+ .S:R'="" A=A_"<подразделение>"_$$TAG^TXTU(R)_"</подразделение>"
+ .S R=$$GET^IPAC(NI,"jobtitle")
+ .S:+R=R R=$$NAME^ISPRAV("jobtitle",R)
+ .S:R'="" A=A_"<должность>"_$$TAG^TXTU(R)_"</должность>"
+ .D W^RWU($$WU8^TXTU($$DW^TXTU(CR_A_"</пациент>")))
+ .S J=J+1
+ D W^RWU($$WU8^TXTU($$DW^TXTU(CR_"</Сведения_о_пациентах></Body>")))
+ D W^RWU($$WU8^TXTU(CR_"</InterchangeEnvelope> "))
+ D C^RWU
+ Q
+TOxmlFN(FN,DT) ; Выгрузка в XML, v2 (UTF8)
+ ; STAT - статус
+ ; CNT - число пациентов
+ N NI,J,R,A,ST,I,DEV,CR,%LOG
+ S DT=$$DIH^DTUTL(DT)
+ S DEV=$$OW^FIL(FN),CR=$C(13,10),%LOG=777
+ S A="<?xml version=""1.0"" encoding=""utf-8""?>"_CR
+ S A=A_"<InterchangeEnvelope version=""1.0"">"_CR
+ S A=A_"<Head><DocID>Сведения о пациентах</DocID>"
+ S A=A_"<SourceID>"_$$^I("iname")_"</SourceID>"
+ S I=$H,R=$$DTISO^DTUTL(I)
+ S A=A_"<Timestamp>"_R_"T"_$$TIME^DTUTL(I)_".000</Timestamp></Head>"
+ S A=A_CR_"<Body><Сведения_о_пациентах>"
+ D W^FIL(($C(239,187,191)_$$WU8^TXTU($$DW^TXTU(A))),DEV)
+ S NI="",J=0
+ F  S NI=$$NEXT^IPAC(NI) Q:NI=""  D  
+ .S A="<пациент><номер_карты>"_NI_"</номер_карты>"
+ .S A=A_"<уникальный_код>"_$$TAG^TXTU($$GET^IPAC(NI,"anib"))_"</уникальный_код>"
+ .S A=A_"<фамилия>"_$$TAG^TXTU($$GET^IPAC(NI,"fiof"))_"</фамилия>"
+ .S A=A_"<имя>"_$$TAG^TXTU($$GET^IPAC(NI,"fioi"))_"</имя>"
+ .S A=A_"<отчество>"_$$TAG^TXTU($$GET^IPAC(NI,"fioo"))_"</отчество>"
+ .S A=A_"<дата_рождения>"_$$DTISO^DTUTL($$GET^IPAC(NI,"datar"))_"</дата_рождения>"
+ .S A=A_"<пол>"_$E($$GETE^IPAC(NI,"pol"))_"</пол>"
+ .S ST=$$GET^IPAC(NI,"status",DT)
+ .S R=$$TextSTAT(ST)
+ .S A=A_"<степень_родства>"_$$TAG^TXTU($$GETE^IPAC(NI,"familyr"))_"</степень_родства>"
+ .S R=$$GETE^IPAC(NI,"ofor")
+ .S:R'="" A=A_"<оформление>"_$$TAG^TXTU(R)_"</оформление>"
+ .S A=A_"<дата_постановки_на_учет>"_$$TAG^TXTU($$GETE^IPAC(NI,"dog_from"))_"</дата_постановки_на_учет>"
+ .S A=A_"<дата_снятия_с_учета>"_$$TAG^TXTU($$GETE^IPAC(NI,"dog_to"))_"</дата_снятия_с_учета>"
+ .S R=$$GET^IPAC(NI,"stc")
+ .S:R'="" A=A_"<код_договора>"_$$TAG^TXTU(R)_"</код_договора>"
+ .S R=$$GETE^IPAC(NI,"stc",DT)
+ .S:R'="" A=A_"<договор>"_$$TAG^TXTU(R)_"</договор>"
+ .S R=$$GETE^IPAC(NI,"polis",DT)
+ .S:R'="" A=A_"<полис>"_$$TAG^TXTU(R)_"</полис>"
+ .S:R'="" A=A_"<статус>"_$$TAG^TXTU(R)_"</статус>"
+ .S R=$$GETE^IPAC(NI,"work",DT)
+ .S:$P(R," ",1)?1.N R=$P(R," ",2,99) ; число впереди
+ .S:R'="" A=A_"<подразделение>"_$$TAG^TXTU(R)_"</подразделение>"
+ .S R=$$GET^IPAC(NI,"jobtitle",DT)
+ .S:+R=R R=$$NAME^ISPRAV("jobtitle",R)
+ .S:R'="" A=A_"<должность>"_$$TAG^TXTU(R)_"</должность>"
+ .S R=$$GETE^IPAC(NI,"pasp",DT)
+ .S:R'="" A=A_"<паспорт>"_$$TAG^TXTU(R)_"</паспорт>"
+ .S R=$$GETE^IPAC(NI,"pasp_dan",DT)
+ .S:R'="" A=A_"<паспорт_выдан>"_$$TAG^TXTU(R)_"</паспорт_выдан>"
+ .S R=$$GET^IPAC(NI,"tel1",DT)
+ .S:R'="" A=A_"<тел_домашний>"_$$TAG^TXTU(R)_"</тел_домашний>"
+ .S R=$$GET^IPAC(NI,"tel2",DT)
+ .S:R'="" A=A_"<тел_рабочий>"_$$TAG^TXTU(R)_"</тел_рабочий>"
+ .S R=$$GET^IPAC(NI,"pager",DT)
+ .S:R'="" A=A_"<тел_сотовый>"_$$TAG^TXTU(R)_"</тел_сотовый>"
+ .S R=$$GET^IPAC(NI,"email",DT)
+ .S:R'="" A=A_"<email>"_$$TAG^TXTU(R)_"</email>"
+ .S R=$$ADR^YIPACN(NI,DT)
+ .S:R'="" A=A_"<адрес>"_$$TAG^TXTU(R)_"</адрес>"
+ .S R=$$GET^IPAC(NI,"text",DT)
+ .S:R'="" A=A_"<примечание>"_$$TAG^TXTU(R)_"</примечание>"
+ .D W^FIL(($$WU8^TXTU($$DW^TXTU(CR_A_"</пациент>"))),DEV)
+ .S J=J+1
+ D W^FIL(($$WU8^TXTU($$DW^TXTU(CR_"</Сведения_о_пациентах></Body>"))),DEV)
+ D W^FIL(($$WU8^TXTU(CR_"</InterchangeEnvelope> ")),DEV)
+ D C^FIL(DEV)
+ Q
+TextSTAT(X) ; Расшифровка статусов
+ Q:X="" ""
+ N I,R,K
+ S R="" F I=1:1:$L(X,"|") S K=$P(X,"|",I) S:$D(^M(1,K)) R=R_$S(R="":"",1:"|")_$G(^M(1,K))
+ Q R
+REGIPROC 
+ S ^IPROC("Отчеты по пациентам","Служебные","Множественные ФИО пациента")="DBLFIO_RCONTI,1,1,d,Дата создания с"
+ S ^IPROC("Отчеты по пациентам","Служебные","Пациенты без договора")="NOSTC_RCONTI,100,2,d,Период прикрепления с,d,Период прикрепления по"
+ S ^IPROC("Отчеты по пациентам","Служебные","Проверка контингента")="CHKP_RCONTI,100,4,d,Дата отчета,t@string:1/Пациенты без договора#2/Без сроков прикрепления#3/Без программы обслуживания#4/Смешение русско-английского ФИО,Вид контроля,t@storage:ofor@1,Статус оформления,t@net:NMLCR_NSPRAV(""dvid""),Вид договора"
+ S ^IPROC("Система","Пациенты","Некорректные данные прикрепления")="NORMDT_RCONTI,100,1,t@string:0/Нет#1/Да,Исправить прикрепление"
+ S ^IPROC("Система","Пациенты","Выгрузка пациентов в XML")="TOXML_RCONTI,16,3,te@storage:dog,Договор,t@net:NMLCR_NSPRAV(1),Статус пациента,s,Число пациентов"
+ S ^IPROC("Система","Пациенты","Выгрузка пациентов в XML, формат 2")="TOXML2_RCONTI,16,4,te@storage:dog,Договор,d,Дата отчета,t@net:NMLCR_NSPRAV(1),Статус пациента,s,Число пациентов"
+ Q

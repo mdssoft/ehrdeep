@@ -1,0 +1,147 @@
+NMLABI ; Информационные процедуры КДЛ [ 03/19/2024  0:28 AM ]
+ZNINF(NI,ID) ; Информация по заявке
+ N DTM,R,U,I,B,C,DT,STL,ST,STLD,LP
+ D MINHDR^IHTML("")
+ D CSS^IHTML
+ D W^RWU(CR_".hdr { background-color: #66CCFF; }")
+ D W^RWU(CR_".right { text-align: right; }")
+ D CSSE^IHTML
+ D W^RWU(CR_"</head><body>")
+ G:ID="" ZNINFe
+ I NI="" G:'$D(^MLABI("c",ID)) ZNINFe S NI=^MLABI("c",ID)
+ S DTM=$G(^MLAB(NI,ID)),B=$$GETBAR^IMLAB(NI,ID)
+ D WC^RWU("<font size=""4"">Заявка №<b> "_ID_"</b></font><br>")
+ D:B'="" WC^RWU("<font size=""4"">Штрихкод<b> "_B_"</b></font><br>")
+ S R=$P($G(^MLAB(NI,ID,"lab")),"|",1)
+ D:R'="" WC^RWU(CR_"<br>Лаборатория: <b>"_$$TAG^TXTU($G(^LABC(R,"nm")))_"</b><br>")
+ 
+ D WC^RWU(CR_"<br>Пациент: <b>"_$$TAG^TXTU($$FIO^IPAC(NI))_"</b>")
+ D WC^RWU(CR_"<br>Пол: <b>"_$$GETE^IPAC(NI,"pol")_"</b>, Возраст: <b>"_$$AGET^DTUTL($$GET^IPAC(NI,"datar"),+DTM)_"</b>")
+ 
+ S R=$P($G(^MLAB(NI,ID,"lab")),"|",1)
+ D:R'="" WC^RWU(CR_"<br>Лаборатория: <b>"_$$TAG^TXTU($G(^LABC(R,"nm")))_"</b>")
+ 
+ S (C,B)=""
+ S:$G(^MLAB(NI,ID,"nt")) B="CITO"
+ S R=$G(^MLAB(NI,ID,"fl","dcl"))
+ S:R'="" B=$S(B="":"",1:B_", ")_"День цикла: "_R
+ S R=$G(^MLAB(NI,ID,"fl","ndbr"))
+ S:R'="" B=$S(B="":"",1:B_", ")_"Неделя беременности: "_R
+ S R=$G(^MLAB(NI,ID,"fl","sutdd"))
+ S:R'="" B=$S(B="":"",1:B_", ")_"Суточный диурез: "_R
+ S:B'="" C="<br>"
+ 
+ S R=$G(^MLAB(NI,ID,"tl"))
+ S U=$P(R,"|",1)
+ S:+U B=B_C_"Минимальная планируемая готовность: <b>"_$$DTM^DTUTL(U)_"</b>",C="<br>"
+ S U=$P(R,"|",2)
+ S:+U B=B_C_"Максимальная планируемая готовность: <b>"_$$DTM^DTUTL(U)_"</b>",C="<br>"
+ 
+ S R=$G(^MLAB(NI,ID,"nt"))
+ S U=$P(R,"|",1)
+ S:U'="" B=B_C_"Диагноз: <b>"_$$TAG^TXTU($$NAME^YMKB10(U))_"</b>",C="<br>"
+ S U=$P(R,"|",2,99)
+ S:U'="" B=B_C_"Примечание к заявке: <b>"_$$TAG^TXTU(U)_"</b>",C="<br>"
+ S U=$G(^MLAB(NI,ID,"cs"))
+ S:U'="" B=B_C_"Примечание лаборатории: <b>"_$$TAG^TXTU(U)_"</b>",C="<br>"
+ S U=$G(^MLAB(NI,ID,"c"))
+ S:U'="" B=B_C_"Примечание пациенту: <b>"_$$TAG^TXTU(U)_"</b>",C="<br>"
+ D:B'="" WC^RWU(CR_"<hr>"_B)
+ 
+ S R="|"_$G(^MLAB(NI,ID,"rt"))_"|",B=""
+ S:R["|2:1|" B="факсу"
+ S:R["|3:1|" B=$S(B="":"",1:B_", ")_"эл.почте"
+ S:R["|4:1|" B=$S(B="":"",1:B_", ")_"SMS"
+ S:B'="" B="Отправлено по "_B
+ S:$$IsRT^IMLAB(NI,ID,"nmail") B="Оповещено по эл.почте"_$S(B="":"",1:"<br>"_B)
+ S:$$IsRT^IMLAB(NI,ID,"prn") B="Результат отпечатан"_$S(B="":"",1:"<br>"_B)
+ D:B'="" WC^RWU(CR_"<hr>"_B)
+ D W^RWU(CR_"<hr>")
+ ; Статусы
+ S STL(1)="Создана",STL(2)="Материал взят",STL(3)="В работе"
+ S STL(31)="Маркирована"
+ S STL(4)="Отправлена",STL(4,2)="Принята контрагентом"
+ S STL(9)="Одобрена"
+ S STL(91)="Утверждена"
+ S (ST,C)="" F  S ST=$O(STL(ST)) Q:ST=""  D 
+ .S R=$G(^MLAB(NI,ID,"s"_ST))
+ .S DTM=$P(R,"|",2),U=$P(R,"|",3),LP=$P(R,"|",4)
+ .S:U'="" U=", "_$$TAG^TXTU($$FIO^IUSER(U))
+ .S:LP'="" U=U_", "_$$TAG^TXTU($$OWF^TXTU($$NAME^ICONTR(LP),99))
+ .S R=$P(R,"|",1) Q:'R 
+ .S R=$S($D(STL(ST,R)):STL(ST,R),1:STL(ST))
+ .S STLD(DTM_","_ST)="<b>"_$$DTM^DTUTL(DTM)_"</b>: "_R_U
+ S R="" F  S R=$O(STLD(R)) Q:R=""  D WC^RWU(CR_C_STLD(R)) S C="<br>"
+ ; Рабочие списки
+ G:'$D(^MLABE(NI,ID,"dev")) zninf1
+ D WC^RWU(CR_"<hr>Внутренние номера в методиках:")
+ ; списки
+ K STL
+ S U="" F  S U=$O(^MLABW(U)) Q:U=""  D
+ .S R=""
+ .S I="" F  S I=$O(^MLABW(U,I)) Q:I=""  D:$D(^MLABWE(U,I,"i",ID))
+ ..S C=$S(I:$$DTM^DTUTL($P(^MLABW(U,I),"|",1)),1:"основной")
+ ..S R=$S(R="":"",1:R_"; ")_C
+ .S STL(U)=R
+ ; номера
+ S U="" F  S U=$O(^MLABE(NI,ID,"dev",U)) Q:U=""  D
+ .S R=$G(^(U))
+ .S ST=$$TAG^TXTU($G(^LABT("DEV",U)))
+ .S C=$G(STL(U)) S:C'="" C=" (список "_C_")"
+ .D:R'="" WC^RWU(CR_"<br><b>"_R_"</b> в "_ST_C)
+ .S B="" F  S B=$O(^MLABE(NI,ID,"dev",U,B)) Q:B=""  D
+ ..S R=^(B)
+ ..D:R'="" WC^RWU(CR_"<br><b>"_R_"</b> в "_$$TAG^TXTU($G(^LABT("M",B)))_", "_ST_C)
+zninf1 
+ZNINFe D END^IHTML
+ Q
+PMINF(NI,ID,PRM) ; Информация по параметру (тест)
+ N B,R,A,X,HH
+ S PRM=$$WD^TXTU(PRM)
+ D MINHDR^IHTML("")
+ D CSS^IHTML
+ D W^RWU(CR_".hdr { background-color: #66CCFF; }")
+ D W^RWU(CR_".right { text-align: right; }")
+ D CSSE^IHTML
+ D W^RWU(CR_"</head><body>")
+ G:ID="" PMINFe
+ S:NI="" NI=^MLABI("c",ID)
+ S B=$$GETBAR^IMLAB(NI,ID)
+ D WC^RWU("<font size=""4"">Заявка №<b> "_ID_"</b></font><br>")
+ D:B'="" WC^RWU("<font size=""4"">Штрихкод<b> "_B_"</b></font><br>")
+ D WC^RWU(CR_"<br>Тест: <b>"_$$TAG^TXTU($$NAMEPM^IMLABS($P(PRM,"@",1)))_"</b>")
+ S R=$$VTXT^IMLABV(NI,ID,PRM)
+ S A="<b>"_$$TAG^TXTU($P(R,"|",1))_"</b>"
+ S X=$P(R,"|",2) S:X'="" A=A_", "_$$TAG^TXTU(X)
+ S X=$P(R,"|",3) S:X'="" A=A_", Норма: "_$$TAG^TXTU(X)
+ D WC^RWU(CR_"<br>"_A)
+ I $D(^MLABE(NI,ID,"dl",PRM)) S HH="" F  S HH=$O(^MLABE(NI,ID,"dl",PRM,HH),-1) Q:HH=""  D
+ .S R=$$VTXT^IMLABV(NI,ID,PRM,HH)
+ .S A="<b>"_$$DTM^DTUTL(HH)_": "_$$TAG^TXTU($P(R,"|",1))_"</b>"
+ .S X=$P(R,"|",2) S:X'="" A=A_", "_$$TAG^TXTU(X)
+ .S X=$P(R,"|",3) S:X'="" A=A_", Норма: "_$$TAG^TXTU(X)
+ .S R=^MLABE(NI,ID,"dl",PRM,HH,"l")
+ .S A=A_", Оператор: <b>"_$$TAG^TXTU($$FIO^IUSER(R))_"</b>"
+ .D WC^RWU(CR_"<hr>"_A)
+PMINFe 
+ D END^IHTML
+ Q
+TSEARCH(NI,ID) ; Поиск пробирки (по штрихкодам)
+ N DTM,R,I,BB,B,C,DT
+ D MINHDR^IHTML("")
+ D CSS^IHTML
+ D W^RWU(CR_".hdr { background-color: #66CCFF; }")
+ D W^RWU(CR_".right { text-align: right; }")
+ D CSSE^IHTML
+ D W^RWU(CR_"</head><body>")
+ G:ID="" TSEARCHe
+ S:NI="" NI=^MLABI("c",ID)
+ S DTM=$G(^MLAB(NI,ID)),BB=$$ALLBAR^IMLAB(NI,ID)
+ D WC^RWU("<font size=""4"">Заявка №<b> "_ID_"</b></font><br>")
+ D WC^RWU(CR_"Пациент: <b>"_$$TAG^TXTU($$FIO^IPAC(NI))_"</b><br>")
+ I BB="" D WC^RWU("<br><font color=""#0000FF"">нет данных</font>") G TSEARCHe
+ F I=1:1:$L(BB,"|") S B=$P(BB,"|",I) D:B'=""
+ .D WC^RWU("<font size=""4"">Штрихкод<b> "_B_":</b></font><br>")
+TSEARCHe 
+ D END^IHTML
+ Q

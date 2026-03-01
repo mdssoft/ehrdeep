@@ -1,0 +1,138 @@
+XMLU ; XML<>GL utility [ 04/11/2020  4:29 PM ]
+MKTZ(GLF,TZR,TZRR) ; Создать тезаурус, на вход "XML(""blabla"""
+ N FL,EPL,NTZ S PL="",TZR=TZR_")",TZRR=TZRR_")",EPL=","""_PL_""")"
+ F   S PL=$O(@(GLF_EPL)),EPL=","""_PL_""")" Q:PL=""  D
+ .S FL=$D(@TZR@(PL))
+ .S:'FL NTZ=$O(@TZRR@(""),-1)+1,^(NTZ)=PL,@TZR@(PL)=NTZ
+ .S:FL NTZ=^(PL)
+ .S @(GLF_","""_NTZ_""")")=@(GLF_EPL) K @(GLF_EPL)
+ Q
+GTZ(POLE,TZR,TZRR) ; Получить элемент тезауруса
+ N EPL S EPL=","""_POLE_""")"
+ I '$D(@(TZR_EPL)) N NTZ S NTZ=$O(@(TZRR_","""")"),-1)+1,@(TZR_EPL)=NTZ,@(TZRR_","_NTZ_")")=POLE Q NTZ
+ Q $G(@(TZR_EPL))
+SDT(GL,FRM,IDX,DT) ; Save by date from XML into GL
+ Q:IDX=""!(DT="") 
+ N NB,PL,DTPV,R,PR
+ S NB="nb_console",PL=""
+ F  S PL=$O(XML(NB,FRM,PL)) Q:PL=""  D
+ .S R=$$WD^TXTU($G(XML(NB,FRM,PL)))
+ .S DTPV=$O(@(GL_"(IDX,PL,DT+1)"),-1),PR=""
+ .S:DTPV'="" PR=^(DTPV)
+ .I R'=PR S ^(DT)=R
+ .E  I $D(^(DT)),^(DT)'=R K ^(DT)
+ .S DTPV=$O(^(DT)) I DTPV'="",R=^(DTPV) K ^(DTPV)
+ Q
+LDT(GL,IDX,DT) ; write from GL by date
+ N PL,SDT
+ S PL="",DT=DT+1
+ F  S PL=$O(@GL@(IDX,PL)) Q:PL=""  D
+ .S SDT=$O(@GL@(IDX,PL,DT),-1) Q:SDT="" 
+ .D WTAGDC^RWU(PL,$G(^(SDT)))
+ Q
+LDTP(GL,IDX,DT,PROC) ; write from GL by date w. proc
+ N PL,SDT
+ S PL="",DT=DT+1,PROC=$G(PROC)
+ F  S PL=$O(@GL@(IDX,PL)) Q:PL=""  D
+ .I PROC'="" X "S SDT=$$"_PROC_"(PL)" Q:SDT 
+ .S SDT=$O(@GL@(IDX,PL,DT),-1) Q:SDT="" 
+ .D WTAGDC^RWU(PL,$G(^(SDT)))
+ Q
+LDTM(GL,IDX,DT) ; write from GL by date and time
+ N PL,SDT
+ S PL="",DT=(+DT)_","_($P(DT,",",2)+1)
+ F  S PL=$O(@GL@(IDX,PL)) Q:PL=""  D
+ .S SDT=$O(@GL@(IDX,PL,DT),-1) Q:SDT="" 
+ .D WTAGDC^RWU(PL,$G(^(SDT)))
+ Q
+SET(GL,IDX,PL,DT,R) 
+ N DTPV,PR
+ S DTPV=$O(@(GL_"(IDX,PL,DT+1)"),-1),PR=""
+ S:DTPV'="" PR=^(DTPV)
+ I R'=PR S ^(DT)=R
+ E  I $D(^(DT)),^(DT)'=R K ^(DT)
+ S DTPV=$O(^(DT))
+ I DTPV'="",R=^(DTPV) K ^(DTPV)
+ Q
+RSXML ; Read from ^BUFH to XML()
+ N A,%J
+ D ORH^RWU
+ K XML,XMLR
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D XML^YIXMLRR
+ D CR^RWU
+ Q
+RRXML(A) ; Read from string to XML()
+ N %J
+ K XML,XMLR
+ S %J=1 D XML^YIXMLRR
+ Q
+OS(GL,FRM,IDX) ; Open and Save from XML into GL
+ Q:IDX="" 
+ N A,ID,%J
+ D ORH^RWU
+ K XML,XMLR
+ F %J=1:1 S A=$$WD^TXTU($$R13^RWU) Q:%IFN["Z"  D XML^YIXMLRR
+ S ID=$G(XML("nb_console",FRM,IDX))
+ K XML("nb_console",FRM,IDX)
+ L @GL
+ S:ID="" ID=$O(@GL@(""),-1)+1
+ K @GL@(ID)
+ M @GL@(ID)=XML("nb_console",FRM)
+ L -@GL
+ D CLOSE^YIXMLRR,CR^RWU
+ Q ID
+L(GL,IDX,PROC) ; write from GL
+ N PL,R,X,SD,T
+ S PL="",PROC=$G(PROC)
+ D WTAGD^RWU("id",IDX)
+ F  S PL=$O(@GL@(IDX,PL)) Q:PL=""  D
+ .S R=$G(^(PL))
+ .I PROC'="" X "S X=$$"_PROC_"(PL,R)" Q:X 
+ .I $O(@GL@(IDX,PL,""))="" D WTAGDC^RWU(PL,R) Q
+ .S A="<"_PL
+ .S SD="" F  S SD=$O(@GL@(IDX,PL,SD)) Q:SD=""  S A=A_" "_SD_"="""_@GL@(IDX,PL,SD)_""""
+ .D WC^RWU(A_">"_$$TAG^TXTU(R)_"</"_PL_">")
+ Q
+LDEV(GL,IDX,PROC,DEV) ; write from GL to device
+ N PL,R,X,SD,T
+ S PL="",PROC=$G(PROC)
+ D WTAGD^FIL("id",IDX,DEV)
+ F  S PL=$O(@GL@(IDX,PL)) Q:PL=""  D
+ .S R=$G(^(PL))
+ .I PROC'="" X "S X=$$"_PROC_"(PL,R)" Q:X 
+ .I $O(@GL@(IDX,PL,""))="" D WTAGD^FIL(PL,R,DEV) Q
+ .S A="<"_PL
+ .S SD="" F  S SD=$O(@GL@(IDX,PL,SD)) Q:SD=""  S A=A_" "_SD_"="""_@GL@(IDX,PL,SD)_""""
+ .D W^FIL(A_">"_$$TAG^TXTU(R)_"</"_PL_">",DEV)
+ Q
+OEVH(PSTART,PDATA,PEND)  ; Open event-based parser from ^BUFH
+ N %J,R
+ D ORH^RWU,OEV^XMLR($G(PSTART),$G(PDATA),$G(PEND))
+ F %J=1:1 S R=$$RA^RWU Q:%IFN["Z"  D REV^XMLR(R)
+ D CEV^XMLR,CR^RWU
+ Q
+OLGL(TROOT,LNFL) ; Парсинг XML из BUFH в ^BUF
+ ; TROOT - корневой тег
+ ; LNFL - перечень полей с построчным представлением через |
+ N %J,R,I,N,F,A
+ S LNFL=$G(LNFL)
+ S:LNFL'="" LNFL="|"_LNFL_"|"
+ D OEVH("otgTS^XMLU","otgTD^XMLU","")
+ Q
+otgTS 
+ S A=%XM(2)
+ Q:A="xml"!(A="nb_console")!(A=TROOT)
+ Q:LNFL[("|"_A_"|") 
+ S ^BUF($J,TROOT,A)=""
+ Q
+otgTD 
+ S A=%XM(2)
+ Q:A="xml"!(A="nb_console")!(A=TROOT)
+ I LNFL[("|"_A_"|") G otgTDl
+ S ^(A)=^BUF($J,TROOT,A)_%XD
+ Q
+otgTDl S I=+$O(^BUF($J,TROOT,A,""),-1)
+ F  S F=%XD[CR,N=$P(%XD,CR,1),%XD=$P(%XD,CR,2,9999) S:$L(N) ^(I)=$G(^BUF($J,TROOT,A,I))_N,I=I+F Q:'$L(%XD)
+ Q
+BFL(TROOT,FL) 
+ Q $G(^BUF($J,TROOT,FL))

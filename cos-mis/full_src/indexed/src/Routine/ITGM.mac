@@ -1,0 +1,34 @@
+ITGM ; Telegram MQ routines
+mq	; MQ callback
+	N VR,cd,proc,cmd,ev,rq
+	D data^IMQ
+	S obj=$$FS^IJSON(mqdata)
+	S ev=obj.event
+	S ret={}
+	S ret.reqid=obj.reqid
+	i ev="tgreg" D  G mqend
+	.s cd=obj.code
+	.S ret.cmd="reg"
+	.S VR=$$fndcode(cd) Q:VR="" 
+	.D SET^IKADRY(VR,"tgid",+$H,obj.chatid_"|"_obj.tgid)
+	.S ret.doc=VR
+	.S ret.name=$$FIO^IKADRY(VR)
+	s cmd=$P(ev,".",1),proc=$P(ev,".",2)
+	I $T(@("tgm^"_proc))'="" D @("tgm^"_proc)
+mqend	
+	Q:ret.noresult 
+	D PUB^IMQ("tg","",ret.%ToJSON())
+	Q
+fndcode(X)
+	N N
+	S N="" F  S N=$O(^KDR(N)) Q:N=""  I $$GET^IKADRY(N,"tgcode")=X Q 
+	Q N
+getchat(VR)
+	Q $P($$GET^IKADRY(VR,"tgid",+$H),"|",1)
+getvr(chatid)
+	N N,H
+	S H=+$H,N="" F  S N=$O(^KDR(N)) Q:N=""  I $P($$GET^IKADRY(VR,"tgid",H),"|",1)=chatid Q 
+	Q N
+INITDB
+	D REGTYPE^IMQ("tgm","mq^ITGM")
+	Q

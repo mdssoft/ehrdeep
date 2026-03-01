@@ -1,0 +1,52 @@
+NKADRY ; Кадры [ 08/27/2016  3:40 PM ]
+INIT ; For Create
+ N V,R,I,X,MOD
+ S MOD=1
+ G INIT+1^YIKADRY
+INITLT ; For Open
+ D OWF^RWU(".xmlb")
+ D W^RWU($G(^PP(0,2))_"<kadry>")
+ D INITp^YIKADRY
+ D W^RWU("</kadry></nb_console>"),C^RWU
+ Q
+NMVR(TN) ; ФИО врача
+ D MSG^RWU($$FIOSH^IKADRY(TN))
+ Q
+QINFO(VR,DT) ; Информация по квалификации
+ N R,I,X
+ Q:VR="" 
+ S:$G(DT)="" DT=+$H
+ D MINHDR^IHTML("")
+ D CSS^IHTML
+ D W^RWU(CR_".hdr { background-color: #66CCFF; }")
+ D W^RWU(CR_".right { text-align: right; }")
+ D CSSE^IHTML
+ D W^RWU(CR_"</head><body>")
+ D WC^RWU(CR_"<p class=""hdr""><font size=""4"" color=""#000000""><b>"_$$FIO^IKADRY(VR)_"</b></font></p>")
+ 
+ S X="" F I="",1,2 S R=$$GET^IKADRY(VR,"spec"_I,DT) S:R'="" X=$S(X="":"",1:X_", ")_$$GSPEC^YISPRAV(R)
+ D:X'="" WC^RWU(CR_"<b>Специальности:</b> "_$$TAG^TXTU(X))
+ 
+ S X=$$TAG^TXTU($$GET^IKADRY(VR,"pubinf",DT))
+ D:X'="" WC^RWU(CR_"<br><b>О враче:</b> "_X)
+ 
+ S X=$$TAG^TXTU($$GET^IKADRY(VR,"sptext",DT))
+ D:X'="" WC^RWU(CR_"<br><b>Специализация:</b> "_X)
+ 
+ S X=$$TAG^TXTU($$GET^IKADRY(VR,"certs",DT))
+ D:X'="" WC^RWU(CR_"<br><b>Сертификаты:</b> "_X)
+ 
+ S X=$$TAG^TXTU($$GET^IKADRY(VR,"ppr",DT))
+ D:X'="" WC^RWU(CR_"<br><b>Дипломы и проф. переподготовка:</b> "_X)
+ 
+ S X=$$TAG^TXTU($$GET^IKADRY(VR,"dis_dsc",DT))
+ D:X'="" WC^RWU(CR_"<br><b>Типовые заболевания:</b> "_X)
+ 
+ S X=$$TAG^TXTU($$GET^IKADRY(VR,"pri_dsc",DT))
+ D:X'="" WC^RWU(CR_"<br><b>В первичный прием входит:</b> "_X)
+ 
+ S X=$$TAG^TXTU($$GET^IKADRY(VR,"ppcenn",DT))
+ D:X'="" WC^RWU(CR_"<br><b>Средняя стоимость первичного приема:</b> "_X)
+ 
+ D END^IHTML
+ Q

@@ -1,0 +1,73 @@
+NRLS ; Реестр лекарственных средств [ 04/25/2012  10:13 AM ]
+FND(TXT,TP,MKB,ATX) 
+ N I,IDX,R,NM,A,F,P,X,Z
+ D OWF^RWU(".txt")
+ S I="",IDX=0,TXT=$$WD^TXTU(TXT),TXT=$$LU^TXTU(TXT)
+ I MKB="",ATX="" F  S I=$O(^RLS(I)) Q:I=""  D:IDX<500 
+ .S R=^(I)
+ .I TXT'="" S NM=$$LU^TXTU($P(R,"|",1,2)) Q:NM'[TXT 
+ .S IDX=IDX+1
+ .D FNDproc
+ D:MKB'="" FNDmkb
+ D:MKB=""&(ATX'="") FNDatx
+ D C^RWU
+ Q
+FNDmkb 
+ F  S I=$O(^RLSS("mkb",MKB,I)) Q:I=""  D
+ .I ATX'="" Q:'$D(^RLS(I,"a",ATX)) 
+ .S R=$G(^RLS(I)) Q:R="" 
+ .I TXT'="" S NM=$$LU^TXTU($P(R,"|",1,2)) Q:NM'[TXT
+ .D FNDproc
+ Q
+FNDatx 
+ F  S I=$O(^RLSS("atx",ATX,I)) Q:I=""  D
+ .S R=$G(^RLS(I)) Q:R=""
+ .I TXT'="" S NM=$$LU^TXTU($P(R,"|",1,2)) Q:NM'[TXT
+ .D FNDproc
+ Q
+FNDproc 
+ S NM=$$LU^TXTU($P(R,"|",1,2)) Q:NM'[TXT
+ S A=$P(R,"|",1)_"|"_$G(^RLSV(+$P(R,"|",3)))_"|",X="",F=""
+ F  S X=$O(^RLS(I,"f",X)) Q:X=""  S:F'="" F=F_"; " S F=F_$G(^RLSS("fgr",X))
+ S X="^RLS("_I_")",Z=0
+ F  S X=$Q(@X) Q:X=""  Q:$QL(X)<4  Q:$QS(X,2)'?1.N  D
+ .S Z=$P($G(^RLSS("mnf",+$P($G(@X),"|",1))),"|",1)
+ .D WC^RWU(CR_I_"|"_A_$P($G(^RLSS("lf",+$QS(X,2))),"|",3)_"|"_Z_"|"_F)
+ .S Z=1
+ D:'Z WC^RWU(CR_A_"||"_P)
+ Q
+MKBLST(NM) 
+ I $L(NM)<2 Q
+ N X,K,R S (X,K)="",NM=$$LU^TXTU($$WD^TXTU(NM))
+ I $$CHECK^YMKB10(NM) S K=$$RECODE^YMKB10(NM),X=$O(^RLSS("mkb",K),-1)
+ D OWF^RWU(".txt"),WC^RWU("Наименование")
+ F  S X=$O(^RLSS("mkb",X)) Q:X=""!((K'="")&(X]K))  D
+ .S R=$P(^(X),"|",2)
+ .I K="" Q:$$LU^TXTU(R)'[NM 
+ .D WC^RWU(CR_X_"|"_R)
+ D C^RWU
+ Q
+ATXLST(NM) 
+ I $L(NM)<2 Q 
+ N X,R S NM=$$LU^TXTU($$WD^TXTU(NM)),X=""
+ D OWF^RWU(".txt"),WC^RWU("Наименование")
+ F  S X=$O(^RLSS("atx",X)) Q:X=""  D
+ .S R=$P(^(X),"|",2) Q:$$LU^TXTU(R)'[NM 
+ .D WC^RWU(CR_X_"|"_R)
+ D C^RWU
+ Q
+LFLST ; перечень лекарственных форм
+ D OWF^RWU(".txt")
+ N I,C S (C,I)=""
+ F  S I=$O(^RLSS("lf",I)) Q:I=""  D WC^RWU(C_$P(^(I),"|",3)) S C=CR
+ D C^RWU
+ Q
+DLFLST ; перечень доз и лекарственных форм
+ D OWF^RWU(".txt")
+ N I,C S (C,I)=""
+ F  S I=$O(^RLSS("dls",I)) Q:I=""  D WC^RWU(C_^(I)) S C=CR
+ S I=""
+ F  S I=$O(^RLSS("lf",I)) Q:I=""  D WC^RWU(C_$P(^(I),"|",3)) S C=CR
+ D C^RWU
+ Q
+ 

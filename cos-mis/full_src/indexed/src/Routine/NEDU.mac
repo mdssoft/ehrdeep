@@ -1,0 +1,33 @@
+NEDU ; Дополнительные утилиты ЕД [ 12/12/2019  3:40 PM ]
+PKVT(NIB,VR,OTD,SP,DT,SPIS) ; Печать квитанции
+ ; Последние визиты к этому врачу за сегодня
+ ; SPIS - выводить списком
+ N DTT,DGN,CPRG,CPRC,CSTC,KX,VRX,OTX,BUF,X,VV,S,CNT,U,PRC,SUM,ERR,Z
+ N @$$NEWVAR^IUSL
+ D OWF^RWU(".txt")
+ S DTT=$$DIH^DTUTL(DT),SPIS=+$G(SPIS)
+ S VV=+$$C1^I("kvt-kss-only")
+ S DGN=$$GET^IPAC(NIB,"stc",DTT)
+ S CPRG=$$GET^IPAC(NIB,"prog",DTT)
+ S CPRC=+$$PRC^IINSC(DGN,NIB,DTT) S:CPRC=0 CPRC=1
+ S KX="" F  S KX=$O(^PNF(NIB,DTT,KX),-1) Q:KX=""  D
+ .S VRX=$P(KX,"|",1),OTX=$P(KX,"|",2)
+ .Q:VRX'=VR!(OTX'=OTD)  
+ .D GET^IUSL(VRX,DTT,OTX,$P(KX,"|",3))
+ .Q:$D(ERR)!(STAT="w")!(STAT="d") 
+ .S U="" F  S U=$O(UL(U)) Q:U=""  D
+ ..S CNT=UL(U),SUM=$S($D(UL(U,1)):UL(U,1),1:$$USUM^IUSL(DTT,U,CNT))
+ ..S Z=1 S:STAT'=2 SUM="***",Z=0
+ ..S:$$GET^IPRICE(U,"hcen",PRC,DTT) SUM="***",Z=0
+ ..S X=$G(BUF(Z_U)),S=$P(X,"|",3)
+ ..S:X="" BUF(Z_U)=$$nmu(U,PRC,DTT)_"|"_CNT_"|"_SUM
+ ..S:$L(X) BUF(Z_U)=$P(X,"|",1)_"|"_(+$P(X,"|",2)+CNT)_"|"_$S(S="***":S,1:$P(X,"|",3)+SUM)
+ S (U,Z)=""
+ I 'SPIS F  S U=$O(BUF(U)) Q:U=""  D WC^RWU(CR_$E(U,2,99)_"|"_BUF(U))
+ I SPIS F  S U=$O(BUF(U)) Q:U=""  D WC^RWU(Z_$P(BUF(U),"|",1)) S Z=CR
+ D C^RWU
+ Q
+nmu(U,PRC,DT) 
+ N X
+ S X=$$GET^IPRICE(U,"aname",PRC,DT) Q:X'="" X
+ Q $$NAMEH^IPRICE(U,PRC,DTT)

@@ -1,0 +1,140 @@
+NRASPU ; Утилиты расписания [ 04/05/2022  1:13 PM ]
+REBK(KEY,noEx) ; Восстановить записи из резервной копии
+ ; KEY - дата/время копии
+ ; noEx - заменять все поля (1), восстановить недостающие (2)
+ N LPU,OT,VR,SP,DT,TM,R
+ S noEx=$G(noEx)
+ G:noEx=1 REBKa
+ G:noEx=2 REBKg
+ S LPU="" F  S LPU=$O(^DSHBK(KEY,LPU)) Q:LPU=""  S OT="" F  S OT=$O(^DSHBK(KEY,LPU,OT)) Q:OT=""  S VR="" F  S VR=$O(^DSHBK(KEY,LPU,OT,VR)) Q:VR=""  S SP="" F  S SP=$O(^DSHBK(KEY,LPU,OT,VR,SP)) Q:SP=""  D
+ .S DT="" F  S DT=$O(^DSHBK(KEY,LPU,OT,VR,SP,DT)) Q:DT=""  D:$D(^DSH(LPU,OT,VR,SP,DT))
+ ..S TM="" F  S TM=$O(^DSHBK(KEY,LPU,OT,VR,SP,DT,TM)) Q:TM=""  S R=^(TM) I R'="",R'="*" D
+ ...Q:'$D(^DSH(LPU,OT,VR,SP,DT,TM)) 
+ ...S R=$G(^(TM)) Q:TM'="" 
+ ...K ^DSH(LPU,OT,VR,SP,DT,TM)
+ ...M ^DSH(LPU,OT,VR,SP,DT,TM)=^DSHBK(KEY,LPU,OT,VR,SP,DT,TM)
+ Q
+REBKa 
+ ; TODO
+ Q
+REBKg 
+ S LPU="" F  S LPU=$O(^DSHBK(KEY,LPU)) Q:LPU=""  S OT="" F  S OT=$O(^DSHBK(KEY,LPU,OT)) Q:OT=""  S VR="" F  S VR=$O(^DSHBK(KEY,LPU,OT,VR)) Q:VR=""  S SP="" F  S SP=$O(^DSHBK(KEY,LPU,OT,VR,SP)) Q:SP=""  D
+ .S DT="" F  S DT=$O(^DSHBK(KEY,LPU,OT,VR,SP,DT)) Q:DT=""  D
+ ..I '$D(^DSH(LPU,OT,VR,SP,DT)) M ^DSH(LPU,OT,VR,SP,DT)=^DSHBK(KEY,LPU,OT,VR,SP,DT) Q
+ ..S TM="" F  S TM=$O(^DSHBK(KEY,LPU,OT,VR,SP,DT,TM)) Q:TM=""  D
+ ...Q:$D(^DSH(LPU,OT,VR,SP,DT,TM)) 
+ ...M ^DSH(LPU,OT,VR,SP,DT,TM)=^DSHBK(KEY,LPU,OT,VR,SP,DT,TM)
+ Q
+FNDBK(VR,DS,DE) ; Поиск резервной копии по врачу
+ N DD,R
+ S DD=$$DIH^DTUTL(DS)_",0",DE=$$DIH^DTUTL(DE)
+ F  S DD=$O(^DSHBK(DD)) Q:DD=""!($P(DD,",",1)>DE)  D
+ .S R=^(DD) Q:$P(R,",",3)'=VR
+ .W !,$$DTM^DTUTL(DD)_"="_R
+ Q
+INRASP ; Загрузка в расписание
+ ; Дата|Время|Врач|Пациент
+ N %J,A,DT,TM,VR,NI,OT,SP,LP
+ D ORH^RWU
+ S LP=+$$^I("ilpu")
+ K ^BUF("t")
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D
+ .I %J=1 Q 
+ .S DT=$$DI^DTUTL($P(A,"|",1)),TM=$$TI^DTUTL($P(A,"|",2))
+ .Q:DT=""!(TM="") 
+ .S VR=$P(A,"|",4),NI=$P(A,"|",5)
+ .S A=$$FNDDT(DT,VR) Q:A="" 
+ .S OT=$P(A,"|",1),SP=$P(A,"|",2)
+ .Q:'$D(^DSH(LP,OT,VR,SP,DT))  ; нет врача в этот день 
+ .S A=$G(^DSH(LP,OT,VR,SP,DT,TM))
+ .I A'="" S:$P(A,"|",1)'=NI ^BUF("t",LP,OT,VR,SP,DT,TM)=NI Q ; есть записи
+ .S:NI="" NI="кто-то"
+ .D SET^IRASP2(OT,VR,SP,DT,TM,NI,1,LP,"",1)
+ Q
+FNDDT(DT,VR) ; Получить спец/отд
+ N L,OT,SP,R
+ S L=+$$^I("ilpu"),R="" 
+ S OT="" F  S OT=$O(^DSH(L,OT)) Q:OT=""  I $D(^DSH(L,OT,VR)) S SP=$O(^DSH(L,OT,VR,"")) I SP'="" S R=OT_"|"_SP Q 
+ Q R
+WW 
+ S OT="" F  S OT=$O(^BUF("t",0,OT)) Q:OT=""  S VR="" F  S VR=$O(^BUF("t",0,OT,VR)) Q:VR=""  D
+ .S SP="" F  S SP=$O(^BUF("t",0,OT,VR,SP)) Q:SP=""  S DT="" F  S DT=$O(^BUF("t",0,OT,VR,SP,DT)) Q:DT=""  D
+ ..S TM="" F  S TM=$O(^BUF("t",0,OT,VR,SP,DT,TM)) Q:TM=""   D
+ ...S NI=$P(^BUF("t",0,OT,VR,SP,DT,TM),"|",1)
+ ...S R=$P(^DSH(0,OT,VR,SP,DT,TM),"|",1)
+ ...S:$$EXIST^IPAC(R) R=R_" "_$$FIOSH^YIPACN(R)
+ ...W !,$$FIO^YIKADRY(VR)_", "_$$DT2^DTUTL(DT)_", "_$$TM^DTUTL(TM)_" = "_R_" ("_$$FIOSH^YIPACN(NI)_")"
+ Q
+FNDPL(XX) ; Поиск подстроки по полям расписания
+ N LP,OT,VR,SP,DT,TM,R,DP,NI,RP,PI,RI,I,U
+ S I=0,PL=""
+ F  S LP=$O(^DSH(LP)) Q:LP=""  S OT="" F  S OT=$O(^DSH(LP,OT)) Q:OT=""  S VR="" F  S VR=$O(^DSH(LP,OT,VR)) Q:VR=""  S SP="" F  S SP=$O(^DSH(LP,OT,VR,SP)) Q:SP=""  D
+ .S DT="" F  S DT=$O(^DSH(LP,OT,VR,SP,DT)) Q:DT=""  D  
+ ..S TM="" F  S TM=$O(^DSH(LP,OT,VR,SP,DT,TM)) Q:TM=""  D
+ ...I $G(^(TM))[XX W !,LP_","_OT_","_VR_","_SP_","_DT_","_TM Q 
+ ...s PL="" F  S PL=$O(^DSH(LP,OT,VR,SP,DT,TM,PL)) Q:PL=""  I $G(^(PL))[XX W !,LP_","_OT_","_VR_","_SP_","_DT_","_TM_","_PL Q 
+ Q
+UPDDT(LPU,DS,DE) ; Обновить все расписание по сети
+ N OT,VR,SP,DT
+ S DS=$$DI^DTUTL(DS),DE=$$DI^DTUTL(DE)
+ S OT="" F  S OT=$O(^DSH(LPU,OT)) Q:OT=""  S VR="" F  S VR=$O(^DSH(LPU,OT,VR)) Q:VR=""  S SP="" F  S SP=$O(^DSH(LPU,OT,VR,SP)) Q:SP=""  D
+ .
+ Q
+CNGGR(DT,TS,TE,RTS,RTE,STEP) ; Изменить график
+ N LP,OT,VR,SP,T1,T2,T
+ S STEP=STEP*60,LP=""
+ F  S LP=$O(^DSH(LP)) Q:LP=""  S OT="" F  S OT=$O(^DSH(LP,OT)) Q:OT=""  S VR="" F  S VR=$O(^DSH(LP,OT,VR)) Q:VR=""  S SP="" F  S SP=$O(^DSH(LP,OT,VR,SP)) Q:SP=""  D:$D(^DSH(LP,OT,VR,SP,DT))
+ .S T1=$O(^(DT,"")),T2=$O(^(86400),-1)
+ .Q:T1=""  Q:T1'=TS  Q:T2'=TE  
+ .F T=RTS:STEP:RTE S:'$D(^DSH(LP,OT,VR,SP,DT,T)) ^(T)="" 
+ .S ^DSH(LP,OT,VR,SP,DT,RTE)="*"
+ .D REGL^IEXCH("^DSH",LP,OT,VR,SP,DT)
+ Q
+INMK ; Загрузка графика в расписание
+ ; Дата|Время|Врач|Пациент
+ N %J,A,DS,TM,VR,CAB,OT,SP,LPU,TML,DTL,W,F,I,IX
+ D ORH^RWU
+ S LPU=+$$^I("ilpu")
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D
+ .I %J=1 S DS=$$DI^DTUTL($P(A,"|",1)) Q 
+ .Q:DS=""  
+ .S VR=$P(A,"|",1),CAB=$P(A,"|",2),OT=$P(A,"|",4),SP=$P(A,"|",5)
+ .I VR="",CAB'="" S VR=$$FCAB^IPLPU(LPU,CAB) Q:VR=""   S VR="X."_VR
+ .Q:VR=""
+ .S OT=$$fndNM^YISPRAV(OT,"otd") Q:OT="" 
+ .S SP=$$fndNM^YISPRAV(SP,"spec") Q:SP=""
+ .F W=0:1:6 D
+ ..S X=$P(A,"|",6+W) Q:X="" 
+ ..K TML
+ ..F I=1:1:$L(X," ") D genTM($P(X," ",I),"TML")
+ ..S IX=$$genIDX("TML")
+ ..S DX=DS+W
+ ..S F=$G(^DSH(LPU,OT,VR,SP,DX)),$P(F,"|",1,3)="*@"_IX_"|"_CAB
+ ..S ^DSH(LPU,OT,VR,SP,DX)=F
+ ..M ^DSH(LPU,OT,VR,SP,DX)=TML ; TODO - del & check
+ ..D GL^IEXCH("^DSH",LPU,OT,VR,SP,DX)
+ ..S DTL(DX)=""
+ D CR^RWU
+ 
+ S DT="" F  S DT=$O(DTL(DT)) Q:DT=""  D MKI^IMRASP(LPU,DT,DT,DT)
+ Q
+genTM(V,GL) 
+ Q:V=""  
+ N TS,TE,TL,R,X,TM,J
+ S V=$$TRIM^TXTU(V)
+ S R=$P(V,",",1),TL=+$TR($P(V,",",2)," ","")
+ S:'TL TL=30
+ S TS=$$TI^DTUTL($P(R,"-",1)),TE=$$TI^DTUTL($P(R,"-",2))
+ ; one time
+ I TS'="",TE="" S @GL@(TS)="",@GL@(TS+(TL*60))="*" Q 
+ Q:TS=""  Q:TE="" 
+ S TL=TL*60
+ F TM=TS:TL:TE S @GL@(TM)=""
+ S @GL@(TE)="*"
+ Q
+genIDX(GL) 
+ N J,R
+ S (J,R)=""
+ F  S R=$O(@GL@(R)) Q:R=""  S J=J_$S(J="":"",1:"|")_(R/60)_@GL@(R)
+ S:J'="" J=$$MKTIDX^NMIRASP(J)
+ Q J

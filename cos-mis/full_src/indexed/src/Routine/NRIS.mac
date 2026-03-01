@@ -1,0 +1,46 @@
+NRIS ; RIS [ 01/20/2014  1:36 AM ]
+REGIP ; Регистрация исследования/пациента
+ N IDX,NI,FF,FI,FO,ID,DT,USL
+ D ORH^RWU
+ S IDX=""
+ F I=1:1 S A=$$R^RWU Q:%IFN["Z"  D
+ .S DT=+$H,ID=$O(^RISL(DT,""),-1)+1,IDX=DT_","_ID
+ .S ^RISL(DT,ID,"dtm")=$H,^RISL(DT,ID,"log")=$$USRH^IUSER()
+ .S ^RISL(DT,ID,"pid")=NI
+ .S ^RISL(DT,ID,"service")=USL
+ D CR^RWU
+ D MSG^RWU(IDX)
+ Q
+ULIST(STR) ; Список доступных услуг
+ N C,CD,I
+ D OWF^RWU(".txt")
+ S (C,CD)="",I=0 F  S CD=$O(^CN(CD)) Q:CD=""  D:$$CHECK^IPRICE(CD,1)  Q:I>32
+ .D WC^RWU(C_CD_"|"_$$NAME^IPRICE(CD,1))
+ .S C=CR
+ D C^RWU
+ Q
+RJ(DS,DE,STAT) ; Журнал исследований
+ N DT,ID,ST,NI
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D OWF^RWU(".txt")
+ D W^RWU("[")
+ S DL=""
+ S DT=DS-1 F  S DT=$O(^RISL(DT)) Q:DT=""!(DT>DE)  D
+ .S ID="" F  S ID=$O(^RISL(DT,ID)) Q:ID=""  D
+ ..S ST=$G(^(ID,"st"))
+ ..I STAT,STAT'=ST Q
+ ..S NI=$G(^("pid")) 
+ ..D B^IJSON()
+ ..D W^IJSON("pid",NI)
+ ..D W^IJSON("emr",$$fnx("h"))
+ ..D W^IJSON("patient",$$FIO^IPAC(NI)_", "_$$GETE^IPAC(NI,"pol")_", "_$$AGET^IPAC(NI,+$H))
+ ..D W^IJSON("dtm",$$DTM^DTUTL($$fnx("dtm")))
+ ..D W^IJSON("service",$$NAME^IPRICE($$fnx("usl"),1))
+ ..D W^IJSON("doc",$$FIOSH^IKADRY($$fnx("vr")))
+ ..D WC^RWU(DL_$$E^IJSON())
+ ..S DL=","
+ D W^RWU("]")
+ D C^RWU
+ Q
+fnx(NM) 
+ Q $G(^RISL(DT,ID,NM))

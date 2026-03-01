@@ -1,0 +1,122 @@
+NZLABIO ; Внешний интерфейс зуботехнической лаборатории [ 03/12/2018  11:15 AM ]
+GET(ID) ; Получение заявки
+ N A,R,N,S,P,NIB,X,D,VR,IS,LI,DT,SBS,SBDT,IsZ,KEY,PP,UOT,UVR,UDT,UID,SUM,CNT,HH
+ D OWF^RWU(".xml")
+ S A=$G(^STZN(ID)),S=0,VR=$P(A,"|",3),IS=$P(A,"|",6),EL=$P(A,"|",12),DT=+$P(A,"|",5)
+ D W^RWU("<?xml version=""1.0"" encoding=""windows-1251""?>")
+ D W^RWU("<InterchangeEnvelope version=""1.0""><Head>")
+ D WTAGC^RWU("DocID","Заказ-наряд зуботехнической лаборатории")
+ S HH=$H
+ D WTAG^RWU("Timestamp",$$DTISO^DTUTL(HH)_"T"_$$TIME^DTUTL(HH)_".000")
+ D W^RWU("</Head><Body><DentalOutfit>")
+ D WTAG^RWU("id",ID)
+ D WTAG^RWU("date",$$DT2^DTUTL(DT))
+ D WTAG^RWU("patientId",NIB)
+ D WTAGC^RWU("patient",$$FIO^IPAC(NIB))
+ D WTAG^RWU("pay",+$P(A,"|",10))
+ D WTAG^RWU("photo",+$P($G(^STZN(ID,"im")),"|",1))
+ 
+ D WTAG^RWU("clinicId",EL)
+ D WTAGC^RWU("clinic",$$NAME^ICONTR(EL))
+ D WTAG^RWU("doctorId",VR)
+ D WTAGC^RWU("doctor",$$FIOSH^IKADRY(VR))
+ D WTAG^RWU("contractorId",IS)
+ D WTAGC^RWU("contractor",$$FIO^IKADRY(IS))
+ 
+ D WTAGC^RWU("comment",$G(^STZN(ID,"cz")))
+ 
+ S P=$$GET^YNDOG($$GET^IPAC(NIB,"stc",DT),"price",DT)
+ S P=$$CORCP^IPRICET(P)
+ S (A,N)="",IsZ=0
+ D W^RWU("<services>")
+ F  S N=$O(^STZN(ID,"u",N)) Q:N=""  D
+ .S R=^(N)
+ .S IS=$P(R,"|",5),LI=$P(R,"|",8),SBS=$P(R,"|",7),SBDT=$P(SBS,"@",3)
+ .S KEY=$P(N,"|",1)_"@"_$P(R,"|",1)_"@"_$P(R,"|",4)_"@"_IS_"@"_LI_"@"_$S(SBS="":"",$$IsSBS^IZUBLAB("","",SBS):4,1:"")
+ .S:SBS'="" $P(KEY,"@",7)=$TR(SBS,"@","~")
+ .S UOT=$P(SBS,"@",1),UVR=$P(SBS,"@",2),UDT=$P(SBS,"@",3),UID=$P(SBS,"@",4)
+ .S PP=$$UPRC^IZUBLAB(R,P)
+ .S SUM=$P(R,"|",2),CNT=$P(R,"|",3)
+ .D W^RWU("<item>")
+ .D WTAG^RWU("id",N)
+ .D WTAGC^RWU("code",$P(N,"|",2))
+ .D WTAGC^RWU("name",$$NAME^IPRICE($P(N,"|",2),PP))
+ .D WTAGC^RWU("count",CNT)
+ .D WTAGC^RWU("summ",SUM)
+ .D WTAG^RWU("teeth",$P(N,"|",3))
+ .D WTAGC^RWU("color",$$NAME^ISPRAV("stomzcolor",$P(R,"|",4)))
+ .D WTAG^RWU("contractorId",IS)
+ .D WTAGC^RWU("contractor",$$FIO^IKADRY(IS))
+ .D WTAG^RWU("contractor2Id",LI)
+ .D WTAGC^RWU("contractor2",$$FIO^IKADRY(LI))
+ .D WTAGC^RWU("comment",$P(R,"|",6))
+ .D W^RWU("</item>")
+ D W^RWU("</services>")
+ D W^RWU("<stages>")
+ S (N,A)="" F  S N=$O(^STZN(ID,"w",N)) Q:N=""  D
+ .S R=^(N),VR=$P(R,"|",3)
+ .D W^RWU("<item>")
+ .D WTAG^RWU("id",N)
+ .D WTAGC^RWU("name",$$NAME^ISPRAV("stomstage",N))
+ .D WTAG^RWU("planned",$$DT^DTUTL($P(R,"|",1)))
+ .D WTAG^RWU("executed",$$DT^DTUTL($P(R,"|",4)))
+ .D WTAGC^RWU("contractorId",VR)
+ .D WTAGC^RWU("contractor",$$FIO^IKADRY(VR))
+ .D W^RWU("</item>")
+ D W^RWU("</stages>")
+ 
+ D W^RWU("</DentalOutfit></Body></InterchangeEnvelope>")
+ D C^RWU
+ Q
+LIST(DTM) ; Список ID изменений с даты
+ N ID,HH
+ D OWF^RWU(".xml")
+ D W^RWU("<?xml version=""1.0"" encoding=""windows-1251""?>")
+ D W^RWU("<InterchangeEnvelope version=""1.0""><Head>")
+ D WTAGC^RWU("DocID","Реестр изменений заказ-нарядов")
+ S HH=$H,DTM=$$IISO^DTUTL(DTM)
+ D WTAG^RWU("Timestamp",$$DTISO^DTUTL(HH)_"T"_$$TIME^DTUTL(HH)_".000")
+ D W^RWU("</Head><Body><DentalOutfitLog>")
+ S DTM=$P(DTM,",",1)_","_($P(DTM,",",2)-1)
+ F  S DTM=$O(^STZNW(DTM)) Q:DTM=""  D
+ .S ID="" F  S ID=$O(^STZNW(DTM,ID)) Q:ID=""  D WTAG^RWU("item",ID)
+ D W^RWU("</DentalOutfitLog></Body></InterchangeEnvelope>")
+ D C^RWU
+ Q
+ECOMM ; Замечания техника
+ N ID,X1,X2
+ K ^BUF($J)
+ D OLGL^XMLU("zl","contractorComment|contractorCommentTimestamp|id")
+ S ID=$$BFL^XMLU("zl","id")
+ I ID="" D status("ERR: no id") K ^BUF($J) Q 
+ I '$D(^STZN(ID)) D status("ERR: no document by id") K ^BUF($J) Q 
+ S X1=$$BFL^XMLU("zl","contractorComment")
+ S X2=$$IISO^DTUTL($$BFL^XMLU("zl","contractorCommentTimestamp"))
+ S:X2="" X2=$H
+ S ^STZN(ID,"ci")=X1
+ S ^STZN(ID,"cip")=X2
+ D GL^IEXCH("^STZN",ID,"ci"),GL^IEXCH("^STZN",ID,"cip")
+ K ^BUF($J)
+ D status("OK")
+ Q
+POST ; Сохранение изменений заказ наряда
+ D OEVH^XMLU("POSTs^NZLABIO","POSTd^NZLABIO","POSTe^NZLABIO")
+ D status("OK")
+ Q
+POSTs 
+ Q
+POSTd 
+ Q
+POSTe 
+ Q
+status(TXT) ; Отправить статус
+ N HH
+ D OWF^RWU(".xml")
+ D W^RWU("<?xml version=""1.0"" encoding=""windows-1251""?>")
+ D W^RWU("<InterchangeEnvelope version=""1.0""><Head>")
+ D WTAGC^RWU("DocID","Результат выполнения функции")
+ S HH=$H
+ D WTAG^RWU("Timestamp",$$DTISO^DTUTL(HH)_"T"_$$TIME^DTUTL(HH)_".000")
+ D W^RWU("</Head><Body><Status>"_$$TAG^TXTU(TXT)_"</Status></Body>")
+ D C^RWU
+ Q

@@ -1,0 +1,367 @@
+IPRICE ; Прейскурант [ 07/29/2024  5:55 PM ]
+NAMEH(N,TIP,DT) ; Наименование (на дату)
+ Q:N="" "" S DT=$O(^CN(N,TIP,"name",DT+1),-1)
+ Q:DT="" "" Q $TR(^(DT),"<>","{}") ; TODO - убрать, рефакторинг прикл.
+NAME(N,TIP) 
+ Q:N="" "" S N=$O(^CN(N,TIP,"name",$H+1),-1)
+ Q:N="" "" Q $TR(^(N),"<>","{}")
+CNAMEH(N,TIP,DT) ; Краткое наименование
+ Q:N="" "" S DT=$O(^CN(N,TIP,"cname",DT+1),-1)
+ Q:DT="" "" Q $TR(^(DT),"<>","{}")
+CNAME(N,TIP) 
+ Q:N="" "" S N=$O(^CN(N,TIP,"cname",$H+1),-1)
+ Q:N="" "" Q $TR(^(N),"<>","{}")
+ANAMEH(N,TIP,DT) ; Альтернативное наименование (на дату)
+ Q:N="" "" S DT=$O(^CN(N,TIP,"aname",DT+1),-1)
+ Q:DT="" "" Q $TR(^(DT),"<>","{}") ; TODO - убрать, рефакторинг прикл.
+PRICEH(N,TIP,DT) ; Цена
+ S DT=$O(^CN(N,TIP,DT+1),-1) Q:DT="" ""
+ S N=$P(^(DT),"|",1)
+ I $D(%LPU),$D(^(DT,%LPU)) Q ^(%LPU)
+ Q N
+PRICE(N,TIP) ; Цена (на дату)
+ S TIP=$O(^CN(N,TIP,$H+1),-1)
+ S N=$P(^(TIP),"|",1)
+ I $D(%LPU),$D(^(TIP,%LPU)) Q ^(%LPU)
+ Q N
+CHECKH(N,TIP,DT) ; Проверить код на дату
+ Q:N="" 0 S TIP=$G(TIP,1) Q:TIP="" 0
+ Q:'$D(^CN(N,TIP)) 0 ; Q:$O(^(TIP,DT+1),-1)="" 0
+ N H S H=DT+1,DT=$O(^(TIP,"use",H),-1)
+ Q:DT="" ($O(^CN(N,TIP,H),-1)'="") Q +^(DT)
+CHECK(N,TIP) ; Проверить код на сегодня
+ Q:N="" 0 S TIP=$G(TIP,1) Q:TIP="" 0 Q:'$D(^CN(N,TIP)) 0
+ N DT,H S H=$H+1,DT=$O(^(TIP,"use",H),-1)
+ Q:DT="" ($O(^CN(N,TIP,H),-1)'="") Q +^(DT)
+EXIST(N,TIP) ; Проверить существование кода
+ Q:N="" 0 S TIP=$G(TIP)
+ I TIP="" Q:$D(^CN(N)) 1 Q 0
+ Q:$D(^CN(N,TIP)) 1
+ Q 0
+GET(N,PL,TIP,DT) ; Значение поля
+ Q:N="" "" G:$$IsCNE^YNPRICE(PL) GETe
+ S DT=$O(^CN(N,TIP,PL,DT+1),-1) Q:DT="" ""
+ Q ^(DT)
+GETe S DT=$O(^CNE(N,TIP,PL,DT+1),-1) Q:DT="" ""
+ Q ^(DT)
+GET2(N,PL,X,TIP,DT) ; Значение поля (с индексом)
+ Q:N="" "" G:$$IsCNE^YNPRICE(PL) GET2e
+ S DT=$O(^CN(N,TIP,PL,DT+1),-1)
+ Q:DT="" ""
+ I X="" S X=$O(^(DT,"")) Q:X="" "" Q $G(^(X))
+ Q $G(^(DT,X))
+GET2e S DT=$O(^CNE(N,TIP,PL,DT+1),-1)
+ Q:DT="" "" 
+ I X="" S X=$O(^(DT,"")) Q:X="" "" Q $G(^(X))
+ Q $G(^(DT,X))
+GNEXT(N,PL,X,TIP,DT) ; Получить следующий индекс поля
+ Q:N="" "" G:$$IsCNE^YNPRICE(PL) GNEXTe
+ S DT=$O(^CN(N,TIP,PL,DT+1),-1)
+ Q:DT="" ""
+ Q $O(^(DT,X))
+GNEXTe S DT=$O(^CNE(N,TIP,PL,DT+1),-1)
+ Q:DT="" ""
+ Q $O(^(DT,X))
+IsSYS(PL) ; Поле является системным
+ I PL="hash"!(PL="log") Q 1
+ Q 0
+ANYDTV(N,PL,TIP,VAL) ; Значение есть хоть в каком значении поля на дату
+ N D,F
+ S F=$$IsCNE^YNPRICE(PL),D=""
+ I 'F F  S D=$O(^CN(N,TIP,PL,D)) Q:D=""  Q:^(D)=VAL 
+ I F F  S D=$O(^CNE(N,TIP,PL,D)) Q:D=""  Q:^(D)=VAL
+ Q D'=""
+GETMAT(N,TP,DT,CNT) ; Получить строку материалов с учетом кол-ва услуг
+ ; CNT - кол-во услуг
+ N R,I,C,X,M
+ S R=$$GET^IPRICE(N,"mat",TP,DT) Q:R="" ""
+ S CNT=+$G(CNT)
+ F I=1:1:$L(R,"|") S X=$P(R,"|",I),C=$P(X,"@",2) S:C="" C=1 S:CNT C=C*CNT S $P(X,"@",2)=C,$P(R,"|",I)=X 
+ Q R
+SUMSKD(SUM,NIB,SKD,USL,DGN,PRC,DT,SK,KSS) ; Подсчет скидки для суммы
+ ; SKD - ID скидки
+ ; SK - альтернативный коэффициент скидки
+ ; KSS - по кассе 
+ S SK=$G(SK)
+ I SKD=""&(SK=""),NIB="" Q SUM
+ I SK="",SKD="" S SK=+$$CALC^IDSCN(NIB,"",USL,DGN,PRC,1,"","","",$G(KSS))
+ I SK="",SKD'="" S SK=+$$CALCID^IDSCN(SKD,"",USL,DGN,PRC,1)
+ Q:'SK SUM
+ I SK>100,$$GET(USL,"nosn",PRC,DT) Q  ; без наценки
+ I SK>0,SK'>100,$$GET(USL,"nosp",PRC,DT) Q  ; без скидки
+ Q +$J(100-SK*SUM/100,"",2)
+NMCN(ID,TYP) ; Имя|Цена по коду
+ Q $$NAME^IPRICE(ID,TYP)_"|"_$$PRICE^IPRICE(ID,TYP)
+CHKIH(USL,PRC,DT,OT,SP,VR,LPU) ; Проверить принадлежность услуги
+ N R
+ S R=$$GET(USL,"otd",PRC,DT)
+ I R'="","|"_R_"|"'[("|"_OT_"|") Q 0
+ S R=$$GET(USL,"spec",PRC,DT)
+ I R'="","|"_R_"|"'[("|"_SP_"|") Q 0
+ I $G(LPU),$$GET2(USL,"lpu",LPU,PRC,DT)="d" Q 0
+ Q:'$D(^CNCL("vr",VR)) 1 ; TODO - move first, ignore otd
+ N T
+ S T=$G(^(VR)),R=$G(^CNCL(VR,USL))
+ Q:R=0 0
+ Q:T=2&(R'=1) 0  ; S:T'=3!R - TODO OTD
+ Q 1
+CHKGD(USL,PRC,DT,CGA) ; Проверить принадлежность к головному подр.
+ I $$GET2(USL,"lpu",CGA,PRC,DT)="d" Q 0
+ Q 1
+CHKCND(USL,PRC,DT,CNT,DIA,SKD,ZUB) ; Проверить условия по прайсу (0-OK)
+ Q:USL="" 0
+ N X
+ I DIA="",$$GET(USL,"rdia",PRC,DT) Q 1
+ I DIA'="",$G(^CNDIA(USL,"d",DIA))!($D(^CNDIA(USL,"a"))&'$D(^CNDIA(USL,"a",DIA))) Q 3_":"_DIA
+ S X=$$GET(USL,"cnt",PRC,DT)
+ I X,CNT>X Q 2
+ I ZUB="",$$GET(USL,"stof",PRC,DT) Q 4
+ I ZUB'="" S X=$$GET(USL,"znu",PRC,DT) I X,$$NZCNT^ISTOM(ZUB)>X Q 5
+ Q 0
+CNDTXT(ECOD) ; Расшифровать условие по прайсу
+ N SUB
+ S SUB=$P(ECOD,":",2,9),ECOD=$P(ECOD,":",1)
+ I ECOD=1 Q "При выполнении данной услуги обязательно наличие диагноза."
+ I ECOD=2 Q "Превышено максимально допустимое количество по данной услуге."
+ I ECOD=3 Q "Диагноз """_$$NAME^YMKB10(SUB)_""""_CR_" не может быть указан при выполнении данной услуги."
+ I ECOD=4 Q "При выполнении данной услуги обязательно указание № зуба."
+ I ECOD=5 Q "Превышено допустимое число зубов на услугу."
+ Q ""
+CNALV(USL,OT,SP,VR,PRC,VID,FLG) ; Псевдоним спец/врача по услуге
+ ; PRC - прейскурант
+ ; VID - вид договора
+ ; FLG - добавляемые флаги услуги
+ Q:USL="" ""
+ N A,X
+ S A=""
+ I SP'="",$D(^CNCL("als","sp",SP,USL)) S A=^(USL)
+ I A'="",OT'="",$D(^CNCL("als","ot",OT,USL)) S A=^(USL)
+ Q:A="" ""
+ S X=$P(A,"|",1),RET=$P(A,"|",4)_"|"_$P(A,"|",3)_"|"_$P(A,"|",5)
+ S:RET="||" RET=""
+ Q:X="" RET Q:X=$G(VID) RET
+ S X=$P(A,"|",2)
+ Q:X="" "" Q:FLG[("|"_X_"|") RET
+ Q "" ; SP_"|"_VR_"|"_OT
+CNALVN(USL,OT,SP,VR,PRC,VID,FLG) ; Авто назначение +спец/врача по услуге
+ ; PRC - прейскурант
+ ; VID - вид договора
+ ; FLG - добавляемые флаги услуги
+ N A,X,RET
+ S A=""
+ I $D(^CNCL("naz","sp",SP,USL)) S A=^(USL)
+ I A'="",$D(^CNCL("naz","ot",OT,USL)) S A=^(USL)
+ Q:A="" ""
+ S X=$P(A,"|",1),RET="1|"_$P(A,"|",3)_"|"_$P(A,"|",5)_"|"_$P(A,"|",2)
+ Q:X="" RET Q:X=$G(VID) RET
+ S X=$P(A,"|",4)
+ Q:X="" "" Q:FLG[("|"_X_"|") RET
+ Q "" ; 0/1_"|"_SP_"|"_VR_"|"_DAYS
+GETVRK(USL,VR,DT,PRC,FLG,OT,SKD) ; Получить коэффициент по врачу и услуге
+ I '$D(^CNCL("vrk",USL)) Q:$D(SKD) SKD Q ""
+ N D,R,I,K,CLS,ATTK,UST
+ S CLS=$$GET^IKADRY(VR,"flg",DT),ATTK=$$GET^IKADRY(VR,"attk",DT),UST=$$GET^IKADRY(VR,"ust",DT)
+ S D=$O(^CNCL("vrk",USL,DT+1),-1)
+ I D="" Q:$D(SKD) SKD Q ""
+ S (K,I)="" F  S I=$O(^CNCL("vrk",USL,D,I)) Q:I=""  D  Q:K'="" 
+ .S R=^(I)
+ .I $P(R,"|",2)'="",PRC'=$P(R,"|",2) Q 
+ .I $P(R,"|",3)'="",'$$FLinFL^TXTU(CLS,$P(R,"|",3)) Q 
+ .I $P(R,"|",4)'="",UST'=$P(R,"|",4) Q 
+ .I $P(R,"|",5)'="",ATTK'=$P(R,"|",5) Q 
+ .I $P(R,"|",6)'="",'$$FLinFL^TXTU(FLG,$P(R,"|",6)) Q 
+ .I $P(R,"|",7)'="",OT'=$P(R,"|",7) Q 
+ .I $P(R,"|",8)'="",VR'=$P(R,"|",8) Q  
+ .S K=$P(R,"|",1)
+ I K="" Q:$D(SKD) SKD Q ""
+ I $D(SKD) S K=$S(SKD=0:(1-K)*100,1:(1-((100-SKD/100)*K))*100) Q K
+ Q K
+STARTTP(N,DT,FROM,DPRC) ; Первый прейскурант по услуге
+ ; FROM - с прейскуранта
+ ; DPRC - проверять есть ли тут услуга
+ Q:N="" 0
+ N X
+ I $G(DPRC)'="",$D(^CN(N,DPRC)) Q DPRC
+ G:$G(DT) sttpDT
+ S X=$O(^CN(N,$G(FROM))) Q:X X
+ Q +$O(^CNE(N,$G(FROM)))
+sttpDT 
+ S DT=DT+1,X=""
+ F  S X=$O(^CN(N,X)) Q:X=""  Q:$O(^(X,DT),-1)'=""
+ Q +X
+SET(N,PL,TP,DT,R,NUDP) ; Установить поле
+ ; NUPD - не обновлять
+ Q:N=""  S:DT="" DT=$H N DTPV,PR,F
+ G:$$IsCNE^YNPRICE(PL) SETe
+ ; D:PL="mat" WMATT ; TODO
+ S PR=$O(^CN(N,TP,PL,DT),-1),F=0
+ S:$L(PR) PR=$G(^(PR))
+ I $D(^(DT)),^(DT)'=R K ^(DT) S F=1
+ S:PR'=R ^(DT)=R,F=1
+ S DTPV=$O(^(DT)) I $L(DTPV),R=^(DTPV) K ^(DTPV) S F=1
+ Q:'F 
+ D:'$G(NUPD) REGL^IEXCH("^CN",N,TP,PL)
+ S ^CN=$H
+ Q
+SETe 
+ S PR=$O(^CNE(N,TP,PL,DT),-1),F=0
+ S:$L(PR) PR=$G(^(PR))
+ I $D(^(DT)),^(DT)'=R K ^(DT) S F=1
+ S:PR'=R ^(DT)=R,F=1
+ S DTPV=$O(^(DT)) I $L(DTPV),R=^(DTPV) K ^(DTPV) S F=1
+ Q:'F 
+ S DTPV=$O(^(DT)) I $L(DTPV),R=^(DTPV) K ^(DTPV)
+ D:'$G(NUPD) REGL^IEXCH("^CNE",N,TP,PL)
+ S ^CNE=$H 
+ Q
+SETI2(N,PL,TP,DT,IDX,R,NUDP) ; Установить поле с индексом
+ S NUPD=$G(NUPD)
+ Q:N=""  S:DT="" DT=+$H N DTPV
+ G:$$IsCNE^YNPRICE(PL) SETI2e
+ 
+ S DTPV=$O(^CN(N,TP,PL,DT+1),-1)
+ I DTPV'="",$G(^CN(N,TP,PL,DTPV,IDX))=R Q 
+ I DTPV="" S ^CN(N,TP,PL,DT,IDX)=R D:'NUPD GL^IEXCH("^CN",N,TP,PL,DT,IDX) Q 
+ M:DT'=DTPV ^CN(N,TP,PL,DT)=^CN(N,TP,PL,DTPV)
+ K:R="" ^CN(N,TP,PL,DT,IDX)
+ S:R'="" ^CN(N,TP,PL,DT,IDX)=R
+ D:'NUPD REGL^IEXCH("^CN",N,TP,PL,DT)
+ Q
+SETI2e 
+ S DTPV=$O(^CNE(N,TP,PL,DT+1),-1)
+ I DTPV'="",$G(^CNE(N,TP,PL,DTPV,IDX))=R Q 
+ I DTPV="" S ^CNE(N,TP,PL,DT,IDX)=R D:'NUPD GL^IEXCH("^CNE",N,TP,PL,DT,IDX) Q 
+ M:DT'=DTPV ^CNE(N,TP,PL,DT)=^CNE(N,TP,PL,DTPV)
+ K:R="" ^CNE(N,TP,PL,DT,IDX)
+ S:R'="" ^CNE(N,TP,PL,DT,IDX)=R
+ D:'NUPD REGL^IEXCH("^CNE",N,TP,PL,DT)
+ Q
+rndprc 
+ S RF=$G(^cfg("price-round"))
+ S VAL=$S('RF:VAL,RF=1:$J(VAL,0,0),RF=2:$J(VAL/10,0,0)*10,1:VAL)
+ Q
+SETPRICE(N,PRC,DT,VAL) ; Установить цену услуги
+ N RF
+ d rndprc
+ S RF=$O(^CN(N,PRC,DT+1),-1)
+ I RF,^(RF)=VAL G setprc1
+ S ^CN(N,PRC,DT)=VAL
+ D GLZ^IEXCH("^CN",N,PRC,DT)
+ D SETLOG(N,PRC,DT)
+setprc1 
+ S RF=$$GETN^ISPRAV("tprice",PRC,3) Q:RF="" 
+ N K1,K2
+ S K1=$$CRNCV^IPRICET(PRC,DT),K2=$$CRNCV^IPRICET(RF,DT)
+ D SETPRICE(N,RF,DT,(VAL*K1)/K2)
+ Q
+SETLPRIC(N,PRC,DT,LPU,VAL) ; Установить цену для ЛПУ
+ N RF
+ d rndprc
+ S RF=$O(^CN(N,PRC,DT+1),-1)
+ I RF,$G(^(RF,LPU))=VAL Q 
+ S ^CN(N,PRC,DT,LPU)=VAL
+ D GLZ^IEXCH("^CN",N,PRC,DT,LPU)
+ D SETLOG(N,PRC,DT,"LP:"_LPU_":"_VAL)
+ Q
+SETLOG(N,PRC,DT,MOD) ; Установить дату изменения, пользователя
+ S ^CNE(N,PRC,"log",DT)=$$USR^IUSER()_"|"_$H_$S($D(MOD):"|"_MOD,1:"")
+ D GL^IEXCH("^CNE",N,PRC,"log",DT)
+ Q
+GETAV(USL) ; Получить врачей по услуге
+ N VR,R
+ S (R,VR)="" F  S VR=$O(^CNCL("vr",VR)) Q:VR=""  S:$D(^CNCL("vr",VR,USL)) R=R_$S(R="":"",1:"|")_VR  
+ Q R
+NNUM(PRC,BEG) ; Новый код прайса
+ ; BEG - начало кода (опционально)
+ N COD,F
+ S BEG=$G(BEG)
+ S F=$S($G(BEG)="":1001,1:1)
+ F COD=F:1:999999 Q:'$D(^CN(BEG_COD,PRC))
+ S:COD=999999 COD=$O(^CN(""),-1)+1 
+ Q BEG_COD
+ADD(USL,PRC,DT,NM,SUM,SP,OT,FLG,GRP,CON,UCON) ; Добавить услугу
+ ; NM - наименование
+ ; SUM - сумма
+ ; SP - специальность
+ ; OT - отделение
+ ; CON - контрагент
+ ; UCON - услуга контрагента
+ N NBC,OPR,XML,%L,%B,FN
+ S NBC="nb_console",OPR="oprice"
+ S XML(NBC,OPR,"date")=$$DT^DTUTL(DT)
+ S XML(NBC,OPR,"tprice")=+PRC
+ S XML(NBC,OPR,"kod")=USL
+ S NM=$$DW^TXTU(NM)
+ S XML(NBC,OPR,"pname")=NM
+ S XML(NBC,OPR,"cname")=NM
+ S XML(NBC,OPR,"price")=SUM
+ S:$G(GRP)'="" XML(NBC,OPR,"grp")=GRP
+ S:$G(OT)'="" XML(NBC,OPR,"otd")=OT
+ S:$G(SP)'="" XML(NBC,OPR,"spec")=SP
+ S:$G(FLG)'="" XML(NBC,OPR,"cls")=FLG
+ D W^YNPRICE
+ 
+ I $G(CON),$G(UCON)'="" S $P(^CNE(USL,PRC,"con",DT,CON),"|",2)=UCON
+ Q USL
+INITDB 
+ N I
+ S ^MN("root","tprice")="Прейскуранты"
+ S ^MN("root","tprice","fname")="Наименование|Валюта|Связанный прайс|Архив"
+ S ^("ftype")="S|L:crncy|L:tprice|B"
+ S ^MN("root","tprice","fcode")="name|currency|linked_price|arch"
+ S ^MN("root","tprice","arch")=4
+ S ^MN("root","pricecls")="Классы прейскуранта"
+ S ^MN("root","pricecls","kname")="Флаг",^("ktype")="S"
+ S ^MN("root","priceexs")="Статьи расходов"
+ S ^MN("root","cowrk")="Виды соисполнителей услуги"
+ S ^MN("root","crncy")="Валюты"
+ 
+ D:'$D(^MN("pricecls"))
+ .S I=$$NEWIDX^ISPRAV("pricecls")
+ .S ^MN(I,"cns")="Консультация"
+ .S ^MN(I,"diag")="Диагностика"
+ .S ^MN(I,"lab")="Лаборатория"
+ .S ^MN(I,"pnd")="Помошь на дому"
+ .S ^MN(I,"pos")="Посещение"
+ .S ^MN(I,"stms")="Медсестра обязательна"
+ .S ^MN(I,"trt")="Лечение"
+ .S ^MN(I,"vcc")="Вакцинация"
+ Q
+REGsys  ; register system info
+ S ^STRUCT("price","name")="|Полное наименование"
+ S ^STRUCT("price","cname")="|Краткое наименование"
+ S ^STRUCT("price","aname")="|Альтернативное наименование"
+ S ^STRUCT("price","use")="|Используется"
+ ;S ^STRUCT("price","")="|Стоимость"
+ S ^STRUCT("price","scost")="|Себестоимость услуги"
+ S ^STRUCT("price","kctr")="|Коэффициент контроля"
+ S ^STRUCT("price","grp")="|Группа"
+ S ^STRUCT("price","cls")="|Классы"
+ S ^STRUCT("price","otd")="|Отделения"
+ S ^STRUCT("price","spec")="|Специальности"
+ S ^STRUCT("price","mat")="|Материалы"
+ ;S ^STRUCT("price","")="|Оборудование"
+ S ^STRUCT("price","lnk")="|Состав"
+ S ^STRUCT("price","acu")="|Аналитические коды"
+ S ^STRUCT("price","cowrk")="|Соисполнтели"
+ S ^STRUCT("price","con")="|Контрагенты"
+ S ^STRUCT("price","lpu")="|Филиалы"
+ S ^STRUCT("price","exps")="|Статьи расхода"
+ Q
+REGLCL  ; Register description of available rights
+ K ^LCLI("price")
+ S ^LCLI("price")="Прейскурант"
+ S ^LCLI("price","mklimit")="Изменение ограничений"
+ S ^LCLI("price","mkmatt")="Изменение материалов"
+ S ^LCLI("price","mklist")="Изменение состава услуги"
+ S ^LCLI("price","mkcontr")="Изменение контрагентов"
+ S ^LCLI("price","mklpu")="Изменение филиалов"
+ S ^LCLI("price","new")="Создание услуги"
+ S ^LCLI("price","save")="Сохранение услуги"
+ S ^LCLI("price","del")="Удаление услуги"
+ S ^LCLI("price","delpr")="Удаление/очистка прейскуранта"
+ S ^LCLI("price","newpr")="Создание прейскуранта"
+ S ^LCLI("price","grp-flg")="Флаг фильтрации групп"
+ S ^LCLI("price","grp-nflg")="Фильтр групп на отсутствие флага"
+ S ^LCLI("price","ucalc-scost")="Выводить себестоимость в калькуляторе услуг"
+ Q

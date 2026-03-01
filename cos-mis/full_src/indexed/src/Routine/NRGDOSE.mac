@@ -1,0 +1,193 @@
+NRGDOSE ; Дозовые нагрузки пациента [ 02/07/2018  12:24 PM ]
+MKDOC(NI) ; Создать документ в ЭИБ
+ N ID
+ S ID=$$REGint()
+ S:$$FNDTP^IEPR(NI,ID)="" ID=$$MKDOC^IEPR(NI,ID,"",1)
+ Q
+REGint() 
+ N ID,NM
+ S NM="Лист дозовых нагрузок"
+ S ID=$$FNDUID^YIMHS("base/rgdose")
+ Q:ID'="" ID
+ S ID=$$ADDT^YIMHS(NM,$$ADDF^YIMHS("Долговременная информация о больном"),"tab")
+ D SET^YIMHS(ID,"rproc","ODOC^NRGDOSE")
+ D SET^YIMHS(ID,"rights","rrr")
+ D SET^YIMHS(ID,"ext","tab")
+ D SET^YIMHS(ID,"bdoc",1)
+ D SET^YIMHS(ID,"uid","base/rgdose")
+ D MKIDX^IMHS(ID)
+ Q ID
+ODOC ; 
+ N DT,K,VR,OT,ID,R,U,X,S,S0,DS,@$$NEWVAR^IUSL
+ ;D WC^RWU("№ п/п|Дата|Вид исследования, количество и вид процедур|Эффективная доза за исследование|Примечание")
+ D WC^RWU("№ п/п|Дата|Вид исследования, количество и вид процедур|Доза, мЗв|Примечание")
+ S DT="",i=1,S=0,S0=0,DS=$H-365
+ F  S DT=$O(^PNF(N,DT)) Q:DT=""  S K="" F  S K=$O(^PNF(N,DT,K)) Q:K=""  D
+ .S VR=$P(K,"|",1),OT=$P(K,"|",2),ID=$P(K,"|",3)
+ .S R=+$G(^ZNF(VR,OT,DT,ID,"rgd")) Q:'R 
+ .S:R>500 R=R/1000 ; мкЗв -> млЗв
+ .D GET^IUSL(VR,DT,OT,ID)
+ .Q:STAT="w"!(STAT="d")!(STAT>3)  
+ .S (U,X)="" F  S U=$O(UL(U)) Q:U=""  S X=$S(X="":"",1:X_", ")_$$NAMEH^IPRICE(U,PRC,DT)_$S(+UL(U)>1:" "_UL(U)_" шт.",1:"")
+ .D WC^RWU(CR_i_"|"_$$DT2^DTUTL(DT)_"|"_X_"|"_$$FN(R))
+ .S i=i+1,S0=S0+R
+ .S:DT>DS S=S+R
+ D:S0 WC^RWU(CR_"||Совокупная доза за все время|"_$$FN(S0))
+ D:S WC^RWU(CR_"||Суммарная доза за год"_$S(S>30:" (! превышена !)",1:"")_"|"_$$FN(S))
+ Q
+NRMLST(USL) ; Список норм
+ N ID,R,A
+ S (A,ID)=""
+ F  S ID=$O(^CNRGD(USL,ID)) Q:ID=""  S R=^(ID),A=$S($L(A):A_CR,1:"")_$P(R,"|",2)_"|"_$P(R,"|",1)
+ D MSG^RWU(A)
+ Q
+GETbyVR(NI,VR,DT,NSBS) ; Получить значение за текущий день у врача
+ ; NSBS - и неподписанные
+ N S,KX,OT,ID,R,ST
+ S S=0,NSBS=$G(NSBS)
+ S KX="" F  S KX=$O(^PNF(NI,DT,KX)) Q:KX=""  D
+ .Q:$P(KX,"|",1)'=VR 
+ .S OT=$P(KX,"|",2),ID=$P(KX,"|",3)
+ .S R=+$G(^ZNF(VR,OT,DT,ID,"rgd")) Q:'R 
+ .S ST=$P(^("e"),"~",1) Q:ST=3!(ST=4) 
+ .I 'NSBS,"wd"[ST Q
+ .S S=S+R
+ Q S
+DLST(DS,DE,LPU) ; Сводка по рентген.нагрузкам
+ N ST,TP,LID,TAB,USL,CNT,RG,TU,NI
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S LPU=$G(LPU)
+ S:'+$$FR^I() LPU=$$^I("ilpu")
+ S LID=$$FNDBYFL^ICNLIST("uid","doz3")
+ D mkRTAB
+ K ^BUF($J,"rg")
+ D:LID ITERATE^IUSLD("DLSTp^NRGDOSE(VR,OT,DT,ID)",DS,DE,,,LPU)
+ D OWF^RWU(".txt")
+ D WC^RWU("Вид "_$$TXTP^DTUTL(DS,DE)_"|Расч.доза чел-Зв|Процедур, расч.|Лиц, расчетно|Измер.доза чел-Зв|Процедур, измерено|Лиц, измерено")
+ S TP="" F  S TP=$O(TAB(TP)) Q:TP=""  D
+ .S RG=$$d3nm(TP),TU=""
+ .S TAB(TP,1)=$J(TAB(TP,1)/(TAB(TP,3)*1000),"",4)
+ .S:$G(TAB(TP,6)) TAB(TP,4)=$J(TAB(TP,4)/(TAB(TP,6)*1000),"",4)
+ .F ST=1:1:6 S TU=TU_"|"_$$FN($G(TAB(TP,ST)))
+ .D WC^RWU(CR_RG_TU)
+ D C^RWU
+ K ^BUF($J,"rg")
+ Q
+DLSTp(VR,OT,DT,ID) 
+ Q:"wd45"[$$GETSTAT^IUSL(VR,DT,OT,ID) 
+ S USL=$$GETUSLS^IUSL(VR,DT,OT,ID),CNT=$P(USL,"*",2),USL=$P(USL,"*",1)
+ Q:'$$IsLST^ICNLIST(LID,USL)
+ S:'CNT CNT=1
+ S TU=$$GETUF^ICNLIST(LID,USL,"-"),TP=$P(TU,"|",1)
+ S RG=+$G(^ZNF(VR,OT,DT,ID,"rgd"))
+ S NI=$$GETNIB^IUSL(VR,DT,OT,ID)
+ S TAB(TP,1)=$G(TAB(TP,1))+($G(RTAB($P(TU,"|",2),TP,$P(TU,"|",3)))*CNT)
+ S TAB(TP,2)=$G(TAB(TP,2))+CNT
+ S:RG TAB(TP,4)=$G(TAB(TP,4))+(RG*CNT)
+ S:RG TAB(TP,5)=$G(TAB(TP,5))+CNT
+ I '$D(^BUF($J,"rg",TP,NI,1)) S ^(1)="",TAB(TP,3)=$G(TAB(TP,3))+1
+ I RG,'$D(^(2)) S ^(2)="",TAB(TP,6)=$G(TAB(TP,6))+1
+ Q
+DNI(DS,DE,LPU) ; Сводка по рентген.нагрузкам
+ N TAB,USL,CNT,RG,NI,R,P
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S LPU=$G(LPU)
+ S:'+$$FR^I() LPU=$$^I("ilpu")
+ K ^BUF($J,"rg")
+ D ITERATE^IUSLD("DNIp^NRGDOSE(VR,OT,DT,ID)",DS,DE,,,LPU)
+ D OWF^RWU(".txt")
+ D WC^RWU("Исследование "_$$TXTP^DTUTL(DS,DE)_"|Доза, мЗв|Доза на лицо, мЗв|Процедур|Лиц")
+ S USL="" F  S USL=$O(TAB(USL)) Q:USL=""  D
+ .S P=$$STARTTP^IPRICE(USL)
+ .S R=$TR(TAB(USL,1),".",",")_"|"
+ .S R=R_$$FN(TAB(USL,1)/TAB(USL,2))_"|"
+ .D WC^RWU(CR_$$NAME^IPRICE(USL,P)_"|"_R_$$FN(TAB(USL,2))_"|"_$$FN(TAB(USL,3)))
+ D C^RWU
+ K ^BUF($J,"rg")
+ Q
+DNIp(VR,OT,DT,ID) 
+ Q:"wd45"[$$GETSTAT^IUSL(VR,DT,OT,ID) 
+ S RG=+$G(^ZNF(VR,OT,DT,ID,"rgd")) Q:'RG
+ S USL=$$GETUSLS^IUSL(VR,DT,OT,ID) Q:USL="" 
+ S CNT=$P(USL,"*",2),USL=$P(USL,"*",1)
+ S:'CNT CNT=1
+ S NI=$$GETNIB^IUSL(VR,DT,OT,ID)
+ S TAB(USL,1)=$G(TAB(USL,1))+(RG*CNT)
+ S TAB(USL,2)=$G(TAB(USL,2))+CNT
+ I '$D(^BUF($J,"rg",USL,NI)) S ^(NI)="",TAB(USL,3)=$G(TAB(USL,3))+1
+ Q
+d3nm(X) ; DOZ-3 name - локализация
+ Q:X="01" "Органы грудной клетки"
+ Q:X="02" "- в том числе профилактических процедур"
+ Q:X="03" "Конечности"
+ Q:X="04" "Шейные позвонки"
+ Q:X="05" "Грудные позвонки"
+ Q:X="06" "Поясничные позвонки"
+ Q:X="07" "Таз и бедро"
+ Q:X="08" "Ребра и грудина"
+ Q:X="09" "Органы пищеварения"
+ Q:X="10" "Верхняя часть желудочно-кишечного тракта"
+ Q:X="11" "Нижняя часть желудочно-кишечного тракта"
+ Q:X="12" "Череп"
+ Q:X="13" "Челюстно-лицевая область,в т.ч. зубы"
+ Q:X="14" "Почки, мочевыводящая система"
+ Q:X="15" "Молочная железа"
+ Q:X="16" "- в том числе профилактических процедур"
+ Q "Прочие"
+mkRTAB ; Создать расч. таблицу для ДОЗ-3 
+ ; RTAB(вид,локализация,тип)=доза мЗв
+ ; вид: f - флюрограф, r - рентгеноргамма, rs - рентг.скопия
+ ; t - КТ, o - прочие (ангиограф, интервенц.исследования)
+ ; тип: 1 - пленочные, 2 - цифровые
+ S RTAB("f","01",1)=.5,RTAB("f","01",2)=.05
+ S RTAB("f","03",1)=.01,RTAB("f","03",2)=.01
+ S RTAB("f","04",1)=.3,RTAB("f","04",2)=.03
+ S RTAB("f","05",1)=.4,RTAB("f","05",2)=.04
+ S RTAB("f","06",1)=.1,RTAB("f","06",2)=.1
+ S RTAB("f","07",1)=2.5,RTAB("f","07",2)=.3
+ S RTAB("f","08",1)=1.3,RTAB("f","08",2)=.1
+ 
+ S RTAB("r","01",1)=.3,RTAB("r","01",2)=.03
+ S RTAB("r","03",1)=.01,RTAB("r","03",2)=.01
+ S RTAB("r","04",1)=.2,RTAB("r","04",2)=.03
+ S RTAB("r","05",1)=.5,RTAB("r","05",2)=.06
+ S RTAB("r","06",1)=.7,RTAB("r","06",2)=.08
+ S RTAB("r","07",1)=.9,RTAB("r","07",2)=.1
+ S RTAB("r","08",1)=.8,RTAB("r","08",2)=.1
+ S RTAB("r","09",1)=1.1,RTAB("r","09",2)=.2
+ S RTAB("r","10",1)=0.8,RTAB("r","10",2)=.1
+ S RTAB("r","11",1)=1.6,RTAB("r","11",2)=.2
+ S RTAB("r","12",1)=.1,RTAB("r","12",2)=.04
+ S RTAB("r","13",1)=.04,RTAB("r","13",2)=.02
+ S RTAB("r","14",1)=.6,RTAB("r","14",2)=.1
+ S RTAB("r","15",1)=.1,RTAB("r","15",2)=.05
+ 
+ ; 1 - без типа
+ S RTAB("rs","01",1)=3.3
+ S RTAB("rs","09",1)=20
+ S RTAB("rs","10",1)=3.5
+ S RTAB("rs","11",1)=12
+ 
+ S RTAB("t","01",1)=11
+ S RTAB("t","08",1)=11
+ S RTAB("t","03",1)=.1
+ S RTAB("t","04",1)=5
+ S RTAB("t","05",1)=5
+ S RTAB("t","06",1)=5.4
+ S RTAB("t","07",1)=9.5
+ S RTAB("t","14",1)=9.5
+ S RTAB("t","09",1)=14
+ S RTAB("t","10",1)=14
+ S RTAB("t","11",1)=14
+ S RTAB("t","12",1)=2
+ S RTAB("t","13",1)=.05
+ Q
+ ; Шаблон списка усл. ДОЗ-3 услуга)=вид|локализация|тип (ICNLIST)
+FN(X) 
+ Q $TR($J(X,"",2),".",",")
+REGIPROC 
+ N F
+ S F=+$$FR^I()
+ S ^IPROC("Медстатистика","Сводная дозовая нагрузка")="DLST_NRGDOSE,1,"_$S(F:3,1:2)_",d,Начальная дата,d,Конечная дата"_$S(F:",t@storage:lpu,Филиал",1:"")
+ S ^IPROC("Медстатистика","Дозовая нагрузка по исследованиям")="DNI_NRGDOSE,1,"_$S(F:3,1:2)_",d,Начальная дата,d,Конечная дата"_$S(F:",t@storage:lpu,Филиал",1:"")
+ Q

@@ -1,0 +1,265 @@
+IUSLSC ; Формирование счетов [ 08/29/2024  11:13 PM ]
+MKUTST(DS,DE,CNT) ; Создать фиктивное кол-во услуг
+ K OTL,CNL,VRL,^ZNF,^PNF,^ZNFL
+ S DCN=1+CNT/(DE-DS),II=0,TCNT=0,PCNT=0
+ S OT="" F  S OT=$O(^MN(^MN("otd"),OT)) Q:OT=""  S OTL(OT)=""
+ S DI="" F  S DI=$O(^D(DI)) Q:DI=""  S DIL(II)=DI,II=II+1
+ S II=0
+ S VR="" F  S VR=$O(^KDR(VR)) Q:VR=""  S VRL(VR)=""
+ S CN="" F  S CN=$O(^CN(CN)) Q:CN=""  S:$D(^CN(CN,1))'=0 CNL(II)=CN,II=II+1
+ S II=0 K VRL(0),CNL(0),OTL(0)
+ F DTT=DS:1:DE Q:II>CNT  W DTT," ("_II_") " S IDX=0 F  Q:IDX>DCN  D 
+ .S TCNT=TCNT+1
+ .S VR=$O(VRL($R(900)),-1) S:VR="" VR=$O(VRL($R(900))) Q:VR=""
+ .S OT=$O(OTL($R(98)),-1) S:OT="" OT=$O(OTL($R(200))) Q:OT=""
+ .S NI=$O(^BTN(250+$R(90999)),-1) S:NI="" NI=$O(^BTN($R(900999))) Q:NI=""
+ .S X=$R(2000),USL=$O(CNL(X),-1) S:USL="" USL=$O(CNL(X)) Q:USL=""  S USL=$G(CNL(X)) Q:USL=""
+ .S X=$R(500),DI=$O(DIL(X),-1) S:DI="" DI=$O(DIL(X)) Q:DI=""  S DI=$G(DIL(X))
+ .S FLG=$R(29)+1 S:FLG>9 FLG=""
+ .S N=$$ADD^IUSL(VR,DTT,OT,NI,USL,DI,FLG,$S($R(20)=5:"coment.",1:""),"","","") S:N>0 II=II+1,IDX=IDX+1 W:N=0 !,"Err:"_VR_","_DTT_","_OT_","_NI_","_USL,!
+ W !,II,!
+ K OTL,^BUF($J,"D")
+ Q
+MKDGN(DGN,DS,DE,XNIB,XLPU,REL,XFLTPRC,CLPU,FRA) ; По договору
+ ; REL - release , not use STATUS >= 3
+ ; FRA - только по франшизе
+ K ^BUF($J,"sc"),^BUF($J,"er")
+ N MDTMP,MSTC,MPRG,NIB,KX,TT,IDX,FRST,U,CPRG,CPRC,CSTC,DTL,R,I,NVU
+ N KSKD,LPU,TEST,CIDX,DT,DD,DVID,NZ,FRAF,DPRC,@$$NEWVAR^IUSL
+ S CLPU=$G(CLPU) S:CLPU="" CLPU=$$^I("ilpu")
+ S XNIB=$G(XNIB),XLPU=$G(XLPU),XFLTPRC=$G(XFLTPRC),FRA=$G(FRA)
+ S NVU=$G(^cfg("no-vusl"))
+ 
+ S DVID=$$GET^IINSC(DGN,"dvid",DE)
+ F KX=DS:1:DE S DTL(KX)=0 ; список когда действует или нет договор
+ D:DVID'=3
+ .D GETM^YNDOG(DGN,"dog_from","MDTMP")
+ .F KX=DS:1:DE S TT=$O(MDTMP(KX+1),-1) I TT'="",KX<(+$G(MDTMP(TT))) K DTL(KX)
+ .D GETM^YNDOG(DGN,"dog_to","MDTMP")
+ .S KX="" F  S KX=$O(DTL(KX)) Q:KX=""  S TT=+$O(MDTMP(KX+1),-1),TT=+$G(MDTMP(TT)) I TT>0,KX>TT K DTL(KX)
+ .D GETM^YNDOG(DGN,"use","MDTMP")
+ .S KX="" F  S KX=$O(DTL(KX)) Q:KX=""  S TT=+$O(MDTMP(KX+1),-1) K:+$G(MDTMP(TT))=0 DTL(KX)
+ S KX=$O(DTL("")),DS=$S(KX="":DS,1:KX)
+ S KX=$O(DTL(""),-1),DE=$S(KX="":DE,1:KX)
+ S IDX=0
+ D GETM^YNDOG(DGN,"price","MPRC")
+ S DT="" F  S DT=$O(MPRC(DT)) Q:DT=""  S MPRC(DT)=$$CORCP^IPRICET(+MPRC(DT))
+ S DPRC=$$CORCP^IPRICET(1) ; TODO - default price
+ D PRETZR^IPAC
+ S NIB="" F  S NIB=$O(^BTI(" s",DGN,NIB)) Q:NIB=""  D:$D(^PNF(NIB))
+ .I XNIB'="",NIB'=XNIB Q 
+ .S (ERRCNT,FRST)=0
+ .S DT=DS-1 F  S DT=$O(^PNF(NIB,DT)) Q:DT=""!(DT>DE)  S KX=$D(DTL(DT)) S:KX=0 ERRCNT=ERRCNT+1 D:KX'=0 
+ ..K ERR,UL,U
+ ..S CIDX=$$PIDX^IPAC(NIB,DGN,DT)
+ ..; S KX=+$O(MSTC(DT+1),-1)
+ ..; I KX="" S ERRCNT=ERRCNT+1,ERR("USL")="DT" D ERRCU Q - TODO в цикл услуг
+ ..S:FRST=0 (FRST,IDX)=1
+ ..; I '$$CHECK^IPAC(NIB,DT),'$$CHECK^IGRNL(NIB,DT,DGN) S ERRCNT=ERRCNT+1,ERR("NI")=NIB_" - снят" D ERRCU Q - может быть снят по касс. , проверка в CHKU
+ ..S CPRG=$$GET^IPAC(NIB,"prog"_CIDX,DT)
+ ..S CPRC=+$G(MPRC(+$O(MPRC(DT+1),-1)))
+ ..S CSTC=DGN
+ ..S:'CPRC CPRC=DPRC
+ ..S KX="" F  S KX=$O(^PNF(NIB,DT,KX)) Q:KX=""  D
+ ...S R=$P(^(KX),"|",2)
+ ...I R'="",R'=DGN Q  ; wrong stc
+ ...I CIDX'="",R'=DGN Q  ; second stc
+ ...;I R="" S DD=+$O(MSTC(DT+1),-1) Q:$G(MSTC(DD))'=DGN  ; if std DGN
+ ...D CHKU($P(KX,"|",1),$P(KX,"|",2),$P(KX,"|",3))
+ ..Q
+ .S:ERRCNT>0 ^BUF($J,"er",NIB)=ERRCNT
+ S DTSTART=DS,DTEND=DE
+ Q
+MKAPPRC(DS,DE,NOER,XPREPRC,XCHKPRC,XCHKERR,XCHKPAC,XLPU) ; с предпроверкой
+ N WCN,WBF,XCHKPAST,FMOD,CLPU S WCN=1 G MKALL1
+MKALLPRC(DS,DE,NOER,XCHKPRC,XCHKERR,XLPU,XCHKPAST,FMOD,CLPU) 
+ N XPREPRC,XCHKPAC,WCN,WBF
+ S (XPREPRC,XCHKPAC)="",WCN=1 G MKALL1
+MKALL(DS,DE,WCN,WBF,NOER,XLPU,FMOD,CLPU) 
+ N XCHKPRC,XCHKERR,XPREPRC,XCHKPAST,XCHKPAC
+ S (XCHKPRC,XCHKERR,XCHKPAC)=""
+MKALL1 K ^BUF($J,"sc"),^BUF($J,"er")
+ ; WBF - write buffer
+ ; NOER - ignore errors
+ ; WCN - write price in buffer
+ ; XLPU - filter by current LPU
+ ; FMOD - fast mode (no check logical errors)
+ ; CLPU - current LPU
+ N MDTMP,MSTC,MPRG,NIB,KX,TT,IDX,FRST,U,CPRG,CPRC,DTL,R,F,TEST,NVU
+ N PRCL,LPU,KSS,PSTC,SUM,KSKD,Idx,CNT1,WCNp,DT,@$$NEWVAR^IUSL
+ S CLPU=$G(CLPU) S:CLPU="" CLPU=$$^I("ilpu")
+ S NVU=$G(^cfg("no-vusl"))
+ S XCHKPAST=$G(XCHKPAST)
+ S XPREPRC=$G(XPREPRC)
+ s XCHKPAC=$G(XCHKPAC)
+ S WCN=+$G(WCN),WBF=+$G(WBF),NOER=+$G(NOER),XLPU=+$G(XLPU),FMOD=$G(FMOD)
+ S WCNp=(WCN!$L(XCHKPRC))
+ S TT=$C(9)_"s",TMS=$P($H,",",2),U="",(IDX,ERRI,CNT1,KSS)=0
+ D PRETZR^IPAC
+ F  S U=$O(^DGN(U)) Q:U=""  D GETM^YNDOG(U,"price","PRCL("_U_")")
+ S DT=DS-1 F  S DT=$O(^ZNFI("dn",DT)) Q:DT=""!(DT>DE)  D
+ .S NIB="" F  S NIB=$O(^ZNFI("dn",DT,NIB)) Q:NIB=""  D
+ ..I XCHKPAC'="" S TEST=1 D @XCHKPAC Q:'TEST 
+ ..S (ERRCNT,FRST)=0
+ ..Q:'$D(^PNF(NIB,DT)) 
+ ..S CSTC=+$$GETTZ^IPAC(NIB,TZRBTNs,DT),PSTC=CSTC
+ ..;I NOER=0,STAT'=2,FLG'["|kss|",'$$CHECK^IPAC(NIB,DT,CSTC),'$$CHECK^IGRNL(NIB,DT,CSTC) S ERR("NI")=NIB_"-снят",ERRCNT=ERRCNT+1 Q - TODO STAT,KSS
+ ..S CPRG=$$GET^IPAC(+$G(TZRBTN("prog")),"prog",DT)
+ ..S CPRC=+$G(PRCL(CSTC,+$O(PRCL(CSTC,DT+1),-1)))
+ ..S:'CPRC CPRC=$$CORCP^IPRICET(1)
+ ..S KX="" F  S KX=$O(^PNF(NIB,DT,KX)) Q:KX=""  S CNT1=CNT1+1 D CHKUA($P(KX,"|",1),$P(KX,"|",2),$P(KX,"|",3))
+ .Q:ERRCNT=0 
+ .I XCHKERR'="" D @XCHKERR Q 
+ .S ^BUF($J,"er",NIB)=ERRCNT,ERRI=ERRI+ERRCNT
+ ;W !,"Idx="_IDX,!,"err="_ERRI,!,"Tim="_($P($H,",",2)-TMS),!,"C="_CNT1,!
+ S DTSTART=DS,DTEND=DE
+ Q
+MKOTV(OTD,VR,DS,DE,WCN,WBF,KSS,LT,NOER,ULPU,CLPU,UPROC) ; Расчет по сотрудникам
+ ; WCN - запрашивать цену 0/1, WBF-писать полный буфер, KSS-без кассы
+ ; LT - упрощ. версия , NOER - не учитывать ошибки
+ ; ULPU - фильтр по ЛПУ, выбор ЛПУ, или текущее
+ ; UPROC - процедура обработки строки буфера
+ K ^BUF($J,"sc"),^BUF($J,"er")
+ N LPU S ULPU=+$G(ULPU) S:$G(CLPU)="" CLPU=$$^I("ilpu")
+ S UPROC=$G(UPROC)
+ S WCN=+$G(WCN),WBF=+$G(WBF),KSS=+$G(KSS),LT=$G(LT),NOER=+$G(NOER)
+ N NIB,KX,U,UL,ERRI,OTX,VRX,DT,CN,R,UCNT,CPRC,KSKD,SKID,DIA,PRC,PRCL,IDX
+ N CSTC,NI,SUM,I,C,A,NVU
+ Q:VR'=""&('$D(^ZNF(VR))) ; Нет услуг по врачу
+ S TMS=$P($H,",",2)
+ S (ERRCNT,IDX,CPRC)=0,U=""
+ S NVU=$G(^cfg("no-vusl"))
+ D PRETZR^IPAC
+ I LT F  S U=$O(^DGN(U)) Q:U=""  D GETM^YNDOG(U,"price","PRCL("_U_")")
+ S VRX=$S(VR="":"",1:VR-1)
+ F  S VRX=$O(^ZNF(VRX)) Q:VRX=""  D:VR=""!(VR=VRX)  
+ .I ULPU,CLPU,'$D(^ZNFI("l",CLPU,VRX)) Q 
+ .S OTX=$S(OTD="":"",1:OTD-1)
+ .F  S OTX=$O(^ZNF(VRX,OTX)) Q:OTX=""  Q:OTD'=""&(OTD'=OTX)  D
+ ..S DT=DS-1,(UCNT,ERRI)=0 K PRCS F  S DT=$O(^ZNF(VRX,OTX,DT)) Q:DT>DE!(DT="")  S ID="" F  S ID=$O(^ZNF(VRX,OTX,DT,ID)) Q:ID=""  D
+ ...S LPU=$G(^(ID,"l"))
+ ...I ULPU,CLPU'=LPU Q 
+ ...I NVU,$G(^("v")) Q 
+ ...S:WCN SUM=$G(^("s"))
+ ...D:LT=0 GET^IUSL(VRX,DT,OTX,ID)
+ ...D:LT=1 GETLT^IUSL(VRX,DT,OTX,ID)
+ ...Q:STAT="d"!(STAT="w") 
+ ...S FLG="|"_$G(FLG)_"|",ISTC=$G(ISTC)
+ ...I KSS=1,(STAT=2)!(FLG["|kss|") Q 
+ ...I KSS=2,STAT'=2,FLG'["|kss|" Q 
+ ...I NOER=0,LT,'$$CHECK^IPAC(NI,DT,ISTC),'$$CHECK^IGRNL(NI,DT,$S($L(ISTC):ISTC,1:+$$GETTZ^IPAC(NI,TZRBTNs,DT))) S ERR("NI")=NI_"-снят",ERRI=1+ERRI
+ ...I LT,'+$G(PRC) S CSTC=$S(ISTC'="":ISTC,1:+$$GETTZ^IPAC(NI,TZRBTNs,DT)),PRC=+$G(PRCL(CSTC,+$O(PRCL(CSTC,DT+1),-1))) S:'PRC PRC=$$CORCP^IPRICET(1)
+ ...I LT,'$D(SP) S SP=$$SPEC^IKADRY(VRX,DT)
+ ...I 'NOER,$D(ERR) S U="" F  S U=$O(ERR(U)) Q:U=""  S ERRI=1+ERRI
+ ...I 'NOER,$D(ERR) S ^BUF($J,"err",OTX,VRX,IDX)=DT_"|"_NI Q
+ ...D:LT=1 MKPRC^IUSL(1)
+ ...S KSKD=1 S:$D(SKID) KSKD=SKID/100
+ ...S A="|"_DIA_"|"_PRC_"|"_NI_"|"_LPU_"|",ISTC=$G(ISTC),U="",I=2
+ ...F  S U=$O(UL(U)) Q:U=""  S C=+UL(U) S:WCN R=$S('C:0,$D(UL(U,1)):UL(U,1)/C,1:$$PRICEH^IPRICE(U,PRC,DT)*KSKD) S R=DT_"|"_U_"|"_$S(WCN:R,1:"")_"|"_C_A_ID_"|"_ISTC_"|"_SP,IDX=IDX+1,UCNT=UCNT+1,I=I+1 S:WBF=1 ^BUF($J,"sc",OTX,VRX,IDX)=R D:UPROC'="" @UPROC 
+ ..S ^BUF($J,"sc",OTX,VRX)=UCNT
+ ..S:ERRI>0 ^BUF($J,"er",OTX,VRX)=ERRI,ERRCNT=ERRCNT+ERRI
+ ;W !,IDX,!,"Time=",$P($H,",",2)-TMS
+ Q
+CHKWRAP(VR,OTD,DT,ID,NOER,XCHKPRC,XCHKERR,XCHKPAST) ; wrapper для вызова CHKUA
+ N XPREPRC,WCN,WBF,NIB,KX,IDX,U,CPRG,CPRC,R,LPU,CLPU,KSS,PSTC,SUM,KSKD,Idx,XLPU,FMOD,WCNp,@$$NEWVAR^IUSL,NVU
+ S CLPU=$$^I("ilpu"),XPREPRC="",WCN=1,NOER=+$G(NOER),FMOD=0
+ S XCHKPAST=$G(XCHKPAST),C=$G(XPREPRC)
+ S WCNp=(WCN!$L(XCHKPRC))
+ S TMS=$P($H,",",2),U="",(IDX,ERRI,KSS,XLPU,WBF)=0
+ S NVU=$G(^cfg("no-vusl"))
+ D PRETZR^IPAC
+ S NIB=$$GETNIB^IUSL(VR,DT,OTD,ID)
+ S CSTC=+$$GETTZ^IPAC(NIB,TZRBTNs,DT),PSTC=CSTC
+ S CPRG=$$GET^IPAC(NIB,"prog",DT)
+ S CPRC=+$$GET^IINSC(CSTC,"price",DT)
+ S:'CPRC CPRC=$$CORCP^IPRICET(1)
+ D CHKUA(VR,OTD,ID)
+ Q
+CHKU(VR,OTD,ID) ; Внутренняя процедура проверки пац.
+ S LPU=$G(^ZNF(VR,OTD,DT,ID,"l"))
+ I +$G(XLPU)>0,CLPU'=LPU Q 
+ I NVU,$G(^("v")) Q
+ S SUM=$G(^("s")),GRN=$G(^("g")),FRAF=$S(FRA:$G(^("fr")),1:"")
+ S REL=$G(REL)
+ D GETSC^IUSL(VR,DT,OTD,ID)
+ Q:$D(ERR) 
+ I $G(NI)'=NIB S ERR("ENI")=$G(NI)
+ I REL=4,STAT<4 Q 
+ I REL=3,STAT=3 Q 
+ I REL=2,STAT>3 Q 
+ I REL=1,STAT>2 Q 
+ 
+ I CIDX'="",$G(ISTC)="" Q  ; не основной и по умолчанию
+ I $G(ISTC)'="",ISTC'=DGN Q  ; только по текущему договору
+ I $L(XFLTPRC) S TEST=0 D @XFLTPRC Q:TEST  ; filter procedure
+CHKU1 
+ Q:STAT="d"!(STAT="w")  ; CHKU1 w.o. GETSC^ !
+ I $D(ERR) S ERRCNT=ERRCNT+1 D ERRCU Q 
+ I DVID'=3!(FRAF'="") Q:KASS  ; Кассовые услуги по договору не считать
+ I DVID'=3,'FRA Q:KASS  ; Кассовые услуги по договору не считать
+ I FRA Q:FRAF=""    ; франшиза
+ S:REL=1 DC=$$RCLCNT^IUSL(VR,DT,OTD,ID)
+ S KSKD=1,U="",I=2 S:$D(SKID) KSKD=SKID/100
+ S NZ=$$GETPL^IUSL(VR,DT,OTD,ID,"f")
+ F  S U=$O(UL(U)) Q:U=""  S R=+UL(U),R=$S('R:0,SUM["|":$P(SUM,"|",I)/R,SUM'="":SUM/R,1:$$PRICEH^IPRICE(U,PRC,DT)*KSKD),R=R-($P(FRAF,"|",4)/UL(U)),R=DT_"|"_U_"|"_R_"|"_UL(U)_"|"_DIA_"|"_PRC_"|"_VR_"|"_OTD_"|"_ID_"|"_LPU_"|"_SP S:GRN'="" $P(R,"|",12)=GRN S:NZ'="" $P(R,"|",13)=NZ S:FRAF'="" $P(R,"|",14)=$P(FRAF,"|",2) S ^BUF($J,"sc",NIB,IDX)=R,IDX=IDX+1,I=I+1
+ Q
+ERRCU 
+ S R=$G(VR)_"|"_DT_"|"_$G(OTD)_"|"_$G(ID)_"|"
+ N U S U="" F  S U=$O(UL(U)) Q:U=""  S R=R_U_" "
+ S ^BUF($J,"err",NIB,IDX)=R_"|"_$$ECODE^IUSL(DT),IDX=IDX+1
+ Q
+CHKUA(VR,OTD,ID) ; Внутренняя процедура проверки пац.
+ S LPU=$G(^ZNF(VR,OTD,DT,ID,"l"))
+ I NVU,$G(^("v")) Q
+ I +$G(XLPU)>0,CLPU'=LPU Q 
+ I XPREPRC'="" S TEST=1 D @XPREPRC Q:'$G(TEST) 
+ D GETSC^IUSL(VR,DT,OTD,ID,FMOD)
+ Q:STAT="d"!(STAT="w")  
+ I $G(NI)'=NIB S ERR("ENI")=$G(NI)
+ I KSS Q:STAT=2  Q:"|"_$G(FLG)_"|"["|kss|"  
+ S:WCNp SUM=$G(^ZNF(VR,OTD,DT,ID,"s"))
+ S:$D(ISTC) PSTC=CSTC,CSTC=ISTC
+ I 'NOER,$D(ERR) D:$L(XCHKERR) @XCHKERR Q:$L(XCHKERR)  S ERRCNT=ERRCNT+1,^(VR)=$G(^BUF($J,"er",OTD,VR))+1,^(VR,IDX)=DT_"|"_$G(NI)_"|"_ID S:$D(ISTC) CSTC=PSTC Q 
+ S KSKD=1,U="",Idx=1,SUMM="" S:$D(SKID) KSKD=SKID/100
+ F  S U=$O(UL(U)) Q:U=""  D
+ .S:WCNp Idx=Idx+1,SUMM=$S(SUM["|":$P(SUM,"|",Idx),SUM'="":+SUM,1:""),SUMM=$S(SUMM="":"",'UL(U):0,1:SUMM/UL(U))
+ .I XCHKPRC'="" D @XCHKPRC Q 
+ .S:WCN R=$S($L(SUMM):SUMM,1:$$PRICEH^IPRICE(U,PRC,DT)*KSKD)
+ .S:WBF R=DT_"|"_U_"|"_$S(WCN:R,1:"")_"|"_$G(UL(U))_"|"_DIA_"|"_PRC_"|"_NI_"|"_LPU_"|"_SP,^BUF($J,"sc",OTD,VR,IDX)=R
+ .S IDX=IDX+1
+ I XCHKPAST'="" D @XCHKPAST
+ S:$D(ISTC) CSTC=PSTC
+ Q
+GETNI(VR,DT,OT,ID) ; Получить номер истории
+ Q $P($G(^ZNF(VR,DT,OT,ID,"e")),"~",2)
+MKZPNF(LPU,OTD,VR,DS,DE) ; Создать ZPNF
+ N NIB,KX,IDX,U,UL,ERRI,OTX,VRX,DT,CN,R I $D(WCN)=0 N WCN S WCN=0
+ S ERRCNT=0,IDX=0
+ I $D(^ZPNF(OTD))'=0 K:VR=999 ^ZPNF(OTD) K:VR'=999 ^ZPNF(OTD,VR) ;?
+ Q:VR'=999&($D(^ZNF(VR))'=0) ; Нет услуг по врачу
+ S VRX=$S(VR=999:"",1:VR-1) F  S VRX=$O(^ZNF(VRX)) Q:VRX=""!((VR'=999)&(VR'=VRX))  D
+ .S DT=DS-1 F  S DT=$O(^ZNF(VRX,DT)) Q:DT>DE!(DT="")  S OTX=$S(OTD=999:"",1:OTD-1) F  S OTX=$O(^ZNF(VRX,DT,OTX)) Q:OTX=""!((OTD'=999)&(OTD'=OTX))  S ID="" F  S ID=$O(^ZNF(VRX,DT,OTX,ID)) Q:ID=""  D
+ ..D GETLT^IUSL(VRX,DT,OTX,ID)
+ ..Q:STAT="d"!(STAT="w")  
+ ..S:$D(^ZPNF(LPU,OTX,VRX,NI,DT))=0 ^ZPNF(LPU,OTX,VRX,DT,NI,DT)=STAT
+ Q
+USLCNT(DS,DE) 
+ S UCNT=0,IDX1=0,IDX2=0
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ .S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ..S R=$G(^(ID,"e"))
+ ..S STAT=$P(R,"~",1),NI=$P(R,"~",2),USL=$P(R,"~",3)
+ ..S IDX1=IDX1+1 
+ ..Q:STAT="d"!(STAT="w") 
+ ..S IDX2=IDX2+1
+ ..D UDEC^IUSL
+ ..S U="" F  S U=$O(UL(U)) Q:U=""  S UCNT=UCNT+1 W:UCNT#5000=0 !,UCNT
+ ..I IDX2'=UCNT W "Ahtung="_USL R KK Q 
+ W !,"IDX1="_IDX1,!,"IDX2="_IDX2,!,"UCNT="_UCNT,!
+ S IDX2=0,IDX1=0
+ S NI="" F  S NI=$O(^PNF(NI)) Q:NI=""  S DT=DS-1 F  S DT=$O(^PNF(NI,DT)) Q:DT=""!(DT>DE)  S KX="" F  S KX=$O(^PNF(NI,DT,KX)) Q:KX=""  D
+ .S R=$G(^ZNF($P(KX,"|",1),$P(KX,"|",2),DT,$P(KX,"|",3),"e"))
+ .S:R'="" IDX2=IDX2+1
+ .S IDX1=IDX1+1
+ W !,"IDX1="_IDX1,!,"IDX2="_IDX2,!
+ Q

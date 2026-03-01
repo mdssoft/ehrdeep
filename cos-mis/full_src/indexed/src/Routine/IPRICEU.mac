@@ -1,0 +1,185 @@
+IPRICEU ; Прейскурант - дополнительные ф-ции [ 06/03/2019  8:09 PM ]
+CLRPRC(ID) ; Удалить услуги из прейскуранта
+ N COD
+ S COD="" F  S COD=$O(^CN(COD)) Q:COD=""  D
+ .K ^CNBK(COD,ID),^CNBKE(COD,ID)
+ .M ^CNBK(COD,ID)=^CN(COD,ID)
+ .K ^CN(COD,ID)
+ .D KGL^IEXCH("^CN",COD,ID)
+ .Q:'$D(^CNE(COD,ID)) 
+ .M ^CNBKE(COD,ID)=^CNE(COD,ID)
+ .K ^CNE(COD,ID)
+ .D KGL^IEXCH("^CNE",COD,ID)
+ Q
+MERGE(COD,FTP,TTP,DT,TDT,ALL) ; Перенести поля с одного на другой прейскурант
+ ; FTP - с прейскуранта
+ ; TTP - на прейскурант
+ ; DT - с даты
+ ; TDT - на дату
+ ; ALL - все поля
+ Q:'$D(^CN(COD,TTP))
+ N D,P
+ S ALL=+$G(ALL)
+ S:$G(TDT)="" TDT=DT
+ S P=99999 F  S P=$O(^CN(COD,FTP,P)) Q:P=""  D
+ .I 'ALL Q:P="use"  Q:P="pname"  Q:P="cname" 
+ .S D=$O(^(P,DT+1),-1) Q:D=""
+ .M ^CN(COD,TTP,P,TDT)=^CN(COD,FTP,P,D)
+ S P="" F  S P=$O(^CNE(COD,FTP,P)) Q:P=""  D
+ .Q:P="log" 
+ .S D=$O(^(P,DT+1),-1) Q:D=""
+ .M ^CNE(COD,TTP,P,TDT)=^CNE(COD,FTP,P,D)
+ D GL^IEXCH("^CN",COD,TTP),GL^IEXCH("^CNE",COD,TTP)
+ Q
+MERGEA(FTP,TTP,DT) ; Перенести свойства всех услуг на другой прайс
+ N C
+ S C="" F  S C=$O(^CN(C)) Q:C=""  I $D(^CN(C,TTP)),$D(^CN(C,FTP)) D
+ .D MERGE(C,FTP,TTP,DT,DT,0)
+ Q
+ADDSP(PRC,SP,ISP) ; Добавить специальность
+ ; PRC - прейскурант
+ ; SP - специальность
+ ; ISP - при наличии специальности
+ N U,D,R,I
+ S ISP="|"_ISP_"|"
+ I PRC'="" D addsps Q
+ S I=+$G(^MN("tprice"))
+ S PRC="" F  S PRC=$O(^MN(I,PRC)) Q:PRC=""  I '$P(^(PRC),"|",4) D addsps
+ Q
+addsps 
+ S U="" F  S U=$O(^CN(U)) Q:U=""  D:$D(^(U,PRC))
+ .Q:'$$CHECKH^IPRICE(U,PRC,+$H) 
+ .S D=$O(^CN(U,PRC,"spec",""),-1) Q:D=""
+ .S R=^(D) Q:("|"_R_"|")'[ISP  Q:("|"_R_"|")[("|"_SP_"|") 
+ .S ^(D)=R_SP_"|"  w "."
+ .D GL^IEXCH("^CN",U,PRC,"spec",D)
+ Q
+ADDFLGS(PRC,DT,FL,FLGS) ; Добавить флаги на поле (за исключением spec и otd)
+ ; PRC - прейскурант
+ ; DT - дата
+ ; FL - имя поля
+ ; FLGS - флаги
+ N U,D,R,I
+ Q:FL="" 
+ I PRC'="" D addflgs Q
+ S I=+$G(^MN("tprice")),PRC="" 
+ F  S PRC=$O(^MN(I,PRC)) Q:PRC=""  I '$P(^(PRC),"|",4) D addflgs
+ Q
+addflgs 
+ S U="" F  S U=$O(^CN(U)) Q:U=""  D:$D(^(U,PRC))
+ .Q:'$$CHECKH^IPRICE(U,PRC,+$H) 
+ .S D=$O(^CN(U,PRC,FL,""),-1)
+ .I D'="" S R=^(D) Q:$$FLinFL^TXTU(R,FLGS) 
+ .I D="" S D=DT,R=""
+ .S ^CN(U,PRC,FL,D)=$$STFLGS^TXTU(R,FLGS)
+ .w "."
+ .D GL^IEXCH("^CN",U,PRC,FL,D)
+ Q
+CDOTD(DT,F,T) ; Изменить отделение с на
+ N C,P,X,FF
+ S DT=$$DI^DTUTL(DT) Q:DT="" 
+ S FF="|"_F_"|"
+ S C="" F  S C=$O(^CN(C)) Q:C=""  D
+ .S P="" F  S P=$O(^CN(C,P)) Q:P=""  D
+ ..S X=$$GET^IPRICE(C,"otd",P,DT) Q:X="" 
+ ..Q:X'[FF 
+ ..S X=X_T_"|" w "." 
+ ..D SET^IPRICE(C,"otd",P,DT,X) 
+ Q
+UPDSPO(FR) ; Обновить специальности у прайсов (если нет данных) 
+ ; FR - из этого прейскуранта
+ N P,C,D,OT,SP,H,DO,DS
+ S H=+$H
+ S C="" F  S C=$O(^CN(C)) Q:C=""  D:$D(^CN(C,FR))
+ .S OT=$$GET^IPRICE(C,"otd",FR,H)
+ .S DO=$O(^CN(C,FR,"otd",H+1),-1)
+ .S SP=$$GET^IPRICE(C,"spec",FR,H)
+ .S DS=$O(^CN(C,FR,"spec",H+1),-1)
+ .S P="" F  S P=$O(^CN(C,P)) Q:P=""  D:P'=FR
+ ..I '$D(^CN(C,P,"otd")),OT'="" S ^CN(C,P,"otd",DO)=OT
+ ..I '$D(^CN(C,P,"spec")),SP'="" S ^CN(C,P,"spec",DS)=SP
+ Q
+DOBK ; Сделать резервную копию
+ K ^CNBK,^CNBKE,^CNBKG
+ M ^CNBK=^CN,^CNBKE=^CNE
+ S ^CNBK=+$H
+ N I
+ S I=+$G(^MN("gprice")) Q:'I 
+ M ^CNBKG=^MN(I)
+ Q
+REBK ; Восстановить резервную копию
+ Q:'$D(^CNBK)
+ K ^CN,^CNE
+ M ^CN=^CNBK,^CNE=^CNBKE
+ N I S I=+$G(^MN("gprice")) Q:'I 
+ K ^MN(I)
+ M ^MN(I)=^CNBKG
+ Q
+EQU ; Сопоставить услуги в ^BUF("x"
+ ; код|наименование
+ N K,I,R,NM,P,C
+ D MKLU^TXTU
+ K ^BUF($J,"l")
+ S I=0 F  S I=$O(^BUF("x",I)) Q:I=""  D
+ .S R=^(I),NM=$P(R,"|",2),NM=$$eqpc(NM) Q:NM=""  
+ .S ^BUF($J,"l",$E(NM,1,240),I)=NM
+ .W !,NM
+ S P=$$DEFPRC^IINSC("",+$H,0)
+ S C="" F  S C=$O(^CN(C)) Q:C=""  D:$D(^CN(C,P))
+ .S NM=$$NAME^IPRICE(C,P)
+ .S K=$$eqpc(NM) Q:K="" 
+ .S I="" F  S I=$O(^BUF($J,"l",$E(K,1,240),I)) Q:I=""  D
+ ..Q:K'=^(I)
+ ..S $P(^BUF("x",I),"|",1)=C 
+ Q
+eqpc(X) 
+ S X=$$UL^TXTU(X)
+ Q $TR(X,$TR(X,%cLL_"1234567890",""),"")
+CLRFROM(FDT) ; Очистить все с даты
+ S FDT=$$DI^DTUTL(FDT) Q:FDT="" 
+ N I,V,N,X,DT
+ S I="" F  S I=$O(^CN(I)) Q:I=""  S V="" F  S V=$O(^CN(I,V)) Q:V=""  D
+ .F  S N=$O(^CN(I,V,FDT)) Q:+N'=N  K ^CN(I,V,N) ; kill all after
+ .S N=99999 F  S N=$O(^CN(I,V,N)) Q:N=""  D  ; fields
+ ..F  S X=$O(^CN(I,V,N,FDT)) Q:+X'=X  K ^CN(I,V,N,X)
+ Q
+CONVERT ; Конвертирование ^CE ^CE2 в ^CN
+ W !,"Конвертирование ^CE ^CE2 -> ^CN",!,"Продолжить <N>:" R R Q:R'="Y" 
+ W !,"Processing" K:$G(^MN("tprice"))'="" ^MN($G(^MN("tprice"))) K ^CN
+ D ADDCP^YNPRICE("",$$DW^TXTU("Основной"),1,100),ADDCP^YNPRICE("",$$DW^TXTU("Кассовый"),1,100)
+ S DTSTART=$$DI^DTUTL("010180")
+ S CE1="" F  S CE1=$O(^CE(CE1)) Q:CE1=""  S CE2="" F  S CE2=$O(^CE(CE1,CE2)) Q:CE2=""  D
+ .S NM=$G(^CE(CE1,CE2)),COD=+(CE1_$E("00",1,3-$L(CE2))_CE2)
+ .S DD=-1,PD=DTSTART,PCEN="" F  S DD=$O(^CE(CE1,CE2,DD)) Q:DD=""!(DD'=(+DD))  S CEN=$G(^CE(CE1,CE2,DD)) S:CEN'=PCEN ^CN(COD,1,PD)=CEN S PCEN=CEN,PD=DD
+ .S ^CN(COD,1,"name",DTSTART)=NM,^CN(COD,1,"cname",DTSTART)=NM
+ .S ^CN(COD,1,"use",DTSTART)=1
+ .S OTD=$G(^CE2(CE1,CE2,"O")) ; ! CE2 !!
+ .S:OTD'="" ^CN(COD,1,"otd",DTSTART)="|"_$TR(OTD,",","|")_"|"
+ .S OMS=$G(^CEOMC(CE1,CE2))
+ .S:(OMS'=0)&(OMS'="") ^CN(COD,1,"oms",DTSTART)=OMS
+ .W "."
+ S CE1="" F  S CE1=$O(^CE2(CE1)) Q:CE1=""  S CE2="" F  S CE2=$O(^CE2(CE1,CE2)) Q:CE2=""  D
+ .S NM=$G(^CE2(CE1,CE2)),COD=+(CE1_$E("00",1,3-$L(CE2))_CE2)
+ .S DD="",PD=DTSTART,PCEN="" F  S DD=$O(^CE2(CE1,CE2,DD)) Q:DD=""!(DD'=(+DD))  S CEN=$G(^CE2(CE1,CE2,DD)) S:CEN'=PCEN ^CN(COD,2,PD)=CEN S PCEN=CEN,PD=DD
+ .S ^CN(COD,2,"name",DTSTART)=NM,^CN(COD,2,"cname",DTSTART)=NM
+ .S ^CN(COD,2,"use",DTSTART)=1
+ .S OTD=$G(^CE2(CE1,CE2,"O"))
+ .S:OTD'="" ^CN(COD,2,"otd",DTSTART)="|"_$TR(OTD,",","|")_"|"
+ .S OMS=$G(^CEOMC(CE1,CE2))
+ .S:(OMS'=0)&(OMS'="") ^CN(COD,2,"oms",DTSTART)=OMS
+ .W "."
+ S ^CN=$H
+ W "OK",!
+ Q
+CNVage ; convert age->ages,agee (030619)
+ N C,P,R,DT,F
+ S C="" F  S C=$O(^CN(C)) Q:C=""  D
+ .S P="" F  S P=$O(^CN(C,P)) Q:P=""  D
+ ..S F=0
+ ..S DT="" F  S DT=$O(^CN(C,P,"age",DT)) Q:DT=""  D
+ ...S R=^(DT)
+ ...S ^CN(C,P,"ages",DT)=$P(R,"|",1)
+ ...S ^CN(C,P,"agee",DT)=$P(R,"|",2)
+ ...S F=1
+ ..D:F REGL^IEXCH("^CN",C,P)
+ Q

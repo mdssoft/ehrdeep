@@ -1,0 +1,421 @@
+NSPRAV ; Утилиты справочников [ 03/22/2021  12:37 PM ]
+NM(LST,ID) ; Наименование мз справочника
+ D MSG^RWU($$NAME^ISPRAV(LST,ID))
+ Q
+CDOTD(N) ; Проверка при удалении отделений
+ N X,A
+ S A=""
+ S X="" F  S X=$O(^DSH(X)) Q:X=""  I $D(^DSH(X,N)) S A="Используется в расписании !" Q 
+ I A="" S X="" F  S X=$O(^ZNF(X)) Q:X=""  I $D(^DSH(X,N)) S A="Используется в услугах !" Q
+ I A="" S X="" F  S X=$O(^LOG(X)) Q:X=""  I $G(^LOG(X,"otd"))=N S A="Используется у пользователей !" Q
+ I A="" S X="" F  S X=$O(^KDR(X)) Q:X=""  I $$GET^IKADRY(X,"otd")=N!($$GET^IKADRY(X,"otd2")=N)!($$GET^IKADRY(X,"otd3")=N) S A="Используется в кадрах !" Q
+ D MSG^RWU(A)
+ Q
+CDSP(N) ; Проверка при удалении специальностей
+ N X,A
+ S A=""
+ S X="" F  S X=$O(^DSHI("sp",X)) Q:X=""  I $D(^DSHI("sp",X,N)) S A="Используется в расписании !" Q 
+ I A="" S X="" F  S X=$O(^LOG(X)) Q:X=""  I $G(^LOG(X,"spec"))=N S A="Используется у пользователей !" Q
+ I A="" S X="" F  S X=$O(^KDR(X)) Q:X=""  I $$GET^IKADRY(X,"spec")=N!($$GET^IKADRY(X,"spec2")=N)!($$GET^IKADRY(X,"spec2")=N) S A="Используется в кадрах !" Q
+ D MSG^RWU(A)
+ Q
+CDPWRK(N) ; Проверка при удалении мест работы контингента
+ N A
+ S A=""
+ I $D(^BTI(" w",N)) S A="Используется в контингенте."
+ D MSG^RWU(A)
+ Q
+OTDLSRT(TXT,NALL,nOWF) ; Список отделений с сортировкой по имени
+ D:'+$G(nOWF) OWF^RWU(".txt")
+ N I,N,L,R S I=+$G(^MN("otd")),N="",TXT=$$LU^TXTU($$WD^TXTU($G(TXT)))
+ D:'$G(NALL) W^RWU("|")
+ F  S N=$O(^MN(I,N)) Q:N=""  I $G(^(N,"use"))'=0 D:$G(^("med"))=1
+ .S R=$G(^("sname")) Q:R=""  I TXT'="" Q:$$LU^TXTU(R)'[TXT 
+ .S L(R)=N
+ S I="" F  S I=$O(L(I)) Q:I=""  D WC^RWU(CR_L(I)_"|"_I)
+ D:'+$G(nOWF) C^RWU
+ Q
+OTLSF(TXT,FLG,nOWF,FNM) ; Список отделений с сортировкой по имени + флаги
+ D:'+$G(nOWF) OWF^RWU(".txt")
+ N I,N,L,C,J,X,FL
+ S I=+$G(^MN("otd")),(C,N)="",FL=$S(+$G(FNM):"fname",1:"sname")
+ S TXT=$$LU^TXTU($$WD^TXTU($G(TXT))),FLG=$G(FLG)
+ F  S N=$O(^MN(I,N)) Q:N=""  D:$G(^(N,"use"))'=0
+ .I FLG'="" Q:'$$InFlg("|"_$G(^("flg"))_"|",FLG) 
+ .S R=$G(^(FL)) Q:R=""  I TXT'="" Q:$$LU^TXTU(R)'[TXT 
+ .S L(R)=N
+ S I="" F  S I=$O(L(I)) Q:I=""  D WC^RWU(C_L(I)_"|"_I) S C=CR
+ D:'+$G(nOWF) C^RWU
+ Q
+SPLSRT(TXT,NALL,nOWF) ; Список специальностей с сортировкой по имени
+ D:'+$G(nOWF) OWF^RWU(".txt")
+ N I,N,L,C
+ S I=+$G(^MN("spec")),(C,N)="",TXT=$$LU^TXTU($$WD^TXTU($G(TXT)))
+ I '$G(NALL) D W^RWU("|") S C=CR
+ F  S N=$O(^MN(I,N)) Q:N=""  D:$G(^(N,"use"))'=0
+ .S R=$G(^("sname")) Q:R=""  I TXT'="" Q:$$LU^TXTU(R)'[TXT
+ .S L(R)=N
+ S I="" F  S I=$O(L(I)) Q:I=""  D WC^RWU(C_L(I)_"|"_I) S C=CR
+ D:'+$G(nOWF) C^RWU
+ Q
+SPLSF(TXT,FLG,nOWF,FNM) ; Список специальностей с сортировкой по имени + флаги
+ ; FLG - фильтр по флагам
+ ; nOWF - не открывать/закрывать выходной поток
+ ; FNM - полное наименование
+ D:'+$G(nOWF) OWF^RWU(".txt")
+ N I,N,L,C,J,X,FL
+ S I=+$G(^MN("spec")),(C,N)="",FL=$S(+$G(FNM):"fname",1:"sname")
+ S TXT=$$LU^TXTU($$WD^TXTU($G(TXT))),FLG=$G(FLG)
+ F  S N=$O(^MN(I,N)) Q:N=""  D:$G(^(N,"use"))'=0
+ .I FLG'="" Q:'$$InFlg("|"_$G(^("flg"))_"|",FLG) 
+ .S R=$G(^(FL)) Q:R=""  I TXT'="" Q:$$LU^TXTU(R)'[TXT 
+ .S L(R)=N
+ S I="" F  S I=$O(L(I)) Q:I=""  D WC^RWU(C_L(I)_"|"_I) S C=CR
+ D:'+$G(nOWF) C^RWU
+ Q
+InFlg(FLG,F) 
+ N I,X,Z
+ S Z=0 F I=1:1:9 S X=$P(F,"|",I) Q:X=""  I FLG[("|"_X_"|") S Z=1 Q 
+ Q Z 
+ADDL(NM) ; Добавить должность
+ N I S I=$$NEWIDX^YISPRAV("doljn")
+ S NM=$$WD^TXTU(NM)
+ S ^MN(I)=$H,I=$O(^MN(I,""),-1)+1,^(I)=NM
+ D UPD^IEXCH("YISPRAV","doljn")
+ D USYNC^ISPRAV("doljn")
+ D LDL
+ Q
+SETDL(ID,NM) ; Изменить должность
+ Q:ID=""  Q:'$D(^MN("doljn"))
+ N I S I=^("doljn")
+ D WD^ISSG("^MN("_I_","_ID_")")
+ S NM=$$WD^TXTU(NM),^MN(I,ID)=NM,^MN(I)=$H
+ D UPD^IEXCH("YISPRAV","doljn")
+ D USYNC^ISPRAV("doljn")
+ ;D LDL
+ Q
+CDL(ID) ; Проверить, если должность используется
+ N VR,A
+ S (A,VR)=""
+ F  S VR=$O(^KDR(VR)) Q:VR=""!A'=""  I $$GET^IKADRY(VR,"doljn")=ID!($$GET^IKADRY(VR,"doljn2")=ID) S A="Должность используется" Q
+ Q:A=""
+ D MSG^RWU(A)
+ Q
+DELDL(ID) ; Удалить должность
+ I ID="" D MSG^RWU("Неверный код") Q 
+ N I S I=+$G(^MN("doljn"))
+ I 'I D MSG^RWU("Справочник пуст") Q 
+ D CDL(ID) Q:$$IsMSG^RWU() 
+ D KD^ISSG("^MN("_I_","_ID_")")
+ K ^MN(I,ID)
+ D UPD^IEXCH("YISPRAV","doljn")
+ D USYNC^ISPRAV("doljn")
+ Q
+LDL ; Список должностей
+ N ID,I,C
+ S I=+$G(^MN("doljn")),(C,ID)=""
+ D OWF^RWU(".txt")
+ F  S ID=$O(^MN(I,ID)) Q:ID=""  D WC^RWU(C_ID_"|"_$G(^(ID))) S C=CR
+ D C^RWU
+ Q
+AITEMs(NM,TXT,DBL,KEY) ; Добавить элемент в справочник (system)
+ ; NM - наименование справочника
+ ; TXT - наименование элемента
+ ; DBL - контроль дублей
+ ; KEY - системный ключ (опционально)
+ N I,T,IX,K
+ S TXT=$$WD^TXTU(TXT),T=$$TRIM^TXTU($P(TXT,"|",1))
+ S NX=$S(NM="mectorab":5,1:NM),DBL=$G(DBL),KEY=$G(KEY)
+ I DBL S I=$$FINDN^ISPRAV(NX,1,T,DBL) Q:I'="" I 
+ I 'DBL,$G(^MN("root",NM,"uniq")) S I=$$FINDN^ISPRAV(NX,1,T,1) Q:I'="" I
+ I NM="mectorab" S ^M(NX)=$H,K=$S(KEY="":$O(^M(NX,""),-1)+1,1:KEY),^MN(I,K)=TXT Q I ; TODO
+ S I=$$NEWIDX^YISPRAV(NM)
+ S ^MN(I)=$H,K=$S(KEY="":$O(^MN(I,""),-1)+1,1:KEY),^MN(I,K)=TXT
+ D UPD^IEXCH("YISPRAV",NM)
+ Q I
+AITEM(NM,TXT,MOD,DBL,KEY) ; Добавить элемент в справочник
+ ; MOD - возврат номера
+ ; DBL - контроль дублей (1- с UL, 2-исключая знаки препинания)
+ ; KEY - системный ключ
+ S TXT=$$AITEMs(NM,TXT,$G(DBL),$G(KEY))
+ I $G(MOD) D MSG^RWU(TXT) q 
+ D NMLST(NM,2,0,1)
+ D USYNC^ISPRAV(NM)
+ Q
+SITEM(NM,ID,TXT,POS) ; Изменить элемент в справочнике
+ ; NM - наименование справочника
+ ; ID - элемент
+ ; TXT - значение
+ ; POS - позиция в элементе
+ Q:ID=""  Q:'$D(^MN(NM))
+ N I,TP,X
+ S I=^(NM),POS=+$G(POS)
+ S TP=$P($G(^MN("root",NM,"ftype")),"|",POS)
+ D WD^ISSG("^MN("_I_","""_ID_""")")
+ S TXT=$TR($$WD^TXTU(TXT),"|","/")
+ D:TP'=""
+ .I TP="D" S TXT=$$DI^DTUTL(TXT)
+ .I TP="B" S TXT=$TR(TXT,$TR(TXT,10,""),"") ; only 1/0
+ .I TP="N" S TXT=$$NNUM^TXTU(TXT)
+ I POS=1,$G(^MN("root",NM,"uniq")) S X=$$FINDN^ISPRAV(NM,1,$P(TXT,"|",1)) I X'="" D MSG^RWU("Элемент дублируется с "_X) Q 
+ I 'POS S:TXT["|" ^MN(I,ID)=TXT S:TXT'["|" $P(^MN(I,ID),"|",1)=TXT
+ I POS S $P(^MN(I,ID),"|",POS)=TXT
+ S ^MN(I)=$H
+ D UPD^IEXCH("YISPRAV",NM)
+ D USYNC^ISPRAV(NM)
+ Q
+DITEM(NM,ID) ; Удалить элемент в справочнике
+ I ID="" D MSG^RWU("Неверный код") Q 
+ N I S I=+$G(^MN(NM))
+ I 'I D MSG^RWU("Справочник пуст") Q 
+ D KD^ISSG("^MN("_I_","""_ID_""")")
+ K ^MN(I,ID)
+ D UPD^IEXCH("YISPRAV",NM)
+ D USYNC^ISPRAV(NM)
+ Q
+LSTITEM(NM,POS) ; Справочник по полю
+ N TP
+ S TP=$P($G(^MN("root",NM,"ftype")),"|",+POS)
+ Q:$P(TP,":",1)'="L" 
+ D OWF^RWU(".txt")
+ D STORsys^ICHIFR($P(TP,":",2))
+ D C^RWU
+ Q
+LSTs(NAME,ALL,CCR,TAG,DEC,AUSE) ; Вывод справочника
+ ; ALL - 0-только имя, 1-все данные, 2-имя в индексе
+ ; CCR - перевод строки вначале
+ ; TAG - экранировать тэги
+ ; DEC - расшифровывать справочники
+ ; AUSE - выводить все записи
+ N I,N,C,LD,A,J,LL,US
+ S C=$S($G(CCR):CR,1:""),N="",ALL=+$G(ALL),TAG=+$G(TAG),AUSE=$G(AUSE)
+ G:+NAME=NAME LSTnum
+ S I=+$G(^MN($S(NAME="otda":"otd",1:NAME)))
+ I NAME="otd" F  S N=$O(^MN(I,N)) Q:N=""  I $G(^(N,"use"))=1!AUSE,$G(^("med"))=1 D ww(C_N_"|"_$G(^("sname"))) S C=CR
+ I NAME="otda" F  S N=$O(^MN(I,N)) Q:N=""  I $G(^(N,"use"))=1!AUSE D ww(C_N_"|"_$G(^("sname"))) S C=CR
+ I NAME="spec" F  S N=$O(^MN(I,N)) Q:N=""  I $G(^(N,"use"))=1!AUSE D ww(C_N_"|"_$G(^("fname"))) S C=CR
+ I NAME="uchastok" F  S N=$O(^MN(I,N)) Q:N=""  S A=^(N) I '$P(A,"|",2) S A=$P(A,"|",1) D ww(C_N_"|"_"("_N_") "_$$FIOSH^IKADRY(^(N))) S C=CR
+ Q:NAME="otd"!(NAME="otda")!(NAME="spec")!(NAME="uchastok") 
+ S DEC=$G(DEC)
+ I DEC S N=$G(^MN("root",NAME,"ftype")) F J=1:1:$L(N,"|") S A=$P(N,"|",J) I $P(A,":",1)="L" S LL(J)=$P(A,":",2)
+ S US=$G(^MN("root",NAME,"arch"))
+ S N="" F  S N=$O(^MN(I,N)) Q:N=""  D
+ .S A=$G(^(N))
+ .I 'AUSE,US,$P(A,"|",US) Q  ; архив
+ .I 'ALL D ww(C_N_"|"_$P(A,"|",1)) S C=CR Q 
+ .I $D(LL) S J="" F  S J=$O(LL(J)) Q:J=""  S $P(A,"|",J)=$$name^ICHIFR(LL(J),$P(A,"|",J)) 
+ .D ww(C_$S(ALL=2:A,1:N)_"|"_A)
+ .S C=CR
+ Q
+LSTnum 
+ S I=NAME F  S N=$O(^M(I,N)) Q:N=""  D ww(C_N_"|"_^(N)) S C=CR
+ Q
+ww(X) 
+ S:TAG X=$$TAG^TXTU(X)
+ D WC^RWU(X)
+ Q
+SILSTs(NAME,IL,CCR,TAG) ; Список с строковой сортировкой по индексу
+ ; IL - размерность индекса (символов)
+ ; CCR - перевод строки вначале
+ ; TAG - экранировать тэги
+ N N,I,C,LST,K
+ S C=$S($G(CCR):CR,1:""),N="",TAG=+$G(TAG),IL=$S('$G(IL):3,1:IL)
+ S I=+$G(^MN(NAME))
+ F  S N=$O(^MN(I,N)) Q:N=""  S LST($J(N,IL))=N
+ S K="" F  S K=$O(LST(K)) Q:K=""  S N=LST(K) D ww(C_N_"|"_$P(^MN(I,N),"|",1)) S C=CR
+ Q
+NMLCR(NAME) ; Same as NMLST(NAME,2)
+ N ALL S ALL=2
+ G NMLST+2
+NMLST(NAME,ALL,ADD,FULL,AUSE) ; По имени, да/нет пустая строка/все
+ ; ALL - добавлять строку "Все"(1) или пустой выбор(2)
+ ; ADD - добавлять строку с добавлением элемента
+ ; FULL - все данные (полная строка)
+ ; AUSE - показывать архив
+ S ALL=+$G(ALL)
+ D OWF^RWU(".txt")
+ D:ALL=2 W^RWU("|"_CR)
+ S NAME=$S(NAME="mectorab":5,1:NAME)
+ D LSTs(NAME,+$G(FULL),,,$S(+$G(FULL):1,1:0),$G(AUSE))
+ D:ALL=1 WC^RWU(CR_"999|Все")
+ D:$G(ADD) WC^RWU(CR_"+|Добавить")
+ D C^RWU
+ Q
+NMLFLT(NAME,ALL,ADD,POS,VAL,VMOD) ; По имени с фильтрацией по позиции
+ ; POS - позиция строке разделителей
+ ; VAL - значение
+ ; VMOD = 0 - равно / 1 - не равно
+ N I,N,C,R
+ S I=+$G(^MN(NAME)),(C,N)="",ALL=+$G(ALL),POS=+$G(POS),VMOD=+$G(VMOD)
+ D OWF^RWU(".txt")
+ I ALL=2 D W^RWU("|"_CR) S C=CR
+ F  S N=$O(^MN(I,N)) Q:N=""  D
+ .S R=^(N)
+ .I POS Q:$S(VMOD:$P(R,"|",POS)=VAL,1:$P(R,"|",POS)'=VAL) 
+ .D WC^RWU(C_N_"|"_$P(R,"|",1)) S C=CR
+ I ALL=1 D WC^RWU(C_"999|Все") S C=CR
+ D:$G(ADD) WC^RWU(C_"+|Добавить")
+ D C^RWU
+ Q
+NMLSTLN(NAME) ; Линейно список (имя и все данные)
+ D OWF^RWU(".txt")
+ N N,I,C S (C,N)="",I=+$G(^MN(NAME))
+ F  S N=$O(^MN(I,N)) Q:N=""  D WC^RWU(C_^(N)) S C=CR
+ D C^RWU
+ Q
+FNDLST(NAME,TXT,fST) ; Список с поиском
+ ; fST - поиск только с начала строки
+ D OWF^RWU(".txt")
+ N N,I,C,R,X
+ S (C,N)="",I=+$G(^MN(NAME)),TXT=$$LU^TXTU($$WD^TXTU(TXT)),fST=+$G(fST)
+ S:fST X=$L(TXT)+1
+ F  S N=$O(^MN(I,N)) Q:N=""  D
+ .S R=$P(^(N),"|",1)
+ .I 'fST,$L(TXT) Q:$$LU^TXTU(R)'[TXT
+ .I fST,$L(TXT) Q:$F($$LU^TXTU(R),TXT)'=X 
+ .D WC^RWU(C_N_"|"_R) S C=CR
+ D C^RWU
+ Q
+CWRKDEC(X,VR,OTD) ; Decode coworker's
+ N I,R,Z,O,V,A
+ S A="",X=$$WD^TXTU(X),O=$S($P(X,",",1):"~"_OTD,1:"")
+ F I=2:1 S R=$P(X,",",I) Q:R=""  S Z=$P(R,":",4),V=$P(R,":",6,9),R=$P(R,":",1) S:R'="+" A=A_CR_R_O_$S(V="":"",1:"@"_V)_"|"_$S(Z="":$$GSPEC^YISPRAV(R),1:Z)_$S(V="":"",1:"|"_$$FIOSH^IKADRY(V))
+ ; cowrk~otd@VR|name
+ D MSG^RWU(A)
+ Q
+CWRKL ; Coworker list
+ N I,X
+ D OWF^RWU(".txt")
+ S I=+$G(^MN("cowrk")),X=""
+ F  S X=$O(^MN(I,X)) Q:X=""  D WC^RWU(CR_X_"|"_^(X))
+ D C^RWU
+ Q
+CWRKAL(NM) ; Add to list
+ N I,ID
+ S I=$$NEWIDX^YISPRAV("cowrk"),NM=$$WD^TXTU(NM)
+ S ID=$O(^MN(I,""),-1)+1,^(ID)=NM
+ D MSG^RWU(ID)
+ Q
+CWRKDL(ID) ; Delete from list
+ I ID="" D MSG^RWU("Error !!") Q 
+ N I S I=+$G(^MN("cowrk"))
+ K ^MN(I,ID)
+ Q
+CWRKLL(ID) ; Load list
+ N I,X,R
+ S I=+$G(^MN("cowrk")),X=""
+ D OWF^RWU(".txt")
+ F  S X=$O(^MN(I,ID,X)) Q:X=""  S R=^(X) D WC^RWU(CR_X_"|"_$P(R,"|",1)_"|"_$$GSPEC^YISPRAV($P(R,"|",2)))
+ D C^RWU
+ Q
+CWRKLLS(ID) ; Load list (w. spec)
+ N I,X,R,SP
+ S I=+$G(^MN("cowrk")),X=""
+ D OWF^RWU(".txt")
+ F  S X=$O(^MN(I,ID,X)) Q:X=""  S R=^(X),SP=$P(R,"|",2) D WC^RWU(CR_SP_"|"_$P(R,"|",1)_"|"_$$GSPEC^YISPRAV(SP))
+ D C^RWU
+ Q
+CWRKAI(ID,LN,TXT) ; Add item line
+ N I,X S I=+$G(^MN("cowrk"))
+ S TXT=$$WD^TXTU(TXT)
+ S ^MN(I,ID,LN)=TXT
+ Q
+CWRKDI(ID,LN) ; Delete item line
+ I ID=""!(LN="") D MSG^RWU("Error !!") Q
+ N X,I S I=+$G(^MN("cowrk"))
+ S X=LN F  S X=$O(^MN(I,ID,X)) Q:X=""  S ^(LN)=^(X),LN=X
+ S:X="" X=LN
+ K ^MN(I,ID,X)
+ Q
+CWRKEXL(ID,LN1,LN2) ; Exchange lines
+ N I S I=+$G(^MN("cowrk"))
+ S I=$G(^MN(I,ID,LN1)),^(LN1)=$G(^(LN2)),^(LN2)=I
+ Q
+SPST ; Save patient status
+ N I,R,X
+ D ORH^RWU
+ K ^M(1)
+ F I=1:1:9999 S R=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D
+ .S X=$P(R,"|",1) S:X'="" ^M(1,X)=$TR($P(R,"|",2,9),"|","/")
+ D CR^RWU,OWF^RWU(".txt")
+ S I="",R="" F  S I=$O(^M(1,I)) Q:I=""  D WC^RWU(R_I_"|"_^(I)) S R=CR
+ D C^RWU
+ D USYNC^ISPRAV("status1")
+ Q
+HDR(NM) ; Заголовок таблицы справочника
+ ; NM - имя справочника
+ N I,R,H,L,L1,W,N,KN,KW,KT
+ S R=$G(^MN("root",NM,"fname")),N=$G(^MN("root",NM))
+ S KN=$G(^MN("root",NM,"kname")),KT=$G(^MN("root",NM,"ktype"))
+ I KN="",R="" D MSG^RWU(N_CR_"Код:1000;Наименование:8600;"_CR_CR_KT) Q
+ S L=$L(R,"|"),L1=L-1
+ S W=$P($S('L1:0,L<3:5000/L1,L<5:6000/L1,1:6400/L1),".",1)
+ S KW=$S(L=1:1500,L<2:800,1:600)
+ S KN=$G(^MN("root",NM,"kname")) S:KN="" KN="Код"
+ S:R="" R="Наименование"
+ S H=KN_":"_KW_";"_$P(R,"|",1)_":"_$S(L=1:8100,L<3:3800,L<5:3000,1:2600)
+ F I=2:1:L S H=H_";"_$P(R,"|",I)_":"_W
+ D MSG^RWU(N_CR_H_";"_CR_$G(^MN("root",NM,"ftype"))_CR_KT)
+ Q
+ROOTLST(X) ; Список справочников
+ N ID,R,C,LST
+ S X=$$UL^TXTU($$WD^TXTU($G(X)))
+ D OWF^RWU(".txt")
+ S ID="" F  S ID=$O(^MN("root",ID)) Q:ID=""  S LST(ID)=""
+ S ID="" F  S ID=$O(^MN(ID)) Q:ID=""  I +ID'=ID,ID'="root" S LST(ID)=""
+ 
+ S (C,ID)="" F  S ID=$O(LST(ID)) Q:ID=""  D
+ .S R=$G(^MN("root",ID)) S:R="" R=ID
+ .I X'="",$$UL^TXTU(R)'[X Q 
+ .D WC^RWU(C_ID_"|"_R)
+ .S C=CR
+ D C^RWU
+ Q
+EXP(NM,MOD) ; Экспорт
+ N IDX,ID,R
+ Q:NM=""
+ S IDX=$G(^MN(NM)) Q:IDX=""
+ D OWF^RWU(".txt")
+ D WC^RWU("Код|Наименование")
+ S ID="" F  S ID=$O(^MN(IDX,ID)) Q:ID=""  D
+ .S R=$G(^(ID))
+ .S:R="" R=$G(^(ID,$S(NM="otd"!(NM="spec"):"fname",1:"name")))
+ .D WC^RWU(CR_ID_"|"_$S(MOD:$P(R,"|",1),1:R))
+ D C^RWU
+ Q
+IMP ; Импорт справочников
+ ; имя|key|<values|||||>
+ N %J,A,K,II,NM
+ D ORH^RWU
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  D:%J>1
+ .S A=$$WD^TXTU(A),NM=$P(A,"|",1),K=$P(A,"|",2)
+ .Q:NM=""!(K="") 
+ .S II=$$NEWIDX^ISPRAV(NM)
+ .S ^MN(II,K)=$P(A,"|",3,99)
+ D CR^RWU
+ Q
+REGIPROC 
+ S ^IPROC("Система","Экспорт справочников")="EXP_NSPRAV,1,2,te@net:ROOTLST_NSPRAV(),Справочник,t@string:1/Да#2/Нет,Только наименование элементов"
+ Q
+INITDB 
+ N I
+ S ^MN("root","spec")="Специальности"
+ S ^MN("root","spec","mode")="f"
+ S ^MN("root","otd")="Отделения"
+ S ^MN("root","otd","mode")="f"
+ S ^MN("root","doljn")="Должности"
+ S ^MN("root","otdflg")="Флаги отделений"
+ S ^MN("root","otdflg","kname")="Флаг",^("ktype")="S"
+ S ^MN("root","specflg")="Флаги специальностей"
+ S ^MN("root","specflg","kname")="Флаг",^("ktype")="S"
+ S ^MN("root","tspec")="Разделы специальностей"
+ S ^MN("root","specrtp")="Пользовательские разделы специальностей"
+ D:'$D(^MN("tspec"))
+ .S I=$$NEWIDX^YISPRAV("tspec")
+ .S ^MN(I,1)="Поликлиника"
+ .S ^MN(I,2)="Помощь на дому"
+ .S ^MN(I,3)="Профмедицина"
+ .S ^MN(I,4)="Стоматология"
+ .S ^MN(I,5)="Параклиника"
+ .S ^MN(I,6)="Средний медперсонал"
+ Q

@@ -1,0 +1,337 @@
+NTPOLIS ; Типы абонементов [ 11/23/2023  1:24 AM ]
+OPEN(FRM) ; Начальная инициализация
+ S FRM=$G(FRM) S:FRM="" FRM="buyga"
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<"_FRM_"><lst>")
+ D TREEsys
+ D W^RWU("</lst><zgrp>")
+ N I S I=""
+ F  S I=$O(^BTPLS("z",I)) Q:I=""  D WC^RWU(CR_I_"|"_$P(^(I),"|",1))
+ D W^RWU("</zgrp><prog>")
+ D LSTSsys^YMPRP(+$H,1,1)
+ D W^RWU("</prog>")
+ D:$$LCL^IUSER("polis","seldate") W^RWU("<sdate visible=""yes""/>")
+ D W^RWU("</"_FRM_"></nb_console>"),C^RWU
+ Q
+LST ; Show list, w. price 
+ N ID,C S (C,ID)=""
+ D OWF^RWU(".txt")
+ F  S ID=$O(^BTPLS("t",ID)) Q:ID=""  I $G(^(ID,"use"))'=0 D WC^RWU(C_ID_"|"_$G(^("name"))_", "_(+$G(^("price",1)))_" руб.") S C=CR
+ D C^RWU
+ Q
+LSTLT ; Show list, w./o price 
+ N ID,C S (C,ID)=""
+ D OWF^RWU(".txt")
+ F  S ID=$O(^BTPLS("t",ID)) Q:ID=""  I $G(^(ID,"use"))'=0 D WC^RWU(C_ID_"|"_$G(^("name"))) S C=CR
+ D C^RWU
+ Q
+TREE ; Show tree, w. folders and price 
+ D OWF^RWU(".txt")
+ D TREEsys
+ D C^RWU
+ Q
+TREEsys ; Show tree, w. folders and price 
+ N ID,C,G,LST,R,P,X
+ S (C,ID)=""
+ F  S ID=$O(^BTPLS("t",ID)) Q:ID=""  S:$G(^(ID,"use"))'=0 LST($G(^("grp"))_"|"_$G(^("name"))_"|"_ID)=ID
+ S (G,ID)="" F  S ID=$O(LST(ID)) Q:ID=""  D
+ .S R=$P(ID,"|",1)
+ .I R'="",G'=R D WC^RWU(C_"|"_$G(^(+$G(^MN("salegrp")),R))) S C=CR
+ .S G=R,R=LST(ID)
+ .S P=+$G(^BTPLS("t",R,"price",1)),X=+$G(^BTPLS("t",R,"base-summ",1))
+ .S:P&(X>P) P=P_" ("_X_")" 
+ .D WC^RWU(C_$S(G="":"",1:$C(9))_R_"|"_$P(ID,"|",2)_", "_P_" руб.")
+ .S C=CR
+ Q
+INIT ; Инициализация редактора договоров
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<tgalist><autonaz>")
+ D LSTsys^NNAZPT("")
+ D W^RWU("</autonaz><grp>")
+ D LSTs^NSPRAV("salegrp",0,"",1)
+ D W^RWU("</grp><pgrp>")
+ D LSTs^NSPRAV("agspgrp",0,"",1)
+ D W^RWU("</pgrp><flg>")
+ D LSTs^NSPRAV("btplflg",0,"",1) ; Флаги абонементов
+ D W^RWU("</flg></tgalist></nb_console>"),C^RWU
+ Q
+TAB(STR,GRP) ; Show table
+ N ID,NM
+ S ID="",STR=$$UL^TXTU($$WD^TXTU(STR))
+ D OWF^RWU(".txt"),WC^RWU("|Наименование")
+ F  S ID=$O(^BTPLS("t",ID)) Q:ID=""  D
+ .S NM=$G(^(ID,"name"))
+ .I GRP'="",$G(^("grp"))'=GRP Q
+ .I STR'="",$$UL^TXTU(NM)'[STR Q 
+ .D WC^RWU(CR_ID_"|"_NM)
+ D C^RWU
+ Q
+L(ID) ; Load
+ Q:ID=""
+ N P,R,I,K,A,Z,X
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<tgalist>")
+ D WTAGDC^RWU("id",ID)
+ D WTAGDC^RWU("nm",$G(^BTPLS("t",ID,"name")))
+ D WTAGDC^RWU("base",$G(^BTPLS("t",ID,"base-summ",1)))
+ D WTAGDC^RWU("price",$G(^BTPLS("t",ID,"price",1)))
+ D WTAGDC^RWU("rprice",$G(^BTPLS("t",ID,"rprice",1)))
+ F P="dcnt","stc","grp","ptp","agz","agf","autonaz","skd","mskd","flg","use","prn","pclose","aladd","uprg","pp","limit","pgrp" D WTAGDC^RWU(P,$G(^BTPLS("t",ID,P)))
+ D WTAGC^RWU("prog",$$progLST(ID))
+ D W^RWU("</tgalist></nb_console>"),C^RWU
+ Q
+progLST(ID) ; Текстовый список программ
+ N R,Z,I,K,A
+ S R=$G(^BTPLS("t",ID,"prog")),A=""
+ S Z=$G(^BTPLS("t",ID,"progsum"))
+ F I=1:1:99 S K=$P(R,"|",I),X=$P(Z,"|",I) Q:K=""  S A=$S(I=1:"",1:A_CR)_K_"|"_$S(X:X_" руб. ",1:"")_$$NAME^IMPRP(K)
+ Q A
+S ; Save
+ N @$$NEWVAR^YIXMLRR()
+ D RBUFH^YIXMLRR(1)
+ D W
+ Q
+W ; Write
+ Q:$$LCL^IUSER("npolis","save")=0 
+ N ID,P
+ S ID=$G(XML("nb_console","tgalist","id"))
+ I ID="",$$LCL^IUSER("npolis","new")=0 Q 
+ I ID="" L +^BTPLS("t") S ID=$O(^BTPLS("t",""),-1)+1,^BTPLS("t",ID,"name")="" L -^BTPLS("t") 
+ I $G(XML("nb_console","tgalist","base"))>$G(XML("nb_console","tgalist","price")) D MSG^RWU("Сумма оплаты не может быть больше стоимости абонемента.") Q 
+ S ^BTPLS("t",ID,"name")=$G(XML("nb_console","tgalist","nm"))
+ S ^BTPLS("t",ID,"base-summ",1)=$G(XML("nb_console","tgalist","base"))
+ S ^BTPLS("t",ID,"price",1)=$G(XML("nb_console","tgalist","price"))
+ S ^BTPLS("t",ID,"rprice",1)=$G(XML("nb_console","tgalist","rprice"))
+ S P=$G(XML("nb_console","tgalist","dcnt"))
+ S:'P P=365 ; по умолчанию
+ S ^BTPLS("t",ID,"dcnt")=P
+ F P="stc","prog","dcnt","ptp","grp","agz","agf","autonaz","skd","mskd","flg","use","prn","pclose","aladd","uprg","limit","pgrp" S ^BTPLS("t",ID,P)=$G(XML("nb_console","tgalist",P))
+ S P=$TR($G(XML("nb_console","tgalist","prog")),$C(13,10),"|")
+ S ^BTPLS("t",ID,"prog")=P
+ S P=$TR($G(XML("nb_console","tgalist","pp")),"/;\|, ",";;;;.")
+ S ^BTPLS("t",ID,"pp")=P
+ S ^BTPLS("t",ID,"log")=$$USRH^IUSER()
+ D W^ISSG("^BTPLS(""t"",ID)")
+ D MKIDX
+ D KGL^IEXCH("^BTPLS","t"),GL^IEXCH("^BTPLS","t")
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<tgalist>")
+ D WTAGDC^RWU("id",ID)
+ D W^RWU("</tgalist></nb_console>"),C^RWU
+ Q
+SUMPRG(ID,PRG,SUM) 
+ Q:ID="" 
+ N R,I
+ S R=$G(^BTPLS("t",ID,"prog"))
+ F I=1:1:99 Q:$P(R,"|",I)=PRG 
+ Q:I=99
+ S $P(^BTPLS("t",ID,"progsum"),"|",I)=SUM
+ D GL^IEXCH("^BTPLS","t",ID,"progsum")
+ D MSG^RWU($$progLST(ID))
+ Q
+DEL(ID,STR,GRP) ; Delete
+ Q:$$LCL^IUSER("npolis","del")=0 
+ I ID'="" K ^BTPLS("t",ID) D K^ISSG("^BTPLS(""t"",ID)")
+ D MKIDX
+ D KGL^IEXCH("^BTPLS","t"),GL^IEXCH("^BTPLS","t")
+ D TAB($G(STR),$G(GRP))
+ Q
+MKIDX ; Make index
+ N I,R S I=""
+ K ^BTPLS("stc")
+ F  S I=$O(^BTPLS("t",I)) Q:I=""  D
+ .S R=$G(^BTPLS("t",I,"stc"))
+ .S:R'="" ^BTPLS("stc",R)=""
+ D KGL^IEXCH("^BTPLS","stc"),GL^IEXCH("^BTPLS","stc")
+ Q
+IsABON(DGN) ; Этот договор - абонемент
+ Q:DGN="" 0
+ Q $S($D(^BTPLS("stc",DGN)):1,1:0)
+MAKE(NIB,ID,AG,COM,GZ,MSKD,AGE,ADD,PRG,PPC,SDT) ; Зарегистрировать из шаблона
+ ; AG - агент, AGE - внешний агент
+ ; GZ - группа здоровья
+ ; MSKD - скидка вручную
+ ; ADD - добавить к существующему (если есть)
+ ; PRG - программа обслуживания
+ ; PPC - число платежей
+ ; SDT - дата начала действия
+ I NIB=""!(ID="") D MSG^RWU(0) Q 
+ N X,TP,STC,K,R,R1,N,SKD,PP,LA,REZ,FP
+ S AGE=$$WD^TXTU($G(AGE)),COM=$$WD^TXTU(COM),PPC=$G(PPC)
+ S GZ=$G(GZ),MSKD=$G(MSKD),ADD=$G(ADD),PRG=$G(PRG),K=1,(LA,REZ)=""
+ S SDT=$$DI^DTUTL($G(SDT))
+ I $$LCL^IUSER("polis","posbal"),$$NOW^IBILL(NIB)<0 D MSG^RWU("У пациента есть долг.") Q 
+ S SKD=$$GET^IDSCN(NIB,+$H)
+ S:$$LCL^IUSER("polis","skd")=0 SKD=""
+ S:$$LCL^IUSER("polis","mskd")=0 MSKD=""
+ S:$$LCL^IUSER("polis","usprg")=0 PRG=""
+ S TP=$G(^BTPLS("t",ID,"ptp")),STC=$G(^("stc"))
+ S:'+$G(^("agz")) GZ="" ; недозволены группы здоровья
+ S:'+$G(^("skd")) SKD="" ; недозволены авт. скидки
+ S:'+$G(^("mskd")) MSKD="" ; недозволены ручн. скидки
+ S:'+$G(^("aladd")) ADD="" ; недозволено объединение
+ I $L(GZ) S K=$P($G(^BTPLS("z",GZ)),"|",2) S:K="" K=1
+ S:MSKD SKD=MSKD ; приоритет ручн. скидки
+ I +SKD S:SKD>100 SKD=100 S K=K*(100-SKD)/100
+ S PP=$$NEW^IPOLIS()
+ S R1=$S(PPC:K*$G(^BTPLS("t",ID,"price",1))/PPC,1:"")
+ D CREA^IPOLIS(NIB,PP,STC,ID,K,,1,R1,SDT)
+ S:SDT="" SDT=+$H
+ D:AG'=""!(AGE'="") SET^IPOLIS(NIB,PP,"agent",$S(AG="":AGE,1:AG))
+ S K=$$KDR^IUSER(),X="|"_$G(^BTPLS("t",ID,"flg"))_"|"
+ I K'="",K'=AG,X["|ag0|" D SET^IPOLIS(NIB,PP,"agent0",K)
+ D:COM'="" SET^IPOLIS(NIB,PP,"comm",COM)
+ I ADD S LA=$$LAST^IPOLIS(NIB,1) S:LA="" ADD=0 ; нет последн. абон.
+ S X=$G(^BTPLS("t",ID,"pclose"))
+ I X S:LA="" LA=$$LAST^IPOLIS(NIB,1) S:LA'="" R=$$DOEND^IPOLIS(NIB,LA,SDT)
+ I 'ADD,TP=3 D
+ .S R=$$GET^IPAC(NIB,"stc",SDT)
+ .S R1=$$GET^IPAC(NIB,"stc1",SDT)
+ .S TP=$S(R="":1,$D(^BTPLS("dstc",R)):1,X&(STC=R):1,1:3)
+ .S:TP=3 TP=$S(R1="":2,$D(^BTPLS("dstc",R1)):2,X&(STC=R1):2,1:4)
+ D:TP>1 SET^IPOLIS(NIB,PP,"ptp",TP) ; если отличается от шаблона
+ D:'ADD SET^IPAC(NIB,"polis"_$S(TP=2:1,TP=4:2,1:""),+$H,PP)
+ ; программы
+ S FP=1
+ S:+$G(^BTPLS("t",ID,"uprg")) PRG=""
+ S:PRG="" X=$G(^BTPLS("t",ID,"prog"))
+ I PRG="",X'="",+$G(^BTPLS("t",ID,"uprg")) S $P(REZ,"|",3)="prog",FP=0 D SS^IUSER("polis","PP",PP),SS^IUSER("polis","prog",X),SS^IUSER("polis","tp",ID)
+ I 'ADD,PRG'="" D SET^IPOLIS(NIB,PP,"prog",PRG) ; нестандартн. прогр.
+ ; оплата частями
+ S X=$G(^BTPLS("t",ID,"pp"))
+ I PPC S R1=$$GET^IPOLIS(NIB,PP,"price")/PPC,X="" F R=1:1:PPC S $P(X,";",R)=R1
+ D:X'=""
+ .S X=$TR(X,";","|"),PPC=$L(X,"|")
+ .S K=+$H+$$GET^IPOLIS(NIB,PP,"from")
+ .S N=$$GET^IPOLIS(NIB,PP,"dcnt")\PPC
+ .F R=1:1:PPC S $P(X,"|",R)=$P(X,"|",R)_":"_K,K=K+N ; сумма+дата
+ .D SET^IPOLIS(NIB,PP,"pp",X)
+ 
+ D:ADD SET^IPOLIS(NIB,PP,"add",LA)
+ D:FP CHKPAY^IPOLIS(NIB,PP)
+ D:$G(^BTPLS("t",ID,"activate"))!$$LCL^IUSER("polis","autoactive") ACTIVAT^IPOLIS(NIB,PP,"",1) 
+ D UPD^IEXCH("IPACEX",NIB)
+ S X=$G(^BTPLS("t",ID,"prn"))
+ S:X'="" $P(REZ,"|",1)="print",$P(REZ,"|",2)=X
+ I REZ'="" D MSG^RWU(REZ) Q 
+ D MSG^RWU(1)
+ Q
+PROGUL ; Список программ по создаваемому абонем.
+ N R,I,A,X,Z,E
+ S R=$$GS^IUSER("polis","prog"),A=""
+ S Z=$G(^BTPLS("t",$$GS^IUSER("polis","tp"),"progsum"))
+ F I=1:1:$L(R,"|") S X=$P(R,"|",I),E=$P(Z,"|",I),A=$S(A="":"",1:A_CR)_X_"|"_$S(E:E_" руб. ",1:"")_$$NAME^IMPRP(X)
+ D MSG^RWU(A)
+ Q
+PROGSET(NIB,VAL) 
+ N PP,I,K,R,SKD
+ S PP=$$GS^IUSER("polis","PP"),VAL=$$WD^TXTU(VAL)
+ S R=$$GS^IUSER("polis","prog")
+ F I=1:1:99 Q:$P(R,"|",I)=VAL
+ I I'=99 S R=$P($G(^BTPLS("t",$$GET^IPOLIS(NIB,PP,"tp"),"progsum")),"|",I) D:R
+ .S K=$$GET^IPOLIS(NIB,PP,"koef") S:K="" K=1
+ .D SET^IPOLIS(NIB,PP,"price",R*K)
+ D SET^IPOLIS(NIB,PP,"prog",VAL)
+ D CHKPAY^IPOLIS(NIB,PP)
+ Q
+MAKESYS(NIB,ID,COM,SUM,MSKD,TP,LIM,PRG) ; Зарегистрировать из шаблона с сист данными 
+ ; SUM - стоимость полиса
+ ; MSKD - ручная скидка
+ ; TP - тип основной/вторичный/автовыбор
+ ; LIM - лимит суммы приемов
+ ; PRG - нестандартные программы
+ D MSG^RWU(0)
+ Q:NIB=""!(ID="") 
+ I $$LCL^IUSER("polis","posbal"),$$NOW^IBILL(NIB)<0 D MSG^RWU("У пациента есть долг.") Q 
+ N X,TP,STC,K,R,X,R1,PP,H,SKD
+ S COM=$$WD^TXTU(COM),SUM=$$NNUM^TXTU($G(SUM)),MSKD=$G(MSKD)
+ S TP=$G(TP),LIM=$G(LIM),PRG=$G(PRG),H=+$H
+ S SKD=$$GET^IDSCN(NIB,H)
+ S:$$LCL^IUSER("polis","skd")=0 SKD=""
+ S:$$LCL^IUSER("polis","mskd")=0 MSKD=""
+ S:$$LCL^IUSER("polis","usprg")=0 PRG=""
+ S TP=$S(TP="":$G(^BTPLS("t",ID,"ptp")),1:TP),STC=$G(^("stc")),K=1
+ S:'+$G(^("skd")) SKD="" ; недозволены скидки
+ S:'+$G(^("mskd")) MSKD="" ; недозволены ручн. скидки
+ S:MSKD SKD=MSKD ; приоритет ручн. скидки
+ I +SKD S:SKD>100 SKD=100 S K=K*(100-SKD)/100
+ I SUM,SUM<$G(^BTPLS("t",ID,"base-summ",1)) D MSG^RWU("Стоимость меньше минимальной суммы оплаты.") Q 
+ S PP=$$NEW^IPOLIS()
+ D CREA^IPOLIS(NIB,PP,STC,ID,K,SUM,1,,H)
+ S K=$$KDR^IUSER(),X="|"_$G(^BTPLS("t",ID,"flg"))_"|"
+ I K'="",X["|ag0|" D SET^IPOLIS(NIB,PP,"agent0",K)
+ D:SKD SET^IPOLIS(NIB,PP,"skd",SKD)
+ D:COM'="" SET^IPOLIS(NIB,PP,"comm",COM)
+ S X=$G(^BTPLS("t",ID,"pclose"))
+ I X S R=$$LAST^IPOLIS(NIB,1) S:R'="" R=$$DOEND^IPOLIS(NIB,R,H)
+ D:TP=3
+ .S R=$$GET^IPAC(NIB,"stc",H)
+ .S R1=$$GET^IPAC(NIB,"stc1",H)
+ .S TP=$S(R="":1,$D(^BTPLS("dstc",R)):1,X&(STC=R):1,1:3)
+ .S:TP=3 TP=$S(R1="":2,$D(^BTPLS("dstc",R1)):2,X&(STC=R1):2,1:4)
+ D:TP>1 SET^IPOLIS(NIB,PP,"ptp",TP) ; если отличается от шаблона
+ D:PRG'="" SET^IPOLIS(NIB,PP,"prog",PRG) ; нестандартн. прогр.
+ D SET^IPAC(NIB,"polis"_$S(TP=2:1,TP=4:2,1:""),H,PP)
+ I LIM'="",+LIM>0 D SET^IPAC(NIB,"sumlimit",H,$TR(LIM,",","."))
+ D CHKPAY^IPOLIS(NIB,PP)
+ D UPD^IEXCH("IPACEX",NIB)
+ D MSG^RWU(1)
+ Q
+TABGZ ; Группы здоровья
+ D OWF^RWU(".txt")
+ N I S I=""
+ F  S I=$O(^BTPLS("z",I)) Q:I=""  D WC^RWU(CR_I_"|"_^(I))
+ D C^RWU
+ Q
+ADDGZ(X) 
+ S X=$$WD^TXTU(X)
+ L +^BTPLS("z")
+ N I S I=$O(^BTPLS("z",""),-1)+1
+ S ^(I)=X
+ L -^BTPLS("z")
+ D GL^IEXCH("^BTPLS","z")
+ D TABGZ
+ Q
+DELGZ(X) 
+ Q:X="" 
+ K ^BTPLS("z",X)
+ D KGL^IEXCH("^BTPLS","z")
+ Q
+NMGZ(I,X) 
+ Q:I="" 
+ Q:'$D(^BTPLS("z",I)) 
+ S $P(^BTPLS("z",I),"|",1)=$$WD^TXTU(X)
+ D KGL^IEXCH("^BTPLS","z"),GL^IEXCH("^BTPLS","z")
+ Q
+KOEFGZ(I,X) 
+ Q:I="" 
+ S X=$TR(X,"1234567890,.","1234567890..")
+ Q:'$D(^BTPLS("z",I)) 
+ S $P(^BTPLS("z",I),"|",2)=X
+ D KGL^IEXCH("^BTPLS","z"),GL^IEXCH("^BTPLS","z")
+ Q
+NAME(I) ; Имя шаблона
+ Q:I="" ""
+ Q $G(^BTPLS("t",I,"name"))
+COLIST(PLS,ALLOW) ; Разрешенные/запрешенные услуги по программе к полису
+ Q:PLS="" 
+ N P S P=$G(^BTPLS("t",PLS,"prog")) Q:P="" 
+ D COLIST^YMPRP(P,"",+$G(ALLOW),1)
+ Q
+AUTOADD ; Добавление информации по абонементам в раздел НСИ общих документов
+ N DOC,NM,ID
+ S TP=$$FNDTP^YDOCTP("Нормативно-справочные документы")
+ S ID="" F  S ID=$O(^BTPLS("t",ID)) Q:ID=""  D
+ .S NM=$G(^(ID,"name"))
+ .S DOC=$$FNDDOC^YDOCS(NM) Q:NUM="" 
+ .S DOC=$$MKDOCNM^YDOCS(NM,"Нормативно-справочный документ","Нормативно-справочная информация")
+ .D SETDEF^YDOCS(DOC)
+ .D SET^YDOCS(DOC,"ext","tab")
+ .D SET^YDOCS(DOC,"rproc","COLIST^NTPOLIS("_ID_",1)")
+ Q
+INITDB 
+ S ^MN("root","btplflg")="Флаги видов абонементов"
+ Q
+REGLCL ; Register description of available rights
+ K ^LCLI("npolis")
+ S ^LCLI("npolis")="Типы абонементов"
+ S ^LCLI("npolis","new")="Создание нового"
+ S ^LCLI("npolis","save")="Сохранение"
+ S ^LCLI("npolis","del")="Удаление"
+ Q

@@ -1,0 +1,61 @@
+NKKM ; Утилиты кассвого аппарата [ 06/12/2020  1:35 PM ]
+DEPL ; Справочник секций
+ N Id,I,R
+ D OWF^RWU(".txt")
+ D WC^RWU("|Наименование|Код в ККМ|Тип платежа|Для юрлиц|Договор|Абонемент|Назначение|НДС|Налогообложение|ККМ|Товар")
+ S Id=+$G(^MN("kkmdepart")),I=""
+ F  S I=$O(^MN(Id,I)) Q:I=""  D
+ .S R=^(I)
+ .D WC^RWU(CR_I_"@"_$P(R,"|",3)_"|"_$P(R,"|",1)_"|"_$P(R,"|",2)_"|"_$$NAME^ISPRAV("paytype",$P(R,"|",3))_"|"_$S($P(R,"|",4):"да",1:"нет")_"|"_$P(R,"|",5)_"|"_$P(R,"|",6)_"|"_$P(R,"|",7)_"|"_$P(R,"|",8)_"|"_$P(R,"|",9)_"|"_$$NAME^ISPRAV("kkm",$P(R,"|",10)))
+ D C^RWU
+ Q
+DEPADD(NM)      ; Добавить новую секцию
+ N Id,ID
+ S Id=$$NEWIDX^YISPRAV("kkmdepart"),NM=$$WD^TXTU(NM)
+ L +^MN(Id)
+ S ID=$O(^MN(Id,""),-1)+1,^(ID)=NM
+ L -^MN(Id)
+ D MSG^RWU(ID)
+ D UPD^IEXCH("YISPRAV","kkmdepart")
+ Q
+DEPSET(ID,POS,STR)      ; Изменить поля справочника секций
+ N Id S Id=+$G(^MN("kkmdepart")) Q:'Id 
+ D MSG^RWU(1)
+ S STR=$$WD^TXTU(STR),ID=$P(ID,"@",1)
+ S STR=$S(POS=3:$S(STR="да":1,1:0),POS=7:$S(STR="да":1,1:0),POS>3:$S(STR="*":STR,1:+STR),1:STR)
+ S POS=$S(POS<7:POS+1,1:0)
+ I 'POS D MSG^RWU(0) Q
+ S $P(^MN(Id,ID),"|",POS)=STR
+ D UPD^IEXCH("YISPRAV","kkmdepart")
+ Q
+DEPDEL(ID)      ; Удалить секцию
+ I ID="" D MSG^RWU("Ошибка идентификатора") Q
+ N Id S Id=+$G(^MN("kkmdepart")) Q:'Id
+ D K^ISSG("^MN("_Id_","_ID_")")
+ K ^MN(Id,ID)
+ D UPD^IEXCH("YISPRAV","kkmdepart")
+ Q
+INITDB 
+ N I
+ S ^MN("root","kkmdepart")="Отделы в ККМ"
+ S ^MN("root","kkmdepart","fname")="Наименование|Код в ККМ|Тип платежа|Для юрлиц|Договор|Абонемент|Назначение|НДС|Налогообложение|ККМ|Товар"
+ S ^MN("root","kkmdepart","ftype")="S|S|L:paytype|B|S|S|S|N|L:taxmode|L:kkm|B"
+ S ^MN("root","kkmdepart","fcode")="name|code_in_dev|paytype|entity|contract|lsubscript|appointment|nds|taxes|cashbox|goods"
+ 
+ S ^MN("root","kkmtax")="Преобразование значения налогов в группу ККМ"
+ S ^MN("root","kkmtax","kname")="Налог"
+ S ^MN("root","kkmtax","ktype")="S"
+ S ^MN("root","kkmtax","fname")="Налоговая группа ККМ"
+ S ^MN("root","kkmtax","ftype")="N"
+ S ^MN("root","kkmtax","fcode")="tax_group"
+ 
+ S ^MN("root","taxmode")="Вид налогообложения"
+ D:'$D(^MN("taxmode"))
+ .S I=$$NEWIDX^YISPRAV("taxmode")
+ .S ^MN(I,1)="ОСН"
+ .S ^MN(I,2)="УСН доход"
+ .S ^MN(I,3)="УСН доход-расход"
+ .S ^MN(I,4)="ЕНВД"
+ .S ^MN(I,5)="ЕСН"
+ .S ^MN(I,6)="ПСН"
+ Q

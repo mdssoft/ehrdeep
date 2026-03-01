@@ -1,0 +1,15 @@
+NIEXCH ; Процедуры инф. обмена [ 11/20/2011  3:16 AM ]
+ESTAT ; Состояние информационного обмена по филиалам
+ N R,P,S,F
+ D OWF^RWU(".txt")
+ D WC^RWU("Сервер|Дата,время|Данные")
+ S R="" F  S R=$O(^EXCFG("log",R)) Q:R=""  D
+ .S F=0,P=""
+ .F  S P=$O(^EICH("f",P)) Q:P=""!F  S S="" F  S S=$O(^EICH("f",P,S)) Q:S=""  I $D(^(S,R)) S F=1 Q 
+ .D WC^RWU(CR_$$NAME^ICONTR(R)_"|"_$$DTM^DTUTL(^EXCFG("log",R))_"|"_$S(F:"+",1:""))
+ D C^RWU
+ Q
+REGIPROC 
+ Q:'$G(^cfg("exch"))
+ S ^IPROC("Система","Состояние информационного обмена")="ESTAT_NIEXCH,1,0"
+ Q

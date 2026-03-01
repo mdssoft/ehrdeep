@@ -1,0 +1,52 @@
+RWWWLOG ; ^WWWLOG reports [ 03/22/2023  6:40 PM ]
+DSSU(DS,DE,USR,R,R2) ; Вывод журнала
+ N C,X,I,N,D,M,EX,PROC,PP,A,TPR,TMS,TME,U,IP,TP,IPA,PRT,PRR,P2
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),IP=""
+ D OWF^RWU(".txt")
+ D WC^RWU("Дата, время|Адрес|Тип|URL|Запрос|Ответ|Пользователь")
+ S C=$C(9),(X,I,EX)=0
+ F N=$O(^WWWLOG(""),-1):-1:0 S M=$G(^WWWLOG(N)) Q:M=""  S D=$P(M,C,1) Q:+D<DS  D  Q:+D>DE 
+ .I M["<<sys>>" Q
+ .S PP=$P(M,C,6)
+ .I R'="",PP'[R Q 
+ .I R2'="",PP'[R2 Q
+ .S U=$P(M,C,8) I USR'="",USR'=U Q
+ .;I IP'="",$P(M,C,3)'=IP Q
+ .S PROC=$P(PP,"?",1),TP=$P(M,C,5),IPA=$P(M,C,3)
+ .S PROC=$TR($P(PROC,"/",$L(PROC,"/")),"_","^"),P2=$P(PROC,"^",2),PRR=""
+ .I PROC'="",PROC["^",PROC'["%",PROC'["$",$P(PROC,"^",3)="" X "S PRT=$T("_PROC_")" X:P2'="" "S PRR=$T(^"_P2_")" S PROC=$$TRIM^TXTU($P(PRT,";",2))_" / "_$$TRIM^TXTU($P($P(PRR,";",2),"[",1))
+ .S:PROC=" / " PROC=""
+ .I M["<<err>>" S TP="ERR",PP=IPA,IPA=""
+ .D WC^RWU(CR_$$DTM^DTUTL(D)_"|"_IPA_"|"_TP_"|"_PP_"|"_PROC_"|"_$P(M,C,7)_"|"_U)
+ D C^RWU
+ Q
+DSSUR(DS,DE,USR) ; Вывод журнала
+ N C,X,I,N,D,M,EX,PROC,PP,A,TPR,TMS,TME,U,IP,TP,IPA,PRT,PRR,LSTR,RES
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),IP=""
+ S LSTR("ZPS^NSPRASP")=""
+ S LSTR("ZPSL^NSPRASP")=""
+ S LSTR("S^YIPACN")=""
+ S LSTR("S^NNAZPT")=""
+ S LSTR("S^NGRNL")=""
+ S LSTR("MAKE^NTPOLIS")=""
+ 
+ D OWF^RWU(".txt")
+ D WC^RWU("Оператор|ФИО|Запросов")
+ S C=$C(9),(X,I,EX)=0
+ F N=$O(^WWWLOG(""),-1):-1:0 S M=$G(^WWWLOG(N)) Q:M=""  S D=$P(M,C,1) Q:+D<DS  D  Q:X 
+ .I EX Q:+D>DE  
+ .I M["<<sys>>" Q
+ .S U=$P(M,C,8) I USR'="",USR'=U Q
+ .;I IP'="",$P(M,C,3)'=IP Q
+ .S PP=$P(M,C,6),PROC=$P(PP,"?",1),TP=$P(M,C,5),IPA=$P(M,C,3)
+ .S PROC=$TR($P(PROC,"/",$L(PROC,"/")),"_","^") Q:PROC=""  Q:U="" 
+ .Q:'$D(LSTR(PROC))
+ .S RES(U)=$G(RES(U))+1
+ S U="" F  S U=$O(RES(U)) Q:U=""  D
+ .D WC^RWU(CR_U_"|"_$$FIO^IUSER(U)_"|"_RES(U))
+ D C^RWU
+ Q
+REGIPROC 
+ S ^IPROC("Система","Журнал сервисов")="DSSU_RWWWLOG,1,5,d,Начальная дата,d,Конечная дата,s,Пользователь,s,Запрос,s,Запрос 2"
+ S ^IPROC("Система","Статистика по операторам")="DSSUR_RWWWLOG,1,3,d,Начальная дата,d,Конечная дата,s,Пользователь"
+ Q

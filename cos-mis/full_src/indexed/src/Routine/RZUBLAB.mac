@@ -1,0 +1,86 @@
+RZUBLAB ; Отчеты зуботехнической лаборатории [ 09/03/2019  5:38 PM ]
+WTECH(DS,DE) ; Загруженность техников
+ ; что у кого сейчас в работе, по основному технику
+ ; только невыполненные
+ N ID,TAB,A,S,R,W,RD
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S ID="" F  S ID=$O(^STZN(ID)) Q:ID=""  D
+ .S A=^(ID),S=$P(A,"|",2)
+ .S R=$$GSTAGE^NZUBLAB(ID,DS,DE,3) ; этап в периоде, невыполн.
+ .Q:R="" 
+ .S RD=$P(R,"|",2),R=$P(R,"|",1),W=$P(A,"|",6) Q:W="" 
+ .S TAB(W,RD,R)=$G(TAB(W,RD,R))+1
+ 
+ D OWF^RWU(".txt")
+ D WC^RWU("Техник "_$$TXTP^DTUTL(DS,DE)_"|Дата этапа|Единиц|Этап")
+ S W="" F  S W=$O(TAB(W)) Q:W=""  D
+ .S A=$$FIO^IKADRY(W)
+ .S RD="" F  S RD=$O(TAB(W,RD)) Q:RD=""  D
+ ..S R="" F  S R=$O(TAB(W,RD,R)) Q:R=""  D
+ ...D WC^RWU(CR_A_"|"_$$DT^DTUTL(RD)_"|"_TAB(W,RD,R)_"|"_$$NAME^ISPRAV("stomstage",R))
+ D C^RWU
+ Q
+CASTLST(DS,DE) ; Отчет по литью
+ N ID,A,U,K,UR,KEY,L,CNT,LPU,VR,NI,P,DT
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D OWF^RWU(".txt")
+ D WC^RWU("Клиника|Доктор|Пациент|Работа "_$$TXTP^DTUTL(DS,DE)_"|Кол-во|Техник")
+ S ID="" F  S ID=$O(^STZN(ID)) Q:ID=""  D
+ .S A=^(ID),DT=+$P(A,"|",5)
+ .Q:DT<DS  Q:DT>DE 
+ .S NI=$P(A,"|",1),LPU=$P(A,"|",4),VR=$P(A,"|",3)
+ .S P=$$PRC^IZUBLAB(NI,ID,DT)
+ .S K="" F  S K=$O(^STZN(ID,"u",K)) Q:K=""  D
+ ..S UR=^(K),L=$P(UR,"|",8) Q:L="" 
+ ..S U=$P(K,"|",2),CNT=$P(UR,"|",3) S:CNT="" CNT=1
+ ..S PR=$$UPRC^IZUBLAB(UR,P)
+ ..D WC^RWU(CR_$$NAME^ICONTR(LPU)_"|"_$$FIOSH^IKADRY(VR)_"|"_$$FIOSH^IPAC(NI)_" ("_NI_")|"_$$OWF^TXTU($$NAME^IPRICE(U,PR),99)_"|"_CNT_"|"_$$FIOSH^IKADRY(L))
+ D C^RWU
+ Q
+STLST(DS,DE,ST,TP) ; Список по этапу TODO
+ ; TP - тип готов/в работе
+ Q
+LSTZ(DS,DE,LPUX,TPS,ApprPrm,FILIAL) ; Перечень работ
+ N ID,A,U,K,UR,KEY,CNT,LPU,VR,NI,P,DT,S,approved,repStr,apprNm
+ ;k ^kam
+ ;S ^kam($I(^kam),"RZUBLAB","LSTZ","DS")=DS
+ ;S ^kam($I(^kam),"RZUBLAB","LSTZ","DE")=DE
+ ;S ^kam($I(^kam),"RZUBLAB","LSTZ","LPUX")=LPUX
+ ;S ^kam($I(^kam),"RZUBLAB","LSTZ","TPS")=TPS
+ ;S ^kam($I(^kam),"RZUBLAB","LSTZ","APPROVE")=ApproveParam
+ ;S ^kam($I(^kam),"RZUBLAB","LSTZ","PRM")=PRM
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D OWF^RWU(".txt")
+ D:ApprPrm=1 WC^RWU("Пациент|Работа "_$$TXTP^DTUTL(DS,DE)_"|Дата|Врач|Кол-во|Сумма|Клиника|Одобрил")
+ D:ApprPrm'=1 WC^RWU("Пациент|Работа "_$$TXTP^DTUTL(DS,DE)_"|Дата|Врач|Кол-во|Сумма|Клиника")
+ S ID="" F  S ID=$O(^STZN(ID)) Q:ID=""  D
+ .S A=$G(^(ID)),DT=+$P(A,"|",5) Q:A="" 
+ .Q:DT<DS  Q:DT>DE
+ .S NI=$P(A,"|",1),LPU=$P(A,"|",4),VR=$P(A,"|",3)
+ .I LPUX'="",LPUX'=LPU Q 
+ .S P=$$PRC^IZUBLAB(NI,ID,DT)
+ .S K="" F  S K=$O(^STZN(ID,"u",K)) Q:K=""  D
+ ..S UR=^(K)
+ ..S apprNm=""
+ ..S approved=$P(UR,"|",9)
+ ..S:approved'="" apprNm=$$FIOSH^IKADRY($P(approved,"@",1))
+ ..S writeData=1
+ ..S:(approved="")&(ApprPrm=1) writeData=0 ; не выводим если фильтр только по одобренным, а заказ НЕ одобрен
+ ..S:(approved'="")&(ApprPrm=0) writeData=0 ; не выводим если фильтр по НЕодобренным, а заказ одобрен
+ ..S U=$P(K,"|",2),CNT=$P(UR,"|",3) S:CNT="" CNT=1
+ ..S PR=$$UPRC^IZUBLAB(UR,P)
+ ..S S=$S('TPS:$P(UR,"|",2)*CNT,1:$$SUM^IZUBLAB(K,UR,DT,PR,1))
+ ..S repStr=CR_$$FIOSH^IPAC(NI)_" ("_NI_")|"_$$OWF^TXTU($$NAME^IPRICE(U,PR),99)_"|"_$$DT^DTUTL(DT)_"|"_$$FIOSH^IKADRY(VR)_"|"_CNT_"|"_S_"|"_$$NAME^ICONTR(LPU)
+ ..S:ApprPrm=1 repStr=repStr_"|"_apprNm
+ ..D:writeData WC^RWU(repStr)
+ D C^RWU
+ Q
+REGIPROC 
+ N Z,P
+ S Z="Зуботехническая лаборатория"
+ S P="d,Период с,d,Период по"
+ S ^IPROC(Z,"Загруженность техников")="WTECH_RZUBLAB,1,2,"_P
+ S ^IPROC(Z,"Отчет по работам литейщиков")="CASTLST_RZUBLAB,1,2,"_P
+ S ^IPROC(Z,"Реестр заказов")="LSTZ_RZUBLAB,1,4,"_P_",te@net:FLST_NVFIND(""""),Заказчик,t@string:0/В наряде#1/Внешняя,Вид цены,t@storage:lpu,Филиал"
+ S ^IPROC(Z,"Реестр заказов")="LSTZ_RZUBLAB,1,6,"_P_",te@net:FLST_NVFIND(""""),Заказчик,t@string:0/В наряде#1/Внешняя,Вид цены,t@string:0/Нет#1/Да#2/Все,Одобренные заказы,t@storage:lpu,Филиал"
+ Q

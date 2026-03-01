@@ -1,0 +1,567 @@
+IZARP ; Ф-ции по зарплате [ 09/26/2022  1:20 PM ]
+ZP(LPU) ; Период по зарплате по умолчанию
+ I LPU'="",$D(^cfg("zarp-period",LPU)) Q +^(LPU)
+ Q +$G(^cfg("zarp-period"))
+nextDT(DT,T,LPU) ; следующая дата для периода
+ S T=$S($G(T)="":$$ZP(LPU),1:T)
+ I T=3 Q DT+1 ; dayly
+ I T=2 Q DT-$$DWEEK^DTUTL(DT)+8 ; weekly
+ N D,M,Y
+ I T=9 S D=$O(^ZARPI("period",+LPU,DT+1),-1) Q:D="" "" Q:D<DT "" Q ^(D)+1
+ S D=$$DT^DTUTL(DT),M=$P(D,".",2),Y=$P(D,".",3)
+ ; default - monthly (0)
+ I T=0 Q $$DI^DTUTL("01."_$S(M=12:"01",1:M+1)_"."_$S(M=12:Y+1,1:Y))
+ S D=+$P(D,".",1)
+ Q:D>15 $$DI^DTUTL("01."_$S(M=12:"01",1:M+1)_"."_$S(M=12:Y+1,1:Y))
+ Q $$DI^DTUTL("16."_M_"."_Y)
+startDT(DT,T,LPU) ; начальная дата для периода
+ S T=$S($G(T)="":$$ZP(LPU),1:T)
+ I T=3 Q DT ; dayly
+ I T=2 Q DT-$$DWEEK^DTUTL(DT)+1 ; weekly
+ I T=9 Q $O(^ZARPI("period",+LPU,DT+1),-1) ; variable 
+ N D,M,Y
+ S D=$$DT^DTUTL(DT),M=$P(D,".",2),Y=$P(D,".",3)
+ ; default - monthly
+ I T=0 Q $$DI^DTUTL("01."_M_"."_Y)
+ S D=+$P(D,".",1) ; half month
+ Q:D>15 $$DI^DTUTL("16."_M_"."_Y)
+ Q $$DI^DTUTL("01."_M_"."_Y)
+typeDT(DT,DE,LPU,DEF) ; получить тип периода из дат
+ ; DEF - период по умолчанию
+ S DT=DE-DT+1
+ Q:DT=1 3 Q:DT=7 2 Q:(DT>12)&(DT<17) 1 Q:(DT>16)&(DT<32) 0
+ ; 12 days for febrary (28-16)
+ Q:$G(DEF)'="" DEF
+ Q +$$ZP(LPU)
+typeTXT(TP) ; Текстовое описание периода
+ Q:TP=0 "месяц"
+ Q:TP=1 "пол.месяца"
+ Q:TP=2 "неделя"
+ Q:TP=3 "день"
+ Q:TP=9 "произвольный"
+ Q ""
+GETsum(DT,DE,LP,OT,VR) ; Начисленная сумма по сотруднику
+ N S S S=0
+ S S=$G(^ZARP(LP,OT,VR,DT,1))+$G(^(2))
+ G GETSUM1
+GETSUM(DT,DE,KEY) ; Начисленная сумма по сотруднику
+ N S S S=0
+ S S=$G(^ZARP($P(KEY,"@",1),$P(KEY,"@",2),$P(KEY,"@",3),DT,1))+$G(^(2))
+GETSUM1 S DT=$G(^("nalog"))
+ S S=S-$S(DT="":$G(^("nalogs")),1:S*DT/100) ; сумма или процент
+ Q +$FN(S,"",2)
+GETpay(DT,DE,LP,OT,VR,TP) ; Выплаченная сумма по сотруднику
+ N D,S,X
+ S (D,S)=0,TP=$G(TP)
+ Q:$O(^ZARV(LP,VR,DT,D))="" 0
+ G GETPAY1
+GETPAY(DT,DE,KEY,TP) ; Выплаченная сумма по сотруднику
+ N D,S,X
+ S (D,S)=0,TP=$G(TP)
+ Q:$O(^ZARV($P(KEY,"@",1),$P(KEY,"@",3),DT,D))="" 0
+GETPAY1 F  S D=$O(^(D)) Q:D=""  S X=^(D) S:TP=""!($P(X,"|",3)=TP) S=S+$P(X,"|",1)
+ Q S
+GETPAYM(DT,DE,KEY,VAR) ; Выплаченная сумма по сотруднику в разрезе типов
+ ; результат -> VAR(TP)=SUM
+ N D,X
+ K @VAR
+ S D=0
+ Q:$O(^ZARV($P(KEY,"@",1),$P(KEY,"@",3),DT,D))="" 
+ F  S D=$O(^(D)) Q:D=""  S X=^(D) S @VAR@(+$P(X,"|",3))=$P(X,"|",1)
+ Q
+GETpayp(DT,DE,L,O,V,TP) ; Выплаченная сумма по сотруднику за пред. периоды
+ Q:'$G(^cfg("zarp","vad")) 0
+ N D,S,X
+ S (D,S)=0,TP=$G(TP)
+ G GETPAYP1
+GETPAYP(DT,DE,KEY,TP) ; Выплаченная сумма по сотруднику за пред. периоды
+ ; TP - тип выплат
+ Q:'$G(^cfg("zarp","vad")) 0
+ N D,S,X,L,O,V
+ S (D,S)=0,L=$P(KEY,"@",1),O=$P(KEY,"@",2),V=$P(KEY,"@",3),TP=$G(TP)
+GETPAYP1 
+ Q:$O(^ZARV(L,V,DT),-1)="" 0
+ ; TODO - почему только 1 платеж ?
+ F  S DT=$O(^ZARV(L,V,DT),-1) Q:DT=""  I $L($O(^(DT,""))) S D="" F  S D=$O(^(D)) Q:D=""  S X=^(D) S:TP=""!($P(X,"|",3)=TP) S=S+$P(X,"|",1)
+ Q S
+GETsump(DT,DE,L,O,V,TP) ; Выплаченно по сотруднику из начисления за период
+ N D,S,X
+ S S=0,TP=$G(TP),DT=DT-1
+ F  S DT=$O(^ZARV(L,V,DT)) Q:DT=""!(DT>DE)  S D=0 F  S D=$O(^ZARV(L,V,DT,D)) Q:D=""  S X=^(D) S:TP=""!($P(X,"|",3)=TP) S=S+$P(X,"|",1)
+ Q S
+GETsumnv(DT,DS,DE,L,O,V,TP) ; Выплаченно по сотруднику из начисления за период
+ N D,S,X
+ S S=0,TP=$G(TP)
+ S D=DS_",0" F  S D=$O(^ZARV(L,V,DT,D)) Q:D=""!(+D>DE)  S X=^(D) S:TP=""!($P(X,"|",3)=TP) S=S+$P(X,"|",1)
+ Q S
+GETHSUM(DS,DE,KEY) ; Сумма "на руки" в текущем периоде
+ Q $$GETSUM(DS,DE,KEY)-$$GETPAYP(DS,DE,KEY)+$$GETPAY(DS,DE,KEY)
+ALLPAY(DS,DE,VR,OTD,VAR) ; Выплаты по филиалам -> VAR
+ N K,LP,S,D
+ K @VAR
+ S LP="" F  S LP=$O(^ZARV(LP)) Q:LP=""  D:$D(^(LP,VR))
+ .S D=DE
+ .I D="" S D=$O(^ZARP(LP,OTD,VR,DS+1),-1) S:D'="" D=$G(^(D))
+ .S:D="" D=$$nextDT^IZARP(DS,"",LP)-1
+ .Q:D="" 
+ .S K=LP_"@"_OTD_"@"_VR
+ .S S=$$GETSUM(DS,D,K)-$$GETPAYP(DS,D,K)
+ .S:S @VAR@(LP)=S
+ Q
+FMXPAY(DS,DE,VR) ; Поиск ЛПУ с макс. начисл. на сотрудника
+ N K,LP,S,SM,LM,O,NOO,D
+ S (SM,LM)="",NOO=+$G(^cfg("zarp","nootd"))
+ S LP="" F  S LP=$O(^ZARV(LP)) Q:LP=""  D:$D(^(LP,VR))
+ .S O=$S(NOO:0,1:$$OTD^IKADRY(VR,DS))
+ .S D=DE
+ .I D="" S D=$O(^ZARP(LP,O,VR,DS+1),-1) S:D'="" D=^(D)
+ .S:D="" D=$$nextDT^IZARP(DS,"",LP)-1
+ .Q:D="" 
+ .S K=LP_"@"_O_"@"_VR
+ .S S=-$$GETPAY(DS,D,K)-$$GETPAYP(DS,D,K)
+ .I S>SM S SM=S,LM=LP
+ Q LM
+SBS(LP,OT,VR,DT,ALL) ; Подписать период для сотрудника
+ ; ALL=1 - игнорировать подпись
+ ; ALL=2 - игнорировать подпись+только обновить сумму 
+ I '$G(ALL),$D(^ZARP(LP,OT,VR,DT,"f")) Q 
+ N X,R,DE,D
+ G:$G(ALL)=2 sbs1
+ 
+ S ^ZARP(LP,OT,VR,DT,"f")=$H_"|"_$$USR^IUSER()
+ ; перемещение log-а рассч. ранее исключенных услуг
+ ; удаление ранее исключенных из друг. периода
+ S X="" F  S X=$O(^ZARPI("uexc",LP,OT,VR,X)) Q:X=""  I ^(X)=DT K ^(X) S ^ZARPI("uexclog",LP,OT,VR,DT,X)=$H,^ZARPI("uexcr",VR,X)=DT,D="" F  S D=$O(^ZARPI("uexclog",LP,OT,VR,D)) Q:D=""  K:D'=DT ^(D,X)
+sbs1 
+ S DE=$G(^ZARP(LP,OT,VR,DT))
+ ; фиксация суммы 
+ S X=$$GETsum(DT,DE,LP,OT,VR)
+ S ^ZARV(LP,VR,DT,0)=-X
+ D GL^IEXCH("^ZARP",LP,OT,VR,DT) ; посылка ВСЕХ данных
+ D GL^IEXCH("^ZARV",LP,VR,DT,0)
+ Q
+UNSBS(LP,OT,VR,DT) ; Расподписать период для сотрудника
+ Q:'$D(^ZARP(LP,OT,VR,DT,"f")) 
+ K ^("f")
+ D KGL^IEXCH("^ZARP",LP,OT,VR,DT,"f")
+ ; TODO - "uexclog" - ?пересчет всегда в рамках того периода?
+ Q
+PNALOG(DS,DE,LP,OT,VR) ; Сумма налога за период
+ N DT,X1,X2,X3,S
+ S DT=DS-1,S=0
+ F  S DT=$O(^ZARP(LP,OT,VR,DT)) Q:DT=""!(DT'<DE)  D
+ .S X1=$G(^(DT,1)),X2=$G(^(2)),X3=$G(^("nalog")) 
+ .S S=S+$S(X3="":$G(^("nalogs")),1:X1+X2*X3/100) ; сумма или процент
+ Q S
+PREkss ; from RVRSTAT SVOBIL12
+ N DS,DE
+ N NI,LP,DT,TI,L,SUM,OPE,VR,R,IDK,DL,SS,I,OTD,X
+ S DS=zDT,DE=zDE
+ S NI="" F  S NI=$O(^BILL(NI)) Q:NI=""!(NI="00")  D
+ .S DT=DS-1
+ .F  S DT=$O(^BILL(NI,DT)) Q:DT=""!(DT>DE)!(DT'=+DT)  S TI="" F  S TI=$O(^BILL(NI,DT,TI)) Q:TI=""  D
+ ..S L=$G(^(TI)),SUM=+$P(L,"|",2),OPE=$P(L,"|",1)
+ ..Q:$L(OPE)  Q:SUM=0
+ ..S R=$P(L,"|",6),X=$P($P(R,"/",1),":",1)
+ ..I X'="ZNF" Q:X'="ZND" 
+ ..S VR=+$P(R,":",2),OTD=+$P(R,":",3),LP=+$P($P(L,"|",5),"@",2)
+ ..S ^("kss")=$G(^BUF($J,"zrp",LP,OTD,VR,"kss"))-SUM
+ Q
+PREhh 
+ S V="" F  S V=$O(^ZNF(V)) Q:V=""  S O="" F  S O=$O(^ZNF(V,O)) Q:O=""  S D=zDT-1 F  S D=$O(^ZNF(V,O,D)) Q:D=""!(D<zDE)  D
+ .S R=$G(^(D)) Q:R=""  S L=""
+ .; find first lpu - potential bug. по всем услугам надо бы
+ .S X="" F  S X=$O(^ZNF(V,O,D,X)) Q:X=""  I $D(^(X,"l")) S L=^("l") Q 
+ .S:L="" L=+$$GET^IKADRY(V,"lpu",zDE)
+ .S ^("hh-p")=$G(^BUF($J,"zrp",L,O,V,"hh-p"))+$P(R,"|",2)
+ .S ^("hh-pnd")=$G(^("hh-pnd"))+$P(R,"|",3)
+ .S ^("hh-pr")=$G(^("hh-pr"))+$P(R,"|",4)
+ .S ^("hh-all")=$G(^("hh-all"))+$P(R,"|",2)+$P(R,"|",3)+$P(R,"|",4)
+ Q
+PAYOUT(LP,OT,VR,DT,TP,SUM) ; Выплата сотруднику
+ ; TP - тип выплат
+ ; SUM - сумма
+ N X,OW,WH,H
+ S X=$G(^cfg("zarp","outkss")),H=$H,WH=H,OW=$$KDR^IUSER()
+ F  Q:'$D(^ZARV(LP,VR,DT,H))  S H=$P(H,",",1)_","_($P(H,",",2)+1)
+ D SBS^IZARP(LP,OT,VR,DT)
+ S:X="" X=1
+ D:TP=1 OUTSUM^IBILL("",SUM,X,$$FIOSH^IKADRY(VR),"ZARP:"_LP_":"_OT_":"_VR_":"_DT_":"_H,"WH")
+ S ^ZARV(LP,VR,DT,H)=SUM_"|"_OW_"|"_TP_"|"_(+$$^I("ilpu"))_","_WH
+ D GL^IEXCH("^ZARV",LP,VR,DT,H)
+ Q
+AUTOCALC ; Авторасчет, подпись и "выдача" всей ЗП по филиалу
+ Q
+UBILL(NI,VR,DT,OT,ID,DE) ; Баланс на момент услуги
+ ; DE - окончание периода расчета
+ Q:DT>DE -1  ; услуга вне периода
+ N P,D,T,R,DD,TT,L
+ S P=$G(^ZNF(VR,OT,DT,ID,"p"))
+ S:P="" P=$P($G(^PNF(NI,DT,VR_"|"_OT_"|"_ID)),"|",1)
+ S DD=+$O(^BILL(NI,DE+1),-1),T=+$O(^(DD,""),-1)
+ Q:$G(^ZNF(VR,OT,DT,ID,"s"))<0 0 ; отрицательные услуги считаем всегда
+ ; TODO - пропустить все информационные платежи
+ S R=+$S(T:$P($G(^BILLI(DD,T,NI)),"|",1),1:0)
+ S D=$P(P,",",1),T=$P(P,",",2),P="",DD=DE 
+ ; последовательно вычитаем "вычеты"
+ F  D  S DD=$O(^BILL(NI,DD),-1) Q:DD=""!(DD<D)  Q:R'<0 
+ .S TT="" F  S TT=$O(^BILL(NI,DD,TT),-1) Q:TT=""!((DD=D)&(TT=T))  S L=$P(^(TT),"|",1,2),P=$P(L,"|",1),L=$P(L,"|",2) I P="",L<0 S R=R-L Q:R'<0 
+ Q:R'<0 R
+ ; последовательно вычитаем услуги
+ S L=$P($G(^BILL(NI,D,T)),"|",6)
+ F P=2:1:$L(L,"/") S TT=$P($P(L,"/",P),":",3) Q:TT=ID  S R=R+$P($G(^ZNF(VR,OT,DT,TT,"s")),"|",1)
+ Q:R<0 -1
+ Q R
+ISAGN(VR,DT,OTD,ID) ; Услуга по агентскому назначению
+ N R,X
+ S R=$$GETPL^IUSL(VR,DT,OTD,ID,"f") Q:R="" 0
+ S X=$P($G(^NAZ(R,"a")),"|",4) Q:X="" 0 ; не по шаблону
+ ; Q:$P($G(^("k")),"|",2)="" 0 ; не оплачено - !!! и неоплач. !!!
+ Q:$P($G(^NAZM("pt",X,"agc")),"|",1)="" 0
+ Q 1
+ISAGNV(VR,DT,OTD,ID) ; Вид начисления по агентскому назначению
+ N R,X
+ S R=$$GETPL^IUSL(VR,DT,OTD,ID,"f") Q:R="" 0
+ S X=$P($G(^NAZ(R,"a")),"|",4) Q:X="" 0 ; не по шаблону
+ Q $P($G(^NAZM("pt",X,"agc")),"|",3)
+AGNCAT(VR,DT,OTD,ID) ; Категория агентского назначения
+ N R,X
+ S R=$$GETPL^IUSL(VR,DT,OTD,ID,"f") Q:R="" 0
+ S X=$P($G(^NAZ(R,"a")),"|",4) Q:X="" 0 ; не по шаблону
+ Q $P($G(^NAZM("pt",X,"agc")),"|",4)
+NAZEND(NAZ,VR,DT,OTD,ID) ; Назначение завершено этой услугой
+ Q:NAZ="" 0
+ Q:'$P($G(^NAZ(NAZ,"e")),"|",1) 0
+ N I,K,E,R
+ S E=$P($G(^NAZ(NAZ,"e")),"|",5) ; end time
+ S K=OTD_"@"_VR_"@"_DT_"@"_ID
+ S I="" F  S I=$O(^NAZ(NAZ,"a",I)) Q:I=""  D  Q:K=""  Q:K=0 
+ .S R=^(I)
+ .Q:$P(R,"|",12)'=E
+ .I $P(R,"|",11)=K S K="" Q
+ .S K=0 ; only first
+ Q $S(K="":1,1:0)
+ANLV(LP,OT,VR,DT,HH,TP) ; Аннулирование выплат
+ ; HH - конкретная выплата
+ ; TP - определенного типа
+ Q:'$D(^ZARV(LP,VR,DT)) 
+ N H,R
+ S H=0,HH=$G(HH),TP=$G(TP)
+ F  S H=$O(^ZARV(LP,VR,DT,H)) Q:H=""  D:$S(HH="":1,1:HH=H)
+ .S R=^(H)
+ .I TP'="",$P(R,"|",3)'=TP Q 
+ .S R=$P(R,"|",4)
+ .D:$L(R) ROUTSUM^IBILL($P(R,",",1),$P(R,",",2),$P(R,",",3)) ; удаление суммы
+ .K ^ZARV(LP,VR,DT,H)
+ .D KGL^IEXCH("^ZARV",LP,VR,DT,H)
+ Q
+CLRVAR ; clear calculated variables
+ N ELST
+ ; edit parameter list (not base)
+ S L="" F  S L=$O(^ZARM("t",L)) Q:L=""  S P=^(L) S:$P(P,"|",3) ELST($P(P,"|",2))=""
+ S L="" F  S L=$O(^ZARP(L)) Q:L=""  I L=cLPU!FF S O="" F  S O=$O(^ZARP(L,O)) Q:O=""  S V="" F  S V=$O(^ZARP(L,O,V)) Q:V=""  D:$D(^(V,zDT))
+ .I noSB,$D(^(zDT,"f")) Q ; уже посчитано
+ .I $D(SelVR) Q:'$D(SelVR(V))  ; не считаем по врачу
+ .S P="" F  S P=$O(BPL(P)) Q:P=""  K:'$D(ELST(P)) ^ZARP(L,O,V,zDT,P)
+ .K ^ZARPLT(L,O,V,zDT) ; prev version
+ .M ^ZARPLT(L,O,V,zDT)=^ZARPL(L,O,V,zDT)
+ .K ^ZARPL(L,O,V,zDT) ; clear log
+ Q
+SCANlst ; Сканировать месяц для сбора используемых расчетных параметров
+ ; используемые алгоритмы
+ N PP 
+ S L="" F  S L=$O(^ZARP(L)) Q:L=""  I L=cLPU!FF S O="" F  S O=$O(^ZARP(L,O)) Q:O=""  S V="" F  S V=$O(^ZARP(L,O,V)) Q:V=""  S R=$G(^(V,zbDT,"a")) S:$L(R) ALG(R)=""
+ ; используемые значения
+ S X="" F  S X=$O(^ZARM("t",X)) Q:X=""  S R=^(X)
+ .S R=$P(A,"|",2)
+ .I R'="",(R?1.1"P"1.N)=0,(R?1.N)=0 S BPL(R)=""
+ S A="" F  S A=$O(ALG(A)) Q:A=""  D
+ .S I="" F  S I=$O(^ZARM("ar",A,"v",I)) Q:I=""  D 
+ ..S R=$P(^(I),"|",7) ; Используются в присвоении
+ ..I R'="",$E(R)="P" S BPL(R)="" 
+ 
+ S X="" F  S X=$O(ALG(X)) Q:X=""  D
+ .S I="" F  S I=$O(^ZARM("ar",X,"r",I)) Q:I=""  D
+ ..S A=^(I)
+ ..S R=$P(A,"|",3)
+ ..I $L(R) S R=$$SCANtr(R) I '(R?1.1"P"1.N),+R'=R S BPL(R)=""
+ ..S R=$P(A,"|",4)
+ ..I $L(R) S R=$$SCANtr(R) I '(R?1.1"P"1.N),+R'=R S BPL(R)=""
+ ..S R=$P(A,"|",6),PP=$P(A,"|",8)
+ ..S:PP'="" PP="@"_PP ; доп параметр
+ ..I $L(R) S R=$$SCANtr(R) I '(R?1.1"P"1.N),+R'=R S BPL(R_PP)=""
+ ..S R=$P(A,"|",7)
+ ..I $L(R) S R=$$SCANtr(R) I '(R?1.1"P"1.N),+R'=R S BPL(R)=""
+ .S I="" F  S I=$O(^ZARM("ar",X,"v",I)) Q:I=""  D
+ ..S A=^(I)
+ ..S R=$P(A,"|",1)
+ ..I $L(R) S R=$$SCANtr(R) I '(R?1.1"P"1.N),+R'=R S UPL(R)=""
+ ..S R=$P(A,"|",3)
+ ..I $L(R) S R=$$SCANtr(R) I '(R?1.1"P"1.N),+R'=R S UPL(R)=""
+ ..S R=$P(A,"|",5)
+ ..I $L(R) S R=$$SCANtr(R) I '(R?1.1"P"1.N),+R'=R S UPL(R)=""
+ ..S R=$P(A,"|",6)
+ ..I $L(R) S R=$$SCANtr(R) I '(R?1.1"P"1.N),+R'=R S UPL(R)=""
+ Q
+SCANtr(X) 
+ Q:X="yes"!(X="true") 1
+ Q:X="no"!(X="false") 0
+ Q X
+CALCF1 ; calc tbl,plan
+ N DOO,LG,TPR,ztDS,ztDE,T,OO,OOS,DLT,PP,PX
+ S DOO=+$G(^cfg("zarp","defotd"))
+ S DLT=$S(zDT=zDE:0,1:+$G(^cfg("zarp","hh-dayly")))
+ S L="" F  S L=$O(^ZARP(L)) Q:L=""  I L=cLPU!FF S O="" F  S O=$O(^ZARP(L,O)) Q:O=""  S V="" F  S V=$O(^ZARP(L,O,V)) Q:V=""  D:$D(^(V,zDT))
+ .I noSB,$D(^(zDT,"f")) Q ; уже посчитано
+ .I $D(SelVR) Q:'$D(SelVR(V))  ; не считаем по врачу
+ .S LG="^ZARPL("_L_","_O_","_V_","_zDT_")"
+ .S TPR=$G(^ZARP(L,O,V,zDT,"trperiod"))
+ .S OO=$S(DOO:"",1:O),OOS=$S(DOO:$$OTD^IKADRY(V),1:O)
+ .S ztDS=zDT,ztDE=zDE ; доп период для графика
+ .I $L(TPR) S T=$P(TPR,":",1),P=$$startDT(zDE+$P(TPR,":",2),T,L),X=$$nextDT(P,T,L)-1,(ztDS,ztDE)="" S:zDE+$P(TPR,":",2)=X ztDS=P,ztDE=X
+ .S PP="" F  S PP=$O(BPL(PP)) Q:PP=""  D
+ ..K X
+ ..S P=$P(PP,"@",1),PX=$P(PP,"@",2)
+ ..I PX'="" D CALCprm(PX) S PX=$G(X) K X ; parameter
+ ..D CALCprm(P)
+ ..I '$D(X),$D(^BUF($J,"zrp",L,O,V,P)) S X=^(P)
+ ..S:$D(X) ^ZARP(L,O,V,zDT,P)=$S(+X=X:+$J(X,0,2),1:X)
+ Q
+CALCprm(P) 
+ I P="plan" S X=$P((ztDE-ztDS+1)*$$GET^NFPLAN(L,O,V,zDE),"|",1) Q 
+ I P="plan-lpu" S X=$P((ztDE-ztDS+1)*$$GETLP^NFPLAN(L,ztDE),"|",1) Q 
+ I P="plan-otd" S X=$P((ztDE-ztDS+1)*$$GETOT^NFPLAN(L,O,ztDE),"|",1) Q 
+ I P="hh-p" S X=$$GETTM^IEDE(OO,V,ztDS,ztDE,1,LG,DLT) Q 
+ I P="hh-pnd" S X=$$GETTM^IEDE(OO,V,ztDS,ztDE,2,LG,DLT) Q 
+ I P="hh-pr" S X=$$GETTM^IEDE(OO,V,ztDS,ztDE,3,LG,DLT) Q 
+ I P="hh-ms" S X=$$GETMSTM^IEDE(L,"",V,ztDS,ztDE,LG,DLT) Q 
+ I P="hh-msp" S X=$$GETMSP^IEDE(L,"",V,ztDS,ztDE,LG,DLT) Q 
+ I P="hh-all" S X=$$GETTM^IEDE(OO,V,ztDS,ztDE,0,LG,DLT) Q 
+ I P="sp-ms" S X=$$GETSPMS^IUSLD(L,"",V,ztDS,ztDE,0,LG,DLT) Q 
+ I P="sp-mss" S X=$$GETSPMS^IUSLD(L,"",V,ztDS,ztDE,1,LG,DLT) Q 
+ I P="vr-ms" S X=$$GETVRMS^IUSLD(L,"",V,ztDS,ztDE,0,LG,DLT) Q 
+ I P="vr-mss" S X=$$GETVRMS^IUSLD(L,"",V,ztDS,ztDE,1,LG,DLT) Q 
+ I P="vr" S X=V Q 
+ I P="otd" S X=OO Q 
+ I P="lpu" S X=L Q 
+ I P="spec" S X=$$SPbyOTD^IKADRY(V,$S(PX="":OOS,1:PX),ztDE) Q 
+ I P="doljn" S X=$$DLJbyOTD^IKADRY(V,$S(PX="":OOS,1:PX),ztDE) Q 
+ I P="period" S X=$$typeDT(ztDS,ztDE,L) Q 
+ I P="tbl",$L(ztDS) S X=$$TMTABEL^NPTBL(L,$S(PX="":OO,1:PX),V,ztDS,ztDE,LG)/3600 Q 
+ I P="grf",$L(ztDS) S X=$$TMGRAF^NPTBL(L,$S(PX="":OO,1:PX),V,ztDS,ztDE,LG)/3600 ;todo
+ I P="time",ztDS S X=$$TMTIMES^NPTBL(L,$S(PX="":OO,1:PX),V,ztDS,ztDE,LG)/3600 Q 
+ I P="time-o",ztDS S X=$P($$TMTIMES^NPTBL(L,$S(PX="":OO,1:PX),V,ztDS,ztDE,LG)/3600,".",1) Q 
+ I P="prdcal",ztDS S X=$$GET^IPRDCAL(ztDS,ztDE) Q 
+ I P="tbld",ztDS S X=$$DTTABEL^NPTBL(L,$S(PX="":OO,1:PX),V,ztDS,ztDE,LG) Q 
+ I P="grfd",ztDS S X=$$DTGRAF^NPTBL(L,$S(PX="":OO,1:PX),V,ztDS,ztDE,LG) Q 
+ I P="timed",ztDS S X=$$DTTIMES^NPTBL(L,$S(PX="":OO,1:PX),V,ztDS,ztDE,LG) Q 
+ I P="dsh-all",ztDS S X=$P($$VRST^IRASPR(ztDS,ztDE,V,"",OO,L,0,PX),"|",1)/60
+ I P="dsh-nw",ztDS S X=$P($$VRST^IRASPR(ztDS,ztDE,V,"",OO,L,0,PX),"|",2)/60
+ I P="fd-dsh" S X=$P($$KEYinDT^IRASP2(L,V,"",+$H),"|",5),X=$S(X="":"",1:zDE-X) Q 
+ I P="kdrnb" S X=$$GETFSUM^YIKADRY(L,V,zDT,zDE,1,LG,1) Q 
+ I P="kdrvc" S X=$$GETFSUM^YIKADRY(L,V,zDT,zDE,2,LG,1) Q 
+ I P="kdrpnb" S X=$$GETFPRC^YIKADRY(L,V,zDT,zDE,1,LG,1) Q 
+ I P="kdrpvc" S X=$$GETFPRC^YIKADRY(L,V,zDT,zDE,2,LG,1) Q 
+ I P="kdrofd" S X=$H-$$GET^IKADRY(V,"dofor",zDE) Q 
+ I P="agpl" S X=$$AGPSUM^RPOLIS(zDT,zDE,V,L,LG) Q 
+ I P="agplc" S X=$$AGPVCNT^RPOLIS(zDT,zDE,V,L,LG) Q 
+ I P="agnz" S X=$$GETAGC^INAZN(V,zDT,zDE,LG)+$$NAZOVER^INAZN(V,zDT,zDE,LG) Q 
+ I P="agnz1" S X=$$GETAGC^INAZN(V,zDT,zDE,LG,,1)+$$NAZOVER^INAZN(V,zDT,zDE,LG,,1) Q 
+ I P="agnz2" S X=$$GETAGC^INAZN(V,zDT,zDE,LG,,2)+$$NAZOVER^INAZN(V,zDT,zDE,LG,,2) Q 
+ I P="agnzc" S X=$$GETAGCC^INAZN(V,zDT,zDE,LG,1) Q 
+ I P="agnzcs" S X=$$GETAGC^INAZN(V,zDT,zDE,LG,1)+$$NAZOVER^INAZN(V,zDT,zDE,LG,1) Q 
+ I P="bcrdssm" S X=$$AGC^NBCARD(V,zDT,zDE,LG,1) Q 
+ I P="bcrdssa" S X=$$AGC^NBCARD(V,zDT,zDE,LG,2) Q 
+ I P="wrhprofit" S X=$$SALEsvr^RWRH(zDT,zDE,1,V,LG) Q 
+ I P="wrhpay" S X=$$SALEsvr^RWRH(zDT,zDE,0,V,LG) Q 
+ I P="isznf" S X=$$IsUVR^IUSLD(V,zDT,zDE,L,0) Q 
+ I P="isepr" S X=$$CHKVDTS^IEPR(V,zDT,zDE,L,0) Q 
+ I P="intrpr" S X=$S(TPR="":0,ztDS="":0,1:1) Q 
+ I P="daymn" S X=$$DAYMN^DTUTL(zDT) Q 
+ I P="month" S X=$$MONTH^DTUTL(zDT) Q 
+ I P="dweek" S X=$$DWEEK^DTUTL(zDT) Q 
+ I P="dmlast" S X=(+$$DAYMN^DTUTL(zDT+1)=1) Q 
+ I P="dsh-ot" S X=$P($$KEYinDT^IRASP2(L,V,zDT,zDE),"|",1) Q 
+ I P="dsh-sp" S X=$P($$KEYinDT^IRASP2(L,V,zDT,zDE),"|",3) Q 
+ I P="dsh-cab" S X=$P($$KEYinDT^IRASP2(L,V,zDT,zDE),"|",4) Q 
+ I P="usl-o" S X=$$pSUMM(L,OO,zDT,"usl") Q 
+ I P="usl-l" S X=$$pSUMM(L,"",zDT,"usl") Q 
+ I P="v4-o" S X=$$pSUMM(L,OO,zDT,"V4") Q 
+ I P="v4-l" S X=$$pSUMM(L,"",zDT,"V4") Q 
+ I $E(P,1,3)="fn:" S X="S X="_$P(^ZARM("rfn",$E(P,4,9)),"|",2,99) X X Q 
+ 
+ Q
+CALCPROC ; main loop
+ N AL,z,PRC,OP,X1,X2,X3,P1,P2,P3,CMD,E,REZ,ST,vT,WNF,LW,WSA,WSAL
+ S WNF='+$$C^I("zarp","lognalog")
+ S WSA='+$$C^I("zarp","nlog_sl_ad")
+ 
+ ; переменные для логирования
+ S P1="" F  S P1=$O(^ZARM("p",P1)) Q:P1=""  S X1=^(P1) I $P(X1,"|",2)="log" S WSAL("P"_P1)=$P(X1,"|",1)
+ 
+ S L="" F  S L=$O(^ZARP(L)) Q:L=""  I L=cLPU!FF S O="" F  S O=$O(^ZARP(L,O)) Q:O=""  S V="" F  S V=$O(^ZARP(L,O,V)) Q:V=""  D:$D(^(V,zDT))
+ .I $D(^(zDT,"f")),noSB Q  ; уже посчитано
+ .I $D(SelVR) Q:'$D(SelVR(V))  ; не считаем по врачу
+ .S AL=$G(^("a")) Q:AL=""  K ST
+ .S (^ZARP(L,O,V,zDT,1),^(2))=0
+ .S z="" F  S z=$O(^ZARM("ar",AL,"r",z)) Q:z=""  D
+ ..S PRC=^(z),OP=$P(PRC,"|",5),(X1,X2)=""
+ ..S vT=$P(PRC,"|",1) Q:vT=""  Q:$D(ST(vT)) 
+ ..S P1=$P(PRC,"|",3),P2=$P(PRC,"|",4),LW=$P(PRC,"|",9)
+ ..S:$L(P1) X1=$$cprm(P1)
+ ..S:$L(P2) X2=$$cprm(P2)
+ ..I OP="f[" S R=$S(X1="":0,1:("|"_X1_"|")[("|"_X2_"|")),OP="" Q:'R 
+ ..I OP="m[" S R=$S(X1="":0,1:(","_X1_",")[(","_X2_",")),OP="" Q:'R
+ ..I OP="btw" S X3=+$P(X2,"/",2),X2=+$P(X2,"/",1),R=$S(X1<X2:0,X1>X3:0,1:1),OP="" Q:'R   
+ ..I $L(OP) X ("S R=X1"_OP_"X2") Q:'R 
+ ..S P1=$P(PRC,"|",6),P2=$P(PRC,"|",7),P3=$P(PRC,"|",8),(X1,X2)=""
+ ..S:P1="-" P1=""
+ ..S:$L(P1) X1=$$cprm(P1)
+ ..S:$L(P2) X2=$$cprm(P2)
+ ..S X1=$S(P1="":X2,P2="":X1,1:X1*X2)
+ ..S OP=$P(PRC,"|",2)
+ ..I OP="stop" S ST(vT)="" Q
+ ..I OP="step" S z=z+X1 Q
+ ..I OP="go",X1'="",$D(^ZARM("ar",AL,"lbr",X1)) S z=^ZARM("ar",AL,"lbr",X1)-1 Q 
+ ..I OP="=" S X1=+$J(X1,0,2),^ZARP(L,O,V,zDT,vT)=X1 D:LW'=""&X1 WL(L,O,V,zDT,LW_"|"_X1) Q 
+ ..S X2=$G(^ZARP(L,O,V,zDT,vT))
+ ..I OP="%%" S X2=$S(X1=100:X2,1:100*X2/(100-X1)),OP="" ; обратный процент
+ ..I OP="%" S X2=X1*X2/100,OP="" 
+ ..I OP="+%" S X2=X2+(X1*X2/100),OP=""
+ ..I OP="-%" S X2=X2-(X1*X2/100),OP=""
+ ..I OP="/" S X2=$S(X1:X2/X1,1:0),OP="" 
+ ..I $L(OP) X ("S X2=X2"_OP_"X1")
+ ..S ^ZARP(L,O,V,zDT,vT)=+$J(X2,0,2)
+ ..D:LW'=""&X1 WL(L,O,V,zDT,LW_"|"_(+$J(X1,0,2)))
+ .I rV=2 D REGL^IEXCH("^ZARP",L,O,V,zDT) Q 
+ .I $G(^cfg("zarp","res-round")) S ^(1)=$J($G(^ZARP(L,O,V,zDT,1)),0,0),^(2)=$J($G(^(2)),0,0)
+ .S X1=$G(^ZARP(L,O,V,zDT,1)),X2=$G(^(2)),E=X1+X2
+ .S ^ZARPL(L,O,V,zDT)=$$USR^IUSER()_"|"_$H
+ .D:E WL(L,O,V,zDT,"Итого|"_E_"||=0")
+ .D:WSA
+ ..I X1 D WL(L,O,V,zDT,"Значение оклада|"_X1_"||=1")
+ ..I X2 D WL(L,O,V,zDT,"Значение надбавки|"_X2_"||=2")
+ .S P1="" F  S P1=$O(WSAL(P1)) Q:P1=""  S X1=$G(^ZARP(L,O,V,zDT,P1)) D:X1 WL(L,O,V,zDT,WSAL(P1)_"|"_X1_"||="_P1)
+ .D:'WNF 
+ ..S X1=$G(^ZARP(L,O,V,zDT,"nalog")),X2=$G(^("nalogs"))
+ ..S P1=$G(^("nalogdsc")),P1=$S(P1="":"",1:" ("_P1_")")
+ ..D:X1 WL(L,O,V,zDT,"Процент налогов|"_X1_P1)
+ ..D:X2 WL(L,O,V,zDT,"Значение налогов|"_X2_P1)
+ .D REGL^IEXCH("^ZARP",L,O,V,zDT),REGL^IEXCH("^ZARPL",L,O,V,zDT)
+ Q
+cprm(P) 
+ Q:+P=P P
+ Q:$E(P)="=" $E(P,2,99)
+ Q $G(^ZARP(L,O,V,zDT,$S(P="okl":1,P="ndb":2,1:P)))
+FF() 
+ I $D(^cfg("zarp","filial-report")) Q ^("filial-report")
+ Q $$FR^I()
+WL(L,O,V,DT,VAL) ; Write log
+ S ^($O(^ZARPL(L,O,V,DT,""),-1)+1)=VAL
+ Q
+CLEAR(DTT,LP) ; delete all by date
+ N L,O,V,DT,FF,DE,CC
+ S DT=$P(DTT,"-",1),DE=$P(DTT,"-",2),FF=+$$FF(),CC=0
+ S:$G(LP)="" LP=+$$^I("ilpu")
+ S L="" F  S L=$O(^ZARP(L)) Q:L=""  D:FF!(L=LP)
+ .S O="" F  S O=$O(^ZARP(L,O)) Q:O=""  S V="" F  S V=$O(^ZARP(L,O,V)) Q:V=""  D:$D(^(V,DT))
+ ..I DE'="",$G(^(DT))'=DE S CC=1 Q  ; another period
+ ..K ^(DT) D KGL^IEXCH("^ZARP",L,O,V,DT)
+ ..K ^ZARPL(L,O,V,DT) D KGL^IEXCH("^ZARP",L,O,V,DT)
+ .Q:$$ZP(L)'=9  Q:CC 
+ .K ^ZARPI("period",L,DT)
+ .D KGL^IEXCH("^ZARPI","period",L,DT)
+ Q
+CLEARV(DTT) ; Очистить зарплатную ведомость
+ N DT,zDT,zDE,DE,LP,OT,VR,A,R,FF,LPU,NOO
+ S DT=$P(DTT,"-",1),zDT=DT,zDE=$P(DTT,"-",2)
+ S FF=+$$FF^IZARP(),LPU=+$$^I("ilpu")
+ S NOO=+$G(^cfg("zarp","nootd"))
+ S LP="" F  S LP=$O(^ZARP(LP)) Q:LP=""  D:LP=LPU!FF 
+ .S OT="" F  S OT=$O(^ZARP(LP,OT)) Q:OT=""  D
+ ..S VR="" F  S VR=$O(^ZARP(LP,OT,VR)) Q:VR=""  I $D(^(VR,DT)),^(DT)=zDE D
+ ...K ^ZARV(LP,VR,DT)
+ ...D KGL^IEXCH("^ZARV",LP,VR,DT)
+ ...D UNSBS(LP,OT,VR,DT)
+ Q
+CFREEPR(DTT,LP) ; Проверить что в периоде нет сотрудников
+ N L,O,V,DT,DE,F,X
+ S DT=$P(DTT,"-",1),DE=$P(DTT,"-",2),F=0
+ S:$G(LP)="" LP=+$$^I("ilpu")
+ S L="" F  Q:F  S L=$O(^ZARP(L)) Q:L=""  D:L=LP  
+ .S O="" F  Q:F  S O=$O(^ZARP(L,O)) Q:O=""  S V="" F  S V=$O(^ZARP(L,O,V)) Q:V=""  S X=$G(^(V,DT)) I DE=""!(DE=X) S F=1 Q
+ Q 'F
+USEInLPU(VR,LPU,DT,DDT) ; Врач оформлен в данном филиале
+ ; DDT - уволен не более дней назад
+ I '$$USED^IKADRY(VR,DT) Q:'$G(DDT)  Q:'$$USED^IKADRY(VR,DT-DDT) 
+ Q $$USEInLPU^IKADRY(VR,LPU,DT,1)
+IsVR(LPU,OT,VR,DT,SBS) ; На врача присутствует расчет з.п.
+ ; SBS - расчет подписан 
+ N D,F
+ S OT=$G(OT),F=0
+ I OT="" F  S OT=$O(^ZARP(LPU,OT)) Q:OT=""  I $D(^(OT,VR)) S F=$$IsVR(LPU,OT,VR,DT,$G(SBS)) Q:F 
+ Q:F 1 Q:OT="" 0
+ S D=$O(^ZARP(LPU,OT,VR,DT+1),-1) Q:D="" 0
+ Q:$G(^(D))<DT 0
+ I $G(SBS) Q:$G(^(D,"f"))="" 0 Q 1  
+ Q 1
+tpVR(VR,LP) ; Тип периода для врача
+ N L,X
+ S X=$$ZARP^YIKADRY(VR,LP),L=$L(X,"|") Q:X="" ""
+ Q $S(L#2:$P(X,"|",L),1:"")
+pSUMM(LP,OT,zDT,P) ; Посчитать сумму по параметру 
+ ; LP - филиал
+ ; OT - отделение
+ ; zDT - дата расчета
+ ; P - наименование параметра
+ N L,O,V,S
+ S S=0
+ S L="" F  S L=$O(^ZARP(L)) Q:L=""  D:LP=""!(LP=L)
+ .S O="" F  S O=$O(^ZARP(L,O)) Q:O=""  D:OT=""!(OT=O)
+ ..S V=""  F  S V=$O(^ZARP(L,O,V)) Q:V=""  I $D(^ZARP(L,O,V,zDT,P)) S S=S+^(P)
+ Q S
+TOZRP(VR,DT,OT,ID,MOD) ; Услугу в расчет з.п. (буфер)
+ ; MOD - 0/1/2 = основной/по направлению/соисполнитель
+ N O,V,LP
+ S V=$S(MOD=1:$$fromVRLP^INAZN($$GETPL^IUSL(VR,DT,OT,ID,"f")),MOD=2:$$GETPL^IUSL(VR,DT,OT,ID,"cw"),1:VR)
+ S O=$S($G(^cfg("zarp","nootd")):0,+OT=0:$$OTD^IKADRY(V),1:OT)
+ S LP=$$GETPL^IUSL(VR,DT,OT,ID,"l")
+ S:LP="" LP=+$$^I("ilpu")
+ S ^ZARPI("uexc",LP,O,V,VR_"|"_OT_"|"_DT_"|"_ID)=""
+ D REGL^IEXCH("^ZARPI","uexc",LP,O,V,VR_"|"_OT_"|"_DT_"|"_ID)
+ Q
+FRZRP(VR,DT,OT,ID,MOD) ; Услуги из расчета з.п. (временного буфера)
+ ; MOD - 0/1/2 = основной/по направлению/соисполнитель
+ N O,V,LP
+ S V=$S(MOD=1:$$fromVRLP^INAZN($$GETPL^IUSL(VR,DT,OT,ID,"f")),MOD=2:$P($$GETPL^IUSL(VR,DT,OT,ID,"cw"),":",1),1:VR)
+ S O=$S($G(^cfg("zarp","nootd")):0,+OT=0:$$OTD^IKADRY(VR),1:OT)
+ S LP=$$GETPL^IUSL(VR,DT,OT,ID,"l")
+ S:LP="" LP=+$$^I("ilpu")
+ K ^ZARPI("uexc",LP,O,V,VR_"|"_OT_"|"_DT_"|"_ID)
+ D KGL^IEXCH("^ZARPI","uexc",LP,O,V,VR_"|"_OT_"|"_DT_"|"_ID)
+ S O=$$KILPL^IUSL(VR,DT,OT,ID,"zrp")
+ S O=$$KILPLE^IUSL(VR,DT,OT,ID,"zrp")
+ Q
+REGLCL ;	
+ K ^LCLI("zarp")
+ S ^LCLI("zarp")="Заработная плата"
+ S ^LCLI("zarp","ro")="Запрет изменения таблицы"
+ S ^LCLI("zarp","make")="Создание расчета (=0 запрет)"
+ S ^LCLI("zarp","calc")="Расчет зарплаты (=0 запрет)"
+ S ^LCLI("zarp","delvr")="Удаление сотрудника"
+ S ^LCLI("zarp","movvr")="Изменение периода расчета у сотрудника"
+ S ^LCLI("zarp","calcnow")="Расчет периода разрешен только в даты периода"
+ S ^LCLI("zarp","anlnalog")="Аннулирование налоговых вычетов"
+ S ^LCLI("zarp","inalog")="Импорт налоговых вычетов"
+ S ^LCLI("zarp","ipay")="Импорт платежей"
+ S ^LCLI("zarp","anlall")="Ануллирование выплат и подписи"
+ S ^LCLI("zarp","vunsbs")="Ануллирование подписи"
+ S ^LCLI("zarp","export")="Возможность экспорта таблицы"
+ S ^LCLI("zarp","paysbs")="Выплата только после подписи"
+ S ^LCLI("zarp","onepay")="Выплата только 1 раз по сотруднику"
+ S ^LCLI("zarp","nowpay")="Выплаты только за текущий день"
+ S ^LCLI("zarp","allzarv")="Показывать всех подписанных в ведомости"
+ S ^LCLI("zarp","addvr")="Ручное добавление нового врача"
+ S ^LCLI("zarp","vvnull")="Вывод в ведомости на сотрудника со всеми нулевыми цифрами"
+ S ^LCLI("zarp","nctpay")="Возможность выплаты любой суммы (без проверки)"
+ Q

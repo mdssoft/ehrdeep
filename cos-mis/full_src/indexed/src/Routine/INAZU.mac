@@ -1,0 +1,59 @@
+INAZU ; Утилиты назначений [ 08/30/2023  2:25 PM ]
+CNGDTE(TP,L) ; Изменить период действия направления
+ N ID,R,D,DE,I,A
+ S DE=$H-L
+ S ID="" F  S ID=$O(^NAZ(ID)) Q:ID=""  D
+ .S R=$G(^(ID,"i")) Q:$P(R,"|",1)'=TP 
+ .S D=+$P(R,"|",5)
+ .;Q:D>DE 
+ .S I="" F  S I=$O(^NAZ(ID,"a",I)) Q:I=""  D
+ ..S A=^(I) Q:+$P(A,"|",1)'=0 
+ ..Q:($P(A,"|",4)-D)'>L 
+ ..W "."
+ ..S $P(A,"|",4)=D+L
+ ..S ^NAZ(ID,"a",I)=A
+ ..D GL^IEXCH("^NAZ",ID,"a",I)
+ Q
+CNGDT(ID,DT) ; Изменить дату назначения
+ N S,A,OD,R,NI
+ S A=$G(^NAZ(ID,"i")),NI=$P(A,"|",2),OD=+$P(A,"|",5)
+ S R=$G(^NAZI("d",OD,ID))
+ K ^NAZI("d",OD,ID)
+ D KGL^IEXCH("^NAZI","d",OD,ID)
+ S ^NAZI("d",DT,ID)=R
+ D GL^IEXCH("^NAZI","d",DT,ID)
+ S $P(^NAZI("n",NI,ID),"|",3)=DT
+ D GL^IEXCH("^NAZI","n",NI,ID)
+ S R=$P(A,"|",5),$P(A,"|",5)=DT_","_$P(R,",",2)
+ D GL^IEXCH("^NAZ",ID,"i")
+ Q
+UPDNETL(DS,DE,LPU) ; Отправить за период на ЛПУ
+ N D,ID,R,NI,LP,ST,T
+ S LP=$$^I("ilpu")
+ S D=DS-1 F  S D=$O(^NAZI("d",D)) Q:D=""!(D>DE)  D
+ .S ID="" F  S ID=$O(^NAZI("d",D,ID)) Q:ID=""  D
+ ..S R=$G(^NAZ(ID,"i")),NI=$P(R,"|",2)
+ ..S ST=+$P($G(^NAZ(ID,"e")),"|",1),T=$P(R,"|",1)
+ ..D UPDA^IEXCH("GL","^NAZ("_ID,LP,LPU)
+ ..D UPDA^IEXCH("GL","^NAZI(""d"","_D_","_ID,LP,LPU)
+ ..D UPDA^IEXCH("GL","^NAZI(""n"","_NI_","_ID,LP,LPU)
+ ..I ST D UPDA^IEXCH("GL","^NAZI(""st"","""_T_"|"_ST_""","_NI_","_ID,LP,LPU) 
+ Q
+REIDX(NUPD) ; Переиндексация
+ ; NUPD - локальная
+ S NUPD=$G(NUPD)
+ K:'NUPD ^NAZI
+ N ID,J
+ S ID="",J=0 F  S ID=$O(^NAZ(ID)) Q:ID=""  D MKIDX^INAZN(ID,NUPD) S J=J+1 W:J#500=1 "."
+ W !,"End, total="_J
+ Q
+UPDALL(DS,DE,LPU) 
+ N N,D,L
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S D=DS-1 F  S D=$O(^NAZI("d",D)) Q:D=""!(D>DE)  D
+ .S N="" F  S N=$O(^NAZI("d",D,N)) Q:N=""  D
+ ..I LPU'="",$RE($P(N,".",2))'=LPU Q 
+ ..D REGL^IEXCH("^NAZ",N)
+ ..D MKIDX^INAZN(N,0)
+ ..w "."
+ Q

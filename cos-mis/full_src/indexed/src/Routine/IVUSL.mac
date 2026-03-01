@@ -1,0 +1,212 @@
+IVUSL ; Виртуальные услуги [ 12/27/2015  3:03 AM ]
+GENGL(DS,DE,SUM,DGN,WRK,NOTD,PRG,SPRG,SSKD) 
+ S DS=$$DI^DTUTL(DS),DE=$$DI^DTUTL(DE)
+ S PRG=$G(PRG),SPRG=$G(SPRG),SSKD=$G(SSKD),WW=1
+ ; Generate patient list
+ I '$D(NOTD) W !,"Wrong params" Q 
+ K ^BUF($J)
+ N NI,R,P,KX,ID,DT,I,UU,S,Prc,NIB,VR,OT,DCS,PC,U,SS,CNIB
+ N @$$NEWVAR^IUSL(),bb
+ S bb=1
+ S:SSKD SSKD=100-SSKD
+ W !,"Scan destination patients 'sex' ..."
+ S CNIB=""
+ S NIB="",PC=0 F  S NIB=$O(^BUF("ivusl",NIB)) Q:NIB=""  D
+ .S DCS=$$CREATED^IPAC(NIB) Q:DCS>DS  S DCS=DS ;S:DS>DCS DCS=DS
+ .Q:'$$CHECK^IPAC(NIB,DCS)  
+ .Q:'$$CHECK^IPAC(NIB,DE) 
+ .Q:$$GET^IPAC(NIB,"stc",DCS)'=DGN 
+ .Q:$$GET^IPAC(NIB,"stc",DE)'=DGN 
+ .I SPRG'="",SPRG'=$$GET^IPAC(NIB,"stcprg",+$H) Q 
+ .I WRK'="",$$GET^IPAC(NIB,"work",DE)'=WRK Q 
+ .I $G(PRG)'="",$$GET^IPAC(NIB,"prog",DE)'=PRG Q 
+ .S P=+$$GET^IPAC(NIB,"pol",DE),^BUF($J,"pp",P)="",PC=PC+1
+ .S CNIB=NIB
+ G GENfp
+GENMK(DS,DE,SUM,DGN,WRK,NOTD,PRG,SPRG,SSKD) ; создать для счетов
+ S DS=$$DI^DTUTL(DS),DE=$$DI^DTUTL(DE)
+ S PRG=$G(PRG),SPRG=$G(SPRG),SSKD=$G(SSKD)
+ N NNI,R,P,KX,ID,DT,I,UU,S,Prc,NIB,VR,OT,DCS,PC,U,SS,CNIB,SSS
+ N @$$NEWVAR^IUSL(),zi,WW,CNT
+ S:SSKD SSKD=100-SSKD
+ S Prc=$$GET^IINSC(DGN,"price",DE)
+ S NIB="",SS=0,zi=0,WW=0,SSS=0
+GENmk 
+ F  S NIB=$$NEXT^IPAC(NIB,"stc",DGN) Q:NIB=""  D GENprsc
+ Q:zi>2048 
+ s zi=zi+1
+ I $D(^BUF($J,"u")) G GENmk
+ K ^BUF($J,"u"),^("s"),^("pp")
+ S ^BUF($J,"rez")=SSS
+ Q
+GEN(DS,DE,SUM,DGN,WRK,NOTD,PRG,SPRG,SSKD,WW) 
+ S DS=$$DI^DTUTL(DS),DE=$$DI^DTUTL(DE)
+ S PRG=$G(PRG),SPRG=$G(SPRG),SSKD=$G(SSKD),WW='+$G(WW)
+ ; Generate patient list
+ I WW,'$D(NOTD) W !,"Wrong params" Q 
+ K ^BUF($J,"s"),^("pp"),^("rez"),^("u")
+ N NNI,R,P,KX,ID,DT,I,UU,S,Prc,NIB,VR,OT,DCS,PC,U,SS,CNIB
+ N @$$NEWVAR^IUSL()
+ N bb S bb=0
+ S:SSKD SSKD=100-SSKD
+ W:WW !,"Scan destination patients 'sex' ..."
+ S CNIB=""
+ S NIB="",PC=0 F  S NIB=$$NEXT^IPAC(NIB,"stc",DGN) Q:NIB=""  D
+ .S DCS=$$CREATED^IPAC(NIB) Q:DCS>DS  S DCS=DS ;S:DS>DCS DCS=DS
+ .Q:'$$CHECK^IPAC(NIB,DCS)  
+ .Q:'$$CHECK^IPAC(NIB,DE) 
+ .Q:$$GET^IPAC(NIB,"stc",DCS)'=DGN 
+ .Q:$$GET^IPAC(NIB,"stc",DE)'=DGN 
+ .I SPRG'="",SPRG'=$$GET^IPAC(NIB,"stcprg",DE) Q 
+ .I WRK'="",$$GET^IPAC(NIB,"work",DE)'=WRK Q 
+ .I $G(PRG)'="" Q:$$GET^IPAC(NIB,"prog",DE)'=PRG 
+ .S P=+$$GET^IPAC(NIB,"pol",DE),^BUF($J,"pp",P)="",PC=PC+1
+ .S CNIB=NIB
+GENfp 
+ S:PC PC=SUM/(500*PC) S:PC<4 PC=4 ; усреднение услуг на каждого
+ S PC=PC*2,I=(DE-DS)*2
+ S:PC<I PC=I ; если большой период - 2 усл. в день
+ W:WW "OK",!,"Find patients:",!
+ S Prc=$$GET^IINSC(DGN,"price",DE)
+ S NI="" F  S NI=$$NEXT^IPAC(NI) Q:NI=""  D
+ .Q:'$D(^BUF($J,"pp",+$$GET^IPAC(NI,"pol",DE))) 
+ .S I=0,DT=DS-1,S=0 F  S DT=$O(^PNF(NI,DT)) Q:DT=""!(DT>DE)  D
+ ..S KX="" F  S KX=$O(^PNF(NI,DT,KX)) Q:KX=""  S:'$D(^ZNF($P(KX,"|",1),$P(KX,"|",2),DT,$P(KX,"|",3),"v")) I=I+1
+ .Q:I<1  Q:I>PC   ; Q:I<3
+ .I WW W:NI#500 "."
+ .S P=$$GET^IPAC(NI,"prog",DE)
+ .S R=+$$GET^IPAC(NI,"pol",DE)
+ .Q:$$GET^IINSC(+$$GET^IPAC(NI,"stc",DE),"dvid",DE)>1  
+ .;S Prc=$$GET^IINSC($$GET^IPAC(NI,"stc",DE),"price",DE)
+ .S DT=DS-1 F  S DT=$O(^PNF(NI,DT)) Q:DT=""!(DT>DE)  D
+ ..S KX="" F  S KX=$O(^PNF(NI,DT,KX)) Q:KX=""  D
+ ...S OT=$P(KX,"|",2)
+ ...I NOTD'="" Q:NOTD=OT 
+ ...S VR=$P(KX,"|",1)
+ ...Q:$D(^ZNF(VR,DT,OT,$P(KX,"|",3),"v"))  ; not v.
+ ...S UU=NI
+ ...D GET^IUSL(VR,DT,OT,$P(KX,"|",3))
+ ...S NI=UU,FLG="|"_$G(FLG)_"|"
+ ...Q:STAT="d"!(STAT="w")!(STAT=2)!(STAT>3)  Q:$D(ERR)   
+ ...Q:FLG["|prf|"  Q:FLG["|kss|"  Q:FLG["|grn|"  Q:FLG["|nop|"
+ ...S U=$O(UL("")) Q:U=""  Q:'$$CHECKH^IPRICE(U,Prc,DT) 
+ ...S PRC=Prc K SKID ; подсчет суммы по нужному прайсу
+ ...S:SSKD SKID=SSKD
+ ...S SS=$$MKSUM^IUSL(DT,0) Q:'SS 
+ ...Q:'$$CHKPRG^IUSL(CNIB,DT,OT,SP,DIA,U,VR,"","","","")
+ ...S S=S+SS
+ ...S ^BUF($J,"u",R,NI,DT,KX)=""
+ .I S=0 K ^BUF($J,"u",R,NI) Q 
+ .I S>SUM K ^BUF($J,"u",R,NI) Q 
+ .S ^BUF($J,"u",R,NI)=S,^BUF($J,"s",S,NI)=R
+ W:WW !,"Find summ"
+ S S=0,P="" F  S P=$O(^BUF($J,"s",P),-1) Q:P=""  D
+ .S NI="" F  S NI=$O(^BUF($J,"s",P,NI)) Q:NI=""  D
+ ..I (S+P)<SUM S S=S+P Q 
+ ..S R=^BUF($J,"s",P,NI) K ^BUF($J,"s",P,NI),^BUF($J,"u",R,NI)
+ I S<1 W:WW !,"Summ not found!" S:'WW ^BUF($J,"rez")="SUM" Q 
+ S:'WW ^BUF($J,"rez")=S
+ Q:'WW 
+ W !,"Found summ "_S,!,"Generate list",!
+ W "Continue ? <Y>:" R P#1 Q:P="N"!(P="n") 
+ W !
+rGEN 
+ S NIB="",SS=0
+ I bb F  S NIB=$O(^BUF("ivusl",NIB)) Q:NIB=""  D GENproc
+ I 'bb F  S NIB=$$NEXT^IPAC(NIB,"stc",DGN) Q:NIB=""  D GENproc
+ I $D(^BUF($J,"u")) H:WW 1 W:WW !,"FILL, next step" G rGEN
+ W:WW !,"Summ="_SS
+ Q
+GENproc 
+ S DCS=$$CREATED^IPAC(NIB) S:DS>DCS DCS=DS
+ Q:'$$CHECK^IPAC(NIB,DCS)  
+ Q:'$$CHECK^IPAC(NIB,DE) 
+ Q:$$GET^IPAC(NIB,"stc",DCS)'=DGN 
+ Q:$$GET^IPAC(NIB,"stc",DE)'=DGN 
+ I SPRG'="" Q:SPRG'=$$GET^IPAC(NIB,"stcprg",+$H)
+ Q:'$RANDOM(3) 
+ I WRK'="" Q:$$GET^IPAC(NIB,"work",DE)'=WRK 
+ I $G(PRG)'="" Q:$$GET^IPAC(NIB,"prog",DE)'=PRG 
+ S P=+$$GET^IPAC(NIB,"pol",DE)
+ S NI=$O(^BUF($J,"u",P,"")) Q:NI=""  
+ W:WW !,$$FIOSH^YIPACN(NI)_" -> "_$$FIOSH^YIPACN(NIB)_" ("_^BUF($J,"u",P,NI)_")" 
+ S DT="" F  S DT=$O(^BUF($J,"u",P,NI,DT)) Q:DT=""  D
+ .Q:$$GET^IPAC(NIB,"stc",DT)'=DGN 
+ .S KX=""  F  S KX=$O(^BUF($J,"u",P,NI,DT,KX)) Q:KX=""  D
+ ..S VR=$P(KX,"|",1),OT=$P(KX,"|",2),ID=$P(KX,"|",3)
+ ..K ^BUF($J,"u",P,NI,DT,KX) ; Q 
+ ..S I=$O(^ZNF(VR,OT,DT,""),-1)+1
+ ..W:WW !,"VR="_VR_" OT="_OT_" DT="_DT_",KX=-"_KX_"-"_I
+ ..M ^ZNF(VR,OT,DT,I)=^ZNF(VR,OT,DT,ID)
+ ..S ^ZNF(VR,OT,DT,I,"v")="" K ^ZNF(VR,OT,DT,I,"s")
+ ..S R=$G(^ZNF(VR,OT,DT,I,"m")) S:R'="" $P(R,"~",2)="",^("m")=R
+ ..S ^PNF(NIB,DT,VR_"|"_OT_"|"_I)=$H
+ ..I '$D(^ZNFI("dn",DT,NIB)) S ^(NIB)="" D GL^IEXCH("^ZNFI","dn",DT,NIB)
+ ..S R=$P($G(^ZNF(VR,OT,DT,I,"e")),"~",1,4)
+ ..S U=$P($P(R,"~",2),"*",1),SKID=SSKD
+ ..I SKID<0,$$GET^IPRICE(U,"nosn",Prc,DT) S SKID=""
+ ..I SKID>0,$$GET^IPRICE(USL,"nosp",Prc,DT) S SKID=""
+ ..S $P(R,"~",1)=0,$P(R,"~",2)=NIB,$P(R,"~",4)=Prc
+ ..S:SKID $P(R,"~",5)=SKID
+ ..S ^ZNF(VR,OT,DT,I,"e")=R
+ ..S ^BUF("z",VR,OT,DT,I)=NIB
+ ..S PRC=Prc,U=$P(R,"~",3),S=$P(U,"*",2),U=$P(U,"*",1)
+ ..; TODO - "s"
+ ..S S=$$USUM^IUSL(DT,U,$S(S="":1,1:S))
+ ..W:WW " "_S S SS=SS+S
+ ..D UPD^IUSL(VR,OT,DT,I)
+ K ^BUF($J,"u",P,NI)
+ Q
+GENprsc ; процедура для формата счетов
+ S DCS=$$CREATED^IPAC(NIB) S:DS>DCS DCS=DS
+ Q:'$$CHECK^IPAC(NIB,DCS)  
+ Q:'$$CHECK^IPAC(NIB,DE) 
+ Q:$$GET^IPAC(NIB,"stc",DCS)'=DGN 
+ Q:$$GET^IPAC(NIB,"stc",DE)'=DGN 
+ I SPRG'="" Q:SPRG'=$$GET^IPAC(NIB,"stcprg",+$H)
+ Q:'$RANDOM(3) 
+ I WRK'="" Q:$$GET^IPAC(NIB,"work",DE)'=WRK 
+ I $G(PRG)'="" Q:$$GET^IPAC(NIB,"prog",DE)'=PRG 
+ S P=+$$GET^IPAC(NIB,"pol",DE)
+ S NI=$O(^BUF($J,"u",P,"")) Q:NI=""  
+  
+ S DT="" F  S DT=$O(^BUF($J,"u",P,NI,DT)) Q:DT=""  D
+ .Q:$$GET^IPAC(NIB,"stc",DT)'=DGN  ; только основной договор
+ .S KX=""  F  S KX=$O(^BUF($J,"u",P,NI,DT,KX)) Q:KX=""  D
+ ..S VR=$P(KX,"|",1),OT=$P(KX,"|",2),ID=$P(KX,"|",3)
+ ..K ^BUF($J,"u",P,NI,DT,KX) ; Q 
+ ..S NNI=NI
+ ..D GET^IUSL(VR,DT,OT,ID,1)
+ ..S NI=NNI
+ ..Q:STAT="w"!(STAT="d") 
+ ..S U=$O(UL("")),CNT=UL(U),SKID=SSKD
+ ..I SKID<0,$$GET^IPRICE(U,"nosn",Prc,DT) S SKID=""
+ ..I SKID>0,$$GET^IPRICE(USL,"nosp",Prc,DT) S SKID=""
+ ..S PRC=Prc,CNT=$S(CNT="":1,1:+CNT)
+ ..S S=$$USUM^IUSL(DT,U,CNT)
+ ..S SSS=SSS+S
+ ..S R=DT_"|"_U_"|"_S_"|"_CNT_"|"_DIA_"|"_PRC_"|"_VR_"|"_OT_"||"_$G(LPU)
+ ..S I=$O(^BUF($J,"sc",NIB,""),-1)+1
+ ..S ^BUF($J,"sc",NIB,I)=R
+ K ^BUF($J,"u",P,NI)
+ Q
+CLR(DS,DE,DO,DGN) 
+ S DS=$$DI^DTUTL(DS),DE=$$DI^DTUTL(DE)
+ N I,VR,DT,OT,ID,R
+ S VR="",I=0 F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D
+ ..S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ...S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ....Q:'$D(^(ID,"v"))  
+ ....S R=$G(^("e")) Q:$P(R,"~",1)'=0  
+ ....S R=$P(R,"~",2)
+ ....I $G(DGN)'="" Q:$$GET^IPAC(R,"stc",DT)'=DGN 
+ ....S I=I+1 
+ ....Q:'DO
+ ....K ^ZNF(VR,OT,DT,ID)
+ ....D:R'=""
+ .....K ^PNF(R,DT,VR_"|"_OT_"|"_ID)
+ .....I '$D(^PNF(R,DT)),$D(^ZNFI("dn",DT,R)) K ^(R) D KGL^IEXCH("^ZNFI","dn",DT,R)
+ ....D UPDDEL^IUSL(VR,OT,DT,ID,R)
+ W !,"Found "_I
+ Q

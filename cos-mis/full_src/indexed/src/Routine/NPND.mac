@@ -1,0 +1,377 @@
+A ; Вызовы помощи на дому [ 05/29/2023  4:31 PM ]
+NEW ; Создать новый вызов
+ I $$LCL^IUSER("pnd","new")=0 D MSG^RWU("Нет прав на создание нового вызова.") Q
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<sncall>")
+ D WTAGDC^RWU("dt",$$DT^DTUTL(+$H))
+ D WTAGDC^RWU("tm",$$TM^DTUTL($H))
+ D W^RWU("</sncall></nb_console>")
+ D C^RWU
+ Q
+LNIB(NIB,CID) ; Загрузка данных по пациенту
+ ; CID - ID текущей заявки
+ N R,ID,LL,PL
+ Q:NIB=""  Q:'$$EXIST^IPAC(NIB) 
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<sncall>")
+ S ID=$O(^MCLI("n",NIB,$G(CID)),-1)
+ D WTAGDC^RWU("nib",NIB)
+ D WTAGDC^RWU("fio",$$FIO^IPAC(NIB))
+ D WTAGDC^RWU("age",$$AGE^IPAC(NIB))
+ D WTAGDC^RWU("stc",$$GETE^IPAC(NIB,"stc"))
+ S LL("adr")=$$ADR^YIPACN(NIB)
+ S LL("phone")=$$TELS^IPAC(NIB)
+ F PL="floor","entr","domkod","orient" S LL(PL)=$$GET^IPAC(NIB,PL)
+ 
+ I ID'="" F PL="floor","entr","domkod","orient","adr","phone","orient","metro" S R=$G(^MCL(ID,PL)) S:R'="" LL(PL)=R
+ 
+ S PL="" F  S PL=$O(LL(PL)) Q:PL=""  D WTAGDC^RWU(PL,LL(PL))
+ D W^RWU("</sncall></nb_console>")
+ D C^RWU
+ Q
+LNADR(NIB) ; Загрузить адрес из учетной карточки
+ N R,LL,PL
+ Q:NIB=""  Q:'$$EXIST^IPAC(NIB) 
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<sncall>")
+ S LL("adr")=$$ADR^YIPACN(NIB)
+ S LL("phone")=$$TELS^IPAC(NIB)
+ F PL="floor","entr","domkod","orient" S LL(PL)=$$GET^IPAC(NIB,PL)
+ S PL="" F  S PL=$O(LL(PL)) Q:PL=""  D WTAGDC^RWU(PL,LL(PL))
+ D W^RWU("</sncall></nb_console>")
+ D C^RWU
+ Q
+L(N) ; ЗАГРУЗКА
+ N POLE,R
+ S N=+N
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<sncall>")
+ I '$D(^MCL(N)) D WTAGD^RWU("id","") G Le
+ D WTAGD^RWU("id",N)
+ S POLE="" F  S POLE=$O(^MCL(N,POLE)) Q:POLE=""  D
+ .Q:POLE="log" 
+ .S R=$G(^MCL(N,POLE))
+ .S:POLE="dt" R=$$DT^DTUTL(R) S:POLE="tm" R=$$TM^DTUTL(R)
+ .I POLE="nib",R'="" D WTAGDC^RWU("fio",$$FIO^IPAC(R)),WTAGDC^RWU("stc",$$GETE^IPAC(R,"stc"))
+ .I POLE="nib1" F I=2:1:4 S:$G(^MCL(N,"nib"_I))'="" R=R_" "_^("nib"_I)
+ .D WTAGDC^RWU(POLE,R)
+Le D W^RWU("</sncall></nb_console>")
+ D C^RWU
+ Q
+S ; СОХРАНЕНИЕ
+ I $$LCL^IUSER("pnd","save")=0 D MSG^RWU("Нет прав на изменение вызова.") Q 
+ N PL,C,N,%J,A,NI,NB,FM,fCD,I,X
+ S NB="nb_console",FM="sncall"
+ D ORH^RWU
+ K XML,XMLR
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  D XMLAN^YIXMLRR
+ D CR^RWU
+ S fCD=$$LCL^IUSER("pnd","cdsave")
+ S N=+$G(XML(NB,FM,"id"))
+ I 'N,$$LCL^IUSER("pnd","new")=0 D MSG^RWU("Нет прав на создание нового вызова.") Q
+ S NI=$G(XML(NB,FM,"nib"))
+ I $G(^cfg("pnd","usenib")),'$$EXIST^IPAC(NI) D MSG^RWU("Не указан № И.Б. пациента.") Q  
+ I N,$G(^MCL(N,"nib"))'=NI D MSG^RWU("Изменять пациента недопустимо.") Q
+ I 'N,fCD,+$H>$$DI^DTUTL($G(XML(NB,FM,"dt"))) D MSG^RWU("Запрещено создание вызовов за прошлый период.") Q 
+ 
+ I $$EXIST^IPAC(NI),$$GET^IPAC(NI,"fiof",$$DI^DTUTL($G(XML(NB,FM,"dt"))))="" D MSG^RWU("На указанную дату пациент отсутствует.") Q 
+ 
+ S XML(NB,FM,"fio")=$$TRIM^TXTU($$NORMFIOF^TXTU($G(XML(NB,FM,"fio"))))
+ I N'="",$D(^MCL(N)) D RMIDX(N)
+ I 'N L +^MCL S N=$O(^MCL(""),-1)+1,^MCL(N,"nib")="" L -^MCL
+ I NI'="" K XML(NB,FM,"fio"),^MCL(N,"fio")
+ 
+ D DO^ITRIG("pnd","save")
+ 
+ S C=$G(XML(NB,FM,"vr")) ; автостатус
+ I $G(^MCL(N,"vr"))="",C'="",'$G(^cfg("pnd","noastv")) S ^MCL(N,"stat")=1,^("pvv")=$H
+ S C=$$DBLSP^TXTU($TR($G(XML(NB,FM,"nib1")),",;/\|","     "))
+ I $G(XML(NB,FM,"nib"))=C K XML(NB,FM,"nib1") S C=""
+ F I=1:1:4 S X=$P(C," ",1) S:X'="" XML(NB,FM,"nib"_I)=$P(C," ",I)
+ 
+ S PL="" F  S PL=$O(XML(NB,FM,PL)) Q:PL=""  D
+ .Q:PL="ver" 
+ .S C=$$WD^TXTU($G(XML(NB,FM,PL)))
+ .S:PL="dt" C=$$DI^DTUTL(C) S:PL="tm" C=$$TI^DTUTL(C)
+ .I $D(^MCL(N,PL)) D WD^ISSG("^MCL("_N_","""_PL_""")")
+ .I fCD,PL="dt",C'=$G(^MCL(N,PL)) Q  ; not change
+ .I C="" K ^MCL(N,PL) Q
+ .S ^MCL(N,PL)=C
+ S ^MCL(N,"log")=$$USRH^IUSER()
+ S ^MCL(N,"ver")=$G(^MCL(N,"ver"))+1
+ 
+ D MKIDX(N)
+ 
+ D CLOSE^YIXMLRR
+ D REGL^IEXCH("^MCL",N)
+ D DO^ITRIG("pnd","post")
+ D MSG^RWU($G(^PP(0,2))_"<sncall><id>"_N_"</id></sncall></nb_console>",".xmlb")
+ Q
+GETVER(N,MOD) ; Получить версию записи
+ ; MOD = 0/1 - версия/версия+оператор
+ N R
+ S R=$G(^MCL(N,"ver"))
+ S:$G(MOD) R=R_"|"_$$FIO^IUSER($G(^MCL(N,"log")))
+ D MSG^RWU(R)
+ Q
+DEL(N) ; Удаление вызова
+ Q:N="" 
+ Q:$$LCL^IUSER("pnd","del")=0 
+ D RMIDX(N)
+ K ^MCL(N)
+ D K^ISSG("^MCL("_N_")")
+ D KGL^IEXCH("^MCL",N)
+ Q
+MKIDX(ID) ; Create index
+ ; first NIB
+ N NI,I
+ S NI=$G(^MCL(ID,"nib"))
+ I NI'="" S ^MCLI("n",NI,ID)="" D GL^IEXCH("^MCLI","n",NI,ID)
+ ; second and other
+ F I=1:1:4 D
+ .S NI=$G(^MCL(ID,"nib"_I)) Q:NI="" 
+ .S ^MCLI("n",NI,ID)=1 D GL^IEXCH("^MCLI","n",NI,ID)
+ ; dates
+ S I=$G(^MCL(ID,"dt"))
+ I I'="" S ^MCLI("dt",I,ID)="" D GL^IEXCH("^MCLI","dt",I,ID)
+ Q
+RMIDX(ID) ; Remove index
+ N NI,I
+ S NI=$G(^MCL(ID,"nib"))
+ I NI'="" K ^MCLI("n",NI,ID) D KGL^IEXCH("^MCLI","n",NI,ID)
+ ; second and other
+ F I=1:1:4 D 
+ .S NI=$G(^MCL(ID,"nib"_I)) Q:NI="" 
+ .K ^MCLI("n",NI,ID) D KGL^IEXCH("^MCLI","n",NI,ID)
+ ; dates
+ S I=$G(^MCL(ID,"dt"))
+ I I'="" K ^MCLI("dt",I,ID) D KGL^IEXCH("^MCLI","dt",I,ID)
+ Q
+IsNIB(NI,DT) ; Проверить наличие пациента на дату
+ N ID,F
+ S F=0
+ S ID="" F  S ID=$O(^MCLI("n",NI,ID),-1) Q:ID=""  I $G(^MCL(ID,"dt"))=DT S F=1 Q  
+ Q F
+TAB(TNV,DN,DK,TXT) ; ВЫВОД ТАБЛИЦЫ
+ N ID,DT,TN,NI,FIO,ST,T,I,X,F
+ D OWF^RWU(".txt")
+ S DN=$$DIH^DTUTL(DN),DK=$$DIH^DTUTL(DK)
+ S TXT=$$LU^TXTU($$WD^TXTU($G(TXT)))
+ S ID="" F  S ID=$O(^MCL(ID)) Q:ID=""  D
+ .S DT=$G(^MCL(ID,"dt")) Q:DT=""  Q:DT<DN!(DT>DK) 
+ .S TN=$G(^("vr"))
+ .I TNV'="",TN'=TNV Q 
+ .S TMM=$G(^("tm")),NI=$G(^("nib")),ST=$G(^("stat"))
+ .S FIO=$$FIO^IPAC(NI),F=1
+ .S:FIO="" FIO=$G(^MCL(ID,"fio"))
+ .I TXT'="",$$LU^TXTU(FIO)'[TXT S F=0 
+ .I 'F F I=1:1:4 S X=$G(^MCL(ID,"nib"_I)) I X'="" S F=0 I $$LU^TXTU($$FIO^IPAC(X))[TXT S F=1 Q
+ .Q:'F
+ .S A=ID_"|"_ID_" "_$S(ST=1:"П",ST=9:"В",ST=5:"К",1:"")_"|"_$$DT2^DTUTL(DT)_$S(TMM="":"",1:", "_$$TM^DTUTL(TMM))_"|"
+ .S T=$S(ST=3:"Отменен",1:$S(ST=9:"Выполнен, ",1:"")_$$FIOSH^IKADRY(TN))
+ .S A=A_T_"|"_NI_" "_FIO_"|"
+ .D WC^RWU(CR_A_$G(^MCL(ID,"dsc"))_"|"_$G(^("adr")))
+ D C^RWU
+ Q
+FNDP(TXT,DS,DE,VR,OTD) ; Поиск для ЭМК
+ N ID,DT,TN,NI,NI1,FIO,ST,T,I
+ D OWF^RWU(".txt")
+ D WC^RWU("№ И.Б.|Фамилия|Имя|Отчество|Договор|Время, дата")
+ S ID="" F  S ID=$O(^MCL(ID)) Q:ID=""  D
+ .S DT=$G(^MCL(ID,"dt")) Q:DT=""  Q:DT<DS!(DT>DE) 
+ .S TN=$G(^("vr"))
+ .I VR'="",TN'=VR Q
+ .S TMM=$G(^("tm")),ST=$G(^("stat"))
+ .S NI=$G(^("nib")),FIO=$$FIO^IPAC(NI)
+ .S:FIO="" FIO=$G(^MCL(ID,"fio"))
+ .D
+ ..I TXT'="",$$LU^TXTU(FIO)'[TXT Q 
+ ..S A=NI_"|"_$P(FIO," ",1)_"|"_$P(FIO," ",2)_"|"_$P(FIO," ",3,9)
+ ..S A=A_"|"_$$GETE^IPAC(NI,"stc")_"|"
+ ..S A=A_$S(TMM="":"",1:$$TM^DTUTL(TMM))_", "_$$DT2^DTUTL(DT)
+ ..D WC^RWU(CR_A) ;_", "_$G(^MCL(ID,"dsc")))
+ .F I=1:1:4 S NI1=$G(^MCL(ID,"nib"_I)) D:NI1'=""  
+ ..S FIO=$$FIO^IPAC(NI1)
+ ..I TXT'="",$$LU^TXTU(FIO)'[TXT Q 
+ ..S A=NI1_"|"_$P(FIO," ",1)_"|"_$P(FIO," ",2)_"|"_$P(FIO," ",3,9)
+ ..S A=A_"|"_$$GETE^IPAC(NI1,"stc")_"|"
+ ..S A=A_$S(TMM="":"",1:$$TM^DTUTL(TMM))_", "_$$DT2^DTUTL(DT)
+ ..D WC^RWU(CR_A) ;_", "_$G(^MCL(ID,"dsc")))
+ D C^RWU
+ Q
+SETVR(ID,VR) ; Присвоить врача
+ Q:ID="" 
+ I $$LCL^IUSER("pnd","setvr")=0 D MSG^RWU("Нет прав") Q 
+ I $G(^MCL(ID,"stat"))=9 D MSG^RWU("Вызов уже выполнен") Q  ; выполнен
+ Q:$G(^MCL(ID,"vr"))=VR  ; тот же врач
+ S ^MCL(ID,"vr")=VR
+ S ^MCL(ID,"stat")=1
+ S ^MCL(ID,"pvv")=$H
+ S ^MCLI("vr",VR,ID)=""
+ D REGL^IEXCH("^MCL",ID)
+ D REGL^IEXCH("^MCLI","vr",VR,ID)
+ D DO^ITRIG("pnd","setvr")
+ Q
+DOEND(ID,DIA) ; Завершить вызов
+ I $$LCL^IUSER("pnd","end")=0 D MSG^RWU("Нет прав") Q 
+ S ^MCL(ID,"stat")=9
+ S ^MCL(ID,"ve")=$H
+ S:$G(DIA)'="" ^MCL(ID,"dr")=DIA
+ D GL^IEXCH("^MCL",ID)
+ D DO^ITRIG("pnd","end")
+ Q
+DOCANCEL(ID) ; Отменить вызов
+ I $$LCL^IUSER("pnd","cancel")=0  D MSG^RWU("Нет прав") Q 
+ S ^MCL(ID,"stat")=3
+ S ^MCL(ID,"vc")=$H
+ D GL^IEXCH("^MCL",ID,"stat")
+ D DO^ITRIG("pnd","cancel")
+ Q
+VRL(TXT) ; ВЫВОД ВРАЧЕЙ
+ S TXT=$$WD^TXTU($G(TXT))
+ D FLST^NVFIND(TXT,TXT'="",1)
+ Q
+GETNIB(KEY) 
+ D MSG^RWU($G(^MCL(KEY,"nib")))
+ Q
+adr(ID) ; Полный адрес
+ N X,R 
+ S R=$G(^MCL(ID,"adr"))
+ S X=$G(^("entr")) S:X'="" R=R_", под. "_X
+ S X=$G(^("floor")) S:X'="" R=R_", этаж "_X
+ S X=$G(^("domkod")) S:X'="" R=R_", код домофона "_X
+ S X=$G(^("orient")) S:X'="" R=R_", ориентиры: "_X
+ S X=$G(^("metro")) S:X'="" R=R_", м. "_X
+ Q R
+INFO(KEY) ; Информация по вызову
+ Q:KEY="" 
+ N NI,R,X,T,DT,H,I
+ S NI=$G(^MCL(KEY,"nib")),DT=$G(^MCL(KEY,"dt")),H=DT
+ S:'H H=+$H
+ D MINHDR^IHTML("")
+ D CSS^IHTML
+ D W^RWU(CR_".hdr { background-color: #66CCFF; }")
+ D W^RWU(CR_".right { text-align: right; }")
+ D CSSE^IHTML
+ D W^RWU(CR_"</head><body>")
+ D WC^RWU(CR_"<p class=""hdr""><font size=""4"" color=""#000000""><b>"_$$FIO^IPAC(NI)_"</b></font></p>")
+ S R=$G(^MCL(KEY,"age"))
+ S:R="" R=$$AGE^IPAC(NI,H)
+ D WC^RWU(CR_"<b>Возраст:</b> "_R)
+ D WC^RWU(CR_"&nbsp<b>Пол:</b> "_$$GETE^IPAC(NI,"pol",H)_"<br>")
+ D WC^RWU(CR_"<b>Договор:</b> "_$$TAG^TXTU($$GETE^IPAC(NI,"stc",H))_"<br>")
+ S R=$$GETE^IPAC(NI,"prog")
+ D:R'="" WC^RWU(CR_"<b>Программы:</b> "_$$TAG^TXTU(R)_"<br>")
+ F I=1:1:4 S NI1=$G(^MCL(KEY,"nib"_I)) D:NI1'="" 
+ .D WC^RWU(CR_"<hr><p class=""hdr""><font size=""4"" color=""#000000""><b>Дополнительно: "_$$FIO^IPAC(NI1)_"</b></font></p>")
+ .D WC^RWU(CR_"<b>Возраст:</b> "_$$AGE^IPAC(NI1,H))
+ .D WC^RWU(CR_"&nbsp<b>Пол:</b> "_$$GETE^IPAC(NI1,"pol",H)_"<br>")
+ .D WC^RWU(CR_"<b>Договор:</b> "_$$TAG^TXTU($$GETE^IPAC(NI1,"stc",H))_"<hr>")
+ 
+ D WC^RWU(CR_"<b>Дата вызова:</b> "_$$DT^DTUTL(DT))
+ D WC^RWU(CR_",<b>&nbsp;Время:</b> "_$$TM^DTUTL($G(^MCL(KEY,"tm"))))
+ S R=$G(^MCL(KEY,"pvv")),X=$G(^MCL(KEY,"vr")),T=$G(^MCL(KEY,"ve"))
+ D:X'="" WC^RWU(CR_"<br>"_$S(R:"<b>Передача вызова:</b> "_$$DTM^DTUTL(R)_"&nbsp, ",1:"")_$$TAG^TXTU($$FIO^IKADRY(X))_$S($G(^MCL(KEY,"stat"))=9:", <b>Выполнен</b> "_$$DTM^DTUTL(T),1:""))
+ S R=$G(^MCL(KEY,"dr"))
+ D:R'="" WC^RWU(CR_"<br><b>Диагноз:</b> "_$$TAG^TXTU($$NAME^YMKB10(R)))
+ S R=$G(^MCL(KEY,"adr"))
+ S X=$G(^("entr")) S:X'="" R=R_", под. "_X
+ S X=$G(^("floor")) S:X'="" R=R_", этаж "_X
+ S X=$G(^("domkod")) S:X'="" R=R_", код домофона "_X
+ S X=$G(^("orient")) S:X'="" R=R_", ориентиры: "_X
+ S X=$G(^("metro")) S:X'="" R=R_", м. "_X
+ D WC^RWU(CR_"<br><b>Адрес:</b> "_$$TAG^TXTU(R))
+ S R=$G(^MCL(KEY,"kad"))
+ D:R'="" WC^RWU(CR_", <b>За КАД:</b> "_$$TAG^TXTU(R))
+ 
+ S R=$G(^MCL(KEY,"phone"))
+ D:R'="" WC^RWU(CR_"<br><b>Контактные телефоны:</b> "_$$TAG^TXTU(R))
+ 
+ S R=$G(^MCL(KEY,"dsc"))
+ D:R'="" WC^RWU(CR_"<br><b>Повод к вызову:</b> "_$$TAG^TXTU(R))
+ 
+ S R=$G(^MCL(KEY,"wcall")),X=$G(^("wphone"))
+ D:R'=""!(X'="") WC^RWU(CR_"<br>"_$S(R="":"",1:"<b>Кто вызвал:</b> "_$$TAG^TXTU(R)_$S(X="":"",1:", "))_$S(X="":"",1:"<b>Контакты:</b> "_$$TAG^TXTU(X)))
+ 
+ S R=$G(^MCL(KEY,"comm"))
+ D:R'="" WC^RWU(CR_"<br><b>Примечание:</b> "_$$TAG^TXTU(R))
+ 
+ S R=$G(^MCL(KEY,"log"))
+ D:R'="" WC^RWU(CR_"<br><br><i>Изменено: "_$$TAG^TXTU($$FUSRH^IUSER(R))_"</i>")
+ 
+ D END^IHTML
+ Q
+MOVPAC(FNIB,TNIB) ; Переместить все вызовы с одного на другого пациента
+ Q:'$D(^MCLI("n",FNIB)) 
+ N I,P
+ M ^MCLI("n",TNIB)=^MCLI("n",FNIB)
+ S I="" F  S I=$O(^MCLI("n",TNIB,I)) Q:I=""
+ .F P="",1,2,3,4 D
+ ..Q:$G(^MCL(I,"nib"_P))'=FNIB
+ ..S ^("nib"_P)=TNIB
+ ..D GL^IEXCH("^MCL",I,"nib"_P)
+ K ^MCLI("n",FNIB)
+ D GL^IEXCH("^MCLI","n",TNIB)
+ D KGL^IEXCH("^MCLI","n",FNIB)
+ Q
+tgm ; Telegram handler
+ N rr,LI
+ 
+ I cmd="list" D  Q
+ .N ID,DS,R,VR,TMM,ST,NI,I,ADR,FIO,K,NM,item
+ .S DS=+$H,VR=obj.did,K=""
+ .S ID="" F  S ID=$O(^MCLI("dt",DS,ID)) Q:ID=""  D:$D(^MCL(ID))
+ ..S DT=$G(^MCL(ID,"dt")) Q:DT=""  Q:DT'=DS
+ ..Q:$G(^("vr"))'=VR
+ ..Q:39[$G(^("stat"))
+ ..S TMM=$G(^("tm")),ADR=$G(^("adr")),NI=$G(^("nib"))
+ ..S FIO=$$FIO^IPAC(NI) S:FIO="" FIO=$G(^MCL(ID,"fio"))
+ ..S NM=$$TM^DTUTL(TMM)_", "_ADR
+ ..S K=ID_".1",item=$$NEW^IJSON()
+ ..S item.num=K,item.text=$S(NI="":"",1:NI_" ")_FIO_CR_NM D ret.%Set(K,item)
+ ..F I=1:1:4 S NI=$G(^MCL(ID,"nib"_I)) D:NI'=""
+ ...S FIO=$$FIO^IPAC(NI)
+ ...S K=ID_"."_(I+1),item=$$NEW^IJSON()
+ ...S item.num=K,item.text=NI_" "_FIO_CR_NM D ret.%Set(K,item)
+ .S:K="" ret.empty=1
+ 
+ I cmd="inf" D  Q
+ .N ID,NI,II
+ .S ID=$P(obj.id,".",1),II=$P(obj.id,".",2)
+ .Q:ID=""  Q:'$D(^MCL(ID))
+ .s ret.id=ID
+ .s ret.dt=$$DT^DTUTL($G(^MCL(ID,"dt")))
+ .s ret.tm=$$TIME^DTUTL($G(^MCL(ID,"tm")))
+ .s ret.addr=$$adr(ID)
+ .s ret.phone=$G(^MCL(ID,"phone"))
+ .s ret.reason=$G(^MCL(ID,"dsc"))
+ .s ret.comm=$G(^MCL(ID,"comm"))
+ .s ret.wcall=$G(^MCL(ID,"wcall"))_" "_$G(^MCL(ID,"wphone"))
+ .S NI=$S(II=1:$G(^MCL(ID,"nib")),1:$G(^MCL(ID,"nib"_(II-1))))
+ .S FIO=$$FIO^IPAC(NI)
+ .S:FIO="" FIO=$G(^MCL(ID,"fio"))
+ .s ret.pid=NI,ret.fio=FIO,ret.age=$$AGET^IPAC(NI)
+ 
+ I cmd="pay" D  Q
+ .N ID,NI,II,S
+ .S ID=$P(obj.id,".",1),II=$P(obj.id,".",2)
+ .Q:ID=""  Q:'$D(^MCL(ID))
+ .S NI=$S(II=1:$G(^MCL(ID,"nib")),1:$G(^MCL(ID,"nib"_(II-1))))
+ .s S=$$NNUM^TXTU(obj.summ)
+ .S NI=$$PAY^ILIFEPAY(NI,S,"Медицинские услуги")
+ .s ret.noresult=1
+ 
+ Q
+tp(X) 
+ Q:X=1 "Передан врачу"
+ Q:X=3 "Отменен"
+ Q:X=5 "В клинике"
+ Q:X=9 "Выполнен"
+ Q ""
+REGLCL 
+ K ^LCLI("pnd")
+ S ^LCLI("pnd")="Помощь на дому"
+ S ^LCLI("pnd","new")="Создание вызова"
+ S ^LCLI("pnd","save")="Сохранение вызова"
+ S ^LCLI("pnd","del")="Удаление вызова"
+ S ^LCLI("pnd","setvr")="Передача вызова врачу"
+ S ^LCLI("pnd","end")="Завершение вызова"
+ S ^LCLI("pnd","cancel")="Отмена вызова"
+ S ^LCLI("pnd","cdsave")="Запрет создание изменения даты вызова прошлым периодом"
+ Q

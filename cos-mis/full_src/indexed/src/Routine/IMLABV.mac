@@ -1,0 +1,25 @@
+IMLABV ; Вывод данных в КДЛ [ 01/14/2024  11:35 PM ]
+VTXT(NI,ID,PRM,HL) ; Текстовые данные по параметру
+ ; HL - из предыдущих состояний
+ N R,MNN,PP,M,NRM,NRMR,NX,N1,N2
+ S R=$S($G(HL)'="":$G(^MLABE(NI,ID,"dl",PRM,HL)),1:$G(^MLAB(NI,ID,"d",PRM)))
+ Q:R="" ""
+ S MNN=$P(R,"|",5),PP=$P(PRM,"@",1),M=$P(PRM,"@",2),ST=$P(R,"|",6)
+ S NRM=$TR($P(R,"|",2,3),"|","-") S:NRM="-" NRM=""
+ S NRMR=$$NORMPM^IMLAB("",PP,NI),N1=$P(R,"|",2),N2=$P(R,"|",3)
+ S:(N1="")&(N2="") N1=$P(NRMR,"|",1),N2=$P(NRMR,"|",2)
+ S:ST="" ST=$P(NRMR,"|",3)
+ S NX=+$$CMPPM^IMLAB($P(R,"|",1),N1,N2)
+ I NRM="" S NRM=$TR($P(NRMR,"|",1,2),"|","-") S:NRM="-" NRM=""
+ I $E($P(NRM,"-",1))="." S $P(NRM,"-",1)=0_$P(NRM,"-",1) ; 0 before decimal point
+ I $E($P(NRM,"-",2))="." S $P(NRM,"-",2)=0_$P(NRM,"-",2)
+ S:NRM'="" NRM=$$TXTNRM^IMLABS(NRM)
+ S NRM=$S(NRM="":ST,ST'=""&$G(^cfg("lab","rez-tnrm")):NRM_" "_ST,1:NRM)
+ S:MNN="" MNN=$$MEANPM^IMLABS(PP)
+ S R=$P(R,"|",$S($P($G(^LABT("T",PP,"v")),"|",1)="c":6,1:1))
+ S:MNN'="" $P(R,"|",2)=MNN
+ S:NRM'="" $P(R,"|",3)=NRM
+ I M'="",$G(^MLABE(NI,ID,"dmi"))="" S M="" ; сброс
+ S:M'="" $P(R,"|",4)=$$NAMEBI^IMLABS(M) ; биоматериал
+ S:NX $P(R,"|",5)=NX ; контроль норм
+ Q R

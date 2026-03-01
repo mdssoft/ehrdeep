@@ -1,0 +1,122 @@
+IWRHIO ; Экспорт/импорт склада [ 12/11/2019  6:06 PM ]
+NMN(FN) ; Номенклатура
+ N IO,CR,A,I,R,R1,RF
+ S CR=$C(13,10)
+ S IO=$$OW^FIL(FN) Q:IO=""
+ U IO
+ W "<?xml version=""1.0"" encoding=""windows-1251""?>"
+ W CR,"<InterchangeEnvelope version=""1.0"">"
+ W CR,"<Head>"
+ W CR,$$DW^TXTU("<DocID>Номенклатура склада</DocID>")
+ S I=$H,R=$$DTISO^DTUTL(I)
+ W CR,"<Timestamp>"_R_"T"_$$TIME^DTUTL(I)_".000</Timestamp>"
+ W CR,"</Head>"
+ W CR,"<Body><WarehouseNomenclature>"
+ S I="" F  S I=$O(^WRHE(I)) Q:I=""  S R=^(I) D
+ .S R1=$G(^(I,"a")),RF=$G(^("f"))
+ .W CR,"<item>"
+ .W CR,"<id>"_I_"</id>"
+ .W CR,"<name>"_$$DW^TXTU($$TAG^TXTU($P(R,"|",1)))_"</name>"
+ .W CR,"<means>"_$$DW^TXTU($$NAME^IWRHS("means",+$P(R,"|",5)))_"</means>"
+ .W CR,"<profile>"_$P(R,"|",3)_"</profile>"
+ .W CR,"<fpack>"_$$DW^TXTU($$NAME^IWRHS("fpack",+$P(R,"|",7)))_"</fpack>"
+ .W CR,"<manuf>"_$$DW^TXTU($$TAG^TXTU($$NAME^IWRHS("manuf",+$P(R,"|",9))))_"</manuf>"
+ .W CR,"<country>"_$$DW^TXTU($$NAME^IWRHS("country",+$P($P(R,"|",10),"@",1)))_"</country>"
+ .W CR,"<nnum>"_$P(R,"|",8)_"</nnum>"
+ .W CR,"<pku>"_(+$P(R,"|",14))_"</pku>"
+ .W CR,"<arch>"_(+$P(R,"|",15))_"</arch>"
+ .W CR,"<indoze>"_(+$P(R,"|",16))_"</indoze>"
+ .W CR,"<barcode>"_$P(R1,"|",1)_"</barcode>"
+ .W CR,"<ecode>"_$P(R1,"|",2)_"</ecode>"
+ .W CR,"<cenn>"_$P(RF,"|",1)_"</cenn>"
+ .W CR,"<nds>"_$P(RF,"|",2)_"</nds>"
+ .W CR,"<comment>"_$$DW^TXTU($$TAG^TXTU($G(^WRHE(I,"c"))))_"</comment>"
+ .W CR,"</item>"
+ W CR,"</WarehouseNomenclature></Body></InterchangeEnvelope>"
+ C IO
+ Q
+PROF(FN) ; Профили
+ N IO,CR,A,I,R,T,J
+ S CR=$C(13,10)
+ S IO=$$OW^FIL(FN) Q:IO=""
+ U IO
+ W "<?xml version=""1.0"" encoding=""windows-1251""?>"
+ W CR,"<InterchangeEnvelope version=""1.0"">"
+ W CR,"<Head>"
+ W CR,$$DW^TXTU("<DocID>Профили номенклатуры склада</DocID>")
+ S I=$H,R=$$DTISO^DTUTL(I)
+ W CR,"<Timestamp>"_R_"T"_$$TIME^DTUTL(I)_".000</Timestamp>"
+ W CR,"</Head>"
+ W CR,"<Body><WarehouseProfiles>"
+ S I="" F  S I=$O(^WRHM("prof",I)) Q:I=""  S R=^(I) D
+ .W CR,"<item>"
+ .W CR,"<id>"_I_"</id>"
+ .S T=$P(R,"|",2)
+ .W:T CR,"<parent>"_T_"</parent>"
+ .S (T,A)=I F  S T=$P(^WRHM("prof",T),"|",2) Q:'T  S A=T_"."_A
+ .W CR,"<path>"_A_"</path>" 
+ .W CR,"<name>"_$$DW^TXTU($$TAG^TXTU($P(R,"|",1)))_"</name>"
+ .W CR,"</item>"
+ W CR,"</WarehouseProfiles></Body></InterchangeEnvelope>"
+ C IO
+ Q
+DO(FN,DTMS,DTME,DIRECT) 
+ ; DIR - каталог
+ ; DTMS - дата/время начала
+ ; DTME - дата/время окончания
+ ; DIRECT - направление
+ N IO,CR,A,I,R
+ S CR=$C(13,10),DIRECT=$G(DIRECT)
+ S IO=$$OW^FIL(FN) Q:IO=""
+ U IO
+ W "<?xml version=""1.0"" encoding=""windows-1251""?>"
+ W CR,"<InterchangeEnvelope version=""1.0"">"
+ W CR,"<Head>"
+ W CR,$$DW^TXTU("<DocID>Движение склада</DocID>")
+ S I=$H,R=$$DTISO^DTUTL(I)
+ W CR,"<Timestamp>"_R_"T"_$$TIME^DTUTL(I)_".000</Timestamp>"
+ W CR,"</Head>"
+ W CR,"<Body><Warehouse>"
+ D:'DIRECT
+ .W CR,"<Incoming>"
+ .D INCOME(DTMS,DTME)
+ .W CR,"</Incoming>"
+ D:DIRECT
+ .W CR,"<Outgoing>"
+ .D OUTCOME(DTMS,DTME)
+ .W CR,"</Outgoing>"
+ W CR,"</Warehouse></Body></InterchangeEnvelope>"
+ C IO
+ Q
+INCOME(DTMS,DTME) 
+ N ID,STK,DT,O,A,X,KX,V
+ 
+ S NN="" F  S NN=$O(^WRHI("n",NN)) Q:NN=""  D:$G(^(NN))="in"
+ .S R=$O(^(NN,"")),DT=$P(R,"|",1)
+ .Q:$$CMPDTM^DTUTL(DT,DTMS)=-1  Q:$$CMPDTM^DTUTL(DT,DTME)=1 
+ .S R=$G(^WRH($P(R,"|",3),$P(R,"|",2),DT)),O=$P(R,"|",2) Q:R="" 
+ .Q:O'="+" 
+ .W CR,"<Document>"
+ .W CR,"<id>"_$P(R,"|",4)_"</id>"
+ .W CR,"<datetime>"_$$DTM^DTUTL(DT)_"</datetime>"
+ .S X=$P(R,"|",8) ; TODO $P(R,"|",7)="C"
+ .S A=$$GET^ICONTR(X,"ecode",+DT)
+ .S:A="" A=$$NAMEH^ICONTR(X,+DT)
+ .W CR,"<supplier>"_$$DW^TXTU($$TAG^TXTU(A))_"</supplier>"
+ .W CR,"<items>"
+ .S KX="" F  S KX=$O(^WRHI("n",NN,KX)) Q:KX=""  D
+ ..S STK=$P(KX,"|",3),ID=$P(KX,"|",2),DT=$P(KX,"|",1)
+ ..S R=$G(^WRH(STK,ID,DT)) Q:R="" 
+ ..W CR,"<item>"
+ ..W CR,"<key>"_STK_","_ID_","_DT_"</key>"
+ ..W CR,"<name>"_ID_"</name>"
+ ..W CR,"<mean>"_$$DW^TXTU($$TAG^TXTU($$MEANNM^IWRHS(ID)))_"</mean>"
+ ..W CR,"<count>"_$P(R,"|",3)_"</count>"
+ ..W CR,"<summ>"_$P(R,"|",14)_"</summ>"
+ ..W CR,"<nds>"_$P(R,"|",15)_"</nds>"
+ ..W CR,"</item>"
+ .W CR,"</items>"
+ .W CR,"</Document>"
+ Q
+OUTCOME(DTMS,DTME) ;
+ Q

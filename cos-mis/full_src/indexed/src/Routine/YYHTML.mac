@@ -1,0 +1,570 @@
+A ;SOCKET  [ 07/05/2006  1:20 PM ]
+ S:'$D(%IP) %IP="212.16.30.100" ;АДРЕС СЕРВЕРА
+ S:'$D(SOCN) SOCN=80
+ S:'$D(%SYSADM) %SYSADM=102
+ S:'$D(%WW) %WW=0
+ S:'$D(^%WEBCNT) ^%WEBCNT=0
+ S:'$D(TG) TG=^TG
+ S:'$D(TZONE) TZONE=3 ;timezone
+ S:'$D(%W) %W=1 ;1-КОДИРОВКА DOS
+ S:'$D(%DISK) %DISK="\MSM\DISK"
+ S:'$D(LGG) LGG=0 ;logging off
+ S:'$D(ILGG) ILGG=0 ;logging off
+ S:'$D(%IENC) %IENC=0 ;input encoding
+ S %SL=500 ;РАЗМЕР СТРОКИ В ^BUFH
+ S $ZT="ER^YYHTML"
+ S %DW="",%WD="" D:%W IWW
+ S ^%WEBCNT=^%WEBCNT+1 ;free server job count
+ S %LU="QWERTYUIOPASDFGHJKLZXCVBNM"_$C(0)
+ S %LL="qwertyuiopasdfghjklzxcvbnm "
+ S RZ=$C(13,10),RZ1=$C(10),RZ2=$C(13)
+ S:'$D(DIR) DIR="W:\WORK\",UROOT=DIR
+ S DEFDIR=DIR,DEFSOCN=SOCN
+ S DISK=$P(DIR,":",1)_":"
+ S RZ2=$C(13,10),CR=$C(13,10),TAB=$C(9)
+ODEV S ID=0,CL="",%LOG="" C 56 U:%WW 0 W:%WW "СОКЕТ ",SOCN," ",!
+ O 56 U 56::"TCP" S DEV=$KEY
+ U 56:DEV W /SOCKET("",SOCN) S DEV1="$KEY" ;J:'$D(NDEX) INIT2(--UHOST)
+ S JB=$J,%JOB=777777,JOB=%JOB D DEV D:$L(DEV1)=0 DEV
+ S IHT=0 ;K ^BUFH(%JOB)
+ U:%WW 0 W:%WW "ЗАПРОС ОТ "_DEV1,!
+ S ^%WEBCNT=^%WEBCNT-1
+ S ^R=$S_" "_DEV1
+ S %PAS="",%PASS="",FF=1,%WT=0,PRAGMA="",RIDX=0 K %PSCU,%PATH
+JOB S %PAS="" U 56:DEV R R:60 U:%WW 0 W:%WW&($L(R)>0) "-!",R,"!-" S RIDX=RIDX+1 G:RIDX>360 EXIT G:($X=0)&($TEST=0) JOB I $ZC U:%WW 0 W:%WW "JOB",! G EXIT
+ S:ID=0 CLEN="",CTYPE="",CENCODE="",TENCODE="",CLOCATE="",UAG="",URANG="",UHOST="",CLEN="",%PASS="",ATP=0,UACCPT="",PROC="",CATP="",SPNUM=200,EXT=""
+ I R="" D:$D(^JOB(%JOB,3)) YJ S %WT=%WT+1 S:%WT>30 ^JOB(%JOB,7)=%WT G:%WT>360 ODEV
+ S %WT=0 
+ G:($L(CL)+$L(R))>4095 ODEV S CL=CL_R I CL'[RZ2 G JOB
+PRM S PREX=0,R=$P(CL,RZ2,1),CL=$P(CL,RZ2,2,1000) ;U:%WW 0 W:%WW "-",R,"-",PREX,ID,!
+ I ID=0 K HTTPH D  U:%WW 0 W:%WW "@",PROC,"@",!
+ .S COM=$P(R," ",1),PROC=$P(R," ",2) S:PROC["../.."!(PROC[".../") SPNUM=403
+ .S PPROC=PROC,HTTP=$P(R," ",3),CONNK=$E(HTTP,8),PROC=$P(PROC,"/",2,256) S:PROC["%"&(PROC'["?") PROC=$$CODH^YYBPAS(PROC)
+ .U:%WW 0 W:%WW CR_PROC_CR S:$TR($E(PROC,1,5),%LL,%LU)="AUTH/" CATP=$P(PROC,"/",2),X=$F(PROC,CATP),PROC=$E(PROC,X+1,$L(PROC)) Q
+ E  D 
+ .S R1=$TR($P(R,": ",1),%LL,%LU),R2=$P(R,": ",2) S:R1'="" HTTPH($E(R1,1,128))=$E(R2,1,512)
+ .S:R1["CONTENT-LENGTH" CLEN=R2
+ .S:R1["CONTENT-TYPE" CTYPE=R2
+ .S:R1["CONTENT-ENCODING" CENCODE=R2
+ .S:R1["TRANSFER-ENCODING" TENCODE=R2
+ .S:R1["CONTENT-LOCATION" CLOCATE=R2
+ .S:R1["USER-AGENT" UAG=R2
+ .S:R1["COOKIE"&(R2["AUTH=") %PSCU=$P($P(R2,"AUTH=",2),";",1)
+ .I R1["CONNECTION" S R2=$TR(R2,%LL,%LU) S:R2["CLOSE" CONNK=0 S:R2["KEEP-ALIVE" CONNK=1 U:%WW 0 W:%WW CR_"Connection:"_"("_CONNK_")"_R2_CR
+ .S:R1["HOST" UHOST=R2
+ .S:R1["RANGE" URANG=R2
+ .S:R1["ACCEPT" UACCPT=R2
+ .S:R1["AUTHORIZATION" %PASS=$P(R," ",3) 
+ .S:R1["REFERER" CATP1=$P($P($P(R," ",2),"//",2),"/",2) 
+ .I R="" S ID=0,PREX=1,SNUM=200,RIDX=0 D  D:$D(^JOB(%JOB,3)) YJ Q
+ ..I $D(UHOST)=0!($L(UHOST)=0) S UHOST=%IP S:SOCN'=80&(UHOST'[":") UHOST=UHOST_":"_SOCN
+ ..D SETHOST,SETUA ;I CATP=".." S CATP=CATP1
+ ..S:ATP=3&$D(%PSCU) %PASS=%PSCU I CATP'=""&($D(%PASS))&(%PASS'="") D SETJOB
+ ..I (CATP'="")&(ATP<3) I $D(^JOB(CATP))=0!($D(^JOB(CATP))&($G(^JOB(CATP))'=%PASS)) S SNUM=401 D SYS Q
+ ..I (CATP'="")&(ATP=3) S NNN=1 ;I $D(^JOB(CATP))=0!($D(^JOB(CATP))&($G(^JOB(CATP))'=%PASS)) S PROC="AUTH?" D SAUTH Q
+ ..I $E($TR(PROC,%LL,%LU),1,5)="LOGIN" S:$L(PROC)>6 PROC=$E(PROC,7,$L(PROC)) S:$L(PROC)<7 PROC="" D AUTO Q
+ ..I SPNUM'=200 S SNUM=SPNUM,ST="" D SYS Q
+ ..I COM["GET" D GET Q
+ ..I COM["HEAD" D HEAD Q
+ ..I COM["POST" D POST Q
+ ..I COM["PUT" D PUT Q
+ ..I COM["OPTIONS" D OPTION Q
+ I ID=0&(PREX=1) D
+ .D:LGG=2 LGW(DEV1_TAB_$G(CLEN)_"/"_$G(LF)_TAB_COM_TAB_$G(PPROC)_TAB_$G(SNUM)_TAB_$G(%LOG))
+ .S CL="" K:JOB'=777777&$D(^WWW("host",UHOST,12)) ^BUFH(JOB)
+ .S PREX=0,LF=0 C:$D(NDEX) 56 Q:$D(NDEX)  G:CONNK=1 JOB G:CONNK=0 ODEV
+ S ID=1 G:CL'[RZ2 JOB G PRM
+ Q
+IP(%IP,SOCN,DIR) 
+ G A
+ Q
+YJ ;СООБЩЕНИЕ
+ K ^JOB(%JOB,3)
+ S %L=^YJ(%LOG,"SMS"),%B="1.nb-proc"
+ S LF=1 S:$D(%L) LF=$L(%L)
+ S EXT=$P(%B,".",2),EXT=$G(^EXT(EXT))
+ I $L(EXT)=0 S EXT="text/html"
+ U 56:DEV W "HTTP/1.1 200 OK",CR
+ W "Server: "_SRVNM,CR,"Content-type: "_EXT,CR,"Content-length: "_LF,CR,"Connection: keep-alive",CR,CR 
+ I $D(%L) W %L
+ Q
+IWW ;ПЕРЕКОД. ТАБЛИЦА
+ S %DW="" F I=128:1:159,240,160:1:175,224:1:239,241 S %DW=%DW_$C(I)
+ S %WD="" F I=192:1:223,168,224:1:239,240:1:255,184 S %WD=%WD_$C(I)
+ Q
+AUTO U:%WW 0 W:%WW "AUTO " S EXT=$TR($P(PROC,".",2,255),%LU,%LL),EXT=$G(^EXT(EXT)) S:EXT="" EXT="text/html"
+ S JOB="",%PAS="",%LOG="",%PASS="" D CJOB
+ I ATP=1 D
+ .U:%WW 0 W:%WW CR_"ATP="_ATP_CR_PROC
+ .S RT="HTTP/1.1 301 Refused"_CR_"Cache-Control: no-cache"_CR_"Location: http://"_UHOST_"/AUTH/"_JOB_"/"_PROC_CR 
+ .S RT=RT_"Server: "_SRVNM_CR_"Content-type: "_EXT_CR_"Content-length: 1"_CR,LF=1
+ .S:CONNK RT=RT_"Connection: keep-alive"_CR S:CONNK=0&(HTTP["1.1") RT=RT_"Connection: close"_CR U 56:DEV W RT_CR_" " K RT Q
+ I ATP=2 D
+ .U:%WW 0 W:%WW CR_"ATP="_ATP_CR 
+ .S RT="HTTP/1.1 200 OK"_CR_"Cache-Control: no-cache"_CR
+ .S %L="<HTML><META HTTP-EQUIV=""Refresh"" CONTENT=""1; URL=http://"_UHOST_"/AUTH/"_JOB_"/"_PROC_"""><BODY>Please wait...</BODY></HTML>"
+ .S LF=$L(%L),RT=RT_"Server: "_SRVNM_CR_"Content-type: "_EXT_CR_"Content-length: "_LF_CR
+ .S:CONNK RT=RT_"Connection: keep-alive"_CR S:CONNK=0&(HTTP["1.1") RT=RT_"Connection: close"_CR U 56:DEV W RT_CR W %L K RT Q
+ I ATP=3 D
+ .U:%WW 0 W:%WW CR_"ATP="_ATP_CR 
+ .S FLG=0 S:$D(^WWW("host",UHOST,"pwd")) EXT=$G(^WWW("host",UHOST,"pwd")),FLG=1
+ .I FLG S I=-1 D OW("auth."_EXT) D
+ ..F  S I=$N(^WWW("host",UHOST,"pwd",I)) D WW($G(^WWW("host",UHOST,"pwd",I)))
+ ..D CW,POSTB Q
+ .S RT="HTTP/1.1 200 OK"_CR_"Cache-Control: no-cache"_CR
+ .S %L="<?xml version=""1.0""?><!DOCTYPE wml PUBLIC ""-//WAPFORUM//DTD WML 1.1//EN"" ""http://www.wapforum.org/DTD/wml_1.1.xml"">"
+ .S %L=%L_"<wml><card><p><img src=""138.png"" localsrc=""lockkey"" alt="""" /><u>Autentification</u><br/>User Name:<input name=""name"" maxlength=""15""/>"
+ .S %L=%L_"<br/>Password:<input name=""password"" maxlength=""10"" type=""password""/></p><do type=""accept"" label=""OK"">"
+ .S %L=%L_"<go href=""AUTH"" method=""get""><postfield name=""log"" value=""$name""/><postfield name=""pass"" value=""$password""/></go></do></card></wml>"
+ .D ENC U:%WW 0 W:%WW "AUTO(wap):",%L,! U 56:DEV S LF=$L(%L)
+ .S RT=RT_"Server: "_SRVNM_CR_"Content-type: text/vnd.wap.wml"_CR_"Content-length: "_LF_CR
+ .S:CONNK RT=RT_"Connection: keep-alive"_CR S:CONNK=0&(HTTP["1.1") RT=RT_"Connection: close"_CR U 56:DEV W RT_CR W %L K RT Q
+ ;W "Date: Fri, 3 May 2001 12:12:12 GMT",CR
+ I CONNK=0 U:%WW 0 W:%WW "EXITING",! S DIR=DEFDIR Q 
+ Q
+CJOB S JOB1="" 
+ F  Q:JOB1'=""&($D(^JOB(JOB1))=0)  S JOB1="",JOB=$R(10000000000000000) F JJ=1:1 S LJ=$E(JOB,JJ*2-1,JJ*2) Q:LJ=""  S LJ=LJ+64 S:LJ>90 LJ=64+$R(33) S JOB1=JOB1_$C(LJ)
+ S JOB=JOB1 Q
+SAUTH ; sublogin auth for ATP=3
+ G GPOST+1
+ S RT="HTTP/1.1 200 OK"_CR_"Cache-Control: no-cache"_CR_"Server: "_SRVNM_CR
+ S %L="<?xml version=""1.0""?><!DOCTYPE wml PUBLIC ""-//WAPFORUM//DTD WML 1.1//EN"" ""http://www.wapforum.org/DTD/wml_1.1.xml"">"
+ S %LOG="",%PAS="" S:$D(PARAMS("log")) %LOG=PARAMS("log") S:$D(PARAMS("pass")) %PAS=PARAMS("pass")
+ I $L(%LOG)&$D(^PAS(%LOG))&($G(^PAS(%LOG))=%PAS) D
+ .S JOB=$R(10000000000000000),%PAS="",%LOG="",%PASS="" D CJOB I $D(^WWW("host",UHOST,"yauth")) S %L=$G(^WWW("host",UHOST,"yauth"))
+ .E  S %L=%L_"<wml><card id=""Login"" ontimer=""http://"_UHOST_"/AUTH/"_JOB_"/default.wml""><timer value=""1""/><p>Please wait...</p></card></wml>"
+ .S RT=RT_"Set-Cookie: AUTH="_PARAMS("log")_":"_PARAMS("pass")_";path=/"_CR
+ E  D
+ .I $D(^WWW("host",UHOST,"noauth")) S %L=$G(^WWW("host",UHOST,"noauth"))
+ .E  S %L=%L_"<wml><card id=""AuthCard"" ontimer=""http://"_UHOST_"/LOGIN""><timer value=""40""/><p align=""center""><img src=""31.png"" localsrc=""circleslash"" alt=""""/><br/>Access Forbidden<br/><img src=""31.png"" localsrc=""circleslash"" alt=""""/></p></card></wml>"
+ D ENC S LF=$L(%L) S RT=RT_"Content-type: text/vnd.wap.wml"_CR_"Content-length: "_LF_CR
+ S:CONNK RT=RT_"Connection: keep-alive"_CR S:CONNK=0&(HTTP["1.1") RT=RT_"Connection: close"_CR U 56:DEV W RT_CR W %L K PARAMS,RT
+ S ID=0 I CONNK=0 U:%WW 0 W:%WW "EXITING",! S DIR=DEFDIR Q 
+ Q
+SETJOB ;set job params
+ Q:$L(%PASS)=0
+ S JOB=CATP,%JOB=JOB
+ U:%WW 0 W:%WW CR_"SETJOB ,%PASS="_%PASS_",PROC="_PROC
+ S:ATP<3 %LOG=$$DPAS^YYBPAS(%PASS) S:ATP=3 %LOG=%PASS S %PAS=$P(%LOG,":",2),%LOG=$P(%LOG,":",1)
+ I $D(^PAS(%LOG))=0 S %PASS="" Q
+ I %PAS'=$G(^PAS(%LOG)) S %PASS="" Q
+ I $L($G(DEV1))&$D(^LOG(%LOG,"IP"))&($G(^LOG(%LOG,"IP"))'=$G(DEV1)) S %PASS="" Q
+ S %PATH=$G(^LOG(%LOG)) S:'%PATH[":" %PATH=UROOT_%PATH
+ X:$D(^LOG(%LOG,"X")) $G(^LOG(%LOG,"X"))
+ U:%WW 0 W:%WW "%PAS="_%PAS_",%LOG="_%LOG_",%PATH="_%PATH_",CATP="_CATP_CR
+ I $D(^JOB(CATP)) S DIR=$G(^JOB(CATP,1)),%LOG=$G(^JOB(CATP,2)),%JOB=CATP,^JOB(%JOB,5,$J)="" Q
+ U:%WW 0 W:%WW CR_"SETUP JOB FOR "_%LOG_","_%PAS_CR
+ S ^JOB(JOB)=%PASS,^JOB(JOB,1)=%PATH,^(2)=%LOG,^(4)=$H,^(5,$J)="",^JOB(JOB,6)=DEV1,^JOB(JOB,8)=UAG,^JOB(JOB,9)=$J,DIR=%PATH,%JOB=JOB 
+ K ^BUFH(JOB) ; D:LGG'=0 LGW(DEV1_" 0 LOGIN "_%LOG)
+ Q
+TSTFIL(FIL) ; test, if file exists
+ N FN S FN=DIR_PROC,L=$ZOS(12,FN,0) Q:$L(L)>4 FN S:$D(%PATH) FN=%PATH_PROC,L=$ZOS(12,FN,0) Q:$L(L)>4 FN 
+ S:$D(^LOG(%LOG,1)) FN=$G(^LOG(%LOG,1))_PROC S:'FN[":" FN=UROOT_FN S L=$ZOS(12,FN,0) Q:$L(L)>4 FN S L="" Q ""
+FNDFIL ;find files in dirs
+ S FN=$$TSTFIL(PROC) Q:$L(L)>2
+ S SNUM=404,ST=CR_FN D SYS S FN="" Q
+GET U:%WW 0 W:%WW "GET ",PROC S:$L(PROC)=0&($D(^WWW("host",UHOST,1))'=0) PROC=$G(^WWW("host",UHOST,1))
+ I PROC="" S I=-1 F  S X=$G(^WWW("index",I)),PROC=$$TSTFIL(X)'="" Q:PROC'=""  S I=$N(^WWW("index",I)) Q:I=-1
+ I PROC="" S SNUM=404,ST=CR_"Index file not found." D SYS Q
+ S EXT=$TR($P($P(PROC,".",2,255),"?",1),%LU,%LL),EXT=$E(EXT,1,254),EXT2=EXT,EXT=$G(^EXT(EXT)) S:EXT="" EXT="text/plain" G:PROC["?" GPOST
+ I $TR($P(PROC,"/",1),%LU,%LL)="disk" S FN=$$HASH16^YYBPAS($P(PROC,"/",2,999)),FN=%DISK_FN,L=$ZOS(12,FN,0) G:$L(L)>4 GNF S SNUM=404,ST=CR_FN D SYS Q
+ S PROC=$TR(PROC,%LU,%LL)
+ I $D(^BUFH(%JOB,PROC)) S FN=PROC,IHT=0,LF=^(PROC),UV=0 G CGETB
+ U:%WW 0 W:%WW&($D(FN)) " Get start FN="_FN_" PROC="_PROC_" EXT="_EXT,!
+ I EXT["mumps-pages" G POSTA
+ D FNDFIL I FN="" S SNUM=404,ST="" D SYS Q
+ U:%WW 0 W:%WW " Get end FN="_FN,!
+GNF S LL=$L(L),LF=$A(L,LL-5)+($A(L,LL-4)*256)+($A(L,LL-3)*256*256)+($A(L,LL-2)*256*256*256),UV=51
+CGETB G:EXT["vnd.wap.wml" FENC S RT=HTTP_" 200 OK"_CR
+ S:CATP'=""&(ATP<2) RT=RT_"WWW-Authenticate: Basic realm="""_SRVNM_""""_CR ; "Date: "_$$GMT^DTUTL($H,TZONE)_CR
+ S:EXT["/nb-" RT=RT_"Cache-Control: private"_CR
+ S RT=RT_"Server: "_SRVNM_CR_"Content-type: "_EXT_CR_"Content-length: "_LF_CR
+ S:CONNK RT=RT_"Connection: keep-alive"_CR S:CONNK=0&(HTTP["1.1") RT=RT_"Connection: close"_CR U 56:DEV W RT_CR K RT
+ U:%WW 0 W:%WW " After:"_FN_"("_LF_","_CONNK_")",! 
+ G:UV=0 CWB
+ D LGW("<<sys>> open file CGETB="_FN)
+ O 51:(FN:"R"::::"") S ICLEN=LF\2048,OCLEN=LF#2048 F IJ=1:1:ICLEN U 51 R LA#2048 U 56:DEV W LA
+ U:%WW 0 W:%WW "ICLEN="_ICLEN_",OCLEN="_OCLEN_CR
+ I OCLEN>0 U 51 R LA#OCLEN U 56:(DEV:2) W LA,!
+ C 51 I CONNK=0 U:%WW 0 W:%WW "EXITING",! S DIR=DEFDIR Q
+ Q
+CWB F  D RLA Q:IHT=-1  U 56:DEV W LA
+ Q
+FENC D OW("ret") O 51:(FN:"R"::::"") S PWI=+$G(%WI),%WI=1,ICLEN=LF\1024,OCLEN=LF#1024 F IJ=1:1:ICLEN U 51 R LA#1024 D WW(LA)
+ I OCLEN>0 U 51 R LA#OCLEN D WW(LA)
+ S %WI=PWI,ERRNUM=200 K PWI C 51 D CW G POSTC
+GPOST U:%WW 0 W:%WW "GPOST"_",EXT="_EXT,! ;I %JOB=777777&(PROC'["AUTH")&(UAG'["Symbian") S ST="Routines not allowed",SNUM=403 D SYS Q
+ S R=PROC,PROC=$P(R,"?",1),R=$P(R,"?",2)
+ S PROC=$TR(PROC,%LL,%LU) S:$D(^WSPROC(PROC)) PROC=^WSPROC(PROC) S:PROC["_" PROC=$P(PROC,"_",1)_"^"_$P(PROC,"_",2,256) S:PROC["^"=0&($E(PROC,1)'="$") PROC="^"_PROC
+ U:%WW 0 W:%WW "First PROC="_R,!
+ S FLG=0 S:R["%" FLG=1
+ S LPR="(" F ID=1:1 S TMP=$P(R,"&",ID) Q:TMP=""  S LPRR=$P(TMP,"=",2,255) S:FLG=1 LPRR=$$CODH^YYBPAS(LPRR) S LPRR=$$IENC(LPRR),PARAMS($P(TMP,"=",1))=LPRR S:$P(LPRR,"""",3)'="" LPRR=""""_$ZZKAV($P($P(TMP,"=",2),"""",2))_"""" S:$E(LPRR)'="""" LPRR=""""_LPRR_"""" S LPR=LPR_LPRR_","
+ K FLG,TMP,LPRR S LPR=$E(LPR,1,$L(LPR)-1)_")"
+ I $L(LPR)>2 S PROC=PROC_LPR
+ G:PROC["AUTH" SAUTH+2
+POSTA 
+ K %L S %B=0,FN=""
+ U:%WW 0 W:%WW "P="_PROC_"=",!
+ S ERRNUM=200 K HEADER
+ I $E(PROC,1)="$" S PROC=$E(PROC,2,$L(PROC)),CONNK=0,LF=-1,EXT="text/html" G POSTB ;for old-style procs
+ E  D @(PROC) G:TENCODE="chunked" POSTE I PROC="^YJ" S ID=0 Q
+ S LF=1 S:$D(%L) LF=$L(%L)
+ S EXT=$P(%B,".",2),EXT=$G(^EXT(EXT))
+ I $L(EXT)=0 S EXT="text/html"
+ I '$D(%L)&(%B=0) S %L=" ",LF=1
+POSTC I '$D(%L) S LF=+$G(^BUFH(%JOB,%B)),IHT=0,UV=0,FN=%B
+POSTB S RT="HTTP/1.1 "_ERRNUM_" OK"_CR
+ S:CATP'=""&(ATP<2) RT=RT_"WWW-Authenticate: Basic realm="""_SRVNM_""""_CR
+ S:$D(HEADER) RT=RT_HEADER
+ S RT=RT_"Server: "_SRVNM_CR_"Cache-Control: private"_CR_"Content-type: "_EXT_CR S:LF>-1 RT=RT_"Content-length: "_LF_CR
+ S:PROC="EXIT^YYUSER"!(PROC="LOGOUT") CONNK=0
+ S:CONNK RT=RT_"Connection: keep-alive"_CR S:'CONNK&(HTTP["1.1") RT=RT_"Connection: close"_CR  U 56:DEV W RT_CR K RT
+ I LF=-1 U 56:(DEV:3) W "<html><body><pre>" D @(PROC) W "<pre></body></html>" C 56 C 56 U:%WW 0 W:%WW "EXITING",! S DIR=DEFDIR,ID=0 K PARAMS Q
+ I $D(%L) W %L
+ E  F  D RLA Q:IHT=-1  U 56:DEV W LA
+POSTE K PARAMS S ID=0 I CONNK=0 U:%WW 0 W:%WW "EXITING",! S DIR=DEFDIR Q
+ Q
+POST U:%WW 0 W:%WW "POST ",PROC
+ I TENCODE["chunked" S IHT=0,IHTB=$N(^BBB(-1),-1)+1 U:%WW 0 W:%WW "CHUN" G CHUNK Q
+ S FN="7:hpar"
+ D OLA
+ S LA=CL,LBUF=CLEN,CLEN=CLEN-$L(LA),CL=""
+ I LA'="" D WLA
+ S:PROC'["?" PROC=PROC_"?" G:CLEN=0 GPOST
+ S ICLEN=CLEN\1024,OCLEN=CLEN#1024 F IJ=1:1:ICLEN U 56:DEV R LA#1024 D WLA
+ I OCLEN>0 U 56:DEV R LA#OCLEN D WLA
+ D CLA
+ G GPOST
+RLA S IHT=$N(^BUFH(%JOB,FN,IHT)),LA="" Q:IHT=-1  S LA=^(IHT) Q 
+OLA I $P(FN,":",1)=7 S FN=$P(FN,"7:",2,256),UV=0,IHT=0 K ^BUFH(%JOB,FN) Q
+ O 51:(FN:"W"::::"") S UV=51 Q
+CLA I UV=0 S ^BUFH(%JOB,FN)=LBUF Q
+ C 51 Q
+WLA I $D(UV)=0 U:%WW 0 W:%WW "-UV- UNDEF",!
+ I $D(LA)=0 U:%WW 0 W:%WW "-LA- UNDEF",!
+ I UV=0 D WBUFH Q
+ U UV W LA
+ Q
+CHUNK ;
+ U:%WW 0 W:%WW "CHUN"
+ S PROC=$P(PROC,"?",1)
+ S PROC=$TR(PROC,%LL,%LU) S:$D(^WSPROC(PROC)) PROC=^WSPROC(PROC) S:PROC["_" PROC=$P(PROC,"_",1)_"^"_$P(PROC,"_",2,256) S:PROC["^"=0&($E(PROC,1)'="$") PROC="^"_PROC
+ S:PROC="^" PROC="WWWCH"
+ S LA=CL,R="",CL=0,CLEN=-1,RID1=0 ;CL,CLEN - chunk length
+ACHUNK I CL=0 G:CLEN=0 BCHUNK D ZAGCH G ACHUNK ;zagolovok
+ D DANCH
+ G ACHUNK
+ Q
+ZAGCH S RID1=0 F  Q:LA[RZ2  U 56:DEV R R:60 G:$ZC EXIT S RID1=RID1+1,LA=LA_R G:RID1>360 EXIT
+ S R=$P(LA,RZ2,1),LA=$P(LA,RZ2,2,8000)
+ S CLEN=$ZH(R),LL=$L(LA) D:CLEN>0 @(PROC_"(CLEN,0)") U:%WW 0 W:%WW CR_"New chunk, size="_CLEN," LL=",LL,!
+ I LL>(CLEN+1) S R=$E(LA,1,CLEN) D:R'="" @(PROC_"(R,1)") S CL=0,LA=$E(LA,CLEN+3,8000) Q
+ I LL=CLEN!(LL=(CLEN+1)) S R=$E(LA,1,CLEN) D:R'="" @(PROC_"(R,1)") S CL=2-(LL-CLEN) U 56:DEV R R:60 G:$ZC EXIT S LA=$E(R,CL+1,$L(R)),CL=0,R="" Q
+ I LL<CLEN D:LA'="" @(PROC_"(LA,1)") S LA="",CL=CLEN-LL
+ Q
+DANCH U 56:DEV R R:60 G:$ZC EXIT D ;dannie, ostat. v zagol.
+ S R=LA_R,LL=$L(R)
+ I CL>LL D:R'="" @(PROC_"(R,1)") S CL=CL-LL,LA="",R="" Q ;half chunk
+ S LA=$E(R,1,CL) D:LA'="" @(PROC_"(LA,1)")
+ I (LL-CL)>1 S LA=$E(R,CL+3,LL),CL=0 Q ;chunk w. end
+ S LL=2-(LL-CL) U 56:DEV R R:60 G:$ZC EXIT S LA=$E(R,LL+1,$L(R)),CL=0,R="" Q ;chunk w/o end
+ Q
+BCHUNK U:%WW 0 W:%WW CR_"End chunked. CL="_CL_",CLEN="_CLEN,!
+ D @(PROC_"(0,""Z"")")
+ S RT="HTTP/1.1 200 OK"_CR_"Server: MSM-Web 1.0 on Micronetics MUMPS for Windows NT"_CR_"Content-length: 0"_CR_CR 
+ U 56:DEV W RT K RT S ID=0,LF=0
+ S CL="",R=""
+ Q
+WWWCH(LAAA,TYP) ;
+ I TYP=0 S IHT=0,IHTB=$N(^BBB(-1),-1)+1 Q
+ S IHT=IHT+1,^BBB(IHTB,IHT)=LAAA
+ Q
+WBUFH ;
+ I $L(LA)<(%SL+1) S IHT=IHT+1,^BUFH(%JOB,FN,IHT)=LA Q
+ S LA1=$E(LA,1,%SL),LA=$E(LA,%SL+1,9999999),IHT=IHT+1,^BUFH(%JOB,FN,IHT)=LA1 G WBUFH
+ Q 
+HEAD U:%WW 0 W:%WW "HEAD ",PROC S LF=0 S:$L(PROC)=0&($D(^WWW("host",UHOST,1))'=0) PROC=$G(^WWW("host",UHOST,1))
+ I PROC="" S I=-1 F  S X=$G(^WWW("index",I)),PROC=$$TSTFIL(X)'="" Q:PROC'=""  S I=$N(^WWW("index",I)) Q:I=-1
+ I PROC="" S SNUM=404,ST=CR_"Index file not found." D SYS Q
+ S EXT=$TR($P($P(PROC,".",2,255),"?",1),%LU,%LL),EXT2=EXT,EXT=$G(^EXT(EXT)) S:EXT="" EXT="text/plain" G:PROC["?" HDB
+ I $P(PROC,"/",1)="disk" S PROC=$$HASH16^YYBPAS($P(PROC,"/",2,999)),FN=%DISK_FN,L=$ZOS(12,FN,0) G:$L(L)>4 HDF S SNUM=404,ST=CR_FN D SYS Q
+ S PROC=$TR(PROC,%LU,%LL) I $D(^BUFH(%JOB,PROC)) S FN=PROC,IHT=0,LF=^(PROC),UV=0 G HDB
+ D FNDFIL I FN="" S SNUM=404,ST="" D SYS Q
+HDF S LL=$L(L),LF=$A(L,LL-5)+($A(L,LL-4)*256)+($A(L,LL-3)*256*256)+($A(L,LL-2)*256*256*256),UV=51
+HDB S RT=HTTP_" 200 OK"_CR S:CATP'=""&(ATP<2) RT=RT_"WWW-Authenticate: Basic realm="""_SRVNM_""""_CR ;"Date: "_$$GMT^DTUTL($H,TZONE)_CR
+ S:EXT["/nb-" RT=RT_"Cache-Control: private"_CR
+ S RT=RT_"Server: "_SRVNM_CR_"Content-type: "_EXT_CR_"Content-length: "_LF_CR
+ S:CONNK RT=RT_"Connection: keep-alive"_CR S:CONNK=0&(HTTP["1.1") RT=RT_"Connection: close"_CR U 56:DEV W RT_CR K RT
+ S ID=0 Q
+OPTION U:%WW 0 W:%WW "OPTIONS"
+ S RT="HTTP/1.1 200 OK"_CR_"Server: MSM-Web 1.0 on Micronetics MUMPS for Windows NT"_CR_"Allow: GET, POST, HEAD, OPTIONS"_CR_"Content-length: 0"_CR_CR
+ U 56:DEV W RT K RT
+ S ID=0,LF=0
+ Q
+SYS U:%WW 0 W:%WW "SYS"_SNUM_CR
+ S:'$D(SNUM) SNUM=200
+ S:'$D(ST) ST=""
+ S ST=$G(^WWW("errors",SNUM))_ST,SSNUM=SNUM
+ S EXT="text/plain" 
+ S:$D(^WWW("errors",ST,1)) EXT=$G(^WWW("errors",ST,1)) 
+ I $F(UACCPT,"html")=0&(UACCPT["vnd.wap.wml") D
+ .S EXT="text/vnd.wap.wml",ST="<?xml version=""1.0""?><!DOCTYPE wml PUBLIC ""-//WAPFORUM//DTD WML 1.1//EN"" ""http://www.wapforum.org/DTD/wml_1.1.xml""><wml><card id=""err"" title=""Err"_SNUM_"""><p>"_$$RHTML(ST)_"</p></card></wml>" 
+ .S %L=ST,WO=+$G(%W),%W=2 D ENC S ST=%L,%W=WO,SNUM=200
+ D:LGG=2 LGW(DEV1_TAB_$G(CLEN)_"/"_$G(LF)_TAB_COM_TAB_$G(PPROC)_TAB_$G(SSNUM)_TAB_$G(%LOG))
+ S $ZT="SYS2^YYHTML" S:SNUM=404 ST=""
+ S RT=HTTP_" "_SNUM_" OK"_CR_"Server: "_SRVNM_CR_"Content-type: "_EXT_CR_"Connection: close"_CR
+ S:CATP'=""&((ATP<2)!(SNUM=401)) RT=RT_"WWW-Authenticate: Basic realm="""_SRVNM_""""_CR
+ S LF=$L(ST),RT=RT_"Content-length: "_LF_CR_CR U 56:DEV W RT W:LF ST K RT
+ S ID=0,ST="",CONNK=0,$ZT="ER^YYHTML" C 56 K SSNUM
+ Q
+SYS2 S $ZT="ER^YYHTML",ID=0,ST="",CONNK=0,LF=0 C 56 K SSNUM Q
+PUT U:%WW 0 W:%WW "PUT ",PROC
+ S R=PROC,PROC=$P(R,"?",1),R=$P(R,"?",2)
+ S PROC=$TR(PROC,%LU,%LL)
+ I $P(PROC,"/",1)="disk" S FN=$P(PROC,"/",2,999),FN=$$HASH16^YYBPAS(FN),FN=%DISK_FN G PUTIN
+ S DIRR=$P(PROC,"/",1),FN=DIR_PROC
+ S:DIRR=".b." FN=DISK_$P(PROC,"/",2,256) S:DIRR="%07%07%07" FN="7:"_$P(PROC,"/",2,256) S:PROC["NB-DATA" FN="7:"_PROC
+PUTIN S FN=$TR(FN,"/","\")
+ U:%WW 0 W:%WW "PUT FIL=",FN,! D OLA
+ S LA=CL,LBUF=CLEN,CLEN=CLEN-$L(LA),CL=""
+ I LA'="" D WLA
+ U:%WW 0 W:%WW "PUT START",!
+ G:CLEN=0 CPUT
+ S ICLEN=CLEN\1024,OCLEN=CLEN#1024 F IJ=1:1:ICLEN U 56:DEV R LA#1024 D WLA
+ U:%WW 0 W:%WW "PUT MID",!
+ I OCLEN>0 U 56:DEV R LA#OCLEN D WLA
+ U:%WW 0 W:%WW "PUT END",!
+CPUT D CLA
+ S RT=HTTP_" 200 OK"_CR S:CATP'=""&(ATP<2) RT=RT_"WWW-Authenticate: Basic realm="""_SRVNM_""""_CR
+ S RT=RT_"Server: "_SRVNM_CR_"Content-type: text/plain"_CR_"Content-length: 0"_CR
+ S:CONNK RT=RT_"Connection: keep-alive"_CR S:'CONNK&(HTTP["1.1") RT=RT_"Connection: close"_CR U 56:DEV W RT_CR K RT
+ U:%WW 0 W:%WW "PUT END L=",CLEN,!
+ Q
+EXIT C 56
+ I $G(^JOB(%JOB,2))>0 S ^JOB(%JOB,4)=$H,^JOB(%JOB,4,1)=1 K ^JOB(%JOB,5,$J)
+ U:%WW 0 W:%WW "EXITING-E YYHTML "_SOCN,!
+ S DIR=DEFDIR
+ ;J ^YYHTML
+ ;H 1 
+ G ODEV
+ Q
+REX C 56
+ K ^JOB(%JOB),^BUFH(%JOB)
+ U:%WW 0 W:%WW "RELOAD-E",!
+ S DIR=DEFDIR G ODEV Q
+DEV S DEV1=""
+ S K=56 S DDB=$V(4*K+$V(7,-5),-3,0)
+ F  S DDB=$V(DDB+12,-3,0) Q:'DDB  D
+ .I K=56 S J=$V(DDB+46,-3,2)+$V(272,-4,4) Q:J'=JB
+ .I K=56 S X=$V(DDB+81,-3,$V(DDB+80,-3,1),1) I X'="" S DEV1=X
+ Q
+DEV19 S DEV1=""
+ S K=19 S DDB=$V(4*K+$V(7,-5),-3,0)
+ F  S DDB=$V(DDB+12,-3,0) Q:'DDB  D
+ .I K=19 S J=$V(DDB+46,-3,2)+$V(272,-4,4) Q:J'=JOB
+ .I K=19 S X=$V(DDB+81,-3,$V(DDB+80,-3,1),1) I X'="" S DEV1=X
+ Q
+SETUA ; set user agent params
+ S X=-1 F  S X=$N(^UAG(X)) Q:UAG[X!(X=-1)
+ Q:X["-1"  ;S:X["-1" X="000000"
+ S:$D(^UAG(X,0)) %WI=$G(^UAG(X,0)) S:$D(^UAG(X,1)) %W=$G(^UAG(X,1)) S:$D(^UAG(X,3)) ATP=$G(^UAG(X,3)) 
+ S:$D(^UAG(X,1)) UACEPT=$G(^UAG(X,1))
+ I %WW=1 U 0 W CR_"%W="_%W_" %WI="_%WI_" UACEPT="_UACEPT_" ATP="_ATP_CR
+ Q
+SETHOST ; set current host params
+ U:%WW 0 W:%WW " Host="_UHOST_CR
+ S:'$D(UHOST) UHOST="default" S:$L(UHOST)=0 UHOST="default"
+ S UPORT=80 S:UHOST[":" UPORT=$P(UHOST,":",2),UHOST=$P(UHOST,":",1)
+ S:$E(UHOST,$L(UHOST))="." UHOST=$E(UHOST,1,$L(UHOST)-1) ;bugfix IE6
+ S:UPORT'=80 UHOST=UHOST_":"_UPORT
+ U:%WW 0 W:%WW " Host(after)="_UHOST_CR
+ S:$D(^WWW("host",UHOST))=0 UHOST="default"
+ S DIR=$G(^WWW("host",UHOST,0)),DEFDIR=DIR
+ S IDXFIL="" S:$D(^WWW("host",UHOST,1)) IDXFIL=$G(^WWW("host",UHOST,1))
+ S ATP=1 S:$D(^WWW("host",UHOST,2)) ATP=$G(^WWW("host",UHOST,2))
+ S LGG=0 S:$D(^WWW("host",UHOST,3)) LGG=$G(^WWW("host",UHOST,3))
+ S SRVNM="Msm NT" S:$D(^WWW("host",UHOST,6)) SRVNM=$G(^WWW("host",UHOST,6))
+ S %W=1,%WI=0 S:$D(^WWW("host",UHOST,7)) %WI=$G(^WWW("host",UHOST,7)) S:$D(^WWW("host",UHOST,8)) %W=$G(^WWW("host",UHOST,8))
+ S UROOT=DIR S:$D(^WWW("host",UHOST,9)) UROOT=$G(^WWW("host",UHOST,9)) 
+ S %DISK="\MSM\DISK" S:$D(^WWW("host",UHOST,10)) %DISK=$G(^WWW("host",UHOST,10)) 
+ Q
+ER ;
+ S %L2="МОНИТОР ПРЕРВАЛСЯ "_$ZE D LGWS($ZE)
+ I $F($ZE,"<NOPEN") C 56 S $ZT="ER^YYHTML" G ODEV
+ I $F($ZE,"<INRPT") C 56 U:%WW 0 W "E|R HTML МОНИТОР ПРЕРВАН !",! ;J:$L($G(UHOST))>2 INIT2(UHOST) Q  ;ZQ 0
+ I $F($ZE,"<NOPGM") S SNUM=501,ST="NO PROGRAM" D SYS S $ZT="ER^YYHTML" G ODEV
+ I $F($ZE,"<DPARM") S SNUM=500,ST="BAD PARAM ("_$G(PROC)_")" D SYS S $ZT="ER^YYHTML" G ODEV
+ I $F($ZE,"<DSCON") S SNUM=503,ST=%L2 U:%WW 0 W:%WW "E|R",%L2,! S $ZT="ER^YYHTML" G ODEV
+ I $F($ZE,"<SYNTX") S SNUM=504,ST=%L2_" ("_$G(PROC)_")" U:%WW 0 W:%WW "E|R",%L2,! S $ZT="ER^YYHTML" G ODEV
+ U:%WW 0 W:%WW "E|R",%L2,! S SNUM=503,ST=%L2 D SYS S $ZT="ER^YYHTML" G ODEV
+ ZQ
+UMON ; User-Kill monitor
+ S:'$D(%WW) %WW=0
+ S ^WWW("jobs","UMON")=$J
+ F  D
+ .S OJ=-1 H 30
+ .F  H 1 S OJP=OJ,OJ=$N(^JOB(OJ)) Q:OJ=-1  D:$D(^JOB(OJ))>0 
+ ..S TT=$FN($P($H,",",2)-$P(^JOB(OJ,4),",",2),"-"),DT=$FN($P($H,",",1)-$P(^JOB(OJ,4),",",1),"-") S:DT>0 TT=86399-TT+DT*86399
+ ..I $D(^JOB(OJ,4,1))=1&(TT>21600) U:%WW 0 W:%WW "Kill UID:"_OJ_" ,Time="_TT,! K ^JOB(OJ) S OJ=OJP
+ ..Q
+ K ^WWW("jobs","UMON")
+ Q
+STAT 
+ ;I '$D(%SYSADM) S %L="ERR" Q
+ S %W=0 D OW("1.htm")
+ S LL="<html><head><title>„шёЄхьэр  ёЄрЄшёЄшър</title><meta http-equiv=""Content-Type"" content=""text/html; charset=windows-1251""></head><body bgcolor=""#FFFFFF"" text=""#000000"">"
+ D WW(LL)
+ ;I ^JOB(%JOB,2)=%SYSADM 
+ D
+ .S LL="<table width=""100%"" border=""0"" cellspacing=""0"" cellpadding=""0""><tr><td><div align=""center""><p><font size=""+1"">MSM Web Server on ("_%IP_")</font><br>"
+ .S LL=LL_"<b><font color=""#0000FF""><u>„шёЄхьэр  ёЄрЄшёЄшър</u></font></b></p><p>&nbsp;</p></div></td></tr><tr><td><table width=""100%"" border=""1"" cellspacing=""0"" cellpadding=""0""><tr bgcolor=""#FFFF66"" align=""center"">"
+ .S LL=LL_"<td>§юы№чютрЄхы№</td><td>ѕфЁхё</td><td>љїюф т ёшёЄхьє т</td><td>‚рсюўшщ ърЄрыюу</td><td>‡шя ъышхэЄр</td><td>„ЄрЄєё</td><td>(юЄъыўшЄ№)</td></tr>"
+ .S OJ=-1 D WW(LL)
+ .F  S OJ=$N(^JOB(OJ)) Q:OJ=-1  S SAT=$S(%JOB=OJ:" bordercolor=""#0000FF""",1:"") D
+ ..S LL="<tr><td"_SAT_">"_$S($D(^JOB(OJ,2)):^JOB(OJ,2),1:"&nbsp;")_"</td><td>&nbsp;"_$S($D(^JOB(OJ,6)):^JOB(OJ,6),1:"&nbsp;")_"</td><td>"_$ZHL(2,"HH:mm:ss",$S($D(^JOB(OJ,4)):$P(^JOB(OJ,4),",",2),1:0))_"</td><td>"_$S($D(^JOB(OJ,1)):^JOB(OJ,1),1:"&nbsp;")_"</td>"
+ ..S LL=LL_"<td>"_$S($D(^JOB(OJ,8)):^JOB(OJ,8),1:"&nbsp;")_"</td>"
+ ..S PWT=$S($D(^JOB(OJ,7)):^JOB(OJ,7),1:0),LL=LL_"<td>"_$S($D(^JOB(OJ,5))<2:"чюьсш",PWT<30:"ЁрсюЄрхЄ",PWT<90:"юЄф»їрхЄ",PWT<130:"є°ђы",PWT<200:"чрс»ы",PWT<300:"эхяюЁ фюъ")_"</td>" ;<td><font size="-1"></font></td>
+ ..S LL=LL_"<td><div align=""center""><A HREF=""HTTP://"_UHOST_"/"_%JOB_"/KSJ_YYHTML?PR1="_OJ_""">OK</A></div></td></tr>"
+ ..D WW(LL)
+ ..Q
+ .S LL="</tr></table></td></tr><tr><td><p>&nbsp;</p><p><font color=""#0000FF""><u>„тюсюфэ»ї яЁюЎхёёют ёхЁтхЁр : "_^%WEBCNT_"</u></font></p><br><a href=""HTTP://"_UHOST_"/"_%JOB_"/NEWJOB?"">њюсртшЄ№ яЁюЎхёё</a><br><a href=""HTTP://"_UHOST_"/"_%JOB_"/STAT?"">¦сэютшЄ№</a></td></tr></table><br>" D WW(LL)
+ .Q
+ ;E  D WW("<div align=""center"">њюёЄєя чряЁх•ђэ !!!</div>")
+ D WW("</body></html>"),CW
+ Q
+KJ(%J,%KMD) 
+ ;NEW AUTO 
+ S AUTO=1,NOWAIT=0
+ S NOWAIT=0
+ S %KMD=+$G(%KMD) S:(%KMD<1)!(%KMD>3) %KMD=2  ; Default to mode 2 on bad/no input
+ D CHECK^KILLJOB Q:%QF
+ D STOP^KILLJOB
+ G EXIT^KILLJOB
+ Q
+KSJ(%IJ) ; remove current connection and restart server job
+ ;I %IJ=%JOB S %L="<html><head></head><body>Cannot KILL current process !!!</body></html>" Q
+ S SNJ=0
+ I $G(^JOB(%IJ,4,1))=0 S SNJ=1
+ D:$D(^JOB(%IJ,9)) KJ(^JOB(%IJ,9),2)
+ K ^JOB(%IJ),^BUFH(%IJ)
+ S OJx=%JOB,OLx=%LOG
+ S %L="<html><head><meta http-equiv=""Content-Type"" content=""text/html; charset=windows-1251""></head><body>OK<br><a href=""HTTP://"_UHOST_"/"_%JOB_"/STAT?"">Ґрчрф</a></body></html>"
+ J:SNJ=1 ^YYHTML
+ K SNJ
+ S %JOB=OJx,JOB=%JOB,%LOG=OLx
+ Q
+NJB ; new server job and restart stat
+ S OJx=%JOB,OLx=%LOG
+ ;J ^YYHTML
+ S %JOB=OJx,JOB=%JOB,%LOG=OLx
+ D STAT^YYHTML
+ Q
+SETUP 
+ S ^%WEBCNT=0,CR=$C(13,10),TAB=$C(9)
+ S ^WSPROC("STAT")="STAT_YYHTML",^WSPROC("LOGOUT")="LOGOUT_YYHTML",^WSPROC("NEWJOB")="NJB_YYHTML"
+ S ^UAG("000000",0)=0,^UAG("000000",1)=1,^UAG("000000",2)="htm",^UAG("000000",3)=1
+ S ^UAG("Blazer",0)=0,^UAG("Blazer",1)=1,^UAG("Blazer",2)="htm",^UAG("Blazer",3)=2
+ S ^UAG("MSIE",0)=0,^UAG("MSIE",1)=1,^UAG("MSIE",3)=1
+ S ^UAG("UP.Browser",0)=0,^UAG("UP.Browser",1)=2,^UAG("UP.Browser",3)=3
+ S ^WWW("host","127.0.0.1:8081")=0
+ S ^WWW("host","127.0.0.1:8081",0)="C:\WORK\USER"
+ S ^WWW("host","127.0.0.1:8081",1)="index.htm"
+ S ^WWW("host","127.0.0.1:8081",4)="127.0.0.1"
+ S ^WWW("host","127.0.0.1:8081",5)=8081
+ S ^WWW("host","127.0.0.1:8081",5)="C:\WORK\"
+ S ^WWW("host","default",0)="W:\WORK\"
+ S ^WWW("host","default",1)="info_yyuser?"
+ S ^WWW("errors",200)="OK"_CR,^WWW("errors",200,1)="html/text"
+ S ^WWW("errors",301)="Moved Permanently."_CR,^WWW("errors",301,1)="html/text"
+ S ^WWW("errors",303)="See Other."_CR,^WWW("errors",303,1)="html/text"
+ S ^WWW("errors",400)="Bad Request."_CR,^WWW("errors",400,1)="html/text"
+ S ^WWW("errors",401)="Bad Request."_CR,^WWW("errors",401,1)="html/text"
+ S ^WWW("errors",403)="Forbidden."_CR,^WWW("errors",403,1)="html/text" 
+ S ^WWW("errors",404)="File Not found."_CR,^WWW("errors",404,1)="html/text"
+ S ^WWW("errors",500)="Internal Server Error."_CR,^WWW("errors",500,1)="html/text"
+ S ^WWW("errors",501)="Function Not Implemented."_CR,^WWW("errors",501,1)="html/text"
+ S ^WWW("errors",503)="Service Unavailable."_CR,^WWW("errors",503,1)="html/text"
+ S ^WWW("errors",504)="Bad Proc."_CR,^WWW("errors",504,1)="html/text"
+ 
+ S ^WWW("errors",507)="Insufficient Storage"_CR,^WWW("errors",507,1)="html/text" 
+ S ^WWW("index",1)="index.htm"
+ S ^WWW("index",2)="index.html"
+ S ^WWW("index",3)="index.wml"
+ S ^WWW("index",4)="index.msp"
+ S ^WWW("index",5)="default.htm"
+ S ^WWW("index",6)="default.html"
+ S ^WWW("index",7)="default.msp"
+ S ^WWW("index",8)="default.wml"
+ S ^WWW("index",9)="default.mxp" 
+ S ^EXT("msp")="text/mumps-pages"
+ S ^EXT("mxp")="text/mumps-pages" 
+ S ^LOG("admin")="SYSTEM/",^LOG("admin",1)="USER/",^PAS("admin")="msm102"
+ ;J START^YYHTML
+ Q
+START ;
+ ;S SYS=$P($ZZI," ",1)
+ ;I SYS="LAB" S %IP="212.16.30.100",DIR="D:\WORK" G A
+ ;I SYS="LAC" S %IP="212.16.30.101",DIR="C:\WORK" G A
+ ;S %IP="192.168.99.1",DIR="W:\WORK"
+ S UHOST="",TAB=$C(9) H 5 D LGW("<<sys>> starting servers")
+ S IH="-1" F  S IH=$N(^WWW("host",IH)) Q:IH="-1"  I IH'="default" D INITJ(IH,$G(^WWW("host",IH)))
+ ;J UMON^YYHTML
+ Q
+INITJ(IH,JC) Q:'$D(^WWW("host",IH))  F I=1:1:JC J INIT(IH)
+ Q
+INIT(IDX) ;
+ S %IP=$G(^WWW("host",IDX,4)),SOCN=$G(^WWW("host",IDX,5)),UHOST="" S:'$D(%WW) %WW=0 
+ S CR=$C(13,10),UHOST=IDX,TAB=$C(9)
+ D SETHOST 
+ D LGW("<<sys>> starting server on "_%IP_":"_SOCN_" job="_$J) 
+ G A
+ Q 
+INIT2(IDX) ;
+ S %IP=$G(^WWW("host",IDX,4)),SOCN=$G(^WWW("host",IDX,5)),UHOST="" S:'$D(%WW) %WW=0 
+ S CR=$C(13,10),UHOST=IDX,NDEX=1,TAB=$C(9)
+ D SETHOST 
+ D LGW("<<sys>> starting temporary job "_$J_" on "_%IP_":"_SOCN) 
+ G A
+ Q  
+GMT(X,T) ;($H,timezone)
+ Q $$GMT^DTUTL(X,T)
+LGW(TXT) S XX=0 S:$D(^WWWLOG) XX=$O(^WWWLOG(""),-1) S ^WWWLOG(XX+1)=$H_TAB_UHOST_TAB_TXT_TAB_$G(UAG)_TAB_$J Q
+LGWS(TXT) S XX=0 S:$D(^WWWLOG) XX=$O(^WWWLOG(""),-1) S ^WWWLOG(XX+1)=$H_TAB_"<<err>>"_TAB_TXT_TAB_$J Q
+LOGOUT 
+ D LOGOUT^WWWSRV
+ Q
+WWWJOB 
+ S I=-1
+ F  S I=$N(^$JOB(I)),I=+I Q:I=-1  S WWWJ(I)=$V(972,I,$V(59,I,1),9)
+ Q
+CLOSE S I=-1,RR=$ZU($P($ZU(""),",",1)) F  S I=$N(^$JOB(I)),I=+I Q:I=-1  D:$V(972,I,$V(59,I,1),9)="YYHTML"&($$UCI^%SS(I)[RR) KJ(I,2)
+ Q
+IENC(X) Q X S E2=+$G(%IENC),E3=+$G(%WI) Q $S(E2=0&(E3=0):$TR(X,%WD,%DW),(E3=1!(E3=2))&(E2=1):$TR(X,%DW,%WD),1:X) 
+ENC S E2=+$G(%W),E3=+$G(%WI),%L=$S(E2=0&(E3=1):$TR(%L,%WD,%DW),(E2=1!(E2=2))&(E3=0):$TR(%L,%DW,%WD),1:%L)
+ G:E2=2 UTF8 Q
+UTF8 ;
+ S E4="" F JB=1:1:$L(%L) D
+ .I $A(%L,JB)<192 S E4=E4_$E(%L,JB) Q
+ .S E6=$TR($E(%L,JB),^PP(0,4),^PP(0,5)) S E4=E4_"&#x04"_($ZH($A(E6)))_";"
+ S %L=E4 Q
+RHTML(X) ;right html
+ F  S P=$F(X,"<") Q:P=0  S X=$E(X,1,P-2)_"&lt;"_$E(X,P,$L(X))
+ F  S P=$F(X,">") Q:P=0  S X=$E(X,1,P-2)_"&gt;"_$E(X,P,$L(X))
+ Q X
+OW(FN) S %FN=$TR(FN,%LU,%LL) K ^BUFH(%JOB,%FN) S UV=0,%LFN=0,%IFN=0 Q 
+WW(X) Q:X=""  S %L=X D ENC S %IFN=%IFN+1,%LFN=%LFN+$L(%L),^BUFH(%JOB,%FN,%IFN)=%L Q
+CW S FN=%FN,%B=FN K %L S:UV=0 ^BUFH(%JOB,%FN)=%LFN Q 
+SHOWLOG 
+ S OWI=+$G(%WI),%WI=1 D OW("x.htm"),WW("<html><head><title>HTTP log</title><meta http-equiv=""Content-Type"" content=""text/html; charset=windows-1251"">")
+ D WW(CR_"<style type=""text/css""><!--.txt {  font-family: ""Times New Roman"", Times, serif; font-size: 14px}--></style>"_CR)
+ D WW("</head><body bgcolor=""#FFFFFF"" text=""#000000""><table width=""100%"" border=""1"" cellspacing=""0"" class=""txt""><tr bgcolor=""#FFFFCC"">")
+ D WW("<td>њрЄр,љЁхь </td><td>„хЁтхЁ</td><td>›ышхэЄ</td><td>њрээ»х,срщЄ</td><td>›юьрэфр</td><td>URL</td><td>„ЄрЄєё</td><td>§юы№чютрЄхы№</td><td>›ышхэЄ</td></tr>")
+ F N=1:1 S M=$G(^WWWLOG(N)) Q:M=""  D:M'["<<sys>>"&(M'["<<err>>") 
+ .D WW("<tr><td>"_$$DTIME^DTUTL($P(M,TAB,1))_"</td><td>"_$P(M,TAB,2)_"</td><td>"_$P(M,TAB,3)_"</td><td>"_$P(M,TAB,4)_"</td><td>"_$P(M,TAB,5))
+ .D WW("</td><td>"_$P(M,TAB,6)_"</td><td>"_$P(M,TAB,7)_"</td><td>&nbsp;"_$P(M,TAB,8)_"</td><td>"_$P(M,TAB,9)_"</td></tr>"_CR)
+ D WW("</table></body></html>"),CW S %WI=OWI
+ Q
+SHOWERR F N=1:1 S M=$G(^WWWLOG(N)) Q:M=""  W:M["<<err>>" $$DTIME^DTUTL($P(M,$C(9),1))_" "_$P(M,$C(9),3),!
+ Q
+SYSST 
+ D ^%SS Q 

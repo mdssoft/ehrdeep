@@ -1,0 +1,604 @@
+NMLABU ; Лаборатория - утилиты [ 09/12/2024  7:43 PM ]
+LXLS ; Загрузка шаблонов из Excel
+ N ACOD,PCOD,USL,GRP,PMEA,X,Y,ANM,PNM,IDX,NRM,RNM
+ N %J,A,I,R,Z,NU1,NU2,NRM2
+ D ORH^RWU
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D
+ .Q:%J<2 
+ .S A=$$DBLSP^TXTU(A)
+ .S X=$P($TR($$TRIM^TXTU(A)," ","_"),"|",1),USL=$P($$TRIM^TXTU(A),"|",2)
+ .S GRP=$P($$TRIM^TXTU(A),"|",3),Y=$P($$TRIM^TXTU(A),"|",4)
+ .S PNM=$P($$TRIM^TXTU(A),"|",6),Z=$P($$TRIM^TXTU(A),"|",7)
+ .S PMEA=$P($$TRIM^TXTU(A),"|",8),RNM=$P($$TRIM^TXTU(A),"|",5)
+ .S RNM=$P($$TRIM^TXTU(A),"|",5)
+ .S NU1=$P($$TRIM^TXTU(A),"|",9),NU2=$P($$TRIM^TXTU(A),"|",13)
+ .S NRM=$TR($P(A,"|",11,12),",x",".")_"|"_$P(A,"|",10)
+ .S NRM2=$TR($P(A,"|",14,15),",x",".")
+ .S:NRM="||" NRM="" S:NRM2="|" NRM2=""
+ .S:X'="" ACOD=X S:Y'="" ANM=Y S:Z'="" PCOD=Z
+ .Q:ACOD=""  D:Z=""&(PNM="") lNORM Q:Z=""!(PNM="")  
+ .I ANM'="" S ^LABT("I",ACOD)=ANM,ANM="",IDX=1
+ .S ^LABT("T",PCOD)=PNM
+ .S $P(^LABT("T",PCOD,"n"),"|",1)=PNM
+ .S R="",GRP="@"_+GRP
+ .I USL'="" F I=1:1:$L(USL,";") S $P(R,"|",I)=$$TRIM^TXTU($P(USL,";",I))_GRP
+ .S:R'="" ^LABT("T",PCOD,"u")=R
+ .S ^LABT("T",PCOD,"m")=PMEA
+ .S ^LABT("T",PCOD,"i")=ACOD
+ .S:RNM'="" ^LABT("T",PCOD,"r")=RNM
+ .S:NU1=""&(NU2="")&$L(NRM) ^LABT("T",PCOD,"s")=NRM
+ .S:NU1'=""&$L(NRM) ^LABT("T",PCOD,"s","o",NU1)=NRM
+ .S:NU2'=""&$L(NRM2) ^LABT("T",PCOD,"s","f","o",NU2)=NRM2
+ .S:NU2=""&$L(NRM2) ^LABT("T",PCOD,"s","f")=NRM2
+ .S ^LABT("I",ACOD,"T",PCOD)=""
+ .Q 
+ D CR^RWU
+ D MKLABTI
+ Q
+lNORM 
+ Q:PCOD="" 
+ S:$L(NU1)&$L(NRM) ^LABT("T",PCOD,"s","o",NU1)=NRM
+ I $L(NU2),$L(NRM2) S ^LABT("T",PCOD,"s","f","o",NU2)=NRM2 Q 
+ S:$L(NRM2) ^LABT("T",PCOD,"s","f")=NRM2
+ Q
+LXLS1(MOD) ; Импорт тестов (формат WXLS1)
+ ; MOD - импорт норм, формат норм: 6/M:5/F:4
+ N %J,A,R,I,X,USL,T,NM,MM,B,BIO,G,GRP,nMN,nMX,nTX,TML,BL,Y
+ D ORH^RWU
+ S USL="",MOD=$G(MOD)
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D
+ .Q:%J<2 
+ .S A=$$DBLSP^TXTU(A)
+ .S X=$P(A,"|",1) S:X'="" USL=X
+ .S T=$P(A,"|",3),NM=$$TRIM^TXTU($P(A,"|",4))
+ .S T=$TR($$TRIM^TXTU(T)," ","_")
+ .I T'="",NM'="" S ^LABT("T",T)=NM,$P(^(T,"n"),"|",1)=NM
+ .Q:T=""  ; только с кодификаторами
+ .I T="",NM'="" S T=$O(^LABT("T",""),-1)+1 S:T=1 T=1000 S ^(T)=NM,$P(^(T,"n"),"|",1)=NM
+ .S MM=$P(A,"|",5)
+ .S:MM'="" ^LABT("T",T,"m")=MM
+ .S BIO=$P(A,"|",6) K BL
+ .I BIO'="" F I=1:1:$L(BIO,",") D
+ ..S X=$$TRIM^TXTU($P(BIO,",",I))
+ ..S B=$$FNDBIO^IKDLU(X)
+ ..S:B="" B=$O(^LABT("M",""),-1)+1,^(B)=X
+ ..S BL(B)=1
+ .M:$D(BL) ^LABT("T",T,"b")=BL K BL
+ .S GRP=$P(A,"|",7),G=""
+ .I GRP'="" S G=$$FNDGRP^IKDLU(GRP) S:G="" G=$O(^LABT("G",""),-1)+1,^(G)=GRP
+ .S:G'="" ^LABT("T",T,"r")=G
+ .I 'MOD S X=$TR($P(A,"|",8),",",".") D:X'=""  ; min
+ ..F I=1:1:$L(X,"@") S Y=$P(X,"@",I) D
+ ...I $TR($P(Y,":",1),"mМм","MMM")="M" S $P(^LABT("T",T,"s","m"),"|",1)=$P(Y,":",2) Q 
+ ...I $TR($P(Y,":",1),"fЖж","FFF")="F" S $P(^LABT("T",T,"s","f"),"|",1)=$P(Y,":",2) Q 
+ ...S $P(^LABT("T",T,"s"),"|",1)=Y
+ .I 'MOD S X=$TR($P(A,"|",9),",",".") D:X'=""  ; max
+ ..F I=1:1:$L(X,"@") S Y=$P(X,"@",I) D
+ ...I $TR($P(Y,":",1),"mМм","MMM")="M" S $P(^LABT("T",T,"s","m"),"|",2)=$P(Y,":",2) Q 
+ ...I $TR($P(Y,":",1),"fЖж","FFF")="F" S $P(^LABT("T",T,"s","f"),"|",2)=$P(Y,":",2) Q 
+ ...S $P(^LABT("T",T,"s"),"|",2)=Y
+ .S X=$P(A,"|",10)
+ .I 'MOD S:X'="" $P(^LABT("T",T,"s"),"|",3)=X ; norm text
+ .S X=$P(A,"|",11),R=$P(X,"@",1),Y=$P(X,"@",2) ; срок период+текст
+ .S:X'="" ^LABT("T",T,"tl")=$S(R["-":$P($TR(R,"-","|"),"|",1,2),1:R_"|"_R)_"|"_Y
+ .S X=$P(A,"|",12)
+ .I X'="" S ^LABT("T",T,"t")="T" F I=1:1:$L(X,"@") S R=$P(X,"@",I) S:R'="" ^LABT("T",T,"t",R)=""
+ .Q:USL=""
+ .S ^LABT("T",T,"u")=$$STFLGS^TXTU($G(^LABT("T",T,"u")),USL)
+ .F I=1:1:$L(USL,"|") S X=$P(USL,"|",I) Q:X=""  S ^LABTI("CT",X,T)=""
+ D CR^RWU
+ D MKLABTI
+ Q
+fndM(NM) 
+ N I
+ S NM=$$UL^TXTU(NM)
+ S I="" F  S I=$O(^LABT("M",I)) Q:I=""  I $$UL^TXTU($G(^(I)))=NM Q 
+ Q I
+mkBIO(T) ; Перечень биоматериалов
+ N I,R
+ S (I,R)="" F  S I=$O(^LABT("T",T,"b",I)) Q:I=""  S:R'="" R=R_"," S R=R_$G(^LABT("M",I))
+ Q R
+mkLSTT(T) ; Перечень текстовых значений
+ N I,R
+ S (I,R)=""
+ F  S I=$O(^LABT("T",T,"t",I)) Q:I=""  S:R'="" R=R_"@" S R=R_I
+ Q R
+WXLS1 ;
+ N T,PRC,R,X,Y,UL,I,DT,N1,N2
+ D OWF^RWU(".txt")
+ D WC^RWU("Код услуги|Услуга|Код теста|Наименование теста|ед.измерения|Биоматериал|Раздел|Норма min|Норма max|Норма текст|Выполнение дней|Список значений")
+ S DT=+$H,T=""
+ F  S T=$O(^LABT("T",T)) Q:T=""  D:'$P($G(^LABT("T",T,"d")),"|",1)
+ .S RR="||"_T ; 3
+ .S RR=RR_"|"_$G(^LABT("T",T)) ; 4
+ .S RR=RR_"|"_$G(^LABT("T",T,"m")) ; 5
+ .S RR=RR_"|"_$$mkBIO(T) ; 6
+ .S X=$G(^LABT("T",T,"r")) S:X'="" X=$G(^LABT("G",X))
+ .S RR=RR_"|"_X ; 7
+ .S X=$G(^LABT("T",T,"s")),N1=$P(X,"|",1),N2=$P(X,"|",2)
+ .S Y=$G(^LABT("T",T,"s","m"))
+ .I $P(Y,"|",1)'="" S N1=$S(N1="":"",1:N1_"@")_"M:"_$P(Y,"|",1)
+ .I $P(Y,"|",2)'="" S N2=$S(N2="":"",1:N2_"@")_"M:"_$P(Y,"|",2)
+ .S Y=$G(^LABT("T",T,"s","f"))
+ .I $P(Y,"|",1)'="" S N1=$S(N1="":"",1:N1_"@")_"F:"_$P(Y,"|",1)
+ .I $P(Y,"|",2)'="" S N2=$S(N2="":"",1:N2_"@")_"F:"_$P(Y,"|",2)
+ .S RR=RR_"|"_N1_"|"_N2_"|"_$P(X,"|",3) ; 9-11
+ .S X=$G(^LABT("T",T,"tl"))
+ .S RR=RR_"|"_$S($P(X,"|",2)="":$P(X,"|",1),1:$P(X,"|",1)_"-"_$P(X,"|",2))_$S($P(X,"|",3)'="":"@"_$P(X,"|",3),1:"") ; 12
+ .S RR=RR_"|"_$$mkLSTT(T)
+ .S UL=$G(^LABT("T",T,"u"))
+ .F I=1:1:$L(UL,"|") S U=$P(UL,"|",I) D
+ ..S PRC=$$STARTTP^IPRICE(U,DT,0)
+ ..S $P(RR,"|",1)=U
+ ..S $P(RR,"|",2)=$$NAME^IPRICE(U,PRC)
+ ..D WC^RWU(CR_RR)
+ D C^RWU
+ Q
+LNORM ; Загрузка норм
+ N %J,A,R,I,X,COD,MN
+ D ORH^RWU
+ S USL=""
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D
+ .Q:%J<2 
+ .S A=$$DBLSP^TXTU(A),COD=$P(A,"|",1) Q:COD="" 
+ .S COD=$TR($$TRIM^TXTU(COD)," ","_")
+ .S MN=$P(A,"|",3)
+ .Q:'$D(^LABT("T",COD))
+ .S:$G(^LABT("T",COD,"m"))'=MN ^("m")=MN ; means
+ .S X=$TR($P(A,"|",4),",",".") ; min
+ .S:$P($G(^LABT("T",COD,"s")),"|",1)'=X $P(^("s"),"|",1)=X
+ .S X=$TR($P(A,"|",5),",",".") ; max
+ .S:$P($G(^LABT("T",COD,"s")),"|",2)'=X $P(^("s"),"|",2)=X
+ .S X=$TR($P(A,"|",6),",",".") ; min M
+ .S:$P($G(^LABT("T",COD,"s","m")),"|",1)'=X $P(^("m"),"|",1)=X
+ .S X=$TR($P(A,"|",7),",",".") ; max M
+ .S:$P($G(^LABT("T",COD,"s","m")),"|",2)'=X $P(^("m"),"|",2)=X
+ .S X=$TR($P(A,"|",8),",",".") ; min F
+ .S:$P($G(^LABT("T",COD,"s","f")),"|",1)'=X $P(^("f"),"|",1)=X
+ .S X=$TR($P(A,"|",9),",",".") ; max F
+ .S:$P($G(^LABT("T",COD,"s","f")),"|",2)'=X $P(^("f"),"|",2)=X
+ .S X=$TR($P(A,"|",10),",",".") ; text
+ .S:$P($G(^LABT("T",COD,"s")),"|",3)'=X $P(^("f"),"|",3)=X
+ .S X=$TR($P(A,"|",11),",",".") ; text M
+ .S:$P($G(^LABT("T",COD,"s","m")),"|",3)'=X $P(^("m"),"|",3)=X
+ .S X=$TR($P(A,"|",12),",",".") ; text F
+ .S:$P($G(^LABT("T",COD,"s","f")),"|",3)'=X $P(^("f"),"|",3)=X
+ D CR^RWU
+ Q
+LXLSLT 
+ N %J,A,ID
+ K ^LABT("T")
+ D ORH^RWU
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D
+ .Q:%J<2  
+ .S ID=$P(A,"|",1) Q:ID=""
+ .S ^LABT("T",ID)=$P(A,"|",2),$P(^(ID,"n"),"|",1)=$P(A,"|",3),^("m")=$P(A,"|",4)
+ D CR^RWU
+ Q
+LXLSPSM(CLR) ; Across/Roche PSM
+ N %J,A,ID,G,GI,U,iI
+ K:$G(CLR) ^LABT
+ D ORH^RWU
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D
+ .Q:%J<2  
+ .S ID=$TR($P(A,"|",1)," ","_") Q:ID=""
+ .S G=$P(A,"|",5),U=$P(A,"|",4)
+ .; Группа
+ .I G'="" S GI=$$FNDGRP(G) I GI="" S GI=$O(^LABT("G",""),-1)+1,^(GI)=G
+ .; Анализы
+ .I G'="" S iI=$$FNDAN(G) I iI="" S iI=$O(^LABT("I",""),-1)+1,^(iI)=G
+ .S:iI'="" ^LABT("I",iI,"T",ID)=""
+ .S ^LABT("T",ID)=$P(A,"|",2),$P(^(ID,"n"),"|",1)=$P(A,"|",3),^("m")=$P(A,"|",7)
+ .S:U'="" ^("u")=U
+ .S:GI'="" ^("r")=GI
+ .S:iI'="" ^("i")=iI
+ .S:$P(A,"|",11)=1 ^("d")="|1"
+ D CR^RWU
+ D MKLABTI
+ Q
+LOADANG ; Загрузка видов исследований и групп
+ ; код теста|имя исследования|имя группы
+ N %J,A,ID,G,GI,AN,iI
+ D ORH^RWU
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D:%J>1
+ .S ID=$TR($P(A,"|",1)," ","_") Q:ID=""
+ .S AN=$P(A,"|",2),G=$P(A,"|",3),(G,iI)=""
+ .Q:'$D(^LABT("T",ID)) 
+ .; Группа
+ .I G'="" S GI=$$FNDGRP(G) I GI="" S GI=$O(^LABT("G",""),-1)+1,^(GI)=G
+ .; Анализы
+ .I AN'="" S iI=$$FNDAN(AN) I iI="" S iI=$O(^LABT("I",""),-1)+1,^(iI)=AN
+ .S:iI'="" ^LABT("I",iI,"T",ID)=""
+ .S:GI'="" ^LABT("T",ID,"r")=GI
+ .S:iI'="" ^LABT("T",ID,"i")=iI
+ .D GL^IEXCH("^LABT","T",ID)
+ D CR^RWU
+ Q
+LXLSUT ; Загрузить формат услуг и тестов
+ ; Код|Имя краткое|полное|группа|имя услуги|ед.изм.|вывод на печ.|порядок в печ.|автоодобр|флаг.разд.
+ N Idx,%J,A,CN,NM,NMP,NMU,NMG,MN,PRN,PPRN,AO,FSG,X,G,G0
+ S Idx=$$NEWIDX^YISPRAV("pricegrp")
+ S G0=""
+ K ^LABT,^CN,^CNE
+ D ORH^RWU
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D
+ .Q:%J<2
+ .S CN=$P(A,"|",1),NM=$P(A,"|",2),NMP=$P(A,"|",3),NMG=$P(A,"|",4)
+ .Q:NM="" 
+ .S CN=$TR($$TRIM^TXTU(CN)," ","_")
+ .S NMU=$P(A,"|",5),MN=$P(A,"|",6),PRN=$P(A,"|",7)
+ .S PPRN=$P(A,"|",8),AO=$P(A,"|",9),FSG=$P(A,"|",10)
+ .Q:FSG  ; TODO
+ .; Группы
+ .I NMG'="" S G=$$FND^NPRICEG(NM) S:G="" G=$$ADD^NPRICEG(NMG,G0)
+ .I NMG'="" S X=$$FNDGRP(NMG) S:X="" X=$O(^LABT("I",""),-1)+1,^(X)=NMG S NMG=X
+ .S PRN=$$bool(PRN)
+ .S AO=$$bool(AO)
+ .S ^LABT("T",CN)=NM
+ .S $P(^LABT("T",CN,"n"),"|",1)=NMP
+ .S ^LABT("T",CN,"o")=$TR($P(PPRN,",",1)," ","")
+ .S:'PRN $P(^LABT("T",CN,"d"),"|",2)=1
+ .S:MN'="" ^LABT("T",CN,"m")=MN
+ .S:NMG'="" ^LABT("I",NMG,CN)=""
+ .Q:NMU="" 
+ .K XML
+ .S XML(NBC,OPR,"kod")=CN
+ .S XML(NBC,OPR,"date")=$$DT^DTUTL(+$H)
+ .S XML(NBC,OPR,"pname")=NMU
+ .S XML(NBC,OPR,"cname")=NM
+ .S XML(NBC,OPR,"grp")=G
+ .S XML(NBC,OPR,"price")=100 ; TODO
+ .D W^YNPRICE
+ D CR^RWU
+ Q
+LPROF ; Загрузка профилей
+ ; код|наименование|код усл<|цена>
+ N J,A,ID,U,S,NM,X
+ D ORH^RWU
+ F J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D:J>1
+ .S X=$P(A,"|",1),NM=$P(A,"|",2),U=$P(A,"|",3),S=$P(A,"|",4)
+ .I X'="",NM'="" S ^LABT("PU",X)=NM
+ .S:X'="" ID=X
+ .Q:U="" 
+ .S ^LABT("PU",ID,U)=S 
+ D CR^RWU
+ Q
+LBIOU ; Загрузка биоматериалов по услугам
+ ; код усл|биоматериалы через зпт|<кол-во>
+ N I,A,U,T,BT,BL,B,X,I,CNT
+ D ORH^RWU
+ F J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D:J>1
+ .S U=$P(A,"|",1),BT=$P(A,"|",2),CNT=$P(A,"|",3)
+ .S BT=$$DBLSP^TXTU(BT)
+ .Q:BT=""  Q:U=""
+ .S BL=$L(BT,",")
+ .S:'CNT CNT=1
+ .S U=$$LU^TXTU(U)
+ .I '$D(^LABTI("CT",U)) S ^BUF("erbio",U)="" Q 
+ .S T="" F  S T=$O(^LABTI("CT",U,T)) Q:T=""  D  ; тесты
+ ..F I=1:1:BL D
+ ...S X=$$TRIM^TXTU($P(BT,",",I))
+ ...S B=$$FNDBIO^IKDLU(X)
+ ...S:B="" B=$O(^LABT("M",""),-1)+1,^(B)=X
+ ...S $P(^LABT("T",T,"b",B),"|",1)=CNT
+ ...D GL^IEXCH("^LABT","T",T,"b",B)
+ D CR^RWU
+ D GL^IEXCH("^LABT","M")
+ Q
+bool(X) 
+ Q:X=1 1
+ Q:X="да" 1
+ Q:X="истина" 1
+ Q 0
+LLABC ; Загрузка соответствия с услугами конкретной лаб.
+ ; Код лаб.|Код усл|Код в лаб.|Усл.лаб<|Код биомат.в ЛПУ><|Коды биомат.в лаб через,|имя биомат.в лаб>
+ N I,A,U,T,X,I,L,KL,UL,J,K,B,BI,LL,BT,BIX,R
+ D ORH^RWU
+ F J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D:J>1
+ .S L=$P(A,"|",1),U=$P(A,"|",2),KL=$P(A,"|",3),UL=$P(A,"|",4)
+ .S B=$P(A,"|",5),BI=$P(A,"|",6),BT=$P(A,"|",7)
+ .Q:KL=""  Q:U=""   Q:L="" 
+ .Q:'$D(^CN(U)) 
+ .S BT=$$DBLSP^TXTU(BT)
+ .S LL(L)=""
+ .S R=$$STFLG^TXTU($P($G(^LABC(L,"CN",KL)),"|",1),U,"@")
+ .S ^LABC(L,"CN",KL)=R_"|"_UL
+ .I B'="",BI="" S BI=$$fndBIO^IMLABS(L,B)
+ .F K=1:1:$L(BI,",") D
+ ..S BIX=$$TRIM^TXTU($P(BI,",",K)) Q:BIX="" 
+ ..I B="",BIX'="" S B=$P($G(^LABC(L,"M",BIX)),"|",1) S:BT=""&(B="") BIX="" S:B="" B=$$ADDBIO^IKDLU($$TRIM^TXTU($P(BT,",",K)),L,BI)
+ ..S:BIX'="" ^LABC(L,"CN",KL,"b",BIX)=""
+ .D GL^IEXCH("^LABC",L,"CN",KL)
+ D CR^RWU
+ D MKLABCI
+ S L="" F  S L=$O(LL(L)) Q:L=""  D REGL^IEXCH("^LABTI","LAB",L,"CN")
+ Q
+addLABC(LAB,U,LU,BIO) ; Добавить услугу с материалом
+ S ^LABC(LAB,"CN",LU)=U
+ S ^LABC(LAB,"CN",LU,"b",BIO)=""
+ D MKLABCI
+ D GL^IEXCH("^LABC",LAB,"CN",LU)
+ D REGL^IEXCH("^LABTI","LAB",LAB,"CN")
+ Q
+LABCM ; Список биоматериалов (с добавлением в реальн)
+ ; Лаб|Код|Имя
+ N J,A,L,B,BN,M
+ D ORH^RWU
+ F J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D:J>1
+ .S L=$P(A,"|",1),B=$P(A,"|",2),BM=$P(A,"|",3)
+ .Q:L=""  Q:B=""  Q:BM=""   
+ .S M=$$FNDBIO^IKDLU(BM)
+ .I M="" S M=$O(^LABT("M",""),-1)+1,^(M)=BM
+ .S ^LABC(L,"M",B)=M_"|"_BM
+ .D GL^IEXCH("^LABC",L,"M",B)
+ D CR^RWU
+ D GL^IEXCH("^LABT","M")
+ Q
+LLABCM ; Загрузка материалов по усл. внешних лаб.
+ ; LAB|код усл|биоматериалы через зпт
+ N J,A,U,T,BT,BL,B,X,I,L
+ D ORH^RWU
+ F J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D:J>1
+ .S L=$P(A,"|",1),U=$P(A,"|",2),BT=$P(A,"|",3)
+ .S BT=$$DBLSP^TXTU(BT)
+ .Q:BT=""  Q:U=""  Q:L="" 
+ .Q:'$D(^LABC(L,"CN",U)) 
+ .S BL=$L(BT,",")
+ .F I=1:1:BL D
+ ..S X=$$TRIM^TXTU($P(BT,",",I))
+ ..S B=$$FNDLBIO^IKDLU(L,X) Q:B="" 
+ ..S ^LABC(L,"CN",U,"b",B)=""
+ ..D GL^IEXCH("^LABC",L,"CN",U,"b",B)
+ D CR^RWU
+ Q
+clrCMC(LAB) ; Очистить биоматериалы по лаборатории (на услуги)
+ N U
+ K ^LABC(LAB,"M")
+ D KGL^IEXCH("^LABC",LAB,"M")
+ S U="" F  S U=$O(^LABC(LAB,"CN",U)) Q:U=""  D
+ .K ^LABC(LAB,"CN",U,"b")
+ .D KGL^IEXCH("^LABC",LAB,"CN",U,"b")
+ Q
+LLABCMC ; Загрузка материалов с кодами для усл. внешних лаб.
+ ; LAB|код усл|код био|наименование био.
+ N J,A,U,T,BT,BI,B
+ D ORH^RWU
+ F J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D:J>1
+ .S L=$P(A,"|",1),U=$P(A,"|",2),BI=$P(A,"|",3),BT=$P(A,"|",4)
+ .S BT=$$DBLSP^TXTU(BT)
+ .Q:BI=""  Q:U=""  Q:L="" 
+ .Q:'$D(^LABC(L,"CN",U)) 
+ .S B=$P($G(^LABC(L,"M",BI)),"|",1)
+ .S:B="" B=$$ADDBIO^IKDLU(BT,L,BI)
+ .S ^LABC(L,"CN",U,"b",BI)=""
+ .D GL^IEXCH("^LABC",L,"CN",U,"b",BI)
+ D CR^RWU
+ Q
+LUCNV ; Конвертирование кодов услуг
+ N LST,J,A,U1,U2,I,ID,R,U,M,F
+ D ORH^RWU
+ F J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D:J>1
+ .S U1=$P(A,"|",1),U2=$P(A,"|",2)
+ .Q:U1=""  Q:U2=""  Q:'$D(^CN(U2)) 
+ .S LST(U1)=U2
+ S ID="" F  S ID=$O(^LABT("T",ID)) Q:ID=""  D
+ .Q:$P($G(^LABT("T",ID,"d")),"|",1)  ; disable
+ .S A=$G(^LABT("T",ID,"u")),F=0
+ .I A'="" F I=1:1:$L(A,"|") S X=$P(A,"|",I),U=$P(X,"@",1) I $D(LST(U)) S $P(X,"@",1)=LST(U),$P(A,"|",I)=X,F=1 
+ .S:F ^LABT("T",ID,"u")=A
+ .S M="" F  S M=$O(^LABT("T",ID,"ub",M)) Q:M=""  D
+ ..S A=$G(^LABT("T",ID,"ub",M)),F=0
+ ..I A'="" F I=1:1:$L(A,"|") S X=$P(A,"|",I),U=$P(X,"@",1) I $D(LST(U)) S $P(X,"@",1)=LST(U),$P(A,"|",I)=X,F=1
+ ..S:F ^LABT("T",ID,"ub",M)=A
+ D REGL^IEXCH("^LABT","T")
+ D CR^RWU
+ Q
+FNDAN(NM) ; Поиск анализа по имени
+ Q:NM="" "" N I
+ S I="",NM=$$LU^TXTU(NM)
+ F  S I=$O(^LABT("I",I)) Q:I=""  Q:$$LU^TXTU($G(^(I)))=NM 
+ Q I
+FNDGRP(NM) ; Поиск группы по имени
+ Q:NM="" "" N I
+ S I="",NM=$$LU^TXTU(NM)
+ F  S I=$O(^LABT("G",I)) Q:I=""  Q:$$LU^TXTU($G(^(I)))=NM 
+ Q I
+ANL(ALL) ; Перечень анализов
+ S ALL=+$G(ALL)
+ D OWF^RWU(".txt")
+ D:'ALL WC^RWU("|Нет"_CR)
+ D ANLW
+ D:ALL=1 WC^RWU(C_"|Все")
+ D C^RWU
+ Q
+ANLW ; Список видов исследований
+ N CD,NM,C
+ S (C,CD)=""
+ F  S CD=$O(^LABT("I",CD)) Q:CD=""  D
+ .Q:$P($G(^(CD,"d")),"|",1)=1  S NM=$G(^LABT("I",CD))
+ .I NM'="" D WC^RWU(C_CD_"|"_NM) S C=CR
+ Q
+PRML(AN) ; Перечень параметров анализов
+ D OWF^RWU(".txt")
+ D PRMLW(AN)
+ D C^RWU
+ Q
+PRMLW(AN) ; for NMLAB
+ N CD,NM,F
+ S F=""
+ S CD="" F  S CD=$O(^LABT("I",AN,"T",CD)) Q:CD=""  D
+ .Q:$P($G(^LABT("T",CD,"d")),"|",1)=1 
+ .S NM=$P($G(^("n")),"|",1) D WC^RWU(F_CD_"|"_NM) S F=CR
+ Q
+LABS ; Перечень лабораторий
+ D OWF^RWU(".txt")
+ D LABSW
+ D C^RWU
+ Q
+LABSW ; Список лабораторий (активных)
+ N I,C S (I,C)=""
+ F  S I=$O(^LABC(I)) Q:I=""  D:'$P($G(^(I)),"|",3) WC^RWU(C_I_"|"_$G(^(I,"nm"))) S C=CR
+ Q
+NAMEAN(AN) ; Имя исследования
+ Q:AN="" ""
+ Q $G(^LABT("I",AN))
+LKDLT ; Load parameters from KDL-Test
+ N TT,P,R,N
+ S TT="" F  S TT=$O(^IKDL("T",TT)) Q:TT=""  D
+ .S R=$G(^(TT)),N=$P(R,"|",1)
+ .I $D(^LABT("T",TT)) I $P($G(^(TT,"n")),"|",1)'=N W !,"Double Test - "_TT Q
+ .S $P(^LABT("T",TT,"n"),"|",1)=N
+ .S:$P(R,"|",2)'="" ^LABT("T",TT)=$P(R,"|",2)
+ .S:$P(R,"|",3)'="" ^LABT("T",TT,"r")=$P(R,"|",3)
+ .S:$P(R,"|",4)'="" ^LABT("T",TT,"m")=$P(R,"|",4)
+ S P="" F  S P=$O(^IKDL("P",P)) Q:P=""  D
+ .I $D(^LABT("I",P)) W !,"Double Profil - "_P Q 
+ .S ^LABT("I",P)=^IKDL("P",P),TT=""
+ .F  S TT=$O(^IKDL("P",P,TT)) Q:TT=""  S ^LABT("I",P,"T",TT)=""
+ Q
+LCHOST ; Загрузка кодов обмена
+ ; Код услуги|Код обмена
+ N %J,A,U,P,M,I,VAL
+ D ORH^RWU
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D
+ .Q:%J<2 
+ .S U=$P(A,"|",1),VAL=$P(A,"|",2)
+ .S P="" F  S P=$O(^LABTI("CT",U,P)) Q:P=""  D
+ ..S M="" F  S M=$O(^LABT("T",P,"ub",M)) Q:M=""  I ^(M)=U S ^LABT("T",P,"hc",M)=VAL
+ Q
+MKLABTI ; Создать индекс для LABTI
+ N T,P,U,I,X,B
+ K ^LABTI("CT"),^LABTI("CO")
+ S T="" F  S T=$O(^LABT("T",T)) Q:T=""  D
+ .S X=$G(^LABT("T",T,"u")) ; обычные
+ .I X'="" F I=1:1:$L(X,"|") S U=$P(X,"|",I) Q:U=""  S ^LABTI("CT",U,T)=""
+ .S B="" F  S B=$O(^LABT("T",T,"ub",B)) Q:B=""  D  ; по материалам
+ ..S X=$G(^(B)) Q:X=""
+ ..F I=1:1:$L(X,"|") S U=$P(X,"|",I) Q:U=""  S P=$G(^LABTI("CT",U,T)),^(T)=$S(P="":"",1:P_"|")_B
+ .S P="" F  S P=$O(^LABT("T",T,"co",P)) Q:P=""  S ^LABTI("CO",P,T)=""
+ ; профили
+ S T="" F  S T=$O(^LABT("PU",T)) Q:T=""  S U=$P(^(T),"|",2) S:U'="" ^LABTI("CT",U)="P|"_T 
+ D GL^IEXCH("^LABTI","CT")
+ D GL^IEXCH("^LABTI","CO")
+ Q
+MKLABCI ; Создать индексы для лабораторий-контрагентов
+ N LAB,CN,X,B,R,U,I
+ K ^LABTI("LAB")
+ S LAB="" F  S LAB=$O(^LABC(LAB)) Q:LAB=""  D
+ .S CN="" F  S CN=$O(^LABC(LAB,"CN",CN)) Q:CN=""  D
+ ..S R=$P($G(^(CN)),"|",1) Q:R=""
+ ..F I=1:1:$L(R,"@") S U=$P(R,"@",I) D:U'=""
+ ...S ^LABTI("LAB",LAB,"CN",U)=$$STFLG^TXTU($G(^LABTI("LAB",LAB,"CN",U)),CN)
+ ...I '$P($G(^LABTI("CT",U)),"|",3) S $P(^LABTI("CT",U),"|",3)=1 D GL^IEXCH("^LABTI","CT",U)
+ .D REGL^IEXCH("^LABTI","LAB",LAB,"CN")
+ ; TODO ^LABC( "I" "T"
+ Q
+MKIDX ; Переиндексировать заявки
+ K ^MLABI
+ N NI,ID,R
+ S NI="" F  S NI=$O(^MLAB(NI)) Q:NI=""  D
+ .S ID="" F  S ID=$O(^MLAB(NI,ID)) Q:ID=""  D
+ ..S R=+$G(^(ID)) Q:'R  
+ ..S ^MLABI("d",R,ID)=NI
+ ..S ^MLABI("c",ID)=NI
+ Q
+MKZNFI ; пересоздать li ссылки в ^ZNF
+ N NI,I,ULL,J,K,Z,KX,VR,OT,DT,ID
+ S NI="" F  S NI=$O(^MLAB(NI)) Q:NI=""  D
+ .S I="" F  S I=$O(^MLAB(NI,I)) Q:I=""  D
+ ..S ULL=$G(^(I,"up")) Q:ULL=""
+ ..F J=1:1 S Z=$P(ULL,"|",J) Q:Z=""  S KX=$P(Z,"/",1),Z=$P(Z,"/",2),VR=$P(KX,":",1),OT=$P(KX,":",2),DT=$P(KX,":",3) F K=1:1 S ID=$P(Z,":",K) Q:ID=""  D
+ ...Q:$G(^ZNF(VR,OT,DT,ID,"li"))=I 
+ ...S ^("li")=I
+ ...D GL^IEXCH("^ZNF",VR,OT,DT,ID,"li")
+ Q
+UNT(PRC,MOD) ; Услуги без тестов
+ ; PRC - прейскурант
+ ; MOD=1 - только с флагом lab
+ N C,R,H,A
+ S H=+$H
+ D OWF^RWU(".txt")
+ D WC^RWU("Код|Наименование услуги")
+ S C="" F  S C=$O(^CN(C)) Q:C=""  D:$D(^(C,PRC))
+ .Q:'$$CHECKH^IPRICE(C,PRC,H) 
+ .I MOD,"|"_$$GET^IPRICE(C,"cls",PRC,H)_"|"'["|lab|" 
+ .I MOD S A=$$GET^IPRICE(C,"grp",PRC,H) Q:"|"_$$FLG^NPRICEG(A)_"|"'["|lab|"
+ .Q:$D(^LABTI("CT",C)) 
+ .D WC^RWU(CR_C_"|"_$$NAME^IPRICE(C,PRC))
+ D C^RWU
+ Q
+TNOHC ; Тесты без хост кодов
+ N T,M,R,F
+ D OWF^RWU(".txt")
+ D WC^RWU("Код|Наименование|Биоматериал|Услуга")
+ S T="" F  S T=$O(^LABT("T",T)) Q:T=""  D
+ .Q:$P($G(^(T,"d")),"|",1)=0 
+ .Q:$G(^("hc"))'=""  
+ .S F=0
+ .S M="" F  S M=$O(^LABT("T",T,"b",M)) Q:M=""  D
+ ..S F=1
+ ..Q:$G(^LABT("T",T,"hc",M))'="" 
+ ..D WC^RWU(CR_T_"|"_$G(^LABT("T",T))_"|"_$G(^LABT("M",M))_"|"_$G(^LABT("T",T,"ub",M)))
+ .Q:F
+ .D WC^RWU(CR_T_"|"_$G(^LABT("T",T))_"||"_$G(^LABT("T",T,"u")))
+ D C^RWU
+ Q
+TWOM(USED) ; Тесты вне методик
+ N T,I,P
+ D OWF^RWU(".txt")
+ D WC^RWU("Код|Наименование теста|Услуга")
+ S P=$$CORCP^IPRICET(1)
+ S T="" F  S T=$O(^LABT("T",T)) Q:T=""  D
+ .I 'USED,$P($G(^(T,"d")),"|",1)=0  Q 
+ .Q:$D(^LABT("T",T,"dev")) 
+ .S R=$TR($G(^("u")),"|",";")
+ .D WC^RWU(CR_T_"|"_^LABT("T",T)_"|"_R)
+ D C^RWU
+ Q
+LABUL(LAB) ; Перечень системных кодов по лаборатории
+ N CN,R,B,U,P
+ D OWF^RWU(".txt")
+ D WC^RWU("Услуга в учреждении|Системный код лаборатории|Услуга лаборатории|Код материала|Биоматериал")
+ S CN="" F  S CN=$O(^LABC(LAB,"CN",CN)) Q:CN=""  D
+ .S R=^(CN),U=$P(R,"|",1),R=$P(R,"|",2),P=0
+ .S:U'="" P=+$$STARTTP^IPRICE(U,+$H,0)
+ .S R=U_" "_$$OWF^TXTU($$NAME^IPRICE(U,P),99)_"|"_CN_"|"_R_"|"
+ .I '$D(^LABC(LAB,"CN",CN,"b")) D WC^RWU(CR_R) Q
+ .S B="" F  S B=$O(^LABC(LAB,"CN",CN,"b",B)) Q:B=""  D
+ ..S P=$G(^LABC(LAB,"M",B))
+ ..S P=$S($P(P,"|",2)="":$G(^LABT("M",+$P(P,"|",1))),1:$P(P,"|",2))
+ ..D WC^RWU(CR_R_B_"|"_P)
+ D C^RWU
+ Q
+UPDSP ; ОБновить справочники принудительно
+ N S
+ S S=$S($G(^cfg("lab","eml",1,"server"))'="":"SPRUU^IKDLEML(1)",1:"ANUPD^IKDLPSM")
+ X ("J "_S)
+ Q
+mkxprc(ACOD,ICOD,INM,IPRC,IGRP) ; Собрать прайс из загруженного в буфер
+ ; ACOD - добавочный код
+ ; ICOD - позиция кода
+ ; INM - позиция имен 2:5
+ ; IPRC - позиция цены
+ ; IGRP - позиция группы
+ N I,J,R,E,N1,N2,NM,X,CD
+ K ^BUF($J)
+ S N1=$P(INM,":",1),N2=$P(INM,":",2)
+ S:'N2 N2=N1
+ S I="" F  S I=$O(^BUF("x",I)) Q:I=""  D:I>1
+ .S R=^(I),E=""
+ .I $P(R,"|",IPRC)="" S ^BUF($J,I)="|"_$P(R,"|",IGRP)_"|" Q 
+ .S NM="" F J=N1:1:N2 S X=$$TRIM^TXTU($P(R,"|",J)) S:X'="" NM=$S(NM="":"",1:NM_" ")_X
+ .S CD=$P(R,"|",ICOD) S:ACOD'="" CD=ACOD_CD
+ .S ^BUF($J,I)=CD_"|"_NM_"|"_$P(R,"|",IPRC)
+ K ^BUF("x")
+ M ^BUF("x")=^BUF($J)
+ S ^BUF("x",1)="code|name|price"
+ Q
+REGIPROC 
+ S ^IPROC("Система","Лаборатория","Лабораторные услуги без тестов")="UNT_NMLABU,1,2,t@storage:tprice,Прейскурант,t@string:0/Все#1/Только лабораторные,Вид услуг"
+ S ^IPROC("Система","Лаборатория","Тесты без хост кодов")="TNOHC_NMLABU,1,0"
+ S ^IPROC("Система","Лаборатория","Тесты вне методик")="TWOM_NMLABU,1,1,t@string:0/Все#1/Только действующие,Показывать тесты"
+ S ^IPROC("Система","Лаборатория","Коды внешних лабораторий")="LABUL_NMLABU,1,1,t@net:LABCL_NMLABS(),Внешняя лаборатория"
+ S ^IPROC("Система","Лаборатория","Экспорт тестов")="WXLS1_NMLABU,1,0"
+ Q

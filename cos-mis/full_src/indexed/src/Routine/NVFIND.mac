@@ -1,0 +1,191 @@
+A ; ПОИСК ВРАЧЕЙ [ 02/16/2021  3:43 PM ]
+ Q
+FND(STR,OTX,SPX,OFX,LPUX,SHORT,DTX) ; ПОИСК ВРАЧА  
+ ; OTX - фильтр по отделению
+ ; SPX - фильтр по специальности
+ ; OFX - только оформленные
+ ; SHORT - короткий вариант вывода
+ ; DTX - на дату
+ N TN,DT,X1,X2,TNE,FF,LPU,LP,R,RI,RO,wO
+ S STR=$$WD^TXTU(STR),R=$TR($$LU^TXTU(STR),"Ё","Е")
+ S DT=$$DIH^DTUTL($G(DTX))
+ S OFX=+$G(OFX),SHORT=+$G(SHORT)
+ D OWF^RWU(".txt"),WC^RWU("Таб. №|Фамилия|Имя|Отчество"_$S(SHORT:"",1:"|Специальность"))
+ S FF=+$G(^cfg("sl-kadry")),LPU=$$^I("ilpu")
+ S wO=$G(^cfg("kadry","sworder"))
+ S:'FF FF=$$LCL^IUSER("kadry","clpu")
+ S:$$LCL^IUSER("kadry","fndofor") OFX=1
+ I FF,$G(LPUX)'="" S LPU=LPUX
+ K:wO ^BUF($J)
+ S OTX=$G(OTX),SPX=$G(SPX) S:OTX=999 OTX="" S:SPX=999 SPX=""
+ I $L(STR),$D(^KDR($E(STR,1,128))) D fw(STR,DT) G fEND
+ S TN=$$TRIM^TXTU($P(STR,"-",1)),TNE=$$TRIM^TXTU($P(STR,"-",2))
+ I STR["-",STR'[" ",TN=+TN,TNE=+TNE S TN=TN-1,R=""
+ E  S (TN,TNE)=""
+ S RI=$P(R," ",2),RO=$P(R," ",3),R=$P(R," ",1)
+ F  S TN=$O(^KDR(TN)) Q:$S(TN="":1,TNE="":0,1:TN>TNE)  I $$fi(R,TN,"f",DT),$$fi(RI,TN,"i",DT,1),$$fi(RO,TN,"o",DT,1) D fw(TN,DT)
+fEND 
+ I wO S TN="" F  S TN=$O(^BUF($J,TN)) Q:TN=""  D WC^RWU(CR_^(TN))
+ D C^RWU
+ Q
+fi(R,TN,PL,DT,BEG) ; find in field
+ Q:R="" 1
+ I $G(BEG) Q $E($$LU^TXTU($$GET^IKADRY(TN,PL,DT)),1,$L(R))=R
+ Q $TR($$LU^TXTU($$GET^IKADRY(TN,PL,DT)),"Ё","Е")[R
+fw(TN,DT) ; Write string
+ I OFX,$$GET^IKADRY(TN,"ofor",DT)=0 Q 
+ I OTX'="",'$$IsOTD^IKADRY(TN,OTX,DT) Q 
+ I SPX'="",'$$IsSPEC^IKADRY(TN,SPX,DT) Q 
+ I FF,LPU'="",'$$IsLPU^IKADRY(TN,LPU,DT) Q 
+ S X1=$$GET^IKADRY(TN,"f",DT)_"|"_$$GET^IKADRY(TN,"i",DT)_"|"_$$GET^IKADRY(TN,"o",DT)
+ S X2=X1_$S(SHORT:"",1:"|"_$$GSPEC^YISPRAV($$SPEC^IKADRY(TN)))
+ I wO S ^BUF($J,$E(X1,1,64)_TN)=TN_"|"_X2 Q 
+ D WC^RWU(CR_TN_"|"_X2)
+ Q
+FLST(STR,CCR,MED,RSP,LPAll,nOWF,LPU,XFLG) ; Find for lists
+ ; CCR - not first CR
+ ; MED - only medical
+ ; RSP - for ^DSH
+ ; LPAll - for all LPU
+ ; LPU - selected LPU
+ ; XFLG - флаги сотрудников
+ N DT,TN,FF,L,R,C
+ S STR=$$LU^TXTU($$WD^TXTU($G(STR))),DT=+$H,C=$S($G(CCR):"",1:CR)
+ S:$G(LPU)="" LPU=$$^I("ilpu")
+ S LPU=$S($G(LPAll):"",1:"|"_LPU_"|")
+ S MED=+$G(MED),RSP=+$G(RSP),XFLG=$G(XFLG)
+ S FF=$S(+$G(^cfg("sl-kadry-only")):2,1:+$G(^("sl-kadry")))
+ S:'FF FF=$$LCL^IUSER("kadry","clpu")
+ I $L(STR),$D(^KDR(STR)) S TN=STR D FLSTW G FLSTE
+ S TN="" F  S TN=$O(^KDR(TN)) Q:TN=""  D FLSTW
+FLSTE D:'+$G(nOWF) OWF^RWU(".txt")
+ S R="" F  S R=$O(L(R)) Q:R=""  D WC^RWU(C_L(R)_"|"_$P(R,"|",1)) S C=CR
+ D:'+$G(nOWF) C^RWU
+ Q
+FLSTW ; Write string to FLST
+ I FF,LPU'="" S LP=$$GET^IKADRY(TN,"lpu",DT) Q:FF=2&(LP="")  I $L(LP),"|"_LP_"|"'[LPU Q 
+ Q:$$GET^IKADRY(TN,"use",DT)=0 
+ I STR'="",$$LU^TXTU($$GET^IKADRY(TN,"f",DT))'[STR Q
+ I MED S R=$$OTD^IKADRY(TN) I $L(R),$G(^(+$G(^MN("otd")),R,"med"))=0 Q 
+ I RSP,$$GET^IKADRY(TN,"norsp",DT) Q 
+ I XFLG'="",'$$FLinFL^TXTU($$GET^IKADRY(TN,"flg",DT),XFLG) Q 
+ S R=$$FIO^IKADRY(TN) Q:R=""  S L(R_"|"_TN)=TN
+ Q
+FLSTLT(STR,MED,LPAll) ; Find lite, for lists
+ ; MED - only medical
+ ; LPAll - for all LPU
+ N DT,TN,FF,LPU,L,R,i,A
+ S STR=$$LU^TXTU($$WD^TXTU($G(STR))),DT=+$H
+ S LPU=$S($G(LPAll):"",1:"|"_$$^I("ilpu")_"|"),MED=+$G(MED)
+ S FF=$S(+$G(^cfg("sl-kadry-only")):2,1:+$G(^("sl-kadry"))),A="",i=0
+ S:'FF FF=$$LCL^IUSER("kadry","clpu")
+ I $$EXIST^IKADRY(STR) D MSG^RWU($$FIO^IKADRY(STR)) Q 
+ S TN="" F  S TN=$O(^KDR(TN)) Q:TN=""  D  I i>10 S i=99
+ .I FF,LPU'="" S LP=$$GET^IKADRY(TN,"lpu",DT) Q:FF=2&(LP="")  I $L(LP),"|"_LP_"|"'[LPU Q 
+ .Q:$$GET^IKADRY(TN,"use",DT)=0 
+ .I STR'="",$$LU^TXTU($$GET^IKADRY(TN,"f",DT))'[STR Q
+ .I MED S R=$$OTD^IKADRY(TN) I R'="",$G(^(+$G(^MN("otd")),R,"med"))=0 Q
+ .S R=$$FIO^IKADRY(TN)
+ .S A=A_CR_TN_"@"_R_"|"_R
+ S:i=99 A=A_CR_"|..."
+ D MSG^RWU(A)
+ Q
+NVR(VR) ; ФИО врача по номеру
+ D MSG^RWU($$FIOSH^IKADRY(VR))
+ Q
+NVRTN(X) ; ФИО врача по номеру (кадров или таб.)
+ N K,VR
+ I $E(X)'="R",X'="" S (K,VR)="" F  S K=$O(^KDR(K)) Q:K=""  D  Q:VR'=""
+ .I $$GET^IKADRY(K,"knum")=X S VR=K
+ I $E(X)="R" S VR=$E(X,2,99)
+ I X'="",$D(^KDR(X)) S VR=X
+ D MSG^RWU(VR_"|"_$$FIOSH^IKADRY(VR))
+ Q
+SPLST(SPX) ; w. OTD
+ ; SPX - специальности через , + отделение
+ N A,N,C,L,X,O,FF,SPL
+ S (A,N,C)="",L=$$^I("ilpu"),O=$P(SPX,"~",2),SPX=$P(SPX,"~",1)
+ I SPX'="" F N=1:1:$L(SPX,",") S SPL($P(SPX,",",N))=""
+ S:L'="" L="|"_L_"|"
+ S FF=$S(+$G(^cfg("sl-kadry-only")):2,1:+$G(^("sl-kadry")))
+ S:'FF FF=$$LCL^IUSER("kadry","clpu")
+ F  S N=$O(^KDR(N)) Q:N=""  D
+ .Q:$$GET^IKADRY(N,"ofor",+$H)=0 
+ .I $D(SPL),'$$inSPL($$SPEC^IKADRY(N)),'$$inSPL($$GET^IKADRY(N,"spec2",+$H)),'$$inSPL($$GET^IKADRY(N,"spec3",+$H)) Q 
+ .I $L(O),$$OTD^IKADRY(N)'=O,$$GET^IKADRY(N,"otd2",+$H)'=O,$$GET^IKADRY(N,"otd3",+$H)'=O Q 
+ .I FF,$L(L) S X=$$GET^IKADRY(N,"lpu",+$H) Q:FF=2&(X="")  I $L(X),"|"_X_"|"'[L Q 
+ .S A=A_C_N_"|"_$$FIOSH^IKADRY(N),C=CR
+ D MSG^RWU(A)
+ Q
+inSPL(X) ; sys func fo SPLST
+ Q:X="" 0
+ Q $D(SPL(X))
+SPECFN(SP,wID) ; Сотрудники по специальности
+ ; wID - вывод ID
+ N A,N,C,L,X,FF
+ S (A,N,C)="",L=$$^I("ilpu"),wID=+$G(wID)
+ S:L'="" L="|"_L_"|"
+ S FF=$S(+$G(^cfg("sl-kadry-only")):2,1:+$G(^("sl-kadry")))
+ S:'FF FF=$$LCL^IUSER("kadry","clpu")
+ F  S N=$O(^KDR(N)) Q:N=""  D
+ .Q:'$$GET^IKADRY(N,"ofor",+$H) 
+ .I $$SPEC^IKADRY(N)'=SP,$$GET^IKADRY(N,"spec2",+$H)'=SP,$$GET^IKADRY(N,"spec3",+$H)'=SP Q 
+ .I FF,L'="" S X=$$GET^IKADRY(N,"lpu",+$H) Q:FF=2&(X="")  I X'="","|"_X_"|"'[L Q 
+ .S A=A_C_$S(wID:N_"|",1:"")_$$FIOSH^IKADRY(N),C=CR
+ Q A
+DOLJFN(DL,wID) ; Сотрудники по должности
+ ; wID - вывод ID
+ N A,N,C,L,X,FF
+ S (A,N,C)="",L=$$^I("ilpu"),wID=+$G(wID)
+ S:L'="" L="|"_L_"|"
+ S FF=$S(+$G(^cfg("sl-kadry-only")):2,1:+$G(^("sl-kadry")))
+ S:'FF FF=$$LCL^IUSER("kadry","clpu")
+ F  S N=$O(^KDR(N)) Q:N=""  D
+ .Q:'$$GET^IKADRY(N,"ofor",+$H) 
+ .I $$GET^IKADRY(N,"doljn")'=DL,$$GET^IKADRY(N,"doljn2",+$H)'=DL Q  
+ .I FF,L'="" S X=$$GET^IKADRY(N,"lpu",+$H) Q:FF=2&(X="")  I X'="","|"_X_"|"'[L Q
+ .S A=A_C_$S(wID:N_"|",1:"")_$$FIOSH^IKADRY(N),C=CR
+ Q A
+MYOTDFN(SP,wID) ; сотрудники по текущему отделению
+ ; wID - вывод ID
+ N A,N,C,L,X,OT,FF
+ S (A,N,C)="",L=$$^I("ilpu"),SP=$G(SP),wID=+$G(wID)
+ S:L'="" L="|"_L_"|"
+ S FF=$S(+$G(^cfg("sl-kadry-only")):2,1:+$G(^("sl-kadry")))
+ S:'FF FF=$$LCL^IUSER("kadry","clpu")
+ S OT=$$OTD^IUSER() Q:OT="" ""
+ F  S N=$O(^KDR(N)) Q:N=""  D
+ .Q:'$$GET^IKADRY(N,"ofor",+$H) 
+ .I $$OTD^IKADRY(N)'=OT,$$GET^IKADRY(N,"otd2",+$H)'=OT,$$GET^IKADRY(N,"otd3",+$H)'=OT Q
+ .I FF,L'="" S X=$$GET^IKADRY(N,"lpu",+$H) Q:FF=2&(X="")  I X'="","|"_X_"|"'[L Q 
+ .I SP'="",$$SPEC^IKADRY(N)'=SP,$$GET^IKADRY(N,"spec2",+$H)'=SP,$$GET^IKADRY(N,"spec3",+$H)'=SP Q 
+ .S A=A_C_$S(wID:N_"|",1:"")_$$FIOSH^IKADRY(N),C=CR
+ Q A
+FNDFIO(FIO,BD) ; Найти таб.ном. по ф.и.о.
+ ; BD - дата рождения ($H)
+ N V,F,I,O,R
+ S FIO=$$LU^TXTU($$DBLSP^TXTU(FIO)),BD=$G(BD)
+ S F=$P(FIO," ",1),I=$P(FIO," ",2),O=$P(FIO," ",3),V=""
+ I F="",I="",O="" Q ""
+ F  S V=$O(^KDR(V)) Q:V=""  I $$LU^TXTU($$GET^IKADRY(V,"f"))=F,$$LU^TXTU($$GET^IKADRY(V,"i"))=I,$$LU^TXTU($$GET^IKADRY(V,"o"))=O Q:BD=""  Q:$$DI^DTUTL($$GET^IKADRY(V,"bdate"))=BD 
+ Q V
+FNDFIOL(FIO,BD) ; Найти таб.ном. по ф.и.о. (неполное ФИО)
+ ; BD - дата рождения ($H)
+ N V,F,I,O,R,IL,OL,VR
+ S FIO=$$LU^TXTU($$DBLSP^TXTU($TR(FIO,"."," "))),BD=$G(BD)
+ S F=$P(FIO," ",1),I=$P(FIO," ",2),O=$P(FIO," ",3),(V,VR)=""
+ S IL=$L(I),OL=$L(O)
+ F  S V=$O(^KDR(V)) Q:V=""  D  Q:VR="-"
+ .Q:$$LU^TXTU($$GET^IKADRY(V,"f"))'=F
+ .Q:$$LU^TXTU($E($$GET^IKADRY(V,"i"),1,IL))'=I
+ .Q:$$LU^TXTU($E($$GET^IKADRY(V,"o"),1,OL))'=O 
+ .I VR'="" S VR="-" Q 
+ .I BD="" S VR=V Q
+ .S:$$DI^DTUTL($$GET^IKADRY(V,"bdate"))=BD VR=V
+ Q:VR="-" ""
+ Q VR
+FNDKTN(X,F2) ; Найти таб.ном. по т.н. кадровой службы
+ ; F2 - первые 2 буквы ФИО
+ N V S V="",F2=$$LU^TXTU($E($G(F2),1,2))
+ F  S V=$O(^KDR(V)) Q:V=""  I F2=""!($$LU^TXTU($E($$GET^IKADRY(V,"f"),1,2))=F2) Q:$$GET^IKADRY(V,"knum")=X 
+ Q V

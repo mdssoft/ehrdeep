@@ -1,0 +1,16 @@
+A ; ПОИСК ПАЦИЕНТА  [ 07/19/2011  7:53 PM ]
+ Q
+NIB(NI) ; Полное ФИО пациента
+ S NI=$$FIO^YIPACN(NI)
+ S:NI="" NI="НЕТ ЕГО !"
+ D MSG^RWU(NI)
+ Q
+NI(NI) ;ПОДТВЕРЖДЕНИЕ КОНТИНГЕНТА
+ S NI=$$FIO^YIPACN(NI)
+ S:NI="" NI="Нет такого пациента !"
+ D MSG^RWU(NI)
+ Q
+ND(DI,ERCHK) ;ПОДТВЕРЖДЕНИЕ ДИАГНОЗА
+ G ND+1^NDIAGS
+NVR(TN) ;ПОДТВЕРЖДЕНИЕ ВРАЧА
+ G NMVR+1^NKADRY

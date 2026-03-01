@@ -1,0 +1,569 @@
+NMLABS ; Справочники КДЛ [ 04/10/2020  9:12 PM ]
+INITT ; Инициализация формы тестов
+ N I,R,L
+ S (I,L,C)=""
+ F  S I=$O(^LABT("G",I)) Q:I=""  S L=L_C_I_"|"_^(I),C=CR
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<labtest><grp>")
+ D WC^RWU($$TAG^TXTU(L)_"</grp><fgrp>")
+ D WC^RWU("|"_CR_$$TAG^TXTU(L)_"</fgrp><an>")
+ ;<ts>")
+ ;S (I,L,C)=""
+ ;F  S I=$O(^LABT("TS",I)) Q:I=""  S L=L_C_I_"|"_^(I),C=CR
+ ;D WC^RWU($$TAG^TXTU(L)_"</ts><an>")
+ S (I,L,C)=""
+ F  S I=$O(^LABT("I",I)) Q:I=""  S L=L_C_I_"|"_^(I),C=CR
+ D WC^RWU($$TAG^TXTU(L)_"</an></labtest></nb_console>")
+ D C^RWU
+ Q
+TABT(TXT,GRP,USE,MOD) ; Вывод списка тестов
+ ; MOD = 1 - повторять код теста
+ ; USE - только действующие
+ N T,R,G
+ S TXT=$$WD^TXTU($G(TXT))
+ S GRP=$G(GRP),USE=$G(USE),MOD=+$G(MOD)
+ D OWF^RWU(".txt")
+ D WC^RWU($S(MOD=1:"|",1:"")_"|Наименование"_$S(GRP="":"|Раздел",1:""))
+ I TXT'="",$D(^LABT("T",TXT)) D WC^RWU(CR_TXT_"|"_$S(MOD=1:TXT_"|",1:"")_^LABT("T",TXT))
+ S TXT=$$LU^TXTU(TXT)
+ S T="" F  S T=$O(^LABT("T",T)) Q:T=""  D
+ .S R=$G(^(T)),G=$G(^(T,"r"))
+ .I GRP'="",$G(^(T,"r"))'=GRP Q 
+ .I USE,$G(^LABT("T",T,"d")) Q 
+ .I TXT'="",$$LU^TXTU(R)'[TXT Q 
+ .D WC^RWU(CR_T_"|"_$S(MOD=1:T_"|",1:"")_$$OWF^TXTU(R,75)_$S(GRP="":"|"_$$GRPNM^IMLABS(G),1:""))
+ D C^RWU
+ Q
+LT(ID) ; Просмотр теста
+ N R,I,A
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<labtest>")
+ D WTAGDC^RWU("id",ID)
+ D WTAGDC^RWU("uid",ID)
+ D WTAGDC^RWU("nm",$G(^LABT("T",ID)))
+ S R=$G(^LABT("T",ID,"n"))
+ D WTAGDC^RWU("nmf",$P(R,"|",1))
+ D WTAGDC^RWU("nml",$P(R,"|",2))
+ D WTAGDC^RWU("mean",$G(^LABT("T",ID,"m")))
+ D WTAGDC^RWU("grp",$G(^LABT("T",ID,"r")))
+ S R=$G(^LABT("T",ID,"d"))
+ D WTAGDC^RWU("use",$P(R,"|",1))
+ D WTAGDC^RWU("prn",'$P(R,"|",2))
+ S R=$G(^LABT("T",ID,"v"))
+ D WTAGDC^RWU("prnmod",$P(R,"|",1))
+ D WTAGDC^RWU("prnn",$P(R,"|",2))
+ D WTAGDC^RWU("prniv",$P(R,"|",3))
+ D WTAGDC^RWU("ord",$G(^LABT("T",ID,"o")))
+ D WTAGDC^RWU("ordw",$G(^LABT("T",ID,"ow")))
+ S R=$G(^LABT("T",ID,"t")) ; формат данных
+ D WTAGDC^RWU("tpd",$P(R,"|",1))
+ D WTAGDC^RWU("sgn",$P(R,"|",2))
+ D WTAGDC^RWU("deffil",$P(R,"|",3))
+ D WTAGDC^RWU("msdata",+$P(R,"|",4))
+ S R=$G(^LABT("T",ID,"tl")) ; сроки
+ D WTAGDC^RWU("tmmn",$P(R,"|",1))
+ D WTAGDC^RWU("tmmx",$P(R,"|",2))
+ D WTAGDC^RWU("tmtt",$P(R,"|",3))
+ D WTAGDC^RWU("ts",$G(^LABT("T",ID,"ts"))) ; тест-система
+ D WTAGDC^RWU("an",$G(^LABT("T",ID,"i"))) ; исследование
+ D WTAGDC^RWU("chost",$G(^LABT("T",ID,"hc"))) ; код обмена
+ S R=$G(^LABT("T",ID,"u"))
+ F I=1:1:$L(R,"|") S $P(R,"|",I)=$P($P(R,"|",I),"@",1)
+ D WTAGDC^RWU("usl",$TR(R,"|",";"))
+ S A=""
+ s R=$P($G(^LABT("T",ID,"s")),"|",1,3)
+ I R'="",R'="|||" S A=CR_"||"_$P(R,"|",1,2)_"|"_$$TRT^TXTU($P(R,"|",3),CR,"\r")
+ s I="" F  S I=$O(^LABT("T",ID,"s","a",I)) Q:I=""  D
+ .S R=$G(^(I))
+ .S R=$P(R,"|",1,2)_"|"_$$TRT^TXTU($P(R,"|",3),CR,"\r")
+ .I R'="",R'="|||" S A=A_CR_"|"_I_"|"_R
+ 
+ s R=$P($G(^LABT("T",ID,"s","m")),"|",1,3)
+ I R'="",R'="|||" S A=A_CR_"М||"_$P(R,"|",1,2)_"|"_$$TRT^TXTU($P(R,"|",3),CR,"\r")
+ s I="" F  S I=$O(^LABT("T",ID,"s","m","a",I)) Q:I=""  D
+ .S R=$G(^(I))
+ .S R=$P(R,"|",1,2)_"|"_$$TRT^TXTU($P(R,"|",3),CR,"\r")
+ .I R'="",R'="|||" S A=A_CR_"М|"_I_"|"_R
+ 
+ s R=$P($G(^LABT("T",ID,"s","f")),"|",1,3)
+ I R'="",R'="|||" S A=A_CR_"Ж||"_$P(R,"|",1,2)_"|"_$$TRT^TXTU($P(R,"|",3),CR,"\r")
+ s I="" F  S I=$O(^LABT("T",ID,"s","f","a",I)) Q:I=""  D
+ .S R=$G(^(I))
+ .S R=$P(R,"|",1,2)_"|"_$$TRT^TXTU($P(R,"|",3),CR,"\r")
+ .I R'="",R'="|||" S A=A_CR_"Ж|"_I_"|"_R
+ 
+ D:A="" WTAGDC^RWU("norm","")
+ D:A'="" WTAGC^RWU("norm",A)
+ D WTAGDC^RWU("ncomm",$$TRT^TXTU($G(^LABT("T",ID,"s","cm")),CR,"\\r"))
+ 
+ S (A,I)=""
+ F  S I=$O(^LABT("T",ID,"t",I)) Q:I=""  S A=$S(A="":"",1:A_CR)_I
+ D WTAGC^RWU("inlist",A)
+ 
+ S I="",A="Биоматериал|Услуга"
+ F  S I=$O(^LABT("T",ID,"b",I)) Q:I=""  S R=$P(^(I),"|",1),A=A_CR_I_"|"_$G(^LABT("M",I))_"|"_R_"|"_$TR($G(^LABT("T",ID,"ub",I)),"|",",")_"|"_$G(^LABT("T",ID,"hc",I))
+ D WTAGC^RWU("bio",A)
+ 
+ D W^RWU("</labtest></nb_console>")
+ D C^RWU
+ Q
+setT(ID,FL,R) ; Изменить поле теста
+ S:R'="" ^LABT("T",ID,FL)=R
+ K:R="" ^LABT("T",ID,FL)
+ Q
+ST ; Сохранение теста
+ N XML,XMLR
+ D RBUFH^YIXMLRR(1)
+ D WT
+ Q
+WT ; Запись теста
+ N ID,UID,R,R1,R2,NBC,X,K,UF
+ S NBC="nb_console"
+ S ID=$G(XML(NBC,"labtest","id"))
+ S X=$G(XML(NBC,"labtest","uid"))
+ I ID="",X'="",$D(^LABT("T",X)) D MSG^RWU("Код совпадает с существующим.") Q 
+ S:ID="" ID=X
+ Q:ID="" 
+ S ^LABT("T",ID)=$G(XML(NBC,"labtest","nm"))
+ S R=$G(XML(NBC,"labtest","nmf"))
+ S R1=$G(XML(NBC,"labtest","nml"))
+ S:R1'="" R=R_"|"_R1
+ S ^LABT("T",ID,"n")=R
+ S ^LABT("T",ID,"m")=$G(XML(NBC,"labtest","mean"))
+ S ^LABT("T",ID,"r")=$G(XML(NBC,"labtest","grp"))
+ 
+ S R=$G(XML(NBC,"labtest","prnmod"))
+ S R1=$G(XML(NBC,"labtest","prnn"))
+ S:R1'="" $P(R,"|",2)=R1
+ S R1=$G(XML(NBC,"labtest","prniv"))
+ S:R1'="" $P(R,"|",3)=R1
+ D setT(ID,"v",R)
+ 
+ S R=""
+ S:$G(XML(NBC,"labtest","use")) $P(R,"|",1)=1
+ S:'$G(XML(NBC,"labtest","prn")) $P(R,"|",2)=1
+ S:$TR(R,"|","")="" R=""
+ D setT(ID,"d",R)
+ ; формат данных
+ S R=$G(XML(NBC,"labtest","tpd"))
+ S R1=$G(XML(NBC,"labtest","sgn"))
+ S:R1'="" R=R_"|"_R1
+ S R1=$G(XML(NBC,"labtest","deffil"))
+ S:R1'="" $P(R,"|",3)=R1
+ S R1=$G(XML(NBC,"labtest","msdata"))
+ S:R1 $P(R,"|",4)=R1
+ D setT(ID,"t",R)
+ ; сроки исполнения
+ S R=$G(XML(NBC,"labtest","tmmn")) S:'R R=""
+ S R1=$G(XML(NBC,"labtest","tmmx")) S:'R1 R1=""
+ S:R1'="" R=R_"|"_R1
+ S R1=$G(XML(NBC,"labtest","tmtt"))
+ S:R1'="" $P(R,"|",3)=R1
+ D setT(ID,"tl",R)
+ 
+ D setT(ID,"ts",$G(XML(NBC,"labtest","ts")))
+ 
+ D setT(ID,"i",$G(XML(NBC,"labtest","an")))
+ 
+ D setT(ID,"o",$G(XML(NBC,"labtest","ord")))
+ 
+ D setT(ID,"ow",$G(XML(NBC,"labtest","ordw")))
+ 
+ D setT(ID,"hc",$G(XML(NBC,"labtest","chost"))) ; subidx fill later
+ 
+ S USL=$TR($G(XML(NBC,"labtest","usl")),";, ","||")
+ S UF=$L(USL),UF=$S(UF:1,$G(^LABT("T",ID,"u"))'="":1,1:0)
+ S ^LABT("T",ID,"u")=USL
+ 
+ S X=$G(XML(NBC,"labtest","norm"))
+ K ^LABT("T",ID,"s")
+ F J=2:1:99 S R=$P(X,CR,J) Q:R=""  D
+ .S R1=$P(R,"|",1),R2=$P(R,"|",2)
+ .S K=$TR($P(R,"|",3,4),", ","."),R=$P(R,"|",5)
+ .S:R'="" K=K_"|"_$$TRT^TXTU(R,"\r",CR)
+ .Q:K=""  Q:K="|"  Q:K="||" 
+ .I R1="",R2="" S ^LABT("T",ID,"s")=K Q 
+ .I R1="" S ^LABT("T",ID,"s","a",R2)=K Q 
+ .S R1=$TR($E(R1),"МмЖж","mmff")
+ .I R2="" S ^LABT("T",ID,"s",R1)=K Q
+ .S ^LABT("T",ID,"s",R1,"a",R2)=K
+ S X=$G(XML(NBC,"labtest","ncomm"))
+ S:X'="" ^LABT("T",ID,"s","cm")=$$TRT^TXTU(X,"\r",CR)
+ 
+ S X=$G(XML(NBC,"labtest","inlist"))
+ S J="" F  S J=$O(^LABT("T",ID,"t",J)) Q:J=""  K ^(J)
+ F J=1:1:99 S R=$P(X,CR,J) Q:R=""  S ^LABT("T",ID,"t",R)=""
+ 
+ S X=$G(XML(NBC,"labtest","bio"))
+ k ^LABT("T",ID,"b")
+ F J=2:1:99 S R=$P(X,CR,J) Q:R=""  D
+ .S R1=$P(R,"|",1),R2=$TR($P(R,"|",3),", ",".") Q:R1="" 
+ .S:R2="" R2=1
+ .S $P(^LABT("T",ID,"b",R1),"|",1)=R2
+ .S R2=$TR($P(R,"|",4),";, ","||")  ; услуга по мат.
+ .I R2="",$G(^LABT("T",ID,"ub",R1))'="" S ^(R1)="",UF=1
+ .S:R2'="" ^LABT("T",ID,"ub",R1)=R2,UF=1
+ .S R2=$P(R,"|",5)
+ .S:R2'="" ^LABT("T",ID,"hc",R1)=R2 ; код обмена
+ 
+ S ^LABT("T",ID,"log")=$$USRH^IUSER()
+ 
+ D REGL^IEXCH("^LABT","T",ID)
+ D:UF MKLABTI^NMLABU
+ 
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<labtest>")
+ D WTAGDC^RWU("id",ID)
+ D WTAGDC^RWU("uid",ID)
+ D W^RWU("</labtest></nb_console>")
+ D C^RWU
+ Q
+DT(ID) ; Удаление теста
+ S ID=$$WD^TXTU(ID)
+ Q:ID="" 
+ I $$chkUT(ID) D MSG^RWU("Тест используется в исследованиях.") Q 
+ K ^LABT("T",ID)
+ D KGL^IEXCH("^LABT","T",ID)
+ D MKLABTI^NMLABU
+ Q
+chkUT(ID) ; Проверка теста на использование
+ N N,I,F
+ S N="",F=0 F  S N=$O(^MLAB(N)) Q:N=""  D  Q:F
+ .S I="" F  S I=$O(^MLAB(N,I)) Q:I=""  I $D(^(I,"d",ID)) S F=1 Q 
+ Q F
+INITD ; Инициализация формы методик
+ Q
+TABD(TXT) ; Вывод списка методик
+ N T,R
+ S TXT=$$LU^TXTU($$WD^TXTU($G(TXT)))
+ D OWF^RWU(".txt")
+ D WC^RWU("|Наименование")
+ S T="" F  S T=$O(^LABT("DEV",T)) Q:T=""  D
+ .S R=^(T)
+ .I TXT'="",$$LU^TXTU(R)'[TXT Q 
+ .D WC^RWU(CR_T_"|"_R)
+ D C^RWU
+ Q
+LD(ID) ; Просмотр методики
+ N R,I,A,P,PL,R1,R2
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<labdevs>")
+ D WTAGDC^RWU("id",ID)
+ D WTAGDC^RWU("uid",ID)
+ D WTAGDC^RWU("nm",$G(^LABT("DEV",ID)))
+ D WTAGDC^RWU("ext",+$G(^LABT("DEV",ID,"ext")))
+ D WTAGDC^RWU("sid",+$G(^LABT("DEV",ID,"sid")))
+ D WTAGDC^RWU("nuse",$G(^LABT("DEV",ID,"use"))=0)
+ D WTAGDC^RWU("sys",$$DBLSLH^TXTU($G(^LABT("DEV",ID,"i"))))
+ D WTAGDC^RWU("ex",$G(^LABT("DEV",ID,"ex")))
+ D WTAGDC^RWU("uidi",$G(^LABT("DEV",ID,"uid")))
+ D WTAGDC^RWU("udata",$G(^LABT("DEV",ID,"ud")))
+ D WTAGDC^RWU("fn",$G(^LABT("DEV",ID,"fn")))
+ D WTAGDC^RWU("wlt",$G(^LABT("DEV",ID,"wlt")))
+ D WTAGDC^RWU("wlbase",+$G(^LABT("DEV",ID,"wlbase")))
+ S R=$G(^LABT("DEV",ID,"wl"))
+ D WTAGDC^RWU("cnt",$P(R,"|",1))
+ D WTAGDC^RWU("pgs",$P(R,"|",2))
+ ; тесты
+ D W^RWU("<tests>|")
+ S P="" F  S P=$O(^LABT("DEV",ID,"t",P)) Q:P=""  D
+ .S PL=^(P),R=$G(^(P,"fn")),R1=""
+ .S A=$O(^LABT("DEV",ID,"t",P,""))
+ .S:A="" A=$O(^LABT("T",PL,"dev",ID,"")) ; если нет - из теста
+ .S:+A R1=^(A)
+ .S R2=$G(^LABT("DEV",ID,"t",P,"wl"))
+ .S:$P(R2,"|",3)="" $P(R2,"|",3)=""
+ .D WC^RWU(CR_PL_"|"_P_"|"_$$NAMEPM^IMLABS(PL)_"||"_R_"|"_R1_"|"_R2)
+ 
+ D W^RWU("</tests></labdevs></nb_console>")
+ D C^RWU
+ Q
+SD ; Сохранение методики
+ N XML,XMLR
+ D RBUFH^YIXMLRR(1)
+ D WD
+ Q
+WD ; Запись методики
+ N ID,UID,R,R1,R2,RW,NBC,X,I,J,K,M,B,FL
+ S NBC="nb_console"
+ S ID=$G(XML(NBC,"labdevs","uid")) Q:ID="" 
+ S ^LABT("DEV",ID)=$G(XML(NBC,"labdevs","nm"))
+ 
+ S R=$G(XML(NBC,"labdevs","sys"))
+ S:R="" R="M|io"
+ S ^LABT("DEV",ID,"i")=R
+ S R=$G(XML(NBC,"labdevs","uidi"))
+ S:R'="" ^LABT("DEV",ID,"uid")=R K:R="" ^LABT("DEV",ID,"uid")
+ S R=$G(XML(NBC,"labdevs","udata"))
+ S:R'="" ^LABT("DEV",ID,"ud")=R K:R="" ^LABT("DEV",ID,"ud")
+ 
+ F FL="ex","fn","sid","wlt","wlbase" D
+ .S R=$G(XML(NBC,"labdevs",FL))
+ .S:R'="" ^LABT("DEV",ID,FL)=R K:R="" ^LABT("DEV",ID,FL)
+ 
+ S ^LABT("DEV",ID,"use")=$S($G(XML(NBC,"labdevs","nuse")):0,1:1)
+ 
+ S R1=$G(XML(NBC,"labdevs","cnt"))
+ S R2=$G(XML(NBC,"labdevs","pgs"))
+ S ^LABT("DEV",ID,"wl")=$S(R1=""&(R2=""):"",1:R1_"|"_R2)
+ 
+ S R=$G(XML(NBC,"labdevs","tests"))
+ ; clear data
+ S K="" F  S K=$O(^LABT("DEV",ID,"t",K)) Q:K=""  D
+ .S R2=^(K)
+ .k ^LABT("T",R2,"dev",ID)
+ .d KGL^IEXCH("^LABT","T",R2,"dev",ID)
+ K ^LABT("DEV",ID,"t")
+ 
+ F J=2:1:999 S X=$P(R,CR,J) Q:X=""  D
+ .S K=$P(X,"|",2),R2=$P(X,"|",1) S:K="" K=R2
+ .Q:K=""  
+ .Q:'$D(^LABT("T",R2))   ; нет такого теста
+ .S ^LABT("DEV",ID,"t",K)=R2
+ .S ^LABT("T",R2,"dev",ID)=K
+ .d GL^IEXCH("^LABT","T",R2,"dev",ID)
+ .S R1=$P(X,"|",5) ; формула
+ .S:R1'="" ^LABT("DEV",ID,"t",K,"fn")=R1
+ .S RW=$P(X,"|",7,9) S:RW="||" RW=""
+ .S:RW'="" ^LABT("DEV",ID,"t",K,"wl")=RW
+ .S R1=$P(X,"|",6) ; материал
+ .Q:R1="" 
+ .S I=$O(^LABT("T",R2,"b","")) ; 1-й материал
+ .S:I="" I=1
+ .S ^LABT("DEV",ID,"t",K,I)=R1
+ .S ^LABT("T",R2,"dev",ID,I)=R1
+ 
+ D REGL^IEXCH("^LABT","DEV",ID)
+ ;D:USL'="" MKLABTI^NMLABU
+ Q
+DD(ID) ; Удаление методики
+ Q:ID="" 
+ N T,K
+ S K="" F  S K=$O(^LABT("DEV",ID,"t",K)) Q:K=""  D
+ .S T=$G(^(K)) Q:T="" 
+ .Q:'$D(^LABT("T",T,"dev",ID))
+ .K ^LABT("T",T,"dev",ID)
+ .D KGL^IEXCH("^LABT","T",T,"dev",ID)
+ K ^LABT("DEV",ID)
+ D KGL^IEXCH("^LABT","DEV",ID)
+ K ^MLABW(ID),^MLABWE(ID)
+ Q
+BIOLST ; Список биоматериалов
+ D MSG^RWU($$BIOLSTs())
+ Q
+BIOLSTs() ; Список биоматериалов
+ N A,I
+ S (A,I)=""
+ F  S I=$O(^LABT("M",I)) Q:I=""  S A=$S(A="":"",1:A_CR)_I_"|"_^(I)
+ Q A
+SPLIST(PRM) ; Справочник теста (текстовый)
+ N I,R
+ S PRM=$P($$WD^TXTU(PRM),"@",1)
+ D OWF^RWU(".txt")
+ S (R,I)=""
+ F  S I=$O(^LABT("TTSP",PRM,I)) Q:I=""  D WC^RWU(R_$G(^(I))) S R=CR
+ D C^RWU
+ Q
+SSPLIST ; Сохранить справочник тест (текстовый)
+ N PRM,%J,A,I
+ D ORH^RWU
+ S I=1,PRM=""
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D
+ .I %J=1 S PRM=A K ^LABT("TTSP",PRM) Q
+ .Q:PRM="" 
+ .S ^LABT("TTSP",PRM,I)=A,I=I+1
+ D CR^RWU
+ D:PRM'="" REGL^IEXCH("^LABT","TTSP",PRM)
+ Q
+SPTXTL(PRM) ; Список текстовых шалонов по параметру
+ N I,A
+ S PRM=$P($$WD^TXTU(PRM),"@",1)
+ S (A,I)="" F  S I=$O(^LABT("TTST",PRM,I)) Q:I=""  S A=$S(A="":"",1:A_CR)_I_"|"_^(I)
+ D MSG^RWU(A)
+ Q
+SPTXT(PRM,ID) 
+ S PRM=$P($$WD^TXTU(PRM),"@",1)
+ Q:ID=""  Q:PRM="" 
+ D MSG^RWU($G(^LABT("TTST",PRM,ID,"t")))
+ Q
+SPTXTS ; Сохранить текстовый шаблон
+ N PRM,ID,A,%J,R,NM
+ D ORH^RWU
+ S (PRM,ID,A)=""
+ F %J=1:1 S R=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D
+ .I %J=1 S PRM=$P(R,"|",1),ID=$P(R,"|",2),NM=$P(R,"|",3) Q
+ .S A=$S(A="":"",1:A_CR)_R
+ Q:PRM=""   
+ S:ID="" ID=$O(^LABT("TTST",PRM,""),-1)+1
+ S ^LABT("TTST",PRM,ID)=NM
+ S ^LABT("TTST",PRM,ID,"t")=A
+ D GL^IEXCH("^LABT","TTST",PRM,ID)
+ Q
+SPTXTD(PRM,ID) 
+ S PRM=$P($$WD^TXTU(PRM),"@",1)
+ Q:ID=""  Q:PRM=""
+ K ^LABT("TTST",PRM,ID)
+ D KGL^IEXCH("^LABT","TTST",PRM,ID)
+ Q
+TABP ; Список профилей (всех)
+ N ID
+ D OWF^RWU(".txt")
+ S ID=""
+ F  S ID=$O(^LABT("PU",ID)) Q:ID=""  D WC^RWU(CR_ID_"|"_$P(^(ID),"|",1))
+ D C^RWU
+ Q
+LP(ID) ; Загрузка профиля
+ Q:ID="" 
+ N R,A,U,P
+ S R=$G(^LABT("PU",ID))
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<labprof>")
+ D WTAGDC^RWU("id",ID)
+ D WTAGDC^RWU("nm",$P(R,"|",1))
+ D WTAGDC^RWU("usl",$P(R,"|",2))
+ D WTAGDC^RWU("summ",$P(R,"|",3))
+ D WTAGDC^RWU("arch",+$P(R,"|",4))
+ D WTAGDC^RWU("uskd",+$P(R,"|",5))
+ D WTAGDC^RWU("gender",$P(R,"|",6))
+ D WTAGDC^RWU("skdr",$P(R,"|",7))
+ D WTAGDC^RWU("fln",$P(R,"|",8))
+ S P=$$CORCP^IPRICET(1)
+ S (A,U)="" F  S U=$O(^LABT("PU",ID,U)) Q:U=""  D
+ .S R=^(U)
+ .S A=A_CR_U_"|"_$$NAME^IPRICE(U,P)_"|"_R
+ D WC^RWU("<usls>"_A)
+ D W^RWU("</usls></labprof></nb_console>")
+ D C^RWU
+ Q
+SP ; Сохранить профиль
+ N XML,XMLR
+ D RBUFH^YIXMLRR(1)
+ D WP
+ Q
+WP 
+ N NBC,R,X,ID,U,J,S
+ S NBC="nb_console"
+ S ID=$G(XML(NBC,"labprof","id")) Q:ID="" 
+ S R=$G(XML(NBC,"labprof","nm"))
+ S X=$G(XML(NBC,"labprof","usl"))
+ I X'="" S $P(R,"|",2)=X,^LABTI("CT",X)="P|"_ID D GL^IEXCH("^LABTI","CT",X)
+ S S=$G(XML(NBC,"labprof","summ"))
+ S:S'="" $P(R,"|",3)=S
+ S X=$G(XML(NBC,"labprof","arch"))
+ S:X'="" $P(R,"|",4)=X
+ S X=$G(XML(NBC,"labprof","uskd"))
+ S:X'="" $P(R,"|",5)=X
+ S X=$G(XML(NBC,"labprof","gender"))
+ S:X'="" $P(R,"|",6)=X
+ S X=$TR($G(XML(NBC,"labprof","skdr")),",| ",".;")
+ S:X'="" $P(R,"|",7)=X
+ S X=$TR($G(XML(NBC,"labprof","fln")),",| ",";;")
+ S:X'="" $P(R,"|",8)=X
+ 
+ S ^LABT("PU",ID)=R
+ 
+ ; clear data
+ S U="" F  S U=$O(^LABT("PU",ID,U)) Q:U=""  K ^(U)
+ ; write usls
+ S R=$G(XML(NBC,"labprof","usls"))
+ F J=2:1:999 S X=$P(R,CR,J) Q:X=""  D
+ .S U=$P(X,"|",1) Q:U=""
+ .S ^LABT("PU",ID,U)=$TR($P(X,"|",3),", ",".")
+ 
+ D:S'="" CORRPT^IMLABU(ID,$$CORCP^IPRICET(1),S)
+ D REGL^IEXCH("^LABT","PU",ID)
+ Q
+ADDP(NM) ; Добавить профиль
+ N ID
+ S NM=$$WD^TXTU(NM)
+ S ID=$O(^LABT("PU",""),-1)+1
+ S ^LABT("PU",ID)=NM
+ D GL^IEXCH("^LABT","PU",ID)
+ D MSG^RWU(ID)
+ Q
+DELP(ID) ; Удалить профиль
+ Q:ID="" 
+ D K^ISSG("^LABT(""PU"","_ID_")")
+ K ^LABT("PU",ID)
+ D KGL^IEXCH("^LABT","PU",ID)
+ Q
+NMLST(NM,MOD) ; Список справочника
+ ; MOD=1 - простой список
+ N ID,C
+ D OWF^RWU(".txt")
+ S (ID,C)=""
+ I '$G(MOD) D WC^RWU("Код|Наименование") S C=CR
+ F  S ID=$O(^LABT(NM,ID)) Q:ID=""  D WC^RWU(C_ID_"|"_^(ID)) S C=CR
+ D C^RWU
+ Q
+AITEM(NM,TXT) ; Добавить значение
+ N ID
+ S TXT=$$WD^TXTU(TXT)
+ S ID=$O(^LABT(NM,""),-1)+1,^(ID)=TXT
+ D GL^IEXCH("^LABT",NM,ID)
+ D NMLST(NM)
+ Q
+SITEM(NM,ID,TXT) ; Изменить значение
+ S TXT=$$WD^TXTU(TXT)
+ S ^LABT(NM,ID)=TXT
+ D GL^IEXCH("^LABT",NM,ID)
+ Q
+DITEM(NM,ID) ; Удалить значение
+ K ^LABT(NM,ID)
+ D GL^IEXCH("^LABT",NM,ID)
+ Q
+LSTPPAT ; Список шаблонов печати
+ N A,I
+ S (A,I)=""
+ F  S I=$O(^LABT("PRN",I)) Q:I=""  S A=$S(A="":"",1:A_CR)_I_"|"_$P(^(I),"|",1)
+ D MSG^RWU(A)
+ Q
+LPRNPAT(ID) ; Load print pattern
+ N R,FL
+ D OWF^RWU(".xmlb")
+ D W^RWU($G(^PP(0,2))_"<labppat><list>")
+ S FL="" F  S FL=$O(^LABT("PRN",ID,"fl",FL)) Q:FL=""  D WC^RWU("<"_FL_">"),WC^RWU($$TAG^TXTU(^LABT("PRN",ID,"fl",FL))),WC^RWU("</"_FL_">")
+ D W^RWU("</list>")
+ S R=^LABT("PRN",ID)
+ D WTAGC^RWU("id",ID)
+ D WTAGC^RWU("uid",$P(R,"|",2))
+ D WTAGC^RWU("uname",$P(R,"|",1))
+ D WTAGC^RWU("zid",$G(^LABT("PRN",ID,"zid")))
+ D WTAGC^RWU("dgn",$G(^LABT("PRN",ID,"dgn")))
+ D W^RWU("</labppat></nb_console>"),C^RWU
+ Q
+SPRNPAT ; Save print pattern
+ N R,ID,NM
+ D RBUFH^YIXMLRR(1)
+ S ID=$G(XML("list","id"))
+ S:ID="" ID=$O(^LABT("PRN",""),-1)+1
+ S R=$G(XML("list","uname"))
+ S $P(R,"|",2)=$G(XML("list","uid"))
+ 
+ K ^LABT("PRN",ID)
+ S ^LABT("PRN",ID)=R
+ S ^LABT("PRN",ID,"zid")=$TR($G(XML("list","zid")),"/\;: ",",,,,")
+ S ^LABT("PRN",ID,"dgn")=$TR($G(XML("list","dgn")),"/\;: ",",,,,")
+ K XML("list","id"),XML("list","uname"),XML("list","uid"),XML("list","zid"),XML("list","dgn")
+ M ^LABT("PRN",ID,"fl")=XML("list")
+ D CLOSE^YIXMLRR
+ D REGL^IEXCH("^LABT","PRN",ID)
+ Q
+APRNPAT(NM) ; Добавить шаблон печати
+ N ID
+ S ID=$O(^LABT("PRN",""),-1)+1
+ S ^LABT("PRN",ID)=$$WD^TXTU(NM)
+ D GL^IEXCH("^LABT","PRN",ID)
+ D LSTPPAT
+ Q
+DPRNPAT(ID) ; Удалить шаблон печати
+ K ^LABT("PRN",ID)
+ D KGL^IEXCH("^LABT","PRN",ID)
+ D LSTPPAT
+ Q
+LSTs(NM,TAG) ; Системный список по справочнику
+ N ID,C,R
+ S (ID,C)="",TAG=$G(TAG)
+ F  S ID=$O(^LABT(NM,ID)) Q:ID=""  S R=$P(^(ID),"|",1) S:TAG R=$$TAG^TXTU(R) D WC^RWU(C_ID_"|"_R) S C=CR
+ Q
+LABCL ; Перечень внешних лабораторий
+ N LAB,C
+ D OWF^RWU(".txt")
+ S (LAB,C)="" F  S LAB=$O(^LABC(LAB)) Q:LAB=""  D WC^RWU(C_LAB_"|"_$G(^(LAB,"nm"))) S C=CR
+ D C^RWU
+ Q

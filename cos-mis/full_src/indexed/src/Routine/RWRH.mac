@@ -1,0 +1,638 @@
+RWRH ; Отчеты по складу [ 07/25/2022  7:31 PM ]
+OSTP(DT,SK,PRF) ; Остатки по складу в разрезе партий
+ ; SK - склад
+ ; PRF - профиль номенклатуры
+ N H,N,R,DE,C,S,OP,I,X,XC,XS,CT,SD,SE,Np,RE,NM,KX,fRD
+ S DE=$$DIH^DTUTL(DT)
+ S fRD=$$LCL^IUSER("wrh","round")
+ K ^BUF($J)
+ ; TODO - годность серий
+ S N="" F  S N=$O(^WRH(SK,N)) Q:N=""  D
+ .I PRF'="",$P($G(^WRHE(N)),"|",3)'=PRF Q
+ .S (I,CT)=0
+ .S H="" F  S H=$O(^WRH(SK,N,H)) Q:H=""!(+H>DE)  D
+ ..S R=^(H) Q:'+$P(R,"|",1) 
+ ..S OP=$P(R,"|",2),S=+$P(R,"|",14),C=+$P(R,"|",3)
+ ..I OP="+" S ^BUF($J,1,N,I)=C_"|"_S,^(I,0)=$P(R,"|",4)_"|"_C_"|"_S_"|"_$P(R,"|",12)_"|"_$P(R,"|",21)_"|"_H,I=I+1 Q 
+ ..S CT=CT+C
+ ..F  S X=$O(^BUF($J,1,N,"")) Q:X=""  D  Q:'CT
+ ...S R=^BUF($J,1,N,X),XC=$P(R,"|",1),XS=$P(R,"|",2)
+ ...I XC'>CT K ^BUF($J,1,N,X) S CT=CT-XC Q  ; пришло<=надо
+ ...S R=XS/XC,XC=XC-CT,XS=XS-(R*CT)
+ ...S ^BUF($J,1,N,X)=XC_"|"_XS,CT=0
+ ; Сортировка по алфавиту
+ S N="" F  S N=$O(^BUF($J,1,N)) Q:N=""  D
+ .S NM=$$NAMENM^IWRHS(N),KX=$$UL^TXTU($E(NM,1,64))_"|"_N
+ .S ^BUF($J,2,KX)=NM
+ ; вывод
+ D OWF^RWU(".txt")
+ D WC^RWU("|"_$$NAME^IWRHS("stock",SK)_" на "_$$DT2^DTUTL(DE)_";"_CR)
+ D WC^RWU("П.п.|Номенклатурная единица|Учетный №|Единиц|Накл. №|Цена за ед.|Кол-во|Сумма|Остаток|Сумма по ост.|Срок годности")
+ S N="",I=1 F  S N=$O(^BUF($J,N)) Q:N=""  D
+ 
+ S KX="" F  S KX=$O(^BUF($J,2,KX)) Q:KX=""  D
+ .S NM=^(KX),N=$P(KX,"|",2)
+ .S R=I_"|"_NM,I=I+1
+ .S RE=$$MEANNM^IWRHS(N)
+ .S Np=$$PKU^IWRHS(N)
+ .S H="" F  S H=$O(^BUF($J,1,N,H)) Q:H=""  D
+ ..S X=^(H),C=$P(X,"|",1),S=$P(X,"|",2),CT=$G(^(H,0))
+ ..S SE=$P(CT,"|",4),SD=$P(CT,"|",5)
+ ..I SD="",Np=2,SE'="" S SD=$P(^WRHE(N,"ser",SE),"|",4)
+ ..I SD="" S SD=$P($G(^WRHE(N)),"|",11),SD=$S(SD:$P(CT,"|",6)+SD,1:"")
+ ..I SE'="" S SE=$$GETSN^IWRH(SE,N,Np) S:SE'="" SE=SE
+ ..D WC^RWU(CR_R_"|"_SE_"|"_RE_"|"_$P(CT,"|",1)_"|"_$S('C:0,1:$$FNx(S/C))_"|"_$$FN($P(CT,"|",2))_"|"_$$FNx($P(CT,"|",3))_"|"_$$FN3(C)_"|"_$$FNx(S)_"|"_$$DT^DTUTL(SD))
+ ..S R="|"
+ D C^RWU
+ K ^BUF($J)
+ Q
+IV(DT,SK,VMOD) ; Инвентаризационная ведомость
+ ; DT - дата отчета
+ ; SK - склад
+ ; VMOD - отображение в базовых единицах или фасовке 
+ N H,N,R,C,S,OP,I,X,XS,CT,SE,Np,RE,SN,KEY,PC,fRD
+ S DE=$$DIH^DTUTL(DT),VMOD=+VMOD,fRD=$$LCL^IUSER("wrh","round")
+ K ^BUF($J)
+ 
+ S N="" F  S N=$O(^WRH(SK,N)) Q:N=""  D
+ .S H="" F  S H=$O(^WRH(SK,N,H)) Q:H=""!(+H>DE)  D
+ ..S R=^(H) Q:'+$P(R,"|",1) 
+ ..S OP=$P(R,"|",2),S=+$P(R,"|",14),C=+$P(R,"|",3)
+ ..S SN=$P(R,"|",12),XS=$S(C:+$J(S/C,"",3),1:0) S:XS<0 XS=-XS
+ ..S KEY=XS_"|"_SN,X=$G(^BUF($J,"c",N,KEY))
+ ..I OP="+" S ^BUF($J,"c",N,KEY)=($P(X,"|",1)+C)_"|"_($P(X,"|",2)+S)
+ ..I OP="-" S ^BUF($J,"c",N,KEY)=($P(X,"|",1)-C)_"|"_($P(X,"|",2)-S)
+ 
+ S N="",I=0 F  S N=$O(^BUF($J,"c",N)) Q:N=""  D
+ .S R=$$NAMENM^IWRHS(N)
+ .S RE=$$MEANNM^IWRHS(N)
+ .S Np=$$PKU^IWRHS(N)
+ .S H="" F  S H=$O(^BUF($J,"c",N,H)) Q:H=""  D
+ ..S XS=$P(H,"|",1),SN=$P(H,"|",2)
+ ..S X=^(H),C=$P(X,"|",1),S=$P(X,"|",2),SE=""
+ ..Q:'C 
+ ..I SN'="" S SE=$$GETSN^IWRH(SN,N,Np) S:SE="" SE=SN
+ ..I VMOD=2 S PC=$$MEANCNT^IWRHS(N,VMOD-1) S:'PC PC=1 S XS=XS*PC
+ ..S ^BUF($J,"n",$E(R,1,32)_"|"_I)=R_"|"_SE_"|"_RE_"|"_$$FN3(C)_"|"_$$FNx(XS)_"|"_$$FNx(S)
+ ..S I=I+1
+ 
+ D OWF^RWU(".txt")
+ D WC^RWU("П.п.|Наименование|Учетный №|Ед.изм.|Кол-во|Цена|Сумма")
+ S N="",I=1 F  S N=$O(^BUF($J,"n",N)) Q:N=""  D
+ .D WC^RWU(CR_I_"|"_^BUF($J,"n",N))
+ .S I=I+1
+ D C^RWU
+ K ^BUF($J)
+ Q
+SUBP(DS,DE,SK,PRF,SPK) ; Расход склада по партиям
+ ; SK - склад
+ ; PRF - профиль номенклатуры
+ ; SPK - выводить в единицах (тип)
+ N H,N,R,C,S,OP,I,X,XC,XS,CT,Z,NM,KX,fRD
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S fRD=$$LCL^IUSER("wrh","round"),SPK=+$G(SPK)
+ K ^BUF($J)
+ S N="" F  S N=$O(^WRH(SK,N)) Q:N=""  D
+ .I PRF'="",$P($G(^WRHE(N)),"|",3)'=PRF Q 
+ .S (I,CT,Z)=0
+ .S H="" F  S H=$O(^WRH(SK,N,H)) Q:H=""!(+H>DE)  D
+ ..S R=^(H) Q:'+$P(R,"|",1) 
+ ..S OP=$P(R,"|",2),S=+$P(R,"|",14),C=+$P(R,"|",3)
+ ..I OP="+" S ^BUF($J,0,N,I)=C_"|"_S,^(I,0)=$P(R,"|",4)_"|"_C_"|"_S,I=I+1 Q 
+ ..S CT=CT+C,OW=$P(R,"|",9,10)
+ ..F  S X=$O(^BUF($J,0,N,"")) Q:X=""  D  Q:'CT
+ ...S R=^BUF($J,0,N,X),XC=$P(R,"|",1),XS=$P(R,"|",2)
+ ...I XC'>CT S CT=CT-XC S:H-1>DS ^BUF($J,1,N,Z)=XC_"|"_OW,^BUF($J,1,N,Z,0)=^BUF($J,0,N,X,0),Z=Z+1 K ^BUF($J,0,N,X) Q  ; пришло<=надо
+ ...S R=XS/XC,XC=XC-CT,XS=XS-(R*CT)
+ ...S ^BUF($J,0,N,X)=XC_"|"_XS,CT=0
+ ...S:H-1>DS ^BUF($J,1,N,Z)=C_"|"_OW,^BUF($J,1,N,Z,0)=^BUF($J,0,N,X,0),Z=Z+1
+ 
+ ; Сортировка по алфавиту
+ S N="" F  S N=$O(^BUF($J,1,N)) Q:N=""  D
+ .S NM=$$NAMENM^IWRHS(N),KX=$$UL^TXTU($E(NM,1,64))_"|"_N
+ .S ^BUF($J,9,KX)=NM
+ 
+ D OWF^RWU(".txt")
+ D WC^RWU("П.п.|Номенклатурная единица|Единиц|Накл. №|Цена за ед.|Кол-во|Сумма|Расход|Контрагент")
+ S N="",I=1 F  S N=$O(^BUF($J,1,N)) Q:N=""  D
+ 
+ S KX="",I=1 F  S KX=$O(^BUF($J,9,KX)) Q:KX=""  D
+ .S NM=^(KX),N=$P(KX,"|",2)
+ .S PM=SPK,PC=$$MEANCNT^IWRHS(N,SPK) S:'PC PC=1,PM=0
+ .S R=I_"|"_NM_"|"_$$MEANNM^IWRHS(N,PM),I=I+1
+ .S H="" F  S H=$O(^BUF($J,1,N,H)) Q:H=""  D
+ ..S X=^(H),C=$P(X,"|",1),CT=$G(^(H,0)),XC=$P(CT,"|",2),XS=$P(CT,"|",3)
+ ..S Z=$P(X,"|",2),S=$P(X,"|",3)
+ ..S S=$S(Z="L":$$NAME^ICONTR(S),Z="O":$$GOTD^YISPRAV(S),Z="D":$$FIO^YIKADRY(S),1:"")
+ ..D WC^RWU(CR_R_"|"_$P(CT,"|",1)_"|"_$$FNx($S(XC:XS/XC,1:0)*PC)_"|"_$$FN3(XC/PC)_"|"_$$FNx(XS)_"|"_$$FN3(C/PC)_"|"_S)
+ ..S R="||"
+ D C^RWU
+ K ^BUF($J)
+ Q
+OSTG(DT,SKX,PRF,SPK,XSUM) ; Остатки по складу по группам номенклатуры
+ ; SKX - склад
+ ; PRF - профиль номенклатуры
+ ; SPK - Выводить в единицах
+ ; XSUM - подсчет итогов
+ N ID,H,DE,R,C,OP,G,I,X,K,RC,PM,KX,S,SS,SK,SKI,SSG
+ S DE=$$DIH^DTUTL(DT),SPK=+$G(SPK)
+ K ^BUF($J)
+ S SK="" F  S SK=$O(^WRH(SK)) Q:SK=""  I SKX=""!(SKX="*")!(SKX=SK),SK'["|" S ID="" F  S ID=$O(^WRH(SK,ID)) Q:ID=""  D
+ .I PRF'="",$P($G(^WRHE(ID)),"|",3)'=PRF Q 
+ .S H="" F  S H=$O(^WRH(SK,ID,H)) Q:H=""!(+H>DE)  D
+ ..S R=^(H) Q:'+$P(R,"|",1)
+ ..S C=+$P(R,"|",3),OP=$P(R,"|",2),S=$P(R,"|",14),SKI=SK
+ ..S SKI=$S(SKX="*":SKX,1:SK)
+ ..I OP="+" S ^(1)=$G(^BUF($J,"ost",SKI,ID,1))+C,^(2)=$G(^(2))+S
+ ..I OP="-" S ^(3)=$G(^BUF($J,"ost",SKI,ID,3))+C,^(4)=$G(^(4))+S
+ S SK="" F  S SK=$O(^BUF($J,"ost",SK)) Q:SK=""  S ID="" F  S ID=$O(^BUF($J,"ost",SK,ID)) Q:ID=""  D
+ .Q:'($G(^(ID,1))-$G(^(3))) 
+ .S KX=$E($$NAMENM^IWRHS(ID),1,16)_"|"_ID
+ .S G=+$$GRP^IWRHS(ID),^BUF($J,"og",SK,G,KX)=ID
+ D OWF^RWU(".txt")
+ D WC^RWU("|"_$S(SKX="":"Все склады",1:$$NAME^IWRHS("stock",SKX))_" на "_$$DT2^DTUTL(DE)_";")
+ D WC^RWU(CR_"П.п.|Номенклатурная единица|Остаток|Единиц|Сумма")
+ S SS=0
+ S SK="" F  S SK=$O(^BUF($J,"og",SK)) Q:SK=""  D
+ .D:SKX=""&(SKX'="*") WC^RWU(CR_"-|"_$$NAME^IWRHS("stock",SK)_"|-|-|-")
+ .S G="",I=1 F  S G=$O(^BUF($J,"og",SK,G)) Q:G=""  D
+ ..D:G WC^RWU(CR_"|"_$P($$GETT^IWRHS("prof",G),"|",1))
+ ..S SSG=0
+ ..S KX=""  F  S KX=$O(^BUF($J,"og",SK,G,KX)) Q:KX=""  D
+ ...S ID=^(KX)
+ ...S C=$G(^BUF($J,"ost",SK,ID,1)),RC=$G(^(3)),X=C-RC,K=$G(^(2))
+ ...S S=$S($G(^(4)):K-^(4),C=0!(X<0):0,1:X*(K/C))
+ ...S PM=SPK,PC=$$MEANCNT^IWRHS(ID,SPK) S:'PC PC=1,PM=0
+ ...S R=I_"|"_$$NAMENM^IWRHS(ID)_"|"_$$FN3(X/PC)_"|"
+ ...S:XSUM SS=SS+S,SSG=SSG+S
+ ...S R=R_$$MEANNM^IWRHS(ID,PM)_"|"_$$FN(S)
+ ...S I=I+1
+ ...D WC^RWU(CR_R)
+ ..D:SSG WC^RWU(CR_"|По группе|||"_$$FN(SSG))
+ D:SS WC^RWU(CR_"|Итого|||"_$$FN(SS))
+ D C^RWU
+ K ^BUF($J)
+ Q
+SUBG(DS,DE,SK,PRF,SPK,WTP,WIN,XSUM) ; Расход по складу по группам номенклатуры
+ ; SK - склад
+ ; PRF - профиль номенклатуры
+ ; SPK - выводить в единицах (тип)
+ ; WTP - выводить товар по приходу
+ ; WIN - показывать приход
+ ; XSUM - подсчет итогов
+ N ID,H,R,C,OP,G,I,X,K,Z,RC,PM,CE,KX,NM,CO,SC,SS,PK,PRFL,XX
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),SPK=+$G(SPK),WTP=+$G(WTP)
+ D MKDPRFL^IWRHS(PRF)
+ K ^BUF($J)
+ S ID="" F  S ID=$O(^WRH(SK,ID)) Q:ID=""  D
+ .I PRF'="" S H=$P($G(^WRHE(ID)),"|",3) Q:H=""  Q:'$D(PRFL(H))  
+ .S PK=""
+ .S H="" F  S H=$O(^WRH(SK,ID,H)) Q:H=""!(+H>DE)  D
+ ..S R=^(H) Q:'+$P(R,"|",1)
+ ..S C=+$P(R,"|",3),OP=$P(R,"|",2),Z=$P(R,"|",14),KX=ID
+ ..I $P(R,"|",12)'="" S:PK'="" PK=+$$GET^IWRHS(ID,"pku") S KX=KX_"|"_$S(PK:$P(R,"|",12),1:$$SER^IWRHS(ID,$P(R,"|",12)))
+ ..I $P(R,"|",21)'="" S ^BUF($J,"ost",KX,10)=$P(R,"|",21) ; годность
+ ..I OP="+" S ^(1)=$G(^BUF($J,"ost",KX,1))+C,^(2)=$G(^(2))+Z,^(18)=Z ; last
+ ..I OP="-" S ^(3)=$G(^BUF($J,"ost",KX,3))+C,^(8)=$G(^(8))+Z S:+H'<DS ^(4)=$G(^(4))+C
+ ..I OP="-",+H'<DS S ^(5)=$G(^BUF($J,"ost",KX,5))+Z
+ ..I WIN,OP="+",+H'<DS S ^(6)=$G(^BUF($J,"ost",KX,6))+C,^(9)=$G(^(9))+Z
+ ..S ^BUF($J,"ost",KX,11)=+H
+ ; сортировка
+ S ID="" F  S ID=$O(^BUF($J,"ost",ID)) Q:ID=""  D
+ .I WTP,'$G(^(ID,4)) Q  ; не учитываем
+ .S K=$P(ID,"|",1)
+ .S KX=$E($$NAMENM^IWRHS(K),1,5)_"|"_ID
+ .S G=+$$GRP^IWRHS(K),^BUF($J,"og",G,KX)=ID
+ D OWF^RWU(".txt")
+ S R=$$TXTP^DTUTL(DS,DE)
+ D WC^RWU("||"_$$NAME^IWRHS("stock",SK)_" "_R_";")
+ D WC^RWU(CR_"П.п.|Учетный №|Номенклатурная единица|"_$S(WIN:"Получено|Сумма|",1:"")_"Расход|Остаток|Единиц|Сумма расхода|Сумма остатка|В розницу|Сумма розницы|Срок годности")
+ S (SS(1),SS(2),SS(3))=0
+ S G="",I=1 F  S G=$O(^BUF($J,"og",G)) Q:G=""  D
+ .D:G WC^RWU(CR_"||"_$P($$GETT^IWRHS("prof",G),"|",1))
+ .S KX=""  F  S KX=$O(^BUF($J,"og",G,KX)) Q:KX=""  D
+ ..S ID=^(KX),H=$P(ID,"|",2)
+ ..S C=$G(^BUF($J,"ost",ID,1))
+ ..S RC=$G(^(3)),X=C-RC,K=$G(^(2)),RC=$G(^(4)),CE=$G(^(5)),CO=$G(^(6)),CS=$G(^(9))
+ ..I WTP,'RC Q 
+ ..S Z=$S($G(^(8)):K-^(8),+C=0!(X<0):0,1:(X*K)/C)
+ ..S ID=$P(ID,"|",1)
+ ..S PM=SPK,PC=$$MEANCNT^IWRHS(ID,SPK) S:'PC PC=1,PM=0
+ ..S R=I_"|"_H_"|"_$$NAMENM^IWRHS(ID)_"|"
+ ..I WIN S R=R_$$FN3(CO)_"|"_$$FN3(CS)_"|" S:XSUM SS(3)=SS(3)+CS
+ ..S R=R_$$FN3(RC/PC)_"|"_$$FN3(X/PC)_"|"
+ ..S:XSUM SS(1)=SS(1)+CE
+ ..S R=R_$$MEANNM^IWRHS(ID,PM)_"|"_$$FN(CE)_"|"
+ ..S:XSUM SS(2)=SS(2)+Z
+ ..S R=R_$$FN(Z)
+ ..S XX=$$CCENN^IWRHS("",ID,$G(^BUF($J,"ost",ID,11)),$G(^BUF($J,"ost",ID,11)))
+ ..S R=R_"|"_XX_"|"_(XX*RC/PC)
+ ..S R=R_"|"_$$DT^DTUTL($G(^BUF($J,"ost",ID,10)))
+ ..S I=I+1
+ ..D WC^RWU(CR_R)
+ D:SS(1) WC^RWU(CR_"||Итого|"_$S(WIN:"|"_$$FN(SS(3))_"|",1:"")_"|||"_$$FN(SS(1))_"|"_$$FN(SS(2)))
+ D C^RWU
+ K ^BUF($J)
+ Q
+SUMMG(DS,DE,SK,PRF,XSUM) ; Суммы склада по группам номенклатуры
+ ; SK - склад
+ ; PRF - профиль номенклатуры
+ ; XSUM - подсчет итогов
+ N ID,H,R,C,OP,G,I,X,K,Z,RC,PM,CE,KX,NM,CO,CS,SS,PK,PRFL,fRD
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),SPK=+$G(SPK)
+ S fRD=$$LCL^IUSER("wrh","round")
+ D MKDPRFL^IWRHS(PRF)
+ K ^BUF($J)
+ S ID="" F  S ID=$O(^WRH(SK,ID)) Q:ID=""  D
+ .I PRF'="" S H=$P($G(^WRHE(ID)),"|",3) Q:H=""  Q:'$D(PRFL(H))  
+ .S PK=""
+ .S H="" F  S H=$O(^WRH(SK,ID,H)) Q:H=""!(+H>DE)  D
+ ..S R=^(H) Q:'+$P(R,"|",1)
+ ..S C=+$P(R,"|",3),OP=$P(R,"|",2),Z=$P(R,"|",14),KX=ID
+ ..I OP="-",+H'<DS S ^(5)=$G(^BUF($J,"ost",KX,5))+Z
+ ..I OP="+",+H'<DS S ^(9)=$G(^BUF($J,"ost",KX,9))+Z
+ 
+ ; TODO - при сохранении на группе весь путь
+ S ID="" F  S ID=$O(^BUF($J,"ost",ID)) Q:ID=""  D
+ .S K=$P(ID,"|",1)
+ .S KX=$E($$NAMENM^IWRHS(K),1,8)_"|"_ID
+ .S G=+$$GRP^IWRHS(K),^BUF($J,"og",G,KX)=ID
+ .S ^BUF($J,"ogs",G,5)=$G(^BUF($J,"ogs",G,5))+$G(^BUF($J,"ost",ID,5))
+ .S ^BUF($J,"ogs",G,9)=$G(^BUF($J,"ogs",G,9))+$G(^BUF($J,"ost",ID,9))
+ 
+ D OWF^RWU(".txt")
+ S R=$$TXTP^DTUTL(DS,DE)
+ D WC^RWU($$NAME^IWRHS("stock",SK)_" "_R_";")
+ D WC^RWU(CR_"Группа|Сумма прихода|Сумма расхода")
+ S (SS(1),SS(2))=0
+ S G="",I=1 F  S G=$O(^BUF($J,"og",G)) Q:G=""  D
+ .S CE=$G(^BUF($J,"ogs",G,5)),CS=$G(^(9))
+ .S:XSUM SS(1)=SS(1)+CS ; Sum in
+ .S:XSUM SS(2)=SS(2)+CE ; Sum out
+ .D WC^RWU(CR_$S('G:"не указана",1:$P($$GETT^IWRHS("prof",G),"|",1))_"|"_$$FNx(CS)_"|"_$$FNx(CE))
+ D:SS(1)!SS(2) WC^RWU(CR_"Итого|"_$$FNx(SS(1))_"|"_$$FNx(SS(2)))
+ D C^RWU
+ K ^BUF($J)
+ Q
+SUBBTP(DS,DE,TP,PRF) ; Расход по субскладам
+ ; TP - тип склада
+ ; PRF - профиль номенклатуры
+ N TX,N,R,H,I,C,S,fRD
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S fRD=$$LCL^IUSER("wrh","round")
+ K ^BUF($J)
+ S TX="" F  S TX=$O(^WRH(TX)) Q:TX=""  D:TP=""!($P(TX,"|",1)=TP)
+ .S N="" F  S N=$O(^WRH(TX,N)) Q:N=""  I $S(PRF="":1,1:$P($G(^WRHE(N)),"|",3)=PRF) S H=DS_",0" F  S H=$O(^WRH(TX,N,H)) Q:H=""!(+H>DE)  D
+ ..S R=^(H) Q:'+$P(R,"|",1)  Q:$P(R,"|",2)'="-" 
+ ..S C=$P(R,"|",3),S=$P(R,"|",14)
+ ..S:C ^(N)=$G(^BUF($J,TX,N))+C
+ ..S:S ^(1)=$G(^BUF($J,TX,N,1))+S
+ ; TODO - сортировка
+ D OWF^RWU(".txt")
+ D WC^RWU("П.п.|Контрагент|Номенклатурная единица|Расход|Единиц|Сумма")
+ S TX="",I=1 F  S TX=$O(^BUF($J,TX)) Q:TX=""  D
+ .S TP=$P(TX,"|",1),C=$P(TX,"|",2)
+ .S R=I_"|"_$S(TP="L":$$NAME^ICONTR(C),TP="O":$$GOTD^YISPRAV(C),TP="D":$$FIO^YIKADRY(C),1:$$NAME^IWRHS("stock",TP))_"|",I=I+1
+ .S N="" F  S N=$O(^BUF($J,TX,N)) Q:N=""  D
+ ..S C=$G(^(N)),S=$G(^(N,1))
+ ..D WC^RWU(CR_R_$$NAMENM^IWRHS(N)_"|"_$$FN3(C)_"|"_$$MEANNM^IWRHS(N)_"|"_$$FNx(S))
+ ..S R="||"
+ D C^RWU
+ K ^BUF($J)
+ Q
+SALE(DS,DE,MOD,XSUM,PRF,LP) ; Продажи со склада
+ ; MOD - вид группировки 
+ ; XSUM - подсчет итогов
+ ; PRF - профиль номенклатуры
+ ; LP - филиал
+ N TX,N,R,H,I,C,S,WHO,BS,FR,IDX,CN,PR,SK,CNT,SS,WM
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),MOD=$G(MOD)
+ S FF=+$$FR^I(),LP=$S('FF:$$^I("ilpu"),1:$G(LP))
+ K ^BUF($J)
+ S TX="" F  S TX=$O(^WRH(TX)) Q:TX=""  D:TX'["|"  ; только склады
+ .S WM=$G(^WRHM("stock",TX))
+ .S R=$P(WM,"|",4)
+ .I LP,R'="",R'=LP Q 
+ .S N="" F  S N=$O(^WRH(TX,N)) Q:N=""  I $S(PRF="":1,1:$P($G(^WRHE(N)),"|",3)=PRF) S H=DS_",0" F  S H=$O(^WRH(TX,N,H)) Q:H=""!(+H>DE)  D
+ ..S R=^(H) Q:'+$P(R,"|",1)  Q:$P(R,"|",2)'="-"  Q:$P(R,"|",9)'="D"
+ ..Q:$P($P(R,"|",11),":",1)'="BILLC"  ; нет ссылки на BILLC
+ ..S CNT=$P(R,"|",3),WHO=$P(R,"|",10) Q:WHO="" 
+ ..I 'FF,$P(R,"|",7)="" S FR=$P(R,"|",8) I FR'=""  S FR=$P($G(^WRHM("stock",FR)),"|",4) I FR'="",FR'=LP Q  
+ ..S:MOD WHO=0
+ ..S CN=$P(R,"|",14),PR=$$CCENN^IWRHS("",N,H,)
+ ..S IDX=N_"|"_$S(CN=PR:"",'CN:"",'PR:"",1:$J(100-(100*CN/(PR*CNT)),"",2))
+ ..S:CNT ^(IDX)=$G(^BUF($J,WHO,IDX))+CNT
+ ..S C=$$GETCNN^IWRH(TX,N,H,CNT)
+ ..S:C ^(1)=$G(^BUF($J,WHO,IDX,1))+C
+ ..S C=CN S:C="" C=PR*CNT
+ ..S:C ^(2)=$G(^BUF($J,WHO,IDX,2))+C
+ ..S:PR ^(3)=$G(^BUF($J,WHO,IDX,3))+PR
+ 
+ S (SS(4),SS(5),SS(6),SS(8),SS(9))=0
+ D OWF^RWU(".txt")
+ S R=$$TXTP^DTUTL(DS,DE)
+ D WC^RWU($S(MOD:"",1:"Сотрудник"_$S(LP="":"",1:", "_$$NAME^ICONTR(LP))_"|")_"Номенклатурная единица "_R_"|Единиц|Расход|Цена продажи|Цена|Скидка|Стоимость|Разница")
+ S TX="" F  S TX=$O(^BUF($J,TX)) Q:TX=""  D
+ .S R=$S(MOD:"",1:$$FIO^YIKADRY(TX)_"|")
+ .S IDX="" F  S IDX=$O(^BUF($J,TX,IDX)) Q:IDX=""  D
+ ..S C=^(IDX),BS=$G(^(IDX,1)),S=$G(^(2)),I=$G(^(3))*C
+ ..S N=$P(IDX,"|",1),SK=$P(IDX,"|",2)
+ ..S:XSUM SS(5)=SS(5)+S,SS(6)=SS(6)+I,SS(8)=SS(8)+BS,SS(9)=SS(9)+(S-BS)
+ ..D WC^RWU(CR_R_$$NAMENM^IWRHS(N)_"|"_$$MEANNM^IWRHS(N)_"|"_$$FN3(C)_"|"_$$FN(S)_"|"_$$FN(I)_"|"_SK_"|"_$$FN(BS)_"|"_$$FN(S-BS))
+ ..S R=$S('MOD:"|",1:"")
+ I XSUM,SS(4) D WC^RWU(CR_"||Итого|"_$$FN3(SS(4))_"|"_$$FN(SS(5))_"|"_$$FN(SS(6))_"||"_$$FN(SS(8))_"|"_$$FN(SS(9)))
+ D C^RWU
+ K ^BUF($J)
+ Q
+SALEL(DS,DE,PRF,LP) ; Продажи со склада (списком)
+ ; PRF - профиль номенклатуры
+ ; LP - филиал
+ N TX,N,R,H,I,C,S,WHO,BS,FR,IDX,CN,PR,SK,CNT,II,DTM,WM
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S FF=+$$FR^I(),LP=$S('FF:$$^I("ilpu"),1:$G(LP))
+ 
+ D OWF^RWU(".txt")
+ D WC^RWU("Дата, время|Сотрудник"_$S(LP="":"",1:", "_$$NAME^ICONTR(LP))_"|Номенклатурная единица|Единиц|Расход|Цена продажи|Цена|Скидка|Стоимость|Разница|Склад")
+ S TX="",II=1 F  S TX=$O(^WRH(TX)) Q:TX=""  D:TX'["|"
+ .S WM=$G(^WRHM("stock",TX))
+ .S R=$P(WM,"|",4)
+ .I LP,R'="",R'=LP Q 
+ .S N="" F  S N=$O(^WRH(TX,N)) Q:N=""  I $S(PRF="":1,1:$P($G(^WRHE(N)),"|",3)=PRF) S H=DS_",0" F  S H=$O(^WRH(TX,N,H)) Q:H=""!(+H>DE)  D
+ ..S R=^(H) Q:'+$P(R,"|",1)  Q:$P(R,"|",2)'="-"  Q:$P(R,"|",9)'="D" 
+ ..Q:$P($P(R,"|",11),":",1)'="BILLC"  ; нет ссылки на BILLC
+ ..S CNT=$P(R,"|",3),WHO=$P(R,"|",10) Q:WHO="" 
+ ..I 'FF,$P(R,"|",7)="" S FR=$P(R,"|",8) I FR'=""  S FR=$P($G(^WRHM("stock",FR)),"|",4) I FR'="",FR'=LP Q  
+ ..S DTM=$P(R,"|",6),CN=$P(R,"|",14)
+ ..S PR=$P(R,"|",22) S:PR="" PR=$$CCENN^IWRHS("",N,H,CN)
+ ..S SK=$S(CN=PR:"",'CN:"",'PR:"",1:$J(100-(100*CN/(PR*CNT)),"",2))
+ ..S BS=$$GETCNN^IWRH(TX,N,H,CNT)
+ ..S S=CN S:S="" S=PR*CNT
+ ..S I=PR*CNT
+ ..S R=$$FIOSH^YIKADRY(WHO)_"|"_$$NAMENM^IWRHS(N)_"|"_$$MEANNM^IWRHS(N)
+ ..S C=$S($P(TX,"|",1)="W":$P(TX,"|",2),1:TX)
+ ..S C=$$NAME^IWRHS("stock",C)
+ ..D WC^RWU(CR_$$DTM^DTUTL(DTM)_"|"_R_"|"_CNT_"|"_$$FN(S)_"|"_$$FN(I)_"|"_SK_"|"_$$FN(BS)_"|"_$$FN(S-BS)_"|"_C)
+ D C^RWU
+ Q
+SALEsvr(DS,DE,VR,PROFIT,LOGG) ; Ф-ция по врачу
+ S PROFIT=+$G(PROFIT)
+ N TX,N,R,H,I,C,S,WHO,BS,SUM,ES
+ K ^BUF($J,"rwrh")
+ S TX="" F  S TX=$O(^WRH(TX)) Q:TX=""  D
+ .S N="" F  S N=$O(^WRH(TX,N)) Q:N=""  S H=DS_",0" F  S H=$O(^WRH(TX,N,H)) Q:H=""!(+H>DE)  D
+ ..S R=^(H) Q:'+$P(R,"|",1)  Q:$P(R,"|",2)'="-"  Q:$P(R,"|",8)'="D" 
+ ..S C=$P(R,"|",3),WHO=$P(R,"|",9) Q:WHO=""  Q:WHO'=VR 
+ ..S:C ^(N)=$G(^BUF($J,"rwrh",N))+C
+ ..S C=$$GETCNN^IWRH(TX,N,H,C)
+ ..S:C ^(1)=$G(^BUF($J,"rwrh",N,1))+C
+ ..S ES=$P(R,"|",22)
+ ..S:C ^(2)=$G(^BUF($J,"rwrh",N,2))+ES
+ S SUM=0,N="" F  S N=$O(^BUF($J,"rwrh",N)) Q:N=""  D
+ .S C=^(N),BS=$G(^(N,1)),ES=$G(^(2))
+ .S SUM=$S(PROFIT:S-BS,1:S)
+ K ^BUF($J,"rwrh")
+ Q:'SUM 0
+ S:LOGG'="" R=$O(@LOGGL@(""),-1)+1,^(R)="Продажа товаров|"_SUM
+ Q SUM
+OUTG(DS,DE,SPK,PRF,STKX,LP) ; Списание со склада
+ ; SPK - вывод в единицах
+ ; PRF - профиль номенклатуры
+ ; STKX - склад (если выбран, ЛПУ игнор.)
+ ; LP - филиал
+ N TX,N,R,H,I,C,S,WHO,BS,FR,ID,CN,CNT,PM,PC,SS,KX,SSE,PK
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S FF=+$$FR^I(),LP=$S('FF:$$^I("ilpu"),1:$G(LP))
+ K ^BUF($J)
+ S TX="" F  S TX=$O(^WRH(TX)) Q:TX=""  D
+ .I TX'["|",LP S R=$P($G(^WRHM("stock",TX)),"|",4) I R'="",R'=LP Q 
+ .I STKX'="",STKX'=TX Q 
+ .S PK=""
+ .S N="" F  S N=$O(^WRH(TX,N)) Q:N=""  I $S(PRF="":1,1:$P($G(^WRHE(N)),"|",3)=PRF) S H=DS_",0" F  S H=$O(^WRH(TX,N,H)) Q:H=""!(+H>DE)  D
+ ..S R=^(H) Q:'+$P(R,"|",1)  Q:$P(R,"|",2)'="-"  
+ ..Q:$P(R,"|",9)="W"  ;списание не на склад
+ ..S KX=N
+ ..I $P(R,"|",12)'="" S:PK'="" PK=+$$GET^IWRHS(N,"pku") S KX=KX_"|"_$S(PK:$P(R,"|",12),1:$$SER^IWRHS(N,$P(R,"|",12)))
+ ..S CNT=$P(R,"|",3),CN=$P(R,"|",14)  
+ ..S:CNT ^(KX)=$G(^BUF($J,"o",KX))+CNT
+ ..S:CN ^(1)=$G(^BUF($J,"o",KX,1))+CN
+ 
+ S N="" F  S N=$O(^BUF($J,"o",N)) Q:N=""  D
+ .S KX=$E($$NAMENM^IWRHS(N),1,5)_"|"_N
+ .S G=+$$GRP^IWRHS($P(N,"|",1)),^BUF($J,"og",G,KX)=N
+ 
+ D OWF^RWU(".txt")
+ S R=$$TXTP^DTUTL(DS,DE)
+ D WC^RWU("№|Номенклатурная единица "_R_"|Единиц|Расход|Цена")
+ S SSE=0
+ S G="" F  S G=$O(^BUF($J,"og",G)) Q:G=""  D
+ .D:G WC^RWU(CR_"|"_$P($$GETT^IWRHS("prof",G),"|",1))
+ .S SS=0
+ .S KX=""  F  S KX=$O(^BUF($J,"og",G,KX)) Q:KX=""  D
+ ..S ID=^(KX)
+ ..S CNT=$G(^BUF($J,"o",ID)),CN=$G(^(ID,1))
+ ..S N=$P(ID,"|",2),ID=$P(ID,"|",1)
+ ..S:N'="" N=" / "_N
+ ..S PM=SPK,PC=$$MEANCNT^IWRHS(ID,SPK) S:'PC PC=1,PM=0
+ ..S I=$$GET^IWRHS(ID,"nnum")
+ ..S R=I_N_"|"_$$NAMENM^IWRHS(ID)_"|"_$$MEANNM^IWRHS(ID,PM)
+ ..S R=R_"|"_$$FN3(CNT/PC)_"|"_$$FN(CN)
+ ..S SS=SS+CN
+ ..D WC^RWU(CR_R)
+ .D:SS WC^RWU(CR_"||Итого||"_$$FN(SS))
+ .S SSE=SSE+SS
+ D:SSE WC^RWU(CR_"|Итог по отчету|||"_$$FN(SSE))
+ D C^RWU
+ K ^BUF($J)
+ Q
+MOVST(DS,DE,STK,PR,XSUM,XEND,XACT) ; Движение товаров на складе
+ ; STK - склад
+ ; PR - профиль номенклатуры
+ ; XSUM - стоимость
+ ; XEND - итоги
+ ; XACT - только товары с движением
+ N R,ID,H,C,S,OP,A,SS,X1,X2,X3,X4,NM
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S XSUM=$G(XSUM),XEND=+$G(XEND),XACT=$G(XACT)
+ K ^BUF($J)
+ S ID="" F  S ID=$O(^WRH(STK,ID)) Q:ID=""  D
+ .I PR'="",$P($G(^WRHE(ID)),"|",3)'=PR Q 
+ .S H="" F  S H=$O(^WRH(STK,ID,H)) Q:H=""!(+H>DE)  D
+ ..S R=^(H) Q:'+$P(R,"|",1)
+ ..S C=+$P(R,"|",3),OP=$P(R,"|",2),S=$P(R,"|",14)
+ ..I +H<DS S ^(1)=$G(^BUF($J,"m",ID,1))+$S(OP="-":-C,1:C) S:XSUM ^(2)=$G(^(2))+$S(OP="-":-S,1:S) Q
+ ..I OP="+" S ^(3)=$G(^BUF($J,"m",ID,3))+C S:XSUM ^(4)=$G(^(4))+S
+ ..I OP="-" S ^(5)=$G(^BUF($J,"m",ID,5))+C S:XSUM ^(6)=$G(^(6))+S
+ 
+ ; Сортировка
+ S ID="" F  S ID=$O(^BUF($J,"m",ID)) Q:ID=""  D
+ .I XACT S H=0 F C=1,3,5 I $G(^BUF($J,"m",ID,C)) S H=1 Q  ; есть знач.
+ .I XACT Q:'H 
+ .S NM=$$NAMENM^IWRHS(ID),OP=$E(NM,1,16)_"|"_ID
+ .S ^BUF($J,"n",OP)=NM
+ 
+ D OWF^RWU(".txt")
+ S R=$S(XSUM:"|Стоимость",1:"")
+ D WC^RWU("Номенклатура "_$$TXTP^DTUTL(DS,DE)_"|Единицы|Остаток на начало"_R_"|Приход"_R_"|Расход"_R_"|Остаток на конец"_R)
+ S OP="" F  S OP=$O(^BUF($J,"n",OP)) Q:OP=""  D
+ .S ID=$P(OP,"|",2)
+ .S A=^BUF($J,"n",OP)_"|"_$$MEANNM^IWRHS(ID)
+ .S C=$G(^BUF($J,"m",ID,1)),S=$G(^(2))
+ .S A=A_"|"_$$FN3(C),SS(1)=$G(SS(1))+C
+ .S:XSUM A=A_"|"_$$FN(S),SS(2)=$G(SS(2))+S
+ .S X1=$G(^(3)),X3=$G(^(5)),C=C+X1-X3
+ .S:XSUM X2=$G(^(4)),X4=$G(^(6)),S=S+X2-X4
+ .S A=A_"|"_$$FN3(X1),SS(3)=$G(SS(3))+X1
+ .S:XSUM A=A_"|"_$$FN(X2),SS(4)=$G(SS(4))+X2
+ .S A=A_"|"_$$FN3(X3),SS(5)=$G(SS(5))+X3
+ .S:XSUM A=A_"|"_$$FN(X4),SS(6)=$G(SS(6))+X4
+ .S A=A_"|"_$$FN3(C),SS(7)=$G(SS(7))+C
+ .S:XSUM A=A_"|"_$$FN(S),SS(8)=$G(SS(8))+S
+ .D WC^RWU(CR_A)
+ D:XEND
+ .S (A,H)="" F  S H=$O(SS(H)) Q:H=""  S A=A_"|"_$S(H#2=1:$$FN3(SS(H)),1:$$FN(SS(H)))
+ .D WC^RWU(CR_"ИТОГО:|"_A)
+ K ^BUF($J)
+ D C^RWU
+ Q
+NOTUS(DS,DE,STK,PR) ; Товары без движения
+ ; STK - склад
+ ; PR - профиль номенклатуры
+ N ID,F,H
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D OWF^RWU(".txt")
+ D WC^RWU("Номенкл.№|Наименование")
+ S ID="" F  S ID=$O(^WRH(STK,ID)) Q:ID=""  D
+ .S H=$O(^WRH(STK,ID,DS_",0")) I H'="",+H<(DE+1) Q 
+ .I PR'="",$P($G(^WRHE(ID)),"|",3)'=PR Q 
+ .D WC^RWU(CR_$$GET^IWRHS(ID,"nnum")_"|"_$$NAMENM^IWRHS(ID))
+ D C^RWU
+ Q
+MOVSTL(DS,DE,STK,PR,XSG) ; Движение на складе, подробно
+ ; STK="" - по всем складам
+ ; PR - профиль номенклатуры
+ ; XSG - показывать срок годности
+ N ST,STN,ID,DT,R,U,O,C,S,NM,CON,J,SG,PKU,SN
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ 
+ K ^BUF($J)
+ D OWF^RWU(".txt")
+ D WC^RWU("Дата, время|Оператор|Номенклатура "_$$TXTP^DTUTL(DS,DE)_"|Единица|Приход|Расход|Остаток|Сумма|Контрагент"_$S(STK="":"|Склад",1:"")_$S(XSG:"|Годен до",1:""))
+ S J=1
+ S ST="" F  S ST=$O(^WRH(ST)) Q:ST=""  D:ST=STK!(STK="") 
+ .S STN=$$NAME^IWRHS("stock",ST)
+ .S ID="" F  S ID=$O(^WRH(ST,ID)) Q:ID=""  D
+ ..S NM="",S=0
+ ..I PR'="",$P($G(^WRHE(ID)),"|",3)'=PR Q
+ ..S PKU=$$PKU^IWRHS(ID) 
+ ..S DT="" F  S DT=$O(^WRH(STK,ID,DT)) Q:DT=""!(+DT>DE)  D
+ ...S R=^(DT),U=$P(R,"|",5),O=$P(R,"|",2),C=$P(R,"|",3)
+ ...Q:'$P(R,"|",1)
+ ...S:O="+" S=S+C S:O="-" S=S-C ; остаток
+ ...I +DT<DS Q
+ ...S SN=$P(R,"|",12)
+ ...S:NM="" NM=$$OWF^TXTU($$NAMENM^IWRHS(ID),100)
+ ...S:SN'="" SN=" "_$$GETSN^IWRH(SN,ID,PKU,3)
+ ...S CON=$S(O="+":$P(R,"|",7,8),O="-":$P(R,"|",9,10),1:"")
+ ...S CON=$$CTRNM2^IWRHS($P(CON,"|",1),$P(CON,"|",2),DT)
+ ...S:CON="" CON=$S(O="-":"списание",O="+":"передача",1:"")
+ ...S A=$$DTM2^DTUTL(DT)_"|"_$$FIO^IUSER(U)_"|"_NM_SN_"|"
+ ...S A=A_$$MEANNM^IWRHS(ID)_"|"_$S(O="-":"|"_$$FN3(C),1:$$FN3(C)_"|")
+ ...S A=A_"|"_$$FN3(S)_"|"_$$FN($P(R,"|",14))
+ ...S:STK="" A=A_"|"_STN
+ ...S A=A_"|"_CON
+ ...S:XSG SG=$$GETSG^IWRH(ID,PKU,R),A=A_"|"_$$DT^DTUTL(SG)
+ ...S ^BUF($J,$E(NM,1,16)_"|"_J)=A,J=J+1
+ 
+ S A="" F  S A=$O(^BUF($J,A)) Q:A=""  D WC^RWU(CR_^(A))
+ K ^BUF($J)
+ D C^RWU
+ Q
+EXPIRE(SK,PR,DAYS) ; Отчет по срокам годности товаров
+ ; SK - склад
+ ; PR - профиль номенклатуры
+ ; DAYS - число дней просрочки
+ N H,N,R,DE,C,OP,I,X,XC,CT,EXD,EXDT,WE
+ ; TODO - учесть самое первое появление на складах (проследить цепочку)
+ S DE=+$H,DAYS=$$NNUM^TXTU(DAYS)
+ K ^BUF($J)
+ S N="" F  S N=$O(^WRH(SK,N)) Q:N=""  D
+ .S WE=$G(^WRHE(N))
+ .S EXDT=$P(WE,"|",11) ;Q:'EXD 
+ .I PR'="",$P(WE,"|",3)'=PR Q 
+ .S (I,CT)=0
+ .S H="" F  S H=$O(^WRH(SK,N,H)) Q:H=""!(+H>DE)  D
+ ..S R=^(H) Q:'+$P(R,"|",1) 
+ ..S OP=$P(R,"|",2),C=+$P(R,"|",3),EXD=EXDT
+ ..S:$P(R,"|",21)'="" EXD=$P(R,"|",21)-C
+ ..Q:'EXD 
+ ..I OP="+" S ^BUF($J,N,I)=C,^(I,0)=$P(R,"|",4)_"|"_C_"|"_(+H)_"|"_EXD,I=I+1 Q 
+ ..S CT=CT+C
+ ..F  S X=$O(^BUF($J,N,"")) Q:X=""  D  Q:'CT
+ ...S XC=^BUF($J,N,X)
+ ...I XC'>CT K ^BUF($J,N,X) S CT=CT-XC Q  ; пришло<=надо
+ ...S XC=XC-CT,^BUF($J,N,X)=XC,CT=0
+ ;s DAYS=0 TODO
+ ; Чистка с норм. сроками годности
+ S N="",I=1 F  S N=$O(^BUF($J,N)) Q:N=""  D
+ .S H="" F  S H=$O(^BUF($J,N,H)) Q:H=""  D
+ ..S X=$G(^(H,0)),C=$P(X,"|",3),EXD=$P(X,"|",4)
+ ..I (+$H)>(C+EXD-DAYS) Q 
+ ..K ^BUF($J,N,H)
+ 
+ D OWF^RWU(".txt")
+ D WC^RWU("|"_$$NAME^IWRHS("stock",SK)_" на "_$$DT2^DTUTL(DE)_";"_CR)
+ D WC^RWU("П.п.|Номенклатурная единица|Годен до|Кол-во|Единиц|Накл. №|Принято")
+ S N="",I=1 F  S N=$O(^BUF($J,N)) Q:N=""  D
+ .S R=I_"|"_$$NAMENM^IWRHS(N),XC=$$MEANNM^IWRHS(N),I=I+1
+ .S H="" F  S H=$O(^BUF($J,N,H)) Q:H=""  D
+ ..S C=^(H),CT=$G(^(H,0)),X=$P(CT,"|",3)
+ ..D WC^RWU(CR_R_"|"_$$DT^DTUTL(X+$P(CT,"|",4))_"|"_$$FN(C)_"|"_XC_"|"_$P(CT,"|",1)_"|"_$$DT^DTUTL(X))
+ ..S R="|"
+ D C^RWU
+ K ^BUF($J)
+ Q
+FN(X) 
+ Q $TR($J(X,"",2),".",",")
+FN3(X) 
+ Q $TR(+$J(X,"",3),".",",")
+FNx(X) ; Округление в зависимости от настроек
+ Q:fRD $TR($J(X,"",2),".",",")
+ Q $TR($J(X,"",3),".",",")
+STKLAA ; Список складов + доп.
+ D OWF^RWU(".txt")
+ D STKLSTs^NWRHS(0)
+ D WC^RWU(CR_"|Все"_CR_"*|Все, сводно")
+ D C^RWU
+ Q
+REGIPROC 
+ N D,FF,PRF,DD,FFT
+ S D="Складской учет",FF=+$$FR^I()
+ S PRF="te@net:LST_NWRHS(""prof""),Профиль номенклатуры"
+ S DD="d,Начало периода,d,Окончание периода"
+ S FFT=$S(FF:",t@storage:lpu,Филиал",1:"")
+ S ^IPROC(D,"Остатки на складе по партиям")="OSTP_RWRH,1,3,d,Дата учета,t@net:STKLST_NWRHS(),Склад,"_PRF
+ S ^IPROCR("OSTP_RWRH","prnfn")="rwrh-dd.xml"
+ S ^IPROC(D,"Остатки на складе по группам")="OSTG_RWRH,1,5,d,Дата учета,t@net:STKLAA_RWRH(),Склад,"_PRF_",t@string:0/Базовых#1/Упаковке#2/Фасовке,Выводить в единицах,t@string:0/Нет#1/Да,Итоги"
+ S ^IPROCR("OSTG_RWRH","prnfn")="rwrh-dd-l.xml"
+ S ^IPROC(D,"Расход склада по партиям")="SUBP_RWRH,1,5,"_DD_",t@net:STKLST_NWRHS(),Склад,"_PRF_",t@string:0/базовых#1/упаковке#2/фасовке,Выводить в единицах"
+ S ^IPROCR("SUBP_RWRH","prnfn")="rwrh-dd-l.xml"
+ S ^IPROC(D,"Расход склада по группам")="SUBG_RWRH,1,8,"_DD_",t@net:STKLST_NWRHS(),Склад,"_PRF_",t@string:0/базовых#1/упаковке#2/фасовке,Выводить в единицах,t@string:0/весь#1/по расходу,Показывать товар,t@string:0/нет#1/да,Показывать приход за период,t@string:0/Нет#1/Да,Итоги"
+ S ^IPROCR("SUBG_RWRH","prnfn")="rwrh-dd.xml"
+ S ^IPROC(D,"Инвентаризационная ведомость")="IV_RWRH,1,3,d,Дата учета,t@net:STKLST_NWRHS(),Склад,t@string:0/базовых#2/упаковке#3/фасовке,Выводить в единицах"
+ S ^IPROCR("IV_RWRH","prnfn")="ivrwrh.xml"
+ 
+ S ^IPROC(D,"Суммы по группам")="SUMMG_RWRH,1,5,"_DD_",t@net:STKLST_NWRHS(),Склад,"_PRF_",t@string:0/Нет#1/Да,Итоги"
+ S ^IPROCR("SUMMG_RWRH","prnfn")="rwrh-dd.xml"
+ S ^IPROC(D,"Расход по субскладам")="SUBBTP_RWRH,1,4,"_DD_",t@string:По всем типам#/По ЛПУ#O/По отделениям#V/По сотрудникам,Тип субсклада,"_PRF
+ S ^IPROC(D,"Списание материальных ценностей")="OUTG_RWRH,1,"_$S(FF:6,1:5)_","_DD_",t@string:0/Базовых#1/Упаковке#2/Фасовке,Выводить в единицах,"_PRF_",t@net:STKLSTA_NWRHS(),Склад"_FFT_",p"
+ S ^IPROC(D,"Сводка по продажам со склада")="SALE_RWRH,1,"_$S(FF:6,1:5)_","_DD_",t@string:0/По сотрудникам#1/Не группировать,Группировать,t@string:0/Нет#1/Да,Итоги,"_PRF_FFT
+ S ^IPROCR("SALE_RWRH","prnfn")="rwrh-odd-l.xml"
+ S ^IPROC(D,"Продажи со склада")="SALEL_RWRH,1,"_$S(FF:4,1:3)_","_DD_","_PRF_FFT
+ S ^IPROCR("SALEL_RWRH","prnfn")="rwrh-odd-l.xml"
+ S ^IPROC(D,"Движение товаров на складе")="MOVST_RWRH,1,7,"_DD_",t@net:STKLST_NWRHS(),Склад,"_PRF_",t@string:0/Нет#1/Да,Показывать стоимость,t@string:0/Нет#1/Да,Итоги,t@string:0/Нет#1/Да,Только номенклатура с движением"
+ S ^IPROCR("MOVST_RWRH","prnfn")="rwrh-dd-l.xml"
+ S ^IPROC(D,"Движение товаров на складе, подробно")="MOVSTL_RWRH,1,5,"_DD_",t@net:STKLST_NWRHS(),Склад,"_PRF_",t@string:0/Нет#1/Да,Показывать срок годности"
+ S ^IPROCR("MOVSTL_RWRH","prnfn")="rwrh-dd-l.xml"
+ S ^IPROC(D,"Товары без движения")="NOTUS_RWRH,1,4,"_DD_",t@net:STKLST_NWRHS(),Склад,"_PRF
+ S ^IPROC(D,"Сроки годности")="EXPIRE_RWRH,1,3,t@net:STKLST_NWRHS(),Склад,"_PRF_",s,Дней до окончания срока"
+ Q

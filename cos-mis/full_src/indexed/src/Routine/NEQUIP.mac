@@ -1,0 +1,115 @@
+NEQUIP ; Оборудование [ 11/13/2015  9:19 PM ]
+LST 
+ N I,C
+ D OWF^RWU(".txt")
+ S (I,C)="" F  S I=$O(^EQUIP(I)) Q:I=""  D WC^RWU(C_I_"|"_^(I)) S C=CR
+ D C^RWU
+ Q
+TAB 
+ N I,R
+ D OWF^RWU(".txt")
+ D WC^RWU("|Наименование|Описание|Архив|Стоимость|Амм.в мес.")
+ S I="" F  S I=$O(^EQUIP(I)) Q:I=""  D
+ .S R=I_"|"_^(I)
+ .S R=R_"|"_$G(^(I,"c"))_"|"_$S($G(^("use"))=0:"да",1:"нет")_"|"_$G(^("sum"))_"|"_$G(^("amm"))
+ .D WC^RWU(CR_R)
+ D C^RWU
+ Q
+ADD(NM) ; Добавить
+ N I
+ S I=$O(^EQUIP(""),-1)+1
+ S ^EQUIP(I)=$$WD^TXTU(NM)
+ D GL^IEXCH("^EQUIP",I)
+ D MSG^RWU(I)
+ Q
+DEL(ID) ; Удалить
+ Q:ID="" 
+ K ^EQUIP(ID)
+ D KGL^IEXCH("^EQUIP",ID)
+ Q
+SET(ID,IDX,VAL) ; Присвоить данные
+ ; IDX=0/1/2 - имя/описание/архив
+ Q:ID=""
+ S VAL=$$WD^TXTU(VAL)
+ S ^EQUIP(ID,"log")=$$USRH^IUSER() D GL^IEXCH("^EQUIP",ID,"log") 
+ I IDX=0 S ^EQUIP(ID)=VAL D GL^IEXCH("^EQUIP",ID) Q
+ I IDX=1 S ^EQUIP(ID,"c")=VAL D GL^IEXCH("^EQUIP",ID,"c") Q
+ I IDX=2 S ^EQUIP(ID,"use")='VAL D GL^IEXCH("^EQUIP",ID,"use") Q
+ I IDX=3 S ^EQUIP(ID,"sum")=VAL D GL^IEXCH("^EQUIP",ID,"sum") Q
+ I IDX=4 S ^EQUIP(ID,"amm")=VAL D GL^IEXCH("^EQUIP",ID,"amm") Q
+ Q
+ULIST(ID,PRC) ; Список услуг
+ N U
+ D OWF^RWU(".txt")
+ D WC^RWU("Код|Наименование")
+ S U="" F  S U=$O(^EQUIP(ID,"usl",U)) Q:U=""  D WC^RWU(CR_U_"|"_$$NAME^IPRICE(U,PRC))
+ D C^RWU
+ Q
+UADD(ID,USL) ; Добавить услугу
+ S ^EQUIP(ID,"usl",USL)=""
+ D GL^IEXCH("^EQUIP",ID,"usl",USL)
+ Q
+UDEL(ID,USL) ; Удалить услугу
+ K ^EQUIP(ID,"usl",USL)
+ D KGL^IEXCH("^EQUIP",ID,"usl",USL)
+ Q
+NAME(ID) 
+ Q:ID="" ""
+ Q $G(^EQUIP(ID))
+FNDNM(NM) ; Поиск по имени
+ N I
+ S I="" F  S I=$O(^EQUIP(I)) Q:I=""  Q:$G(^(I))=NM
+ Q I
+FNDUID(UID) ; Поиск по идентификатору
+ N I
+ S I="" F  S I=$O(^EQUIP(I)) Q:I=""  Q:$G(^(I,"uid"))=UID
+ Q I
+TABEQ(TXT) ; Поиск по оборудованию
+ S TXT=$$UL^TXTU($$WD^TXTU(TXT))
+ N ID,R
+ D OWF^RWU(".txt")
+ D WC^RWU("Код|Наименование|Примечание")
+ S ID="" F  S ID=$O(^EQUIP(ID)) Q:ID=""  D
+ .S R=^(ID)
+ .I TXT'="",$$UL^TXTU(R)'[TXT Q
+ .D WC^RWU(CR_ID_"|"_R_"|"_$G(^EQUIP(ID,"c")))
+ D C^RWU 
+ Q
+ELIST(USL) ; Оборудование по услуге
+ N ID
+ D OWF^RWU(".txt")
+ D WC^RWU("Код|Наименование|Примечание")
+ S ID="" F  S ID=$O(^EQUIP(ID)) Q:ID=""  D
+ .S R=^(ID)
+ .Q:'$D(^EQUIP(ID,"usl",USL)) 
+ .D WC^RWU(CR_ID_"|"_R_"|"_$G(^EQUIP(ID,"c")))
+ D C^RWU
+ Q
+LXLS ; Загрузка из файла (без удаления существующих)
+ ; Наименование|UID|Услуга
+ N X,NM,J,UID,U,I,A,ID
+ D ORH^RWU
+ S NM=""
+ F J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D
+ .Q:J<2
+ .S X=$P(A,"|",1),UID=$P(A,"|",2) S:X'="" NM=X
+ .Q:NM="" 
+ .I X'="" S ID=$$FNDNM(NM) S:ID="" ID=$O(^EQUIP(""),-1)+1 S ^EQUIP(ID)=NM S:UID'="" ^EQUIP(ID,"uid")=UID D GL^IEXCH("^EQUIP",ID)
+ .S U=$P(A,"|",3) Q:U=""
+ .S ^EQUIP(ID,"usl",U)=""
+ .D GL^IEXCH("^EQUIP",ID,"usl",U) 
+ D CR^RWU
+ Q
+LXLSL ; Загрузка списка оборудования
+ ; ID|Наименование|Примечание
+ N X,NM,J,I,A,ID
+ D ORH^RWU
+ S NM=""
+ F J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D
+ .Q:J<2
+ .S ID=$P(A,"|",1)
+ .S:ID="" ID=$O(^EQUIP(""),-1)+1
+ .S ^EQUIP(ID)=$P(A,"|",2)
+ .S:$P(A,"|",3)'="" ^EQUIP(ID,"c")=$P(A,"|",3)
+ D CR^RWU
+ Q

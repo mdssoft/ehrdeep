@@ -1,0 +1,76 @@
+RSSMCC ; ССМЦ - Отчеты по контингенту
+SVD(DT,DGN,sWRK,REMOV,STAT,STALL,TDGN,TPRG) ; Сводка по прикрепленному контингенту
+ ; sWRK - показывать по местам работы(1) или программам(2)
+ ; REMOV - учитывать снятых 
+ ; TDGN - текстовый договор
+ ; TPRG - текстовая программа
+ N NI,SEX,SUMM,UF,I,SS,WRK,R,X,Z,ALL,PIDX,AGE,plSd,plSp,MST
+ S NI="",DT=$$DIH^DTUTL(DT),sWRK=+sWRK,REMOV=+REMOV
+ S TDGN=$$UL^TXTU($G(TDGN)),TPRG=$$UL^TXTU($G(TPRG))
+ K ^BUF($J)
+ D PRETZR^IPAC
+ S plSd=$$PLIDX^IPAC("stcdog"),plSp=$$PLIDX^IPAC("stcprg")
+ 
+ S:STAT'="" STAT="|"_STAT_"|"
+ S R=$G(STAT) K STAT
+ F I=1:1:$L(R,"|") S X=$P(R,"|",I) S:X'="" STAT("|"_X_"|")=""
+ 
+ F I=0:1:5 S SUM(I)=0
+ I DGN'="" S ALL=0 F  S NI=$O(^BTI(" s",DGN,NI)) Q:NI=""  D
+ .S PIDX=$$PIDXN^IPAC(NI,DGN,DT)
+ .Q:PIDX=-1  ; не найдено
+ .D SVDproc(DGN)
+ I DGN="" S ALL=1 F  S NI=$$NEXT^IPAC(NI) Q:NI=""  D
+ .F PIDX="",1,2 S DGN=$$GET^IPAC(NI,"stc"_PIDX,DT) D:DGN'="" SVDproc(DGN)
+ D OWF^RWU(".txt")
+ D WC^RWU("Договор|"_$S(sWRK=1:"Место работы|",sWRK=2:"Программа|",sWRK=3:"Страховой договор|",1:"")_"Всего лиц|Медицина|Стоматология|Мед+Стом|Прочие|Пришедших")
+ S DGN="" F  S DGN=$O(^BUF($J,DGN)) Q:DGN=""  D
+ .K SS S UF=$G(^(DGN,9)),SS=0,Z=""
+ .F  S Z=$O(^(Z)) Q:Z=""!(Z>5)!(Z="-")  S SS(Z)=^(Z)
+ .S SS=SS+$G(SS(1))+$G(SS(2))+$G(SS(3))+$G(SS(4))
+ .D WC^RWU(CR_$$NAME^IINSC(DGN,DT)_$S(sWRK:"|",1:"")_"|"_SS_"|"_$G(SS(1))_"|"_$G(SS(2))_"|"_$G(SS(3))_"|"_$G(SS(4))_"|"_UF)
+ .S SUM(0)=SUM(0)+SS,SUM(1)=SUM(1)+$G(SS(1)),SUM(2)=SUM(2)+$G(SS(2)),SUM(3)=SUM(3)+$G(SS(3)),SUM(4)=SUM(4)+$G(SS(4)),SUM(5)=SUM(5)+UF
+ .S WRK="" F  S WRK=$O(^BUF($J,DGN,"-",WRK)) Q:WRK="-"!(WRK="")  D
+ ..K SS S UF=$G(^(WRK,9)),SS=0,Z=""
+ ..F  S Z=$O(^(Z)) Q:Z=""!(Z>5)  S SS(Z)=^(Z)
+ ..S SS=SS+$G(SS(1))+$G(SS(2))+$G(SS(3))+$G(SS(4))
+ ..S R=$S(WRK=0:"не указано",sWRK=2:$$NAME^IMPRP(WRK),sWRK=3:WRK,1:$$GET^ISPRAV(5,WRK))
+ ..D WC^RWU(CR_"|"_R_"|"_SS_"|"_$G(SS(1))_"|"_$G(SS(2))_"|"_$G(SS(3))_"|"_$G(SS(4))_"|"_UF)
+ S UF=" Итого"_$S(sWRK:"|",1:"") F I=0:1:5 S UF=UF_"|"_$G(SUM(I))
+ D WC^RWU(CR_UF)
+ D C^RWU
+ Q
+SVDproc(DGN) 
+ I 'REMOV,'$$CHECKIDX^IPAC(NI,DT,PIDX) Q 
+ I TDGN'="" S R=$$UL^TXTU($$GETTZ^IPAC(NI,plSd,DT)) Q:R'[TDGN 
+ I TPRG'="" S R=$$UL^TXTU($$GETTZ^IPAC(NI,plSp,DT)) Q:R'[TPRG 
+ S R=0
+ I $D(STAT) S R=1,X=$$GET^IPAC(NI,"status",DT) Q:X=""  D
+ .S X="|"_X_"|",Z=""
+ .I STALL S R=0 F  S Z=$O(STAT(Z)) Q:Z=""  I X'[Z S R=1 
+ .I 'STALL F  S Z=$O(STAT(Z)) Q:Z=""  I X[Z S R=0 Q
+ Q:R
+ S R=$$GET^IPAC(NI,"status",DT)
+ S MST=$S((R["med")&&(R["stom"):3,R["med":1,R["stom":2,1:4)
+ S UF=$S($D(^PNF(NI)):1,1:0)
+ S ^(MST)=$G(^BUF($J,DGN,MST))+1
+ S:UF ^(9)=$G(^(9))+1
+ Q:'sWRK
+ S R=$$GET^IPAC(NI,$S(sWRK=2:"prog"_PIDX,sWRK=3:"stcdog"_PIDX,1:"work"),DT)
+ I R="",sWRK=3 S R=" "
+ I sWRK=3,$L(R)>100 S R=$$OWF^TXTU(R,100)
+ F I=1:1:$L(R,"|") S X=$P(R,"|",I) D
+ .S:X="" X=0
+ .S ^(MST)=$G(^BUF($J,DGN,"-",X,MST))+1
+ .S:UF ^(9)=$G(^(9))+1
+ Q
+REGIPROC
+ N D,DG,K,W,M,U,PP
+ S D="Отчеты по пациентам",K="Контингент"
+ S DG="te@storage:dog,Договор"
+ S W="te@storage:mectorab@1,Место работы"
+ S M="te@net:LST_YMPRP(""""),Мед.программа"
+ S U="te@storage:uchastok@1,Участок (врач)"
+ S PP="d,Период прикрепления с,d,Период прикрепления по"
+ S ^IPROC("ССМЦ","Сводка по контингенту")="SVD_RSSMCC,1,8,d,Дата отчета,"_DG_",t@string:0/Нет#1/Местам работы#2/Программам прикрепления#3/Страховому договору,Детализировать по,t@string:0/Нет#1/Да,Показывать снятых,c@net:NMLST_NSPRAV(1),Статус,t@string:0/Любой#1/Все отмеченные,Учитывать статус,s,Текстовый договор,s,Текстовая программа"
+ Q

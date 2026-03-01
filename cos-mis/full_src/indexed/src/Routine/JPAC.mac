@@ -1,0 +1,67 @@
+JPAC ; JSON patients [ 07/21/2021  3:52 PM ]
+SIMPLE(NI) ; Минимальный экспорт без контактных реквизитов
+ I '$$EXIST^IPAC(NI) D MSG^RWU("{}") Q 
+ N A,FL
+ D B^IJSON()
+ F FL="fiof","fioi","fioo","snils","polis","ofor" D W^IJSON(FL,$$GETE^IPAC(NI,FL))
+ D W^IJSON("birthday",$$DTISO^DTUTL($$GET^IPAC(NI,"datar")))
+ S FL=$$GET^IPAC(NI,"pol"),FL=$S(FL=1:"M",FL=2:"F",1:"")
+ D W^IJSON("gender",FL)
+ D W^IJSON("pid",NI)
+ D MSG^RWU($$E^IJSON())
+ Q
+MID(NI) ; Минимальный экспорт
+ I '$$EXIST^IPAC(NI) D MSG^RWU("{}") Q 
+ N A,FL
+ D B^IJSON()
+ F FL="fiof","fioi","fioo","snils","polis","ofor","email","pemail" D W^IJSON(FL,$$GETE^IPAC(NI,FL))
+ D W^IJSON("phones",$$TELS^IPAC(NI))
+ D W^IJSON("company",$$GETE^IPAC(NI,"stc"))
+ D W^IJSON("polis_start",$$GETE^IPAC(NI,"dog_from"))
+ D W^IJSON("polis_end",$$GETE^IPAC(NI,"dog_to"))
+ D W^IJSON("birthday",$$DTISO^DTUTL($$GET^IPAC(NI,"datar")))
+ S FL=$$GET^IPAC(NI,"pol"),FL=$S(FL=1:"M",FL=2:"F",1:"")
+ D W^IJSON("gender",FL)
+ D W^IJSON("pid",NI)
+ D MSG^RWU($$E^IJSON())
+ Q
+LOAD(NI) 
+ N A,FL
+ D B^IJSON()
+ F FL="fiof","fioi","fioo","datar","pager","email","street","snils","text" D W^IJSON(FL,$$GETE^IPAC(NI,FL))
+ D W^IJSON("pol",$$GET^IPAC(NI,"pol"))
+ D W^IJSON("pid",NI)
+ D MSG^RWU($$E^IJSON())
+ Q
+SAVE 
+ N I,A,FL,VAL,NI,LST,H
+ D ORH^RWU
+ F I=1:1 S A=$$WD^TXTU($$U8W^TXTU($$R^RWU)) Q:%IFN["Z"  D
+ .S FL=$P(A,"|",1) S:FL'="" LST(FL)=$P(A,"|",2)
+ D CR^RWU
+ S NI=$G(LST("pid")) Q:NI=""
+ K LST("pid")
+ S LST("datar")=$$DI^DTUTL($G(LST("datar")))
+ K:LST("pol")="" LST("pol")
+ S H=+$H
+ S FL="" F  S FL=$O(LST(FL)) Q:FL=""  D SET^IPAC(NI,FL,H,LST(FL))
+ Q
+FIND(STR) ; Поиск
+ N EXEC,ii,CLS,xx,TPBP,iX,A,FIO,X,NIB
+ S ii=0,STR=$$TRIM^TXTU(STR)
+ S EXEC="pfLine^JPAC"
+ D OWF^RWU(".txt"),W^RWU("[")
+ D FFND^YIFINDN(STR,3,0,0,EXEC)
+ D W^RWU("]"),C^RWU
+ Q
+pfLine ; write patient search object
+ D B^IJSON()
+ D W^IJSON("pid",A)
+ D W^IJSON("fio",FIO)
+ D W^IJSON("sex",$$GETE^IPAC(A,"pol"))
+ D W^IJSON("born",X)
+ D W^IJSON("age",$$AGET^IPAC(A))
+ D W^IJSON("stc",$$GETE^IPAC(A,"stc"))
+ D WC^RWU($S(ii:",",1:"")_$$E^IJSON()) 
+ S ii=ii+1
+ Q

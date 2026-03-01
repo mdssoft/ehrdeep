@@ -1,0 +1,52 @@
+IEDUTL ; Доп. программы Единых Документов [ 03/14/2020  11:07 PM ]
+CHKUSLT(NIB,DGN,USL,PRC,DT,MPR) ; Проверить услугу на ограничения
+ ; DGN - договор
+ ; USL - код услуги
+ ; PRC - прейскурант
+ ; DT - дата
+ ; MPR - опционально, конкретно указываемый перечень программ
+ N R,WS,NM,X
+ S PRC=$S(PRC="":$$PRC^IINSC(DGN,NIB,DT),1:PRC)
+ S PRC=$$CORCP^IPRICET(PRC)
+ Q:'$$CHECK^IPRICE(USL,PRC) ""
+ Q:$$GET^IINSC(DGN,"dvid",DT)=3 ""
+ S R=$$PIDX^IPAC(NIB,DGN,DT),WP="",MPR=$G(MPR)
+ S:$G(MPR)="" MPR=$$GET^IPAC(NIB,"prog"_R,DT)
+ Q:MPR="" ""
+ ;I PSEX'="" S SEX=$$GET^IPRICE(USL,"dsex",PRC,DT) Q:SEX'=PSEX&$L(SEX)
+ I $$CHKUVA^YMPRP(MPR,DT,USL)=0 S WP="не оказывается"
+ I WP="",$$CHKUA^YMPRP(MPR,DT,USL)<0 S WP="платно"
+ I WP="",$$CHKUSA^YMPRP(MPR,DT,USL) S WP="по согласованию"
+ I WP="" S R=$$CNTUA^YMPRP(MPR,DT,USL),NM=$P(R,"|",1),X=$P(R,"|",2) S:$L(NM) WP="не более "_NM_" шт."_$S(X<0:" за последние "_$$DAYT^DTUTL(-X),X:" в течении "_$$DAYT^DTUTL(X),1:"")
+ Q WP
+PVPRICE(NIB,DGN,TYP,DT,KSS) ; Получить прейскурант по пациенту
+ ; NIB - № и.б. пациента 
+ ; DGN - договор
+ ; TYP - тип прейскуранта c/s/d/k
+ ; DT - дата прейскуранта
+ ; KSS - кассовый статус
+ S KSS=$G(KSS)
+ Q:NIB="" $$PRC^IINSC(DGN,"",DT,KSS) ; без пациента 
+ N PRC
+ S PRC=0
+ S:DGN="" DGN=$$GET^IPAC(NIB,"stc",DT)
+ S:('KSS)&(TYP'="") PRC=+$$GET^IINSC(DGN,TYP_"price",DT)
+ Q:PRC $$CORCP^IPRICET(PRC)
+ Q $$PRC^IINSC(DGN,NIB,DT,KSS)
+MOVUSL(U1,U2,DS,DE) ; Заменить один код услуги на другой
+ N OT,VR,DT,ID,R,U
+ S DS=$G(DS),DE=$G(DE) S:DE="" DE=99999
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D 
+ ..S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ...S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ....S R=$G(^(ID,"e")) Q:R="" 
+ ....S U=$P(R,"~",3) Q:$P(U,"*",1)'=U1
+ ....S $P(U,"*",1)=U2,$P(R,"~",3)=U
+ ....S ^ZNF(VR,OT,DT,ID,"e")=R
+ ....D GL^IEXCH("^ZNF",VR,OT,DT,ID,"e")
+ Q
+FLGKSS(FLI) ; Проверка на кассу при добавлении флага, нет - исключить
+ I VID=3!KSS Q 1
+ S FLG=$$EXFLG^TXTU(FLG,FLI)
+ Q 0

@@ -1,0 +1,22 @@
+INMSM ; Утилиты импорта из старой системы МСМ [ 10/30/2017  2:15 AM ]
+DO 
+ ; ^M, ^DOG, ^BCE, ^PCE, ^PKD
+ D INSPRAV
+ D INKDR
+ D INPAC
+ D INUSL
+ Q
+INKDR 
+ ; ^LOG->^LOG, ^PAS->^PAS
+ D CONVERT^NSTAFFU
+ Q
+INSPRAV 
+ D OTCNVRT^YISPRAV
+ D SPCNVRT^YISPRAV 
+ Q
+INPAC 
+ D CONVERT^YNDOG
+ Q
+INUSL 
+ D ^IUSLCNV
+ Q

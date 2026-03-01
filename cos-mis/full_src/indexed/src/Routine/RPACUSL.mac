@@ -1,0 +1,155 @@
+RPACUSL ; Услуги у пациентов [ 07/21/2021  3:46 PM ]
+VOZLT(DS,DE,DCNT,DBF,KSS,MNSUM,SMOD,CCLP,LP) ; Вернувшиеся пациенты
+ N NPHN S NPHN=1
+ G VOZ+2
+VOZ(DS,DE,DCNT,DBF,KSS,MNSUM,SMOD,CCLP,LP) ; Вернувшиеся пациенты
+ N NPHN S NPHN=0
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S DBF=$$DI^DTUTL(DBF)
+ S KSS=+$G(KSS),LP=$G(LP),SMOD=+$G(SMOD),MNSUM=+$G(MNSUM),CCLP=$G(CCLP)
+ S:DCNT DBF=""
+ S:'DCNT&('DBF) DCNT=365
+ N VR,OT,DT,ID,R,OD,FR,F,K,STOM,O,DF,@$$NEWVAR^IUSL
+ S FR=+$$FR^I() S:'FR LP=$$^I("ilpu")
+ M STOM=^cfg("stom-otd") S R=$G(^cfg("stom-otd")) S:R'="" STOM(R)=""
+ K ^BUF($J)
+ S DF=$S(DCNT:DS-DCNT+1,1:DBF)
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .I LP,'$D(^ZNFI("l",LP,VR)) Q 
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  I $$isSMOD(OT,SMOD) S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ..S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ...I LP,LP'=$G(^(ID,"l")) Q
+ ...D GETLT^IUSL(VR,DT,OT,ID) Q:$D(ERR)
+ ...I KSS,'KASS Q 
+ ...S OD=DT,F=0 F  S OD=$O(^PNF(NI,OD),-1) Q:OD=""  D  Q:F 
+ ....S K="" F  S K=$O(^PNF(NI,OD,K)) Q:K=""  S O=$P(K,"|",2) I $$isSMOD(O,SMOD) S R=$G(^ZNF($P(K,"|",1),$P(K,"|",2),OD,$P(K,"|",3),"e")) I "wd"'[$P(R,"~",1),$S(CCLP=1:1,CCLP=2&(OD>DF):1,'LP:1,1:LP=$G(^("l"))) Q:KSS&("|"_$P($G(^("m")),"~",2)_"|"'["|kss|")  S F=1  Q 
+ ...Q:OD=""
+ ...I DCNT,(DT-OD+1)<DCNT Q 
+ ...I DBF,OD>DBF Q 
+ ...I KSS,$O(^BILL(NI,DS-1),-1)="" Q  ; не было платеж.
+ ...I MNSUM,$$PKOSUM^NBILL(NI,DS,DE,3)<MNSUM Q 
+ ...Q:$D(^BUF($J,NI))  S ^(NI)=DT_"|"_OD
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|№ И.Б.|Ф.И.О. Пациента|Дата возврата|Число дней|Нал. за период|Основной договор|"_$S(NPHN:"",1:"Телефон|")_"Менеджер")
+ S NI="" F  S NI=$O(^BUF($J,NI)) Q:NI=""  D
+ .S R=^(NI),DT=$P(R,"|",1),OD=$P(R,"|",2)
+ .S R=NI_"|"_NI_"|"_$$FIO^IPAC(NI)_"|"_$$DT^DTUTL(DT)_"|"_(DT-OD+1)
+ .S R=R_"|"_$TR(+$$PKOSUM^NBILL(NI,DS,DE,3),".",",")
+ .S R=R_"|"_$$GETE^IPAC(NI,"stc",DT)
+ .S:'NPHN R=R_"|"_$$TELS^IPAC(NI)
+ .S R=R_"|"_$$GET^IPAC(NI,"menj")
+ .D WC^RWU(CR_R)
+ D C^RWU
+ K ^BUF($J)
+ Q
+SVVOZ(DS,DE,DCNT,DBF,KSS,MNSUM,SMOD,CCLP,LP) ; Вернувшиеся пациенты (сводка)
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),DBF=$$DI^DTUTL(DBF)
+ S KSS=+$G(KSS),LP=$G(LP),SMOD=+$G(SMOD),MNSUM=+$G(MNSUM),CCLP=$G(CCLP)
+ S:DCNT DBF=""
+ S:'DCNT&('DBF) DCNT=365
+ N VR,OT,DT,ID,R,OD,FR,TAB,DG,F,K,STOM,O,DF,@$$NEWVAR^IUSL
+ S FR=+$$FR^I() S:'FR LP=$$^I("ilpu")
+ M STOM=^cfg("stom-otd") S R=$G(^cfg("stom-otd")) S:R'="" STOM(R)=""
+ K ^BUF($J)
+ S DF=$S(DCNT:DS-DCNT+1,1:DBF)
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .I LP,'$D(^ZNFI("l",LP,VR)) Q
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  I $$isSMOD(OT,SMOD) S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ..S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ...I LP,LP'=$G(^(ID,"l")) Q
+ ...D GETLT^IUSL(VR,DT,OT,ID) Q:$D(ERR)
+ ...Q:$D(^BUF($J,NI)) 
+ ...I KSS,'KASS Q 
+ ...S OD=DT,F=0 F  S OD=$O(^PNF(NI,OD),-1) Q:OD=""  D  Q:F 
+ ....S K="" F  S K=$O(^PNF(NI,OD,K)) Q:K=""  S O=$P(K,"|",2) I $$isSMOD(O,SMOD) S R=$G(^ZNF($P(K,"|",1),$P(K,"|",2),OD,$P(K,"|",3),"e")) I "wd"'[$P(R,"~",1),$S(CCLP=1:1,CCLP=2&(OD>DF):1,'LP:1,1:LP=$G(^("l"))) Q:KSS&("|"_$P($G(^("m")),"~",2)_"|"'["|kss|")  S F=1  Q 
+ ...Q:OD=""  
+ ...I DCNT S R=DT-OD+1 Q:R<DCNT
+ ...I DBF Q:OD>DBF  S R=DS-OD+1
+ ...Q:$D(^BUF($J,NI)) 
+ ...I KSS,$O(^BILL(NI,DS-1),-1)="" S ^BUF($J,NI)=0 Q  ; не было платеж.
+ ...I MNSUM,$$PKOSUM^NBILL(NI,DS,DE,3)<MNSUM S ^BUF($J,NI)=0 Q  ; мин. сумма
+ ...S ^BUF($J,NI)=1
+ ...S DG=+$S($G(ISTC)'="":ISTC,1:$$GET^IPAC(NI,"stc",DT))
+ ...S TAB(DG,1)=$G(TAB(DG,1))+1
+ ...S TAB(DG,2)=$G(TAB(DG,2))+R
+ ...S:'$D(TAB(DG,3)) TAB(DG,3)=999999
+ ...S:$G(TAB(DG,3))>R TAB(DG,3)=R
+ ...S:$G(TAB(DG,4))<R TAB(DG,4)=R
+ K ^BUF($J)
+ 
+ D OWF^RWU(".txt")
+ D WC^RWU("Договор|Лиц|Дней, мин.|Дней, среднее|Дней, макс.")
+ S DG="" F  S DG=$O(TAB(DG)) Q:DG=""  D
+ .S OD=TAB(DG,1),DT=TAB(DG,2)
+ .S R=OD_"|"_TAB(DG,3)_"|"_$J(DT/OD,"",2)_"|"_TAB(DG,4)
+ .D WC^RWU(CR_$$NAME^IINSC(DG)_"|"_R)
+ D C^RWU
+ Q
+isSMOD(OT,SMOD) ; Отделение стоматологическое
+ I SMOD=2,'$D(STOM(OT)) Q 0 ; stom
+ I SMOD=1,$D(STOM(OT)) Q 0 ; not stom
+ Q 1
+MISSLT(DCNT,KSS,MNSUM,SMOD,MMOD,LP) ; Пациенты отсутствующие N дней
+ N NPHN S NPHN=1
+ G MISS+2
+MISS(DCNT,KSS,MNSUM,SMOD,MMOD,LP) ; Пациенты отсутствующие N дней
+ N NPHN S NPHN=0
+ ; TODO - оптимизация, хоть по ЛПУ
+ S KSS=+$G(KSS),LP=$G(LP),SMOD=+$G(SMOD),MMOD=+$G(MMOD)
+ S:'+DCNT DCNT=365
+ N VR,OT,DT,ID,R,OD,FR,F,K,STOM,@$$NEWVAR^IUSL,NIB,KX,HH,iLP
+ S FR=+$$FR^I() S:'FR LP=$$^I("ilpu")
+ M STOM=^cfg("stom-otd") S R=$G(^cfg("stom-otd")) S:R'="" STOM(R)=""
+ S HH=+$H+1
+ K ^BUF($J)
+ S NIB="" F  S NIB=$O(^PNF(NIB)) Q:NIB=""  D
+ .I MNSUM,'$D(^BILL(NIB)) Q 
+ .S DT=HH,F=0,iLP=0
+ .F  S DT=$O(^PNF(NIB,DT),-1) Q:DT=""  D  Q:F
+ ..S KX="" F  S KX=$O(^PNF(NIB,DT,KX)) Q:KX=""  D  Q:F
+ ...S VR=$P(KX,"|",1),OT=$P(KX,"|",2),ID=$P(KX,"|",3)
+ ...Q:'$$isSMOD(OT,SMOD) 
+ ...I LP,LP'=$G(^ZNF(VR,OT,DT,ID,"l")) Q  
+ ...S iLP=1
+ ...D GETLT^IUSL(VR,DT,OT,ID) Q:$D(ERR)
+ ...I KSS,'KASS Q
+ ...I KSS,$O(^BILL(NI,HH-1),-1)="" Q  ; не было платеж. TODO - lpu
+ ...S OD=HH-DT,F=1 ; сколько дней
+ .Q:'iLP 
+ .I MMOD=1,$$GET^IPAC(NIB,"menj")="" Q 
+ .I MMOD=2,$$GET^IPAC(NIB,"menj")'="" Q
+ .I MNSUM,$$PKOSUM^NBILL(NIB,"",HH,3)<MNSUM Q 
+ .I F,OD>DCNT Q:$D(^BUF($J,NIB))  S ^(NIB)=(HH-OD)_"|"_OD
+ 
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|№ И.Б.|Ф.И.О. Пациента|Дата посещения|Число дней|Основной договор|"_$S(NPHN:"",1:"Телефон|")_"Менеджер")
+ S NI="" F  S NI=$O(^BUF($J,NI)) Q:NI=""  D
+ .S R=^(NI),DT=$P(R,"|",1),R=$P(R,"|",2)
+ .S R=NI_"|"_NI_"|"_$$FIO^IPAC(NI)_"|"_$$DT^DTUTL(DT)_"|"_R
+ .S R=R_"|"_$$GETE^IPAC(NI,"stc",DT)
+ .S:'NPHN R=R_"|"_$$TELS^IPAC(NI)
+ .S R=R_"|"_$$GET^IPAC(NI,"menj")
+ .D WC^RWU(CR_R)
+ D C^RWU
+ K ^BUF($J)
+ Q
+REGIPROC ; 
+ N FF,L,A,D,R,TS
+ S FF=$$FR^I(),L=+$$^I("ilpu")
+ S D="Отчеты по пациентам",R="Аналитика"
+ S TS="t@string:0/Всем подразделениям#1/Поликлинике#2/Стоматологии,Расчет по"
+ S A=",100,"_$S('FF&L:8,FF:9,1:7)_",d,Дата начала периода,d,Дата окончания периода,s,Число дней непосещения (365),d,Дата предыдущего посещения (не ранее),t@string:0/Нет#1/Да,Только кассовые услуги,s,Минимальная сумма платежа,"_TS
+ S A=A_$S(FF!L:",t@string:0/По текущему ЛПУ#1/По любому ЛПУ#2/Отсутствие - в любом,Расчет предыдущих посещений",1:"")
+ S ^IPROC(D,R,"Список вернувшихся пациентов")="VOZ_RPACUSL"_A_$S(FF:",t@storage:lpu,Филиал",1:"")
+ S ^IPROC(D,R,"Краткий список вернувшихся пациентов")="VOZLT_RPACUSL"_A_$S(FF:",t@storage:lpu,Филиал",1:"")
+ 
+ S A="SVVOZ_RPACUSL,1,"_$S('FF&L:8,FF:9,1:7)
+ S A=A_",d,Дата начала периода,d,Дата окончания периода,s,Число дней непосещения (365),d,Дата предыдущего посещения (не ранее),t@string:0/Нет#1/Да,Только кассовые услуги,s,Минимальная сумма платежа,"_TS
+ S A=A_$S(FF!L:",t@string:0/По текущему ЛПУ#1/По любому ЛПУ#2/Отсутствие - в любом,Расчет предыдущих посещений",1:"")
+ S ^IPROC(D,R,"Сводка по вернувшимся пациентам")=A_$S(FF:",t@storage:lpu,Филиал",1:"")
+ 
+ S A=",100,"_$S(FF:6,1:5)
+ S A=A_",s,Число дней непосещения (365),t@string:0/Нет#1/Да,Только кассовые услуги,s,Минимальная сумма платежа,"_TS_",t@string:0/не учитывать#1/указан#2/отсутствует,Менеджер пациента"
+  S ^IPROC(D,R,"Список отсутствующих пациентов")="MISS_RPACUSL"_A_$S(FF:",t@storage:lpu,Филиал",1:"")
+ S ^IPROC(D,R,"Краткий список отсутствующих пациентов")="MISSLT_RPACUSL"_A_$S(FF:",t@storage:lpu,Филиал",1:"")
+ Q

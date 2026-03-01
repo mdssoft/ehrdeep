@@ -1,0 +1,196 @@
+A ; Медицинский телемониторинг [ 08/11/2013  2:12 AM ]
+IO ; wrapper
+ D IO^IMEDMON
+ Q
+INITDB 
+ S ^MN("root","medmontm")="Вид событий оповещения телемониторинга"
+ S ^MN("root","medmonmsg")="Сообщения в оповещениях телемониторинга"
+ Q:$$CHKSPR^ISPRAV("medmontm") 
+ N I S I=$$NEWIDX^YISPRAV("medmontm")
+ S ^MN(I,0)="измерение",^(1)="прием препаратов",^(2)="информация",^(3)="прием препаратов (подт.)",^(4)="информация (подт.)",TTYPE(5)="настройка прибора"
+ Q
+LMD(NI) ; ПРОФИЛЬ АД ПАЦИЕНТА
+ D OWF^RWU(".xmlb")
+ D W^RWU($G(^PP(0,2))_"<newmon>")
+ N PL
+ I '$D(^MPROF(NI,1)) G LMDe
+ S PL="" F  S PL=$O(^MPROF(NI,1,PL)) Q:PL=""  D WTAGDC^RWU(PL,^(PL))
+LMDe 
+ D W^RWU("</newmon></nb_console>"),C^RWU
+ Q
+SMD ; ЗАПОМНИТЬ ПРОФИЛЬ АД
+ N NP,PL,%J,A,IMEI,NI,INU,INU1
+ S NP=1
+ D ORH^RWU
+ K XML,XMLR
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D XML^YIXMLRR
+ S NI=$G(XML("nb_console","newmon","nib"))
+ S INU=$G(^MPROF(NI,NP,"insulincur"))
+ S PL="",ISG=0 F  S PL=$O(XML("nb_console","newmon",PL)) Q:PL=""  S R=XML("nb_console","newmon",PL),^MPROF(NI,NP,PL)=R
+ S IMEI=$G(^MPROF(NI,NP,"imei")) S:IMEI'="" ^IMEI(IMEI)=NI
+ S NAM="Профиль мониторирования" D WWTYP^YIMGLU(NI,NAM)
+ S INU1=$G(^MPROF(NI,NP,"insulincur"))
+ S:INU'=INU1 ^MESS(NI,"insulin")=INU1
+ Q
+LEV(NI) ; СОБЫТИЯ ПАЦИЕНТА
+ N DT,TI,KOD,CHK,A
+LEV2 S DT=""
+ D OWF^RWU(".txt"),WC^RWU("Дата,время")
+ F  S DT=$O(^MESS(NI,DT),-1) Q:DT=""!(DT=0)  S TI="" F  S TI=$O(^MESS(NI,DT,TI)) Q:TI=""  D
+ .S A=^(TI),KOD=$P(A,"|",1),CHK="" S:$L($P(A,"|",2))>0 CHK=" *"
+ .S A=KOD_"@"_DT_","_TI_"|"_$$DT2^DTUTL(DT)_","_$$TM^DTUTL(TI)
+ .D WC^RWU(CR_A_" "_CHK_"|"_$P($G(^MESS(NI,0,KOD)),"|",2))
+ D C^RWU
+ Q
+ASE(NI,DS,DE,TM,KOD)   ; ДОБАВИТЬ НЕСК. СОБЫТИЙ
+ N DT,TI,KOD,CHK,A
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),TM=$$TI^DTUTL(TM)
+ F DT=DS:1:DE D WD^ISSG("^MESS("_NI_","_DT_","_TI_")") S ^MESS(NI,DT,TI)=KOD
+ S A=$$MKDOC^IMEDMON(NI,"med_mon/shedule","Лечебно-охранительный режим")
+ G LEV2
+SE(NI,DT,TM,KOD)   ; ЗАПОМНИТЬ СОБЫТИЕ
+ N CHK,A,DE,TI
+ S DT=$$DIH^DTUTL(DT),TM=$$TI^DTUTL(TM)
+ D WD^ISSG("^MESS("_NI_","_DT_","_TM_")") ; log if exists !
+ S ^MESS(NI,DT,TM)=KOD
+ S A=$$MKDOC^IMEDMON(NI,"med_mon/shedule","Лечебно-охранительный режим")
+ G LEV2
+DE(NI,KEY)       ; УДАЛИТЬ СОБЫТИЕ
+ N DT,TI,KOD,CHK,A,DE,TM
+ S DT=$P(KEY,",",1),TM=$P(KEY,",",2)
+ G:'$D(^MESS(NI,DT,TM)) LEV2
+ I $P(^(TM),"|",2)="*" D MSG^RWU("ERR:Событие уже выполнено") Q 
+ D KD^ISSG("^MESS("_NI_","_DT_","_TM_")")
+ K ^MESS(NI,DT,TM)
+ G LEV2
+NM(NI) ; НОВЫЙ КОД СОБЫТИЯ
+ D MSG^RWU($O(^MESS(NI,0,""),-1)+1)
+ Q
+LMS(NI) ; ТАБЛИЦА СООБЩЕНИЙ
+LMS1 N TYPE,KD,A,TYP
+ M TYPE=^MN(+$G(^MN("medmontm")))
+ D OWF^RWU(".txt"),WC^RWU("Код")
+ S KD="" F  S KD=$O(^MESS(NI,0,KD)) Q:KD=""  S A=^(KD),TYP=$P(A,"|",1) D WC^RWU(CR_KD_"@"_TYP_"|"_$G(TYPE(+TYP))_"|"_$P(A,"|",2))
+ D C^RWU
+ Q
+SM(NI,KD,TYP,NN,FN,FP)          ; запомнить СООБЩЕНИЕ
+ S L=$G(^MESS(NI,0,KD)),FN=$$UL^TXTU(FN),NN=$$WD^TXTU(NN)
+ I $L(FP),$P(L,"|",3)'=FN D RMFILE^NFILES("/DBDIR/MMAMR",$P(L,"|",3)) ; del prev. file
+ D WD^ISSG("^MESS("_NI_",0,"_KD_")")
+ S ^MESS(NI,0,KD)=TYP_"|"_NN_"|"_FN_"|"_FP
+ G LMS1
+DM(NI,KD)          ; удалить СООБЩЕНИЕ
+ N FLG,DD,TT
+ S (DD,FLG)=0
+ F  S DD=$O(^MESS(NI,DD)) Q:DD=""!FLG  S TT="" F  S TT=$O(^MESS(NI,DD,TT)) Q:TT=""  I KD=$P(^(TT),"|",1) S FLG=1 Q 
+ I FLG=1 Q
+ D KD^ISSG("^MESS("_NI_",0,"_KD_")")
+ K ^MESS(NI,0,KD)
+ G LMS1
+LFN(NI,KD)         ;
+ D MSG^RWU($P($G(^MESS(NI,0,KD)),"|",3,4))
+ Q
+LFD(FN) ; ВЫВЕСТИ ФАЙЛ AMR (ДЛЯ СООБЩЕНИЯ)
+ D GET^NFILES("/DBDIR/MMAMR/"_$$UL^TXTU(FN))
+ Q
+SFD ; ЗАГРУЗИТЬ ФАЙЛ
+ N FIL S FIL=$$LASTF^NFILES("/DBDIR/MMAMR")
+ S FIL=($P(FIL,"-",1)+1)_"-"_(+$$^I("ilpu"))_".amr"
+ D SETFILE^NFILES("/DBDIR/MMAMR/"_FIL)
+ D POST^NFILES
+ D MSG^RWU(FIL)
+ Q
+SFN(NI,KD,FIL) ; save file name
+ N A S A=$G(^MESS(NI,0,KD))
+ S $P(A,"|",3)=FIL,$P(A,"|",4)="LFD^NMEDMON?prm="_FIL
+ S ^MESS(NI,0,KD)=A
+ Q
+LDIA(NI,DTN,DTK,TIP) ; ВЫВОД ДНЕВНИКА
+ ; todo
+ S TYPE(1)="DB|голосовое сообщение",TYPE(2)="CHKM|расписание",TYPE(3)="BP|измерение",TYPE(4)="SYS|системное"
+ S DN=$$DIH^DTUTL(DTN)-1,DK=$$DIH^DTUTL(DTK)
+ D OWF^RWU(".txt")
+ F  S DN=$O(^WMON(NI,DN)) Q:DN=""  S TIM="" F  S TIM=$O(^WMON(NI,DN,TIM)) Q:TIM=""  D
+ .I TIP=99 S TI="" F  S TI=$O(^WMON(NI,DN,TIM,TI)) Q:TI=""  D DIATI
+ .I TIP'=99 S TI=$P($G(TYPE(TIP)),"|",1) D:$D(^WMON(NI,DN,TIM,TI)) DIATI
+ D C^RWU
+ Q
+DIATI ;
+ S L=$G(^(TI))
+ S A=$$DT^DTUTL(DN)_" "_$$TM^DTUTL(TIM)_"|"
+ ;;I TI="DB"&($P(L,"|",1)="DSREC") S A=A_"1 Голосовое сообщение|звуковой файл" ZZW A,! Q
+ ;;I TI="DB"&($P(L,"|",1)="CRDS") S A=A_"4 Снятие ЭКГ|файл кардиограммы" ZZW A,! Q
+ 
+ ;;I TI="BP" S A=A_"2 Давление|"_$TR(L,"|","/") ZZW A,! Q
+ ;;I TI="CHKM" S A=A_"3 Расписание|",LL=$G(^MESS(NI,0,L)),A=A_$P(LL,"|",2) ZZW A,! Q
+ Q
+LFDS(NI,DT,TIM) ;ВЫВОД ФАЙЛА
+ N ID,TP,DTT,TM,L
+ S ID=$$FNDUID^IEPR(NI,"med_mon/data")
+ S DTT=$$DI^DTUTL(DT),TM=$$TI^DTUTL(TIM)
+ S L=$G(^EPRD(NI,ID,DTT,TM,"DB")) I L="" Q 
+ D GET^NFILES("/DBDIR/MMON/"_$P(L,"|",2))
+ Q
+LFDSF(FN) ;ВЫВОД ФАЙЛА
+ I FN="" Q
+ D GET^NFILES("/DBDIR/MMON/"_$$UL^TXTU(FN))
+ Q
+CVDB(P1,NNI)       ; КАРДИО ВЬЮЕР
+ I P1="patient"
+ I P1="cardio" D CVDB1
+ Q
+CVDB1 ;
+ F JN=1:1 S NI=$P(NNI,"|",JN) Q:NI=""  D
+ .S DT="" F  S DT=$O(^WMON(NI,DT)) Q:DT=""  S TI="" F  S TI=$O(^WMON(NI,DT,TI)) Q:TI=""  D
+ ..S L=$G(^WMON(NI,DT,TI,"DB"))
+ ..S DTT=$$DT^DTUTL(DT)
+ ;;..I $P(L,"|",1)="CRDS" S %A=NI_"|"_DTT_"|"_$$TM^DTUTL(TI)_"|"_$P(L,"|",2) ZZW %A,!
+ Q
+TABMSG ; Таблица общих сообщений
+ N TYPE,KD,A,TYP,I
+ S I=+$G(^MN("medmonmsg"))
+ M TYPE=^MN(+$G(^MN("medmontm")))
+ D OWF^RWU(".txt"),WC^RWU("|Код")
+ S KD="" F  S KD=$O(^MN(I,KD)) Q:KD=""  S A=^(KD),TYP=$P(A,"|",1) D WC^RWU(CR_KD_"@"_TYP_"|"_$G(TYPE(+TYP))_"|"_$P(A,"|",2))
+ D C^RWU
+ Q
+LFMSG(ID) 
+ D MSG^RWU($P($G(^MN(+$G(^MN("medmonmsg")),ID)),"|",3,4))
+ Q
+SMSG(ID,TYP,NN,FN,FP) 
+ N I,L
+ S I=$$NEWIDX^YISPRAV("medmonmsg")
+ S:ID="" ID=$O(^MN(I,""),-1)+1
+ S L=$G(^MN(I,ID)),FN=$$UL^TXTU(FN),NN=$$WD^TXTU(NN)
+ I $L(FP),$P(L,"|",3)'=FN D RMFILE^NFILES("/DBDIR/MMAMR",$P(L,"|",3)) ; del prev. file
+ ; D WD^ISSG("^MESS("_NI_",0,"_KD_")")
+ S ^MN(I,ID)=TYP_"|"_NN_"|"_FN_"|"_FP
+ D MSG^RWU(ID)
+ Q
+SFMSG(ID,FIL) ; save file name
+ N A,I
+ S I=+$G(^MN("medmonmsg")),A=$G(^MN(I,ID))
+ S $P(A,"|",3)=FIL,$P(A,"|",4)="LFD^NMEDMON?prm="_FIL
+ S ^MN(I,ID)=A
+ Q
+DMSG(ID) 
+ K ^MN(+$G(^MN("medmonmsg")),ID)
+ G TABMSG
+ Q
+DEVTAB(TXT,DS,DE) ; Таблица выдачи устройств
+ N NI,I
+ S DS=$$DI^DTUTL(DS),DE=$$DI^DTUTL(DE)
+ S TXT=$$LU^TXTU($$WD^TXTU(TXT))
+ Q
+REGIMHS ;
+ N ID,NM,U
+ S NM="Лечебно-охранительный режим",U="med_mon/shedule"
+ S ID=$$FNDUID^YIMHS(U)
+ Q:ID'="" 
+ S ID=$$ADDT^YIMHS(NM,$$ADDF^YIMHS("Мониторирование"),"frm",U)
+ D SET^YIMHS(ID,"pfile","evmon.frm")
+ D SET^YIMHS(ID,"rights","aaa")
+ D SET^YIMHS(ID,"ext","frm")
+ D SET^YIMHS(ID,"bdoc",1)
+ D MKIDX^IMHS(ID)
+ Q

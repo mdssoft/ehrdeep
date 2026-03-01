@@ -1,0 +1,72 @@
+RVRSC ; Услуги  по врачам [ 10/03/2018  3:16 PM ]
+BYPVR(DS,DE,LAB,fNAZ,cLPU) ; Персональные услуги и направления
+ N VRx,OTD
+ S VRx=$$KDR^IUSER(),OTD=""
+ G BYOTD+1
+BYOTD(DS,DE,OTD,VRx,LAB,fNAZ,fOWNZ,cLPU) ; По врачам и отделениям
+ ; DS,DE - период дат
+ ; OTD - фильтр по отделению
+ ; VRx - фильтр по врачу
+ ; LAB - статус лаборатории
+ ; fNAZ - тип назначенных услуг: выполненные/нет/вып.из назначенных  
+ ; fOWNZ - не учитывать направления к себе
+ ; cLPU - филиал
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),LAB=+$G(LAB),fNAZ=+$G(fNAZ)
+ S:OTD="999" OTD=""
+ D OWF^RWU(".txt")
+ D WC^RWU("Дата|Пациент|Услуга|Кол-во|Сумма|Диагноз|"_$S($L(VRx):"",1:"Сотрудник|")_"По направлению|"_$S(LAB:"Лаб.|",1:"")_"По кассе|Прейскурант|Статус")
+ N @$$NEWVAR^IUSL
+ N POLE,A,F,VR,ii,OT,DT,ID,U,SUS,SUi,SU,CEN,CNT,fV,LL,KSS,DV,ST,S,CC,SU,CCU,FVR
+ K ^BUF($J,"nn")
+ D PRETZR^IPAC
+ S VR="",ii=1,cLPU=+$G(cLPU),(CC,S,CCU,SU)=0,iSTC=$G(TZRBTN("stc"))
+ S:'+$$FR^I() cLPU=$$^I("ilpu")
+ ; TODO - подсчет по всем назн., т.к. назначения
+ F  S VR=$O(^ZNF(VR)) Q:VR=""  I 'cLPU!$D(^ZNFI("l",cLPU,VR)) S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D
+ .I OTD'="",OT'=OTD Q
+ .I VRx'="",fNAZ'=2,VR'=VRx Q
+ .S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:(DT="")!(DT>DE)  D
+ ..I cLPU,'$D(^ZNFI("l",cLPU,VR,DT)) Q 
+ ..S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ...S A=$P($G(^(ID,"e")),"~",1) Q:A="d"!(A="w")!(A=5)  
+ ...I cLPU,cLPU'=$G(^("l")) Q 
+ ...S (F,FVR,fV)=""
+ ...I fNAZ=2 S F=$$GETPL^IUSL(VR,DT,OT,ID,"f") I $L(F) S FVR=$$fromVRI^INAZN(F) I VRx'="",FVR'=VRx,VR'=VRx Q 
+ ...I fNAZ=2,'$L(F),$L(VRx),VR'=VRx Q   ; не по врачу, не по направлению
+ ...D GET^IUSL(VR,DT,OT,ID)
+ ...Q:STAT="d"!(STAT="w")!(STAT>3)!$D(ERR)  
+ ...S PRC=$$CORCP^IPRICET($G(PRC))
+ ...I '$L(F),fNAZ'=2 S F=$$GETPL^IUSL(VR,DT,OT,ID,"f")
+ ...I $L(F) S F=$$fromVRI^INAZN(F),fV=F S:$L(F) F=$$FIOSH^IKADRY(F)
+ ...S SUS=$$GETPL^IUSL(VR,DT,OT,ID,"s"),SUi=2
+ ...S FLG="|"_$G(FLG)_"|"
+ ...S DV=$$GET^IINSC($S($G(ISTC)="":$$GETTZ^YIPACN(NI,TZRBTNs,DT),1:ISTC),"dvid",DT)
+ ...S ST=$TR($$GET^IPAC(NI,"status",DT),"|",",")
+ ...S U="" F  S U=$O(UL(U)) Q:U=""  D
+ ....S CNT=$G(UL(U))
+ ....S CEN=$S(SUS'["|"&$L(SUS):SUS,$L(SUS):$P(SUS,"|",SUi),1:$$USUM^IUSL(DT,U,CNT))
+ ....S LL="",KSS=$S(KASS:"да",DV=3:"да",1:"")
+ ....I LAB S A=$$GET^IPRICE(U,"grp",PRC,DT),LL=$S($$FLG^NPRICEG(A)["lab":"да",1:"")_"|"
+ ....S A=$$DT^DTUTL(DT)_"|"_NI_" "_$$FIOSH^YIPACN(NI)_"|"
+ ....S A=A_U_" "_$$NAME^IPRICE(U,PRC)_"|"_CNT_"|"_CEN_"|"_$G(DIA)_"|"
+ ....I fNAZ,$L(F),'$L(VRx)!(VRx=FVR),$S('fOWNZ:1,1:fV'=VR) S ^BUF($J,"nn",ii)=A_$S($L(VRx):"",1:"|")_F_LL_"|"_KSS,SU=SU+CEN,CCU=CCU+CNT,ii=ii+1
+ ....I fNAZ=2,$L(VRx),VR'=VRx Q 
+ ....S S=S+CEN,CC=CC+CNT
+ ....S A=A_$S($L(VRx):"",1:$$FIOSH^IKADRY(VR,DT)_"|")_F_"|"
+ ....D WC^RWU(CR_A_LL_KSS_"|"_$$NAME^ISPRAV("tprice",PRC)_"|"_ST)
+ D:CC!S WC^RWU(CR_"||Итого|"_CC_"|"_S)
+ D:$D(^BUF($J,"nn",1))
+ .D WC^RWU(CR_CR_"||Назначенные и выполненные услуги")
+ .S ii="" F  S ii=$O(^BUF($J,"nn",ii)) Q:ii=""  D WC^RWU(CR_^(ii))
+ .D:CCU!SU WC^RWU(CR_"||Итого|"_CCU_"|"_SU)
+ D C^RWU
+ Q
+REGIPROC 
+ N D,FR,F,P
+ S P=",d,Период услуг с,d,Период услуг по"
+ S FR=$$FR^I(),F=$S(FR:",t@storage:lpu,Филиал",1:"")
+ 
+ S ^IPROC("Отчеты по услугам","Услуги и направления врачей")="BYOTD_RVRSC,1,"_$S(FR:8,1:7)_P_",t@storage:otd,Отделение,te@net:FLST_NVFIND(""""),Врач,t@string:0/Нет#1/Да,Отображать статус лаборатории,t@string:1/Выполненные#0/Нет#2/Выполненные из назначенных,Отображать назначенные услуги,t@string:0/Нет#1/Да,Не выводить направления к себе"_F
+ S ^IPROC("Отчеты по услугам","Персональные услуги и направления")="BYPVR_RVRSC,1,"_$S(FR:5,1:4)_P_",t@string:0/Нет#1/Да,Отображать статус лаборатории,t@string:1/Выполненные#0/Нет#2/Выполненные из назначенных,Отображать назначенные услуги"_F
+ Q
+ 

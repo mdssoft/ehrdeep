@@ -1,0 +1,48 @@
+IPLPU ; План ЛПУ [ 04/20/2022  1:59 AM ]
+TPNAME(ID) ; Наименование типа помещения
+ N CTP
+ S CTP(0)="Кабинет",CTP(2)="Палата",CTP(3)="Адм. помещение",CTP(4)="Служебное",CTP(5)="Складское",CTP(6)="Техническое",CTP(11)="Операционная",CTP(20)="Туалет",CTP(99)="Прочие" 
+ Q $G(CTP(ID))
+CABFL(LPU,CAB,FL) ; Получить поле из кабинета в ЛПУ
+ N K,F
+ S (K,F)=""
+ F  S K=$O(^PLPUI("cab",CAB,K)) Q:K=""  I $P(K,".",1)=LPU S F=$G(^PLPU(LPU,$P(K,".",2),$P(K,".",3),"cab",CAB,FL)) Q 
+ Q F
+CABNM(LPU,CAB) ; Получить имя из кабинета в ЛПУ
+ N K,F
+ S (K,F)=""
+ F  S K=$O(^PLPUI("cab",CAB,K)) Q:K=""  I $P(K,".",1)=LPU S F=$P($G(^PLPU(LPU,$P(K,".",2),$P(K,".",3),"cab",CAB)),"|",3) Q 
+ Q F
+FCAB(LP,NM) ; Поиск по имени кабинета (для распис.)
+ N I1,I2,I3,F
+ S (F,I1)=""
+ F  S I1=$O(^PLPU(LP,I1)) Q:I1=""  Q:F'=""  S I2="" F  S I2=$O(^PLPU(LP,I1,I2)) Q:I2=""  Q:F'=""  S I3="" F  S I3=$O(^PLPU(LP,I1,I2,"cab",I3)) Q:I3=""  I $P(^PLPU(LP,I1,I2,"cab",I3),"|",3)=NM S F=I3_"."_LP_"."_I1_"."_I2
+ Q F
+NAME(LP,BL,FL,CAB,FULL) ; Получить имя кабинета
+ N R,R1,R2
+ S R=$G(^PLPU(LP,BL,FL,"cab",CAB)) Q:R="" ""
+ S R=$P(R,"|",2)_$S($P(R,"|",3)="":"",1:" ("_$P(R,"|",3)_")")
+ I '$G(FULL) Q R
+ S R1=$P($G(^PLPU(LP,BL)),"|",1) S:R1="" R1="Основной корпус"
+ S R2=$P($G(^PLPU(LP,BL,FL)),"|",1) S:R2="" R2="этаж "_FL
+ S R=R_$S(FULL=2:", "_$$NAME^ICONTR(LP),1:"")_", "_R1_", "_R2
+ Q R
+REIDX ; Переиндексация
+ N L,B,F,C
+ K ^PLPUI
+ D KGL^IEXCH("^PLPUI")
+ S L="" F  S L=$O(^PLPU(L)) Q:L=""  D
+ .S B="" F  S B=$O(^PLPU(L,B)) Q:B=""  D
+ ..S F="" F  S F=$O(^PLPU(L,B,F)) Q:F=""  D
+ ...S C="" F  S C=$O(^PLPU(L,B,F,"cab",C)) Q:C=""  D mkIDX^NPLPU(L,B,F,C)
+ Q
+REGLCL ; Регистрация прав
+ S ^LCLI("plpu")="План ЛПУ"
+ S ^LCLI("plpu","new")="Создание кабинета"
+ S ^LCLI("plpu","newb")="Добавление зданий и этажей"
+ S ^LCLI("plpu","save")="Сохранение кабинета"
+ S ^LCLI("plpu","del")="Удаление кабинета"
+ S ^LCLI("plpu","delb")="Удаление зданий и этажей"
+ S ^LCLI("plpu","seteq")="Изменение оборудования"
+ S ^LCLI("plpu","setvr")="Изменение врача"
+ Q

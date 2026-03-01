@@ -1,0 +1,181 @@
+RPOLISA ;  [ 06/29/2015  11:32 PM ]
+DO(TPL,MMX,VR) ; Оценка стоимости
+ ; MMX - по инимальной или максимальной стоимости (0/1)
+ N DGN,PRG,PRC,U,STAT,R,DD,DA,CN,G,I,X,SUM,MC,Q,MX,DT,OTD,ID,PG,PI
+ N CSTC,DVID,UL,UPL,U,u,g
+ S DGN=$G(^BTPLS("t",+TPL,"stc")),PRG=$G(^BTPLS("t",+TPL,"prog")),DT=+$H
+ S PRC=$$GET^YNDOG(DGN,"price",DT)
+ S DVID=$$GET^YNDOG(DGN,"dvid",DT)
+ F PI=1:1:$L(PRG,"|") S PG=$P(PRG,"|",PI) D:PG'=""  Q:$$IsMSG^RWU()  
+ .S DA=$O(^MPRP(PG,"u","a",DT+1),-1)
+ .S DD=$O(^MPRP(PG,"u","d",DT+1),-1)
+ .I DD="",DA="" D MSG^RWU(CR_"Не определены условия обслуживания") Q 
+ K ^BUF($J)
+ D:MMX=0 VCENNmi(PRG)
+ D:MMX=1 VCENNmx(PRG)
+ S OTD=$$OTD^IKADRY(VR)
+ D CALCzrp
+ D OWF^RWU(".txt")
+ D WC^RWU($G(^BTPLS("t",+TPL,"name"))_"|")
+ D WC^RWU(CR_"Цена|"_$$FN($G(^BTPLS("t",+TPL,"price",1))))
+ D WC^RWU(CR_"Базовая цена|"_$$FN($G(^BTPLS("t",+TPL,"rprice",1))))
+ D WC^RWU(CR_"Сумма услуг|"_$$FN($G(STAT(1))))
+ D WC^RWU(CR_"Себестоимость услуг|"_$$FN($G(STAT(2))))
+ D WC^RWU(CR_"Сумма материалов|"_$$FN($G(STAT(3))))
+ D WC^RWU(CR_"Сумма заработной платы|"_$$FN($G(STAT(4))))
+ S X=$G(^BTPLS("t",+TPL,"rprice",1))-$G(STAT(2))-$G(STAT(3))-$G(STAT(4))
+ D WC^RWU(CR_"Итого выручка|"_$$FN(X)_CR)
+ D WC^RWU(CR_"Список услуг|Цена|Кол-во|Сумма З.П.")
+ S G="" F  S G=$O(^BUF($J,1,G)) Q:G=""  D
+ .S U="" F  S U=$O(^BUF($J,1,G,U)) Q:U=""  D
+ ..S R=^(U)
+ ..D WC^RWU(CR_U_" "_$E($$NAMEH^IPRICE(U,PRC,DT),1,85)_"|"_$$FN($P(R,"|",3))_"|"_$$FN($G(^BUF($J,1,G,U,0)))_"|"_$$FN($G(^BUF($J,1,G,U,1))))
+ D C^RWU
+ K ^BUF($J)
+ Q
+CALCzrp 
+ N zDT,zbDT,DT,zDE,LPU,KSKD,iii,rVi,rV,cLPU,FF,NOO,noSB,u,g,SUMM,fLC,fLZ
+ S LPU=+$P($$GET^IKADRY(VR,"lpu"),"|",1)
+ S DT=$O(^ZARP(LPU,0,VR,+$H+1),-1) Q:DT=""  ; нет алгоритмов
+ S FF=+$$FR^I()
+ S NOO=+$G(^cfg("zarp","nootd"))
+ S KSKD=1,CSTC=DGN,noSB=0
+ S zDT=DT,zbDT=DT,zDE=DT,iii=1,ID=1,(rV,rVi)=2,cLPU=LPU
+ S fLC=+$G(^cfg("zarp","logucon"))
+ S fLZ=+$G(^cfg("zarp","loguzak"))
+ D SCANlst^IZARP
+ S g="" F  S g=$O(^BUF($J,1,g)) Q:g=""  D
+ .S u="" F  S u=$O(^BUF($J,1,g,u)) Q:u=""  D:$D(^BUF($J,1,g,u,0))
+ ..S ^BUF($J,3,u)=g
+ ..K UL S R=^BUF($J,1,g,u,0),UL(u)=R,U=u
+ ..D CVPROC
+ D CPROC^NZARP
+ S STAT(4)=0
+ S u="" F  S u=$O(^BUF($J,"vrez",u)) Q:u=""  D
+ .S R=^(u),U=$P(R,"|",5),G=^BUF($J,3,U),X=$P(R,"|",7)
+ .S ^BUF($J,1,G,U,1)=$G(^BUF($J,1,G,U,1))+X
+ .S STAT(4)=STAT(4)+X
+ Q
+VCENNmi(PRG) 
+ K ^BUF($J)
+ ; Комбинируем группы
+ F PI=1:1:$L(PRG,"|") S PG=$P(PRG,"|",PI) D:PG'=""
+ .S U="" F  S U=$O(^MPRP(PG,"u","a",DA,U)) Q:U=""  D
+ ..S R=^(U),G=$P(R,"|",4)
+ ..S R=$P(R,"|",1)_"|"_$P(R,"|",5)_"|"_$$PRICEH^IPRICE(U,PRC,DT)
+ ..F I=1:1:$L(G,";") S ^BUF($J,1,+$P(G,";",1),U)=R
+ 
+ Q:'$D(^BUF($J,1)) 
+ ; Сортировка по сумме в группе
+ S G="" F  S G=$O(^BUF($J,1,G)) Q:G=""  D
+ .K ^BUF($J,2)
+ .S U="" F  S U=$O(^BUF($J,1,G,U)) Q:U=""  D
+ ..S R=^(U)
+ ..S ^BUF($J,2,+$P(R,"|",3),U)=R
+ .S SUM="",MC=0 F  S SUM=$O(^BUF($J,2,SUM),-1) Q:SUM=""  D
+ ..S U="" F  S U=$O(^BUF($J,2,SUM,U)) Q:U=""  D
+ ...S R=^(U),MU=0
+ ...S MX=$P(R,"|",1),Q=0 I MX="",$P(R,"|",2)="" S MX=1
+ ...I $P(R,"|",2)'="" Q:+$P(R,"|",2)'>MC  
+ ...I MX'="",MU'<MX S Q=1 Q ; превышение кол-ва
+ ...I $P(R,"|",2) Q:+$P(R,"|",1)'>MU  ; если не указано отдельно по грп
+ ...S MC=MC+1,MU=MU+1
+ ...S STAT(1)=$G(STAT(1))+SUM
+ ...S ^BUF($J,1,G,U,0)=$G(^BUF($J,1,G,U,0))+1
+ ...S STAT(2)=$G(STAT(2))+$$GET^IPRICE(U,"scost",PRC,DT)
+ ...S X=$$GET^IPRICE(U,"mat",PRC,DT) Q:X="" 
+ ...S STAT(3)=$G(STAT(3))+$$CENNALL^IWRHS(X,DT)
+ K ^BUF($J,2)
+ Q
+VCENNmx(PRG) 
+ K ^BUF($J)
+ F PI=1:1:$L(PRG,"|") S PG=$P(PRG,"|",PI) D:PG'=""
+ .Q:$G(^MPRP(PG,"u","a",DA))'=1  ; нет списка только разрешенных
+ .S U="" F  S U=$O(^MPRP(PG,"u","a",DA,U)) Q:U=""  D
+ ..S R=^(U),G=$P(R,"|",4)
+ ..S R=$P(R,"|",1)_"|"_$P(R,"|",5)_"|"_$$PRICEH^IPRICE(U,PRC,DT)
+ ..F I=1:1:$L(G,";") S ^BUF($J,1,+$P(G,";",1),U)=R
+ 
+ Q:'$D(^BUF($J,1)) 
+ ; Сортировка по сумме в группе
+ S G="" F  S G=$O(^BUF($J,1,G)) Q:G=""  D
+ .K ^BUF($J,2)
+ .S U="" F  S U=$O(^BUF($J,1,G,U)) Q:U=""  D
+ ..S R=^(U)
+ ..S ^BUF($J,2,+$P(R,"|",3),U)=R
+ .S SUM="",MC=0 F  S SUM=$O(^BUF($J,2,SUM),-1) Q:SUM=""  D
+ ..S U="" F  S U=$O(^BUF($J,2,SUM,U)) Q:U=""  D
+ ...S R=^(U),MU=0
+ ...S MX=$P(R,"|",1),Q=0 
+ ...I MX="",$P(R,"|",2)="" S MX=1
+ ...F I=1:1:99 D  Q:Q
+ ....I G,$P(R,"|",2)'="" Q:+$P(R,"|",2)'>MC  
+ ....I MX'="",MU'<MX S Q=1 Q ; превышение кол-ва
+ ....I $P(R,"|",2) Q:+$P(R,"|",1)'>MU  ; если не указано отдельно по грп
+ ....S MC=MC+1,MU=MU+1
+ ....S STAT(1)=$G(STAT(1))+SUM
+ ....S ^BUF($J,1,G,U,0)=$G(^BUF($J,1,G,U,0))+1
+ ....S STAT(2)=$G(STAT(2))+$$GET^IPRICE(U,"scost",PRC,DT)
+ ....S X=$$GET^IPRICE(U,"mat",PRC,DT) Q:X="" 
+ ....S STAT(3)=$G(STAT(3))+$$CENNALL^IWRHS(X,DT)
+ K ^BUF($J,2)
+ Q
+CVPROC 
+ N P,R,V,NI
+ S NI=1000,zii=$R(100)
+ S SUMM=$$PRICEH^IPRICE(U,PRC,DT)*KSKD
+ S:$D(UPL("vnaz"))!$D(UPL("fnaz")) ^BUF($J,"usl",VR,OTD,DT,zii_","_iii,"fnaz")=0
+ D CVPROCi(VR,OTD)
+ Q
+CVPROCi(V,OT) 
+ S P="" F  S P=$O(UPL(P)) Q:P=""  D
+ .S R=""
+ .S:P="cnt" R=UL(U)
+ .S:P="cen" R=$$PRICEH^IPRICE(U,$$CORCP^IPRICET(0),DT)*UL(U)
+ .S:P="dgn" R=CSTC
+ .S:P="diag" R=""
+ .S:P="dvid" R=DVID
+ .S:P="flg" R=""
+ .S:P="ms" R="" ; todo
+ .S:P="nzub" R=""
+ .S:P="otd" R=OTD
+ .S:P="pay" R=0
+ .S:P="pmatt" R=$$cvPMATT()
+ .S:P="prc" R=PRC
+ .S:P="sbs" R=$$GET^IPRICE(U,"scost",PRC,DT)*UL(U)
+ .S:P="skd" R=$S($G(SKID)="":0,1:100-SKID)
+ .S:P="smatt" R=$$cvSMATT()*UL(U)
+ .S:P="spec" R=$G(SP)
+ .S:P="stom" R=$S($D(zSTOM(OTD)):1,1:0)
+ .S:P="sum" R=SUMM*UL(U)
+ .S:P="ucls" R=$$GET^IPRICE(U,"cls",PRC,DT)
+ .S:P="ush" R="" ; todo
+ .S:P="uc" R=U
+ .I P="kss" S R=(DVID=3)
+ .S:P="bill" R=1
+ .S:P="cbill" R=1
+ .S:P="ubill" R=1
+ .S:P="fn:1" R=0
+ .S:P="fn:2" R=0
+ .S:P="isagn" R=0
+ .S:$P(P,":",1)="zpprice" R=$$PRM^NPRICEZ(U,PRC,+$P(P,":",2),$$cvGETP(LPU,OT,V,DT,"zg"),V,DT)
+ .S:$L(R) ^BUF($J,"usl",V,OT,DT,zii_","_iii,P)=R
+ S ^BUF($J,"usl",V,OT,DT,zii_","_iii,"lpu")=+$G(LPU)
+ S ^("znf")=VR_","_OTD_","_DT_","_ID
+ S:rVi ^("nib")=$G(NI),^("u")=U,^("c")=SUMM*UL(U),^("p")=PRC,^("ct")=UL(U)
+ S iii=iii+1
+ Q
+cvSMATT() ; Сумма материалов
+ N X S X=$$GET^IPRICE(U,"mat",PRC,DT) Q:X="" 0
+ Q $$CENNALL^IWRHS(X,DT)
+cvPMATT() ; Продажа материалов FAKE !
+ N X S X=$$GET^IPRICE(U,"mat",PRC,DT) Q:X="" 0
+ Q $$CENNALL^IWRHS(X,DT)
+cvGETP(LPU,OT,VR,DT,PL) ; Получить поле из настройки ЗП
+ S DT=$O(^ZARP(+LPU,OT,VR,DT+1),-1) Q:DT="" ""
+ Q $G(^(DT,PL))
+FN(X) 
+ Q $TR(+$J(X,"",2),".",",")
+REGIPROC 
+ S ^IPROC("Абонементы","Оценка стоимости")="DO_RPOLISA,1,3,t@net:LSTLT_NTPOLIS(),Вид абонемента,t@string:0/Минимуму услуг#1/Максимуму услуг,Расчет по,te@net:FLST_NVFIND(""""),Расчетный сотрудник"
+ Q

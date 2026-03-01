@@ -1,0 +1,244 @@
+NNETRS ; Отчеты по нетрудоспособности [ 03/09/2015  3:19 PM ]
+LST(DS,DE,LPU) ; Выданные больничные
+ S DS=$$DIH^DTUTL($G(DS)),DE=$$DIH^DTUTL($G(DE))
+ N DT,VR,NI,ID,A,DI,DC,NL,L,FR,I,R,VRE
+ S FR=+$$FR^I(),LPU=$G(LPU),I=1
+ S:'FR LPU=$$^I("ilpu")
+ D OWF^RWU(".txt")
+ D WC^RWU("|||||За период "_$$DT^DTUTL(DS)_"-"_$$DT^DTUTL(DE)_";"_CR)
+ D WC^RWU("П.п.|Дата|Врач открывший|Врач закрывший|№ И.Б.|Пациент|Номер листка|Диагноз открытия|Диагноз закрытия|Длительность"_$S(FR:"|Филиал",1:""))
+ S DT=DS-1 F  S DT=$O(^MNTRI("d",DT)) Q:DT=""!(DT>DE)  S NI="" F  S NI=$O(^MNTRI("d",DT,NI)) Q:NI=""  D
+ .S ID="" F  S ID=$O(^MNTRI("d",DT,NI,ID)) Q:ID=""  D:$D(^MNTR(NI,ID))
+ ..S DI=^(ID),L=$P(DI,"|",16)
+ ..I LPU'="",LPU'=L Q 
+ ..S R=$P(DI,"|",2)
+ ..S VR=$P($G(^(ID,1)),"|",3)
+ ..I R'="",$D(^MNTRI("num",R)) Q
+ ..S VRE=$P(DI,"|",12)
+ ..S NL=$P(DI,"|",1),DC=$P(DI,"|",7),DI=$P(DI,"|",6)
+ ..S A=$$NAME^YMKB10(DI,64)_"|"
+ ..S A=A_$$NAME^YMKB10(DC,64)_"|"
+ ..S A=A_$$ADAYS(NI,ID)
+ ..S:FR A=A_"|"_$$NAME^ICONTR(L)
+ ..D WC^RWU(CR_I_"|"_$$DT^DTUTL(DT)_"|"_$$FIOSH^IKADRY(VR,DT)_"|"_$$FIOSH^IKADRY(VRE,DT)_"|"_NI_"|"_$$FIO^IPAC(NI)_"|"_NL_"|"_A)
+ ..S I=I+1
+ D C^RWU
+ Q
+LSTVR(DS,DE,VRX) ; Выданные больничные по врачу
+ S DS=$$DIH^DTUTL($G(DS)),DE=$$DIH^DTUTL($G(DE))
+ N DT,VR,NI,ID,A,DI,NL,I,L
+ S I=1
+ D OWF^RWU(".txt")
+ D WC^RWU("||||За период "_$$DT^DTUTL(DS)_"-"_$$DT^DTUTL(DE)_";"_CR)
+ D WC^RWU("П.п.|Дата|Врач|№ И.Б.|Пациент|Диагноз|Длительность")
+ S DT=DS-1 F  S DT=$O(^MNTRI("d",DT)) Q:DT=""!(DT>DE)  S NI="" F  S NI=$O(^MNTRI("d",DT,NI)) Q:NI=""  D
+ .S ID="" F  S ID=$O(^MNTRI("d",DT,NI,ID)) Q:ID=""  D
+ ..S DI=$G(^MNTR(NI,ID)),L=$P(DI,"|",5)
+ ..S VR=$P($G(^(ID,1)),"|",3) Q:VRX'=VR  ; TODO
+ ..I L'="",$D(^MNTRI("num",L)) Q
+ ..S NL=$P(DI,"|",1),DI=$P(DI,"|",6),A=$$ADAYS(NI,ID)
+ ..D WC^RWU(CR_I_"|"_$$DT^DTUTL(DT)_"|"_$$vFIO(VR,DT)_"|"_NI_"|"_$$FIO^IPAC(NI)_"|"_$$NAME^YMKB10(DI)_"|"_A)
+ ..S I=I+1
+ D C^RWU
+ Q
+DOG(DS,DE,DGN,WRK,STAT,LPU) ; по договору
+ S DS=$$DIH^DTUTL($G(DS)),DE=$$DIH^DTUTL($G(DE))
+ N DT,VR,NI,A,DI,DG,I,FR,L,R,SU,S
+ S I=0,FR=+$$FR^I(),LPU=$G(LPU)
+ S:'FR LPU=$$^I("ilpu")
+ S:WRK=999 WRK=""
+ S R=STAT K STAT
+ F L=1:1:$L(R,"|") S X=$P(R,"|",L) S:X'="" STAT("|"_X_"|")=""
+ D OWF^RWU(".txt")
+ D WC^RWU("||||За период "_$$DT^DTUTL(DS)_"-"_$$DT^DTUTL(DE)_";"_CR)
+ D WC^RWU("П.п.|Дата|Врач|№ И.Б.|Пациент|Диагноз|Длительность"_$S(FR:"|Филиал",1:""))
+ S DT=DS-1 F  S DT=$O(^MNTRI("d",DT)) Q:DT=""!(DT>DE)  S NI="" F  S NI=$O(^MNTRI("d",DT,NI)) Q:NI=""  D
+ .I DGN'="",$$PIDXN^IPAC(NI,DGN,DT)=-1 Q  
+ .I WRK'="",$$GET^IPAC(NI,"work",DT)'=WRK Q 
+ .S R=0
+ .I $D(STAT) S R=1,SU=$$GET^IPAC(NI,"status",DT) Q:SU=""  S SU="|"_SU_"|",S="" F  S S=$O(STAT(S)) Q:S=""  I SU[S S R=0 Q
+ .Q:R
+ .S ID="" F  S ID=$O(^MNTRI("d",DT,NI,ID)) Q:ID=""  D
+ ..S DI=$G(^MNTR(NI,ID)),R=$P(DI,"|",2),L=$P(DI,"|",16)
+ ..I LPU'="",LPU'=L Q 
+ ..S VR=$P($G(^(ID,1)),"|",3) 
+ ..I R'="",$D(^MNTRI("num",R)) Q 
+ ..S DI=$P(DI,"|",6),A=$$ADAYS(NI,ID),I=I+1
+ ..S:FR A=A_"|"_$$NAME^ICONTR(L)
+ ..D WC^RWU(CR_I_"|"_$$DT^DTUTL(DT)_"|"_$$vFIO(VR,DT)_"|"_NI_"|"_$$FIO^IPAC(NI)_"|"_$$NAME^YMKB10(DI)_"|"_A)
+ D C^RWU
+ Q
+ZB(DS,DE,OVR,EVR,STAT,DGN,LPU) ; Закрытые больничные
+ ; OVR - открывший врач
+ ; EVR - закрывший врач
+ S DS=$$DIH^DTUTL($G(DS)),DE=$$DIH^DTUTL($G(DE))
+ N DT,NI,A,DI,I,R,X,X1,K,FR,L,VR,RS,RE,SU,S,VE,D,ST
+ S I=1,FR=+$$FR^I(),LPU=$G(LPU)
+ S:'FR LPU=$$^I("ilpu")
+ S R=STAT K STAT
+ F L=1:1:$L(R,"|") S X=$P(R,"|",L) S:X'="" STAT("|"_X_"|")=""
+ D OWF^RWU(".txt")
+ D WC^RWU("||||За период "_$$DT^DTUTL(DS)_"-"_$$DT^DTUTL(DE)_";"_CR)
+ D WC^RWU("П.п.|Пациент|Открытие|Врач открывший|Диагноз откр.|Закрытие|Врач закрывший|Диагн. закр.|Длительность"_$S(FR:"|Филиал",1:""))
+ S:EVR=OVR EVR=""
+ S I=1
+ S DT=DS-1 F  S DT=$O(^MNTRI("d",DT)) Q:DT=""!(DT>DE)  S NI="" F  S NI=$O(^MNTRI("d",DT,NI)) Q:NI=""  D
+ .I DGN'="",$$PIDXN^IPAC(NI,DGN,DT)=-1 Q  
+ .S R=0
+ .I $D(STAT) S R=1,SU=$$GET^IPAC(NI,"status",DT) Q:SU=""  S SU="|"_SU_"|",S="" F  S S=$O(STAT(S)) Q:S=""  I SU[S S R=0 Q
+ .Q:R
+ .S ID="" F  S ID=$O(^MNTRI("d",DT,NI,ID)) Q:ID=""  D
+ ..S DI=$G(^MNTR(NI,ID)),R=$P(DI,"|",2),L=$P(DI,"|",16)
+ ..S ST=$P(DI,"|",11)
+ ..Q:ST=""  Q:ST>80  ; нет статуса или отменен/выбыл
+ ..I LPU'="",LPU'=L Q 
+ ..S VE=$P(DI,"|",12)
+ ..I EVR'="",EVR'=VE Q 
+ ..S VR=$P($G(^(ID,1)),"|",3) 
+ ..I OVR'="",OVR'=VR Q
+ ..I R'="",$D(^MNTRI("num",R)) Q
+ ..S D=$P(DI,"|",4)
+ ..S A=CR_I_"|"_NI_" "_$$FIOSH^IPAC(NI)_"|"
+ ..S A=A_$$DT^DTUTL(D)_"|"_$$vFIO(VR,DT)_"|"_$$NAME^YMKB10($P(DI,"|",6))
+ ..S A=A_"|"_$$DT^DTUTL(D+$P(DI,"|",5)-1)_"|"_$$FIOSH^IKADRY(VE,DT)
+ ..S A=A_"|"_$$NAME^YMKB10($P(DI,"|",7))_"|"_$$ADAYS(NI,ID)
+ ..S:FR A=A_"|"_$$NAME^ICONTR(L)
+ ..D WC^RWU(A)
+ ..S I=I+1
+ D C^RWU
+ Q
+NZB(DS,DE,VR,STAT,DGN,LPU) ; Незакрытые больничные
+ S DS=$$DIH^DTUTL($G(DS)),DE=$$DIH^DTUTL($G(DE))
+ N DT,NI,A,DI,I,X,X1,K,V,NL,FR,L,R,SU,S,ST
+ S I=1,FR=+$$FR^I(),LPU=$G(LPU)
+ S:'FR LPU=$$^I("ilpu")
+ S R=STAT K STAT
+ F L=1:1:$L(R,"|") S X=$P(R,"|",L) S:X'="" STAT("|"_X_"|")=""
+ D OWF^RWU(".txt")
+ D WC^RWU("|||Незакрытые больничные с "_$$DT2^DTUTL(DS)_" по "_$$DT2^DTUTL(DE)_";"_CR)
+ D WC^RWU("П.п.|№ листка|Дата выдачи|Пациент|Шифр диагноза|Врач открывший"_$S(FR:"|Филиал",1:""))
+ S I=1
+ S DT=DS-1 F  S DT=$O(^MNTRI("d",DT)) Q:DT=""!(DT>DE)  S NI="" F  S NI=$O(^MNTRI("d",DT,NI)) Q:NI=""  D
+ .I DGN'="",$$PIDXN^IPAC(NI,DGN,DT)=-1 Q  
+ .S R=0
+ .I $D(STAT) S R=1,SU=$$GET^IPAC(NI,"status",DT) Q:SU=""  S SU="|"_SU_"|",S="" F  S S=$O(STAT(S)) Q:S=""  I SU[S S R=0 Q
+ .Q:R
+ .S ID="" F  S ID=$O(^MNTRI("d",DT,NI,ID)) Q:ID=""  D
+ ..S DI=$G(^MNTR(NI,ID)),R=$P(DI,"|",2),L=$P(DI,"|",16)
+ ..S ST=$P(DI,"|",11)
+ ..Q:ST'=""  ; нет статуса закрытия
+ ..I LPU'="",LPU'=L Q 
+ ..S V=$P($G(^(ID,1)),"|",3) 
+ ..I VR'="",VR'=V Q
+ ..I R'="",$D(^MNTRI("num",R)) Q
+ ..S A=CR_I_"|"_$P(DI,"|",1)_"|"_$$DT^DTUTL(DT)_"|"
+ ..S A=A_NI_" "_$$FIOSH^IPAC(NI,DT)_"|"
+ ..S A=A_$$NAME^YMKB10($P(DI,"|",6))_"|"_$$vFIO(V,DT)
+ ..S:FR A=A_"|"_$$NAME^ICONTR(L)
+ ..D WC^RWU(A)
+ ..S I=I+1
+ D C^RWU
+ Q
+DSN(DS,DE,DAYS,LPU) ; Длительные сроки нетр. (по умолч. >30)
+ S DS=$$DI^DTUTL($G(DS)),DE=$$DIH^DTUTL($G(DE))
+ S:DAYS="" DAYS=30
+ N DT,VR,VE,NI,ID,A,DI,I,FR,L,R
+ S I=0,FR=+$$FR^I(),LPU=$G(LPU)
+ S:'FR LPU=$$^I("ilpu")
+ D OWF^RWU(".txt")
+ D WC^RWU("|||Срок более "_DAYS_" дней с "_$$DT2^DTUTL(DS)_" по "_$$DT2^DTUTL(DE)_";"_CR)
+ D WC^RWU("П.п.|Дата выдачи|Пациент|Шифр диагноза|Длительность|Врач открывший|Врач закрывший"_$S(FR:"|Филиал",1:""))
+ S DAYS=DAYS+1
+ S DT=DS-1 F  S DT=$O(^MNTRI("d",DT)) Q:DT=""!(DT>DE)  S NI="" F  S NI=$O(^MNTRI("d",DT,NI)) Q:NI=""  D
+ .S ID="" F  S ID=$O(^MNTRI("d",DT,NI,ID)) Q:ID=""  D
+ ..S DI=$G(^MNTR(NI,ID)),R=$P(DI,"|",2)
+ ..I R'="",$D(^MNTRI("num",R)) Q  ; Не первый существующий Б.Л.
+ ..S L=$P(DI,"|",16)
+ ..I LPU'="",LPU'=L Q 
+ ..S A=$$ADAYS(NI,ID)
+ ..Q:A<DAYS 
+ ..S VE=$P(DI,"|",12)
+ ..S VR=$P($G(^MNTR(NI,ID,1)),"|",3),DI=$P(DI,"|",6),I=I+1
+ ..S A=A_"|"_$$vFIO(VR,DT)_"|"_VE_" "_$$FIOSH^IKADRY(VE,DT)
+ ..S:FR A=A_"|"_$$NAME^ICONTR(L)
+ ..D WC^RWU(CR_I_"|"_$$DT^DTUTL(DT)_"|"_NI_" "_$$FIOSH^IPAC(NI,DT)_"|"_$$NAME^YMKB10(DI)_"|"_A)
+ D C^RWU
+ Q
+KSN(DS,DE,DAYS,LPU) ; Короткие сроки нетр. (<6)
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S:DAYS="" DAYS=5
+ N DT,VR,NI,ID,A,DI,I,FR,L,LP
+ S I=0,FR=+$$FR^I(),LPU=$G(LPU)
+ S:'FR LPU=$$^I("ilpu")
+ D OWF^RWU(".txt")
+ D WC^RWU("|||Срок более "_DAYS_" дней с "_$$DT2^DTUTL(DS)_" по "_$$DT2^DTUTL(DE)_";"_CR)
+ D WC^RWU("П.п.|Дата выдачи|Пациент|Шифр диагноза|Длительность|Врач открывший|Врач закрывший"_$S(FR:"|Филиал",1:""))
+ S DT=DS-1 F  S DT=$O(^MNTRI("d",DT)) Q:DT=""!(DT>DE)  S NI="" F  S NI=$O(^MNTRI("d",DT,NI)) Q:NI=""  D
+ .S ID="" F  S ID=$O(^MNTRI("d",DT,NI,ID)) Q:ID=""  D
+ ..S DI=$G(^MNTR(NI,ID)),R=$P(DI,"|",2)
+ ..I R'="",$D(^MNTRI("num",R)) Q  ; Не первый Б.Л.
+ ..S L=$P(DI,"|",16)
+ ..I LPU'="",LPU'=L Q 
+ ..S A=$$ADAYS(NI,ID)
+ ..Q:A>DAYS 
+ ..S VE=$P(DI,"|",12)
+ ..S VR=$P($G(^MNTR(DT,NI,1)),"|",3),DI=$P(DI,"|",6),I=I+1
+ ..S A=A_"|"_$$vFIO(VR,DT)_"|"_VE_" "_$$FIOSH^IKADRY(VE,DT)
+ ..S:FR A=A_"|"_$$NAME^ICONTR(L)
+ ..D WC^RWU(CR_I_"|"_$$DT^DTUTL(DT)_"|"_NI_" "_$$FIOSH^IPAC(NI,DT)_"|"_$$NAME^YMKB10(DI)_"|"_A)
+ D C^RWU
+ Q
+WSV(DS,DE) ; Краткая сводка по выданным листам
+ N STAT,LP,FR,DT,NI,ID,DI,NN,R,ST
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S FR=+$$FR^I(),LP=$$^I("ilpu")
+ S DT=DS-1 F  S DT=$O(^MNTRI("d",DT)) Q:DT=""!(DT>DE)  S NI="" F  S NI=$O(^MNTRI("d",DT,NI)) Q:NI=""  D
+ .S ID="" F  S ID=$O(^MNTRI("d",DT,NI,ID)) Q:ID=""  D
+ ..S DI=$G(^MNTR(NI,ID)),NN=$G(^(ID,99))
+ ..S NN=$P(NN,"|",1)+$P(NN,"|",2) 
+ ..I LP'="" S L=$P(DI,"|",16) I 'FR,L'=LP Q 
+ ..I DT'<DS S STAT(1)=$G(STAT(1))+1
+ ..S ST=$P(DI,"|",11)
+ ..I ST'="",ST<81,NN'<DS,NN'>DE S STAT(3)=$G(STAT(3))+1
+ ..S R=$P(DI,"|",2)
+ ..I R'="",$D(^MNTRI("num",R)) Q  ; Не первый Б.Л.
+ ..I DT'<DS,DT'>DE S STAT(2)=$G(STAT(2))+1
+ 
+ d OWF^RWU(".txt")
+ D WC^RWU("Значение|Расчет")
+ D WC^RWU(CR_"Всего выдано за период|"_$G(STAT(1)))
+ D WC^RWU(CR_"Первично выдано за период|"_$G(STAT(2)))
+ D WC^RWU(CR_"Закрыто л.н. за период|"_$G(STAT(3)))
+ D C^RWU
+ Q
+GDAYS(NN) ; Получить кол-во дней Б.Л.
+ Q:NN="" 0
+ N A S A=$G(^MNTRI("num",NN)) Q:A=""!(A="|") 0
+ Q $P($G(^MNTR($P(A,"|",1),$P(A,"|",2))),"|",5)
+GADAYS(NN) ; Кол-во дней по всем связанным
+ Q:NN="" 0
+ N A,R,K S R=0,K=""
+ F  S K=$O(^MNTRI("num",NN,K)) Q:K=""  S A=$G(^MNTRI("num",K)) I A'="",A'="|" S R=R+$P($G(^MNTR($P(A,"|",1),$P(A,"|",2))),"|",5)
+ Q R
+ADAYS(NI,ID) ; Кол-во дней по всем связанным+данный
+ N NN,R
+ S R=$G(^MNTR(NI,ID)),NN=$P(R,"|",1),R=$P(R,"|",5)
+ Q:NN="" R
+ S K="" F  S K=$O(^MNTRI("num",NN,K)) Q:K=""  S A=$G(^MNTRI("num",K)) I A'="",A'="|" S R=R+$P($G(^MNTR(NI,$P(A,"|",2))),"|",5)
+ Q R
+vFIO(X,DT) 
+ Q:X="" ""
+ Q X_" "_$$FIOSH^IKADRY(X,DT)
+REGIPROC 
+ N D,F,FF
+ S D="Нетрудоспособность",F=$$FR^I()
+ S FF=$S(F:",t@storage:lpu,Филиал",1:"")
+ S ^IPROC(D,"Список листков нетрудоспособности")="LST_NNETRS,1,"_$S(F:3,1:2)_",d,Период с,d,Период по"_FF
+ S ^IPROC(D,"Список больничных листов по врачу")="LSTVR_NNETRS,1,3,d,Период с,d,Период по,te@net:FLST_NVFIND(""""),Врач"
+ S ^IPROC(D,"Список больничных листов по договору")="DOG_NNETRS,1,"_$S(F:6,1:5)_",d,Период открытия с,d,Период открытия по,t@storage:dog,Договор,t@storage:mectorab@1,Место работы,c@net:NMLST_NSPRAV(1),Статус пациента"_FF
+ S ^IPROC(D,"Закрытые больничные листы")="ZB_NNETRS,1,"_$S(F:7,1:6)_",d,Период открытия с,d,Период открытия по,te@net:FLST_NVFIND(""""),Врач открывший,te@net:FLST_NVFIND(""""),Врач закрывший,c@net:NMLST_NSPRAV(1),Статус пациента,t@storage:dog,Договор"_FF_",l,-1,1"
+ S ^IPROC(D,"Незакрытые больничные листы")="NZB_NNETRS,1,"_$S(F:6,1:5)_",d,Период открытия с,d,Период открытия по,te@net:FLST_NVFIND(""""),Врач открывший,c@net:NMLST_NSPRAV(1),Статус пациента,t@storage:dog,Договор"_FF
+ S ^IPROC(D,"Длительные сроки нетрудоспособности")="DSN_NNETRS,1,"_$S(F:4,1:3)_",d,Период с,d,Период по,s,Минимум дней (30)"_FF
+ S ^IPROC(D,"Короткие сроки нетрудоспособности")="KSN_NNETRS,1,"_$S(F:4,1:3)_",d,Период с,d,Период по,s,Максимум дней (5)"_FF
+ S ^IPROC(D,"Еженедельная сводка")="WSV_NNETRS,1,2,d,Период с,d,Период по"
+ Q

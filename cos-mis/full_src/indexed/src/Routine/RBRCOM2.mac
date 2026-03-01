@@ -1,0 +1,61 @@
+RBRCOM2 ; Коммерческий департамент, раздел 2 [ 09/18/2018  10:39 AM ]
+VP(DS,DE) ; Воронка продаж
+ N REZ,MM,STAT,LP,OT,VR,R,ST,X1,X2,X3,X4
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S M=+$P($$DT^DTUTL(DS),".",2) ; month
+ ; Записано/пришло
+ D ZOTDI^RRASP(DS,DE,0,1,"")
+ S LP="" F  S LP=$O(STAT(LP)) Q:LP=""  D
+ .S OT="" F  S OT=$O(STAT(LP,OT)) Q:OT=""  D
+ ..F R=1,3,4,5,6,7,8 S ST(R)=$G(ST(R))+$G(STAT(LP,OT,R))
+ S REZ("sheets","list","F"_(M+4))=$G(ST(4))
+ S REZ("sheets","list","G"_(M+4))=$G(ST(6))
+ ; время на приеме
+ K STAT
+ D lst^RLPUTM(DS,DE,"","")
+ S X1=0,X2=0
+ S OT="" F  S OT=$O(STAT(OT)) Q:OT=""  D
+ .S VR="" F  S VR=$O(STAT(OT,VR)) Q:VR=""  D
+ ..S X1=X1+$G(STAT(OT,VR,1)),X2=X2+$G(STAT(OT,VR,2))
+ S REZ(M,"I")=$S(X1:+$J(((X2/X1)/60),"",0),1:0)
+ ; посещений с диагнозом + контрольных осм
+ K ^BUF($J)
+ s X1=0,X2=0
+ D ITERATE^IUSLD("VPu^RBRCOM2(VR,OT,DT,ID)",DS,DE,,,"")
+ S REZ("sheets","list","J"_(M+4))=X1
+ S REZ("sheets","list","T"_(M+4))=X2
+ ; Число операций + время
+ D oper(DS,DE)
+ S REZ("sheets","list","O"_(M+4))=X1
+ S REZ("sheets","list","P"_(M+4))=X1
+ S REZ("sheets","list","S"_(M+4))=X3
+ K ^KKK m ^KKK=REZ
+ D MAKE^IDOCGEN("fb321.xlsx","REZ","xlsx")
+ K ^BUF($J)
+ Q
+VPu(VR,OT,DT,ID) 
+ Q:"wd"[$$GETSTAT^IUSL(VR,DT,OT,ID)
+ S NI=$$GETNIB^IUSL(VR,DT,OT,ID)
+ S DIA=$$GETDI^IUSL(VR,DT,OT,ID)
+ S USL=$$GETUSLS^IUSL(VR,DT,OT,ID),CNT=$P(USL,"*",2),USL=$P(USL,"*",1)
+ ; 2.41 21.4
+ I USL="2.41" S X2=X2+CNT
+ I USL="21.4" S X2=X2+CNT 
+ I DIA'="",'$D(^BUF($J,"n",NI)) S ^(NI)="",X1=X1+1 
+ Q
+oper(DS,DE) 
+ S X1=0,X2=0,X3=0
+ N CAB,DT,TM,LP,OT,R,NI,TL
+ S LP="" F  S LP=$O(^OPSH(LP)) Q:LP=""  S OT="" F  S OT=$O(^OPSH(LP,OT)) Q:OT=""  S CAB="" F  S CAB=$O(^OPSH(LP,OT,CAB)) Q:CAB=""  D
+ .S DT=DS-1 F  S DT=$O(^OPSH(LP,OT,CAB,DT)) Q:DT=""!(DT>DE)  D
+ ..S TM="" F  S TM=$O(^OPSH(LP,OT,CAB,DT,TM)) Q:TM=""  D
+ ...S R=^(TM)
+ ...S NI=$P(R,"|",1),TL=$P(R,"|",2)
+ ...Q:NI=""  
+ ...S X1=X1+1
+ ...S X2=X2+TL
+ S X3=$S(X1:+$J(X2/X1,"",0),1:0) ; min
+ Q
+REGIPROC 
+ S ^IPROC("Отчеты клиники","Форма 3.2.1 - Воронка продаж")="VP_RBRCOM2,14,2,d,Дата с,d,Дата по"
+ Q

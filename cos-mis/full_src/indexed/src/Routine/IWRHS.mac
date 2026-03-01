@@ -1,0 +1,288 @@
+IWRHS ; Справочники склада [ 08/21/2023  6:12 PM ]
+INITDB ; Инициализация
+ Q:$D(^WRHM("root")) 
+ S ^WRHM("root","mean")="Единицы измерения|tab|prompt|LST^NWRHS|LSTATL^NWRHS|LSTDEL^NWRHS|GETT^NWRHS"
+ S ^WRHM("root","means")="Единицы мер|tab|twrhmns|LST^NWRHS|LSTAT^NWRHS|LSTDEL^NWRHS|GETT^NWRHS"
+ S ^WRHM("root","tcn")="Розничная цена|tabnm|twrhtcn|LST^NWRHS|LSTAT^NWRHS|LSTDEL^NWRHS|TCTAB^NWRHS"
+ S ^WRHM("root","pack")="Упаковка|tab|twrhpk|LST^NWRHS|LSTAT^NWRHS|LSTDEL^NWRHS|GETT^NWRHS"
+ S ^WRHM("root","fpack")="Фасовка|tab|twrhfpk|LST^NWRHS|LSTAT^NWRHS|LSTDEL^NWRHS|GETT^NWRHS"
+ S ^WRHM("root","prof")="Профили|tree|twrhprf|LSTTREE^NWRHS||LSTDEL^NWRHS"
+ S ^WRHM("root","manuf")="Изготовители|tab|twrhmk|LST^NWRHS|LSTAT^NWRHS|LSTDEL^NWRHS|GETT^NWRHS"
+ S ^WRHM("root","stock")="Склад|tab|twrhstk|LST^NWRHS|LSTAT^NWRHS|LSTDEL^NWRHS|GETT^NWRHS"
+ S ^WRHM("root","country")="Страна|tab|prompt|LST^NWRHS|LSTAT^NWRHS|LSTDEL^NWRHS|GETT^NWRHS"
+ S ^WRHM("doc",1)="Журнал прихода|in_j"
+ S ^WRHM("doc",2)="Журнал расхода|out_j"
+ S ^WRHM("doc",3)="Журнал движения|mov_j"
+ S ^WRHM("doc",4)="Остатки по складу|ost_r"
+ S ^WRHM("doc",5)="Журнал заявок|req_j"
+ S ^WRHM("doc",6)="Приходные накладные|in_d|Приходная накладная"
+ S ^WRHM("doc",7)="Расходные накладные|out_d|Расходная накладная"
+ S ^WRHM("doc",8)="Возврат поставщику|inr_d|Акт возврата поставщику"
+ S ^WRHM("doc",9)="Возврат покупателем|outr_d|Акт возврата покупателем"
+ S ^WRHM("doc",10)="Внутренний приход|ini_d|Внутренняя приходная накладная"
+ S ^WRHM("doc",11)="Внутренний расход|outi_d|Внутренняя расходная накладная"
+ S ^WRHM("doc",12)="Акт прихода|akti_d|Акт прихода"
+ S ^WRHM("doc",13)="Акт списания|akto_d|Акт списания"
+ S ^WRHM("doc",14)="Акт передачи|aktm_d|Акт передачи"
+ S ^WRHM("ctp","C")="Юр. лицо"
+ S ^WRHM("ctp","D")="Сотрудник"
+ S ^WRHM("ctp","L")="ЛПУ"
+ S ^WRHM("ctp","O")="Отделение"
+ S ^WRHM("ctp","W")="Склад"
+ S ^WRHM("tcrnd",0)="нет"
+ S ^WRHM("tcrnd",1)="копейки"
+ S ^WRHM("tcrnd",2)="копейки с отсечением"
+ S ^WRHM("tcrnd",3)="рубли"
+ S ^WRHM("tcrnd",4)="рубли с отсечением"
+ S ^WRHM("tcrnd",5)="5 руб."
+ S ^WRHM("tcrnd",6)="5 руб. с отсечением"
+ S ^WRHM("tcrnd",7)="10 руб."
+ S ^WRHM("tcrnd",8)="10 руб. с отсечением"
+ Q
+ADDT(NM,ID,STR) ; Add text line
+ I $L(ID) D:$D(^WRHM(NM,ID)) WD^ISSG("^WRHM(""_NM_"","_ID_")")
+ I ID="" L +^WRHM(NM) S ID=$O(^WRHM(NM,""),-1)+1,^(ID)=STR L -^WRHM(NM)
+ E  S ^WRHM(NM,ID)=STR
+ D GL^IEXCH("^WRHM",NM,ID)
+ Q
+GETT(NM,ID) ; Get text
+ Q:NM=""!(ID="") ""
+ Q $G(^WRHM(NM,ID))
+NAME(NM,ID) ; Get name
+ Q:NM=""!(ID="") ""
+ Q $P($G(^WRHM(NM,ID)),"|",1)
+NAMENM(ID) ; Наименование номенклатуры
+ Q:ID="" ""
+ Q $P($G(^WRHE(ID)),"|",1)
+MEANNM(ID,MOD) ; Ед. измерения номенклатуры
+ Q:ID="" ""
+ S MOD=+$G(MOD),ID=$P($G(^WRHE(ID)),"|",5+MOD)
+ Q:ID="" ""
+ Q $P($G(^WRHM($S(MOD=2:"fpack",MOD=1:"pack",1:"means"),ID)),"|",1)
+MEANCNT(ID,MOD) ; Число единиц в представлении номенкл.
+ Q:'MOD 1
+ Q:ID="" 1
+ Q:MOD=3 $P($G(^WRHE(ID)),"|",16) ; доз
+ Q $P($G(^WRHE(ID)),"|",11+MOD)
+GRP(ID) ; Раздел номенклатуры
+ Q:ID="" ""
+ Q $P($G(^WRHE(ID)),"|",3)
+GET(ID,NM) ; Поле номенклатуры	
+ Q:ID="" ""
+ I NM="nnum" Q $P($G(^WRHE(ID)),"|",8)
+ I NM="comm" Q $G(^WRHE(ID,"c"))
+ I NM="nreg" Q $P($G(^WRHE(ID,"m")),"|",1)
+ I NM="dreg" Q $P($G(^WRHE(ID,"m")),"|",2)
+ I NM="rt" Q $P($G(^WRHE(ID,"m")),"|",3)
+ I NM="cenn" Q $P($G(^WRHE(ID,"f")),"|",1)
+ I NM="nds" Q $P($G(^WRHE(ID,"f")),"|",2)
+ I NM="pku" Q +$P(^WRHE(ID),"|",14)
+ I NM="arch" Q +$P(^WRHE(ID),"|",15)
+ Q ""
+CENN(ID,DT) ; Цена по дате
+ S TM=$P(DT,",",2) S:'TM TM=99999 S:+DT=DT DT=DT_","_TM
+ S DT=$O(^WRHE(ID,"f",DT))
+ I DT="" Q $P($G(^WRHE(ID,"f")),"|",1)
+ Q $P(^(DT),"|",1)
+CENNDT(ID,DT) ; Фактическая дата изменения цены
+ S:+DT=DT DT=DT_",0"
+ S DT=$O(^WRHE(ID,"f",DT))
+ Q DT
+CCENN(ID,NMI,DT,VAL,CNT) ; Расчет розничной цены от оптовой
+ ; ID - тип цены
+ ; NMI - тип номенклатуры
+ ; VAL - оптовая цена
+ ; TODO
+ Q:NMI="" ""
+ S:$G(ID)="" ID=$G(^WRHE(NMI,"tc"))
+ N CN,R
+ I +ID=0 S R=$P($G(^WRHE(NMI,"f")),"|",1),CNT=$G(CNT) S:'CNT CNT=1 Q:R'="" +$J(R*CNT,"",2)
+ S DT=$O(^WRHM("tcn",ID,DT+1),-1) Q:DT="" ""
+ S CN=$O(^(DT,VAL+0.001),-1) Q:CN="" ""
+ S R=^(CN)
+ I $P(R,"|",3)'="" Q $$ROUND($P(R,"|",2),VAL+$P(R,"|",3))
+ Q $$ROUND($P(R,"|",2),(VAL*(100+$P(R,"|",1)))/100)
+NDS(ID,DT) ; НДС по дате
+ S:+DT=DT DT=DT_",0"
+ S DT=$O(^WRHE(ID,"f",DT),-1)
+ I DT="" Q $P($G(^WRHE(ID,"f")),"|",2)
+ Q $P(^(DT),"|",2)
+SETCEN(ID,DT,CN,NDS) ; Установить стоимость и НДС на дату,время
+ N RF,RmD
+ S:+DT=DT DT=DT_",0"
+ S RF=CN_"|"_NDS,D=$O(^WRHE(ID,"f",DT),-1)
+ I D'="" S R=$P(^(D),"|",1,2) Q:RF=R 
+ S ^WRHE(ID,"f",DT)=RF_"|"_$$USRH^IUSER()
+ I $O(^WRHE(ID,"f",DT))="" S ^WRHE(ID,"f")=RF
+ D REGL^IEXCH("^WRHE",ID,"f")
+ Q
+GETALL(IDS,NM,DL) ; Данные через DL по нескольким
+ N I,X,S S S="",DL=$G(DL,"|")
+ F I=1:1:99 S X=$P(IDS,"|",I) Q:X=""  S S=S_$S(S="":S,1:DL)_$$GET(X,NM)
+ Q S
+GETSALL(IDS,NM) ; Суммы по нескольким
+ N I,X,S S S=0
+ F I=1:1:99 S X=$P(IDS,"|",I) Q:X=""  S S=$$GET($P(X,"@",1),NM)*$S($P(X,"@",2)="":1,1:$P(X,"@",2))+S
+ Q S
+GETCNT(IDS,ID) ; Кол-во по одному
+ N I,X,S,K S S=0
+ F I=1:1:99 S X=$P(IDS,"|",I) Q:X=""  S K=$P(X,"@",2) S:$P(X,"@",1)=ID S=S+$S(K=""!(K=1):1,1:K)
+ Q S
+NAMESALL(IDS) ; Имена по нескольким
+ N I,X,S,K S S=""
+ F I=1:1:99 S X=$P(IDS,"|",I) Q:X=""  S K=$P(X,"@",2),S=S_$S(S="":"",1:", ")_$$NAMENM($P(X,"@",1))_$S(K=""!(K=1):"",1:" "_K_" шт.")
+ Q S
+CENNALL(IDS,DTM) ; Суммы по нескольким
+ N I,X,S S S=0
+ F I=1:1:99 S X=$P(IDS,"|",I) Q:X=""  S S=$$CENN($P(X,"@",1),DTM)*$S($P(X,"@",2)="":1,1:$P(X,"@",2))+S
+ Q S
+CNTSTR(IDS,ID) ; Общее кол-во или по конкретному материалу из строки
+ ; IDS - строка
+ ; ID - код материала
+ S ID=$G(ID)
+ N I,X,S S S=0
+ F I=1:1:99 S X=$P(IDS,"|",I) Q:X=""  I $S(ID="":1,1:$P(X,"@",1)=ID) S S=S+$S($P(X,"@",2)="":1,1:$P(X,"@",2))
+ Q S
+IsNAME(NM) ; Найти по имени
+ N K S K="",NM=$$UL^TXTU(NM)
+ F  S K=$O(^WRHE(K)) Q:K=""  I $$UL^TXTU($P(^(K),"|",1))=NM Q 
+ Q K
+USE(ID) ; Номенклатура используется
+ Q:ID="" 0
+ Q '+$P($G(^WRHE(ID)),"|",15)
+PKU(ID) ; Варианты специального учета по коду номенклатуры
+ Q:ID="" ""
+ Q +$P($G(^WRHE(ID)),"|",14)
+IsSER(ID) ; У номенклатуры есть серия
+ Q:ID="" 0
+ Q:$P($G(^WRHE(ID)),"|",14)'=2 0
+ Q $D(^(ID,"ser"))'=0
+SER(ID,IDS) ; Наименование серии
+ Q:IDS="" ""
+ Q $P($G(^WRHE(ID,"ser",IDS)),"|",1)
+NMSNUM(ID,IDS) ; Полное наименование серийного номера/партии/серии
+ N P,X
+ S P=$P($G(^WRHE(ID)),"|",14)
+ I P=1 Q "партия №"_IDS
+ I P=2 S X=$P($G(^WRHE(ID,"ser",IDS)),"|",1) Q:X'="" "серия "_X
+ Q " С.Н. "_IDS
+SETSGSER(ID,IDS,DT) ; Установить срок годности серии
+ Q:'$$IsSER(ID) 
+ S $P(^WRHE(ID,"ser",IDS),"|",4)=DT
+ D GL^IEXCH("^WRHE",ID,"ser",IDS)
+ Q
+GETSTK(ID,FL) ; Поле склада
+ S ID=$G(^WRHM("stock",ID)) Q:ID="" ""
+ I FL="where" Q $P(ID,"|",2)
+ I FL="kadry" Q $P($P(ID,"|",3),"@",2)
+ I FL="lpu" Q $P(ID,"|",4)
+ I FL="otd" Q $P(ID,"|",5)
+ I FL="private" Q $P(ID,"|",6)
+ I FL="arch" Q $P(ID,"|",7)
+ I FL="allow" Q $P(ID,"|",8)
+ Q
+VRSTK(VR,LST,PHARM) ; Получить склад по сотруднику
+ ; VR - код врача
+ ; LST - вернуть список (1)
+ ; PHARM - получить аптечный склад
+ N I,R,A,O
+ S VR=","_VR_",",(A,I)="",LST=$G(LST),PHARM=$G(PHARM)
+ F  S I=$O(^WRHM("stock",I)) Q:I=""  S R=^(I) I ","_$P($P(R,"|",3),"@",2)_","[VR,$S('PHARM:1,1:$P(R,"|",9)) S A=$S(A="":"",1:A_"|")_I Q:'LST 
+ Q:A'="" A
+ ; TODO ^cfg
+ S O=$$OTD^IKADRY(VR)
+ S I="" F  S I=$O(^WRHM("stock",I)) Q:I=""  S R=^(I) I '$P(ID,"|",7),$P(ID,"|",6),$P(R,"|",5)=O Q  ; private by otd
+ Q I
+LPUSTK(LPU,PHARM) ; Получить склад ЛПУ
+ ; LPU - филиал
+ ; PHARM - получить аптечный склад
+ N I,R
+ S I=$G(^cfg("wrh","def-stock")) Q:I'="" I
+ Q:LPU="" ""
+ S PHARM=$G(PHARM)
+ F  S I=$O(^WRHM("stock",I)) Q:I=""  S R=^(I) I $P(R,"|",4)=LPU Q:'PHARM  Q:$P(R,"|",9)
+ Q I
+STKOTD(STK) ; Получить отделение склада
+ Q:STK="" ""
+ Q $P(^WRHM("stock",STK),"|",5)
+ALLOWSTK(STK,TSTK) ; Допустимый склад для склада
+ ; STR - исходный склад
+ ; TSTK - склад операции
+ Q:STK="" 0 Q:TSTK="" 0
+ S STK=$P(^WRHM("stock",STK),"|",8) Q:STK="" 1
+ I (","_STK_",")[(","_TSTK_",") Q 1
+ Q 0
+DOCNM(TP) ; Получить имя документа по типу
+ N V,R 
+ S V="" F  S V=$O(^WRHM("doc",V)) Q:V=""  S R=^(V) I $P(R,"|",2)=TP S V=$P(R,"|",3) Q 
+ Q V
+CTRNM(ID,DT,LT) ; Расшифровка имени контрагента
+ ; LT - сокращенно
+ N X S X=$E(ID,2,99),ID=$E(ID,1)
+CTRNMl S LT=$G(LT),DT=$G(DT)
+ I ID="O" Q $$GOTD^YISPRAV(X)_$S('LT:", "_$$NAME("ctp",ID),1:"")
+ I ID="W" Q $$NAME("stock",X)_$S('LT:", "_$$NAME("ctp",ID),1:"")
+ I ID="D" Q $$FIOSH^IKADRY(X,DT)_$S('LT:", "_$$NAME("ctp",ID),1:"")
+ I ID="C"!(ID="L") Q $$NAMEH^ICONTR(X,DT)_$S('LT:", "_$$NAME("ctp",ID),1:"")
+ Q ""
+CTRNM2(ID,X,DT,LT) ; Расшифровка имени контрагента
+ G CTRNMl
+NMCHK(ID) ; Проверить использование номенклатуры
+ I $D(^WRHZ(ID)) Q 2
+ N ST,F
+ S ST="",F=0 F  S ST=$O(^WRH(ST)) Q:ST=""  I $D(^(ST,ID)) S F=1 Q
+ Q F
+CHKNIN(ID) ; Проверить, на каком складе есть номенклатура
+ N ST
+ S ST="",F=0 F  S ST=$O(^WRH(ST)) Q:ST=""  Q:$D(^(ST,ID)) 
+ Q ST
+BAR(BAR) ; Получить ID по штрихкоду
+ Q:BAR="" ""
+ Q $G(^WRHEI("bar",$E(BAR,1,64)))
+ROUND(ID,X) ; Виды округлений
+ ; ID - тип округления
+ ; X - значение
+ Q:'ID X
+ I ID=1 Q +$J(X,"",2)
+ I ID=2 Q +($P(X,".",1)_"."_$E($P(X,".",2),1,2))
+ I ID=3 Q +$J(X,"",0)
+ I ID=4 Q +$P(X,".",1)
+ I ID=5 Q $J(X/5,0,0)*5
+ I ID=6 Q $P(X/5,".",1)*5
+ I ID=7 Q $J(X/5,0,0)*5
+ I ID=8 Q $P(X/5,".",1)*5
+ Q X
+ROUNDTP(ID) ; Типы округления
+ Q:'ID "нет"
+ I ID=1 Q "копейки"
+ I ID=2 Q "копейки с отсечением"
+ I ID=3 Q "рубли"
+ I ID=4 Q "рубли с отсечением"
+ I ID=5 Q "5 руб."
+ I ID=6 Q "5 руб. с отсечением"
+ I ID=7 Q "10 руб."
+ I ID=8 Q "10 руб. с отсечением"
+ Q "нет"
+TDOC(X) ; Типы документов-оснований
+ Q:X=1 "Договор"
+ Q:X=2 "Счет"
+ Q:X=3 "Счет-фактура"
+ Q:X=4 "Акт"
+ Q:X=5 "Накладная"
+ Q:X=6 "Чек"
+ Q ""
+MKPRFL(ID) ; Создать список профилей с учетом вышестоящих э-тов
+ Q:ID="" 
+ N R
+ K PRFL
+ F  S PRFL(ID)="" S ID=$P($G(^WRHM("prof",ID)),"|",3) Q:ID="" 
+ Q
+MKDPRFL(ID) ; Создать список профилей с учетом нижестоящих э-тов
+ Q:ID="" 
+ N K,I,J,LL
+ K PRFL
+ S K=ID,I=ID,PRFL(ID)=""
+ F  S I=$P($G(^WRHM("prof",I)),"|",3) Q:I=""  S K=I_","_K
+ M LL=@("^WRHI(""Mprof"","_K_")")
+ S K="LL("""")" F  S K=$Q(@K) Q:K=""  F J=1:1:$QL(K) S PRFL($QS(K,J))=""
+ Q

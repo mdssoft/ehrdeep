@@ -1,0 +1,242 @@
+RLPUTM ; Время на приеме [ 08/10/2018  2:08 PM ]
+VRTM(DT,VR) ; Детальное фактическое время
+ S DT=$$DIH^DTUTL(DT)
+ N LP,OT,SP,NI,TM,TR,S1,C,O,A,LST,R,U
+ D OWF^RWU(".txt")
+ D WC^RWU("Врач "_$$FIOSH^IKADRY(VR,DT)_" на "_$$DT2^DTUTL(DT)_" по отделению|И.Б.|Ф.И.О. пациента|Начало|Длительность|Услуги")
+ S LP="",(S1,C)=0
+ F  S LP=$O(^VRPOS(LP)) Q:LP=""  S OT="" F  S OT=$O(^VRPOS(LP,OT)) Q:OT=""!(OT["~")  D
+ .S O=$$GOTD^YISPRAV(OT),NI=""
+ .F  S NI=$O(^VRPOS(LP,OT,VR,DT,NI)) Q:NI=""  D
+ ..K LST S TM="",S=0,A=0,U=""
+ ..F  S TM=$O(^VRPOS(LP,OT,VR,DT,NI,TM)) Q:TM=""  S TR=TM,U=^(TM),R=$P(U,"~",1),A=A+1,LST(TM)=R S:R'="" S=S+R-TM S:$P(U,"~",3)'="" LST(TM,1)=""
+ ..S C=C+1,S1=S1+S,U=$P(U,"~",3)
+ ..D WC^RWU(CR_O_"|"_NI_"|"_$$FIO^IPAC(NI,DT)_"|"_$S(A=1:$$TIME^DTUTL(TR),A>1:"всего",1:"")_"|"_$$TIME^DTUTL(S)_"|"_$S(A>1:"",U="":"Нет",1:"Да"))
+ ..I A>1 S TM="" F  S TM=$O(LST(TM)) Q:TM=""  S U=LST(TM) D WC^RWU(CR_"|||"_$$TIME^DTUTL(TM)_"|"_$S(U="":"-",1:$$TIME^DTUTL(U-TM))_"|"_$S($D(LST(TM,1)):"Нет",1:"Да"))
+ D:S1 WC^RWU(CR_"||Итого времени||"_$$TIME^DTUTL(S1))
+ D:S1 WC^RWU(CR_"||Усредненный прием||"_$$TIME^DTUTL($P(S1/C,".",1)))
+ D C^RWU
+ Q
+lst(DS,DE,LPX,OTX,ADV) 
+ ; 1 - кол-во посещений
+ ; 2 - общее время
+ ; 3 - мин время приема
+ ; 4 - макс время приема
+ ; 5 - среднее время ожидания
+ ; 6 - мин время ожидания
+ ; 7 - макс время ожидания
+ ; ADV - статистика с мин-макс
+ K STAT
+ N LP,OT,SP,NI,TM,TR,S1,S2,C,C2,O,R,RR,U,DT,DX,X,Pma,Pmi,Rma,Rmi,RSP,ROT
+ S LP=""
+ F  S LP=$O(^VRPOS(LP)) Q:LP=""  I LPX=""!(LPX=LP) S OT="" F  S OT=$O(^VRPOS(LP,OT)) Q:OT=""!(OT["~")  I OTX=""!(OTX=OT) D
+ .S VR="" F  S VR=$O(^VRPOS(LP,OT,VR)) Q:VR=""  D
+ ..S Pma=0,Pmi=99999,Rma=0,Rmi=99999
+ ..S (C,S1,C2,S2)=0,DT=DS-1
+ ..F  S DT=$O(^VRPOS(LP,OT,VR,DT)) Q:DT=""!(DT>DE)  D
+ ...S NI="" F  S NI=$O(^VRPOS(LP,OT,VR,DT,NI)) Q:NI=""  D
+ ....S TM="",S=0
+ ....F  S TM=$O(^VRPOS(LP,OT,VR,DT,NI,TM)) Q:TM=""  D
+ .....S TR=TM,RR=^(TM),R=$P(RR,"~",1)
+ .....Q:R="" 
+ .....S DX=R-TM,S1=S1+DX,C=C+1
+ .....S:DX<Pmi Pmi=DX S:DX>Pma Pma=DX
+ .....S X=$P(RR,"~",2),RSP=$P(X,"@",1),ROT=$P(X,"@",2),RTM=$P(X,"@",3)
+ .....Q:RTM="" 
+ .....S:RSP="" RSP=SP S:ROT="" ROT=OT
+ .....S X=$P($G(^DSH(LP,ROT,VR,RSP,DT,RTM,"c")),"|",1)
+ .....S DX=TM-$P(X,",",2) Q:DX'>0  ; только положительные значения
+ .....S:DX<Rmi Rmi=DX S:DX>Rma Rma=DX
+ .....S S2=S2+DX,C2=C2+1
+ ..S:C STAT(OT,VR,1)=$G(STAT(OT,VR,1))+C
+ ..S:S1 STAT(OT,VR,2)=$G(STAT(OT,VR,2))+S1
+ ..I Pma S:$G(STAT(OT,VR,4))<Pma STAT(OT,VR,4)=Pma S STAT(OT,VR,3)=Pmi ; приемы
+ ..I C2 S STAT(OT,VR,5)=$P(S2/C2,".",1)
+ ..I Rma S:$G(STAT(OT,VR,7))<Rma STAT(OT,VR,7)=Rma S STAT(OT,VR,6)=Rmi ; ожидание
+ Q
+VRATM(DS,DE,OTX,MODE,LPUX) ; Комплексная статистика по времени приемов вречей
+ ; MODE - =1 расщиренная статистика
+ N STAT,TAB,OT,VR,X,R,I,X1,X2
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S LPUX=$S(+$$FR^I():$G(LPUX),1:+$$^I("ilpu"))
+ 
+ S LP="" F  S LP=$O(^PTBL(LP)) Q:LP=""  D:LPUX=""!(LPUX=LP)
+ .S OT="" F  S OT=$O(^PTBL(LP,OT)) Q:OT=""  D:OTX=""!(OTX=OT)
+ ..S VR="" F  S VR=$O(^PTBL(LP,OT,VR)) Q:VR=""  D
+ ...S X=$$TMTABEL^NPTBL(LP,OT,VR,DS,DE,"")
+ ...S:X TAB(OT,VR,6)=$G(TAB(OT,VR,6))+X
+ ...S X=$$TMGRAF^NPTBL(LP,OT,VR,DS,DE,"")
+ ...S:X TAB(OT,VR,7)=$G(TAB(OT,VR,7))+X
+ ...S X=$$TMTIMES^NPTBL(LP,OT,VR,DS,DE,"")
+ ...S:X TAB(OT,VR,8)=$G(TAB(OT,VR,8))+X
+ 
+ D vrtl^REDE(DS,DE,OTX,LPUX)
+ S OT="" F  S OT=$O(STAT(OT)) Q:OT=""  D
+ .S VR="" F  S VR=$O(STAT(OT,VR)) Q:VR=""  D
+ ..S TAB(OT,VR,5)=$G(STAT(OT,VR,1))+$G(STAT(OT,VR,2))+$G(STAT(OT,VR,3))
+ 
+ D lst(DS,DE,LPUX,OTX)
+ S OT="" F  S OT=$O(STAT(OT)) Q:OT=""  D
+ .S VR="" F  S VR=$O(STAT(OT,VR)) Q:VR=""  D
+ ..S X1=$G(STAT(OT,VR,2))
+ ..S TAB(OT,VR,4)=X1
+ ..S X2=$G(STAT(OT,VR,1))
+ ..S TAB(OT,VR,9)=$S(X2:$P(X1/X2,",",1),1:"")
+ ..S X2=$G(STAT(OT,VR,5))
+ ..S TAB(OT,VR,10)=$S(X2=0:"",1:X2)
+ ..S TAB(OT,VR,11)=$$TM^DTUTL($G(STAT(OT,VR,3)))_"-"_$$TM^DTUTL($G(STAT(OT,VR,4)))
+ ..S TAB(OT,VR,12)=$$TM^DTUTL($G(STAT(OT,VR,6)))_"-"_$$TM^DTUTL($G(STAT(OT,VR,7)))
+ 
+ K STAT
+ D ZVRI^RRASP(DS,DE,LPUX,0,1,1,0,0,0,"")
+ S LP="" F  S LP=$O(STAT(LP)) Q:LP=""  D
+ .S OT="" F  S OT=$O(STAT(LP,OT)) Q:OT=""  D:OTX=""!(OTX=OT)
+ ..S VR="" F  S VR=$O(STAT(LP,OT,VR)) Q:VR=""  D
+ ...S TAB(OT,VR,1)=$G(TAB(OT,VR,1))+$G(STAT(LP,OT,VR,1))
+ ...S TAB(OT,VR,2)=$G(TAB(OT,VR,2))+$G(STAT(LP,OT,VR,3))
+ ...S TAB(OT,VR,3)=$G(TAB(OT,VR,3))+$G(STAT(LP,OT,VR,5))
+ 
+ D OWF^RWU(".txt")
+ D WC^RWU("Отделение|Сотрудник "_$$TXTP^DTUTL(DS,DE)_"|По расписанию|Записано|Пришедщие|Фактически|По ЕД|Табель|График|Рабочее время"_$S(MODE:"|Ср. время приема|Ср. ожидания|Макс-мин время приема|Макс-мин время ожидания",1:""))
+ S OT="" F  S OT=$O(TAB(OT)) Q:OT=""  D
+ .S VR="" F  S VR=$O(TAB(OT,VR)) Q:VR=""  D
+ ..S R=$$GOTD^YISPRAV(OT)_"|"_$$FIO^IKADRY(VR)
+ ..S X1=$G(TAB(OT,VR,3)) ; peoples
+ ..F I=1:1:12 S X=$G(TAB(OT,VR,I)),R=R_"|"_$S(I<11:$$TM^DTUTL(X),1:X)
+ ..D WC^RWU(CR_R)
+ D C^RWU
+ Q
+PSTAT(DS,DE,DET,LPX) ; Комплексная статистика по времени пациентов
+ ; DET - подробно
+ ; LPX - фильтр по филиалу
+ N LP,X1,X2,RR,STAT
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S LPX=$S(+$$FR^I():$G(LPX),1:+$$^I("ilpu"))
+ K ^BUF($J,"ps")
+ D ptpos,ptdsh
+ D ptbill,ptznf
+ D ptcrea
+ D ptcalc
+ D OWF^RWU(".txt")
+ D WC^RWU("Филиал|Регистрация|Ожидание|Оплата|Ожидание м.с.|Прием м.с.|Прием м.с. (мин)|Прием м.с. (макс)|Ожидание врача|Прием врача")
+ S LP="" F  S LP=$O(STAT(LP)) Q:LP=""  D
+ .S RR=$S(DET:$$FIO^IPAC(LP)_" "_LP,1:$$NAME^ICONTR(LP))
+ .S X1=$G(STAT(LP,1,1)),X2=$G(STAT(LP,1,2))
+ .S RR=RR_"|"_$S(X1&X2:$$TM^DTUTL(X1/X2),1:"")
+ .S X1=$G(STAT(LP,2,1)),X2=$G(STAT(LP,2,2))
+ .S RR=RR_"|"_$S(X1&X2:$$TM^DTUTL(X1/X2),1:"")
+ .S X1=$G(STAT(LP,3,1)),X2=$G(STAT(LP,3,2))
+ .S RR=RR_"|"_$S(X1&X2:$$TM^DTUTL(X1/X2),1:"")
+ .S X1=$G(STAT(LP,4,1)),X2=$G(STAT(LP,4,2))
+ .S RR=RR_"|"_$S(X1&X2:$$TM^DTUTL(X1/X2),1:"")
+ .S X1=$G(STAT(LP,5,1)),X2=$G(STAT(LP,5,2))
+ .S RR=RR_"|"_$S(X1&X2:$$TM^DTUTL(X1/X2),1:"")
+ .S X1=$G(STAT(LP,5,3))
+ .S RR=RR_"|"_$S(X1:$$TM^DTUTL(X1),1:"")
+ .S X1=$G(STAT(LP,5,4))
+ .S RR=RR_"|"_$S(X1:$$TM^DTUTL(X1),1:"")
+ .S X1=$G(STAT(LP,6,1)),X2=$G(STAT(LP,6,2))
+ .S RR=RR_"|"_$S(X1&X2:$$TM^DTUTL(X1/X2),1:"")
+ .S X1=$G(STAT(LP,7,1)),X2=$G(STAT(LP,7,2))
+ .S RR=RR_"|"_$S(X1&X2:$$TM^DTUTL(X1/X2),1:"")
+ .D WC^RWU(CR_RR)
+ D C^RWU
+ K ^BUF($J,"ps")
+ Q
+ptcalc 
+ N NI,DT,X,Z,X1,X2,X3,X4,X5,X6,X7,X8,X9,RR,LP
+ S NI="" F  S NI=$O(^BUF($J,"ps",NI)) Q:NI=""  D
+ .S DT="" F  S DT=$O(^BUF($J,"ps",NI,DT)) Q:DT=""  D
+ ..S RR=^(DT)
+ ..S LP=$S(DET=1:NI,1:$P(DT,"|",2,9)) ; key
+ ..S X1=$P(RR,"|",1),X2=$P(RR,"|",2),X3=$P(RR,"|",3),X4=$P(RR,"|",4),X5=$P(RR,"|",5),X6=$P(RR,"|",6),X7=$P(RR,"|",7),X8=$P(RR,"|",8),X9=$P(RR,"|",9)
+ ..S X=$S(X2:X2-X1,X3:X3-X1,X4:X4-X1,1:0) S:X<0 X=0
+ ..S:X STAT(LP,1,1)=$G(STAT(LP,1,1))+X,STAT(LP,1,2)=$G(STAT(LP,1,2))+1
+ ..S X=$S(X3&X2:X3-X2,X1&X3:X3-X1,1:0) S:X<0 X=0
+ ..S:X STAT(LP,2,1)=$G(STAT(LP,2,1))+X,STAT(LP,2,2)=$G(STAT(LP,2,2))+1
+ ..S X=$S(X3&X4:X4-X3,1:0) S:X<0 X=0
+ ..S:X STAT(LP,3,1)=$G(STAT(LP,3,1))+X,STAT(LP,3,2)=$G(STAT(LP,3,2))+1
+ ..S X=$S('X5:0,X4:X5-X4,X3:X5-X3,1:0) S:X<0 X=0
+ ..S:X STAT(LP,4,1)=$G(STAT(LP,4,1))+X,STAT(LP,4,2)=$G(STAT(LP,4,2))+1
+ ..S X=$S(X5&X6:X6-X5,1:0) S:X<0 X=0
+ ..S:X STAT(LP,5,1)=$G(STAT(LP,5,1))+X,STAT(LP,5,2)=$G(STAT(LP,5,2))+1
+ ..I X S Z=$G(STAT(LP,5,3)) S:Z>0&(Z<X) Z=X S:Z="" Z=X S STAT(LP,5,3)=Z ; min
+ ..I X S Z=$G(STAT(LP,5,4)) S:X>Z STAT(LP,5,4)=Z ; max
+ ..S X=$S('X7:0,X6:X7-X6,X4:X7-X4,1:0) S:X<0 X=0
+ ..S:X STAT(LP,6,1)=$G(STAT(LP,6,1))+X,STAT(LP,6,2)=$G(STAT(LP,6,2))+1
+ ..S X=$S(X7&X8:X8-X7,1:0) S:X<0 X=0
+ ..S:X STAT(LP,7,1)=$G(STAT(LP,7,1))+X,STAT(LP,7,2)=$G(STAT(LP,7,2))+1
+ 
+ Q
+ptpos ; Отметка времен по посещениям
+ N MSLST,LP,OT,VR,OTX,NI,TM,DT,R,DX,I,X,RR,KEY
+ ; заполнение справочника специальностей медсестер
+ S I=$$IDX^ISPRAV("spec"),X=""
+ F  S X=$O(^MN(I,X)) Q:X=""  S:$G(^(X,"tp"))=6 MSLST(X)=""
+ ;
+ S LP="",OTX=""
+ F  S LP=$O(^VRPOS(LP)) Q:LP=""  I LPX=""!(LPX=LP) S OT="" F  S OT=$O(^VRPOS(LP,OT)) Q:OT=""!(OT["~")  I OTX=""!(OTX=OT) D
+ .S VR="" F  S VR=$O(^VRPOS(LP,OT,VR)) Q:VR=""  D
+ ..S (C,S1,C2,S2)=0,DT=DS-1
+ ..F  S DT=$O(^VRPOS(LP,OT,VR,DT)) Q:DT=""!(DT>DE)  D
+ ...S NI="" F  S NI=$O(^VRPOS(LP,OT,VR,DT,NI)) Q:NI=""  D
+ ....S TM="",S=0
+ ....F  S TM=$O(^VRPOS(LP,OT,VR,DT,NI,TM)) Q:TM=""  D
+ .....S TR=TM,RR=^(TM),R=$P(RR,"~",1)
+ .....Q:R="" 
+ .....S KEY=DT_"|"_LP
+ .....S RR=$G(^BUF($J,"ps",NI,KEY))
+ .....S I=$S($D(MSLST(+$$SPEC^IKADRY(VR))):5,1:7) ; младший медперс.
+ .....S $P(RR,"|",I)=TM,$P(RR,"|",I+1)=R
+ .....S ^BUF($J,"ps",NI,KEY)=RR
+ Q
+ptdsh ; По расписанию
+ N LP,OT,VR,SP,DT,TM,L,NI,T,E,RR,KEY
+ S LP="" F  S LP=$O(^DSH(LP)) Q:LP=""  I LPX=""!(LPX=LP) S OT="" F  S OT=$O(^DSH(LP,OT)) Q:OT=""  D
+ .S VR="" F  S VR=$O(^DSH(LP,OT,VR)) Q:VR=""  S SP="" F  S SP=$O(^DSH(LP,OT,VR,SP)) Q:SP=""  D
+ ..S DT=DS-1
+ ..F  S DT=$O(^DSH(LP,OT,VR,SP,DT)) Q:DT=""!(DT>DE)  S TM="" F  S PT=TM,TM=$O(^DSH(LP,OT,VR,SP,DT,TM),-1) Q:TM=""  D
+ ...S L=$G(^(TM)) Q:L="*"
+ ...S NI=$P(L,"|",1) Q:NI="" 
+ ...S T=$P($G(^(TM,"c")),"|",1),E=$P($G(^("e")),"|",1)
+ ...Q:'$$EXIST^IPAC(NI)
+ ...S KEY=DT_"|"_LP
+ ...S RR=$G(^BUF($J,"ps",NI,KEY))
+ ...S $P(RR,"|",1)=$P(T,",",2)
+ ...S $P(RR,"|",9)=$P(E,",",2)
+ ...S ^BUF($J,"ps",NI,KEY)=RR
+ Q
+ptbill 
+ N DT,TM,R,RR,D
+ S NI="" F  S NI=$O(^BUF($J,"ps",NI)) Q:NI=""  D
+ .S DT="" F  S DT=$O(^BUF($J,"ps",NI,DT)) Q:DT=""  D
+ ..S D=$P(DT,"|",1)
+ ..S TM=$O(^BILL(NI,D,"")) Q:TM=""  
+ ..S $P(^BUF($J,"ps",NI,DT),"|",4)=TM
+ Q
+ptznf 
+ N NI,DT,KX,TS,TM,D
+ S NI="" F  S NI=$O(^BUF($J,"ps",NI)) Q:NI=""  D
+ .S DT="" F  S DT=$O(^BUF($J,"ps",NI,DT)) Q:DT=""  D
+ ..S TS=99999,D=$P(DT,"|",1)
+ ..S KX="" F  S KX=$O(^PNF(NI,D,KX)) Q:KX=""  S TM=$P($P($G(^(KX)),"|",1),",",2) S:TM<TS TS=TM
+ ..Q:TS=99999
+ ..S $P(^BUF($J,"ps",NI,DT),"|",3)=TS
+ Q
+ptcrea ; Пациенты - печать/создание
+ N NI,DT,TP,FD,FT,R,D
+ S TP=$G(^cfg("pac","prn-event"))
+ S NI="" F  S NI=$O(^BUF($J,"ps",NI)) Q:NI=""  D
+ .S FD=$$FIRSTDT^IPAC(NI),FT=$P($$GET^IPAC(NI,"opfio",FD),"|",2)
+ .S DT="" F  S DT=$O(^BUF($J,"ps",NI,DT)) Q:DT=""  D
+ ..S D=$P(DT,"|",1)
+ ..I D=+$P(FT,",",1) S $P(^BUF($J,"ps",NI,DT),"|",2)=$P(FT,",",2)
+ Q
+REGIPROC 
+ N D,FF,F 
+ S D="Отчеты ЛПУ",FF=+$$FR^I()
+ S F=$S(FF:",t@storage:lpu,Филиал",1:"")
+ S ^IPROC(D,"По сотрудникам","Время на приеме по врачу")="VRTM_RLPUTM,1,2,d,Дата приема,te@net:FLST_NVFIND(""""),Врач"
+ S ^IPROC(D,"По сотрудникам","Комплексная статистика по времени")="VRATM_RLPUTM,1,"_$S(FF:5,1:4)_",d,Период документов с,d,Период документов по,te@storage:otd@1,Отделение,t@string:0/Сокращенный#1/Полный,Вид отчета"_F
+ S ^IPROC("Расписание приемов","Статистика","Комплексная статистика по пути пациента")="PSTAT_RLPUTM,1,"_$S(FF:4,1:3)_",d,Период с,d,Период по,t@string:0/Нет#1/Да (по пациентам),Подробно"_F
+ Q

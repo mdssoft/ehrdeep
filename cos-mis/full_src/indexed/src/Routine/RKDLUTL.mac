@@ -1,0 +1,79 @@
+RKDLUTL ; Служебные отчеты КДЛ [ 10/18/2017  5:39 PM ]
+UNTEST(DS,DE) ; Услуги в заявках, не привязанные к тестам
+ N D,N,I,UL,R,PRC,DGN,Z,U
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ K ^BUF($J) 
+ S D=DS-1 F  S D=$O(^MLABI("d",D)) Q:D=""!(D>DE)  S I="" F  S I=$O(^MLABI("d",D,I)) Q:I=""  D
+ .S N=^(I)
+ .S UL=$G(^MLAB(N,I,"ul")) Q:UL=""
+ .S R=$G(^("prc")),PRC=$P(R,"|",1),DGN=$P(R,"|",2)
+ .F Z=1:1 S U=$P(UL,"|",Z) Q:U=""  D
+ ..S U=$P(U,":",1) Q:$D(^LABTI("CT",U)) 
+ ..S U=$P($P(U,":",1),"*",1) Q:$D(^LABTI("CT",U)) 
+ ..I PRC="" S:DGN="" DGN=$$GET^IPAC(N,"stc",+D) S PRC=$$PRC^IINSC(DGN,"",+D)
+ ..S ^BUF($J,U_"|"_PRC)=""
+ D OWF^RWU(".txt")
+ D WC^RWU("Код|Наименование услуги")
+ S UL="" F  S UL=$O(^BUF($J,UL)) Q:UL=""  D
+ .S U=$P(UL,"|",1),PRC=$P(UL,"|",2)
+ .D WC^RWU(CR_U_"|"_$$NAME^IPRICE(U,PRC))
+ D C^RWU
+ Q
+WXLS ; Write excel
+ D OWF^RWU(".txt")
+ D WC^RWU("Код иссл.|Услуга|Уникальность|Наименование исследования|Раздел|показатель|лат.показателя|ед.измерения|нормы-условие (м)|Норма текст|min|max|нормы-условие (ж)|min|max")
+ N AN,TT,R,I,A,N,LN
+ S AN="" F  S AN=$O(^LABT("I",AN)) Q:AN=""  D
+ .S A=AN_"|||"_$G(^(AN)),TT=""
+ .F  S TT=$O(^LABT("I",AN,"T",TT)) Q:TT=""  D
+ ..S $P(A,"|",2)=$TR($G(^LABT("T",TT,"u")),"@|","*;")
+ ..S $P(A,"|",5)=$G(^LABT("T",TT,"r"))
+ ..S $P(A,"|",6)=$P($G(^LABT("T",TT,"n")),"|",1),$P(A,"|",7)=TT
+ ..S $P(A,"|",8)=$G(^LABT("T",TT,"m"))
+ ..K LN
+ ..D:$D(^LABT("T",TT,"s"))
+ ...S LN("-",1)=$G(^("s")),N=""
+ ...F  S N=$O(^LABT("T",TT,"s","o",N)) Q:N=""  S LN(N,1)=^(N)
+ ..D:$D(^LABT("T",TT,"s","m"))
+ ...S LN("-",1)=$G(^("m")),N=""
+ ...F  S N=$O(^LABT("T",TT,"s","m","o",N)) Q:N=""  S LN(N,1)=^(N)
+ ..D:$D(^LABT("T",TT,"s","f"))
+ ...S LN("-",2)=$G(^("f")),N=""
+ ...F  S N=$O(^LABT("T",TT,"s","f","o",N)) Q:N=""  S LN(N,2)=^(N)
+ ..K:$G(LN("-",1))=""&($G(LN("-",2))="") LN("-")
+ ..S N="" F  S N=$O(LN(N)) Q:N=""  D
+ ...S R=$G(LN(N,1))
+ ...S $P(A,"|",9)=$S($D(LN(N,1))=0:"",N="-":"",1:N)
+ ...S $P(A,"|",10)=$TR($P(R,"|",3),"|","/")
+ ...S $P(A,"|",11)=$P(R,"|",1)
+ ...S $P(A,"|",12)=$P(R,"|",2)
+ ...S R=$G(LN(N,2))
+ ...S $P(A,"|",13)=$S($D(LN(N,2))=0:"",N="-":"",1:N)
+ ...S $P(A,"|",14)=$P(R,"|",1)
+ ...S $P(A,"|",15)=$P(R,"|",2)
+ ...D WC^RWU(CR_A) S A=""
+ ..D:A'="" WC^RWU(CR_A) S A=""
+ D C^RWU
+ Q
+WPROF ; Профили тестов
+ N ID,U,R,A,P
+ D OWF^RWU(".txt")
+ D WC^RWU("Код|Наименование|Цена|Усл.ввода|Архив|Пол|Код усл.|Наименование услуги|Цена")
+ S P=$$CORCP^IPRICET(0)
+ S ID="" F  S ID=$O(^LABT("PU",ID)) Q:ID=""  D
+ .S A=^(ID)
+ .S R=ID_"|"_$P(A,"|",1)_"|"_$P(A,"|",3)_"|"_$P(A,"|",2)_"|"
+ .S R=R_$S(+$P(A,"|",4):"да",1:"нет")_"|"
+ .S R=R_$$GET^ISPRAV("gender",$P(A,"|",6))
+ .S U="" F  S U=$O(^LABT("PU",ID,U)) Q:U=""  D
+ ..S A=^(U)
+ ..S R=R_"|"_U_"|"_$$NAME^IPRICE(U,P)_"|"_A
+ ..D WC^RWU(CR_R)
+ ..S R="|||||"
+ D C^RWU
+ Q
+REGIPROC 
+ S ^IPROC("Лаборатория","Служебные","Экспорт шаблонов")="WXLS_RKDLUTL,1,0"
+ S ^IPROC("Лаборатория","Служебные","Экспорт профилей")="WPROF_RKDLUTL,1,0"
+ S ^IPROC("Лаборатория","Служебные","Проверка услуг и тестов")="UNTEST^RKDLUTL,1,2,d,Дата начала периода,d,Дата окончания периода"
+ Q

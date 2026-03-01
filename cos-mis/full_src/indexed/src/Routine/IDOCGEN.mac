@@ -1,0 +1,97 @@
+IDOCGEN ; Document generator [ 02/08/2018  1:40 PM ]
+MAKE(TPL,VARS,FMT) ; Make and return template
+ ; TPL - template name
+ ; VARS - parameters
+ ; FMT - format docx, xlsx
+ N %SID,PL,R,CM,OK,I,T,J,LN,CM,ADR
+ S ADR=$G(^cfg("idocgen","host")) S:ADR="" ADR="127.0.0.1"
+ S FMT=$G(FMT) S:FMT="" FMT="docx"
+ I FMT="mail" S ADR=$G(^cfg("idocgen","mhost")) S:ADR="" ADR="127.0.0.1"
+ S %SID=$$OPEN^WWWCLI(ADR,57775)
+ D SETCONN^WWWCLI(%SID,2)
+ D SETHDR^WWWCLI(%SID,"Content-Type","application/json;charset=UTF-8")
+ D OWBUF^WWWCLI(%SID)
+ D WBUF^WWWCLI(%SID,"{""template"":"""_TPL_"""")
+ S ^KKKT="{""template"":"""_TPL_""""
+ D:FMT="docx"!(FMT="mail") MKdocx
+ D:FMT="xlsx" MKxlsx
+ D WBUF^WWWCLI(%SID,"}")
+ D CBUF^WWWCLI(%SID)
+ S OK=$$POST^WWWCLI(%SID,"/template/"_FMT)
+ I OK'=200 D CLOSE^WWWCLI(%SID) Q 
+ D OBUF^WWWCLI(%SID),OWF^RWU(".bin")
+ F I=1:1:$$BUFCNT^WWWCLI(%SID) D W^RWU($$RBUF^WWWCLI(%SID))
+ ;D BUF2H^WWWCLI(%SID,0)
+ D CLOSE^WWWCLI(%SID),C^RWU
+ Q
+MKdocx ; 
+ S PL="" F  S PL=$O(@VARS@(PL)) Q:PL=""  D
+ .S T=$D(@VARS@(PL))
+ .I T=10 D  Q   ; table - object
+ ..S CM=""
+ ..D ww(","""_PL_""":[")
+ ..S I="" F  S I=$O(@VARS@(PL,I)) Q:I=""  D
+ ...S R=$$txt(@VARS@(PL,I)),LN=""
+ ...F J=1:1:$L(R,"|") S LN=$S(LN="":"{",1:LN_",")_"""c"_J_""":"""_$P(R,"|",J)_""""
+ ...D ww(CM_LN_"}")
+ ...S CM=","
+ ..D ww("]")
+ .S R=$$txt(@VARS@(PL))
+ .D ww(","""_PL_""":"""_R_"""")
+ Q
+MKxlsx
+ N SHT,CM,CMS,CMC,H,X
+ S CM=""
+ D:$D(@VARS@("names")) 
+ .D ww(",""names"":{")
+ .S PL="" F  S PL=$O(@VARS@("names",PL)) Q:PL=""  D
+ ..S T=$D(@VARS@("names",PL))
+ ..I T=10 D  Q   ; table - array
+ ...S CM=""
+ ...D ww(","""_PL_""":[")
+ ...S I="" F  S I=$O(@VARS@("names",PL,I)) Q:I=""  D
+ ....S R=$$txt(@VARS@("names",PL,I)),LN=""
+ ....F J=1:1:$L(R,"|") S X=$P(R,"|",J),LN=$S(LN="":"[",1:LN_",")_$S(X="":"null",+X=X:$$num^IJSON(X),1:""""_X_"""")
+ ....D ww(CM_LN_"]")
+ ....S CM=","
+ ...D ww("]")
+ ..S R=$$txt(@VARS@("names",PL)) ; field
+ ..D ww(CM_""""_PL_""":"""_R_"""")
+ ..S CM=","
+ .D ww("}")
+ .S CM=","
+ 
+ D:$D(@VARS@("sheets")) 
+ .D ww(",""sheets"":[")
+ .S CMS=""
+ .S SHT="" F  S SHT=$O(@VARS@("sheets",SHT)) Q:SHT=""  D
+ ..D ww(CMS_"{""name"":"""_SHT_""",""cells"":{")
+ ..S (CMC,PL)="" F  S PL=$O(@VARS@("sheets",SHT,PL)) Q:PL=""  D
+ ...S T=$D(@VARS@("sheets",SHT,PL))
+ ...I T=10 D  Q   ; table - array
+ ....S H=""
+ ....D ww(","""_PL_""":[")
+ ....S I="" F  S I=$O(@VARS@("sheets",SHT,PL,I)) Q:I=""  D
+ .....S R=$$txt(@VARS@("sheets",SHT,PL,I)),LN=""
+ .....F J=1:1:$L(R,"|") S X=$P(R,"|",J),LN=$S(LN="":"[",1:LN_",")_$S(X="":"null",+X=X:$$num^IJSON(X),1:""""_X_"""")
+ .....D ww(H_LN_"]")
+ .....S H=","
+ ....D ww("]")
+ ...S R=$$txt(@VARS@("sheets",SHT,PL)) ; field
+ ...D ww(CMC_""""_PL_""":"""_R_"""")
+ ...S CMC=","
+ ..D ww("}}")
+ ..S CMS=","
+ .D ww("]")
+ Q
+ww(X)
+ D WBUF^WWWCLI(%SID,X)
+ Q
+txt(TXT) 
+ N J
+ S J=-1 F  S J=$F(TXT,"\",J+1) Q:J=0  S $E(TXT,J-1)="\\"
+ S J=-1 F  S J=$F(TXT,"""",J+1) Q:J=0  S $E(TXT,J-1)="\"""
+ S J=-1 F  S J=$F(TXT,$C(13),J+1) Q:J=0  S $E(TXT,J-1)="\r"
+ S J=-1 F  S J=$F(TXT,$C(10),J+1) Q:J=0  S $E(TXT,J-1)="\n"
+ S J=-1 F  S J=$F(TXT,$C(9),J+1) Q:J=0  S $E(TXT,J-1)="\t"
+ Q $$WU8^TXTU($$DW^TXTU(TXT))

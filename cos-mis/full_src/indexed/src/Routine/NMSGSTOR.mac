@@ -1,0 +1,141 @@
+NMSGSTOR ; Хранилище сообщений [ 08/01/2019  2:00 PM ]
+INIT(AR) ; Инициализация формы
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<medtask>")
+ D:'$$LCL^NUSER("msgstor","del") W^RWU("<btn_del visible=""no""/>")
+ D W^RWU("</medtask></nb_console>"),C^RWU
+ Q
+DTL(AR,LAST,FDT) ; Даты документов
+ ; LAST - сколько последних дней
+ ; FDT - с даты
+ D OWF^RWU(".txt")
+ N D,C
+ S LAST=+$G(LAST),FDT=$$DIH^DTUTL($G(FDT))
+ S:LAST LAST=FDT-LAST
+ S C="",D=FDT+1
+ F  S D=$O(^MSGSTOR(AR,D),-1) Q:D=""!(D<LAST)  D W^RWU(C_$$DT^DTUTL(D)_"|"_$$DT2^DTUTL(D)) S C=CR 
+ D C^RWU
+ Q
+TAB(AR,DT,ALL) 
+ N D,A,AA,R,FI,L,F,C,U,OW,PTR,FR,EXT
+ S D=$$DIH^DTUTL(DT),ALL=+$G(ALL)
+ D OWF^RWU(".txt")
+ D WC^RWU("|Дата, время|От|Описание|Размер|Обработано|Изменено")
+ S I="" F  S I=$O(^MSGSTOR(AR,D,I)) Q:I=""  D TABprc
+ D C^RWU
+ Q
+TABprc 
+ I 'ALL,$D(^MSGSTOR(AR,D,I,"ud","use")) Q 
+ S R=$G(^MSGSTOR(AR,D,I,"uh")),PTR=$G(^("uptr",1))
+ S FR=$P(R,"|",3),FR=$S(FR["@":$$DECMAIL^TXTU(FR,3),1:FR)
+ I PTR'="" S A=$P(PTR,":",1),C=$P(PTR,":",2),FR=$S(A="CGA":$$NAME^ICONTR(C),A="DGN":$$NAME^IINSC(C),A="BTN":$$FIO^IPAC(C),1:FR) 
+ S A=$$DTM^DTUTL($P(R,"|",2))_"|"_FR,F="",(FI,L)=0
+ F  S F=$O(^MSGSTOR(AR,D,I,"data",F)) Q:F=""  S:$D(^(F))'[0 L=L+^(F),FI=FI+1
+ S EXT=$S('FI:"",$D(^MSGSTOR(AR,D,I,"ext")):^("ext"),1:"tif")
+ I EXT="txt"!(EXT="html") S AA=$S(FI:"file:"_AR_"@"_D_"@"_I_":"_EXT_":",1:":::")
+ I EXT'="txt",EXT'="html" S AA=$S(FI:"file:FIL_IMSGHUB("""_AR_""","""_D_""","""_I_"""):"_EXT_":",1:":::")
+ S A=AA_I_"|"_$$TGA^TXTU(A)
+ S C=$G(^MSGSTOR(AR,D,I,"ud","com"))
+ S U=$P($G(^MSGSTOR(AR,D,I,"ud","uselog")),"|",1)
+ S OW=$G(^MSGSTOR(AR,D,I,"log"))
+ S:U="" U=$P(OW,"|",1)
+ D WC^RWU(CR_A_"|"_C_"|"_L_"|"_$S($D(^MSGSTOR(AR,D,I,"ud","use")):$S(U="":"да",1:U),1:"нет")_"|"_$P(OW,"|",1)_" "_$$DTM2^DTUTL($P(OW,"|",2)))
+ Q
+FCOM(AR,LAST,FDT,TXT,ALL) ; Поиск документов по комментарию
+ ; ALL - и не обработанные документы
+ N D,A,R,FI,L,F,C,U,OW,PTR,FR
+ S LAST=+$G(LAST),FDT=$$DIH^DTUTL(FDT),TXT=$$UL^TXTU($$WD^TXTU(TXT)),ALL=+$G(ALL)
+ S:LAST LAST=FDT-LAST
+ D OWF^RWU(".txt")
+ D WC^RWU("|Дата, время|От|Описание|Размер|Обработано|Изменено")
+ S D=FDT+1 F  S D=$O(^MSGSTOR(AR,D),-1) Q:D=""!(D<LAST)  D
+ .S I="" F  S I=$O(^MSGSTOR(AR,D,I)) Q:I=""  D:$D(^(I,"ud","com"))
+ ..S R=^("com") Q:R=""
+ ..Q:$$UL^TXTU(R)'[TXT 
+ ..D TABprc
+ D C^RWU
+ Q
+SCOM(AR,DT,ID,TXT,ALL) ; Изменить комментарий
+ Q:AR=""  Q:DT=""  Q:ID=""  
+ N D
+ S D=$$DIH^DTUTL(DT)
+ D:$$LCL^IUSER("msgstor","comm")'=0
+ .S ^MSGSTOR(AR,D,ID,"ud","com")=$$WD^TXTU(TXT)
+ .D GL^IEXCH("^MSGSTOR",AR,D,ID,"ud","com")
+ .S ^MSGSTOR(AR,D,ID,"log")=$$USRH^IUSER()
+ .S ^MSGSTOR(AR,D,ID,"log",$H)=$$USR^IUSER()
+ .D GL^IEXCH("^MSGSTOR",AR,D,ID,"log")
+ D TAB(AR,DT,+$G(ALL))
+ Q
+SNIB(AR,DT,ID,NIB,DGN) ; Номер истории и договор
+ Q:AR=""  Q:DT=""  Q:ID=""  
+ N D,T
+ S D=$$DIH^DTUTL(DT)
+ S ^MSGSTOR("fax",D,ID,"ud","use")=0
+ S:$L(NIB) T=NIB_" "_$$FIOSH^YIPACN(NIB),^MSGSTOR(AR,D,ID,"ud","ni")=NIB,^("com")=T
+ S:$L(DGN) ^MSGSTOR(AR,D,ID,"ud","stc")=DGN
+ S ^MSGSTOR(AR,D,ID,"log",$H)=$$USR^IUSER()
+ D GL^IEXCH("^MSGSTOR",AR,D,ID,"ud"),GL^IEXCH("^MSGSTOR",AR,D,ID,"log")
+ Q
+HIDE(AR,DT,ID,X,ALL) 
+ Q:AR=""  Q:DT=""  Q:ID=""  
+ N D
+ I $$LCL^NUSER("msgstor","nhide")=1 D TAB(AR,DT,+$G(ALL)) Q
+ S D=$$DIH^DTUTL(DT),X=+$G(X)
+ S ^MSGSTOR(AR,D,ID,"ud","use")=X
+ S ^MSGSTOR(AR,D,ID,"ud","uselog")=$$USRH^IUSER()
+ S ^MSGSTOR(AR,D,ID,"log",$H)=$$USR^IUSER()
+ D GL^IEXCH("^MSGSTOR",AR,D,ID,"ud"),GL^IEXCH("^MSGSTOR",AR,D,ID,"log")
+ D TAB(AR,DT,+$G(ALL))
+ Q
+DEL(AR,DT,ID) 
+ Q:AR=""  Q:DT=""  Q:ID=""  
+ S DT=$$DIH^DTUTL(DT)
+ I '$$LCL^NUSER("msgstor","del") D MSG^RWU("Удаление сообщений запрещено") Q 
+ N U
+ S U=$P($G(^MSGSTOR(AR,DT,ID,"uh")),"|",1)
+ K ^MSGSTOR(AR,DT,ID)
+ D KGL^IEXCH("^MSGSTOR",AR,DT,ID)
+ Q:U="" 
+ K ^MSGSTORI(AR,"uid",U,DT_","_ID)
+ D KGL^IEXCH("^MSGSTORI",AR,"uid",U,DT_","_ID)
+ Q
+CMD(PRM,DEV) ; Регистрация внешних устройств
+ I PRM="register" D MSG^RWU("OK") Q  ; stub
+ Q
+INFIL 
+ N EX
+ S EX=$G(^MSGHUB("file",1)) Q:EX="" 
+ S EX="INFILE^"_EX D @EX
+ D MSG^RWU("OK")
+ Q
+CNETFIL(CMD,DEV) ; Регистрация устройств для netfile
+ N IP
+ S IP=$G(^JOB(%JOB,6)) Q:IP=""
+ S DEV=$G(DEV)
+ D MSG^RWU("OK")
+ I CMD="register" D  Q
+ .S ^MSGHUB("netfile",DEV,"ip")=IP
+ I CMD="ping" Q
+ I CMD="unregister" K ^MSGHUB("netfile",DEV,"ip") Q
+ Q
+INETFIL ; Получение файла из netfile
+ N I,IP,FN,a
+ S IP=$G(^JOB(%JOB,6))
+ I IP="" D MSG^RWU("ERR") Q
+ S I="" F  S I=$O(^MSGHUB("netfile",I)) Q:I=""  I $G(^(I,"ip"))=IP!($G(^("server"))=IP) Q
+ I I="" D MSG^RWU("ERR") Q
+ S PP=$G(^MSGHUB("netfile",I,"recvfn"))
+ I PP="" D MSG^RWU("OK") Q 
+ s a="D "_PP
+ X a
+ D MSG^RWU("OK")
+ Q
+INWEB ; Input from web
+ D INRECV^INWWW()
+ Q
+REGLCL ;
+ S ^LCLI("msgstor")="Хранилище сообщений"
+ S ^LCLI("msgstor","del")="Удаление"
+ S ^LCLI("msgstor","comm")="Изменение комментария"
+ S ^LCLI("msgstor","nhide")="Запрет сокрытия сообщений"
+ Q

@@ -1,0 +1,14 @@
+IRASP ; Внутренние процедуры расписания [ 07/22/2021  5:08 PM ]
+PACTM(NIB,LPU,VR,SP,DT) ; Получить время приема пациента
+ N R
+ S R=$$PACINV^IRASP2(NIB,LPU,"",VR,SP,DT,2)
+ Q:R="" ""
+ Q $$TIME^IRASP2($P(R,"|",1))_"-"_$$TIME^IRASP2($P(R,"|",2))
+SPECS(SP,SPL) ; Наименование нескольких спец.
+ ; SP - основная
+ ; SPL - список
+ N R,I,X
+ S R=$S(SP="":"",1:$$SPEC^ISPRAV(SP))
+ S SPL=$TR(SPL,"@,;","|||")
+ F I=1:1:$L(SPL,"|") S X=$P(SPL,"|",I) I X'="" S R=R_$S(R="":"",1:", ")_$$SPEC^ISPRAV(X)
+ Q R

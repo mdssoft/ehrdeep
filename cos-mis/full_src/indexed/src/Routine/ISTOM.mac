@@ -1,0 +1,113 @@
+ISTOM ; Стоматологические утилиты [ 12/10/2020  5:25 PM ]
+NZINEPR(NI,NZZ) ; Все номера зуба(зубов) присутствует в ЭИБ
+ ; TODO - неподп. только сегодня
+ N R,I,X,F,VAL,V
+ S R=$$LASTFLD^YIMH(NI,"dentalf",,"VAL",1)
+ S:'R R=$$LASTFLD^YIMH(NI,"формула",,"VAL",1)
+ Q:'R 0
+ S V="",F=0,NZZ="/"_$TR(NZZ,",","/")_"/"
+ F  S V=$O(VAL(V)) Q:V=""  D  Q:F 
+ .S F=0,R=$TR(VAL(V),"/",","),STR=$TR(STR,"/",",")
+ .F I=1:1:$L(R,",") S X="/"_$P($P(R,",",I),"(",1)_"/" I NZZ[X S F=F+1
+ .S F=(F+2=$L(NZZ,"/"))
+ Q F
+ISTOOTH(STR,NZ) ; Номер (любой) зуба(зубов) присутствует в формуле
+ Q:STR="" 0
+ N I,X,F
+ S F=0,NZ="/"_$TR(NZ,",","/")_"/"
+ F I=1:1:$L(STR,",") S X="/"_$P($P(STR,",",I),"(",1)_"/" I NZ[X S F=1 Q
+ Q:F 1
+ Q 0
+DETOOTH(NI) ; Удаленные зубы в формуле
+ N R,I,X,NZ,PM,Q
+ S R=$$LASTFL^YIMH(NI,"dentalf",,1),Q=""
+ S:R="" R=$$LASTFL^YIMH(NI,"формула",,1)
+ Q:R="" ""
+ F I=1:1:$L(R,",") S NZ=$P(R,",",I),PM=$P($P(NZ,"(",2),")",1),NZ=$P(NZ,"(",1) I PM["O" S Q=$S(Q="":"",1:Q_"|")_NZ
+ Q Q
+NZLINE(NI) ; Последние отмеченные номера зубов одной линией через ,
+ S R=$$LASTFL^YIMH(NI,"dentalf",,1)
+ S:R="" R=$$LASTFL^YIMH(NI,"формула",,1)
+ Q:R="" ""
+ N I,X,K
+ S (K,X)=""
+ F I=1:1:$L(R,",") S K=$S(K="":"",1:K_",")_$P($P(R,",",I),"(",1)
+ Q K
+NZLN(R) ; номера зубов одной линией через ,
+ Q:R="" ""
+ N I,X,K
+ S (K,X)=""
+ F I=1:1:$L(R,",") S K=$S(K="":"",1:K_",")_$P($P(R,",",I),"(",1)
+ Q K
+PACTOOTH(NI,NZ) ; Состояние зуба на дату у пациента
+ N R,I,X
+ S R=$$LASTFL^YIMH(NI,"dentalf")
+ S:R="" R=$$LASTFL^YIMH(NI,"формула",,1)
+ Q:R="" ""
+ S X="" F I=1:1:$L(R,",") S X=$P(R,",",I) I $P(X,"(",1)=NZ S X=$P($P(X,"(",2),")",1) Q 
+ Q X
+RECODE(X) 
+ N I,R,Q,T,J
+ S X=$TR(X,",;:\| ","/////"),Q=""
+ F I=1:1:$L(X,"/") S R=$P(X,"/",I),J=$E(R) S:J<1!(J>8) R="" S T=+$E(R,2) S:$S(J>4:T<1!(T>5),1:T<1!(T>8)) R="" S:R'="" Q=Q_$S(Q="":"",1:",")_R
+ Q Q
+NZCNT(X) ; Число зубов
+ Q:X="" 0
+ S X=$TR(X,",;:\| ","/////") 
+ Q $L(X,"/")
+NZUCNT(NIB,DS,DE,VR,NSBS,NKSS,wGRN) ; Число зубов за период (уникальных)
+ ; VR - фильтр по врачу
+ ; NSBS - неподписанные
+ ; NKSS - не по кассе
+ ; wGRN - не учитывать по гарантийным письмам (1), только по ГП (2)
+ N KX,O,V,D,I,R,LL
+ S VR=$G(VR),NSBS='$G(NSBS),NKSS=+$G(NKSS),wGRN=+$G(wGRN)
+ S D=DS-1 F  S D=$O(^PNF(NIB,D)) Q:D=""!(D>DE)  D
+ .S KX="" F  S KX=$O(^PNF(NIB,D,KX)) Q:KX=""  D
+ ..S V=$P(KX,"|",1),O=$P(KX,"|",2),I=$P(KX,"|",3)
+ ..I VR'="",VR'=V Q
+ ..Q:'$D(^ZNF(V,O,D,I,"nz"))
+ ..S R=$P(^("e"),"~",1)
+ ..Q:R="d"  I NSBS,R="w" Q 
+ ..S I=""
+ ..I NKSS Q:R=2  S I="|"_$P($G(^("m")),"~",2)_"|" Q:I["kss|" 
+ ..I wGRN S:I="" I="|"_$P($G(^("m")),"~",2)_"|" Q:$S(wGRN=1:I["|grn|",wGRN=2:I'["|grn|",1:0)
+ ..S R=^("nz")
+ ..F I=1:1:$L(R,",") S O=$P(R,",",I) S LL(O)=""
+ S O=0,I="" F  S I=$O(LL(I)) Q:I=""  S O=O+1
+ Q O
+NZUB(NIB,VR,DT) ; Все коды зубов
+ ; VR - фильтр по врачу
+ N KX,O,V,I,R,RET
+ S VR=$G(VR),RET=""
+ S KX="" F  S KX=$O(^PNF(NIB,DT,KX)) Q:KX=""  D
+ .S V=$P(KX,"|",1),O=$P(KX,"|",2),I=$P(KX,"|",3)
+ .I VR'="",VR'=V Q
+ .Q:'$D(^ZNF(V,O,DT,I,"nz"))
+ .S R=$P(^("e"),"~",1)
+ .Q:R="d"  ;I NSBS,R="w" Q 
+ .S I=""
+ .S R=$TR(^("nz"),",","|") Q:R=""
+ .S RET=$$STFLGS^TXTU(RET,R)
+ Q $TR(RET,"|",",")
+FIXznf ; перекодировать нумерацию зубов
+ S V="" F  S V=$O(^ZNF(V)) Q:V=""  D
+ .S O="" F  S O=$O(^ZNF(V,O)) Q:O=""  D
+ ..S D="" F  S D=$O(^ZNF(V,O,D)) Q:D=""  D
+ ...S I="" F  S I=$O(^ZNF(V,O,D,I)) Q:I=""  D:$D(^(I,"nz"))
+ ....S R=^("nz")
+ ....S X=$$RECODE^ISTOM(R) Q:X=R 
+ ....S ^ZNF(V,O,D,I,"nz")=X
+ ....D GL^IEXCH("^ZNF",V,O,D,I,"nz")
+ ....W "."
+ Q
+INITDB 
+ S ^MN("root","stof")="Зубная формула"
+ S ^MN("root","stof","kname")="Код",^("ktype")="S"
+ S ^MN("root","stof-ort")="Зубная формула (ортодонтия)"
+ S ^MN("root","stof-ort","kname")="Код",^("ktype")="S"
+ S ^MN("root","toothdestr")="Степень разрушения зуба"
+ S ^MN("root","toothdestr","kname")="Коэффициент",^("ktype")="S"
+ S ^MN("root","wstomstat")="Состояния зуба в простой зубной формуле"
+ S ^MN("root","wstomstat","kname")="Код",^("ktype")="S"
+ Q

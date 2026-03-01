@@ -1,0 +1,93 @@
+ISEC ; Контроль доступа [ 03/03/2016  11:21 PM ]
+TPNM(TP,VAL) 
+ Q
+CONV ; Изменение формата хранения полей по времени
+ N NN,R,D,P
+ S NN="" F  S NN=$O(^CARD(NN)) Q:NN=""  D
+ .S D="" F  S D=$O(^CARD(NN,D)) Q:D=""  D:+D=D
+ ..S P="" F  S P=$O(^CARD(NN,D,P)) Q:P=""  M ^CARD(NN,P,D)=^CARD(NN,D,P) K ^CARD(NN,D,P)
+ .W "."
+ Q
+ANLAST(CRD,DT,IO) ; Аннул. последнее событие указанного типа за день
+ N TM
+ S TM="" F  S TM=$O(^CRDLOG(CRD,DT,TM),-1) Q:TM=""  I $P(^(TM),"|",4)=IO S $P(^(TM),"|",3)=9 Q
+ Q
+LASTEN(CRD,DAYS) ; Получить последнее состояние прохода
+ N DT,R
+ S R=$Q(^CRDLOG(CRD,99999,0),-1)
+ Q:R="" ""
+ I $G(DAYS),($H-DAYS)'<$QS(R,2) Q ""
+ Q $P(@R,"|",4)
+IsREG(CRD,DTM,IO) ; Карта уже на дату зарегистрирована
+ ; IO - 1-in/2-out/
+ N TT
+ S DTM=+DTM,TT=""
+ F  S TT=$O(^CRDLOG(CRD,DTM,TT)) Q:TT=""  I $P(^(TT),"|",4)=IO Q
+ Q:TT="" ""
+ Q DTM_","_TT
+CORRJ(DS,DE,DO) ; Проверка событий на корректную последовательность вход/выход
+ N DT,NN,TM,F,FI,FO,R,EV
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S NN="" F  S NN=$O(^CRDLOG(NN)) Q:NN=""  D
+ .S DT=DS-1 F  S DT=$O(^CRDLOG(NN,DT)) Q:DT=""!(DT>DE)  D
+ ..S (FI,FO,F)=0
+ ..S TM="" F  S TM=$O(^CRDLOG(NN,DT,TM)) Q:TM=""  D
+ ...S R=^(TM) Q:$P(R,"|",3)'=1
+ ...Q:'$D(^CARD(NN))
+ ...S EV=$P(R,"|",4)
+ ...I EV=1 S:FO F=1 S FI=FI+1
+ ...I EV=2 S FO=FO+1
+ ..Q:'FI  Q:'FO
+ ..I FI>1!(FO>1) W !,$$DT^DTUTL(DT)_" "_$$FIO^IKADRY($$GETVR^ISCARD(NN)) Q 
+ ..Q:'F 
+ ..I 'DO W !,$$DT^DTUTL(DT)_" "_$$FIO^IKADRY($$GETVR^ISCARD(NN)) Q
+ ..S F=1,TM="" F  S TM=$O(^CRDLOG(NN,DT,TM)) Q:TM=""  D  Q:F=3
+ ...S R=^(TM) Q:$P(R,"|",3)'=1
+ ...S $P(^CRDLOG(NN,DT,TM),"|",4)=F,F=F+1
+ Q
+UPDTBL(CRD,DT,TM,IO) ; Изменить данные в табеле относительно события
+ ; IO - вход/выход 
+ N LP,OT,VR,R
+ S R=$G(^CARD(CRD)) Q:R=""  Q:$P(R,"|",1)'="D"
+ S VR=$P(R,"|",2)
+ S LP=+$$^I("ilpu"),OT=$$OTD^IKADRY(VR,DT)
+ S R=$G(^PTBL(LP,OT,VR,DT,2)),$P(R,"|",IO)=TM_"@1",^(2)=R
+ D GL^IEXCH("^PTBL",LP,OT,VR,DT,2)
+ Q
+DELTBL(CRD,DT,TM) ; Удалить данные табеля если совп. со временем
+ N LP,OT,VR,R,F
+ S R=$G(^CARD(CRD)) Q:R=""  Q:$P(R,"|",1)'="D"
+ S VR=$P(R,"|",2)
+ S LP=+$$^I("ilpu"),OT=$$OTD^IKADRY(VR,DT)
+ S R=$G(^PTBL(LP,OT,VR,DT,2)),F=0
+ S:$P($P(R,"|",1),"@",1)=TM $P(R,"|",1)="@1",F=1
+ S:$P($P(R,"|",2),"@",1)=TM $P(R,"|",2)="@1",F=1
+ Q:'F
+ S ^(2)=R
+ D GL^IEXCH("^PTBL",LP,OT,VR,DT,2)
+ Q
+ADDEV(CRD,DT,TM,IO,MAN)  ; Добавить время
+ ; IO - 1-вход,2-выход,0-не указано
+ ; MAN - 1=вручную
+ Q:CRD=""
+ N A
+ S MAN=$G(MAN),A=CRD_"|1|1|"_(+IO)_"|"_MAN_"|"_$$USR^IUSER()_"|||"_$$^I("ilpu")
+ S:MAN $P(A,"|",8)=$H
+ L +^CRDLOG(CRD,DT)
+ F  Q:'$D(^CRDLOG(CRD,DT,TM))  S TM=TM+1
+ S ^CRDLOG(CRD,DT,TM)=A
+ L -^CRDLOG(CRD,DT)
+ D UPDTBL(CRD,DT,TM,+IO)
+ D GL^IEXCH("^CRDLOG",CRD,DT,TM)
+ Q
+TREZOR(NN) ; Формат кода для системы "Трезор"
+ ; Format: FIO,BD(CRD)
+ N FIO,VR,CRD,BD
+ I $A($E(NN,1))=208,$A($E(NN,3))=208 S NN=$$U8W^TXTU(NN) ; если в UTF-8
+ S CRD=$P($P(NN,"(",2),")",1)
+ I $D(^CARD(CRD)) Q CRD
+ S FIO=$$TRIM^TXTU($P(NN,"(",1))
+ S BD=$P(FIO,",",2),FIO=$P(FIO,",",1)
+ S VR=$$FNDFIOL^NVFIND(FIO) Q:VR="" "" Q:VR="-" ""
+ D REG^ISCARD(CRD,"D",VR)
+ Q CRD

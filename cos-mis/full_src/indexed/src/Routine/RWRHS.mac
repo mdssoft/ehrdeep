@@ -1,0 +1,61 @@
+RWRHS ; Системные отчеты склада [ 10/16/2018  6:36 PM ]
+LSTCN(PR,MOD,USE) ; Номенклатура склада с ценами
+ ; PR - профиль
+ N ID,R,A,I,N,F,C,RA,RM,X
+ S ID="",I=1,USE=+$G(USE)
+ K ^BUF($J,"WRH")
+ F  S ID=$O(^WRHE(ID)) Q:ID=""  S R=^(ID) D:$P(R,"|",3)=PR!(PR="") 
+ .S N=$P(R,"|",1),F=$G(^(ID,"f")),C=$G(^("c"))
+ .Q:('$P(R,"|",15))'=USE 
+ .S:MOD RA=$G(^("a")),RM=$G(^("m"))
+ .S A=$S(MOD:ID_"|",1:"")
+ .S A=A_N_"|"_$$NAME^IWRHS("means",+$P(R,"|",5))
+ .S A=A_"|"_$$NAME^IWRHS("fpack",+$P(R,"|",7))
+ .S:MOD A=A_"|"_$TR($P(R,"|",13),".",",")
+ .S:MOD A=A_"|"_$$NAME^IWRHS("pack",+$P(R,"|",6))
+ .S:MOD A=A_"|"_$TR($P(R,"|",12),".",",")
+ .S:MOD A=A_"|"_$P(R,"|",8)_"|"_$P(RA,"|",1)
+ .S A=A_"|"_$$NAME^IWRHS("manuf",+$P(R,"|",9))
+ .S A=A_"|"_$$NAME^IWRHS("country",+$P($P(R,"|",10),"@",1))
+ .S:MOD A=A_"|"_$P(R,"|",11)_"|"_$P(RM,"|",1)_"|"_$$DT^DTUTL($P(RM,"|",2))
+ .S X=+$G(^WRHE(ID,"tc"))
+ .S A=A_"|"_$P(F,"|",1)_"|"_$S(MOD:$P($G(^WRHM("tcn",X)),"|",1)_"|",1:"")_$P(F,"|",2)_"|"_C
+ .S:MOD A=A_"|"_$P(RM,"|",3)_"|"_(+$P(R,"|",14))
+ .S:MOD A=A_"|"_$P(RA,"|",2)
+ .S:MOD!(PR="") A=A_"|"_$$NAME^IWRHS("prof",$P(R,"|",3))
+ .S ^BUF($J,"WRH",N_"|"_I)=A,I=I+1
+ D OWF^RWU(".txt")
+ D:'MOD WC^RWU("Наименование|Ед.изм.|Фасовка|Изготовитель|Страна|Цена продажи|НДС,%|Примечание"_$S(PR="":"|Группа",1:""))
+ D:MOD WC^RWU("Код|Наименование|Ед.изм.|Фасовка|Ед.в фас.|Упаковка|Ед.в упак.|Номенклатурный №|Штрихкод|Изготовитель|Страна|Годность, дней|№ рег.|Дата рег.|Цена продажи|Тип цены|НДС,%|Примечание|Рейтинг|ПКУ|Внешний код"_$S(MOD!(PR=""):"|Группа",1:""))
+ S I="" F  S I=$O(^BUF($J,"WRH",I)) Q:I=""  D WC^RWU(CR_^(I))
+ K ^BUF($J,"WRH")
+ D C^RWU
+ Q
+NLSALE(PR,DT,USE) ; Выгрузка номенклатуры с ценой прожажи
+ ; PR - профиль
+ ; DT - дата формирования отчета
+ ; USE - только используемая номенклатура
+ N ID,R,A,I,N,RA,RM,CC,TC
+ S ID="",I=1,USE=+$G(USE),DT=$$DIH^DTUTL(DT)
+ K ^BUF($J,"WRH")
+ F  S ID=$O(^WRHE(ID)) Q:ID=""  S R=^(ID) D:$P(R,"|",3)=PR!(PR="") 
+ .S N=$P(R,"|",1)
+ .Q:('$P(R,"|",15))'=USE 
+ .S RA=$G(^(ID,"a")),RM=$G(^("m")),TC=$G(^("tc"))
+ .S CC=$$CENN^IWRHS(ID,DT) I 'CC,'TC Q 
+ .S A=ID_"|"_N_"|"_$$NAME^IWRHS("means",+$P(R,"|",5))
+ .S A=A_"|"_$P(R,"|",8)_"|"_$P(RA,"|",1)
+ .S R=$$NAME^IWRHS("tcn",TC) S:R=""&CC R="Фиксированная" 
+ .S A=A_"|"_$TR(CC,".",",")_"|"_$TR($$NDS^IWRHS(ID,DT),".",",")_"|"_R_"|"_$$DTM^DTUTL($$CENNDT^IWRHS(ID,DT))
+ .S ^BUF($J,"WRH",N_"|"_I)=A,I=I+1
+ D OWF^RWU(".txt")
+ D WC^RWU("Код|Наименование на "_$$DT2^DTUTL(DT)_"|Ед.изм.|Номенклатурный №|Штрихкод|Цена продажи|НДС|Тип цены|Изменено")
+ S I="" F  S I=$O(^BUF($J,"WRH",I)) Q:I=""  D WC^RWU(CR_^(I))
+ K ^BUF($J,"WRH")
+ D C^RWU
+ Q
+REGIPROC 
+ N D S D="Складской учет"
+ S ^IPROC(D,"Номенклатура склада")="LSTCN_RWRHS,1,3,t@net:LST_NWRHS(""prof""),Профиль номенклатуры,t@string:0/Нет#1/Да,Полный перечень полей,t@string:1/Да#0/Архив,Действующие"
+ S ^IPROC(D,"Цена продажи номенклатуры склада")="NLSALE_RWRHS,1,3,t@net:LST_NWRHS(""prof""),Профиль номенклатуры,d,Дата отчета,t@string:1/Да#0/Архив,Действующие"
+ Q

@@ -1,0 +1,118 @@
+ISIRONA ; Sirona Sidexis routines
+JOB
+	;S $ZT="ET^ISIRONA"
+	;D $System.License.DeferUserIdentification(1),$System.License.Login("_SYSTEM") ; SQL user
+	D $System.License.DeferUserIdentification(0)
+	D $System.License.Login("Admin") ; SQL user
+	K ^SYNCJ("JOB^ISIRONA")
+	F  Q:+$G(^SYNCJ("JOB^ISIRONA"))  D DO Q:+$G(^SYNCJ("JOB^ISIRONA"))  H 30 ;200
+	K ^SYNCJ("JOB^ISIRONA")
+	Q
+ET	; Error trap
+	N A S A=$ZE,^ERLOG("ISIRONA",+$H,$P($H,",",2))=A,^($P($H,",",2),"EC")=$ECODE
+	Q
+START
+	J JOB^ISIRONA
+	Q
+STOP
+	S ^SYNCJ("JOB^ISIRONA")=1
+	Q
+DO
+	k ^KKS
+	s ^KKS=$$DTM^DTUTL($H)_" 0"
+	N conn,sc,res,CL,A,I,i,ID,last,sql
+	Set CR=$C(13,10),%LOG="sys",%JOB=777
+	Set conn=##class(%SQLGatewayConnection).%New()
+	Set sc=conn.Connect("SIDEXIS","XGAdmin","HIPAA")
+	U 0 If '$P(sc," ",1) do $System.Status.DisplayError(sc) S ^KKS("ER")=sc quit
+    Set res=##class(%ResultSet).%New("%DynamicQueryGW:SQLGW")
+    s last=+$G(^INKR("sirona"))
+    s sql="Select TImageRaw.tImgSFile as fn, TImageRaw.tImgTs as ts, TPatientRaw.tPatSExtPatID as nib,"
+    s sql=sql_"TImageRaw.tImgCulIntImgIDPk, TPatientRaw.tPatCulIntPatIDPk "
+    s sql=sql_"From TImageRaw Inner Join "
+    s sql=sql_"TPatientRaw On TPatientRaw.tPatCulIntPatIDPk = TImageRaw.tImgCulIntPatIDFk "
+	s sql=sql_"Where TImageRaw.tImgCulIntImgIDPk>"_last
+	s sql=sql_" and TPatientRaw.tPatSExtPatID<>'-'"
+	s sql=sql_" and TPatientRaw.tPatSExtPatID<>''"
+	
+	;w !,sql
+ 
+	S stat=res.Prepare(sql,,conn)
+	I 'stat D $System.OBJ.DisplayError(stat) Q 
+	S stat=res.Execute()
+	I 'stat D $System.OBJ.DisplayError(stat) D res.Close() Q
+    S CL=res.GetColumnCount(),i=0
+    s %LOG="sys"
+    s ^KKS=$$DTM^DTUTL($H)
+    
+    While res.Next() 
+    {
+	    ;S A=""
+	    ;F I=1:1:CL S A=A_$S(A="":"",1:"|")_res.GetData(I) ; $C(9)
+	    ;w !,A,!
+	    s i=i+1
+	    ;q:i>50 
+	    s FN=$$getPL(res,1)
+	    s TS=$$DTI^DTUTL($$getPL(res,2))
+	    s NI=$TR($$getPL(res,3)," ","")
+	    S X=$$NNUM^TXTU($$getPL(res,4))
+	    S:X>last last=X
+	    s ^KKS(X)=NI
+	    if NI'="",NI'="-",$$EXIST^IPAC(NI) {
+	    	;S:NI="" NI=1000 s:NI="-" NI=1000
+	    	D MKEPR(NI,TS,"Снимок",FN)
+	    	;w "ts="_$$DTM^DTUTL(TS)_" ni="_NI
+	    	;w !,"last="_last_", X="_X
+	    }
+    }
+	;Set sc=conn.%Close() 
+	S ^INKR("sirona")=last
+	s sc=conn.Disconnect()
+	If '$P(sc," ",1) do $System.Status.DisplayError(sc)
+    ;D conn.UnloadDLL()
+	Q
+DOp ; Patients
+	Q
+dti(X)
+	S X=$P(X," ",1)
+	Q $$DI^DTUTL($P(X,"-",3)_"."_$P(X,"-",2)_"."_$P(X,"-",1))
+getPL(res,ID)
+	Q $$TRIM^TXTU($TR(res.GetData(ID),$C(0),""))
+MKEPR(NI,DTM,NAM,File) ; Создать документ в ЭИБ
+	N TPD,DOC
+	s TPD=$$FNDUID^YIMHS("sirona/images") Q:TPD="" 
+	S DOC=$$MKDOC^IEPR(NI,TPD,NAM,1)
+	D SETDT^YIMH(NI,DOC,DTM)
+	S ^EPRD(NI,DOC)=File
+	S ^EPR(NI,DOC,"dp")="rotate" ; переворот по умолчанию
+	D UPD^YIMH(NI,DOC)
+	Q
+PFN ; N,ID
+	N FN
+	s FN=$G(^EPRD(N,ID)) Q:FN="" 
+	d WC^RWU("SIRONA/"_FN)
+	;d WC^RWU("IMG_ISIRONA?PR1="""_N_","_ID_"""") 
+	Q
+IMG(KEY) ; N,ID
+	; Недействителен для сетевого размещения файлов Sidexis
+	N X,I,L,FN,N,ID
+	s N=$P(KEY,",",1),ID=$P(KEY,",",2)
+	s FN=$G(^EPRD(N,ID)) Q:FN="" 
+	S X=$G(^cfg("sirona","dir"))_"/"_FN
+	Q:'$$CHECK^FIL(X)
+	D OWF^RWU(".tif")
+	S I=$$OR^FIL(X),L=0
+	U I F  R R#4096 Q:$$ST^FIL()=0  I R'="" D W^RWU(R) s L=L+$L(R)
+	C I
+	s ^KKK(5)=L
+	D C^RWU
+	Q
+tfn
+	S X=$G(^cfg("sirona","dir"))_"/"_FN
+	Q:'$$CHECK^FIL(X)
+	D OWF^RWU(".tiff")
+	S I=$$OR^FIL(X),L=0
+	U I F  R R#4096 Q:$$ST^FIL()=0  I R'="" s L=L+$L(R)
+	C I
+	U 0 w !,"L="_L
+	Q

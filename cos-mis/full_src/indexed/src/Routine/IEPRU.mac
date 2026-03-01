@@ -1,0 +1,230 @@
+IEPRU ; Утилиты EPR [ 05/18/2023  5:33 PM ]
+SYNCOTD(OTD,LPU,WT) ; Синхронизировать с ЛПУ документы отделения
+ ; WT - wait time
+ N NI,ID,TP,I,OW,REZ,IDX,IDXU
+ S REZ="",IDX=0,IDXU=0
+ S NI="" F  S NI=$O(^EPRI("t",NI)) Q:NI=""  D 
+ .S TP="" F  S TP=$O(^EPRI("t",NI,TP)) Q:TP=""  S ID="" F  S ID=$O(^EPRI("t",NI,TP,ID)) Q:ID=""  D
+ ..S OW=^(ID) Q:OW=""  
+ ..Q:'$D(^EPR(NI,ID)) 
+ ..Q:$$OTD^IKADRY(OW)'=OTD 
+ ..S REZ=REZ_CR_NI_","_ID,IDX=IDX+1
+ ..Q:$L(REZ)<31000
+ ..D INSY(REZ)
+ ..S REZ=""
+ ..W "."
+ ..F I=1:1 H 1 Q:'$D(^EICH("f","YIMH"))  Q:$$noch(LPU)  H 9
+ I $L(REZ) D INSY(REZ) W "."
+ W !,"Total "_IDX_" updated "_IDXU
+ Q
+noch(LPU) 
+ N I
+ S I="" F  S I=$O(^EICH("f","YIMH",I)) Q:I=""  Q:$D(^(I,LPU))
+ Q:I="" 1
+ Q 0
+INSY(LST) 
+ N SRV,PORT,SID,IREZ,OK,I,F,R
+ S SRV=$G(^EXCFG("cn",LPU)) Q:SRV="" 
+ S PORT=$P(SRV,":",2),SRV=$P(SRV,":",1) S:PORT="" PORT=80
+ S SID=$$OPEN^WWWCLI(SRV,PORT)
+ D SETAUTH^WWWCLI(SID,1,$G(^EXCFG("user")),$G(^EXCFG("passwd")))
+ D SETCONN^WWWCLI(SID,1)
+ D SETBUF^WWWCLI(SID,LST)
+ S OK=$$POST^WWWCLI(SID,"CHKSY^IEPRU?")
+ D OBUF^WWWCLI(SID)
+ S F=$$BUFCNT^WWWCLI(SID)
+ S R="" F I=1:1:F S R=R_$$RBUF^WWWCLI(SID)
+ S OK=+$$^I("ilpu")
+ F I=1:1:$L(R,CR) S F=$P(R,CR,I) I F'="" D UPDA^IEXCH("YIMH",F,OK,LPU) S IDXU=IDXU+1 
+ D SETCONN^WWWCLI(SID,0)
+ S OK=$$GET^WWWCLI(SID,"LOGOUT?")
+ D CLOSE^WWWCLI(SID)
+ Q
+CHKSY ; Проверка на ЛПУ документов - возврат нужных
+ N KEY,R,J,A,RR
+ D ORH^RWU
+ S RR="" F J=1:1 S KEY=$$R^RWU Q:%IFN["Z"  I KEY'="",'$D(^EPR($P(KEY,",",1),$P(KEY,",",2))) S RR=RR_CR_KEY
+ D CR^RWU
+ D MSG^RWU(RR)
+ Q
+UPDNET(DS,DE,LPU,OTD) ; Обновить данные по сети для отделения и/или филиала
+ N DT,NI,ID,R,O,V,LP
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),OTD=$G(OTD)
+ S LP=$$^I("ilpu")
+ S DT=DS-1 F  S DT=$O(^EPRI("dt",DT)) Q:DT=""!(DT>DE)  D
+ .S NI="" F  S NI=$O(^EPRI("dt",DT,NI)) Q:NI=""  D
+ ..S ID="" F  S ID=$O(^EPRI("dt",DT,NI,ID)) Q:ID=""  D
+ ...S R=$G(^EPR(NI,ID,"o")) Q:R="" 
+ ...I LPU'="",$P(R,"|",3)'=LPU q 
+ ...I OTD'="",'$$IsOTD^IKADRY($P(R,"|",2),OTD,DT) q
+ ...W "."
+ ...I LPU'="" D UPDA^IEXCH("YIMH",NI_","_ID,LP,LPU) q
+ ...D UPD^IEXCH("YIMH",NI_","_ID)
+ Q
+DOSEND(ID) 
+ N TP,UID,IDX,KEY,SRV,PRT,XN,XI
+ S TP=$G(^MSGHUB("iepr",ID,"tp")) ; TODO - Q:TP=""
+ S UID=$G(^("uid")),SRV=$G(^("server")),PRT=$G(^("port"))
+ Q:SRV=""  Q:PRT="" 
+ S IDX="" F  S IDX=$O(^MSGOUT("iepr",ID,IDX)) Q:IDX=""  D
+ .S KEY=$G(^(IDX,"data",1)) Q:KEY=""
+ .S XN=$P(KEY,"@",1),XI=$P(KEY,"@",2) Q:XN=""  Q:XI="" 
+ .Q:'$$SE(XN,XI,SRV,PRT)
+ .D endsend^IMSGHUB("iepr",ID,IDX)
+ Q
+DORECV(ID) 
+ Q
+SEBUF(NI,ID,ANON,ENI) ; Выгрузка в буфер
+ ; ANON - анонимно
+ ; ENI - фиктивный код пациента
+ Q $$SEVAR(NI,ID,$G(ANON),$G(ENI),"^BUF("_$J_")")
+SEVAR(NI,ID,ANON,ENI,VAR) ; Выгрузка в переменную
+ ; ANON - анонимно
+ ; ENI - фиктивный код пациента
+ K @VAR
+ Q:$G(^EPR(NI,ID,"dt"))="" 0
+ N FL,FLN,TP,X,EC
+ S TP=$G(^EPR(NI,ID,"t")) Q:TP="" 0
+ Q:TP=$$FNDUID^YIMHS("base/common-import") 0
+ S EC=$$GET^YCONTR(+$$^I("ilpu"),"ecode")
+ S ENI=$G(ENI) S:ENI="" ENI=NI
+ S:'ANON @VAR@("SYS-pacfio")=$$FIO^IPAC(NI)
+ S @VAR@("SYS-pborn")=$$GETE^IPAC(NI,"datar")
+ S X=$P(^EPR(NI,ID,"dt"),"|",1)
+ S @VAR@("SYS-dt")=X
+ S @VAR@("SYS-date")=$$DT^DTUTL(X)
+ S:'ANON @VAR@("SYS-vr")=$$FIO^IKADRY($P(^EPR(NI,ID,"o"),"|",2))
+ S X=$G(^EPR(NI,ID,"n")) Q:X="" 1
+ S @VAR@("SYS-name")=X
+ S @VAR@("SYS-key")=ENI_","_ID
+ S @VAR@("SYS-pid")=ENI
+ S @VAR@("SYS-gd")=$$GET^IPAC(NI,"pol")
+ S:EC'="" @VAR@("SYS-from")=EC
+ S @VAR@("SYS-etype")=TP
+ S FL="" F  S FL=$O(^EPRD(NI,ID,FL)) Q:FL=""  D  
+ .I ANON Q:FL="dfio"  Q:FL="pfio"  
+ .S FLN=$G(^DTYPE(TP,"fields",FL,"@tit"))
+ .Q:FLN=""    
+ .S @VAR@(FL)=^EPRD(NI,ID,FL) 
+ .S @VAR@(FL,"name")=FLN
+ .S X=$G(^DTYPE(TP,"fields",FL))
+ .S:'ANON&(X'="") @VAR@(FL,"idx")=X
+ .S X=$G(^DTYPE(TP,"fields",FL,"@tp")) S:X="" X="s"
+ .S @VAR@(FL,"tp")=X
+ Q 1
+SE(NI,ID,IP,PORT) ; Упрощенный экспорт
+ Q:$G(IP)="" 0
+ Q:$G(^EPR(NI,ID,"e"))'="rpt" 1
+ ; Неподписанные оставляем только за полгода
+ I '$P($G(^EPR(NI,ID,"s")),"|",1) Q:+$G(^("dt"))<($H-190) 1 Q 0
+ Q:$G(^EPR(NI,ID,"dt"))="" 1
+ N FL,FLN,TP,X,EC
+ S TP=^EPR(NI,ID,"t")
+ Q:TP=$$FNDUID^YIMHS("base/common-import") 1
+ S EC=$$GET^YCONTR(+$$^I("ilpu"),"ecode")
+ K ^BUF($J)
+ S ^BUF($J,"SYS-pacfio")=$$FIO^IPAC(NI)
+ S ^BUF($J,"SYS-pborn")=$$GETE^IPAC(NI,"datar")
+ S ^BUF($J,"SYS-dt")=$P(^EPR(NI,ID,"dt"),"|",1)
+ S ^BUF($J,"SYS-vr")=$$FIO^IKADRY($P(^EPR(NI,ID,"o"),"|",2))
+ S X=$G(^EPR(NI,ID,"n")) Q:X="" 1
+ S ^BUF($J,"SYS-name")=X
+ S ^BUF($J,"SYS-key")=NI_","_ID
+ S ^BUF($J,"SYS-from")=EC
+ S ^BUF($J,"SYS-etype")=TP
+ S FL="" F  S FL=$O(^EPRD(NI,ID,FL)) Q:FL=""  D  
+ .S FLN=$G(^DTYPE(TP,"fields",FL,"@tit"))
+ .Q:FLN=""    
+ .S ^BUF($J,FL)=^EPRD(NI,ID,FL) 
+ .S ^BUF($J,FL,"name")=FLN
+ .S X=$G(^DTYPE(TP,"fields",FL))
+ .S:X'="" ^BUF($J,FL,"idx")=X
+ .S X=$G(^DTYPE(TP,"fields",FL,"@tp")) S:X="" X="s"
+ .S ^BUF($J,FL,"tp")=X
+ D OWF^RWU("exp.xml")
+ D W^RWU($G(^PP(0,1))_"<nb_console><epr>"_CR)
+ D L^XMLU("^BUF",$J)
+ D WC^RWU(CR_"</epr></nb_console>")
+ K ^BUF($J)
+ D C^RWU
+ N OK,SID
+ S SID=$$OPEN^WWWCLI(IP,PORT)
+ D BUFH2B^WWWCLI(SID,"exp.xml",1)
+ D SETAUTH^WWWCLI(SID,1,"sys","sys")
+ S OK=$$POST^WWWCLI(SID,"/AUTH/zEPR/SI_IEPRU?")
+ S:OK'=200 X=0
+ I OK=200 S X=$S($$GETBUF^WWWCLI(SID)="OK":1,1:0) S:X=0 ^ERLOG("IEPRU-EXP",$O(^ERLOG("IEPRU-EXP",""),-1)+1)=NI_","_ID_"|"_$H,X=1
+ D CLOSE^WWWCLI(SID)
+ Q X
+SI ; Упрощенный импорт
+ N IJ,FL,X,R,NI,TP,NI,FF,FI,FO,BD,DT,NM,FLL,DOC,FLF,EC,KEY,I
+ K ^BUF($J)
+ S IJ=$$OS^XMLU("^BUF("_$J_")","epr","id")
+ S FF=$$flIMP("SYS-pacfio")
+ S BD=$$DI^DTUTL($$flIMP("SYS-pborn"))
+ I FF="" D MSG^RWU("ERR") Q
+ S FI=$P(FF," ",2),FO=$P(FF," ",3),FF=$P(FF," ",1)
+ S NI=$$GETNIB^IPACFND(FF,FI,FO,BD,"",1)
+ I NI=""!(NI=-1) D MSG^RWU("ERR") Q   
+ S DT=$$flIMP("SYS-dt"),NM=$$flIMP("SYS-name")
+ S TP=$$FNDUID^YIMHS("base/common-import")
+ G:TP'="" SIi
+ S TP=$$ADDT^YIMHS("Запись в карте",$$ADDF^YIMHS("Консультации, приемы"),"rpt","base/common-import")
+ D SET^YIMHS(TP,"rights","rrr")
+ D SET^YIMHS(TP,"ext","rpt")
+ S ^DTYPE(TP,"fields","dfio")=99,^("dfio","@tp")="s",^("@tit")="Врач"
+ D MKIDX^IMHS(TP)
+SIi 
+ S KEY=$$flIMP("SYS-key")
+ S EC="i"_(+$$flIMP("SYS-from"))_"."_$$flIMP("SYS-etype")
+ S DOC="" F  S DOC=$O(^EPR(NI,DOC)) Q:DOC=""  Q:$G(^(DOC,"ikey"))=KEY
+ S:DOC="" DOC=$$MKDOC^YIMH(NI,TP,NM,1,DT,1) Q:DOC="" 
+ S ^EPRD(NI,DOC,"dfio")=$$flIMP("SYS-vr")
+ S ^EPR(NI,DOC,"ikey")=KEY
+ S ^EPR(NI,DOC,"fk")=EC
+ S FLF=0
+ S FL="" F  S FL=$O(^BUF($J,1,FL)) Q:FL=""  D:$E(FL,1,4)'="SYS-"
+ .S NM=$$flN(FL,"name")
+ .D:'$D(^DTYPE(TP,"fieldkey",EC,FL))  ; new field
+ ..S FF=$$flN(FL,"tp"),I=$$flN(FL,"idx")
+ ..S ^DTYPE(TP,"fieldkey",EC,FL)=+I
+ ..S ^(FL,"@tp")=FF,^("@tit")=NM,FLF=1
+ .S ^EPRD(NI,DOC,FL)=$$DBLSP^TXTU($$flD(FL))
+ D:FLF MKIDX^IMHS(TP)
+ K ^BUF($J)
+ D MSG^RWU("OK")
+ Q
+flIMP(FL) 
+ Q $G(^BUF($J,1,FL,$c(3)_"data"))
+flD(FL) 
+ Q $G(^BUF($J,1,FL))
+flN(FL,NM) 
+ Q $G(^BUF($J,1,FL,$c(3)_NM))
+REUID ; Обновить и доприсвоить глобальный идентификаторы ЭПМЗ
+ N NI,ID,JJ,F
+ S JJ=$$VAL^IINKR("epr","uidrec"),F=0
+ S NI="" F  S NI=$O(^EPR(NI)) Q:NI=""  D
+ .S ID="" F  S ID=$O(^EPR(NI,ID)) Q:ID=""  D
+ ..Q:$D(^EPR(NI,ID,"ur"))  
+ ..S JJ=JJ+1,F=1
+ ..S ^EPR(NI,ID,"ur")=JJ
+ D:F SET^IINKR("epr",JJ,"uidrec")
+ Q
+CNGLPU(DS,DE,LPU,TLPU,SBS) ; Изменить филиал у документов
+ ; LPU - с филиала
+ ; TLPU - на филиал
+ ; SBS - подписанные (1), нет (2)
+ N DT,NI,ID,R,O,V,SB
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),SBS=$G(SBS),TLPU=$G(TLPU)
+ S DT=DS-1 F  S DT=$O(^EPRI("dt",DT)) Q:DT=""!(DT>DE)  D
+ .S NI="" F  S NI=$O(^EPRI("dt",DT,NI)) Q:NI=""  D
+ ..S ID="" F  S ID=$O(^EPRI("dt",DT,NI,ID)) Q:ID=""  D
+ ...S R=$G(^EPR(NI,ID,"o")) Q:R="" 
+ ...I LPU'="",$P(R,"|",3)'=LPU q 
+ ...S SB=+$P($G(^EPR(NI,ID,"s")),"|",1)
+ ...I SBS=1,SB'=1 Q 
+ ...I SBS=2,SB=1 Q 
+ ...S:TLPU $P(^EPR(NI,ID,"o"),"|",3)=TLPU
+ ...W "."
+ ...D UPD^IEXCH("YIMH",NI_","_ID)
+ Q

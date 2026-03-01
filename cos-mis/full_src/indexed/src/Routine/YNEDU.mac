@@ -1,0 +1,378 @@
+YNEDU ; Доп. процедуры для единых документов [ 05/16/2024  2:54 PM ]
+LJ(VR,DT) ; Журнал посещений
+ N DTT
+ S DTT=$$DIH^DTUTL(DT)
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<vrpacj>")
+ D LJTABLE
+ Q
+LJDT(VR,DT) ; Журнал посещений с выводом дат
+ N DTT,OT,DTX
+ S DTT=$$DIH^DTUTL(DT)
+ K ^BUF($J)
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<vrpacj><list>")
+ S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  S DTX="" F  S DTX=$O(^ZNF(VR,OT,DTX)) Q:DTX=""  S ^BUF($J,DTX)=""
+ S DTX="" 
+ F  S DTX=$O(^BUF($J,DTX),-1) Q:DTX=""  D W^RWU($$DT^DTUTL(DTX)_CR)
+ K ^BUF($J)
+ D W^RWU("</list>")
+ D WTAG^RWU("uet",+$$C^I("pacj","uet"))
+ D LJTABLE
+ Q
+LJTABLE 
+ N PAC,UCNT,USUMM,UESS,X,T,VRX,OTX,SS,CC,uC,@$$NEWVAR^IUSL
+ S uC=$$C^I("pacj","uet")
+ S (UCNT,USUMM,UESS)=0,VRX=VR
+ S OTX="" F  S OTX=$O(^ZNF(VRX,OTX)) Q:OTX=""  S ID="" F  S ID=$O(^ZNF(VRX,OTX,DTT,ID)) Q:ID=""  D
+ .D GET^IUSL(VRX,DTT,OTX,ID) Q:$G(NI)=""   S:'$D(PAC(NI)) PAC(NI)=0
+ .Q:STAT="d"!(STAT="w")  Q:$D(ERR)
+ .S X="" F  S X=$O(UL(X)) Q:X=""  D
+ ..S CC=UL(X),SS=$S($D(UL(X,1)):UL(X,1),1:$$USUM^IUSL(DTT,X,CC))
+ ..S USUMM=USUMM+SS,PAC(NI)=$G(PAC(NI))+SS,UCNT=UCNT+CC
+ ..Q:'uC
+ ..S T=$$GET^IPRICE(X,"uetv",PRC,DTT)*CC Q:'T 
+ ..S UESS=UESS+T,PAC(NI,1)=$G(PAC(NI,1))+T
+ D WTAGD^RWU("ucnt",UCNT)
+ S:UESS USUMM=USUMM_" УЕТ: "_UESS 
+ D WTAGD^RWU("usumm",USUMM)
+ D W^RWU("<table>")
+ S X=""
+ F  S X=$O(PAC(X)) Q:X=""  D WC^RWU(CR_X_"|"_$$FIO^IPAC(X,DTT)_"|"_PAC(X)_$S(uC:"|"_$G(PAC(X,1)),1:""))
+ D W^RWU("</table></vrpacj>"),C^RWU
+ Q
+LJUL(VR,DTT,NIB) 
+ S DTT=$$DIH^DTUTL(DTT)
+ N X,VRX,OTX,SS,CC,A,uC,EC,ECW,@$$NEWVAR^IUSL
+ S VRX=VR,uC=$$C^I("pacj","uet")
+ S ECW=$$C^I("ed","show-ecode")
+ D OWF^RWU(".txt")
+ D WC^RWU("Код|Услуга|Кол-во|Сумма|Диагноз"_$S(uC:"|УЕТ",1:""))
+ S OTX="" F  S OTX=$O(^ZNF(VRX,OTX)) Q:OTX=""  S ID="" F  S ID=$O(^ZNF(VRX,OTX,DTT,ID)) Q:ID=""  D
+ .D GET^IUSL(VRX,DTT,OTX,ID) Q:$G(NI)'=NIB 
+ .Q:STAT="d" 
+ .I STAT="w" D WC^RWU(CR_"|Неподписанная услуга") Q 
+ .I $D(ERR) D WC^RWU(CR_"|"_$$ECODE^IUSL(DTT)) Q 
+ .S X="" F  S X=$O(UL(X)) Q:X=""  D
+ ..S CC=UL(X),SS=$S($D(UL(X,1)):UL(X,1),1:$$USUM^IUSL(DTT,X,CC))
+ ..S A=$$OWF^TXTU($$NAMEH^IPRICE(X,PRC,DTT),64)
+ ..S EC=$S(ECW:$$GET^IPRICE(X,"ecode",PRC,DTT),1:"")
+ ..S A=X_$S(EC'="":"("_EC_")",1:"")_"|"_A_"|"_CC_"|"_SS_"|"_$G(DIA)
+ ..S:uC A=A_"|"_($$GET^IPRICE(X,"uetv",PRC,DTT)*CC)
+ ..D WC^RWU(CR_A)
+ D C^RWU
+ Q
+VHTML(VR,DT,OT,ID,ADV,SYS) ; Вывод информации по услуге в виде html
+ ; AVD - с доп. информацией
+ ; SYS - с системной инф.
+ N @$$NEWVAR^IUSL,A,X,Y,U,C,CN,I,K,L,UEV,UM,CNT
+ S ADV=$G(ADV),SYS=$G(SYS)
+ S:DT["." DT=$$DI^DTUTL(DT)
+ D MINHDR^IHTML("")
+ D CSS^IHTML
+ D W^RWU(CR_".hdr { background-color: #66CCFF; }")
+ D W^RWU(CR_".right { text-align: right; }")
+ D CSSE^IHTML
+ D W^RWU(CR_"</head><body>")
+ D GET^IUSL(VR,DT,OT,ID)
+ I STAT="d"!(STAT="") D WC^RWU("Услуга удалена") G VHTMLe
+ S X=$$TSTATUS^IUSL(STAT)
+ I STAT'=1,STAT'=2,X'="" D WC^RWU("<font color=""#FF0000""><b>Услуга: "_X_"</b></font><br>")
+ D:$$ISPL^IUSL(VR,DT,OT,ID,"v") WC^RWU("<font color=""#0000FF"">виртуальная услуга</font><br>")
+ D:$$ISPLE^IUSL(VR,DT,OT,ID,"lc") WC^RWU("<font color=""#0000FF"">услуга заблокирована</font><br>")
+ S DIA=$G(DIA),COMM=$G(COMM),SKID=$G(SKID),SP=$G(SP)
+ S X=$$GETDTM^IUSL(VR,DT,OT,ID)
+ S A=$$GETLOG^IUSL(VR,DT,OT,ID),L=$P(A,"|",2)
+ D WC^RWU(CR_"<b>Дата:</b> "_$$DT^DTUTL(DT)_", зарегистрировано "_$$DTM^DTUTL(X)_$S(A="":"",A'["|":", "_$$FIOSH^NUSER(A,2),1:", "_$$FIOSH^IKADRY(L)_" ("_$P(A,"|",1)_")"))
+ D WC^RWU(CR_"<br><b>Врач:</b> "_$$FIO^IKADRY(VR)_$S(SYS:" ("_VR_")",1:""))
+ D WC^RWU(CR_"<br><b>Специальность:</b> "_$$GSPEC^YISPRAV(SP)_$S(SYS:" ("_SP_")",1:""))
+ D WC^RWU(CR_"<br><b>Подразделение:</b> "_$$GOTD^YISPRAV(OT)_$S(SYS:" ("_OT_")",1:""))
+ S X=$$GETPL^IUSL(VR,DT,OT,ID,"l")
+ D:$L(X) WC^RWU(CR_"<br><b>Филиал:</b> "_$$NAME^ICONTR(X))
+ D W^RWU(CR_"<br><hr>")
+ S L=$$GETPL^IUSL(VR,DT,OT,ID,"f"),X=$$fromVRI^INAZN(L),C=""
+ D:X'=""
+ .S L=$$PATTERN^INAZN(L) S:L'="" L=" ("_$P(^NAZM("pt",L),"|",1)_")"
+ .D WC^RWU(CR_C_"<b>По назначению от:</b> "_$$FIO^IKADRY(X)_L)
+ .S C="<br>"
+ 
+ D WC^RWU(CR_C_"<b>Услуги:</b>")
+ S C="<br>",U="",(UEV,UM,CNT)=0
+ F  S U=$O(UL(U)) Q:U=""  S CNT=UL(U) D WC^RWU(CR_"<br>"_U_" "_$$TAG^TXTU($$NAMEH^IPRICE(U,PRC,DT))_$S(CNT>1:", <b>"_CNT_" шт.</b>",1:"")) S UEV=UEV+$$GET^IPRICE(U,"uetv",PRC,DT),UM=UM+$$GET^IPRICE(U,"uetms",PRC,DT)
+ D WC^RWU(CR_"<br><b>На сумму:</b> "_$$SUMM^IUSL(VR,DT,OT,ID)_$S(STAT=2:" (по кассе)",1:""))
+ D:UEV WC^RWU(CR_"<br><b>УЕТ врача:</b> "_UEV)
+ D:UM WC^RWU(CR_"<br><b>УЕТ медсестры:</b> "_UM)
+ 
+ S X=$$FLGNMS^YIMHS($G(FLG))
+ D:X'="" WC^RWU(CR_"<br><b>Статусы:</b> "_X)
+ D:SKID'="" WC^RWU(CR_"<br><b>Скидка:</b> "_(100-SKID)_"%")
+ S X=$$GETPL^IUSL(VR,DT,OT,ID,"kv"),Y=$$GETPL^IUSL(VR,DT,OT,ID,"kp")
+ S L=$$GETPL^IUSL(VR,DT,OT,ID,"p")
+ D:X'=""!(L'="") WC^RWU(CR_"<br>"_$S(X="":"",1:"<b>Квитанция №:</b> "_X_" ")_$S(L="":"",1:"<b>Платеж от:</b> "_$$DTM^DTUTL(L))_$S('$$CHKPAY^IBILL(NI,L):"<font color=""#FF0000""><b> (удален)</b></font>",1:"")_$S(Y:"<font color=""#FF0000""><b> оплачена</b></font>",1:""))
+ S X=$$GETPL^IUSL(VR,DT,OT,ID,"fr")
+ D:X'="" WC^RWU(CR_"<br><b>Франшиза:</b> "_$S($P(X,"|",1)'="":$P(X,"|",1)_" руб.",1:(+$P(X,"|",2))_"%"))
+ S X=$$GETPL^IUSL(VR,DT,OT,ID,"nds")
+ D:X'="" WC^RWU(CR_"<br><b>НДС:</b> "_X_" руб.")
+ D:DIA'="" WC^RWU(CR_"<br><b>Диагноз:</b> "_$$NAME^YMKB10(DIA))
+ S X=$$GETPL^IUSL(VR,DT,OT,ID,"nz")
+ D:X'="" WC^RWU(CR_"<br><b>Зуб №:</b> "_X)
+ S X=$$GETPL^IUSL(VR,DT,OT,ID,"li")
+ D:X'="" WC^RWU(CR_"<br><b>Заявка КДЛ №:</b> "_X)
+ S X=$$GETPL^IUSL(VR,DT,OT,ID,"rgd")
+ D:X'="" WC^RWU(CR_"<br><b>Доза облучения:</b> "_X_" мЗв")
+ D:COMM'="" WC^RWU(CR_"<br><b>Примечание:</b> "_$$TAG^TXTU(COMM))
+ S X=$$GETPL^IUSL(VR,DT,OT,ID,"mt"),CN=0
+ I $$ISPL^IUSL(VR,DT,OT,ID,"mt") S CN=$$CENNALL^IWRHS($$GETPL^IUSL(VR,DT,OT,ID,"mt"),DT)
+ D:X'="" WC^RWU(CR_"<br><b>Материалы:</b> "_$$TAG^TXTU($$NAMESALL^IWRHS($TR(X,"~","|")))_$S(CN:", <b>на сумму "_CN_"</b>",1:""))
+ S X=$$GETPL^IUSL(VR,DT,OT,ID,"cw"),U=""
+ F I=1:1:$L(X,"|") S K=$P(X,"|",I) S:K'="" U=$S(U="":"",1:U_", ")_$$FIO^IKADRY(K)
+ D:U'="" WC^RWU(CR_"<br><b>Соисполнители:</b> "_U)
+ S X=$$GETPL^IUSL(VR,DT,OT,ID,"ag")
+ D:X'="" WC^RWU(CR_"<br><b>Агент:</b> "_$$FIO^IKADRY(X))
+ S X=$$GETPL^IUSL(VR,DT,OT,ID,"cu")
+ D:X'="" WC^RWU(CR_"<br><b>Заказчик:</b> "_$$NAME^ICONTR(X))
+ 
+ S ISTC=$G(ISTC),PRC=$G(PRC)
+ I ISTC="",PRC="" G VHTMLe
+ D W^RWU(CR_"<br><hr>")
+ S X=$$GETPL^IUSL(VR,DT,OT,ID,"g")
+ D:X'="" WC^RWU(CR_"<b>Гарантийное письмо:</b> "_$$TAG^TXTU($$TDSC^IGRNL(NI,X))_"<br>")
+ D:PRC'="" WC^RWU(CR_"<b>Прейскурант:</b> "_$$TAG^TXTU($$NAME^ISPRAV("tprice",PRC))_"<br>")
+ I 'ADV,ISTC'="" D WC^RWU(CR_"<b>Договор:</b> "_$$TAG^TXTU($$NAME^IINSC(ISTC)))
+ D:$G(UPRG)'="" WC^RWU(CR_"<b>Программа:</b> "_$$TAG^TXTU($$NAME^IMPRP(UPRG))_"<br>")
+ D:ADV
+ .S X=$S(ISTC="":$$GET^IPAC(NI,"stc",DT),1:ISTC)
+ .D:X'="" WC^RWU(CR_"<b>Договор:</b> "_$$TAG^TXTU($$NAME^IINSC(X)))
+ .S X=$$PIDX^YIPACN(NI,X,DT)
+ .S X=$$GETE^IPAC(NI,"prog"_X,DT,1)
+ .D:X'="" WC^RWU(CR_"<br><b>Программы прикрепления:</b> "_$$TAG^TXTU(X))
+ S X=$$GETPL^IUSL(VR,DT,OT,ID,"c")
+ I $P(X,"|",3)'="" D WC^RWU(CR_"<br><b>Контрагент:</b> "_$$TAG^TXTU($$NAME^ICONTR($P(X,"|",3)))_$S($P(X,"|",1):", <b>стоимость: "_$P(X,"|",1)_"</b>",1:""))
+ S X=$$GETPL^IUSL(VR,DT,OT,ID,"zi")
+ D:X'="" WC^RWU(CR_"<br>По услуге создан заказ-наряд.")
+ D:STAT=3 WC^RWU(CR_"<br>По услуге выставлен счет.")
+ D:$$GETPL^IUSL(VR,DT,OT,ID,"zrp") WC^RWU(CR_"<br>По услуге произведен расчет зарплаты.")
+ D:$D(^ZARPI("trace",VR_","_OT_","_DT_","_ID)) WC^RWU(CR_"<br>В расчете зарплаты включена отладка.")
+ D:$D(ERR) WC^RWU(CR_"<br><font color=""#FF0000"">Ошибка: "_$$ECODE^IUSL(DT)_"</font>")
+VHTMLe 
+ D:SYS
+ .S K=CR_"<br><hr><b>История изменений услуги:</b>"
+ .S X="" F  S X=$O(^ZNFL(VR,OT,DT,ID,"log",X)) Q:X=""  D
+ ..S A=^(X)
+ ..I K'="" D WC^RWU(K) S K=""
+ ..D WC^RWU(CR_"<br>"_$$DTM^DTUTL(X)_$S(A="":"",A'["|":" - "_$$FIOSH^NUSER(A,2),1:" - "_$$FIOSH^IKADRY($P(A,"|",2))_" ("_$P(A,"|",1)_")"))
+ .D WC^RWU(CR_"<br><hr><b>sys key: </b>"_VR_","_OT_","_DT_","_ID)
+ D END^IHTML
+ Q
+PACHTML(NI,DGN,DT,SPRG) ; Информация по пациенту в HTML
+ ; SPRG - частные программы
+ N PIDX,R,X1,X2,I
+ S DGN=$G(DGN),DT=$$DIH^DTUTL($G(DT))
+ S PIDX=$S(DGN="":"",1:$$PIDX^IPAC(NI,DGN,DT))
+ S:DGN="" DGN=$$GET^IPAC(NI,"stc",DT)
+ D MINHDR^IHTML("")
+ D CSS^IHTML
+ D W^RWU(CR_".hdr { background-color: #66CCFF; }")
+ D W^RWU(CR_".right { text-align: right; }")
+ D CSSE^IHTML
+ D W^RWU(CR_"</head><body>")
+ D WC^RWU(CR_"<p class=""hdr""><font size=""4"" color=""#000000""><b>"_$$FIO^IPAC(NI)_"</b></font></p>")
+ D WC^RWU(CR_"<b>Возраст:</b> "_$$AGET^IPAC(NI))
+ D WC^RWU(CR_"&nbsp<b>Пол:</b> "_$$GETE^IPAC(NI,"pol",DT))
+ S X1=$$TAG^TXTU($$GETE^IPAC(NI,"status",DT,1))
+ D:X1'="" WC^RWU(CR_"<br><b>Статусы:</b> "_X1)
+ S X1=$$TAG^TXTU($$GET^IPAC(NI,"parents",DT))
+ D:X1'="" WC^RWU(CR_"<br><b>Родители:</b> "_X1)
+ S X1=$$TAG^TXTU($$GET^IPAC(NI,"attendants",DT))
+ D:X1'="" WC^RWU(CR_"<br><b>Сопровождающие:</b> "_X1)
+ D WC^RWU(CR_"<p class=""hdr"">Информация по обслуживанию</p>")
+ D WC^RWU(CR_"<b>Договор:</b> "_$$TAG^TXTU($$NAME^IINSC(DGN)))
+ S X1=$$GETE^IPAC(NI,"dog_from"_PIDX,DT),X2=$$GETE^IPAC(NI,"dog_to"_PIDX,DT)
+ D:X1'=""!(X2'="") WC^RWU(CR_"<br>Срок с <b>"_X1_"</b> по <b>"_X2_"</b>")
+ S X1=$$TAG^TXTU($$GET^IPAC(NI,"polis"_PIDX,DT))
+ D:X1'="" WC^RWU(CR_"<br><b>Полис:</b> "_X1)
+ 
+ S R=$G(SPRG),X1=""
+ S:R="" R=$$GET^IPAC(NI,"prog"_PIDX,DT)
+ F I=1:1:$L(R,"|") S X2=$P(R,"|",I) S:X2'="" X1=$S(X1="":"",1:X1_", ")_$$NAMEH^IMPRP(X2,DT)
+ D:X1'="" WC^RWU(CR_"<br><b>Программы обслуживания:</b> "_$$TAG^TXTU(X1))
+ S X1=$$GET^IPAC(NI,"skd")
+ S:X1="" X1=$$GET^IINSC(DGN,"skd",DT)
+ D:X1'="" WC^RWU(CR_"<br><b>Скидка:</b> "_$$TAG^TXTU($$NAME^IDSCN(X1)))
+ 
+ S X1=$$GET^IPAC(NI,"frap")
+ S:X1="" X1=$$GET^IINSC(DGN,"frap",DT)
+ D:X1'="" WC^RWU(CR_"<br><b>Процент франшизы:</b> "_X1)
+ 
+ S X1=$$GET^IPAC(NI,"fras")
+ S:X1="" X1=$$GET^IINSC(DGN,"fras",DT)
+ D:X1'="" WC^RWU(CR_"<br><b>Сумма франшизы:</b> "_X1)
+ 
+ S X1=$$GET^IPAC(NI,"frasp")
+ S:X1="" X1=$$GET^IINSC(DGN,"frasp",DT)
+ D:X1'="" WC^RWU(CR_"<br><b>Сумма франшизы на сегодняшнее посещение:</b> "_X1)
+ 
+ S X1=$$TAG^TXTU($$GET^IPAC(NI,"stcprg",DT))
+ D:X1'="" WC^RWU(CR_"<br><b>Страховая программа (доплнительно):</b> "_X1)
+ S X1=$$TAG^TXTU($$GET^IPAC(NI,"stcdog",DT))
+ D:X1'="" WC^RWU(CR_"<br><b>Страховой договор (дополнительно):</b> "_X1)
+ 
+ S X1=$$GETIDL^IGRNL(NI,DT,DGN)
+ D:X1'=""
+ .D WC^RWU(CR_"<p class=""hdr"">Гарантийные письма</p>")
+ .F I=1:1:$L(X1,"|") S X2=$P(X1,"|",I) D WC^RWU(CR_$$TDSC^IGRNL(NI,X2)_"<br>")
+ 
+ S X1=$$GET^IINSC(DGN,"disp",DT)
+ S X2=$$GET^IINSC(DGN,"fioo",DT)
+ D:X1'=""!(X2'="")
+ .D WC^RWU(CR_"<p class=""hdr"">Координаты страховой компании</p>")
+ .D:X1'="" WC^RWU(CR_"<b>Телефон диспетчера:</b> "_X1_"<br>")
+ .D:X2'="" WC^RWU(CR_"<b>Ф.И.О. контактного лица:</b> "_X2)
+ 
+ S X1=$$TRIM^TXTU($$GET^IPAC(NI,"text",DT))
+ D:X1'="" WC^RWU(CR_"<p class=""hdr"">Примечание</p>"_$$TAG^TXTU(X1))
+ 
+ D END^IHTML
+ Q
+PACHLT(NI) ; Информация по пациенту в HTML
+ D OWF^RWU(".html")
+ N PIDX,R,X1,X2,I,DT,DGN,BH
+ S BH="<div data-role=""collapsible""><h3>"
+ S DT=+$H
+ S DGN=$$GET^IPAC(NI,"stc",DT)
+ 
+ D WC^RWU(CR_"<div data-role=""collapsible"" data-collapsed=""false""><h3>"_$$FIO^IPAC(NI)_"</h3><p>")
+ D WC^RWU(CR_"<b>Возраст:</b> "_$$AGE^IPAC(NI))
+ D WC^RWU(CR_"&nbsp<b>Пол:</b> "_$$GETE^IPAC(NI,"pol",DT))
+ S X1=$$GETE^IPAC(NI,"status",DT,1)
+ D:X1'="" WC^RWU(CR_"<br><b>Статусы:</b> "_X1)
+ S X1=$$ADR^YIPACN(NI,DT)
+ D:X1'="" WC^RWU(CR_"<br><b>Адрес:</b> "_$$TAG^TXTU(X1))
+ S X1=$$TELS^IPAC(NI,DT)
+ D:X1'="" WC^RWU(CR_"<br><b>Телефоны:</b> "_$$TAG^TXTU(X1))
+ D W^RWU("</p></div>")
+ D WC^RWU(CR_BH_"Информация по обслуживанию</h3><p>")
+ D WC^RWU(CR_"<b>Договор:</b> "_$$TAG^TXTU($$NAME^IINSC(DGN)))
+ S X1=$$GETE^IPAC(NI,"dog_from",DT),X2=$$GETE^IPAC(NI,"dog_to",DT)
+ D:X1'=""!(X2'="") WC^RWU(CR_"<br>Срок с <b>"_X1_"</b> по <b>"_X2_"</b>")
+ S X1=$$GET^IPAC(NI,"polis",DT)
+ D:X1'="" WC^RWU(CR_"<br><b>Полис:</b> "_X1)
+ 
+ S R=$$GET^IPAC(NI,"prog",DT),X1=""
+ F I=1:1:$L(R,"|") S X2=$P(R,"|",I) S:X2'="" X1=$S(X1="":"",1:X1_", ")_$$NAMEH^IMPRP(X2,DT)
+ D:X1'="" WC^RWU(CR_"<br><b>Программы обслуживания:</b> "_X1)
+ S X1=$$GET^IPAC(NI,"skd")
+ S:X1="" X1=$$GET^IINSC(DGN,"skd",+$H)
+ D:X1'="" WC^RWU(CR_"<br><b>Скидка:</b> "_$$NAME^IDSCN(X1))
+ D W^RWU("</p></div>")
+ 
+ S X1=$$GETIDL^IGRNL(NI,DT,DGN)
+ D:X1'=""
+ .D WC^RWU(CR_"<div data-role=""collapsible""><h3>Гарантийные письма</h3><p>")
+ .F I=1:1:$L(X1,"|") S X2=$P(X1,"|",I) D WC^RWU(CR_$$TDSC^IGRNL(NI,X2)_"<br>")
+ .D W^RWU("</p></div>")
+ 
+ S X1=$$GET^IINSC(DGN,"disp",DT)
+ S X2=$$GET^IINSC(DGN,"fioo",DT)
+ D:X1'=""!(X2'="")
+ .D WC^RWU(CR_BH_"Координаты страховой компании</h3><p>")
+ .D:X1'="" WC^RWU(CR_"<b>Телефон диспетчера:</b> "_X1_"<br>")
+ .D:X2'="" WC^RWU(CR_"<b>Ф.И.О. контактного лица:</b> "_X2)
+ .D W^RWU("</p></div>")
+ 
+ S X1=$$TRIM^TXTU($$GET^IPAC(NI,"text",DT))
+ D:X1'="" WC^RWU(CR_BH_"Примечание</h3><p>"_$$TAG^TXTU(X1)),W^RWU("</p></div>")
+ D C^RWU
+ Q
+SERVHTML(NI,USL,UKEY,DGN,OTD,VR,DT,SP) ; Информация по услуге в HTML
+ ; USL- код услуги
+ ; UKEY - параметры услуги из CEL^YNED
+ N PRC,SKD,FLG,X,X0,X1,X2,R,NZmSP,F,DI,FRP
+ S PRC=$P(UKEY,"@",2),SKD=$P(UKEY,"@",4),FLG=$P(UKEY,"@",6),SP=$G(SP)
+ S DI=$P(UKEY,"@",7)
+ S DT=$$DIH^DTUTL($G(DT))
+ S:SP="" SP=$$SPEC^IKADRY(VR)
+ S USL=$$LU^TXTU(USL)
+ S:DGN="" DGN=$$GET^IPAC(NI,"stc",DT)
+ I PRC="",$$STOM^IEDE(OTD,SP) S PRC=$$GET^IINSC(DGN,"sprice",DT)
+ S:PRC="" PRC=$$PRC^IINSC(DGN,NI,DT,FLG["k")
+ S PRC=$$CORCP^IPRICET(PRC)
+ S:SKD="" SKD=$$CALC^IDSCN(NI,OTD,USL,DGN,PRC,1,$$^I("ilpu"))
+ I +SKD>100,$$GET^IPRICE(USL,"nosn",PRC,DT) S SKD=""
+ S FRP=$$GET^IPAC(NI,"frap",DT)
+ S:FRP="" FRP=$$GET^YNDOG(DGN,"frap",DT)
+ 
+ D MINHDR^IHTML("")
+ D W^RWU(CR_"<style type=""text/css""><!--")
+ D W^RWU(CR_".hdr { background-color: #66CCFF; }")
+ D W^RWU(CR_".right { text-align: right; }")
+ D W^RWU(CR_"--></style></head><body>")
+ 
+ D WC^RWU(CR_"<font size=""4"" color=""#000000""><b>"_$$TAG^TXTU($$NAMEH^IPRICE(USL,PRC,DT))_"</b></font><hr>")
+ S X=$$PRICEH^IPRICE(USL,PRC,DT),X0=X
+ S:SKD X=+$J((100-SKD)*X/100,"",2)
+ D WC^RWU(CR_"<b>Цена:</b> "_X0)
+ D:SKD WC^RWU(CR_"<br><b>Цена со скидкой:</b> "_X)
+ D:SKD WC^RWU(CR_"<br><b>Скидка:</b> "_SKD)
+ D:FRP WC^RWU(CR_"<br><b>К оплате по франшизе:</b> "_$J(X0*FRP/100,"",2))
+ S X1=$$GET^IPRICE(USL,"scost",PRC,DT)
+ D:X1'="" WC^RWU(CR_"<br><b>Себестоимость:</b> "_X1)
+ S X1=$$GET^IPRICE(USL,"uetv",PRC,DT)
+ D:X1'="" WC^RWU(CR_"<br><b>УЕТ врача:</b> "_X1)
+ S X1=$$GET^IPRICE(USL,"uetms",PRC,DT)
+ D:X1'="" WC^RWU(CR_"<br><b>УЕТ медсестры:</b> "_X1)
+ S X1=$$GET^IPRICE(USL,"dose",PRC,DT)
+ D:X1'="" WC^RWU(CR_"<br><b>Доза облучения:</b> "_X1_" млЗв")
+ D:DI'="" WC^RWU(CR_"<br><b>Диагноз:</b> "_$$NAME^YMKB10(DI))
+ 
+ D:$$GET^IPRICE(USL,"rdia",PRC,DT) WC^RWU(CR_"<br><font color=""#FF1100"">Диагноз обязателен</font>")
+ D:$$GET^IPRICE(USL,"stof",PRC,DT) WC^RWU(CR_"<br><font color=""#FF1100"">Обязателен номер зуба</font>")
+ D:$$GET^IPRICE(USL,"nosp",PRC,DT) WC^RWU(CR_"<br><font color=""#FF1100"">Скидки запрещены</font>")
+ 
+ D W^RWU(CR_"<hr>")
+ S F=0
+ I FLG["k" D WC^RWU(CR_"<br><font color=""#FF0000"">По кассе.</font>") S F=1
+ D:FLG["n"
+ .D WC^RWU(CR_"<br><font color=""#FF0000"">По назначению.</font>")
+ .S (X1,X2,X)="",F=1
+ .F  S X=$O(^JOB(%JOB,"epr-cnaz",X)) Q:X=""  D:$P(X,"|",1)=USL
+ ..S X0=^(X),R=$$AddUInf^INAZN(X0,USL,1)
+ ..I R'="" S X1=$S(X1="":"",1:X1_"; ")_R
+ ..S R=$$DIAG^INAZN(X0)
+ ..I R'="" S X2=$S(X2="":"",1:X2_"; ")_R
+ .D:X1'="" WC^RWU(CR_"<br><b>Примечание по назначению:</b> "_$$TAG^TXTU(X1))
+ .D:X2'="" WC^RWU(CR_"<br><b>Диагноз по назначению:</b> "_$$TAG^TXTU(X2))
+ S F=1,X1="" F  S X1=$$GET2IDX^YNPRICE(USL,"con",PRC,DT,X1) Q:X1=""  D
+ .I F D WC^RWU(CR_"<br><b>Контрагенты по услуге:</b> ") S F=0
+ .D WC^RWU(CR_"<br>"_$$TAG^TXTU($$NAME^ICONTR(X1)))
+ 
+ S X1=$$GET^IPRICE(USL,"tdsc",PRC,DT)
+ D:X1'="" WC^RWU(CR_$S(F:"<hr>",1:"")_"<b>Технологическое описание:</b><br>"_$$TAG^TXTU(X1))
+ D END^IHTML
+ Q
+PRNPAT(NIB,OTx,VRx,SPx,MOD) ; Заполнение для шаблонов печати в ЭИБ
+ ; MOD=1 - с услугами
+ ; MOD=2 - со всеми (и неподп.) услугами
+ N SSS,LNRUN,UER,TAB,S
+ S MOD=+$G(MOD)
+ D OWF^RWU(".xml")
+ D W^RWU(^PP(0,1)_"<streport><data>")
+ D WTAGC^RWU("nib",NIB)
+ D WTAGC^RWU("fio",$$FIO^IPAC(NIB))
+ D WTAGC^RWU("fiof",$$GET^IPAC(NIB,"fiof"))
+ D WTAGC^RWU("fioi",$$GET^IPAC(NIB,"fioi"))
+ D WTAGC^RWU("fioo",$$GET^IPAC(NIB,"fioo"))
+ D WTAGC^RWU("vrfio",$$FIO^IKADRY(VRx))
+ D:MOD
+ .S LNRUN="USLp^YNEDU",UER=0,TAB="",SSS=0
+ .D DOSC^NPACSC(NIB,+$H,+$H,$S(MOD=2:1,1:0))
+ .D WTAGC^RWU("tab",TAB)
+ .D WTAGC^RWU("summ",SSS)
+ D W^RWU("</data></streport>")
+ D C^RWU
+ Q
+USLp 
+ Q:VRx'=VR
+ I MOD=2,STAT'=2 Q  ; kss
+ S U="" F  S U=$O(UL(U)) Q:U=""  D
+ .S CNT=$G(UL(U)),S=$G(UL(U,1)),SSS=SSS+S
+ .S TAB=TAB_$S(TAB="":"",1:CR)_U_" "_$$NAMEH^IPRICE(U,$G(PRC),DT)_"|"_CNT_"|"_S
+ Q

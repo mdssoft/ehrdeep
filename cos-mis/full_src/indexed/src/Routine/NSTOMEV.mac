@@ -1,0 +1,62 @@
+NSTOMEV ; События стоматологического приема [ 10/16/2015  11:50 PM ]
+epr ; Исполняемая процедура при подписи
+ Q:$D(^EPRD(NI,ID,"visresult")) 
+ Q:'$$LCL^IUSER("stom","evepr") 
+ D MSG^RWU("@mhstomrez")
+ Q
+LST(NI,VR) ; Список событий
+ N A
+ S:$G(VR)="" VR=$$KDR^IUSER()
+ S A=""
+ S:'$$PACINV^IRASP2(NI,+$$^I("ilpu"),"",VR,"",+$H,1) A=A_CR_"1|Запись на прием"
+ S A=A_CR_"2|Перенос приема"_CR_"3|Санация"_CR_"4|Отказ от записи"
+ D MSG^RWU(A)
+ Q
+SET(NI,ID,RES,TP) ; Результат приема
+ S ^EPRD(NI,ID,"visresult")=RES_"|"_TP
+ Q
+SPP(DS,DE,GRP,LPUX) ; Сводка по контролю повторной записи
+ N DT,FF,ID,NI,LP,VR,SP,R,STAT,I2,LPP,X1,X2
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S FF=+$$FR^I(),LPUX=$G(LPUX),LPP=$$^I("ilpu")
+ S:'FF LPUX=$$^I("ilpu")
+ K ^BUF($J)
+ S DT=DS-1 F  S DT=$O(^EPRI("dt",DT)) Q:DT=""!(DT>DE)  D
+ .S NI="" F  S NI=$O(^EPRI("dt",DT,NI)) Q:NI=""  D
+ ..S ID="" F  S ID=$O(^EPRI("dt",DT,NI,ID)) Q:ID=""  D
+ ...S R=$G(^EPR(NI,ID,"o")) Q:R=""  
+ ...Q:$P(R,"|",1)'="D"
+ ...S LP=$P(R,"|",3)
+ ...I LPUX'="",LPUX'=LP Q 
+ ...S SP=$P(R,"|",4) S:SP="" SP=$$SPEC^IKADRY($P(R,"|",2))
+ ...Q:'$$STOM^IEDE("",SP)
+ ...S I2=$S(GRP:"z",1:+$P(R,"|",2))
+ ...S:LP="" LP=LPP
+ ...S:'$D(^BUF($J,+LP,I2,NI)) ^(NI)="",STAT(+LP,I2,1)=$G(STAT(+LP,I2,1))+1
+ ...S:$P($G(^EPRD(NI,ID,"visresult")),"|",1)=4 STAT(+LP,I2,2)=$G(STAT(+LP,I2,2))+1
+ K ^BUF($J)
+ D OWF^RWU(".txt")
+ D WC^RWU("Филиал|"_$S(GRP:"",1:"Сотрудник|")_"Пациентов|Отказалось|% отказа")
+ S LP="" F  S LP=$O(STAT(LP)) Q:LP=""  D
+ .S VR="" F  S VR=$O(STAT(LP,VR)) Q:VR=""  D
+ ..S X1=+$G(STAT(LP,VR,1)),X2=+$G(STAT(LP,VR,2))
+ ..D WC^RWU(CR_$$NAME^ICONTR(LP)_$S(VR="z":"",1:"|"_$$FIO^IKADRY(VR))_"|"_X1_"|"_X2_"|"_($S(X1:+$J(100*X2/X1,"",2),1:0)))
+ D C^RWU
+ Q
+JRNC(DS,DE,TP,LPUX) ; Журнал обзвона стом. пациентов
+ N DT,FF
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S FF=+$$FR^I(),LPUX=$G(LPUX)
+ S:'FF LPUX=$$^I("ilpu")
+ D OWF^RWU(".txt")
+ D WC^RWU("Пациент "_$$TXTP^DTUTL(DS,DE)_"|№ И.Б.|Посл.визит|Вид договора|Телефон|Врач"_$S(LPUX="":"|Филиал",1:""))
+ D C^RWU
+ Q
+REGIPROC 
+ N FF,F,S,A
+ S FF=+$$FR^I(),F=$S(FF:",t@storage:lpu,Филиал",1:"")
+ S S="Стоматология"
+ S ^IPROC(S,"Сводка по контролю повторной записи")="SPP_NSTOMEV,1,"_$S(FF:4,1:3)_",d,Начальная дата,d,Конечная дата,t@string:0/Сотруднику#1/Филиалу,Группировать по"_F
+ S A="0/Все записи#2/Перенос приема#3/Санация#4/Отказ от записи"
+ S ^IPROC(S,"Журнал обзвона стоматологических пациентов")="JRNC_NSTOMEV,1,"_$S(FF:4,1:3)_",d,Начальная дата,d,Конечная дата,t@string:"_A_",Тип журнала"_F
+ Q

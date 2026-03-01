@@ -1,0 +1,996 @@
+NKSS ; Касса [ 09/11/2024  6:33 PM ]
+PTAB(NIB,PAYID,KVNUM,DEPID) ; Неподписанные услуги
+ N DT,F,X,KX,A,OT,VR,ID,LST,DOG,CF,R,CFF,FLG,MVR,TM,SS,SC
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<suchusl>")
+ D WTAGDC^RWU("sFfio",$$GET^IPAC(NIB,"fiof",+$H))
+ D WTAGDC^RWU("sIfio",$$GET^IPAC(NIB,"fioi",+$H))
+ D WTAGDC^RWU("sOfio",$$GET^IPAC(NIB,"fioo",+$H))
+ D WTAGDC^RWU("saddr",$$NRMMAIL^TXTU($$GET^IPAC(NIB,"email",+$H)))
+ S A="" S:$$USE^IBILL(NIB) A=$$NOW^IBILL(NIB)
+ D WTAGD^RWU("deposit",A)
+ D WTAGDCU^RWU("payid",$G(PAYID),$G(KVNUM))
+ D WTAGD^RWU("department",$G(DEPID))
+ G:'$$EXIST^IPAC(NIB) PTABE
+ S DOG=$$GET^IPAC(NIB,"stc",+$H),CF=$G(^cfg("credit"))
+ S R=$S(CF=2:20,1:"w"),CFF=$S(CF=3:33,1:CF),(SS,SC)=0
+ S MVR=$$KDR^IUSER()
+ S A=$G(^cfg("kss","pacidprint"))
+ I A'="",'$$IsPRNID^NPACU(NIB,$P(A,"|",1)),$S($P(A,"|",2):'$$IsPRNID^NPACU(NIB,$P(A,"|",2)),1:1) D WTAGDC^RWU("xpacmsg",""""_$$GETN^ISPRAV("xpacprn",A,2)_""" не напечатан.")
+ ; TODO - соглашение
+ D W^RWU("<tblKvit>")
+ K ^JOB(%JOB,"sul")
+ S X=$G(^cfg("kss","mxvday")) S:'X X=4
+ S DT=$H-X F  S DT=$O(^PNF(NIB,DT)) Q:DT=""  D
+ .S KX="" F  S KX=$O(^PNF(NIB,DT,KX)) Q:KX=""  D
+ ..S VR=$P(KX,"|",1),OT=$P(KX,"|",2),ID=$P(KX,"|",3)
+ ..S A=$P($P($$GETLOG^IUSL(VR,DT,OT,ID),"|",2),"@",1)
+ ..;I VR'=A,A'=MVR Q  ; если зарегистрировал не автор и не тек. пользователь
+ ..S FLG="|"_$P($G(^ZNF(VR,OT,DT,ID,"m")),"~",2)_"|"
+ ..Q:FLG["|nop|"  Q:FLG["|grn|" 
+ ..S:R[$P($G(^("e")),"~",1) LST(OT_"@"_VR_"@"_DT)=0
+ 
+ S KX="" F  S KX=$O(LST(KX)) Q:KX=""  D
+ .S OT=$P(KX,"@",1),VR=$P(KX,"@",2),DT=$P(KX,"@",3)
+ .S:CF'=2 A=+$$CALCWP^IUSLD(NIB,VR,OT,DT,DOG,$$GET^IINSC(DOG,"dvid",DT),"CFF")
+ .S:CF=2 A=$$CALCKS^IUSLD(NIB,VR,OT,DT)
+ .Q:A=0 
+ .D WC^RWU(CR_KX_"|"_OT_" "_$$GOTD^YISPRAV(OT)_"|"_VR_" "_$$FIOSH^IKADRY(VR)_", наз.|"_$$DT^DTUTL(DT)_"|"_A)
+ .S SS=SS+A,SC=SC+1
+ .S ^JOB(%JOB,"sul",KX)=SS
+ ; Назначения
+ S KX="" F  S KX=$O(^NAZI("n",NIB,KX)) Q:KX=""  D
+ .S R=$G(^NAZ(KX,"k")) Q:R=""  Q:$P(R,"|",2)'=""  
+ .Q:$L($D(^("a")))'=2 
+ .Q:$P($G(^("e")),"|",1)=1  ; ready
+ .S A=$G(^("i")),VR=$P(A,"|",3),DT=+$P(A,"|",5)
+ .Q:DT<($H-X)
+ .S OT=$$OTD^IKADRY(VR)
+ .S A=OT_" "_$$GOTD^YISPRAV(OT)_"|"_VR_" "_$$FIOSH^IKADRY(VR)_"|"_$$DT^DTUTL(DT)
+ .D WC^RWU(CR_"NAZ:"_KX_"|"_A_"|"_$P(R,"|",1))
+ .S SS=SS+$P(R,"|",1),SC=SC+1
+ .S ^JOB(%JOB,"sul","NAZ:"_KX)=SS
+ ; Резерв на оплату абонементов
+ 
+ S DT=$H-X F  S DT=$O(^BILL(NIB,"R",DT)) Q:DT=""  S TM="" F  S TM=$O(^BILL(NIB,"R",DT,TM)) Q:TM=""  D
+ .S R=^(TM) Q:$P(R,"|",1)=1 
+ .S A=$P(R,"|",5) Q:$P(A,":",1)'="BTPL"  ; только абонементы
+ .S KX=$P(A,":",2),VR=$$FIO^NUSER($P(R,"|",3),1),OT=$$OTD^IKADRY(VR)
+ .S A=OT_" "_$$GOTD^YISPRAV(OT)_"|"_VR_" "_$$FIOSH^IKADRY(VR)_"|"_$$DT^DTUTL(DT)
+ .D WC^RWU(CR_"BTPL:"_KX_"|"_A_"|"_$P(R,"|",2))
+ .S SS=SS+$P(R,"|",2),SC=SC+1
+ D:SC>1&SS WC^RWU(CR_"ALL|Все услуги||Итого|"_SS)
+ D W^RWU("</tblKvit>")
+PTABE D W^RWU("</suchusl></nb_console>"),C^RWU
+ Q
+GBAR(BAR) ; Decode typical barcode and return NIB
+ N T,X
+ S T=$P(BAR,":",1),X=$P(BAR,":",2)
+ I T="PID" D MSG^RWU(X) Q 
+ I T="NAZ" D MSG^RWU($S(X="":"",1:$P($G(^NAZ(X,"i")),"|",2))) Q
+ I T="PRF"!(T="PROF")!(T="PMO")!(T="LMK") D MSG^RWU(X) Q  
+ Q
+LPAY(NIB,KEY) ; Показать услуги и инфу
+ ; Оплата индивидуальных полисов
+ I $L(KEY),$P(KEY,":",1)="BTPL" D LPBTPL(NIB,KEY) Q 
+ ; Оплата назначений
+ I $L(KEY),$P(KEY,":",1)="NAZ" D LPNAZ(NIB,KEY) Q 
+ ; Оплата услуг 
+ N OT,VR,DT,SPC,DOG,R,ID,KX,UX,CNT,CEN,DVID,CF,CFF,VID,SUS,SUi,SU,SN,X,XS,CON,fSN,SS
+ N @$$NEWVAR^IUSL(),ALIST
+ M ALIST=^JOB(%JOB,"sul")
+ S OT=$P(KEY,"@",1),VR=$P(KEY,"@",2),DT=$P(KEY,"@",3)
+ S:KEY="ALL" DT=+$H
+ I KEY'="ALL" K ALIST S ALIST(KEY)=1
+ S DOG=$$GET^IPAC(NIB,"stc",DT),DVID=$$GET^IINSC(DOG,"dvid",DT),CON=""
+ S CF=$G(^cfg("credit")),CFF=$S(CF=3:33,1:CF)
+ S fSN=$G(^cfg("kss","suname"))
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<suchusl>")
+ D WTAGDC^RWU("otd",$$GOTD^YISPRAV(OT))
+ D WTAGDC^RWU("vrfio",$$FIO^IKADRY(VR))
+ S (SS,SN)=0
+ D W^RWU("<tblUsl>")
+ 
+ S KEY="" F  S KEY=$O(ALIST(KEY)) Q:KEY=""  D
+ .S OT=$P(KEY,"@",1),VR=$P(KEY,"@",2),DT=$P(KEY,"@",3)
+ .S R=+$S(CF=2:$$CALCKS^IUSLD(NIB,VR,OT,DT),1:+$$CALCWP^IUSLD(NIB,VR,OT,DT,DOG,DVID,"CFF")),SS=SS+R
+ .S (SPC,KX)="" F  S KX=$O(^PNF(NIB,DT,KX)) Q:KX=""  D
+ ..Q:VR'=$P(KX,"|",1)!(OT'=$P(KX,"|",2))  
+ ..S ID=$P(KX,"|",3)
+ ..D GET^IUSL(VR,DT,OT,ID)
+ ..Q:STAT'=$S(CF=2:0,1:"w")  
+ ..S VID=$S($G(ISTC)="":DVID,1:$$GET^IINSC(ISTC,"dvid",DT))
+ ..S FLG="|"_$G(FLG)_"|"
+ ..I VID'=3,FLG'["|kss|" Q 
+ ..Q:FLG["|nop|"  ; неоплачиваемые назначения
+ ..I CF=3 Q:$L($$GETPL^IUSL(VR,DT,OT,ID,"kv")) 
+ ..S SUS=$$GETPL^IUSL(VR,DT,OT,ID,"s"),SUi=2
+ ..S:SPC="" SPC=SP
+ ..S UX="" F  S UX=$O(UL(UX)) Q:UX=""  D
+ ...S CNT=+$G(UL(UX))
+ ...S CEN=+$S($L(SUS)&(SUS'["|"):SUS,$L(SUS):$P(SUS,"|",SUi),1:$$USUM^IUSL(DT,UX,CNT))
+ ...S SUi=SUi+1
+ ...S X=+$$GET^IPRICE(UX,"nds",PRC,DT),XS=0
+ ...I 'X S XS=+$$GET^IPRICE(UX,"ndss",PRC,DT)
+ ...S X=$S(XS:XS,'X:0,1:$J(CEN*X/(100+X),"",2))
+ ...S A=ID_"|"_UX_"|"_$S(fSN:$$CNAMEH^IPRICE(UX,PRC,DT),1:$$NAMEH^IPRICE(UX,PRC,DT))_"|"_CNT_"|"
+ ...S A=A_(+$J(CEN/CNT,"",2))
+ ...D WC^RWU(CR_A_"|"_(CEN-X)_"|"_X_"|"_CEN_"|"_$$DT^DTUTL(DT))
+ ...S SN=SN+X
+ ...S X=$$GETCONT^IUSL(VR,DT,OT,ID,1)
+ ...S:X'="" CON=$$STFLG^TXTU(CON,X) ; multiple
+ D W^RWU("</tblUsl>")
+ D WTAGDC^RWU("spec",$$GSPEC^YISPRAV(SPC))
+ D WTAGD^RWU("sum",SS)
+ D WTAGD^RWU("nds",SN)
+ D WTAGD^RWU("cont",CON)
+ D W^RWU("</suchusl></nb_console>"),C^RWU
+ Q
+LPNAZ(NIB,KEY) 
+ N DT,I,R,U,SK,P,PRC,DGN,A,PT,SS,SN,X,XS
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<suchusl>")
+ S KEY=$P(KEY,":",2)
+ S SS=$P($G(^NAZ(KEY,"k")),"|",1)
+ D WTAGD^RWU("sum",SS)
+ D W^RWU("<tblUsl>")
+ S R=$G(^NAZ(KEY,"i"))
+ S DT=+$P(R,"|",5),DGN=$P(R,"|",9)
+ S:DGN="" DGN=$$GET^IPAC(NIB,"stc",DT)
+ S PRC=$$CORCP^IPRICET($$PRC^IINSC(DGN,NIB,DT))
+ S VU=1
+ S SN=$P($G(^NAZ(KEY,"k")),"|",5)
+ S PT=$P($G(^NAZ(KEY,"a")),"|",4)
+ I PT,$P(^NAZM("pt",PT,"f"),"|",5) S PT=0
+ I 'PT S I="" F  S I=$O(^NAZ(KEY,"a",I)) Q:I=""  D
+ .S R=^(I),U=$P(R,"|",5),P=$P(R,"|",6),SK=+$P(R,"|",7),X=+$P(R,"|",17)
+ .S:P="" P=PRC
+ .S SK=+$FN(($$PRICEH^IPRICE(U,P,DT)*(100-SK))/100,"",2)
+ .D:'X  ; no fix NDS
+ ..S X=+$$GET^IPRICE(U,"nds",P,DT),XS=0
+ ..S:'X XS=+$$GET^IPRICE(U,"ndss",P,DT)
+ ..S X=$S(XS:XS,'X:0,1:$J(SK*X/(100+X),"",2))
+ .S A=U_"|"_$$CNAMEH^IPRICE(U,P,DT)_"|1|"_SK_"|"_(SK-X)_"|"_X_"|"_SK
+ .D WC^RWU(CR_"|"_A_"|"_$$DT^DTUTL(DT))
+ 
+ I PT D WC^RWU(CR_"|-|"_$P($G(^NAZM("pt",PT)),"|",1)_"|1|"_SS_"|"_SS_"|"_SN_"|"_SS_"|"_$$DT^DTUTL(DT))
+ D W^RWU("</tblUsl>")
+ D WTAGD^RWU("nds",SN)
+ D W^RWU("</suchusl></nb_console>"),C^RWU
+ Q
+LPBTPL(NIB,KEY) ; Список полисов к оплате
+ N DT,PL,S,A,TP
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<suchusl>")
+ D W^RWU("<tblUsl>")
+ S PL=$P(KEY,":",2),DT=+$$WUSERD^IPOLIS(NIB,PL,0)
+ S TP=$$GET^IPOLIS(NIB,PL,"tp"),S=$$DEBTPL^IPOLIS(NIB,PL)
+ S A=PL_"|"_$$NAME^NTPOLIS(TP)_"|1|"_S_"|"_S_"|0|"_S_"|"_$$DT^DTUTL(DT)
+ D WC^RWU(CR_"|"_A)
+ D W^RWU("</tblUsl>")
+ D WTAGD^RWU("sum",S)
+ D W^RWU("</suchusl></nb_console>"),C^RWU
+ Q
+DELU(NIB,KEY,ID) 
+ N OT,VR,DT
+ S OT=$P(KEY,"@",1),VR=$P(KEY,"@",2),DT=$P(KEY,"@",3)
+ D RETUSL^YNED(VR,OT,$$SPEC^IKADRY(VR),DT,ID)
+ D LPAY(NIB,KEY)
+ Q
+CPAY(NIB,KEY,SUM,VT,NDS,CON) ; Предварительная проверка оплаты
+ Q
+PAY(NIB,KEY,SUM,VT,NDS,CON) ; Оплата
+ ; NDS - сумма НДС
+ ; CON - внешний контрагент
+ ; Оплата полисов
+ S SUM=$$NNUM^TXTU(SUM),NDS=$$NNUM^TXTU(SUM),CON=$G(CON)
+ I $L(KEY),$P(KEY,":",1)="BTPL" D PAYBTPL(NIB,KEY,SUM,VT,NDS,CON) Q
+ ; Оплата назначений
+ I $L(KEY),$P(KEY,":",1)="NAZ" D PAYNAZ(NIB,KEY,SUM,VT,NDS,CON) Q
+ ; Оплата услуг
+ N OT,VR,DT,CF,CFF,X,DVID,DOG,DTT,IDK,KV,DEP,CON,ALIST,OKEY
+ M ALIST=^JOB(%JOB,"sul")
+ S OT=$P(KEY,"@",1),VR=$P(KEY,"@",2),DT=$P(KEY,"@",3),OKEY=KEY
+ S:KEY="ALL" DT=+$H
+ I KEY'="ALL" K ALIST S ALIST(KEY)=1
+ 
+ S OT=$P(KEY,"@",1),VR=$P(KEY,"@",2),DT=$P(KEY,"@",3),DTT=$$DT^DTUTL(DT)
+ S DOG=$$GET^IPAC(NIB,"stc",DT),DVID=$$GET^IINSC(DOG,"dvid",DT),CON=0
+ S DEP=$P($$DEP^IBILL(VT,CON'="",DOG,"","",NDS>0),"|",1)
+ S CF=$G(^cfg("credit")),CFF=$S(CF=3:33,1:CF)
+ ;S X=+$S(CF=2:$$CALCKS^IUSLD(NIB,VR,OT,DT),1:+$$CALCWP^IUSLD(NIB,VR,OT,DT,DOG,DVID,"CFF"))
+ ;I X'=SUM D MSG^RWU("Сумма квитанции была изменена,"_CR_"пожалуйста выберите квитанцию заново.") Q 
+ S IDK=$$KKM^IUSER(),KV=$$GET^IINKR("NKSS")
+ D CHKI2^YIBILL(IDK,NIB,SUM,VT,"","",KV)
+ Q:$G(%L)'="OK" 
+ K %L,%B,FN
+ S KEY="" F  S KEY=$O(ALIST(KEY)) Q:KEY=""  D
+ .S OT=$P(KEY,"@",1),VR=$P(KEY,"@",2),DT=$P(KEY,"@",3)
+ .D:CF<2 SBSYS^YNED(NIB,VR,OT,DTT,1)
+ .D:CF=2 
+ ..D SBSYSC^IUSLD(NIB,VR,OT,DTT,CF)
+ ..I $D(^cfg("kss","vrsbsc",VR)) D SBSYS^YNED(NIB,VR,OT,DTT,1) Q 
+ ..Q:'$G(^cfg("kss","vrsbsc","self")) 
+ ..D:$$CHKUSELF(NIB,VR,OT,DTT) SBSYS^YNED(NIB,VR,OT,DTT,1)
+ .I $G(%B)=".xmlb" K %L,%B,FN
+ .D:CF=3
+ ..D SETKV^IUSLD(NIB,VR,OT,DT,KV,1)
+ ..I $D(^cfg("kss","vrsbsc",VR)) D SBSYS^YNED(NIB,VR,OT,DTT,1) Q
+ ..Q:'$G(^cfg("kss","vrsbsc","self")) 
+ ..D:$$CHKUSELF(NIB,VR,OT,DTT) SBSYS^YNED(NIB,VR,OT,DTT,1)
+ Q:$$IsMSG^RWU()
+ D PTAB(NIB,OKEY,KV,DEP)
+ Q
+CHKUSELF(NI,VR,OT,DT) ; Проверить, что все услуги введены текущ. оператором
+ N F,KX,ID,V,VX
+ S V=$$KDR^IUSER(),F=1
+ S KX="" F  S KX=$O(^PNF(NI,DT,KX)) Q:KX=""  D  Q:'F 
+ .Q:$P(KX,"|",1)'=VR  Q:$P(KX,"|",2)'=OT 
+ .S ID=$P(KX,"|",3)
+ .S VX=$P(^(KX),"|",6)
+ .I VX'="" S:VX'=V F=0 Q 
+ .S:$P($$GETLOG^IUSL(VR,DT,OT,ID),"|",2)'=V F=0 ; old style
+ Q F
+ChkNP(NIB,DT,X) ; Проверить, что есть неопл. услуги в периоде оплаты
+ ; X - число дней
+ S:'$G(X) X=$G(^cfg("kss","mxvday")) S:'X X=4
+ Q $$CALCNP^IUSLD(NIB,DT-X+1,DT,1)
+ADDUL(OT,VR,NI,USL,CNT,BDG) ; Добавить услугу в текущий день (квитанцию)
+ ; BDG - по договору (не касса)
+ N K,SP
+ S NI=$$WD^TXTU(NI)
+ S SP=$$SPEC^IKADRY(VR)
+ S K=$$SSHsys^YNED(VR,OT,SP,+$H,NI,USL,CNT,"",$S($G(BDG):"",1:"kss"),"")
+ Q:$G(%L)'="" 
+ D UTAB(NI,OT,VR)
+ Q
+ADDULR(OT,VR,NI) ; Подтверждение добавления услуги
+ N A S A=$$RESHsys^YNED()
+ Q:$G(%L)'="" 
+ D UTAB(NI,OT,VR)
+ Q
+DELUL(OT,VR,NI,ID) ; Удалить услугу из текущего дня
+ S NI=$$WD^TXTU(NI)
+ D RETUSL^YNED(VR,OT,$$SPEC^IKADRY(VR),+$H,ID)
+ D UTAB(NI,OT,VR)
+ Q
+UTAB(NIB,OTx,VRx) ; Таблица услуг
+ N @$$NEWVAR^IUSL,DT,VID,VV,VF,ITS,ITE,KX,ID,CEN,SUMM,SB,ITER,ITSB
+ N OT,VR,VI,SUS,SUi,SU,KV,UXK,RCL,sC,idx
+ S DT=+$H,KV=0 ; не показываем услуги спец. как кассовые
+ S VV=+$G(^cfg("kvt-kss-only"))
+ S sC=$$LCL^IUSER("inkss","splitcom")!$G(^cfg("ed","splitcom"))
+ S VF=$$GET^IPAC(NIB,"stc",DT),VID=$$GET^IINSC(VF,"dvid",DT)
+ S ITS="<item",ITER=" class=""1"">",ITE="</item>",ITSB=" class=""4"">"
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<kassnew>")
+ D W^RWU("<table><titles>"),WTAG^RWU("key","")
+ D WTAGC^RWU("item","Код"),W^RWU("</titles>")
+ S idx=0,RCL=""
+ S KX="",SUMM=0 F  S KX=$O(^PNF(NIB,DT,KX)) Q:KX=""  D
+ .S OTD=$P(KX,"|",2),VR=$P(KX,"|",1),ID=$P(KX,"|",3)
+ .Q:OTD'=OTx  Q:VR'=VRx 
+ .D GET^IUSL(VR,DT,OTD,ID)
+ .Q:STAT="d"!(STAT="")
+ .S A="<row><key>"_ID_"</key>"
+ .S B=ITS_">"_VR_" "_$$FIOSH^IKADRY(VR)_ITE
+ .S SB=ITS_$S(($G(STAT)?1N)=1:ITSB,1:">")
+ .S VI=$S($G(ISTC)="":VID,1:$$GET^IINSC(ISTC,"dvid",DT))
+ .S FLG="|"_$G(FLG)_"|"
+ .S:VV VF=VID=3!KASS!(FLG["|rkl|")
+ .S SUS=$$GETPL^IUSL(VR,DT,OTD,ID,"s"),SUi=2
+ .S UXK=$$GETPL^IUSL(VR,DT,OTD,ID,"kv")
+ .S UX=$O(UL(""))
+ .F  D RTABPRC^YNEDK S UX=$O(UL(UX)),SUMM=SUMM+CEN Q:UX=""
+ D W^RWU("</table>")
+ D WTAGD^RWU("sum",SUMM)
+ D W^RWU("</kassnew></nb_console>"),C^RWU
+ Q
+PAYNAZ(NIB,KEY,SUM,VT,NDS,CON) ; Оплатить назначение
+ N IDK,KV,DEP,X
+ S IDK=$$KKM^IUSER(),KV=$$GET^IINKR("NKSS"),KEY=$P(KEY,":",2)
+ S X=$$PATTERN^INAZN(KEY) S:X="" X="*"
+ S DEP=$P($$DEP^IBILL(VT,CON'="",$$DGN^INAZN(KEY),"",X,NDS>0,IDK),"|",1)
+ D SETKV^INAZN(KEY,KV)
+ D LNSBS^NNAZN(KEY,1)
+ D CHKI2^YIBILL(IDK,NIB,SUM,VT,"","",KV)
+ I $D(%L) Q:$G(%L)'="OK" 
+ K %L,%B
+ D PTAB(NIB,KEY,KV,DEP)
+ Q
+PAYBTPL(NIB,KEY,SUM,VT,NDS,CON) ; Оплатить полис
+ N IDK,KV,DEP,PL
+ S IDK=$$KKM^IUSER(),KV=$$GET^IINKR("NKSS"),PL=$P(KEY,":",2)
+ S DEP=$P($$DEP^IBILL(VT,CON'="",$$GET^IPOLIS(NIB,PL,"stc"),$$GET^IPOLIS(NIB,PL,"tp"),"",NDS>0,IDK),"|",1)
+ D CHKI2^YIBILL(IDK,NIB,SUM,VT,"","",KV)
+ I $D(%L) Q:$G(%L)'="OK"
+ D SET^IPOLIS(NIB,$P(KEY,":",2),"kv",KV)
+ K %L,%B
+ D PTAB(NIB,KEY,KV,DEP)
+ Q
+RFINIT ; Инициализация kassf
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<kassf>")
+ I $$^I("ilpu"),'$$FR^I() D W^RWU("<dates h=""6425""/><clpu visible=""yes""/>")
+ D:$G(^cfg("kss","prnbill"))'=$G(^cfg("kss","prnlbill")) WTAGU^RWU("btn_print",1)
+ D W^RWU("</kassf></nb_console>"),C^RWU
+ Q
+RFDT(NIB,DS,DE,LP) ; Список дат и кассовых квитанций
+ N DT,C,X,KX,A,BUF,CF,TM,D,VR,OT,ID,NZL,DX
+ S CF=+$G(^cfg("credit")),LP=$G(LP)
+ S:$G(^cfg("inkss","setkv")) CF=3
+ S:$G(^cfg("inkss","fakekv")) CF=9
+ S DS=$$DI^DTUTL($G(DS)),DE=$$DI^DTUTL($G(DE))
+ S:DE="" DE=999999
+ S LP=$S('LP:"",1:$$^I("ilpu"))
+ ; услуги
+ S DT=DS-1 F  S DT=$O(^PNF(NIB,DT)) Q:DT=""!(DT>DE)  D
+ .S KX="" F  S KX=$O(^PNF(NIB,DT,KX)) Q:KX=""  D
+ ..S VR=$P(KX,"|",1),OT=$P(KX,"|",2),ID=$P(KX,"|",3)
+ ..I LP'="",$$GETPL^IUSL(VR,DT,OT,ID,"l")'=LP Q 
+ ..S X=$$GETPL^IUSL(VR,DT,OT,ID,"kv"),D=DT
+ ..I CF'=3,X="" S X=$S(CF=9:DT-58074,$$GETSTAT^IUSL(VR,DT,OT,ID)=2:"-",1:"")
+ ..I CF=3 S D=+$$GETPL^IUSL(VR,DT,OT,ID,"kp") S:D<1000 D=DT ; дату из платежа
+ ..S:$L(X) BUF(D,"@"_$S(X="-":"",1:X))=""
+ ; платежи
+ S DT=DS-1 F  S DT=$O(^BILL(NIB,DT)) Q:DT=""!(+DT'=DT)!(DT>DE)  D
+ .S TM="" F  S TM=$O(^BILL(NIB,DT,TM)) Q:TM=""  D
+ ..S A=^(TM),X=$P(A,"|",1),KX=$P(A,"|",6)
+ ..I X="",$P(KX,":",1)="NAZ" S BUF(DT,"@"_$$GETKV^INAZN($P(KX,":",2))_"@"_KX)="" ; Назначения
+ ..I X'="+",X'="" Q 
+ ..I LP'="",$P($P(A,"|",5),"@",2)'=LP Q 
+ ..Q:$E($P(A,"|",2))="+"   ; возврат
+ ..S X=$P(A,"|",8)
+ ..S:CF=9 X=DT-58074
+ ..S DX=DT
+ ..I $P(KX,":",1)="ZNF" S DX=$P($P(KX,"/",1),":",4) S:DX="" DX=DT
+ ..S:'$D(BUF(DX)) BUF(DX,"@"_X)=""
+ ; TODO - совместить разные даты оплаты и услуг !!
+ 
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<kassf><dates>")
+ S (C,DT)=""
+ F  S DT=$O(BUF(DT),-1) Q:DT=""  S X="" F  S X=$O(BUF(DT,X)) Q:X=""  D
+ .S A=$P(X,"@",2)
+ .D WC^RWU(C_$$DT^DTUTL(DT)_$S(A="":"",1:", № "_A)_"|"_DT_X)
+ .S C=CR
+ S A=$$FIO^IPAC(NIB)
+ D WC^RWU("</dates><fio>"_A_"</fio></kassf></nb_console>")
+ D C^RWU
+ Q
+RFTAB(NIB,IDX) 
+ N @$$NEWVAR^IUSL,KV,DT,VID,VV,VF,TT,ITS,ITE,KX,ID,CEN,SUMM,SB,ITER,ITSB
+ N OTD,VR,VI,SUS,SUi,SU,R,D,I,NDS,NSB,CF,cS,idx,XTP,ITSS,KSUMM,CCU,RCL,fOMS
+ S DT=$P(IDX,"@",1),KV=$P(IDX,"@",2),XTP=$P(IDX,"@",3)
+ S:DT="" DT=+$H
+ S VV=+$G(^cfg("kvt-kss-only"))
+ S sC=$$LCL^IUSER("inkss","splitcom")!$G(^cfg("ed","splitcom"))
+ S fOMS=$$C^I("inkss","omscode") ; вывод ОМС кодов дополнительно
+ S VF=$$GET^IPAC(NIB,"stc",DT),VID=$$GET^IINSC(VF,"dvid",DT)
+ S ITS="<item",ITER=" class=""1"">",ITE="</item>",ITSB=" class=""4"">",ITSS="<item>"
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<kassf>")
+ D WTAGDC^RWU("kv",$S(KV="":"Нет",1:KV))
+ D W^RWU("<table><titles>"),WTAG^RWU("key","")
+ D WTAGC^RWU("item","Код"),W^RWU("</titles>")
+ S CF=$G(^cfg("credit"))
+ S:$G(^cfg("inkss","setkv")) CF=3
+ S:$G(^cfg("inkss","fakekv")) KV=""
+ S (NDS,KSUMM,SUMM,NSB,idx,CCU)=0,RCL=""
+ G:XTP'="" RFTABx
+ I CF=3 S TT="",D=DT F  S TT=$O(^BILL(NIB,D,TT)) Q:TT=""  D
+ .S R=^(TT)
+ .Q:$P(R,"|",1)'=""  
+ .S R=$P(R,"|",6)
+ .Q:$P(R,":",1)'="ZNF" 
+ .S KX=$P(R,"/",1),VR=$P(KX,":",2),OTD=$P(KX,":",3),DT=$P(KX,":",4)
+ .F KX=2:1:$L(R,"/") S ID=$P($P(R,"/",KX),":",3) Q:ID=""  D RFTABsu
+ I 'NSB!(CF'=3) S KX="" F  S KX=$O(^PNF(NIB,DT,KX)) Q:KX=""  D
+ .S OTD=$P(KX,"|",2),VR=$P(KX,"|",1),ID=$P(KX,"|",3)
+ .D RFTABsu
+ G RFTABe
+RFTABx 
+ I $P(XTP,":",1)="NAZ" D RFTABnz($P(XTP,":",2)) S CCU=CCU+1
+RFTABe 
+ S KSUMM=$$GSUMM^IBILL(NIB,DT,DT,"+")
+ I 'CCU D WC^RWU("<row><key></key>"_ITSS_ITE_ITSS_"Платеж"_ITE_ITSS_ITE_ITSS_ITE_ITSS_KSUMM_ITE_"</row>")
+ D W^RWU("</table>")
+ D WTAGD^RWU("sum",SUMM)
+ D WTAGD^RWU("nds",NDS)
+ D W^RWU("</kassf></nb_console>"),C^RWU
+ Q
+RFTABsu ; Sub procedure
+ I KV'="",$$GETPL^IUSL(VR,DT,OTD,ID,"kv")'=KV Q 
+ I KV="",$$GETSTAT^IUSL(VR,DT,OTD,ID)'=2 Q 
+ D GET^IUSL(VR,DT,OTD,ID)
+ Q:STAT="d"!(STAT="") 
+ S NSB=1
+ S A="<row><key>"_ID_"</key>"
+ S B=ITS_">"_VR_" "_$$FIOSH^IKADRY(VR)_ITE
+ S SB=ITS_$S(($G(STAT)?1N)=1:ITSB,1:">")
+ S VI=$S($G(ISTC)="":VID,1:$$GET^IINSC(ISTC,"dvid",DT))
+ S FLG="|"_$G(FLG)_"|"
+ S:VV VF=VID=3!KASS!(FLG["|rkl|")
+ S SUS=$$GETPL^IUSL(VR,DT,OTD,ID,"s"),SUi=2
+ S NDS=NDS+$$GETPL^IUSL(VR,DT,OTD,ID,"nds")
+ S UXK=$$GETPL^IUSL(VR,DT,OTD,ID,"kv")
+ S UX=$O(UL(""))
+ N KV S KV=0
+ F  D RTABPRC^YNEDK S UX=$O(UL(UX)),SUMM=SUMM+CEN,CCU=CCU+1 Q:UX=""
+ Q
+RFTABnz(KEY) ; Вывод платного назначения
+ N R,I,A,U,P,DT,DGN,PRC,SK,SS,VR,C,ucV
+ S R=$G(^NAZ(KEY,"i"))
+ S DT=+$P(R,"|",5),DGN=$P(R,"|",9)
+ S:DGN="" DGN=$$GET^IPAC(NIB,"stc",DT)
+ S PRC=$$PRC^IINSC(DGN,NIB,DT)
+ S PRC=$$CORCP^IPRICET(PRC)
+ S ucV=+$G(^cfg("kss","kvt-ucode"))
+ S I="" F  S I=$O(^NAZ(KEY,"a",I)) Q:I=""  D
+ .S R=^(I),U=$P(R,"|",5),P=$P(R,"|",6),SK=+$P(R,"|",7)
+ .Q:'$P(R,"|",10) ; nopay
+ .S:P="" P=PRC
+ .S SS=$P(R,"|",8)
+ .S SS=$S(SS="":+$FN(($$PRICEH^IPRICE(U,P,DT)*(100-SK))/100,"",2),1:SS)
+ .S VR=$P($P(R,"|",11),"@",2)
+ .S A="<row><key>NAZ:"_KEY_":"_I_"</key>"
+ .S A=A_ITS_$S($P(R,"|",11)'="":ITSB,1:">")_U_ITE
+ .S C=$$NAMEH^IPRICE(U,P,DT)
+ .S:ucV C=U_" "_C
+ .S A=A_ITS_">"_$$TAG^TXTU(C)_ITE
+ .S A=A_ITS_">1"_ITE_ITS_">"_VR_" "_$$FIOSH^IKADRY(VR)_ITE
+ .S A=A_ITS_">"_SS_ITE
+ .S SUMM=SUMM+SS
+ .D WC^RWU(CR_A_"</row>")
+ Q
+RFTABpl(KEY) ; вывод полиса !ADD
+ N A,DT,TP,PL,S
+ S PL=$P(KEY,":",2),DT=+$$WUSERD^IPOLIS(NIB,PL,0)
+ S TP=$$GET^IPOLIS(NIB,PL,"tp"),S=$$DEBTPL^IPOLIS(NIB,PL)
+ S A=PL_"|"_$$NAME^NTPOLIS(TP)_"|1|"_S_"|"_S_"|0|"_S_"|"_$$DT^DTUTL(DT)
+ .D WC^RWU(CR_A_"</row>")
+ 
+ S A="<row><key>BTPL:"_KEY_":"_I_"</key>"
+ S A=A_ITS_ITSB_ITE
+ S A=A_ITS_">"_$$TAG^TXTU($$NAME^NTPOLIS(TP))_ITE
+ S A=A_ITS_">1"_ITE_ITS_">-"_ITE
+ S A=A_ITS_">"_S_ITE
+ D WC^RWU(CR_A_"</row>")
+ Q
+PRNBILL(NIB,IDX,fOMS) ; Печатная форма
+ N RTp
+ D OWF^RWU(".xml")
+ S RTp=+$G(^cfg("kss","prnbill"))
+ S fOMS=$G(fOMS)
+ S:$G(^cfg("kss","omscode")) fOMS=^("omscode")
+ D OPEN^ISTREP("Квитанция")
+ D:(RTp[0)!(RTp[3) PRNBFULL
+ D:RTp[1 PRNBLT
+ I RTp[2 D PRNBLTE,CLOSE^ISTREP,C^RWU Q 
+ D CEND^ISTREP,CLOSE^ISTREP
+ D C^RWU
+ Q
+PRNBFULL 
+ N @$$NEWVAR^IUSL,KV,DT,VID,VV,VF,ITS,ITE,KX,ID,CEN,SUMM,ITER,ITSB,NZ
+ N OT,VR,VI,pV,X,C,SC,SUS,SUi,SU,VRX,Y,PL,sCM,NDS,SUMMN,ucV,PI,fSKS,UT,UX
+ F KX="lpuname","lpuaddr","nib","fio","kv","opfio","dt","vr","vrfio","sum" D FIELD^ISTREP("n",KX)
+ D ENDFLD^ISTREP()
+ 
+ s sCM=+$G(^cfg("ed","splitcom"))
+ S DT=+$P(IDX,"@",1),KV=$P(IDX,"@",2),VRX=$P(IDX,"@",3),pV="",CNT=0
+ S:'DT DT=+$H
+ S VV=+$G(^cfg("kvt-kss-only"))
+ S ucV=+$G(^cfg("kss","kvt-ucode"))
+ S VF=$$GET^IPAC(NIB,"stc",DT),VID=$$GET^IINSC(VF,"dvid",DT)
+ S PI=$$FPRNID^IPRNPAT("kss-prnbill")
+ 
+ D W^RWU("<data>")
+ S X=$$^I("iname") S:X="" X=$$NAME^ICONTR($$^I("ilpu"))
+ D WTAGC^RWU("lpuname",X)
+ D WTAGC^RWU("lpuaddr",$$^I("iaddr"))
+ D WTAGC^RWU("nib",NIB)
+ D WTAGC^RWU("fio",$$FIO^IPAC(NIB))
+ D WTAGC^RWU("kv",KV)
+ D WTAGC^RWU("dt",$$DT^DTUTL(DT))
+ D WTAGC^RWU("opfio",$$FIOSH^IKADRY($$KDR^IUSER()))
+ D WTAGC^RWU("vr",VRX)
+ D WTAGC^RWU("vr",$$FIO^IKADRY(VRX))
+ D W^RWU("</data>")
+ 
+ D FONT^ISTREP(1,"Times New Roman",10)
+ D FONT^ISTREP(2,"Times New Roman",12)
+ D FONT^ISTREP(3,"Times New Roman",10,"b")
+ D FONT^ISTREP(4,"Times New Roman",12,"b")
+ 
+ D CSTART^ISTREP("p")
+ S KX=$$FL^IPRNPAT(PI,"begindoc")
+ I KX'="" D WC^RWU(KX) G PRNbfh
+ D LD^ISTREP($$^I("iname"))
+ D H^ISTREP(2)
+ S KX=$$FL^IPRNPAT(PI,"title") S:KX="" KX="КВИТАНЦИЯ"
+ D LD^ISTREP(KX_$S(KV="":"",1:" № "_KV),2,"c")
+ S KX=$$FL^IPRNPAT(PI,"title1") S:KX="" KX="оплаты медицинских услуг"
+ D LD^ISTREP(KX,2,"c")
+ D H^ISTREP(5)
+ D LD^ISTREP($$FIO^IPAC(NIB)_", И.Б. № "_NIB)
+ D LD^ISTREP("Дата: "_$$DT^DTUTL(DT))
+ D H^ISTREP(2)
+PRNbfh 
+ I $P(VRX,":",1)="NAZ" D PRNBFn($P(VRX,":",2)) G prnbf1
+ S sSKS=$$FL^IPRNPAT(PI,"skdmode") ; 0-общ.сумм,1-сумма ск.,2-%
+ ; услуги
+ S KX="",(SC,SUMM,SUMMN)=0 F  S KX=$O(^PNF(NIB,DT,KX)) Q:KX=""  D
+ .S OT=$P(KX,"|",2),VR=$P(KX,"|",1),ID=$P(KX,"|",3)
+ .I VRX'="",VRX'=VR Q 
+ .I KV'="",$$GETPL^IUSL(VR,DT,OT,ID,"kv")'=KV Q 
+ .D GET^IUSL(VR,DT,OT,ID)
+ .I KV="",'$G(KASS),STAT'=2,VID'=3 Q 
+ .Q:STAT="d"!(STAT="")!(STAT="w")
+ .Q:$$FLinFL^TXTU($G(FLG),"nop")  
+ .D:pV'=VR
+ ..D H^ISTREP(2)
+ ..D LD^ISTREP($$GSPEC^YISPRAV($G(SP))_", "_$$FIODT^YIKADRY(VR,DT))
+ ..D H^ISTREP(1)
+ ..D WC^RWU(CR_"<l b=""tlbr"" w=""194"" a=""c""><d h=""2f"" w=""130"" b=""tbr"">Выполненная услуга</d><d h=""2f"" w=""15"" b=""tlbr"">Кол-во</d><d h=""2f"" w=""15"" b=""tlbr"">Цена</d><d h=""2f"" w=""17"" b=""tlbr"">"_$S(sSKS=1:"Скидка",sSKS=2:"Скидка %",1:"Без  скидки")_"</d><d h=""2f"" w=""17"" b=""tlbr"">Со скидкой</d></l>")
+ ..S pV=VR
+ .S A="<l b=""tlbr"" w=""194"">"
+ .S VI=$S($G(ISTC)="":VID,1:$$GET^IINSC(ISTC,"dvid",DT))
+ .S FLG="|"_$G(FLG)_"|"
+ .S:VV VF=VID=3!KASS!(FLG["|rkl|")
+ .S NDS=$$GETPL^IUSL(VR,DT,OT,ID,"nds"),SUMMN=SUMMN+NDS
+ .S UX=$O(UL("")),SUS=$$GETPL^IUSL(VR,DT,OT,ID,"s"),SUi=2
+ .S NZ=""
+ .F  D RTABPRC S UX=$O(UL(UX)),SUMM=SUMM+CEN,SC=SC+CNT Q:UX=""
+ S:SC>0 A="<l w=""194""><d w=""85""/><d w=""45"" a=""r"">Итого: </d><d h=""f"" a=""c"" w=""15"">"_(+$J(SC,"",2))
+ S:SC>0 A=A_"</d><d h=""f"" a=""c"" w=""17""></d><d h=""f"" a=""c"" w=""15""></d><d h=""f"" a=""c"" w=""17"">"
+ S SUMM=+$J(SUMM,"",2)
+ D:SC>0 WC^RWU(CR_A_SUMM_"</d></l>")
+ D:(SC>0)&(RTp=3) WC^RWU("<l><d f=""5"" w=""20"">К оплате </d><d>"_SUMM_" руб. ( </d><f>$moneytowords:"_SUMM_":руб.:коп.</f><d> )</d></l>"),H^ISTREP(1)
+ I SC>0,RTp=3,'SUMMN D WC^RWU("<l f=""5""><d w=""20""/><d>НДС не облагается</d></l>")
+ D:SUMMN WC^RWU("<l f=""5""><d w=""20"">В т.ч. НДС </d><d>"_SUMMN_" руб. ( </d><f>$moneytowords:"_SUMMN_":руб.:коп.</f><d> )</d></l>")
+ D H^ISTREP(1)
+prnbf1 
+ ; абонементы
+ S PL="",pV=1 F  S PL=$O(^BTPL(NIB,PL)) Q:PL=""  D
+ .S VI=+$$CREATED^IPOLIS(NIB,PL) Q:VI'=DT 
+ .D:pV  
+ ..D H^ISTREP(2)
+ ..D LD^ISTREP("Продажи индивидуальных договоров")
+ ..D H^ISTREP(1)
+ ..D WC^RWU(CR_"<l b=""tlbr"" w=""194"" a=""c""><d w=""164"" b=""tbr"">Информация по договору</d><d w=""30"" b=""tlbr"">Стоимость</d></l>")
+ ..S pV=0
+ .S VI=$$GET^IPOLIS(NIB,PL,"dofor")
+ .S A="№ "_PL_$S(VI="":"",1:" от "_$$DT2^DTUTL(VI))
+ .S X=$$GET^IPOLIS(NIB,PL,"tp")
+ .S:X'="" A=A_", "_$$NAME^NTPOLIS(X)
+ .S X=$$GET^IPOLIS(NIB,PL,"koef")
+ .S:X'="" A=A_", Коэф. "_X
+ .S X=$$CSUMM^IPOLIS(NIB,PL)
+ .S C="<l b=""tlbr"" w=""194""><d w=""164"" b=""r"">"_$$TAG^TXTU(A)
+ .S C=C_"</d><d h=""f"" a=""c"" w=""30"">"_X_"</d></l>"
+ .D WC^RWU(CR_C)
+ D:'pV H^ISTREP(5)
+ 
+ D:'$$FL^IPRNPAT(PI,"nobill")
+ .S X=$$NOW^IBILL(NIB,DT)
+ .D:X&(RTp'=3) LD^ISTREP("Состояние личного счета: "_X_" руб.")
+ D:'$$FL^IPRNPAT(PI,"nobill-lst") PKO(NIB,DT,KV)
+ 
+ D:'$$FL^IPRNPAT(PI,"nobonus")
+ .S X=$$NOW^IBILS(NIB)
+ .D:X&(RTp'=3) LD^ISTREP("Бонусов на счете: "_X)
+ 
+ S KX=$$FL^IPRNPAT(PI,"enddoc")
+ I KX'="" D WC^RWU(KX) Q 
+ 
+ D H^ISTREP(5)
+ D:RTp'=3 WC^RWU(CR_"<l a=""r""><d>Выдал </d><d w=""40"" h=""f"" b=""b""/><f>$date</f><d w=""5""/></l>")
+ D:RTp=3 WC^RWU(CR_"<l a=""r""><d>Выдал </d><d w=""55"" h=""f"" b=""b""/><d w=""5""/></l>")
+ Q
+RTABPRC ; Вывод услуги
+ S CNT=0,CEN=0
+ I 'sCM,UX="" Q 
+ I $$FLinFL^TXTU($$GET^IPRICE(UX,"cls",PRC,DT),"nprnk") Q 
+ S CNT=$S(UX="":"",1:UL(UX))
+ S CEN=$S($L(SUS)&(SUS'["|"):SUS,$L(SUS):$P(SUS,"|",SUi),1:$$USUM^IUSL(DT,UX,CNT))
+ S SUi=SUi+1
+ I VV S:'VF CEN="***"
+ S C=$$GET^IPRICE(UX,"aname",PRC,DT),UT=UX
+ S:C="" C=$$NAMEH^IPRICE(UX,PRC,DT)
+ I fOMS S UT=$$GET^IPRICE(UX,"oms",PRC,DT),UT=$S(UT="":UX,fOMS=2:UT_" / "_UX,1:UT)
+ S:ucV C=UT_" "_C
+ S:NZ'="" C=C_" зуб "_NZ
+ I sCM,$G(COMM)'="" S C=C_" ("_COMM_")"
+ S C=A_"<d w=""130"" b=""r"">"_$$TAG^TXTU(C)_"</d>"
+ S C=C_"<d h=""f"" a=""c"" w=""15"" b=""r"">"_(+$J(CNT,"",2))_"</d>"
+ S X=$S(CNT&CEN:CEN/CNT,1:0)
+ S Y=$$PRICEH^IPRICE(UX,PRC,DT)*CNT
+ S:Y<CEN Y=CEN ; в случае наценки
+ S:sSKS=1 X=Y/CNT,Y=Y-CEN ; только сумма скидки
+ S C=C_"<d h=""f"" a=""c"" w=""15"" b=""r"">"_(+$J(X,"",2))_"</d>"
+ S C=C_"<d h=""f"" a=""c"" w=""17"" b=""r"">"_(+$J(Y,"",2))_"</d>"
+ S C=C_"<d h=""f"" a=""c"" w=""17"">"_(+$J(CEN,"",2))_"</d></l>"
+ D WC^RWU(CR_C)
+ Q
+PRNBFn(KEY) ; Вывод платного назначения в расширенной квитанции
+ N R,I,A,U,P,DT,DGN,PRC,SK,VR,SC,SUMM,SS,SB,C,ucV
+ S R=$G(^NAZ(KEY,"i")),SC=0,SUMM=0
+ S DT=+$P(R,"|",5),DGN=$P(R,"|",9)
+ S:DGN="" DGN=$$GET^IPAC(NIB,"stc",DT)
+ S PRC=$$PRC^IINSC(DGN,NIB,DT)
+ S PRC=$$CORCP^IPRICET(PRC)
+ S ucV=+$G(^cfg("kss","kvt-ucode"))
+ D H^ISTREP(1)
+ D WC^RWU(CR_"<l b=""tlbr"" w=""194"" a=""c""><d h=""2f"" w=""130"" b=""tbr"">Назначенная услуга</d><d h=""2f"" w=""15"" b=""tlbr"">Кол-во</d><d h=""2f"" w=""15"" b=""tlbr"">Цена</d><d h=""2f"" w=""17"" b=""tlbr"">Без  скидки</d><d h=""2f"" w=""17"" b=""tlbr"">Со скидкой</d></l>")
+ S I="" F  S I=$O(^NAZ(KEY,"a",I)) Q:I=""  D
+ .S R=^(I),U=$P(R,"|",5),P=$P(R,"|",6),SK=+$P(R,"|",7)
+ .Q:'$P(R,"|",10) ; nopay
+ .S:P="" P=PRC
+ .I $$FLinFL^TXTU($$GET^IPRICE(U,"cls",P,DT),"nprnk") Q 
+ .S SB=$$PRICEH^IPRICE(U,P,DT),SS=$P(R,"|",8)
+ .S SS=$S(SS'="":SS,1:+$FN((SB*(100-SK))/100,"",2))
+ .S VR=$P($P(R,"|",11),"@",2),SC=SC+1,SUMM=SUMM+SS
+ .S A="<l b=""tlbr"" w=""194"">"
+ .S C=$$NAMEH^IPRICE(U,P,DT),UT=UX
+ .I fOMS S UT=$$GET^IPRICE(UX,"oms",P,DT),UT=$S(UT="":UX,fOMS=2:UT_" / "_UX,1:UT)
+ .S:ucV C=UT_" "_C 
+ .S A=A_"<d w=""130"" b=""r"">"_$$TAG^TXTU(C)_"</d>"
+ .S A=A_"<d h=""f"" a=""c"" w=""15"" b=""r"">1</d>"
+ .S A=A_"<d h=""f"" a=""c"" w=""15"" b=""r"">"_SB_"</d>"
+ .S A=A_"<d h=""f"" a=""c"" w=""17"" b=""r"">"_SB_"</d>"
+ .S A=A_"<d h=""f"" a=""c"" w=""17"">"_SS_"</d></l>" ; TODO - S:Y<CEN Y=CEN в случае наценки
+ .D WC^RWU(CR_A)
+ 
+ S:SC>0 A="<l w=""194""><d w=""85""/><d w=""45"" a=""r"">Итого: </d><d h=""f"" a=""c"" w=""15"">"_SC
+ S:SC>0 A=A_"</d><d h=""f"" a=""c"" w=""17""></d><d h=""f"" a=""c"" w=""15""></d><d h=""f"" a=""c"" w=""17"">"
+ D:SC>0 WC^RWU(CR_A_SUMM_"</d></l>")
+ Q
+PRNBLT 
+ N @$$NEWVAR^IUSL,KV,DT,VID,VV,VF,ITS,ITE,KX,ID,CEN,SUMM,SUMMN,ITER,ITSB
+ N OT,VR,VI,pV,X,C,SC,SUS,SUi,SU,R,SK,KKV,SUMA,BSUM,SKI,SKK,ii,VRX,sCM,UT,UX,ucV
+ D FONT^ISTREP(1,"Times New Roman",11)
+ D FONT^ISTREP(2,"Times New Roman",16,"b,i")
+ D FONT^ISTREP(3,"Arial",11)
+ D FONT^ISTREP(4,"Arial",11,"b")
+ D FONT^ISTREP(5,"Times New Roman",11,"b")
+ D CSTART^ISTREP("p",2) ; 2 copies
+ S VV=+$$^I("ilpu") S:VV=0 VV=1 ; for ^CGA - TODO
+ S DT=+$P(IDX,"@",1),KV=$P(IDX,"@",2),VRX=$P(IDX,"@",3)
+ S:'DT DT=+$H
+ s sCM=+$G(^cfg("ed","splitcom"))
+ s ucV=+$G(^cfg("kss","kvt-ucode"))
+ D H^ISTREP(5) ; 70
+ S C=$$GET^ICONTR(VV,"oname")
+ S:C="" C=$$^I("iname")
+ D LD^ISTREP(C) ; "Продавец:"
+ S C=$$GET^ICONTR(VV,"phone"),R=$$GET^ICONTR(VV,"fax")
+ D LD^ISTREP("Тел.: "_$S(C="":$$^I("itel"),1:C)_"/ Факс: "_$S(R="":$$^I("ifax"),1:R))
+ S C=$$ADDR^ICONTR(VV,"addr"),X=$$ADDRY^ICONTR(VV,"yaddr")
+ S:C="" C=$$^I("iaddr")
+ D:$L(X)&(X'=C) LD^ISTREP("Юр.Адрес: "_X)
+ D LD^ISTREP($S($L(X)&(X'=C):"Факт. адрес: ",1:"Адрес: ")_C)
+ D LD^ISTREP("Реквизиты: ")
+ S C=$$GET^ICONTR(VV,"bank"),R=$$GET^ICONTR(VV,"rsch") 
+ D LD^ISTREP("Банк: "_$S(C="":$$^I("ibank"),1:C)_" р/с "_$S(R="":$$^I("irs"),1:R))
+ S C=$$GET^ICONTR(VV,"kors")
+ D LD^ISTREP("К/с: "_$S(C="":$$^I("iks"),1:C))
+ D LD^ISTREP("БИК: "_$$GET^ICONTR(VV,"bik"))
+ D H^ISTREP(5)
+ D:KV="" 
+ .S KX="",SUi=0 F  S KX=$O(^BILLI(DT,KX)) Q:KX=""  S R=$O(^(KX,"")) I R'="",'$D(SU(R)) S SU(R)="",SUi=SUi+1
+ .K SU S KV=SUi
+ ;D LD^ISTREP("Счет № "_KV_" от "_$$DT^DTUTL(DT),2,"c")
+ D LD^ISTREP("Счет-акт № "_KV_" от "_$$DT^DTUTL(DT),2,"c")
+ S KV=$S($G(^cfg("inkss","setkv")):KV,1:"")
+ D H^ISTREP(5)
+ D LD^ISTREP($$FIO^IPAC(NIB))
+ D LD^ISTREP("Дата рождения: "_$$DT^DTUTL($$GET^IPAC(NIB,"datar")))
+ D H^ISTREP(5)
+ S VF=$$GET^IPAC(NIB,"stc",DT),VID=$$GET^IINSC(VF,"dvid",DT)
+ D WC^RWU(CR_"<l w=""190"" b=""b"" f=""5""><d w=""8"">П/п</d><d w=""144"">Наименование услуги</d><d a=""c"" w=""8"">К-во</d><d a=""c"" w=""15"">Цена</d><d a=""c"" w=""15"">Сумма</d></l>")
+ S SK="",SKI=0,ii=1
+ S KX="",(SC,SUMM,SUMMN,SUMA)=0 F  S KX=$O(^PNF(NIB,DT,KX)) Q:KX=""  D
+ .S OT=$P(KX,"|",2),VR=$P(KX,"|",1),ID=$P(KX,"|",3)
+ .I VRX'="",VRX'=VR Q 
+ .S KKV=$$GETPL^IUSL(VR,DT,OT,ID,"kv"),SKK=""
+ .I KV'="",KKV'=KV Q 
+ .D GET^IUSL(VR,DT,OT,ID)
+ .I KV="",STAT'=2 Q 
+ .Q:STAT="d"!(STAT="")!(STAT="w")
+ .S:$G(SKID)'="" SKK=100-SKID
+ .S A="<l w=""190"" b=""b"">"
+ .S VI=$S($G(ISTC)="":VID,1:$$GET^IINSC(ISTC,"dvid",DT))
+ .S FLG="|"_$G(FLG)_"|"
+ .S SUMMN=SUMMN+$$GETPL^IUSL(VR,DT,OT,ID,"nds")
+ .S:VV VF=VID=3!KASS!(FLG["|rkl|")
+ .S UX=$O(UL("")),SUS=$$GETPL^IUSL(VR,DT,OT,ID,"s"),SUi=2
+ .F  D RTABPRCL D  S UX=$O(UL(UX)),SUMM=SUMM+CEN,SC=SC+CNT,ii=ii+1 Q:UX=""
+ ..Q:CEN>BSUM  ; повышение не учитываем
+ ..Q:'SUMA 
+ ..S:SKK SKI=SKI+1,SK=$S(BSUM:100-$J(100*CEN/BSUM,"",2)+SK,1:0)
+ S:SKI SK=+$J(SK/SKI,"",2) S:SK>100 SK=""
+ ; S:SK="" SK=$S(SUMA:100-$J(100*SUMM/SUMA,"",2),1:"")
+ D WC^RWU(CR_"<l h=""1""/>")
+ D:SUMM WC^RWU(CR_"<l w=""190""><d w=""145""/><d w=""30"">Итого: </d><d h=""f"" a=""c"" w=""15"">"_SUMM_" руб.</d></l>")
+ D:SUMM&('SUMMN) WC^RWU(CR_"<l w=""190""><d w=""145""/><d w=""40"">Без налога (НДС)  -</d></l>")
+ D:SUMM&SUMMN WC^RWU(CR_"<l w=""190""><d w=""145""/><d w=""40"">Включая НДС "_SUMMN_" руб.</d></l>")
+ D:SUMM WC^RWU(CR_"<l w=""190""><d w=""145""/><d w=""30"">Всего к оплате: </d><d h=""f"" a=""c"" w=""15"">"_SUMM_" руб.</d></l>")
+ D:SK WC^RWU(CR_"<l w=""190""><d w=""145""/><d w=""30"">Скидка: </d><d h=""f"" a=""c"" w=""15"">"_SK_" %</d></l>")
+ D:SUMM WC^RWU(CR_"<l h=""5""/><l w=""190"" f=""5""><d w=""40""/><d>Всего к оплате наименований "_(ii-1)_", на сумму "_SUMM_" руб.</d></l>")
+ D:SUMM WC^RWU(CR_"<l w=""190""><d w=""40""/><d>(</d><f>$moneytowords:"_SUMM_":руб.:коп.</f><d> )</d></l>")
+ D H^ISTREP(5)
+ D W^RWU("<l><d>") ; для печати блоком
+ D WC^RWU(CR_"<l w=""190""><d w=""40""/><d>Услуги оказаны в полном объеме</d></l>")
+ D H^ISTREP(3)
+ D WC^RWU(CR_"<l w=""190""><d w=""40""/><d w=""50"">"_$$TAG^TXTU($$FIO^IPAC(NIB))_" </d><d w=""35"" h=""f"" b=""b""/></l>")
+ D H^ISTREP(10)
+ D WC^RWU(CR_"<l w=""190""><d w=""40""/><d w=""50"">"_$$TAG^TXTU($$GET^ICONTR(VV,"doljr"))_"</d><d w=""35"" h=""f"" b=""b""/><d w=""5""/><d h=""f"" w=""80"">"_$$^I("igldr")_"</d></l>")
+ D W^RWU("</d></l>")
+ Q ; TODO
+ D W^RWU(CR_"<mp cmd=""break""/>")
+ D LD^ISTREP($P($$DTIME^DTUTL(DT)," ",1,3),1,"r")
+ D H^ISTREP(40)
+ D LD^ISTREP("INVOICE № "_KV_" / "_$$DT^DTUTL(DT),2,"c")
+ D H^ISTREP(10)
+ D LD^ISTREP($$TRANSLIT^TXTU($$FIO^IPAC(NIB)))
+ ; D LD^ISTREP("Birth date: "_$P($$DT^DTUTL($$GET^IPAC(NIB,"datar")),".",3))
+ D LD^ISTREP("Birth date: "_$$DT^DTUTL($$GET^IPAC(NIB,"datar")))
+ D H^ISTREP(5)
+ S VF=$$GET^IPAC(NIB,"stc",DT),VID=$$GET^IINSC(VF,"dvid",DT)
+ S KX="",(SC,SUMM)=0 F  S KX=$O(^PNF(NIB,DT,KX)) Q:KX=""  D
+ .S OT=$P(KX,"|",2),VR=$P(KX,"|",1),ID=$P(KX,"|",3)
+ .I VRX'="",VRX'=VR Q 
+ .I $L(KV) Q:$$GETPL^IUSL(VR,DT,OT,ID,"kv")'=KV 
+ .D GET^IUSL(VR,DT,OT,ID)
+ .I KV="" Q:STAT'=2 
+ .Q:STAT="d"!(STAT="")!(STAT="w")
+ .S A="<l w=""190"" b=""b"">"
+ .S VI=$S($G(ISTC)="":VID,1:$$GET^IINSC(ISTC,"dvid",DT))
+ .S FLG="|"_$G(FLG)_"|"
+ .S:VV VF=VID=3!KASS!(FLG["|rkl|")
+ .S UX=$O(UL("")),SUS=$$GETPL^IUSL(VR,DT,OT,ID,"s"),SUi=2
+ .F  D RTABPRCl D  S UX=$O(UL(UX)),SUMM=SUMM+CEN,SC=SC+CNT Q:UX=""
+ ..Q:CEN>BSUM  ; повышение не учитываем TODO
+ D:SUMM WC^RWU(CR_"<l h=""3""/><l w=""190""><d w=""170"" a=""r"">Total paid: </d><d h=""f"" a=""r"" w=""20"">"_SUMM_" rub.</d></l>")
+ D H^ISTREP(15)
+ D WC^RWU(CR_"<l w=""190""><d w=""40""/><d>Signature </d><d w=""35"" h=""f"" b=""b""/></l>")
+ D H^ISTREP(30)
+ D WC^RWU(CR_"<l w=""190"" a=""c""><d>"_$$GET^ICONTR(+$$^I("ilpu"),"internet")_"</d></l>")
+ ;D LD^ISTREP("")
+ Q
+RTABPRCL 
+ I 'sCM,UX="" Q  ; пустая услуга без комм.
+ I $$FLinFL^TXTU($$GET^IPRICE(UX,"cls",PRC,DT),"nprnk") Q 
+ S CNT=$S(UX="":"",1:UL(UX)) 
+ S CEN=$S($L(SUS)&(SUS'["|"):SUS,$L(SUS):$P(SUS,"|",SUi),1:$$USUM^IUSL(DT,UX,CNT))
+ I VV S:'VF CEN="***"
+ S C=$$GET^IPRICE(UX,"aname",PRC,DT),UT=UX
+ S:C="" C=$$NAMEH^IPRICE(UX,PRC,DT)
+ I fOMS S UT=$$GET^IPRICE(UX,"oms",PRC,DT),UT=$S(UT="":UX,fOMS=2:UT_" / "_UX,1:UT)
+ s:ucV C=UT_"  "_C
+ I sCM,$G(COMM)'="" S C=C_" ("_COMM_")"
+ S C=A_"<d w=""8"" a=""c"">"_ii_"</d><d w=""144"">"_$$TAG^TXTU(C)_"</d>"
+ S X=$S(CNT&CEN:CEN/CNT,1:0) ;$$PRICEH^IPRICE(UX,PRC,DT)
+ S BSUM=$$PRICEH^IPRICE(UX,PRC,DT)*$$CRNCUV^IPRICET(PRC,UX,DT)
+ S SUMA=SUMA+BSUM
+ S C=C_"<d h=""f"" a=""c"" w=""8"">"_(+$J(CNT,"",3))_"</d>"
+ S C=C_"<d a=""c"" w=""15"">"_X_"</d>"
+ S C=C_"<d a=""c"" w=""15"">"_(+$J(X*CNT,"",2))_"</d></l>"
+ S SUi=SUi+1
+ D WC^RWU(CR_C)
+ Q
+RTABPRCl ; eng
+ I 'sCM,UX="" Q 
+ I $$FLinFL^TXTU($$GET^IPRICE(UX,"cls",PRC,DT),"nprnk") Q 
+ S CNT=$S(UX="":"",1:UL(UX))
+ S CEN=$S($L(SUS)&(SUS'["|"):SUS,$L(SUS):$P(SUS,"|",SUi),1:$$USUM^IUSL(DT,UX,CNT))
+ I VV S:'VF CEN="***"
+ S C=$$GET^IPRICE(UX,"aname",PRC,DT)
+ S:C="" C=$$NAMEH^IPRICE(UX,PRC,DT)
+ s:ucV C=UX_" "_C
+ I sCM,$G(COMM)'="" S C=C_" ("_COMM_")"
+ S C=A_"<d w=""170"">"_$$TAG^TXTU(C)_"</d>"
+ S X=$S(CNT&CEN:CEN/CNT,1:0) ;$$PRICEH^IPRICE(UX,PRC,DT)
+ S C=C_"<d h=""f"" a=""r"" w=""20"">"_(+$J(X*CNT,"",2))_" rub.</d></l>"
+ S SUi=SUi+1
+ D WC^RWU(CR_C)
+ Q
+PRNBLTE 
+ N @$$NEWVAR^IUSL,KV,DT,VID,VV,VF,ITS,ITE,KX,ID,CEN,SUMM,SB,VRX,DTP
+ N ITER,ITSB,OT,VR,VI,SUS,SUi,SU,TT,R,D,I,NDS,NSB,CC,sCM,VRE,ucV,UT,UX,C
+ S DT=$P(IDX,"@",1),KV=$P(IDX,"@",2),VRX=$P(IDX,"@",3),DTP=""
+ S:DT="" DT=+$H
+ S VV=+$G(^cfg("kvt-kss-only"))
+ S VF=$$GET^IPAC(NIB,"stc",DT),VID=$$GET^IINSC(VF,"dvid",DT)
+ s sCM=+$G(^cfg("ed","splitcom"))
+ s ucV=+$G(^cfg("kss","kvt-ucode"))
+ D W^RWU("<data>")
+ D WTAGC^RWU("nnum",$S(KV="":"Нет",1:KV))
+ D WTAGC^RWU("nib",NIB)
+ D WTAGC^RWU("pfio",$$FIO^IPAC(NIB))
+ D W^RWU("<tab>")
+ S (NDS,SUMM,NSB)=0,(CC,VRE,SP)=""
+ I $P($P(IDX,"@",3),":",1)="NAZ" D PRNBLTEn($P($P(IDX,"@",3),":",2)) G PRNBLTEe
+ I $G(^cfg("credit"))=3 S TT="",D=DT F  S TT=$O(^BILL(NIB,D,TT)) Q:TT=""  D
+ .S R=^(TT)
+ .Q:$P(R,"|",1)'=""  
+ .S R=$P(R,"|",6) Q:$P(R,":",1)'="ZNF" 
+ .S KX=$P(R,"/",1),VR=$P(KX,":",2),OT=$P(KX,":",3),DT=$P(KX,":",4)
+ .I VRX'="",VRX'=VR Q 
+ .F KX=2:1:$L(R,"/") S ID=$P($P(R,"/",KX),":",3) Q:ID=""  D PRNBLTEs
+ I 'NSB!($G(^cfg("credit"))'=3) S KX="" F  S KX=$O(^PNF(NIB,DT,KX)) Q:KX=""  D
+ .S OT=$P(KX,"|",2),VR=$P(KX,"|",1),ID=$P(KX,"|",3)
+ .I VRX'="",VRX'=VR Q
+ .D PRNBLTEs
+PRNBLTEe 
+ D W^RWU("</tab>")
+ D WTAGC^RWU("dt",$$DT^DTUTL($S(DTP:DTP,1:DT)))
+ D WTAGC^RWU("otd",$$GOTD^YISPRAV($G(OT)))
+ S (R,VR)="",NSB=0
+ S:$O(VRE(""))'=$O(VRE(""),-1) SP="",NSB=1 ; неск врачей
+ F  S VR=$O(VRE(VR)) Q:VR=""  S R=$S(R="":"",1:R_", ")_$$FIO^IKADRY(VR)
+ D WTAGC^RWU("vrfio",R)
+ D WTAGC^RWU("spec",$S(NSB:"Врачи:",1:$$GSPEC^YISPRAV(SP)))
+ D WTAGC^RWU("summ",SUMM)
+ D WTAGC^RWU("nds",NDS)
+ D WTAGC^RWU("bonus",+$$NOW^IBILS(NIB))
+ D W^RWU("</data>")
+ Q
+PRNBLTEs ; Sub procedure
+ N FRR,X,XS,NDSX,OMS
+ I KV'="",$$GETPL^IUSL(VR,DT,OT,ID,"kv")'=KV Q 
+ D GET^IUSL(VR,DT,OT,ID)
+ S FRR=$P($$GETPL^IUSL(VR,DT,OT,ID,"fr"),"|",2)
+ I KV="",STAT'=2,FRR="" Q 
+ Q:STAT="d"!(STAT="") 
+ S NSB=1,VRE(VR)=""
+ S VI=$S($G(ISTC)="":VID,1:$$GET^IINSC(ISTC,"dvid",DT))
+ S FLG="|"_$G(FLG)_"|"
+ S:VV VF=VID=3!KASS!(FLG["|rkl|")
+ S SUS=$$GETPL^IUSL(VR,DT,OT,ID,"s"),SUi=2
+ S NDSX=$$GETPL^IUSL(VR,DT,OT,ID,"nds")
+ S A=+$$GETPL^IUSL(VR,DT,OT,ID,"p") S:A DTP=A
+ S UX=$O(UL("")) Q:UX="" 
+ F  D  S UX=$O(UL(UX)),SUMM=SUMM+CEN Q:UX=""
+ .S CNT=$S(UX="":"",1:UL(UX)) S:CNT="" CNT=1
+ .I $$FLinFL^TXTU($$GET^IPRICE(UX,"cls",PRC,DT),"nprnk") Q 
+ .S CEN=$S($L(SUS)&(SUS'["|"):SUS,$L(SUS):$P(SUS,"|",SUi),1:$$USUM^IUSL(DT,UX,CNT))
+ .I FRR'="",VID'=3,'KASS S CEN=+$J(CEN*FRR/100,"",2)
+ .S SUi=SUi+1
+ .S C=$$GET^IPRICE(UX,"aname",PRC,DT),UT=UX
+ .S:C="" C=$$NAMEH^IPRICE(UX,PRC,DT)
+ .I fOMS S UT=$$GET^IPRICE(UX,"oms",PRC,DT) S:UT="" UT=UX
+ .S A=UT_"|"_$$TAG^TXTU($S(ucV:UT_" ",1:"")_C)
+ .I sCM,$G(COMM)'="" S A=A_" ("_COMM_")"
+ .S X=NDSX,XS=0
+ .S:'X X=+$$GET^IPRICE(UX,"nds",PRC,DT)
+ .S:'X XS=+$$GET^IPRICE(UX,"ndss",PRC,DT)
+ .S X=$S(XS:XS,'X:0,1:$J(CEN*X/(100+X),"",2))
+ .S NDS=NDS+X
+ .S A=A_"|"_(+$J(CNT,"",3))_"|"_$S(CNT:$J(CEN/CNT,"",2),1:0)_"|"_(+$J(CEN,"",2))_"|"_X_"|"_(+$J(CEN,"",2))_"|"_$$DT2^DTUTL(DT)
+ .D WC^RWU(CC_A) S CC=CR
+ Q
+PRNBLTEn(KEY) ; Вывод платного назначения
+ N R,I,A,U,P,DT,DGN,PRC,SK,VR,SS
+ S R=$G(^NAZ(KEY,"i"))
+ S DT=+$P(R,"|",5),DGN=$P(R,"|",9)
+ S:DGN="" DGN=$$GET^IPAC(NIB,"stc",DT)
+ S PRC=$$PRC^IINSC(DGN,NIB,DT)
+ S PRC=$$CORCP^IPRICET(PRC)
+ S I="" F  S I=$O(^NAZ(KEY,"a",I)) Q:I=""  D
+ .S R=^(I),U=$P(R,"|",5),P=$P(R,"|",6),SK=+$P(R,"|",7)
+ .Q:'$P(R,"|",10) ; nopay
+ .S:P="" P=PRC
+ .I $$FLinFL^TXTU($$GET^IPRICE(U,"cls",P,DT),"nprnk") Q 
+ .S SS=$P(R,"|",8)
+ .S SK=$S(SS'="":SS,1:+$FN(($$PRICEH^IPRICE(U,P,DT)*(100-SK))/100,"",2))
+ .S VR=$P($P(R,"|",11),"@",2),SP=$P(R,"|",2)
+ .S A=U_"|"_$$TAG^TXTU($S(ucV:UX_" ",1:"")_$$NAMEH^IPRICE(U,P,DT))_"|1|"_SK_"|"_SK_"|0|"_SK_"|"_$$DT2^DTUTL(DT)
+ .S SUMM=SUMM+SK
+ .D WC^RWU(CC_A) S CC=CR
+ Q
+PKO(NI,DT,KV) 
+ N OPE,SUM,DD,TP,TXT,TI,L,PA
+ S PA=+$G(^cfg("pko-pac-all"))
+ 
+ S A="<l b=""tlbr"" w=""145"" a=""c""><d w=""20"" b=""tbr"">Время</d><d w=""20"" b=""tblr"">Сумма</d><d w=""60"" b=""tlbr"">Вид операции</d><d w=""45"" b=""tlbr"">Кассир</d></l>"
+ S TI="" F  S TI=$O(^BILL(NI,DT,TI),-1) Q:TI=""  D
+ .S L=^(TI),OPE=$P(L,"|",1),TP=$P(L,"|",3)
+ .I 'PA Q:TP>5 
+ .I PA>1,TP>PA Q 
+ .I OPE'="+",OPE'="-",$L(OPE) Q 
+ .S SUM=$P(L,"|",2),TXT=$$GPTYPE^IBILL(L)
+ .I OPE="",SUM<0,$P(L,"|",6)["ZNF" Q  
+ .I KV'="",$P(L,"|",8)'=KV Q 
+ .D:$L(A) 
+ ..D H^ISTREP(2)
+ ..D LD^ISTREP("Проведенные платежи")
+ ..D H^ISTREP(1)
+ ..D WC^RWU(CR_A)
+ .S:$E(SUM,1)="+" SUM=$E(SUM,2,$L(SUM)) S:SUM<0 SUM=0-SUM
+ .S A="<l b=""tlbr"" w=""145""><d h=""f"" a=""c"" w=""20"">"_$$TM^DTUTL(TI)
+ .S A=A_"</d><d h=""f"" a=""c"" w=""20"">"_SUM_"</d>"
+ .S A=A_"<d h=""f"" w=""60"">"_TXT_"</d>"
+ .S A=A_"<d h=""f"" w=""45"">"_$$FIOSH^NUSER($P(L,"|",5))_"</d></l>"
+ .D WC^RWU(CR_A)
+ .S A=""
+ Q
+KSSUSL(NI,DN,DK) ; Кассовые операции с услугами
+ N DNN,DKK,OPE,SUM,DD,TP,TXT,S1,S2,L,TI,DT,LOG,K,X,PA,A,I,VR,OT,DTT,ID
+ S DNN=$$DI^DTUTL(DN),DKK=$$DI^DTUTL(DK)
+ S (S1,S2)=0
+ S PA=+$G(^cfg("pko-pac-all"))
+ D OWF^RWU(".txt")
+ D WC^RWU("|Дата, время|Операция|Оператор/Примечание|Начислено|На счету")
+ S DT=DNN-1 F  S DT=$O(^BILL(NI,DT)) Q:DT=""!(DT>DKK)  S TI="" F  S TI=$O(^BILL(NI,DT,TI)) Q:TI=""  D
+ .S L=$G(^(TI)) Q:L=""  S OPE=$P(L,"|",1),TP=$P(L,"|",3)
+ .I 'PA Q:TP>5
+ .I PA>1,TP>PA Q
+ .I OPE'="+",OPE'="-",$L(OPE) Q
+ .S SUM=$P(L,"|",2)
+ .S DD=$$DT^DTUTL(DT)_","_$$TM^DTUTL(TI)
+ .S TXT=$$GPTYPE^IBILL(L)
+ .S:$L(OPE) S1=S1+SUM S:OPE="" SUM=0-SUM,S2=SUM+S2
+ .S:$E(SUM,1)="+" SUM=$E(SUM,2,$L(SUM)) ;S:SUM<0 SUM=0-SUM
+ .S SUM=$TR(SUM,".",",")
+ .S LOG=$P(L,"|",5),X=$P(L,"|",6),K=$S(X["ZNF":NI_"@"_DT_"@"_TI,1:"")
+ .S K=K_$S(TP>4:"#10",TP>1:"#9",X["ZNF":"#11",$L(X):"#12",OPE="-":"#2",1:"") ; color style
+ .S A=K_"|"_DD_"|"_TXT_"|"_$$FIOSH^NUSER(LOG)_"|"
+ .S A=A_$TR(SUM,".",",")_"|"_$TR($P($G(^BILLI(DT,TI,NI)),"|",1),".",",")
+ .D WC^RWU(CR_A)
+ .Q:X'["ZNF" 
+ .S I=$P(X,"/",1),VR=$P(I,":",2),OT=$P(I,":",3),DTT=$P(I,":",4)
+ .F I=2:1:99 S K=$P(X,"/",I) Q:K=""  D
+ ..D WC^RWU(CR_"|"_$$DT2^DTUTL(DTT)_"|"_$$NAMEH^IPRICE($P(K,":",2),$P(K,":",1),DTT))
+ D C^RWU
+ Q
+kssudg 
+ D WC^RWU("Договор|Номер|Срок с|Срок по|Баланс|Платежи|Услуги|Неподп.|В авансе")
+ N DGL,SSS,D,D1,D2,DE,X1,X2,X3,X4
+ D GETM^IPAC(NI,"stc","DGL")
+ S D1=$$CREATED^IPAC(NI),D=D1-1
+ F  S D=$O(DGL(D)) Q:D=""  D
+ .S D2=$O(DGL(D)),DE=D2 S:DE="" DE=+$H+1 S DE=DE-1
+ .S X1=$$GSUMM^IBILL(NI,D,DE,"+")
+ .S X2=$$GSUMM^IBILL(NI,D,DE,"-")
+ .S X3=$$SUMMUSL^IUSL(NI,D,DE,"",0,"",1,1,"","")
+ .S X4=$$SUMMUSL^IUSL(NI,D,DE,"",0,"",1,1,-2,"")
+ .D WC^RWU(CR_$$GETE^IPAC(NI,"stc",D)_"|"_$$GET^IPAC(NI,"polis",D)_"|"_$$DT^DTUTL(D)_"|"_$$DT^DTUTL(D2)_"|"_(+$J(X1+X2-X3-X4,"",2))_"|"_(+$J(X1+X2,"",2))_"|"_(+$J(X3+X4,"",2))_"|"_(+$J(X4,"",2))_"|"_$$NOW^IBILL(NI,DE))
+ .S SSS(1)=$G(SSS(1))+$J(X1+X2-X3-X4,"",2)
+ .S SSS(2)=$G(SSS(2))+$J(X1+X2,"",2)
+ .S SSS(3)=$G(SSS(3))+$J(X3+X4,"",2)
+ .S SSS(4)=$G(SSS(4))+$J(X4,"",2)
+ S A="" F I=1:1:4 S A=A_"|"_(+$J($G(SSS(I)),"",2))
+ D WC^RWU(CR_"Итого||"_A_"|"_$$NOW^IBILL(NI))
+ D C^RWU
+ Q
+SETKVN(X) ; Установить счетчик квитанций
+ D SET^IINKR("NKSS",+X)
+ Q
+RETRPT(DT,IDK,LINES) ; Возвраты на дату для КМ-3
+ ; LINES - <№док>:<число строк> деление документа по числу строк 
+ N SS,TAB,TM,NI,L,SUM,ID,I,NN,II,CI,Q,CNUM
+ S DT=$$DIH^DTUTL(DT),IDK=$G(IDK),LINES=$G(LINES)
+ S NN=$P(LINES,":",1),LINES=$P(LINES,":",2),CI=(NN-1)*LINES
+ S:IDK="" IDK=$$KKM^IUSER()
+ S I=1,(Q,SS,II)=0,(TAB,TM)=""
+ F  S TM=$O(^BILLI(DT,TM)) Q:TM=""!Q  S NI="" F  S NI=$O(^BILLI(DT,TM,NI)) Q:NI=""!Q  D
+ .S L=$G(^BILL(NI,DT,TM)) Q:L=""
+ .S ID=$P(L,"|",4),SUM=+$P(L,"|",2)
+ .Q:$P(L,"|",3)>4
+ .Q:SUM'<0 
+ .I $L(IDK),$L(ID) Q:ID'=IDK  ; по текущей кассе
+ .Q:$P(L,"|",1)'="-"
+ .S II=II+1
+ .I LINES,II<(CI+1) Q  ; пред. строки
+ .I LINES,II>(CI+LINES) S Q=1 Q 
+ .S CNUM=$P(L,"|",6)
+ .S CNUM=$S($P(CNUM,":",1)="RET":$P(CNUM,":",2),1:"")
+ .S TAB=$S(TAB="":"",1:TAB_CR)_I_"|||"_CNUM_"|"_(-SUM),SS=SS-SUM
+ .S I=I+1
+ I 'II!('SS) D MSG^RWU("") Q ; нет записей
+ S L=+$$^I("ilpu")
+ D OWF^RWU(".xml")
+ D W^RWU(^PP(0,1)_"<streport><data>")
+ D WTAGC^RWU("summ",SS)
+ D WTAGC^RWU("dgendir",$$GET^ICONTR(L,"doljr",DT))
+ D WTAGC^RWU("num",1) ; TODO - NN - ?
+ D WTAGC^RWU("dt",$$DT^DTUTL(DT))
+ D WTAGC^RWU("textdt",$$UL^TXTU($$DTEXT^DTUTL(DT)))
+ D WTAGC^RWU("tab",TAB)
+ D W^RWU("</data></streport>")
+ D C^RWU
+ Q

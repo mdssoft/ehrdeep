@@ -1,0 +1,729 @@
+NEDE ; Ввод единого документа [ 09/30/2022  1:48 AM ]
+INIT ;
+ N R
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<usled>")
+ S R=$$LCL^IUSER("ed","ulang")
+ D:R'="" W^RWU("<usl lang="""_R_"""/>")
+ D WTAGD^RWU("otdmode",+$$C^I("ed","otdcmode"))
+ D W^RWU("</usled></nb_console>"),C^RWU
+ Q
+CHKOTD(OT) ; Проверка отделения и отображение полей
+ Q:OT="" 
+ N V,R
+ S R=$$GETPL^ISPRAV("otd",OT,"flg"),V="yes"
+ S:R["diag"!(R["treat") V="no"
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<usled>")
+ D W^RWU("<diagr visible="""_V_"""/>")
+ D W^RWU("<goal visible="""_V_"""/>")
+ D W^RWU("<res visible="""_V_"""/>")
+ D W^RWU("<inflg visible="""_V_"""/>")
+ D W^RWU("</usled></nb_console>"),C^RWU 
+ Q
+ULST(NIB,STR,OT) ; Расшифровка услуг
+ S STR=$TR(STR,"\,; ","///")
+ N I,R,U,V,A,nc,cpr
+ S A="",V=+$$PRC^IINSC($$GET^IPAC(NIB,"stc",+$H),NIB,+$H)
+ S nc='$$C^I("ed","no-cna"),OT=$G(OT)
+ S cpr=$$C^I("ed","cna-prio")
+ F I=1:1 S U=$P($P(STR,"/",I),"*",1) Q:U=""  D
+ .I U'="",nc,'$D(^CN(U))!cpr,$D(^CNA(U)) S U=$P(^(U),"|",1)
+ .I U'="",OT'="",nc,'$D(^CN(U))!cpr,$D(^CNAO(OT,U)) S U=$P(^(U),"|",1)
+ .Q:'$$CHECK^IPRICE(U,V)
+ .S A=$S(A="":"",1:A_CR)_U_" "_$$NAME^IPRICE(U,V)
+ D MSG^RWU(A)
+ Q
+RTAB(OT,VR,DT,MSX) ; View table
+ ; OT - отделение
+ ; VR - врач
+ ; DT - дата
+ ; MSX - выбранная медсестра
+ N A,UX,ID,NI,DIA,UL,FLG,PRC,COMM,TF,TFL,TP,TH,TO,MS,C,I,H,SP,SuM,Idx,fm
+ N ITS,ITER,ITSB,ITE,AC,SUMM,ACN
+ S ITS="<item",ITER=" class=""1"">",ITSB=" class=""4"">",ITE="</item>"
+ S DT=$$DIH^DTUTL(DT),SUMM=0
+ S SP=$$GET^IKADRY(VR,"spec",+$H),TF=$$STOM^IEDE(OT,SP),MSX=$G(MSX)
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<usled>")
+ D:$$C^I("ed","edit-msp") W^RWU("<msp visible=""yes""/>")
+ D VIS^INBU("nzub",TF)
+ D VIS^INBU("nzub_label",TF)
+ I OT=999!(OT="") S TP=$O(^ZNF(VR,"")),TH=$O(^ZNF(VR,""),-1) I $L(TP),TP=TH S OT=TP D WTAGDC^RWU("otd",OT)
+ S TP=$$LASTCNG^IEDE(VR,DT,OT)
+ S TH=$$GETDA^IUSL(VR,DT,OT)
+ S A=$S(TP'="":"Изменено: "_$$DTM^DTUTL($P(TP,"|",3))_", "_$$FIOSH^IKADRY($P(TP,"|",2)),1:"")
+ S:A'=""&(TH'="") A=A_"; "
+ S:TH'="" A=A_"Подтверждено: "_$$DTM^DTUTL($P(TH,"@",1))_", "_$$FIOSH^IKADRY($$UKDR^IUSER($P(TH,"@",2,3)))
+ D WTAGDC^RWU("clog",A)
+ D GETHDR^IUSL(VR,DT,OT)
+ S MS=$S(MSX="":$G(MS),1:MSX)
+ D WTAGDC^RWU("ms",MS)
+ D WTAGDC^RWU("msi",MS)
+ D WTAGDC^RWU("ms_fio",$S(MS'="":$$FIOSH^IKADRY(MS),1:""))
+ D WTAGDC^RWU("msp",$G(MSP))
+ D WTAGDC^RWU("time1",$$TM^DTUTL($G(TP)))
+ D WTAGDC^RWU("time2",$$TM^DTUTL($G(TH)))
+ D WTAGDC^RWU("time3",$$TM^DTUTL($G(TO)))
+ 
+ D FLGLST^YIMHS(VR,OT,SP,"TFL",1,$$LCL^IUSER("ed","ed-all-flg"))
+ S (A,I)=""
+ F  S I=$O(TFL(I)) Q:I=""  S A=A_$S(A="":A,1:CR)_I_"|"_TFL(I) 
+ D WTAGUC^RWU("flg",A)
+ 
+ S fm=+$$C^I("ed","ed-nme-flg") S:fm=1 fm=2
+ D FLGLST^YIMHS(VR,OT,SP,"TFL",fm)
+ S I="",C=0 F  S I=$O(TFL(I)) Q:I=""  S C=C+1
+ S H(1)="Диагноз:1550"
+ S H(2)=";Услуга:2200;Кол-во:450;Сумма:500;"_$S(TF:"№ зуба:500;",1:"")_"Примечание:"_$S(TF:9,1:14)_"00"">"
+ G:'C rtab1
+ S A=$S(fm=2:1650,1:3050)/C
+ S:A<380 H(1)="Диагноз:1350",H(2)=";Услуга:2000;Кол-во:450;Сумма:500;"_$S(TF:"№ зуба:500;",1:"")_"Примечание:"_$S(TF:60,1:110)_"0"">",A=$S(fm=2:2350,1:3750)/C
+ S I="",H="",A=+$J(A,"",0)
+ F  S I=$O(TFL(I)) Q:I=""  S H=H_";"_TFL(I)_":"_A
+rtab1 
+ D WC^RWU("<table default=""№ И.Б.:550;"_$S(fm=2:"Ф.И.О.:1400;",1:"")_H(1)_H_H(2))
+ D W^RWU("<titles>"),WTAG^RWU("key","")
+ D WTAGC^RWU("item","N И.Б."),W^RWU("</titles>")
+ K H G:$D(^ZNF(VR,OT,DT))=0 TABEND
+ S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ .D GET^IUSL(VR,DT,OT,ID)
+ .S A="<row>"_"<key>"_ID_"</key>",TP=ITS_">"
+ .S A=A_ITS_$S($D(ERR("NI"))!($G(NI)=""):ITER,($G(STAT)?1N)=1:ITSB,1:">")_$G(NI)_ITE
+ .S:fm=2 A=A_ITS_$S($D(ERR("NI")):ITER,($G(STAT)?1N)=1:ITSB,1:">")_$$FIOSH^IPAC(NI)_ITE
+ .S A=A_ITS_$S($D(ERR("DIA")):ITER,1:">")_$E($$NAME^YMKB10(DIA),1,64)_ITE
+ .S FLG="|"_FLG_"|",I=""
+ .F  S I=$O(TFL(I)) Q:I=""  S A=A_TP_$S(FLG[("|"_I_"|"):"+",1:"")_ITE
+ .S AC=$S(TF:TP_$G(^ZNF(VR,OT,DT,ID,"nz"))_ITE,1:"")_TP_COMM_ITE
+ .S Idx=2,SuM=$$GETPL^IUSL(VR,DT,OT,ID,"s"),ACN=0
+ .I STAT="w",$$ISPL^IUSL(VR,DT,OT,ID,"mt") S ACN=ACN+$$CENNALL^IWRHS($$GETPL^IUSL(VR,DT,OT,ID,"mt"),DT)
+ .S UX=$O(UL("")) F  D  S UX=$O(UL(UX)) Q:UX=""
+ ..S (CNT,CEN)=""
+ ..S:$L(UX) CNT=UL(UX),SUM=$S(SuM["|":$P(SuM,"|",Idx),$L(SuM):SuM,1:$$USUM^IUSL(DT,UX,CNT)),CEN=ACN+SUM,SUMM=SUMM+CEN
+ ..S H=A_ITS_$S(UX="":">",$D(ERR("USL",UX))=1:ITER,1:">")_UX
+ ..S H=H_" "_$$TAG^TXTU($$NAMEH^IPRICE(UX,PRC,DT))_ITE_ITS_">"_CNT_ITE_ITS_">"
+ ..D WC^RWU(H_CEN_ITE_AC_"</row>"_CR)
+TABEND D W^RWU("</table>")
+ D WTAGD^RWU("summ",SUMM)
+ D W^RWU("</usled></nb_console>")
+ D C^RWU
+ Q
+SETTM(OT,VR,MS,DT,TM1,TM2,TM3,MSP) ; set time
+ S DT=$$DIH^DTUTL(DT),MSP=$G(MSP)
+ S:TM1=":"!(TM1="00:00") TM1="" S:TM1'="" TM1=$$TI^DTUTL(TM1)
+ S:TM2=":"!(TM2="00:00") TM2="" S:TM2'="" TM2=$$TI^DTUTL(TM2)
+ S:TM3=":"!(TM3="00:00") TM3="" S:TM3'="" TM3=$$TI^DTUTL(TM3)
+ S:$$LCL^IUSER("ed","mmss") (MS,MSP)=""
+ D:'$$HDR^IUSL(VR,DT,OT,MS,TM1,TM2,TM3,MSP) MSG^RWU("Невозможно установить время работы.")
+ Q
+SETDA(OT,VR,DT) ; Установить статус "подтвержден"
+ S DT=$$DIH^DTUTL(DT)
+ D SETDA^IUSL(VR,DT,OT)
+ Q
+preXML 
+ D RBUFH^YIXMLRR(1)
+ F A="time1","time2","time3" S R=$G(XML(NB,FM,A)) K:R=":"!(R="00:00") XML(NB,FM,A)
+ 
+ S VR=$G(XML(NB,FM,"vr"))
+ S OT=$G(XML(NB,FM,"otd"))
+ S SP=$$GET^IKADRY(VR,"spec",+$H)
+ S DT=$$DI^DTUTL($G(XML(NB,FM,"dt")))
+ Q
+S ; Save data
+ N @$$NEWVAR^IUSL
+ N %J,R,A,VR,OT,SP,DT,NIB,CNT,X,F,SKD,KV,NZ,NB,FM,OK,FT,DGN,PRC,KSS,P,VID,NV,NVI,nc,cpr,LPU,DGN,ISTC,SK1,CLS
+ S NB="nb_console",FM="usled",(NV,NVI)=""
+ D preXML
+ I '$$CHECK^IKADRY(VR) D MSG^RWU("Ошибка в коде врача") Q 
+ I '$$CHECK^ISPRAV("otd",OT) D MSG^RWU("Ошибка в выборе отделения") Q 
+ S LPU=$$^I("ilpu")
+ F R=1,2,3 S XML(NB,FM,"time"_R)=$$TI^DTUTL($G(XML(NB,FM,"time"_R)))
+ D GETHDR^IUSL(VR,DT,OT)
+ S FT=$S(XML(NB,FM,"time1")'=$G(TP):1,XML(NB,FM,"time2")'=$G(TH):1,XML(NB,FM,"time3")'=$G(TO):1,$G(XML(NB,FM,"ms")):1,1:0)
+ 
+ S OK=$G(XML(NB,FM,"ok"))
+ S NIB=$G(XML(NB,FM,"pac"))
+ S nc='$$C^I("ed","no-cna")
+ S cpr=$$C^I("ed","cna-prio")
+ S USL=$$LU^TXTU($TR($G(XML(NB,FM,"usl")),"\,; ","///"))
+ I USL'="",nc,'$D(^CN(USL))!cpr,$D(^CNA(USL)) S USL=$P(^(USL),"|",1)
+ I USL'="",OT'="",nc,'$D(^CN(USL))!cpr,$D(^CNAO(OT,USL)) S USL=$P(^(USL),"|",1)
+ S CNT=$G(XML(NB,FM,"cnt"))
+ S DIA=$G(XML(NB,FM,"diag"))
+ S FLG=$G(XML(NB,FM,"flg"))
+ S COMM=$G(XML(NB,FM,"comment"))
+ S KV=$G(XML(NB,FM,"kv"))
+ S NZ=$$RECODE^ISTOM($G(XML(NB,FM,"nzub")))
+ S:USL=0 USL=""
+ S SP=$$SPbyOTD^IKADRY(VR,OT,DT)
+ S DGN=$G(XML(NB,FM,"stc")),ISTC=DGN
+ S:DGN="" DGN=$$GET^IPAC(NIB,"stc",DT)
+ I 'OK,$$LCL^IUSER("ed","chkadbl"),$$CNTUDT^IUSL(NIB,DT,DT,USL,+$$C1^I("allow-vusl")) D MSG("?Указанная услуга уже была оказана сегодня пациенту, продолжить ?") Q 
+ 
+ K:$$LCL^IUSER("ed","mmss") XML(NB,FM,"ms"),XML(NB,FM,"msp")
+ S:FT A=$$HDR^IUSL(VR,DT,OT,$G(XML(NB,FM,"ms")),XML(NB,FM,"time1"),XML(NB,FM,"time2"),XML(NB,FM,"time3"),$G(XML(NB,FM,"msp")))
+ 
+ S KSS=$$FLinFL^TXTU(FLG,"kss"),PRC=""
+ S VID=$$GET^IINSC(DGN,"dvid",DT)
+ I $$USE^IGRNL(NIB,DT,OT,SP,DIA,USL) S:$$FLinFL^TXTU(FLG,"grn") FLG=$$STFLG^TXTU(FLG,"grn"),KSS=0
+ 
+ S:$$STOM^IEDE(OT,SP) PRC=$$GET^IINSC(DGN,"sprice",DT)
+ S:PRC="" PRC=$$PRC^IINSC(DGN,NIB,DT,KSS)
+ S P=PRC,P=$$CORCP^IPRICET(P)
+ 
+ S A=$$C1^I("ed-price-flt")
+ I A'=""!$$LCL^IUSER("ed","strictso"),'$$CHKIH^IPRICE(USL,P,DT,OT,SP,VR,LPU) D MSG("Услуга не может быть оказана данным врачом") Q 
+ 
+ ; Подходящие направления
+ S NV=$$FUSNAZ^INAZN(NIB,USL,SP,1,DT-30) ; за посл 30 дней
+ S:NV'="" NVI=$P(NV,"|",2),NV=$P(NV,"|",1)
+ 
+ S CLS=$$GET^IPRICE(USL,"cls",P,DT)
+ I $$FLinFL^TXTU(CLS,"stms"),$$LASTMS^IUSL(VR,DT,OT,LPU)="" D MSG("Эта услуга выполняется с медсестрой.") Q 
+ 
+ S X=$$GET^IPRICE(USL,"dsex",P,DT)
+ I X'="",$$GET^IPAC(NIB,"pol",DT)'=X D MSG("Вод услуги для данного пола невозможен") Q 
+ 
+ D DO^ITRIG("usl","add")
+ I USL["/" S CNT=""
+ E  S CNT=+$TR(CNT,",",".") S:CNT=0 CNT=1
+ D pre(VR,P,DT)
+ Q:$$IsMSG^RWU() 
+ S SKD=$$CALC^IDSCN(NIB,OT,USL,DGN,P,CNT,LPU)
+ ; скидка по договору
+ I SKD="",'KSS,VID'=3 S SKD=$$CALCID^IDSCN($$GET^IINSC(DGN,"skd",DT),OT,USL,DGN,P,CNT) ; TODO
+ I KSS!(VID=3) S SK1=$$CALCID^IDSCN($$GET^IINSC(DGN,"cskd",DT),OT,USL,DGN,P,CNT) S:SK1'="" SKD=SK1
+ S:SKD=0 SKD=""
+ D:SKD
+ .S X='+$$LCL^IUSER("ed","anyskd")
+ .I X,+SKD>100 S:$$GET^IPRICE(USL,"nosn",P,DT) SKD=""
+ .I X,+SKD>0,SKD'>100 S:$$GET^IPRICE(USL,"nosp",P,DT) SKD=""
+ S A=$$ADD^IUSL(VR,DT,OT,NIB,USL_$S(CNT'=1:"*"_CNT,1:""),DIA,FLG,COMM,PRC,SKD,SP,ISTC)
+ S X=$$SETSTAT^IUSL(VR,DT,OT,A,"w")
+ S:KV'="" X=$$SETPL^IUSL(VR,DT,OT,A,"kv",KV)
+ S:NZ'="" X=$$SETPL^IUSL(VR,DT,OT,A,"nz",NZ) ; N зуба
+ S:NV'="" X=$$SETPL^IUSL(VR,DT,OT,A,"f",NV),X=$$SETPL^IUSL(VR,DT,OT,A,"fex",NV_"@"_NVI)
+ S R=""
+ S X=$$NNUM^TXTU($G(XML(NB,FM,"goal"))) S:X>4 X="" ; посещ.
+ S $P(R,"|",1)=X
+ S X=$$NNUM^TXTU($G(XML(NB,FM,"res")))
+ S $P(R,"|",3)=X
+ S X=$$SETPL^IUSL(VR,DT,OT,A,"tl",R)
+ D RTAB(OT,VR,$$DT^DTUTL(DT))
+ Q
+RE ; Изменить существующую услугу
+ N @$$NEWVAR^IUSL
+ N %J,R,A,VR,OT,SP,DT,NIB,CNT,X,SKD,ID,Z,KV,NZ,PVR,PDT,POT,PID,NB,FM,DG
+ S NB="nb_console",FM="usled"
+ D preXML
+ D GETHDR^IUSL(VR,DT,OT)
+ S PVR=VR,PDT=DT,POT=OT,R=0
+ S:$$TI^DTUTL($G(XML(NB,FM,"time1")))'=$G(TP) R=1
+ S:$$TI^DTUTL($G(XML(NB,FM,"time2")))'=$G(TH) R=1
+ S:$$TI^DTUTL($G(XML(NB,FM,"time3")))'=$G(TO) R=1
+ S:$G(XML(NB,FM,"ms"))'=$G(MS) R=1
+ K:$$LCL^IUSER("ed","mmss") XML(NB,FM,"ms"),XML(NB,FM,"msp")
+ S:R A=$$HDR^IUSL(VR,DT,OT,$G(XML(NB,FM,"ms")),$$TI^DTUTL($G(XML(NB,FM,"time1"))),$$TI^DTUTL($G(XML(NB,FM,"time2"))),$$TI^DTUTL($G(XML(NB,FM,"time3"))),$G(XML(NB,FM,"msp")))
+ 
+ S ID=$G(XML(NB,FM,"id")) Q:ID="" 
+ I $$C^I("ed","no-cst"),$$GETSTAT^IUSL(PVR,PDT,POT,ID)=3 D MSG^RWU("Услуга выставлена в счете, изменение запрещено.") Q 
+ S R=$G(XML(NB,FM,"old")),Z=0
+ S PVR=$P(R,"|",1) S:VR'=PVR Z=2
+ S PDT=$P(R,"|",2) S:DT'=PDT Z=2
+ S POT=$P(R,"|",3) S:OT'=POT Z=2
+ 
+ D GET^IUSL(PVR,PDT,POT,ID,1) ; No Error handling
+ S USL=$G(USL),DIA=$G(DIA),FLG=$G(FLG),COMM=$G(COMM),SKID=$G(SKID)
+ S SP=$G(SP),PRC=$G(PRC)
+ S R=$G(XML(NB,FM,"pac"))
+ I $G(NI)'=R S NI=R S:'Z Z=1
+ S R=$G(XML(NB,FM,"flg")),R=$$reFLG(FLG,R)
+ I R'=FLG S FLG=R S:'Z Z=1
+ S R=$G(XML(NB,FM,"diag")) I DIA'=R S DIA=R S:'Z Z=1
+ S R=$$LU^TXTU($TR($G(XML(NB,FM,"usl")),"\,; ","///"))
+ S:R=0 R=""
+ S CNT=+$TR($G(XML(NB,FM,"cnt")),",",".")
+ I USL'["/" S:CNT=0 CNT=1 S CNT=$S(CNT'=1:"*"_CNT,1:""),R=R_CNT
+ I USL'=R S USL=R S:'Z Z=1
+ S R=$G(XML(NB,FM,"comment")) I COMM'=R S COMM=R S:'Z Z=1
+ 
+ S STAT=$G(STAT) S:STAT="" STAT="w"
+ S:SKID'="" SKID=100-SKID
+ S DG=$G(ISTC)
+ S:DG="" DG=$$GETTZ^YIPACN(NI,$G(TZRBTN("stc")),DT)
+ S:$$GET^IINSC(DG,"price",DT)=PRC PRC=""
+ 
+ D DO^ITRIG("usl","save")
+ D:Z=2 ; TODO - изменение индексов в BILL,NAZ и т.п.
+ .S PID=ID
+ .S ID=$$ADD^IUSL(VR,DT,OT,$G(NI),USL,DIA,FLG,COMM,PRC,SKID,SP,$G(ISTC))
+ .D CPYPL^IUSL(PVR,PDT,POT,ID,VR,DT,OT,ID)
+ .S A=$$CLR^IUSL(PVR,PDT,POT,ID) 
+ S:Z=1 A=$$SET^IUSL(VR,DT,OT,ID,$G(NI),USL,DIA,FLG,COMM,PRC,SKID,SP,$G(ISTC))
+ S R=$$SETSTAT^IUSL(VR,DT,OT,ID,STAT)
+ S KV=$G(XML(NB,FM,"kv"))
+ S:$$GETPL^IUSL(VR,DT,OT,ID,"kv")'=KV R=$$SETPL^IUSL(VR,DT,OT,ID,"kv",KV) ; квитанция
+ S NZ=$G(XML(NB,FM,"nzub"))
+ S:$$GETPL^IUSL(VR,DT,OT,ID,"nz")'=NZ R=$$SETPL^IUSL(VR,DT,OT,ID,"nz",NZ) ; N зуба
+ S R=""
+ S X=$$NNUM^TXTU($G(XML(NB,FM,"goal"))) S:X>4 X="" ; посещ.
+ S $P(R,"|",1)=X
+ S X=$$NNUM^TXTU($G(XML(NB,FM,"res")))
+ S $P(R,"|",3)=X
+ S X=$$SETPL^IUSL(VR,DT,OT,ID,"tl",R)
+ D RTAB(OT,VR,$$DT^DTUTL(DT))
+ Q
+pre(VR,P,DT) ; Preprocess
+ N X,VU
+ S VU=+$$C1^I("allow-vusl")
+ 
+ S X=$$LCL^IUSER("ed","cntround")
+ S CNT=$TR(CNT,", ",".") S:'CNT CNT=1 S:X'="" CNT=+$J(CNT,"",X)
+ 
+ S X=$$GET^IPRICE(USL,"cnt",P,DT)
+ I $L(X),$S($$LCL^IUSER("ed","allmaxusl"):X<(CNT+$$CNTUVR^IUSL(NIB,VR,DT,USL,VU)),1:X<CNT) D MSG("Превышено максимально допустимое количество по данной услуге.") Q
+ 
+ S X=$$GET^IPRICE(USL,"mincnt",P,DT)
+ I X'="",CNT<X D MSG("Минимальное количество по услуге составляет "_X) Q 
+ Q
+reFLG(X,nX) ; Проверить флаги по услугам
+ I '$L(X) Q nX
+ N I,K,F S K=""
+ F I=1:1:$L(X,"|") S F=$P(X,"|",I) S:'$D(^EPRSP("flg",F)) K=$S(K="":"",1:K_"|")_F
+ Q $$STFLGS^TXTU(nX,K)
+SEL(OT,VR,DT,ID) ; Load data from table
+ N A,UX,UNL,MS,C,I,H,SP,X,@$$NEWVAR^IUSL
+ S DT=$$DIH^DTUTL(DT)
+ Q:'$D(^ZNF(VR,OT,DT,ID)) 
+ D GET^IUSL(VR,DT,OT,ID)
+ D OWF^RWU(".xmlb")
+ D W^RWU($G(^PP(0,2))_"<usled>")
+ D WTAGD^RWU("pac",$G(NI))
+ D WTAGDC^RWU("pac_label",$$FIOSH^YIPACN($G(NI)))
+ D WTAGD^RWU("stc",$G(ISTC))
+ D WTAGD^RWU("diag",$G(DIA))
+ D WTAGDC^RWU("diag_res",$$NAME^YMKB10($G(DIA)))
+ D WC^RWU("<flg state="""_$G(FLG)_"""/>")
+ D WTAGDC^RWU("comment",$G(COMM))
+ S (I,A,UNL)="",C=0
+ F  S I=$O(UL(I)) Q:I=""  S C=C+1,A=A_$S(A="":"",1:"/")_I_$S(UL(I)>1:"*"_UL(I),1:""),UNL=UNL_$S(UNL="":"",1:CR)_I_" "_$$NAMEH^IPRICE(I,PRC,DT)
+ S:C=1 A=$P(A,"*",1)
+ D WTAGDC^RWU("usl",A)
+ D WTAGC^RWU("usllst",UNL)
+ D WTAGD^RWU("cnt",$S(C'=1:"",A="":"",1:$G(UL(A))))
+ D WTAGD^RWU("nzub",$$GETPL^IUSL(VR,DT,OT,ID,"nz"))
+ D WTAGD^RWU("kv",$$GETPL^IUSL(VR,DT,OT,ID,"kv"))
+ D WTAGD^RWU("old",VR_"|"_DT_"|"_OT)
+ D WTAGD^RWU("stc",$G(ISTC))
+ S X=$$GETPL^IUSL(VR,DT,OT,ID,"tl")
+ D WTAGD^RWU("goal",$P(X,"|",1))
+ D WTAGD^RWU("res",$P(X,"|",3))
+ D W^RWU("</usled></nb_console>")
+ D C^RWU
+ Q
+DELCHK(OT,VR,DT,ID) ; Check prev. delete
+ N AD,A
+ S DT=$$DIH^DTUTL(DT),AD=""
+ S:$D(^LOG(%LOG,"lcl","ed")) A=+^("ed"),AD=+$G(^LCL("ed",A,"kssdel"))
+ I 'AD,$$GETSTAT^IUSL(VR,DT,OT,ID)="2" D MSG^RWU("Эта услуга является кассовой.") Q 
+ I 'AD,$$GETPL^IUSL(VR,DT,OT,ID,"kv")'="" D MSG^RWU("Эта услуга проведена по кассе.") Q 
+ Q
+DEL(OT,VR,DT,ID) ; Delete selected record
+ N AD,A,ST
+ S DT=$$DIH^DTUTL(DT),AD=0
+ S:$D(^LOG(%LOG,"lcl","ed")) A=+^("ed"),AD=+$G(^LCL("ed",A,"kssdel"))
+ S ST=$$GETSTAT^IUSL(VR,DT,OT,ID)
+ I 'AD,ST="2" D MSG^RWU("Эта услуга является кассовой."_CR_"Удаление невозможно.") Q
+ I 'AD,$$GETPL^IUSL(VR,DT,OT,ID,"kv")'="" D MSG^RWU("Эта услуга проведена по кассе."_CR_"Удаление невозможно.") Q
+ I $$C^I("ed","no-cst"),ST=3 D MSG^RWU("Услуга выставлена в счете, изменение запрещено.") Q 
+ D RETUSL^YNED(VR,OT,$$SPEC^IKADRY(VR),DT,ID)
+ Q:$$IsMSG^RWU()  
+ D RTAB(OT,VR,$$DT^DTUTL(DT))
+ Q
+PREVDT(OT,VR,DT) 
+ I VR=""!(OT="") D MSG^RWU(DT) Q 
+ S DT=$$DIH^DTUTL(DT)
+ S DT=$O(^ZNF(VR,OT,DT),-1) Q:DT="" 
+ D MSG^RWU($$DT^DTUTL(DT))
+ Q
+NEXTDT(OT,VR,DT) 
+ I VR=""!(OT="") D MSG^RWU(DT) Q 
+ S DT=$$DIH^DTUTL(DT)
+ S DT=$O(^ZNF(VR,OT,DT)) Q:DT="" 
+ D MSG^RWU($$DT^DTUTL(DT))
+ Q
+SBS(OT,VR,DT) ; Subscribe
+ D SBSLT(OT,VR,DT)
+ Q:$$IsMSG^RWU() 
+ D CLRMSG^RWU()
+ D RTAB(OT,VR,DT)
+ Q
+SBSLT(OT,VR,DT) ; Subscribe, w.o. draw table
+ N PL,ID,R,RE,DTT
+ S DTT=DT,DT=$$DIH^DTUTL(DT)
+ S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ .S R=$P($G(^(ID,"e")),"~",1) Q:R'="w"  
+ .S R=$P($G(^("e")),"~",2) Q:R=""  ; NIB
+ .S PL(R)=""
+ S (ID,RE)="",R=+$$C1^I("credit")
+ F  S ID=$O(PL(ID)) Q:ID=""  D
+ .D CLRMSG^RWU()
+ .D SBSYS^YNED(ID,VR,OT,DTT,R)
+ .I $$IsMSG^RWU() S RE=$S(RE="":"",1:RE_CR)_"И.б. "_ID_" - "_$$WD^TXTU($$GETMSG^RWU())
+ Q:RE=""  
+ D MSG^RWU(RE)
+ Q
+SBSLTID(OT,VR,DT,ID) ; Subscribe, w.o. draw table
+ N PL,R,RE,DTT,A,NI
+ S DTT=DT,DT=$$DIH^DTUTL(DT),RE="",R=+$$C^I("credit")
+ S NI=$$GETNIB^IUSL(VR,DT,OT,ID)
+ D SBSYS^YNED(NI,VR,OT,DTT,R,,ID)
+ I $$IsMSG^RWU() S RE=$S(RE="":"",1:RE_CR)_"И.б. "_NI_" - "_$$WD^TXTU($$GETMSG^RWU())
+ D MSG^RWU(RE)
+ Q
+DED(VR,OTD,DT) ; Удаление всего документа
+ Q
+DEDID(VR,OTD,SP,DT,ID) ; Удаление услуги из документа
+ N NI,D
+ S D=$$DI^DTUTL(DT)
+ S NI=$$GETNIB^IUSL(VR,D,OTD,ID)
+ I $$C^I("ed","no-cst"),$$GETSTAT^IUSL(VR,D,OTD,ID)=3 D MSG^RWU("Услуга выставлена в счете, изменение запрещено.") Q  
+ D DH^YNED(VR,OTD,SP,DT,NI,ID,1)
+ Q:$$IsMSG^RWU()  
+ D LED^YNED(VR,OTD,DT,SP)
+ Q
+PED(VR,OTD,DT) ; Документ отпечатан
+ S DT=$$DIH^DTUTL(DT)
+ Q
+SSTAT(OT,VR,DT,ID,TP) ; Изменить статус услуги
+ N P
+ S DT=$$DIH^DTUTL(DT),P=$$GETSTAT^IUSL(VR,DT,OT,ID)
+ I P=2 D MSG^RWU("Услуга является кассовой, изменение запрещено.") Q 
+ I $$C^I("ed","no-cst"),P=3 D MSG^RWU("Услуга выставлена в счете, изменение запрещено.") Q 
+ S X=$$SETSTAT^IUSL(VR,DT,OT,ID,$S(TP=1:0,TP=2:"d",TP=3:"w",1:4))
+ D RTAB(OT,VR,$$DT^DTUTL(DT))
+ Q
+SDGN(OT,VR,DT,ID,DGN) ; Изменить договор
+ N KEY
+ S DT=$$DIH^DTUTL(DT),KEY=VR_"@"_DT_"@"_OT_"@"_ID
+ I $$C^I("ed","no-cst"),$$GETSTAT^IUSL(VR,DT,OT,ID)=3 D MSG^RWU("Услуга выставлена в счете, изменение запрещено.") Q 
+ D UDGN^NPACADM("",KEY,DGN,1)
+ D RTAB(OT,VR,$$DT^DTUTL(DT))
+ Q
+RETUSL(VR,OT,SP,DT,IDX,NRM) ; Чистить/корректировать финансовую транзакцию
+ N RCL S RCL=2
+ G RETsys^YNED
+MSLIST(OT,VR,SP,DT,NSEL) ; Список медсестер для ввода
+ ; NSEL - строка "без выбора"
+ S DT=$$DIH^DTUTL($G(DT))
+ N TN,SPI,FF,LPU,C,R,L,OF,A
+ D C1M^I("ms-id","SPI") ; коды специальностей медсестер
+ S LPU=$$^I("ilpu")
+ S FF=$S(+$$C1^I("sl-kadry-only"):2,1:+$$C1^I("sl-kadry"))
+ S:'FF FF=$$LCL^IUSER("kadry","clpu")
+ S OF=+$$C^I("ed","ms-otflt")
+ S (C,TN)="" F  S TN=$O(^KDR(TN)) Q:TN=""  D
+ .Q:$$GET^IKADRY(TN,"ofor",DT)=0 
+ .I FF,'$$IsLPU^IKADRY(TN,LPU,DT,$S(FF=2:1,1:0)) Q 
+ .I $D(SPI),'$$IsSPECL^IKADRY(TN,"SPI",DT) Q 
+ .I '$D(SPI),'$$IsMED^IKADRY(TN) Q 
+ .I OF,'$$IsOTD^IKADRY(TN,OT) Q 
+ .S R=$$FIO^IKADRY(TN) Q:R=""  S L(R)=TN
+ S A=""
+ S FF=$$LCL^IUSER("ed","chkms"),NSEL=+$G(NSEL)
+ S:NSEL&(FF=1) A="|Без медсестры",C=CR
+ S R="" F  S R=$O(L(R)) Q:R=""  S A=$S(A="":"",1:A_C)_L(R)_"|"_R,C=CR
+ S:NSEL&((FF=2)!(FF=4)) A=$S(A="":"",1:A_C)_"|Без медсестры"
+ D MSG^RWU(A)
+ Q
+MSSET(OT,VR,SP,DT,iMS) ; Выбор медсестры, работающей с врачем
+ S DT=$$DIH^DTUTL($G(DT)),iMS=$G(iMS)
+ N MM,R,I,X,MS,TP,TH,TO,MSP,TMS,TME,SUB,L
+ S MM=+$$LCL^IUSER("ed","mmss")
+ D GETHDR^IUSL(VR,DT,OT)
+ I 'MM,'$$HDR^IUSL(VR,DT,OT,iMS,$G(TP),$G(TH),$G(TO),$G(MSP)) D MSG^RWU("Невозможно установить время работы.") Q 
+ S R=$$GETHMSL^IEDE(VR,DT,OT,iMS)
+ I $P(R,":",2)'="" Q  ; есть м.с. и время установлено
+ S L=$$^I("ilpu")
+ S TMS=$$VRTMS^IRASP2(+L,VR,DT)
+ S:'TMS TMS=+$$C^I("lpu","work-start")
+ S:'TMS TMS=28800 ; 08:00
+ S TME=$$VRTME^IRASP2(+L,VR,DT)
+ S:'TME TME=+$$C^I("lpu","work-end")
+ S:'TME TME=72000 ; 20:00
+ S:+$H>TME TME=+$H
+ S X=TME-TMS S:X<0 X=0
+ D SETHMST^IUSL(VR,DT,OT,iMS,X)
+ D COTD^YCHIFR(VR,OT)
+ Q
+VRMSLST(DT) ; Список - медсестра-врачи
+ N VR,LP,LST,R,I,X,MS,ID,L,oTM
+ S DT=$$DIH^DTUTL(DT),LP=+$$^I("ilpu")
+ S oTM=$$C^I("ed","ms-onetm")
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .I LP,'$D(^ZNFI("l",LP,VR)) Q 
+ .Q:'$$USEInLPU^IKADRY(VR,LP,DT) 
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D:$D(^(OT,DT))
+ ..S R=$G(^(DT)) Q:R=""
+ ..S X=$P(R,"|",1)
+ ..I X'="",$P(R,"|",6)="" S LST(X,VR_"@"_OT)=$P(R,"|",2)_":"_$P(R,"|",5) Q
+ ..Q:oTM 
+ ..S R=$P(R,"|",6) Q:R=""
+ ..F I=1:1:$L(R,";") S X=$P(R,";",I),MS=$P(X,":",1),L=$P(X,":",4) I MS'="",L=LP!(L="") S LST(MS,VR_"@"_OT)=$P(X,":",2,3)
+ D OWF^RWU(".txt")
+ D WC^RWU(DT_"|Медсестра|Врач|Часов|Ставок")
+ S (R,MS)="" F  S MS=$O(LST(MS)) Q:MS=""  S ID="",R=$$FIO^IKADRY(MS) F  S ID=$O(LST(MS,ID)) Q:ID=""  D
+ .S X=LST(MS,ID),I=+$P(X,":",2),VR=$P(ID,"@",1)
+ .D WC^RWU(CR_MS_"@"_ID_"|"_R_"|"_$$FIO^IKADRY(VR)_"|"_$$TM^DTUTL($P(X,":",1))_"|"_$S('I:0,1:$TR(+$J(I/100,"",2),".",",")))
+ D C^RWU
+ Q
+SVMSLST ; Сохранить список медсестра-врачи
+ N K,DT,%J,A,VR,MS,LST,X,T,TM,F,LP,ER,MSL,XL,oTM
+ D ORH^RWU
+ S DT="",LP=+$$^I("ilpu")
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D
+ .I %J=1 S DT=$P(A,"|",1) Q 
+ .Q:DT="" 
+ .S K=$P(A,"|",1) Q:K=""
+ .S X=(100*$TR($P(A,"|",5),",",".")) 
+ .S TM=$P(A,"|",4) S:TM?1.N TM=TM_":00"
+ .S TM=$$TI^DTUTL(TM),VR=$P(K,"@",2)
+ .S:$P(K,"@",3)="" $P(K,"@",3)=$$OTD^IKADRY(VR)
+ .S A=TM_$S(X:":"_X,1:"") Q:A=""  S LST($P(K,"@",2,3),$P(K,"@",1))=A
+ .I LP,'$D(^ZNFI("l",LP,VR,DT)) S ^(DT)="" D GL^IEXCH("^ZNFI","l",LP,VR,DT)
+ Q:DT="" 
+ I $$LCL^IUSER("ed","setmsnow"),+$H'=DT D MSG^RWU("Вы можете изменять только текущий день.") Q 
+ 
+ S X=+$$C^I("ed","pmsmxs"),oTM=$$C^I("ed","ms-onetm")
+ I X D  I T'="" D MSG^RWU(T) Q 
+ .S (TM,K,T)=""
+ .F  S K=$O(LST(K)) Q:K=""  S MS="" F  S MS=$O(LST(K,MS)) Q:MS=""  S F=$P(LST(K,MS),":",2),A(MS)=$G(A(MS))+F I A(MS)>X S T="Превышено суммарное число ставок по "_$$FIO^IKADRY(MS) Q 
+ .K A
+ 
+ S X=+$$C^I("ed","tmsmxs")
+ I X D  I T'="" D MSG^RWU(T) Q 
+ .S (TM,K,T)=""
+ .F  S K=$O(LST(K)) Q:K=""  S MS="" F  S MS=$O(LST(K,MS)) Q:MS=""  S F=$P(LST(K,MS),":",1),A(MS)=$G(A(MS))+F I A(MS)>X S T="Превышено суммарное время по "_$$FIO^IKADRY(MS) Q 
+ .K A
+ 
+ S X=+$$C^I("ed","pms-onevr")
+ I X D  I T'="" D MSG^RWU(T) Q 
+ .S (TM,K,T)=""
+ .F  S K=$O(LST(K)) Q:K=""  D  Q:T'="" 
+ ..S A=0,MS=""
+ ..F  S MS=$O(LST(K,MS)) Q:MS=""  S A=A+$P(LST(K,MS),":",2) I A>X Q
+ ..I A>X S T="Превышено суммарное число ставок по "_$$FIO^IKADRY($P(K,"@",1))
+ .K A
+ 
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .;I LP,'$D(^ZNFI("l",LP,VR)) Q 
+ .I '$$USEInLPU^IKADRY(VR,LP,DT) Q 
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D:$D(^(OT,DT))
+ ..S R=$G(^ZNF(VR,OT,DT)),X=$P(R,"|",1),A=VR_"@"_OT
+ ..I oTM D  Q 
+ ...S MS=$O(LST(A,"")),$P(^ZNF(VR,OT,DT),"|",1)=MS K:MS'="" LST(A,MS) 
+ ..S MSL=$P(R,"|",6)
+ ..S MSL=$$cngMSL(MSL)
+ ..S MS="" F  S MS=$O(LST(A,MS)) Q:MS=""  S XL=MS_":"_LST(A,MS) S:LP $P(XL,":",4)=LP  S MSL=$S(MSL="":"",1:MSL_";")_XL
+ ..I $P($G(^ZNF(VR,OT,DT)),"|",6)=MSL K LST(VR_"@"_OT) Q  
+ ..S $P(^ZNF(VR,OT,DT),"|",6)=MSL
+ ..D GLZ^IEXCH("^ZNF",VR,OT,DT)
+ ..K LST(VR_"@"_OT)
+ 
+ Q:'$D(LST) 
+ 
+ S (T,K)="" F  S K=$O(LST(K)) Q:K=""  D
+ .S VR=$P(K,"@",1),OT=$P(K,"@",2)
+ .S T=$S(T="":"",1:T_CR)_$$FIOSH^IKADRY(VR)_" ("_$$GOTD^YISPRAV(OT)_")"
+ D MSG^RWU("Отсутствуют приемы для:"_CR_T)
+ Q
+cngMSL(STR) ; Удалить из строки отсутствующих медсестер по ЛПУ
+ Q:STR="" ""
+ N R,I,K,L
+ S R=""
+ F I=1:1:$L(STR,";") D
+ .S K=$P(STR,";",I),L=$P(K,":",4)
+ .I L'="",L'=LP S R=R_$S(R="":"",1:";")_K Q  ; other LPU
+ .S MS=$P(K,":",1) Q:MS="" 
+ .I '$D(LST(A,MS)) Q  ; нет М.С.
+ .S XL=MS_":"_LST(A,MS) S:LP $P(XL,":",4)=LP
+ .S R=R_$S(R="":"",1:";")_XL
+ .K LST(A,MS)
+ Q R
+MSG(TXT) 
+ D MSG^RWU(^PP(0,2)_"<usled><msg>"_TXT_"</msg></usled></nb_console>",".xmlb")
+ Q
+HED(VR,OTD,DT,MS,TMPR,TMPND,TMOTH,MSPR) ; Установить времена работы
+ ; MSPR - процент м.с.
+ I $$LCL^IUSER("ed","hed")=0 D MSG^RWU("Изменение запрещено.") Q 
+ S:TMPR=":"!(TMPR="00:00") TMPR=""
+ S:TMPND=":"!(TMPND="00:00") TMPND=""
+ S:TMOTH=":"!(TMOTH="00:00") TMOTH=""
+ N TP,TH,TO
+ S TP=$$TI^DTUTL(TMPR),TH=$$TI^DTUTL(TMPND),TO=$$TI^DTUTL(TMOTH)
+ S DT=$$DIH^DTUTL(DT),MSPR=$G(MSPR)
+ S:MS=0 MS=""
+ S:$$LCL^IUSER("ed","mmss") (MS,MSPR)=""
+ I '$$HDR^IUSL(VR,DT,OTD,MS,TP,TH,TO,MSPR) D MSG^RWU("Ошибка сохранения параметров") Q 
+ S TP=$$SPbyOTD^IKADRY(VR,OTD,DT)
+ S ^JOB(%JOB,"sel-otd")=OTD,^("sel-spec")=TP
+ D LED^YNED(VR,OTD,$$DT2^DTUTL(DT),"")
+ Q
+GETHED(VR,OT,DT) ; Получить заголовок документа
+ N MS,TP,TH,TO,X
+ S DT=$$DIH^DTUTL(DT)
+ D GETHDR^IUSL(VR,DT,OT)
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<mhuinf>")
+ D GETHEDs
+ D WTAGD^RWU("time1",$$TM^DTUTL($G(TP)))
+ D WTAGD^RWU("time3",$$TM^DTUTL($G(TH)))
+ D WTAGD^RWU("time3",$$TM^DTUTL($G(TO)))
+ S MS=$G(MS)
+ S:MS="" MS=$$GETHMST^IUSL(VR,DT,OT),MS=$P($P(MS,";",$L(MS,";")),":",1)
+ D WTAGD^RWU("ms",MS)
+ D WTAGDC^RWU("msfio",$S(MS'="":"М.С.: "_$$FIO^IKADRY(MS),1:""))
+ D W^RWU("</mhuinf></nb_console>"),C^RWU
+ Q
+GETHEDL(VR,DT,OT) ; Получить заголовок документа
+ N MS,TP,TH,TO,X,MS
+ S DT=$$DIH^DTUTL(DT),OT=$G(OT)
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<mhinfsel>")
+ D GETHEDs
+ D WTAGDC^RWU("fio",$$FIO^IKADRY(VR))
+ S MS=$$LASTMS^IUSL(VR,DT,OT)
+ D WTAGD^RWU("ms",MS)
+ D WTAGDC^RWU("msfio",$S(MS'="":"М.С.: "_$$FIO^IKADRY(MS),1:""))
+ D W^RWU("</mhinfsel></nb_console>"),C^RWU
+ Q
+GETHEDs ; System call
+ N OTX,J,K
+ S OTX=$$C1^I("otd"),J=1
+ F K="",2,3,4 D
+ .S X=$S(K="":$$OTD^IKADRY(VR,DT),1:$$GET^IKADRY(VR,"otd"_K,DT))
+ .S:X=0 X=""
+ .I OTX'="",'$$FLinFL^TXTU(OTX,X) Q  ; restricted
+ .D WTAGDCU^RWU("otd"_J,$$GOTD^YISPRAV(X),X)
+ .S X=$$GET^IKADRY(VR,"spec"_K,DT)
+ .S:X=0 X=""
+ .D WTAGDCU^RWU("spec"_J,$$GSPEC^YISPRAV(X),X)
+ .S J=J+1
+ Q
+LED(VR,OTD,DT,SPC) ; Вывод единого документа 
+ N A,B,PA,PB,UX,ID,TF,TFL,TP,TH,TO,MS,C,I,H,X,CF,SPL,UN,UP,NM,ST
+ N SCW,sCOM,AA,@$$NEWVAR^IUSL
+ S CF=$$C1^I("credit"),SPL=$$C1^I("ed-split")
+ S SCW=+$$C^I("ed","showcwc")
+ S sCOM=$$LCL^IUSER("inkss","splitcom")!$$C^I("ed","splitcom")
+ S DT=$$DIH^DTUTL($G(DT))
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<edfprn>")
+ D:$$C^I("ed","edit-msp") W^RWU("<msp visible=""yes""/>")
+ D WTAGDCU^RWU("docid",VR_" "_$$FIOSH^IKADRY(VR),VR)
+ D WTAGDCU^RWU("otdid",OTD_" "_$$GOTD^YISPRAV(OTD),OTD)
+ S SP=$S($G(SPC)'="":SPC,1:$$SPbyOTD^IKADRY(VR,OTD,DT))
+ S ST=$$STOM^IEDE(OTD,SP)
+ D WTAGDCU^RWU("docspec",SP_" "_$$GSPEC^YISPRAV(SP),SP)
+ D WTAGD^RWU("pgfile",$$LCL^IUSER("ed","edfprint"))
+ D GETHDR^IUSL(VR,DT,OTD)
+ S MS=$G(MS)
+ D WTAGDC^RWU("ms",MS)
+ D WTAGDCU^RWU("msid",$S(MS="":"",1:$$FIOSH^IKADRY(MS)),MS)
+ D WTAGDC^RWU("time1",$$TM^DTUTL($G(TP)))
+ D WTAGDC^RWU("time2",$$TM^DTUTL($G(TH)))
+ D WTAGDC^RWU("time3",$$TM^DTUTL($G(TO)))
+ D WTAGDC^RWU("msp",$G(MSP))
+ D FLGLST^YIMHS(VR,OTD,SP,"TFL")
+ S I="",C=0 F  S I=$O(TFL(I)) Q:I=""  S C=C+1
+ ; подбор ширины колонок
+ S A=$S(C:$J(3600/C,0,0),1:380)
+ S B=$S(A>400:1,A<380:2,1:0),A=$S(B=1:400,1:A)
+ S AA=$J((3400-(A*C))/4,0,0) S:AA<0 AA=0
+ S H(1)="И.Б.:"_($S(SPL:1350,1:900)+AA)
+ S H(2)="Диагноз:"_($S(ST:1550,1:1850)+AA)
+ S H(3)="Услуга:"_(1950+AA)
+ S:'SPL H(4)="К-во:400"
+ S:ST H(5)="Зуб №:500"
+ S H(6)="Примечание:"_($S(ST:600,1:800)+AA)
+ 
+ S (H,PA,PB,UP)=""
+ F I=1,2 S H=$S(H="":"",1:H_";")_H(I)
+ S I="" F  S I=$O(TFL(I)) Q:I=""  S H=H_";"_TFL(I)_":"_A
+ S I=2 F  S I=$O(H(I)) Q:I=""  S H=$S(H="":"",1:H_";")_H(I)
+ D WC^RWU("<table default="""_H_""">")
+ K H G:'$D(^ZNF(VR,OTD,DT)) LEDEND
+ S ID="" F  S ID=$O(^ZNF(VR,OTD,DT,ID)) Q:ID=""  D
+ .D GET^IUSL(VR,DT,OTD,ID)
+ .Q:$D(ERR)  ; todo
+ .I $$C1^I("ed-sw-subscr"),STAT="w"!(STAT="d") Q
+ .S TO="" I CF=3 S TO=$$GETPL^IUSL(VR,DT,OTD,ID,"kv")
+ .S FLG="|"_FLG_"|",R=$$NAME^YMKB10(DIA,70)
+ .S A=$S(TO="":TO,1:TO_"/")_NI_" "_$$FIOSH^YIPACN(NI)_"|"_R_"|",I=""
+ .F  S I=$O(TFL(I)) Q:I=""  S A=A_$S(FLG[("|"_I_"|"):"+",1:"")_"|"
+ .S UX=$O(UL("")),X=""
+ .S B="|"_$S(ST:$TR($$GETPL^IUSL(VR,DT,OTD,ID,"nz"),"/"," ")_"|",1:"")
+ .I SCW S X=$$GETPL^IUSL(VR,DT,OTD,ID,"cw") S:X'="" X=$S(COMM="":"",1:" ")_"Совм:"_$$DBLSP^TXTU($TR(X,"|"," "))
+ .S B=B_COMM_X
+ .F  D:'SPL LEDPROC D:SPL LEDPROCS S UX=$O(UL(UX)) Q:UX="" 
+ I SPL D:PA'="" WC^RWU(CR_"|"_PA_UP_NM_PB)
+LEDEND D W^RWU("</table></edfprn></nb_console>")
+ D C^RWU
+ Q
+LEDPROC 
+ S R=$$OWF^TXTU($$NAMEH^IPRICE(UX,PRC,DT),64)
+ S UN=$S(STAT="w":"! ",1:"")_UX_" "_R_"|"_$S(UX="":"",1:UL(UX))
+ D WC^RWU(CR_ID_"|"_A_UN_B)
+ Q
+LEDPROCS 
+ I PA'="",A'=PA!(B'=PB) D WC^RWU(CR_"|"_PA_UP_NM_PB) S (PA,PB,UP)="" 
+ S PA=A,PB=B
+ S NM=$S(UP="":" "_$$NAMEH^IPRICE(UX,PRC,DT),1:"")
+ I sCOM,COMM'="" S NM=NM_" ("_COMM_")"
+ S NM=$$OWF^TXTU(NM,64)
+  
+ S UP=UP_$S(UP="":UP,1:"/ ")_$S(STAT="w":"! ",1:"")_$S(UX="":"",1:UX_$S(UL(UX)'=1:"*"_UL(UX),1:""))
+ Q
+CNGDVR(VR,DT,OT,NVR) ; Изменить врача в документе
+ N ID,X
+ S DT=$$DI^DTUTL(DT) Q:DT=""  Q:NVR=""  Q:NVR=VR 
+ S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ .S X=$$MOV^IUSL(VR,DT,OT,ID,NVR,"")
+ S ^ZNF(NVR,OT,DT)=$G(^ZNF(VR,OT,DT))
+ K ^ZNF(VR,OT,DT)
+ D LED(VR,OT,$$DT2^DTUTL(DT),"")
+ Q
+CNGDDT(VR,DT,OT,NDT) ; Изменить дату в документе
+ N ID,X,NIB
+ S DT=$$DI^DTUTL(DT),NDT=$$DI^DTUTL(NDT)
+ Q:DT=""  Q:NDT=""  Q:NDT=DT  
+ 
+ S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ .S NIB=$$GETNIB^IUSL(VR,DT,OT,ID)
+ .D USDT^NPACADM(NIB,VR_"@"_DT_"@"_OT_"@"_ID,$$DT^DTUTL(NDT),1)
+ 
+ S ^ZNF(VR,OT,NDT)=$G(^ZNF(VR,OT,DT))
+ K ^ZNF(VR,OT,DT)
+ D LED(VR,OT,$$DT2^DTUTL(DT),"")
+ Q
+INMS ; Импорт медсестер по дням
+ N KMOD S KMOD=0 G inms
+INMSK ; Импорт медсестер по дням (по т.н. кадров + код отделения)
+ N KMOD,KLIST,I,Z S KMOD=1
+ S I="" F  S I=$O(^KDR(I)) Q:I=""  S Z=$$GET^IKADRY(I,"knum",+$H) S:Z'="" KLIST(Z)=I
+inms ; dt|ot|vr|ms
+ N DT,OT,VR,MS,A,X,%J
+ D ORH^RWU
+ S (DT,VR,OT)=""
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  D:%J>1
+ .S X=$$DI^DTUTL($$TRIM^TXTU($P(A,"|",1)))
+ .S:X'="" DT=X
+ .S X=$$TRIM^TXTU($P(A,"|",2))
+ .S:X'="" OT=$$inmsot(X,KMOD)
+ .S X=$$TRIM^TXTU($P(A,"|",3))
+ .S:X'="" VR=$$inmsk(X,KMOD)
+ .S X=$$TRIM^TXTU($P(A,"|",4))
+ .S:X'="" MS=$$inmsk(X,KMOD)
+ .I DT'="",OT'="",VR'="",MS'="" D SETHMST^IUSL(VR,DT,OT,MS,-1)
+ D CR^RWU
+ Q
+inmsk(VR,MOD) 
+ I MOD Q $G(KLIST(VR))
+ Q VR
+inmsot(OT,MOD) 
+ I MOD Q $$FINDPL^ISPRAV("otd","code",OT)
+ Q OT

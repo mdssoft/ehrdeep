@@ -1,0 +1,86 @@
+NKSSU ; Утилиты кассы [ 06/24/2022  5:17 PM ]
+INITKKM ; Инициализация кассы
+ N X,I,N,A,R,LP,IDK
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<kkm>")
+ S IDK=$$KKM^IUSER(),LP=$$^I("ilpu")
+ S I=+$G(^MN("paytype")),A=""
+ S N="" F  S N=$O(^MN(I,N)) Q:N=""  D
+ .S R=^(N)
+ .S X=$P(R,"|",9) D:X'="" WTAGD^RWU("pt"_N,X) ; type
+ .S X=$P(R,"|",10) D:X'="" WTAGD^RWU("dep"_N,X) ; depart
+ S R=$$LCL^IUSER("bill","kkmpassword")
+ S:R="" R=$G(^LOG(%LOG,"kkmpassword"))
+ D:R'="" WTAGD^RWU("kkm_passwd",R)
+ S R=$G(^cfg("bill","org_type")) ; тип налогообложения
+ D:R'="" WTAGD^RWU("org_type",R)
+ D WC^RWU("</kkm><script_variable>")
+ S N=$$KDR^IUSER()
+ D WTAGC^RWU("kkm_kdr_name","Кассир "_$$FIOSH^IKADRY(N))
+ S R=$$GET^IKADRY(N,"inn",+$H)
+ D:R'="" WTAGC^RWU("kkm_kdr_inn",R)
+ S R=$G(^cfg("bill","default-ctax"))
+ D:R'="" WTAG^RWU("kkm_tax",R)
+ I $$KKMTP^IUSER()=2,$$MKKM^IBILL(LP) S IDK="" D WTAG^RWU("kkm_multiple",1) ; TODO
+ D:IDK'=""
+ .S R=$$GETN^ISPRAV("kkm",IDK,7)
+ .D:R'="" WTAG^RWU("kkm_port",R)
+ .I $$KKMTP^IUSER()=2,$$MKKM^IBILL(LP) D WTAG^RWU("kkm_multiple",1)
+ D W^RWU("</script_variable><nb_console>")
+ D C^RWU
+ Q
+INITCC ; Init form
+ N K,DL,A
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<ksscc>")
+ S DL=$G(^cfg("bill","cashier-dl"))
+ D:DL'=-1
+ .D W^RWU("<cashier>|"_CR)
+ .D:DL'="" WC^RWU($$DOLJFN^NVFIND(DL,1))
+ .D:DL="" WC^RWU($$MYOTDFN^NVFIND("",1)) ; по своему подразд.
+ .D W^RWU("</cashier>")
+ D:DL=-1 W^RWU("<cashier visible=""no""/><label_3 visible=""no""/>")
+ S DL=$G(^cfg("bill","buhg-dl"))
+ D:DL'=-1
+ .D W^RWU("<buhg>|"_CR)
+ .D:DL'="" WC^RWU($$DOLJFN^NVFIND(DL,1))
+ .D:DL="" WC^RWU($$MYOTDFN^NVFIND("",1)) ; по своему подразд.
+ .D W^RWU("</buhg>")
+ D:DL=-1 W^RWU("<buhg visible=""no""/><label_4 visible=""no""/>")
+ D W^RWU("</ksscc><nb_console>")
+ D C^RWU
+ Q
+LCC(DT) ; Загрузить настройки кассовой смены на день
+ N IDK,VR,R
+ S DT=$$DIH^DTUTL($G(DT))
+ S IDK=+$$KKM^IUSER() S:'IDK IDK=1
+ S VR=+$$KDR^IUSER()
+ S R=$G(^BILLC(+$$^I("ilpu"),DT,"kkmc",IDK,VR))
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<ksscc>")
+ D WTAGDC^RWU("ts",$$TM^DTUTL($P(R,"|",1)))
+ D WTAGDC^RWU("te",$$TM^DTUTL($P(R,"|",2)))
+ D WTAGDC^RWU("cashier",$P(R,"|",3))
+ D WTAGDC^RWU("buhg",$P(R,"|",4))
+ S R=$$GET^ISPRAV("kkm",IDK) ; информационно
+ D WTAGDC^RWU("kkmn",$P(R,"|",1))
+ D WTAGDC^RWU("kkmnum",$P(R,"|",4))
+ D WTAGDC^RWU("kkm_port",$P(R,"|",7))
+ D W^RWU("</ksscc><nb_console>")
+ D C^RWU
+ Q
+WCC ; Сохранить настройки кассовой смены
+ N IDK,VR,R,H,TS,TE,NBC
+ D RBUFH^YIXMLRR(1)
+ S IDK=+$$KKM^IUSER() S:'IDK IDK=1
+ S VR=+$$KDR^IUSER()
+ S H=+$H,NBC="nb_console"
+ S TS=+$$TI^DTUTL($G(XML(NBC,"ksscc","ts")))
+ S:'TS TS=$S($G(^cfg("bill","cstart")):^("cstart"),1:28800)
+ S TE=+$$TI^DTUTL($G(XML(NBC,"ksscc","te")))
+ S:'TE TE=$S($G(^cfg("bill","cend")):^("cend"),1:75600)
+ S R=TS_"|"_TE_"|"_$G(XML(NBC,"ksscc","cashier"))_"|"_$G(XML(NBC,"ksscc","buhg"))
+ S TS=+$$^I("ilpu")
+ S ^BILLC(TS,H,"kkmc",IDK,VR)=R
+ D GL^IEXCH("^BILLC",TS,H,"kkmc",IDK,VR)
+ Q
+GETCC(IDK,DT) ; Информация по смене
+ N VR S VR=$$KDR^IUSER()
+ Q $G(^BILLC(+$$^I("ilpu"),DT,"kkmc",IDK,VR))

@@ -1,0 +1,8 @@
+NBQML ; QML bindings [ 05/18/2011  0:26 AM ]
+AUTH(LOG) ; 
+ D MSG^RWU("OK")
+ Q
+MYRASP(DT) 
+ N VR
+ S VR=$$KDR^NUSER()
+ Q

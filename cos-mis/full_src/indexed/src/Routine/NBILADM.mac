@@ -1,0 +1,135 @@
+NBILADM ; Администрирование платежей [ 11/13/2020  4:34 PM ]
+TAB(DT) ; Таблица общих платежей
+ N LP,TM,TP,R,A,X,U,LPX,IDX
+ S DT=$$DIH^DTUTL(DT)
+ S LPX=$S($$FR^I():"",1:+$$^I("ilpu"))
+ D OWF^RWU(".txt")
+ D WC^RWU("|Дата, время|Тип|Сумма|Примечание|Оператор|ККМ|Филиал")
+ S LP="" F  S LP=$O(^BILL("00",LP)) Q:LP=""  D:LPX=""!(LPX=LP)
+ .S TM="" F  S TM=$O(^BILL("00",LP,DT,TM)) Q:TM=""  D
+ ..S TP="" F  S TP=$O(^BILL("00",LP,DT,TM,TP)) Q:TP=""  D
+ ...I TP'="ik",TP'="ok" Q 
+ ...S R=^(TP),U=$P($P(R,"|",2),":",1),R=$P(R,"|",1)
+ ...S IDK=$P(R,"@",1),X=$P(R,"@",3)
+ ...S A=$$DTM^DTUTL(DT_","_TM)_"|"
+ ...S A=A_$S(TP="ik":"приход",1:"выплата")
+ ...s A=A_$S(X="":"",1:", "_$$NAME^ISPRAV("outkss",X))_"|"
+ ...S A=A_$TR($P(R,"@",2),".",",")_"|"_$P(R,"@",4)
+ ...S A=A_"|"_$$FIO^NUSER(U)_"|"_$$NAME^ISPRAV("kkm",IDK)_"|"_$$NAME^ICONTR($P(U,"@",2))
+ ...D WC^RWU(CR_"0:"_LP_":"_DT_":"_TM_":"_TP_"|"_A)
+ 
+ S LP="" F  S LP=$O(^BILLC(LP)) Q:LP=""  D:LPX=""!(LPX=LP)
+ .S TP="" F  S TP=$O(^BILLC(LP,DT,TP)) Q:TP=""  D:+TP=TP 
+ ..I TP'="ik",TP'="ok",TP'="sl" Q
+ ..S TM="" F  S TM=$O(^BILLC(LP,DT,TP,TM)) Q:TM=""  D
+ ...S R=^(TM),U=$P(R,"|",4),X=$P(R,"|",2),IDK=$P(R,"|",3)
+ ...S A=$$DTM^DTUTL(DT_","_TM)_"|"
+ ...S A=A_$S(TP="ik":"приход",TP="sl":"продажа",1:"выплата")
+ ...s A=A_$S(X="":"",1:", "_$$NAME^ISPRAV("paytype",X))_"|"
+ ...S A=A_$TR($P(R,"|",1),".",",")_"|"_$P(R,"|",7)
+ ...S A=A_"|"_$$FIO^NUSER(U)_"|"_$$NAME^ISPRAV("kkm",IDK)_"|"_$$NAME^ICONTR($P(U,"@",2))
+ ...D WC^RWU(CR_"1:"_LP_":"_DT_":"_TM_":"_TP_"|"_A)
+ 
+ D C^RWU
+ Q
+DEL(KEY) ; Удалить
+ N TP,LP,DT,TM
+ S TP=$P(KEY,":",1),LP=$P(KEY,":",2),DT=$P(KEY,":",3),TM=$P(KEY,":",4)
+ 
+ I TP=0 D  Q 
+ .S KEY=$P(KEY,":",5)
+ .K ^BILL("00",LP,DT,TM,KEY)
+ .D KGL^IEXCH("^BILL","00",LP,DT,TM,KEY)
+ .D REFRESTS^IBILL(LP,DT,+$H)
+ 
+ I TP=1 D  Q 
+ .S KEY=$P(KEY,":",5)
+ .K ^BILLC(LP,DT,KEY,TM)
+ .D KGL^IEXCH("^BILLC",LP,DT,KEY,TM)
+ 
+ Q
+MOV(KEY,NDT) ; Переместить на дату
+ N TP,LP,DT,TM,NTM
+ S TP=$P(KEY,":",1),LP=$P(KEY,":",2),DT=$P(KEY,":",3),TM=$P(KEY,":",4)
+ s NDT=$$DIH^DTUTL(NDT)
+ I TP=0 D  Q 
+ .S KEY=$P(KEY,":",5),NTM=TM
+ .F  Q:'$D(^BILL("00",LP,NDT,NTM,KEY))  S NTM=NTM+1
+ .S ^BILL("00",LP,NDT,NTM,KEY)=^BILL("00",LP,DT,TM,KEY)
+ .K ^BILL("00",LP,DT,TM,KEY)
+ .D KGL^IEXCH("^BILL","00",LP,DT,TM,KEY)
+ .D GL^IEXCH("^BILL","00",LP,NDT,TM,KEY)
+ .D REFRESTS^IBILL(LP,$S(NDT<DT:NDT,1:DT),+$H)
+ 
+ I TP=1 D  Q 
+ .S KEY=$P(KEY,":",5),NTM=TM
+ .F  Q:'$D(^BILLC(LP,NDT,KEY,NTM))  S NTM=NTM+1
+ .S ^BILLC(LP,NDT,KEY,NTM)=^BILLC(LP,DT,KEY,TM)
+ .K ^BILLC(LP,DT,KEY,TM)
+ .D KGL^IEXCH("^BILLC",LP,DT,KEY,TM)
+ .D GL^IEXCH("^BILLC",LP,NDT,KEY,TM)
+ Q
+SUM(KEY,SUM) ; Изменить сумму
+ N TP,LP,DT,TM,R
+ S TP=$P(KEY,":",1),LP=$P(KEY,":",2),DT=$P(KEY,":",3),TM=$P(KEY,":",4)
+ s SUM=+$TR(SUM,",",".")
+ I TP=0 D  Q 
+ .S KEY=$P(KEY,":",5)
+ .S R=$P(^BILL("00",LP,DT,TM,KEY),"|",1)
+ .S $P(R,"@",2)=SUM,$P(^(KEY),"|",1)=R
+ .D GL^IEXCH("^BILL","00",LP,DT,TM,KEY)
+ .D REFRESTS^IBILL(LP,DT,+$H)
+ 
+ I TP=1 D  Q 
+ .S KEY=$P(KEY,":",5)
+ .S $P(^BILLC(LP,DT,KEY,TM),"|",1)=SUM
+ .D GL^IEXCH("^BILLC",LP,DT,KEY,TM)
+ Q
+COM(KEY,TXT) ; Примечание
+ N TP,LP,DT,TM,R
+ S TP=$P(KEY,":",1),LP=$P(KEY,":",2),DT=$P(KEY,":",3),TM=$P(KEY,":",4)
+ s TXT=$$WD^TXTU(TXT)
+ I TP=0 D  Q 
+ .S KEY=$P(KEY,":",5)
+ .S R=$P(^BILL("00",LP,DT,TM,KEY),"|",1)
+ .S $P(R,"@",4)=TXT,$P(^(KEY),"|",1)=R
+ .D GL^IEXCH("^BILL","00",LP,DT,TM,KEY)
+ 
+ I TP=1 D  Q 
+ .S KEY=$P(KEY,":",5)
+ .S $P(^BILLC(LP,DT,KEY,TM),"|",7)=TXT
+ .D GL^IEXCH("^BILLC",LP,DT,KEY,TM)
+ Q
+TPLST(KEY) ; Получить список типов платежей
+ S KEY=$P(KEY,":",1)
+ D OWF^RWU(".txt")
+ D:KEY=0 LSTs^NSPRAV("outkss",0,1)
+ D:KEY=1 LSTs^NSPRAV("paytype",0,1)
+ D C^RWU
+ Q
+TYPE(KEY,TYPE) ; Изменить тип платежа
+ N TP,LP,DT,TM,R
+ S TP=$P(KEY,":",1),LP=$P(KEY,":",2),DT=$P(KEY,":",3),TM=$P(KEY,":",4)
+ s TYPE=+TYPE
+ Q:'TYPE 
+ I TP=0 D  Q 
+ .S KEY=$P(KEY,":",5)
+ .S R=$P(^BILL("00",LP,DT,TM,KEY),"|",1)
+ .S $P(R,"@",3)=TYPE,$P(^(KEY),"|",1)=R
+ .D GL^IEXCH("^BILL","00",LP,DT,TM,KEY)
+ 
+ I TP=1 D  Q 
+ .S KEY=$P(KEY,":",5)
+ .S $P(^BILLC(LP,DT,KEY,TM),"|",2)=TYPE
+ .D GL^IEXCH("^BILLC",LP,DT,KEY,TM)
+ Q
+MOVSUM(KEY,TP,SUM,IDK,KKM) ; Переместить остатки между кассами
+ Q:TP=""  Q:SUM=""  Q:KKM="" 
+ N HH,DT,TM,TM1,LP
+ S HH=$H,DT=$P(HH,",",1),TM=$P(HH,",",2),TM1=TM+1
+ ;S IDK=$$KKM^IUSER(),
+ s LP=$$^I("ilpu")
+ S SUM=$$NNUM^TXTU(SUM) Q:'SUM 
+ s ^BILL("00",LP,DT,TM,"ok")=IDK_"@"_SUM_"@"_TP_"@перемещение|"_$$USR^IUSER()_"|BILL:00:"_DT_":"_TM1_":"_KKM
+ s ^BILL("00",LP,DT,TM1,"ik")=KKM_"@"_SUM_"@"_TP_"@перемещение|"_$$USR^IUSER()_"|BILL:00:"_DT_":"_TM_":"_IDK
+ Q

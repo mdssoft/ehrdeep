@@ -1,0 +1,108 @@
+NLCL ; Управление областями прав [ 04/29/2019  3:56 PM ]
+LST(TXT) ; Список областей
+ N LL
+ S TXT=$$WD^TXTU(TXT)
+ D MSG^RWU($$LSTsys(TXT,1))
+ Q
+LSTsys(TXT,ALL) ; Системный список
+ ; TXT - 
+ ; LL - обязательный параметр (доступные права)
+ N R,A,X,T,LC
+ S TXT=$$UL^TXTU(TXT),ALL=$G(ALL)
+ S R="" F  S R=$O(^LCL(R)) Q:R=""  S LC(R)=""
+ I ALL S R="" F  S R=$O(^LCLI(R)) Q:R=""  S LC(R)=""
+ S (A,R)="" F  S R=$O(LC(R)) Q:R=""  D
+ .S T=$G(LL("lcl",R))
+ .S X=$G(^LCL(R)),X=$S(X="":$G(^LCLI(R)),1:X)
+ .I TXT'="",$$UL^TXTU(X)'[TXT Q
+ .S A=A_CR_R_"@"_T_"|"_X_"|"_$S(T="":T,1:$G(^LCL(R,T)))
+ Q A
+LPAT(KEY) ; Загрузить список шаблонов
+ S KEY=$P(KEY,"@",1) ; искл.парам конкретного шаблона.
+ N A,R,I
+ S (A,I)="" F  S I=$O(^LCL(KEY,I)) Q:I=""  S A=$S(A="":"",1:A_CR)_I_"|"_$G(^(I))
+ D MSG^RWU(A)
+ Q
+APAT(KEY,NM) ; Добавить шаблон
+ N ID
+ S KEY=$P(KEY,"@",1),NM=$$WD^TXTU(NM)
+ S ID=$O(^LCL(KEY,""),-1)+1
+ S ^LCL(KEY,ID)=NM
+ D GL^IEXCH("^LCL",KEY,ID)
+ D LPAT(KEY)
+ Q
+DPAT(KEY,ID) ; Удалить шаблон
+ S KEY=$P(KEY,"@",1)
+ Q:ID="" 
+ K ^LCL(KEY,ID)
+ D KGL^IEXCH("^LCL",KEY,ID)
+ Q
+SPAT(KEY,ID,NM) ; Переименовать шаблон
+ S KEY=$P(KEY,"@",1),NM=$$WD^TXTU(NM)
+ S ^LCL(KEY,ID)=NM
+ D GL^IEXCH("^LCL",KEY,ID)
+ Q
+LPRMS(KEY,PAT) ; Получить перечень прав по шаблону
+ N I,R,TP
+ S KEY=$P(KEY,"@",1)
+ D OWF^RWU(".xmlb")
+ D W^RWU($G(^PP(0,2))_"<lcl><prms>")
+ D WC^RWU("<titles><key></key><item>Параметр</item><item>Значение</item></titles>")
+ S I="" F  S I=$O(^LCL(KEY,PAT,I)) Q:I=""  D
+ .S R=$G(^(I)),TP=$G(^LCLI(KEY,I,"tp"))
+ .S R=$S(TP="L":"список",TP="GL":"структура",1:R)
+ .D WC^RWU(CR_"<row><key>"_I_"</key><item>"_$$TAG^TXTU($G(^LCLI(KEY,I)))_"</item><item>"_$$TAG^TXTU(R)_"</item></row>")
+ D W^RWU("</prms></lcl></nb_console>"),C^RWU
+ Q
+SPRM(KEY,PAT,PRM,VAL) ; Сохранить параметр
+ S KEY=$P(KEY,"@",1) Q:KEY=""  Q:PRM="" 
+ Q:'$D(^LCLI(KEY))
+ S ^LCL(KEY,PAT,PRM)=VAL
+ D GL^IEXCH("^LCL",KEY,PAT,PRM)
+ Q
+SPRMD ; Сохранить параметр (POST)
+ N %J,A,KEY,PAT,PRM,TP,R
+ D ORH^RWU
+ S R=""
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  D  I %J>1,KEY="" Q 
+ .I %J=1 S KEY=$P(A,",",1),PAT=$P(A,",",2),PRM=$P(A,",",3),KEY=$P(KEY,"@",1),TP=$G(^LCLI(KEY,PRM,"tp")) I KEY'="",'$D(^LCLI(KEY)) S KEY="" 
+ .I %J=1,TP="L" K ^LCL(KEY,PAT,PRM)
+ .I %J=1 Q
+ .I TP="" S R=R_$S(%J>2:CR,1:"")_A Q
+ .S A=$$TRIM^TXTU(A) Q:A="" 
+ .I TP="L" S ^LCL(KEY,PAT,PRM,A)=""
+ D CR^RWU
+ I TP="" S ^LCL(KEY,PAT,PRM)=R
+ D REGL^IEXCH("^LCL",KEY,PAT,PRM)
+ Q
+APRM(KEY,PAT,PRM) ; Добавить параметр
+ S KEY=$P(KEY,"@",1)
+ S ^LCL(KEY,PAT,PRM)=""
+ D GL^IEXCH("^LCL",KEY,PAT,PRM)
+ D LPRMS(KEY,PAT)
+ Q
+DPRM(KEY,PAT,PRM) ; Удалить параметр
+ S KEY=$P(KEY,"@",1)
+ K ^LCL(KEY,PAT,PRM)
+ D KGL^IEXCH("^LCL",KEY,PAT,PRM)
+ D LPRMS(KEY,PAT)
+ Q
+LPRM(KEY,PAT,PRM) ; Загрузить параметр
+ N TP
+ S KEY=$P(KEY,"@",1),TP=$G(^LCLI(KEY,PRM,"tp"))
+ I TP="" D MSG^RWU($G(^LCL(KEY,PAT,PRM))) Q 
+ I TP="L" D  Q  
+ .N I,A
+ .S (I,A)="" F  S I=$O(^LCL(KEY,PAT,PRM,I)) Q:I=""  S A=$S(A="":"",1:A_CR)_I
+ .D MSG^RWU(A)
+ Q
+LSTPRMS(KEY,TXT) ; Перечень параметров в области прав
+ N I,R
+ S TXT=$$UL^TXTU($$WD^TXTU(TXT))
+ D OWF^RWU(".xmlb")
+ D W^RWU($G(^PP(0,2))_"<kwftable><table>")
+ D WC^RWU("<titles><key></key><item>Наименование параметра</item></titles>")
+ S KEY=$P(KEY,"@",1)
+ S I="" F  S I=$O(^LCLI(KEY,I)) Q:I=""  S R=^(I) I TXT=""!($$UL^TXTU(R)[TXT) D WC^RWU(CR_"<row><key>"_I_"</key><item>"_$$TAG^TXTU(R)_"</item></row>")
+ D W^RWU("</table></kwftable></nb_console>"),C^RWU
+ Q

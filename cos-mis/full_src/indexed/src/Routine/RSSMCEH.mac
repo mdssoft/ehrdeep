@@ -1,0 +1,86 @@
+RSSMCEH ; Отчет ССМЦ по стационару [ 12/15/2017  7:57 PM ]
+DO(DS,DE,LPUX) 
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N DT,I,DWKL,DWKLR,HHUL,HHUDL,TIT,A,B,TABLE
+ N CCAB,HHU,HHS,HHDS
+ N X1,X2,X3,IWK
+ S I=1,(HHU,HHS,HHDS)=0
+ F DT=DS:1:DE S DWKL(DT)=I,TABLE(I,5)=$G(TABLE(I,5))+1 I DT<DE S:$$DWEEK^DTUTL(DT)=7 I=I+1,DWKLR(I)=DT+1
+ S DWKLR(1)=DS ; 1-я дата - 1-я неделя
+ S TABLE(0,5)=DE-DS+1
+ k ^BUF($J)
+ d hosp
+ d fillu,mku
+ S X1="",PPL=0 F  S X1=$O(^BUF($J,"p",X1)) Q:X1=""  S TABLE(0,8)=$G(TABLE(0,8))+1
+ S TABLE(0,7)=HHU,TABLE(0,15)=HHDS,TABLE(0,14)=HHS
+ k ^BUF($J)
+ D OWF^RWU(".txt")
+ S TIT="Стационар"
+ S (IWK,A)="" F  S IWK=$O(DWKLR(IWK)) Q:IWK=""  S A=$S(A="":"",1:A_CR)_TIT_":"_$C($A("B")+IWK)_":3:"_$$DT2^DTUTL(DWKLR(IWK))
+ D WC^RWU(A)
+ S IWK="" F  S IWK=$O(TABLE(IWK)) Q:IWK=""  D
+ .S X1=$G(TABLE(IWK,5)),B=$C($A("B")+IWK)
+ .S X2=$G(TABLE(IWK,7))
+ .S X3=$G(TABLE(IWK,8))
+ .S A=CR_TIT_":"_B_":4:"_CCAB
+ .S A=A_CR_TIT_":"_B_":5:"_X1
+ .S A=A_CR_TIT_":"_B_":6:"_(X1*CCAB)
+ .S A=A_CR_TIT_":"_B_":7:"_$$ffn(X2)
+ .S A=A_CR_TIT_":"_B_":8:"_X3
+ .S A=A_CR_TIT_":"_B_":9:"_$S(X3:$$fn(X2/X3),1:0)
+ .S A=A_CR_TIT_":"_B_":10:"_$S(CCAB:$$fn(X2/CCAB),1:0)
+ .S A=A_CR_TIT_":"_B_":11:"_$S(CCAB:$$fn(X3/CCAB),1:0)
+ .S X1=$G(TABLE(IWK,14))
+ .S X2=$G(TABLE(IWK,15))
+ .S A=A_CR_TIT_":"_B_":13:"_$$fn(X1+X2)
+ .S A=A_CR_TIT_":"_B_":14:"_$$fn(X1)
+ .S A=A_CR_TIT_":"_B_":15:"_$$fn(X2)
+ .D WC^RWU(A)
+ D C^RWU
+ Q
+hosp ; Число коек
+ S CCAB=0
+ N K,E,CAB
+ S LP="" F  S LP=$O(^PLPU(LP)) Q:LP=""  D:$S(LPUX="":1,1:LP=LPUX)
+ .S K="" F  S K=$O(^PLPU(LP,K)) Q:K=""  D
+ ..S E="" F  S E=$O(^PLPU(LP,K,E)) Q:E=""  D
+ ...S CAB="" F  S CAB=$O(^PLPU(LP,K,E,"cab",CAB)) Q:CAB=""  D
+ ....S X1=$P($G(^(CAB,"p")),"|",1) Q:X1=""
+ ....S CCAB=CCAB+X1
+ Q
+fillu 
+ S HHUL("36.44")=""
+ S HHUL("36.44.3")=""
+ S HHUL("36.44.4")=""
+ S HHUL("36.45")=""
+ S HHUL("37.0.1")=""
+ S HHUL("37.0.2")=""
+ S HHUL("37.0.4")=""
+ S HHUL("37.0.5")=""
+ S HHUL("37.0.6")=""
+ S HHUL("37.0.7")=""
+ S HHUDL("36.44.2")=""
+ Q
+mku 
+ ; D MKALLPRC^IUSLSC(DS,DE,1,"prc^RSSMCEH","","","",0,LPUX)
+ D MKALLPRC^IUSLSC(DS,DE,1,"prc^RSSMCEH","",0,,)
+ Q
+prc 
+ I $P(U,".",1)'=36,$P(U,".",1)'=37,$P(U,".",1)'="ОМС" Q  ; only stac !
+ I LPUX'="",LPUX'=LPU Q 
+ S IWK=DWKL(DT)
+ S X1=$G(UL(U))
+ S X2=$S($D(UL(U,1)):UL(U,1),1:$$PRICEH^IPRICE(U,PRC,DT)*KSKD*X1)
+ I $D(HHUL(U)) S HHU=HHU+1,TABLE(IWK,7)=$G(TABLE(IWK,7))+1
+ I $D(HHUDL(U)) S HHDS=HHDS+X2,TABLE(IWK,15)=$G(TABLE(IWK,15))+X2
+ I '$D(HHUDL(U)) S HHS=HHS+X2,TABLE(IWK,14)=$G(TABLE(IWK,14))+X2
+ S:'$D(^BUF($J,"p",NI)) ^(NI)=""
+ S:'$D(^(NI,IWK)) ^(IWK)="",TABLE(IWK,8)=$G(TABLE(IWK,8))+1
+ Q
+ffn(X) 
+ Q $TR(X,".",",")
+fn(X) 
+ Q $TR(+$J(X,"",2),".",",")
+REGIPROC 
+ S ^IPROC("ССМЦ","Отчет по стационару")="DO_RSSMCEH,8,3,d,Дата отчета,d,Дата по,t@storage:lpu,Филиал,,,,/ssmc/ssmc-stac.xls"
+ Q

@@ -1,0 +1,319 @@
+NFNPAC ; Дополнительные ф-ции в контингенте [ 07/23/2020  3:15 PM ]
+PMENU(NIB) ; Меню по пациенту
+ N I,K,X,R,C,Z
+ D OWF^RWU(".txt")
+ S I=+$G(^MN("addpfn")),(C,K)=""
+ F  S K=$O(^MN(I,K)) Q:K=""  D
+ .S R=^(K),X=$P(R,"|",3)
+ .S Z=$S(X="":1,1:0) I X'="",@X S Z=1
+ .Q:'Z 
+ .D WC^RWU(C_$P(R,"|",1,2)) S C=CR
+ D C^RWU
+ Q
+LST 
+ N N,C,R,I
+ S (N,C)="",I=$G(^MN("addpfn")) Q:I=""  
+ F  S N=$O(^MN(I,N)) Q:N=""  S R=^(N) D WC^RWU(C_$P(R,"|",1)_"|"_$P(R,"|",2)) S C=CR
+ Q
+DOGTXT(NIB,ISTC,DGN,PRG,DTT) ; Описание по договору
+ Q:NIB=""  
+ N D,I,P,H,X,C,MOD,T,PRN
+ S H=$$DIH^DTUTL($G(DTT)),C="",ISTC=$G(ISTC),DGN=$G(DGN)
+ S MOD=$G(^cfg("pac-prog-htm")),PRN=+$$LCL^NUSER("pacinfo","noprn-prog")
+ I ISTC="",DGN'="" S ISTC=$$PIDXN^IPAC(NIB,DGN,H)
+ S D=$S(ISTC=-1:DGN,1:$$GET^IPAC(NIB,"stc"_ISTC,H)),P=$$GET^IPAC(NIB,"prog"_ISTC,H)
+ S:P="" P=$G(PRG)
+ D OWF^RWU(".xmlb")
+ 
+ D W^RWU(^PP(0,1))
+ D:MOD W^RWU("<storage><kwhtml type=""plain"" action=""new"">"_$$TAG^TXTU("<html><body>")),NCSS^IHTML(1)
+ D:'MOD
+ .D W^RWU("<nb_console><run>RUN_REPORT{ktext.frm}</run><ktext>")
+ .D WC^RWU("<label data=""Текстовая информация по договору""/><txt>")
+ 
+ S I=$$DTXTsys^NPACINF(NIB,D,P,MOD,$G(^cfg("pac-prog","stcinf")),H)
+ 
+ D:MOD
+ .D W^RWU($$TAG^TXTU("</body></html>")_"</kwhtml></storage><nb_console><run>RUN_REPORT{kwhtml.frm}</run><kwhtml>")
+ .D WC^RWU("<label data=""Текстовая информация по договору""/><btn_print visible="""_$S(PRN:"no",1:"yes")_"""/></kwhtml></nb_console>")
+ D:'MOD
+ .S C="</txt>"_$S('I:"<txt data=""""/>",1:"")
+ .D W^RWU(C_"<btn_print visible="""_$S(PRN:"no",1:"yes")_"""/></ktext></nb_console>")
+ 
+ D C^RWU
+ Q
+DGNPINF(DGN,PRG,DT) ; Подробная информация по программе
+ N PT
+ S DT=$$DIH^DTUTL($G(DT)),PRG=$$WD^TXTU(PRG)
+ S PT=+$G(^cfg("pac-prog-htm")),A=""
+ D OWF^RWU($S(PT:".htm",1:".txt"))
+ D:PT W^RWU("<HTML><HEAD></HEAD><BODY>")
+ D DGPINFs^NPACINF(DGN,PRG,DT,PT)
+ D:PT W^RWU("</BODY></HTML>")
+ D C^RWU
+ Q
+ISDGNPI(DGN,PRG,DT) ; Есть текстовое приложение к договору
+ S:$G(DT)="" DT=+$H
+ I DGN'="" Q:$$ISL2^YNDOG(DGN,"texts","-",DT) 1
+ I DGN'="" Q:$$ISL2^YNDOG(DGN,"texts",PRG,DT) 1
+ Q:PRG="" 0
+ N I,X
+ F I=1:1 S X=$P(PRG,"|",I) Q:X=""  Q:$$IsLN^YMPRP(X,"dsc",DT) 
+ Q:I 1
+ Q 0
+STCLST(NIB,DTT) ; Список договоров по пациенту
+ N DG,DH,K,R,A
+ S DH=$$DIH^DTUTL($G(DTT))
+ S DG=$$GET^IPAC(NIB,"stc",DH),K=$$GET^IPAC(NIB,"cntstc",DH)
+ S:K="" K=$S($$GET^IPAC(NIB,"stc1",DH)'="":2,1:"")
+ S A="|"_$$NAME^IINSC(DG)
+ F K=1:1:K-1 S R=$$GET^IPAC(NIB,"stc"_K,DH) S:R'="" A=A_CR_K_"|"_$$NAME^IINSC(R)
+ D MSG^RWU(A)
+ Q
+DGNINFP(NIB,OLD,STC,PRG,DTT) ; Информация по договору с фикс. программами
+ ; STC - код договора
+ Q:NIB=""  
+ N D,H,V,ISTC
+ S DTT=$G(DTT),OLD=+$G(OLD)
+ S H=$$DIH^DTUTL(DTT),D=STC,ISTC=$$PIDX^IPAC(NIB,STC,H)
+ G DOGINFs
+DGNINF(NIB,OLD,STC,DTT) ; Информация по договору v2
+ ; STC - код договора
+ Q:NIB=""  
+ N D,H,V,ISTC,PRG
+ S DTT=$G(DTT),OLD=+$G(OLD)
+ S H=$$DIH^DTUTL(DTT),D=STC,ISTC=$$PIDX^IPAC(NIB,STC,H)
+ G DOGINFs
+DOGINFP(NIB,OLD,ISTC,PRG,DTT) ; Информация по договору
+ ; ISTC - индекс договора
+ Q:NIB=""  
+ N D,H,V
+ G DOGINF+4
+DOGINF(NIB,OLD,ISTC,DTT,SPRG) ; Информация по договору
+ ; ISTC - индекс договора
+ Q:NIB=""  
+ N D,H,V,PRG
+ S DTT=$G(DTT),ISTC=$G(ISTC),OLD=+$G(OLD)
+ S H=$$DIH^DTUTL(DTT),D=$$GET^IPAC(NIB,"stc"_ISTC,H)
+DOGINFs 
+ S PRG=$G(PRG)
+ S:PRG="" PRG=$$GET^IPAC(NIB,"prog"_ISTC,H)
+ D OWF^RWU(".xmlb")
+ D W^RWU(^PP(0,1)_"<nb_console>"_$S(OLD:"",1:"<run>RUN_REPORT{pstcinfo.frm}</run>")_"<pstcinfo>")
+ D WTAGD^RWU("pid",NIB)
+ D WTAGDC^RWU("pfio",$$FIO^IPAC(NIB))
+ D WTAGDC^RWU("stc",$$NAME^IINSC(D))
+ D WTAGDC^RWU("disp",$$GET^IINSC(D,"disp",H))
+ D WTAGDC^RWU("fioo",$$GET^IINSC(D,"fioo",H))
+ D WTAGDC^RWU("fax",$$GET^IINSC(D,"fax",H))
+ D WTAGDC^RWU("email",$$GET^IINSC(D,"email",H))
+ D WTAGDC^RWU("progs",$$NAMES^IMPRP(PRG))
+ D WTAGDC^RWU("stcprg",$$GET^IPAC(NIB,"stcprg"_ISTC,H))
+ S V=$S($$GET^IINSC(D,"dvid",H)=3:"no",1:"yes")
+ D W^RWU("<showa visible="""_V_"""/><bt_todo visible="""_V_"""/>")
+ S V=$$ISDGNPI(D,PRG,H)
+ D W^RWU("<btn_text visible="""_$S(V:"yes",1:"no")_"""/>")
+ D W^RWU("</pstcinfo><run>pstcinfo_spec_link</run></nb_console>")
+ D C^RWU
+ Q
+DIUSL(NIB,SP,ALLOW,ISTC,DTT,SPRG) ; Разрешенные/запрешенные услуги по пациенту
+ ; ALLOW - показывать только разрешенные услуги
+ ; ISTC - индекс договора
+ ; SPRG - выбранная программа
+ N WP,FF,DN,VI,SPF,COD,SPC,NM,OT,MPR,Q,UC,UG,SEX,PSEX,PGRP,G,z,AFG,OTL,UCNT
+ S SP=$S(SP="A":"",SP=0:"",SP=999:"",SP="":"",1:SP)
+ S AFG=$G(^cfg("price","grp-flg")) S:AFG'="" AFG="~"_AFG_"~"
+ S ISTC=$G(ISTC),DT=$$DIH^DTUTL($G(DTT))
+ S DN=$$GET^IPAC(NIB,"stc"_ISTC,DT),VI=+$$PRC^IINSC(DN,NIB,DT,"","",SP)
+ S ALLOW=+$G(ALLOW),FF=1,z="0000000000"
+ D OWF^RWU(".txt"),WC^RWU("Код|Наименование услуги|Условие")
+ S UCNT=0
+ I 'ALLOW,$$GET^IINSC(DN,"dvid")=3 G DIUSLe
+ S PSEX=$$GET^IPAC(NIB,"pol")
+ S VI=$$CORCP^IPRICET(VI)
+ S (OT,OTL)="" F  S OT=$O(^KDRI("so",SP,OT)) Q:OT=""  S OTL=$S(OTL="":"",1:OTL_"|")_OT
+ S SPF="|"_SP_"|"
+ S MPR=$S($G(SPRG)'="":SPRG,1:$$GET^IPAC(NIB,"prog"_ISTC,DT))
+ S G=$$^I("ilpu")
+ I G,'$$CHKLPUA^IMPRP(MPR,DT,G) G DIUSLe
+ D MKLST^NPRICEG("PGRP",1)
+ K ^BUF($J,"du")
+ S COD="" F  S COD=$O(^CN(COD)) Q:COD=""  D:$D(^(COD,VI))
+ .Q:'$$CHECK^IPRICE(COD,VI) 
+ .I SP'="" S SPC=$$GET^IPRICE(COD,"spec",VI,DT) I SPC'="",("|"_SPC_"|")'[SPF Q 
+ .I PSEX'="" S SEX=$$GET^IPRICE(COD,"dsex",VI,DT) I $L(SEX),SEX'=PSEX Q
+ .I AFG'="" S G=$$GET^IPRICE(COD,"grp",VI,DT) I G,AFG'[("~"_$$GETN^ISPRAV("gprice",G,4)_"~") Q  ; фильтр по флагам групп прайса
+ .S WP="",UCNT=UCNT+1
+ .I $$CHKUVA^YMPRP(MPR,DT,COD)=0 Q:ALLOW  S WP="не оказывается"
+ .I OTL'="",$$CHKOA^YMPRP(MPR,DT,OTL)<0 S WP="запрещено"
+ .I 'ALLOW,WP="" D  Q:WP="" 
+ ..I $$CHKUA^YMPRP(MPR,DT,COD)<0 S WP="платно" Q 
+ ..I $$CHKUSA^YMPRP(MPR,DT,COD) S WP="по согласованию" Q 
+ ..S NM=$$CNTUA^YMPRP(MPR,DT,COD)
+ ..D:NM'="" 
+ ...S UC=$P(NM,"|",1),UG=$P(NM,"|",5),WP=$S(UC:"не более "_UC_" шт.",1:""),Q=0
+ ...S:UG WP=$S(WP="":UG_" шт. по группе",1:UC_" шт. ("_UG_" по группе)")
+ ...S:UG=""&($P(NM,"|",4)'="") WP=WP_"(в группе)"
+ ..I $$CHKUSA^YMPRP(MPR,DT,COD) S WP=$S(WP="":"",1:WP_", ")_"по согласованию"
+ .I ALLOW,WP="" S Q=1 D  Q:Q 
+ ..S NM=$$CNTUA^YMPRP(MPR,DT,COD)
+ ..I NM'="" S UC=$P(NM,"|",1),UG=$P(NM,"|",5),WP=$S(UC:"не более "_UC_" шт.",1:""),Q=0 S:UG WP=$S(WP="":UG_" шт. по группе",1:UC_" шт. ("_UG_" по группе)") S:UG=""&($P(NM,"|",4)'="") WP=WP_"(в группе)" S:WP="" WP="разрешено" 
+ ..I $$CHKUSA^YMPRP(MPR,DT,COD) S Q=1,WP=$S(WP="":"",1:WP_", ")_"по согласованию" Q 
+ ..I WP="",$$CHKUA^YMPRP(MPR,DT,COD)'<0 S Q=0,WP="разрешено" Q 
+ .S NM=$$NAMEH^IPRICE(COD,VI,DT),FF=0
+ .S G=$G(PGRP(+$$GET^IPRICE(COD,"grp",VI,DT))) S:G="" G=0
+ .S ^BUF($J,"du",G,$E(z,1,10-$L(COD))_COD)=COD_"|"_NM_"|"_WP
+ ; Сортировка по группам и кодам прейскуранта
+ K PGRP S G="" F  S G=$O(^BUF($J,"du",G)) Q:G=""  D
+ .F z=1:1:99 S UG=+$P(G,"~",z) Q:'UG  I '$D(PGRP(UG)) S PGRP(UG)="" D WC^RWU(CR_"|"_$$NAME^NPRICEG(UG))
+ .S NM="" F  S NM=$O(^BUF($J,"du",G,NM)) Q:NM=""  D WC^RWU(CR_^(NM))
+ K ^BUF($J,"du")
+DIUSLe 
+ D:'ALLOW&FF WC^RWU(CR_$S('UCNT:"|услуги отсутствуют",1:"|ограничений нет"))
+ D:ALLOW&FF WC^RWU(CR_"|разрешенных нет")
+ D C^RWU
+ Q
+DIUSLG(NI,USL,ISTC,DTT,SPRG) ; Список услуг по группе
+ ; SPRG - выбранная программа
+ N WP,FF,DN,VI,SPF,COD,SPC,NM,OT,MPR,Q,P,U,Z,D,SEX,PSEX
+ S DT=$$DIH^DTUTL($G(DTT)),USL=$$WD^TXTU(USL),ISTC=$G(ISTC)
+ I USL="" Q 
+ S DN=$$GET^IPAC(NI,"stc"_ISTC,DT),VI=+$$PRC^IINSC(DN,NI,DT)
+ ; TODO - stom price
+ D OWF^RWU(".txt"),WC^RWU("Код|Наименование услуги")
+ S PSEX=$$GET^IPAC(NI,"pol")
+ S:VI=0!($D(^MN($G(^MN("tprice")),VI))=0) VI=1
+ S MPR=$S($G(SPRG)'="":SPRG,1:$$GET^IPAC(NI,"prog"_ISTC,DT))
+ F Z=1:1:$L(MPR,"|") S P=$P(MPR,"|",Z) D
+ .S D=$O(^MPRP(P,"u","g",DT+1),-1) Q:D=""
+ .Q:'$D(^MPRP(P,"u","g",D,USL)) 
+ .S U="" F  S U=$O(^MPRP(P,"u","g",D,USL,U)) Q:U=""  D WC^RWU(CR_U_"|"_$$NAMEH^IPRICE(U,VI,DT))
+ D C^RWU
+ Q
+LSTCLS ; Список классов создания
+ D OWF^RWU(".txt")
+ D:$$LCL^NUSER("patients"," setcls") LST^IRPAC
+ D C^RWU
+ Q
+DUSLH(NI,USL,ISTC,PIDX,DTT,SPRG) ; Условия по услуге с предисторией
+ ; SPRG - выбранные отдельно программы
+ N R,I,Ig,UC,K,DT,CU,CL,U,PRC,P,DS,X,VR,Npg,F,DH,CC,OT,ID,KT,DC,US
+ ; Npg - вне программы
+ S USL=$P(USL,"@",1),PIDX=$G(PIDX)
+ I USL="" Q 
+ S USL=$$WD^TXTU(USL),DH=$$DIH^DTUTL($G(DTT))
+ S:ISTC'="" PIDX=$$PIDX^IPAC(NI,ISTC,DH)
+ I ISTC="",PIDX'="" S ISTC=$$GET^IPAC(NI,"stc"_PIDX,DH)
+ S PRC=$$PRC^IINSC(ISTC,NI,DH)
+ S DT=DH,K=$S($G(SPRG)="":$$GET^IPAC(NI,"prog"_PIDX,DH),1:SPRG)
+ S R=$$CNTUA^YMPRP(K,DT,USL,"UC")
+ S US=$$CHKUS^YMPRP(K,DT,USL)
+ S I=+$P(R,"|",1),Ig=+$P(R,"|",5),DC=$P(R,"|",2)
+ S Npg=$S(R="":1,1:0)
+ S R=+$P(R,"|",2) S:R=0 R=99999
+ S DS=$$GET^IPAC(NI,"dog_from"_PIDX,DT)
+ S X=$$INSCNG^IPAC(NI,$$GET^IPAC(NI,"stc"_PIDX,DH),DT)
+ S DS=$S(DS="":X,X>DS:X,1:DS)
+ S R=$S(R<0:-R,DT-R<DS:DT-DS+1,1:R) ; не ранее нач.договора или абсолютно (если<0)
+ S UC=USL,UC(USL)=""
+ S K=$S(PIDX="":"",1:ISTC),F=+$G(^cfg("allow-vusl"))
+ S CU=$$CNTUSL^IUSL(NI,DT,DT-DS+1,"UC",F,"",1,0,"CL",K,"npg")
+ S K=999,F=1,KT=""
+ I Ig S R=Ig-$P(CU,"|",1) S:R'>0 F=0 I R<K S K=R,KT=" (по группе)"
+ I F,Ig,I S R=I-$P(CU,"|",2) S:R'>0 F=0 I R<K S K=R,KT=" (по группе)"
+ I F,'Ig S R=I-$P(CU,"|",1) S:R'>0 F=0 I R<K S K=R
+ S:K<0 K=0
+ S:K=999 K=""
+ 
+ I K="",'$D(CL) Q 
+ D OWF^RWU(".txt")
+ D WC^RWU("Дата|Услуга|Кол-во|Сотрудник")
+ D:K'="" WC^RWU(CR_"|Осталось разрешенных услуг"_$S(DC:" на "_$$DAYT^DTUTL(DC),1:"")_"|"_$S(K=999:"Не ограничено",1:K_KT)_"|"_$S(US:"с согласованием",1:""))
+ I K="",CU'="" D WC^RWU(CR_"|"_$S(Npg:"Запрещенных",1:"Разрешенных")_" услуг нет|")
+ S DT="" F  S DT=$O(CL(DT)) Q:DT=""  D
+ .S K="" F  S K=$O(CL(DT,K)) Q:K=""  D
+ ..S U=CL(DT,K),VR=$P(K,"|",1),OT=$P(K,"|",2),ID=$P(K,"|",3)
+ ..S P=$P($G(^ZNF(VR,OT,DT,ID,"e")),"~",4)
+ ..S:P="" P=PRC
+ ..S CC=$P($$GETUSLS^IUSL(VR,DT,OT,ID),"*",2)
+ ..D WC^RWU(CR_$$DT2^DTUTL(DT)_"|"_U_$S(CC="":"",1:", "_CC_" шт.")_" "_$$OWF^TXTU($$CNAMEH^IPRICE(U,P,DT),100)_"|"_$S(CC="":1,1:CC)_"|"_$$FIOSH^IKADRY(VR))
+ D C^RWU
+ Q
+DUREST(NI,PIDX,DTT,SPRG) ; Остатки по услугам
+ S DTT=$G(DTT)
+ D PACREST^RMPRP(NI,$$GET^IPAC(NI,"stc"_PIDX,$$DIH^DTUTL(DTT)),DTT,$G(SPRG))
+ Q
+SETCLS(NIB,CLS,COM,DAY,WHO,FAM,ST,OF,PAR) ; Установить класс, использующийся при создании пац.
+ S WHO=$G(WHO),FAM=$G(FAM),ST=$G(ST),OF=+$G(OF),PAR=$G(PAR)
+ D MSG^RWU(0)
+ Q:CLS=""  Q:'$$EXIST^IPAC(NIB)  Q:'$$LCL^IUSER("patients"," setcls") 
+ N R,H,A
+ S A=$$CHKCLS^IRPAC(NIB,CLS),H=+$H,PAR=$G(PAR)
+ I $L(A) D MSG^RWU(A) Q 
+ S COM=$$WD^TXTU($G(COM))
+ D:$L(FAM) SET^IPAC(NIB,"familyr",+$H,FAM)
+ D:OF SSTATE^IRPAC(NIB,"ofbill")
+ S R=$$GET^IPAC(NIB,"text",H)
+ D:$L(COM) SET^IPAC(NIB,"text",H,$S(R="":"",1:R_CR)_COM,1)
+ S R=$$GET^IPAC(NIB,"status",H),ST=$$DW^TXTU(ST)
+ I $L(ST),R=""!(ST'=R) D SET^IPAC(NIB,"status",H,ST,1)
+ D:$L(PAR) SET^IPAC(NIB,"lnkhist",H,PAR_" "_$$NAME^ISPRAV("pclssotr",PAR),1)
+ S A=$$SETCLS^IRPAC(NIB,CLS,COM,$G(DAY),WHO)
+ D DO^ITRIG("patient","setcls")
+ D MSG^RWU(A)
+ Q
+SETAGC(NIB,VR,ORG,PPL,AID) ; Установить агента на пациента
+ ; VR - врач
+ ; ORG - организация
+ ; PPL - сотрудник организации
+ ; AID - внешний код агента
+ Q:NIB=""  
+ I VR="",ORG="",PPL="",AID="" Q 
+ N DD,R,H
+ S H=+$H
+ S DD=$G(^cfg("pac","agc-dcnt")) S:DD="" DD=1
+ I $$GET^IPAC(NIB,"agent",H)'="" D MSG^RWU("Агент был указан ранее") Q 
+ S R=$$GET^IPAC(NIB,"agent",H-1)
+ D SET^IPAC(NIB,"agent",H,VR_"@@"_ORG_"@"_PPL_"@"_AID,1)
+ D:DD'=0 SET^IPAC(NIB,"agent",H+DD,R,1)
+ D DO^ITRIG("patient","setagc")
+ Q
+ONSMS(NIB) 
+ N I
+ S I=$O(^CMSI("type",6,"P",NIB,"")) Q:I'=""  
+ S I=+$H,^CMS("P",NIB,I,1)="0|0|4|||6|"_I_"||0"
+ D MKIDX^ICMS("P",NIB,I,1)
+ Q
+OFFSMS(NIB) 
+ N I
+ S I="" F  S I=$O(^CMSI("type",6,"P",NIB,I)) Q:I=""  D
+ .D RMIDX^ICMS("P",NIB,I,1)
+ .K ^CMS("P",NIB,I)
+ Q
+ENDAB(NIB) ; Завершить контракт
+ I $D(^BTPL(NIB)) Q 
+ I $$GET^IPAC(NIB,"stc")'=2 Q 
+ D SET^IPAC(NIB,"stc",+$H,1)
+ D SET^IPAC(NIB,"dog_from",+$H,"")
+ D SET^IPAC(NIB,"dog_to",+$H,"",1)
+ D L^YIPACN(NIB,$$DT^DTUTL(+$H))
+ Q
+IsPRP(NIB,DT,CLPU) ; Пациент первичный (CLPU - для текущ. ЛПУ)
+ G:$G(CLPU) IsPRPc
+ Q:$O(^DSHP(NIB,DT),-1)'="" 0
+ Q:$O(^PNF(NIB,DT),-1)'="" 0
+ Q:$D(^EPR(NIB)) 0
+ Q:$D(^MLAB(NIB)) 0
+IsPRPc 
+ N D,T,R,I,F,L
+ S F=1,D=DT,L=$$^I("ilpu")
+ F  S D=$O(^DSHP(NIB,D),-1) Q:D=""!('F)  S T="" F  S T=$O(^DSHP(NIB,D,T)) Q:T=""!('F)  S I="" F  S I=$O(^DSHP(NIB,D,T,I)) Q:I=""  S R=$P(^(I),"|",1) I R=L S F=0 Q 
+ Q:'F 0
+ Q:'$$IsPRP^IUSL(NIB,DT,L) 0
+ Q:'$$IsPRP^IMHU(NIB,DT,L) 0
+ Q 1
+REGLCL ; 
+ K ^LCLI("pacinfo")
+ S ^LCLI("pacinfo")="Доп. информация о пациенте"
+ S ^LCLI("pacinfo","noprn-prog")="Запрет печати текста программ"
+ Q

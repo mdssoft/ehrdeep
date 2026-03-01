@@ -1,0 +1,12 @@
+ICCNTR ; Контакт-центр. Внутренние процедуры. [ 06/12/2020  1:20 PM ]
+REGLCL 
+ K ^LCLI("ccntr")
+ S ^LCLI("ccntr")="Контакт-центр"
+ S ^LCLI("ccntr","action")="Действие по умолчанию. rsp - расписание пациента, pac - уч. карта"
+ Q
+INITDB 
+ S ^MN("root","dshlrsn")="Причина добавления в списки обзвона и ожидания"
+ S ^MN("root","dshlrsn","fname")="Наименование|UID"
+ S ^MN("root","dshlrsn","ftype")="S|S"
+ S ^MN("root","dshlrsn","fcode")="name|uid"
+ Q

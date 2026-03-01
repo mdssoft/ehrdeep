@@ -1,0 +1,205 @@
+NMEDSTD ; Медицинские стандарты [ 01/22/2019  2:41 PM ]
+LKDP(DIA,NIB,FRM) 
+ S DIA=$$RECODE^YMKB10(DIA)
+ N ST,R,T,I,V,M,AL,CNT
+ S NIB=$G(NIB),R=$$AGE^IPAC(NIB),FRM=$G(FRM,"spmes")
+ S (ST,T)="" F  S T=$O(^MOSMES("dia",DIA,T)) Q:T=""  D  Q:ST'=""
+ .Q:$G(^MOSMES("base",T,"use"))=0 
+ .S V=$G(^("a"))
+ .I 'V S ST=T Q
+ .I V["-",$P(V,"-",1)'>R,$P(V,"-",2)'>R S ST=T Q ; период возраста
+ .I V=1,R'="",R<16 S ST=T Q  ; дети
+ D OWF^RWU(".xmlb")
+ D W^RWU($G(^PP(0,2))_"<"_FRM_">")
+ I ST="" S R=$O(^MOSMES("dia",DIA)) D  G LKDP1
+ .D WTAGDCU^RWU("diagn","По данному диагнозу стандарты не известны !"_$S($E(R,1)=$E(DIA,1):" Ближайший - "_R,1:""),R)
+ .F I="con","rez","cnt","age","threat" D WTAG^RWU(I,"")
+ D WTAGDCU^RWU("diagn",$$NAME^YMKB10(DIA),DIA)
+ D WTAGD^RWU("st",ST)
+ D W^RWU("<con><titles></titles>")
+ S V="" F  S V=$O(^MOSMES("base",ST,"u",V)) Q:V=""  D
+ .D WC^RWU(CR_"<row><key>-</key><item>"_$G(^MOSMES("vid",V))_"</item></row>")
+ .S M="" F  S M=$O(^MOSMES("base",ST,"u",V,M)) Q:M=""  S T="" F  S T=$O(^MOSMES("base",ST,"u",V,M,T)) Q:T=""  D
+ ..S CNT=^(T) S:CNT="" CNT=1
+ ..S R=$G(^MOSMES("usl",T)) ; name
+ ..S AL=$$TAG^TXTU($G(^(T,"a"))) ; alias
+ ..D WC^RWU("<row><key>"_AL_"</key><item>"_R_"</item><item>"_$S(M=1:"*",1:"")_"</item><item>"_CNT_"</item></row>")
+ D W^RWU("</con>")
+ S R=$G(^MOSMES("base",ST,"n"))
+ D WTAGC^RWU("rez",$P(R,"|",2,99))
+ D WTAGD^RWU("cnt",$P(R,"|",1))
+ ; текстовые поля
+ S (M,V)="" F  S V=$O(^MOSMES("base",ST,"t",V)) Q:V=""  D
+ .S R=^(V)
+ .S M=$S(M="":"",1:M_CR)_^MOSMES("vid",V)_CR_R
+ D WTAGC^RWU("dsc",M)
+ 
+ D WTAGC^RWU("threat",$G(^MOSMES("base",ST,"l")))
+ 
+ D WTAGDC^RWU("age",$G(^MOSMES("base",ST,"f",6))) ; todo
+LKDP1 D W^RWU("</"_FRM_"></nb_console>")
+ D C^RWU
+ Q
+MKNAZ(DIA,NIB,ALL,VR,OT,SP,DT) ; Создать назначение от стандарта
+ ; ALL - 1=все услуги/0=только обязательные
+ ; VR,OT,SP - назначение от врача,отд,спец
+ N ID,UL,U,GL,ST,T,R,M,V,P,KP
+ S DIA=$$RECODE^YMKB10(DIA),DT=$$DIH^DTUTL($G(DT))
+ S R=$$AGE^IPAC(NIB),ALL=+$G(ALL)
+ S P=$$PRC^IINSC("",NIB,DT,0,OT,SP)
+ S KP=$$PRC^IINSC("",NIB,DT,1,OT,SP)
+ S (ST,T)="" F  S T=$O(^MOSMES("dia",DIA,T)) Q:T=""  D  Q:ST'=""
+ .Q:$G(^MOSMES("base",T,"use"))=0 
+ .S U=$G(^("a"))
+ .I 'U S ST=T Q
+ .I U["-",$P(U,"-",1)'>R,$P(U,"-",2)'>R S ST=T Q ; период возраста
+ .I U=1,R'="",R<16 S ST=T Q  ; дети
+ 
+ Q:ST=""
+ 
+ S V="" F  S V=$O(^MOSMES("base",ST,"u",V)) Q:V=""  D
+ .S M="" F  S M=$O(^MOSMES("base",ST,"u",V,M)) Q:M=""  I ALL!(M=1) S T="" F  S T=$O(^MOSMES("base",ST,"u",V,M,T)) Q:T=""  D
+ ..S R=^(T)
+ ..S:R="" R=1
+ ..S UL(T)=$G(UL(T))+R
+ ..S U=$G(^MOSMES("usl",T,"a")) Q:U="" 
+ ..M GL(U)=^MOSMES("uequal",U)
+ 
+ S V="",M=1 F  S V=$O(GL(V)) Q:V=""  S GL(V)=M,M=M+1
+ S T="" F  S T=$O(UL(T)) Q:T=""  D
+ .S U=$G(^MOSMES("usl",T,"a"))
+ .I U="" K UL(T) Q 
+ .I '$$CHECK^IPRICE(U,P),'$$CHECK^IPRICE(U,KP) K UL(T) Q 
+ .I $$FUSNAZ^INAZN(NIB,U,"",0,+$H-2,1)'="" K UL(T) Q ; назначения за 3 дня TODO - все а не только не выполненные
+ .I $$FNDUSL^IUSL(NIB,+$H,U,"",0,0)'="" K UL(T) ; услуги за сегодня
+ I '$D(UL),'$D(GL) Q  ; нет услуг
+ 
+ ; проверка пред. назначений
+ S V=$$DAYS^IMOSMES(ST) S:V="" V=1
+ I $$FNDMES^INAZN(NIB,ST,V) S T="" F  S T=$O(UL(T)) Q:T=""  D
+ .S U=$G(^MOSMES("usl",T,"a"))
+ .K:$$CHKPER^INAZN(NIB,U,V,ST)'="" UL(T)
+ I '$D(UL) D MSG^RWU("-") Q 
+ 
+ S OT=$G(OT),SP=$G(SP),VR=$G(VR)
+ S:VR="" VR=$$KDR^IUSER()
+ S ID=$P($$MKONE^INAZN(NIB,"",VR,+$H,3,,,,,,,OT,SP,$S(V>1:V,1:"")),"|",1)
+ D SETDIAG^INAZN(ID,DIA)
+ D SETMES^INAZN(ID,ST)
+ 
+ S T="" F  S T=$O(UL(T)) Q:T=""  D
+ .S U=$G(^MOSMES("usl",T,"a")) Q:U=""
+ .S R=UL(T),M=$G(GL(U))
+ .S:M ^NAZ(ID,"g",M)=R,^(M,U)="" ; кол-во в группе + usl (до ADD)
+ .D LNIADD^NNAZN(ID,U,R,M,1)
+ .Q:'M 
+ .S V="" F  S V=$O(GL(U,V)) Q:V=""  D
+ ..D LNIADD^NNAZN(ID,V,R,M,1) ; alt
+ ..S ^NAZ(ID,"g",M,V)=""
+ 
+ D:$D(GL) GL^IEXCH("^NAZ",ID,"g")
+ D MSG^RWU(ID) ; ID назначения 
+ Q
+lnkepr(DOC,VAL) ; Включить проверку на документах ЭМК
+ Q:DOC="" 
+ ;S:VAL 
+ ;K:'VAL 
+ Q
+eprNAZ(NIB,EID) ; Проверить и создать назначение для ЭМК
+ N DIA,MSG,%B,%L
+ S DIA=$P($$TRIM^TXTU($G(^EPRD(NIB,EID,"diag")))," ",1) Q:DIA="" ""
+ Q:'$$CHECK^YMKB10(DIA) ""
+ Q:'$$isPERV(NIB,+$P($G(^EPR(NIB,EID,"dt")),"|",1),$P($G(^EPR(NIB,EID,"o")),"|",2)) ""
+ D MKNAZ(DIA,NIB,0)
+ I $G(%L)=""!($G(%L)="-") Q ""
+ D NTXT^NNAZU(%L,NIB)
+ Q $$WD^TXTU($G(%L))
+sysEPR() 
+ N A,B,NN,D
+ S NN=$S($D(^DTYPE(TP,"fields","назначения")):"назначения",$D(^DTYPE(TP,"fields","направления")):"направления",1:"")
+ Q:NN="" 
+ S A=$G(^cfg("mes","allowdgn")) ; разрешеные для назн. договора
+ S D=$G(SDTL) S:D="" D=+$H
+ I A'="",("|"_A_"|")'[("|"_$$GET^IPAC(N,"stc",D)_"|") Q 
+ S A=$$eprNAZ(N,ID) Q:A="" 
+ S B=$G(^EPRD(N,ID,NN))
+ S B=$S(B="":"",1:B_CR)_A
+ S ^EPRD(N,ID,NN)=B
+ S AFL="<"_NN_">"_$$TAG^TXTU(B)_"</"_NN_">"
+ Q
+isPERV(NIB,DT,VR) ; Первичный прием (статусы или флаги)
+ N KX,F,P,U,M
+ s F=0
+ S KX="" F  S KX=$O(^PNF(NIB,DT,KX)) Q:KX=""  D:$P(KX,"|",1)=VR  Q:F
+ .S U=$P($G(^ZNF(VR,$P(KX,"|",2),DT,$P(KX,"|",3),"e")),"~",3) Q:U="" 
+ .S P=$P($G(^("m")),"~",2)
+ .I $$FLinFL^TXTU(P,"povp") S F=2 Q 
+ .I $$FLinFL^TXTU(P,"pervp") S F=1 Q 
+ .S P=$$STARTTP^IPRICE(U,DT,1) Q:P=""
+ .S P=$$GET^IPRICE(U,"cls",P,DT) Q:P="" 
+ .I $$FLinFL^TXTU(P,"povp") S F=2 Q 
+ .I $$FLinFL^TXTU(P,"pervp") S F=1 Q 
+ S:F=2 F=0
+ Q F
+sysIUSL()  ; Проверка на подписанные услуги для ITRIG("epr","presbsc")
+ N KX,F,DT,VR
+ S DT=+$P($G(^EPR(NI,ID,"dt")),"|",1),VR=$P($G(^EPR(NI,ID,"o")),"|",2)
+ Q:'DT=""  Q:VR="" 
+ s F=0,KX=""
+ F  S KX=$O(^PNF(NI,DT,KX)) Q:KX=""  I $P(KX,"|",1)=VR,"wd"'[$P($G(^ZNF(VR,$P(KX,"|",2),DT,$P(KX,"|",3),"e")),"~",1) S F=1 Q 
+ I 'F D MSG^RWU("Отсутствуют подписанные услуги")
+ Q
+isDIA(DIA) ; Среди стандартов есть такой диагноз
+ Q:'$D(^MOSMES("dia",DIA)) 0
+ Q 1
+getST(NIB,DIA) ; Получить код стандарта по диагнозу
+ N T,R,U
+ S R=$$AGE^IPAC(NIB)
+ S (ST,T)="" F  S T=$O(^MOSMES("dia",DIA,T)) Q:T=""  D  Q:ST'=""
+ .Q:$G(^MOSMES("base",T,"use"))=0 
+ .S U=$G(^("a"))
+ .I 'U S ST=T Q
+ .I U["-",$P(U,"-",1)'>R,$P(U,"-",2)'>R S ST=T Q ; период возраста
+ .I U=1,R'="",R<16 S ST=T Q  ; дети
+ Q ST
+getULST(ST,VAR,FIX) ; Получить список услуг
+ ; FIX=1 - только обязательные
+ N V,M,T,U,R
+ S FIX=+$G(FIX)
+ S V="" F  S V=$O(^MOSMES("base",ST,"u",V)) Q:V=""  D
+ .S M="" F  S M=$O(^MOSMES("base",ST,"u",V,M)) Q:M=""  I 'FIX!(M=1) S T="" F  S T=$O(^MOSMES("base",ST,"u",V,M,T)) Q:T=""  D
+ ..S R=^(T)
+ ..S:R="" R=1
+ ..S U=$G(^MOSMES("usl",T,"a")) Q:U=""
+ ..S @VAR@(U)=$G(@VAR@(U))+R
+ Q
+EXP1 
+ N MES,DI,U,COM,TAB,I,J,R,K,M
+ D OWF^RWU(".txt")
+ D WC^RWU("МЭС|Диагноз|Услуга|Код услуги|Кол-во|Обязательно|Нетруд.|Лечение|Возраст")
+ S MES="" F  S MES=$O(^MOSMES("base",MES)) Q:MES=""  D
+ .Q:$G(^MOSMES("base",MES,"use"))=0
+ .K TAB
+ .S DI="",I=1 F  S DI=$O(^MOSMES("base",MES,"d",DI)) Q:DI=""  S $P(TAB(I),"|",1)=DI,I=I+1
+ .S K="",I=1 F  S K=$O(^MOSMES("base",MES,"u",K)) Q:K=""  D
+ ..S M="" F  S M=$O(^MOSMES("base",MES,"u",K,M)) Q:M=""  D
+ ...S U="" F  S U=$O(^MOSMES("base",MES,"u",K,M,U)) Q:U=""  D
+ ....S $P(TAB(I),"|",2)=$G(^MOSMES("usl",U))
+ ....S $P(TAB(I),"|",3)=$G(^MOSMES("usl",U,"a"))
+ ....S R=^MOSMES("base",MES,"u",K,M,U) S:R="" R=1
+ ....S $P(TAB(I),"|",4)=R
+ ....S $P(TAB(I),"|",5)=$S(M=1:"x",1:"") ; TODO - по наименованию
+ ....S I=I+1
+ .S $P(TAB(1),"|",6)=$P($G(^MOSMES("base",MES,"n")),"|",1)
+ .S R=$G(^MOSMES("base",MES,"a"))
+ .S:R'=""&(R'=0) $P(TAB(1),"|",9)=R
+ .S R=$G(^MOSMES("base",MES,"l"))
+ .F I=1:1:$L(R,CR) S $P(TAB(I),"|",7)=$P(R,CR,I)
+ .S K=MES_"|"
+ .S I="" F  S I=$O(TAB(I)) Q:I=""  D WC^RWU(CR_K_TAB(I)) S K="|"
+ .D WC^RWU(CR)
+ D C^RWU
+ Q
+REGIPROC 
+ S ^IPROC("Система","Экспорт МЭС, формат 2")="EXP1_NMEDSTD,1,0"
+ Q

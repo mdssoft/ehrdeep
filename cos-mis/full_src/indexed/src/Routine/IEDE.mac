@@ -1,0 +1,156 @@
+IEDE ; Процедуры Единого Документа (общие) [ 01/11/2021  1:43 PM ]
+GETHMSL(VR,DT,OT,MS) ; Получить строку времени медсестры
+ Q:VR=""!(DT="")!(OT="") "" Q:$D(^ZNF(VR,OT,DT))[0 ""
+ N R,L,RR,X,U,LP
+ S R=$P(^(DT),"|",6),L=$$^I("ilpu"),RR=""
+ F X=1:1:$L(R,";") S U=$P(R,";",X) I U'="",$P(U,":",1)=MS S LP=$P(U,":",4) I LP=""!(LP=L) S RR=U Q
+ Q RR
+GETTM(OT,VR,DS,DE,TP,LOGG,DWW) ; Получить "время по документу за период"
+ ; DWW - ежедневный лог
+ N D,R,S,K
+ S S=0,DWW=+$G(DWW)
+ I OT'="" D GETTMp
+ I OT="" S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D GETTMp
+ I $L($G(LOGG)),S S R=$O(@LOGG@(""),-1)+1,^(R)="Время работы медсестры по ЕД|"_$$TM^DTUTL(S)
+ ; TODO - разные ЛПУ
+ Q S
+GETTMp ; proc for GETTM
+ S D=DS-1 F  S D=$O(^ZNF(VR,OT,D)) Q:D=""!(D>DE)  D
+ .S R=^(D)
+ .S K=$S(TP=1:$P(R,"|",2),TP=2:$P(R,"|",3),TP=3:$P(R,"|",4),1:$P(R,"|",2)+$P(R,"|",3)+$P(R,"|",4))
+ .S S=S+K
+ .I K,DWW,$L($G(LOGG)) S R=$O(@LOGG@(""),-1)+1,^(R)="Время работы медсестры по ЕД на "_$$DT2^DTUTL(D)_"|"_$$TM^DTUTL(K)
+ Q
+GETMSTM(LP,VR,MS,DS,DE,LOGG,DWW) ; Получить время м.с.
+ ; VR - now not used
+ ; DWW - ежедневный лог
+ I DS=DE,'$$USEInLPU^IKADRY(MS,LP,DS) Q 0
+ N OT,V,D,R,S,I,X,K,L,F
+ S V="",S=0,DWW=+$G(DWW)
+ F  S V=$O(^ZNF(V)) Q:V=""  I VR=""!(V=VR) D
+ .I +LP,'$D(^ZNFI("l",LP,V)) Q 
+ .S OT="" F  S OT=$O(^ZNF(V,OT)) Q:OT=""  S D=DS-1 F  S D=$O(^ZNF(V,OT,D)) Q:D=""!(D>DE)  D
+ ..S R=$P(^(D),"|",6) Q:R=""
+ ..Q:'$$USEInLPU^IKADRY(MS,LP,D) 
+ ..S F=$$chkLPU(V,OT,D,LP)
+ ..F I=1:1:$L(R,";") S X=$P(R,";",I) D:$P(X,":",1)=MS  
+ ...S K=$P(X,":",2),L=$P(X,":",4)
+ ...I L="",'F Q 
+ ...I L'="",LP'="",LP'=L Q 
+ ...S S=S+K
+ ...I K,DWW,$L($G(LOGG)) S R=$O(@LOGG@(""),-1)+1,^(R)="Время работы медсестры по ЕД на "_$$DT2^DTUTL(D)_"|"_$$TM^DTUTL(S)
+ I $L($G(LOGG)),S S R=$O(@LOGG@(""),-1)+1,^(R)="Время работы медсестры по ЕД|"_$$TM^DTUTL(S)
+ Q S
+GETMSP(LP,VR,MS,DS,DE,LOGG,DWW) ; Получить процент м.с.
+ ; VR - now not used
+ ; DWW - ежедневный лог
+ I DS=DE,'$$USEInLPU^IKADRY(MS,LP,DS) Q 0
+ N OT,V,D,R,S,I,K,L,F
+ S V="",S=0,DWW=+$G(DWW)
+ F  S V=$O(^ZNF(V)) Q:V=""  I VR=""!(V=VR) D
+ .I +LP,'$D(^ZNFI("l",LP,V)) Q
+ .S OT="" F  S OT=$O(^ZNF(V,OT)) Q:OT=""  S D=DS-1 F  S D=$O(^ZNF(V,OT,D)) Q:D=""!(D>DE)  D
+ ..S R=$G(^(D)) Q:R="" 
+ ..Q:'$$USEInLPU^IKADRY(MS,LP,D)
+ ..S F=$$chkLPU(V,OT,D,LP) 
+ ..I $P(R,"|",1)=MS,$P(R,"|",5)'="" Q:'F  S S=S+$P(R,"|",5) Q 
+ ..S R=$P(R,"|",6)
+ ..F I=1:1:$L(R,";") S X=$P(R,";",I) D:$P(X,":",1)=MS  
+ ...S K=$P(X,":",3),L=$P(X,":",4)
+ ...I L="",'F Q 
+ ...I L'="",LP'="",LP'=L Q
+ ...S S=S+K
+ ...I K,DWW,$L($G(LOGG)) S R=$O(@LOGG@(""),-1)+1,^(R)="Процент участия медсестры по ЕД на "_$$DT2^DTUTL(D)_"|"_$TR(K,",",".")
+ I $L($G(LOGG)),S S R=$O(@LOGG@(""),-1)+1,^(R)="Процент участия медсестры по ЕД|"_$TR(S,",",".")
+ Q S
+chkLPU(VR,OT,DT,LP) ; Проверить филиал для документа
+ I $D(^ZNFI("l")) Q:'$D(^ZNFI("l",LP,VR,DT)) 0 ; нет врача в ЛПУ
+ N F,I
+ S F=1,I=""
+ F  S I=$O(^ZNF(VR,OT,DT,I)) Q:I=""  S F=0 I $G(^(I,"l"))=LP S F=1 Q
+ Q F
+UNAME(NIB,USL,DT)  ; Имя услуги по номеру истории и коду
+ N PRC,DT,A
+ S:$G(DT)="" DT=+$H
+ S USL=$P(USL,"*",1)
+ S PRC=+$$PRC^IINSC($$GET^IPAC(NIB,"stc",DT),NIB,DT)
+ S PRC=$$CORCP^IPRICET(PRC)
+ S A=$$NAMEH^IPRICE(USL,PRC,DT)
+ Q A
+LASTCNG(VR,DT,OT) ; Получить последнее изменение док-та
+ N ID,R,REZ,DTM
+ S (REZ,ID,DTM)="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ .S R=$$GETLOG^IUSL(VR,DT,OT,ID)
+ .I $$CMPDTM^DTUTL($P(R,"|",3),DTM)=1 S REZ=R,DTM=$P(R,"|",3)
+ Q REZ
+STOM(OT,SP) ; Отделение/специальность стоматология
+ Q:$D(^cfg("stom-otd",+OT)) 1
+ Q ($$GETPL^ISPRAV("spec",SP,"tp")=4)
+STAC(OT,SP) ; Отделение/специальность стационар
+ Q:$D(^cfg("stac-otd",+OT)) 1
+ Q ($$GETPL^ISPRAV("spec",SP,"tp")=7)
+MKSCOTD ; Создать в переменных перечень подразделений стоматологии и стационара
+ K STOTD,SCOTD
+ S:$G(^cfg("stom-otd"))'="" STOTD(^cfg("stom-otd"))=""
+ M STOTD=^cfg("stom-otd") M SCOTD=^cfg("stac-otd")
+ Q
+MKSCSPC ; Создать в переменных перечень специальностей стоматологии и стационара
+ N I,N,T
+ S I=$$IDX^ISPRAV("spec") Q:'I
+ K STSPC,SCSPC
+ S N="" F  S N=$O(^MN(I,N)) Q:N=""  S T=$$GETPL^ISPRAV("spec",N,"tp") S:T=4 STSPC(N)="" S:T=7 SCSPC(N)=""
+ Q
+SMOD(SMOD,OTD) ; Проверка на соответствие стом./стац.
+ Q:OTD="" 1
+ Q $S(SMOD=2:$D(STOTD(OTD)),SMOD=3:$D(SCOTD(OTD)),$D(STOTD(OTD)):0,$D(SCOTD(OTD)):0,1:1)
+INITDB 
+ S ^MN("root","uslreso")="Результат обращения по услуге"
+ Q
+REGLCL ; 
+ K ^LCLI("ed")
+ S ^LCLI("ed")="Единый документ учета работы"
+ S ^LCLI("ed","new")="Ввод услуг =0 - запрет"
+ S ^LCLI("ed","ksscomm")="Обязателен комментарий на кассовую услугу"
+ S ^LCLI("ed","viewsbcs")="Показывать или нет подписанные услуги"
+ S ^LCLI("ed","kssdel")="Разрешать удалять кассовые услуги"
+ S ^LCLI("ed","nulserv")="Положение ""Пустой услуги"""
+ S ^LCLI("ed","allmaxusl")="Подсчет макс. кол-ва по всем услугам"
+ S ^LCLI("ed","noifgone")="Запрет регистрации/подписи если пациент ушел"
+ S ^LCLI("ed","hstcsum")="Запрет показа итоговых сумм по СК"
+ S ^LCLI("ed","strictgrn")="Запрет отметки Г.П. при отсутствии письма"
+ S ^LCLI("ed","chkadbl")="Проверять дублированные услуги у всех врачей"
+ S ^LCLI("ed","allprice")="Выводить весь прейскурант без учета отделений и специальностей"
+ S ^LCLI("ed","showcn")="Показывать цену при выводе прейскуранта"
+ S ^LCLI("ed","mated")="Редактор списанных материалов"
+ S ^LCLI("ed","chkms")="Проверять и предлагать ввод медсестры (0-нет,1-выбор и без м.с., 2-без м.с. внизу, 3 без м.с. отсутствует, 4 без мс+необязательный ввод в ЭИБ)"
+ S ^LCLI("ed","mmss")="Учет нескольких медсестер в ЕД в соответствии со временем"
+ S ^LCLI("ed","ed-all-flg")="Показывать все статусы в редакторе услуг"
+ S ^LCLI("ed","delsbs")="Удаление подписанных некассовых услуг"
+ S ^LCLI("ed","chknzub")="Проверять введенные № зубов на наличие в формуле в ЭИБ"
+ S ^LCLI("ed","ms-cwrk")="Устанавливать медсестру как соисполнителя по услуге"
+ S ^LCLI("ed","edfprint")="Шаблон печати единого докумета (файл)"
+ S ^LCLI("ed","setmsnow")="Изменение только текущего времени работы м.с."
+ S ^LCLI("ed","ulang")="Язык по умолчанию при вводе услуг"
+ S ^LCLI("ed","setskd")="Изменение скидки"
+ S ^LCLI("ed","setsumm")="Изменение суммы"
+ S ^LCLI("ed","sbsdia")="Изменение диагноза в подписанных услугах"
+ S ^LCLI("ed","sbscom")="Изменение примечания в подписанных услугах"
+ S ^LCLI("ed","nminput")="Запрет ручного ввода не своих услуг в ЭИБ (=1)"
+ S ^LCLI("ed","anyskd")="Игнорировать запрет скидки/наценки"
+ S ^LCLI("ed","mxdays")="Максимальное число дней для ввода услуг"
+ S ^LCLI("ed","cntround")="Округления кол-ва услуг (знаков)"
+ S ^LCLI("ed","sbsprint")="Печать документа при подписи услуг: файл|условие"
+ S ^LCLI("ed","swnaztab")="Показывать назначенные услуги с таблице зарегистрированных"
+ S ^LCLI("ed","epi-udgn")="Показывать в услугах эпикриза"
+ S ^LCLI("ed","epi-hdia")="Скрывать диагноз в эпикризе"
+ S ^LCLI("ed","sel-extcon")="Выбор внешних контрагентов, если больше 2"
+ S ^LCLI("ed","nowrh")="Запрет ручного выбора и списания материалов"
+ S ^LCLI("ed","hed")="Изменение заголовка ЕД (0-запрет)"
+ S ^LCLI("ed","chkuprc")="Пользовательская процедура проверки условий обслуживания"
+ S ^LCLI("ed","showmeusl")="Отображать не свои но лично введеные услуги"
+ S ^LCLI("ed","nosbs")="Запрет подписи услуг"
+ S ^LCLI("ed","nnaz-warn")="Спрашивать, если услуга вне выбранного назначения"
+ S ^LCLI("ed","strict-price")="Выводить услуги только с соответствием отделения/специальности"
+ S ^LCLI("ed","mincnt")="Минимальное кол-во при вводе любой услуги"
+ S ^LCLI("ed","strictso")="Строгое соответствие услуги отделению и спец."
+ Q

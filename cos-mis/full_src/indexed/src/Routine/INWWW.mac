@@ -1,0 +1,42 @@
+INWWW ; Input from www (IMSGHUB) [ 04/27/2015  3:10 PM ]
+INRECV() ; External input
+ N TP,ID,FN,UID,IDX
+ S TP=$G(HTTPH("X-FROM-MHUB")) Q:TP=""
+ S UID=$G(HTTPH("X-FROM-MHUB-ID"))
+ S IDX=$$FNDUID^IMSGHUB(TP,UID) S:IDX="" IDX=1
+ S FN=$G(^MSGHUB(TP,IDX))
+ S:FN="" FN=$G(^MSGHUB(TP))
+ Q:FN="" 
+ S FN="INRECV^"_FN_"()"
+ D @FN 
+ Q
+DORECV(ID) 
+ ; NULL
+ Q
+DOSEND(ID) 
+ N IDX,IP,PRT,USR,PAS,MSG,I,X,URL,UID,TP
+ S IP=$G(^MSGHUB("www",ID,"server")) Q:IP=""
+ S PRT=$P(IP,":",2),IP=$P(IP,":",1) S:PRT="" PRT=8081
+ S USR=$G(^("login")),PAS=$G(^("passwd")),URL=$G(^("url"))
+ I URL="" S URL=$S(USR="":"",1:"/AUTH/zINW")_"/INWEB_NMSGSTOR?"
+ S TP=$G(^("tp")),UID=$G(^("uid"))
+ S IDX="" F  S IDX=$O(^MSGOUT("www",ID,IDX)) Q:IDX=""  D
+ .S R=^(IDX)
+ .Q:$$timeout^IMSGHUB("www",ID,IDX) 
+ .S NET=$$OPEN^WWWCLI(IP,PRT)
+ .Q:NET=""
+ .D:USR'="" SETAUTH^WWWCLI(NET,1,USR,PAS)
+ .D:TP'="" SETHDR^WWWCLI(NET,"X-From-MHub",TP)
+ .D:UID'="" SETHDR^WWWCLI(NET,"X-From-MHub-id",UID)
+ .D OWBUF^WWWCLI(NET)
+ .S (MSG,I)="" F  S I=$O(^MSGOUT("www",ID,IDX,"data",I)) Q:I=""  S MSG=MSG_^(I)
+ .D WBUF^WWWCLI(NET,MSG)
+ .D CBUF^WWWCLI(NET)
+ .S X=$$POST^WWWCLI(NET,URL)
+ .D CLOSE^WWWCLI(NET)
+ .Q:X'=200
+ .D endsend^IMSGHUB("www",ID,IDX)
+ Q
+INITDB 
+ S ^MSGHUB("www")="INWWW"
+ Q

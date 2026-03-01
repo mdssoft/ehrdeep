@@ -1,0 +1,204 @@
+IZARPU ; Утилиты зарплаты [ 10/13/2020  6:56 PM ]
+GETARL(ID,I,R) ; Вывод строки алгоритма расчета выручки
+ ; ID - код алгоритма
+ ; I - № строки алгоритма
+ ; R - альтернативно: строка данных алгоритма
+ N T,A,X,P,V
+ S T="vprm|cond|vzprm|oper|zprm|zprm|vars",A=""
+ S:$G(R)="" R=^ZARM("ar",ID,"v",I),A=$G(^(I,"l"))
+ F X=1:1:7 S P=$P(R,"|",X),V=$P(T,"|",X),A=A_"|"_$$getLAR^NZARPS(V,P,"v")
+ Q A
+RENALOG(LP,TP,H,FDT) ; Возврат налоговых вычетов на счет при долге 
+ ; LPU - филиал ; TP - тип выплат, FDT
+ N DT,zDT,DE,OT,VR,A,R,X1,X2,X3,X4,S,Z,TP,TT
+ S H=$G(H) S:H="" H=+$H S:$G(FDT)="" FDT=H
+ S zDT=$$startDT^IZARP(H,,LP),LP=+LP
+ S TT=$G(^cfg("zarp","outkss"))
+ S:$G(TP)="" TP=$G(^cfg("zarp","vptype"))
+ S OT="" F  S OT=$O(^ZARP(LP,OT)) Q:OT=""  D
+ .S VR="" F  S VR=$O(^ZARP(LP,OT,VR)) Q:VR=""  D
+ ..S DT=$O(^(VR,H+1),-1) Q:DT<(H-31)  Q:DT>H  ; последний период
+ ..S DE=+$G(^(DT)) Q:DE'=H  ; только период заканчивается сегодня
+ ..Q:'$D(^(DT,"f")) 
+ ..S X1=$G(^(1)),X2=$G(^(2)),X3=$G(^("nalog"))
+ ..S X3=$S(X3="":$G(^("nalogs")),1:X1+X2*X3/100) ; сумма или процент
+ ..Q:X3=0  ; не налогов
+ ..S X3=+$FN(X3,"",2),Z=LP_"@"_OT_"@"_VR
+ ..S X4=+$FN(X1+X2-X3-$$GETPAYP^IZARP(DT,DE,Z),"",2)
+ ..S S=X4-$$GETPAY^IZARP(DT,DE,Z) Q:S'<0 
+ ..S:FDT'=H X3=$$PNALOG^IZARP(FDT,H,LP,OT,VR) ; за пред. периоды и сегодня
+ ..Q:X3=0 
+ ..S:-X3>S S=-X3 ; долг не больше налога
+ ..S ^ZARV(LP,VR,DT,$H)=S_"|sys"_$S(TP="":"",1:"|"_TP)
+ ..D GL^IEXCH("^ZARV",LP,VR,DT)
+ ..D:TP=1 OUTSUM^IBILL("",S,TT,$$FIOSH^IKADRY(VR),"ZARP:"_LP_":"_OT_":"_VR_":"_DT_":"_H)
+ Q
+ANLPAY(LP,DS,DE,TP) ; Возврат выплат за период по ЛПУ
+ N DT,O,V
+ S TP=$G(TP)
+ S O="" F  S O=$O(^ZARP(LP,O)) Q:O=""  D
+ .S V="" F  S V=$O(^ZARP(LP,O,V)) Q:V=""  D
+ ..S DT=DS-1
+ ..F  S DT=$O(^ZARP(LP,O,V,DT)) Q:DT=""!(DT>DE)  D
+ ...D ANLV^IZARP(LP,O,V,DT,"",TP)
+ ...D SBS^IZARP(LP,O,V,DT,2) ; system set
+ Q
+CONVNOO ; Конвертировать в "без отделений"
+ N L,O,V
+ S L=+$$^I("ilpu")
+ K ^BUF($J)
+ S O="" F  S O=$O(^ZARP(L,O)) Q:O=""  M ^BUF($J,0)=^ZARP(L,O)
+ K ^ZARP(L)
+ M ^ZARP(L)=^BUF($J)
+ K ^BUF($J)
+ S O="" F  S O=$O(^ZARPL(L,O)) Q:O=""  M ^BUF($J,0)=^ZARPL(L,O)
+ K ^ZARPL(L)
+ M ^ZARPL(L)=^BUF($J)
+ K ^BUF($J)
+ S O="" F  S O=$O(^ZARPI("uexc",L,O)) Q:O=""  M ^BUF($J,0)=^ZARPI("uexc",L,O)
+ K ^ZARPI("uexc",L)
+ M ^ZARPI("uexc",L)=^BUF($J)
+ K ^BUF($J)
+ S O="" F  S O=$O(^ZARPI("uexclog",L,O)) Q:O=""  M ^BUF($J,0)=^ZARPI("uexclog",L,O)
+ K ^ZARPI("uexclog",L)
+ M ^ZARPI("uexclog",L)=^BUF($J)
+ K ^BUF($J)
+ Q
+MKUIDX(DS,DE,KL) ; Создать начисления по ЗП на индексы услуги
+ ; DS - дата начала
+ ; DE - дата окончания
+ ; KL - полностью очищать ^ZNFE
+ N L,O,V,R,D,DT,I,NI,U,S,KX,OT,VR,ID,Q,X
+ S KL=$G(KL)
+ K:KL ^ZNFE
+ S L="" F  S L=$O(^ZARPL(L)) Q:L=""  S O="" F  S O=$O(^ZARPL(L,O)) Q:O=""  D
+ .S V="" F  S V=$O(^ZARPL(L,O,V)) Q:V=""  S D=DS-1  F  S D=$O(^ZARPL(L,O,V,D)) Q:D=""!(D>DE)  D
+ ..S I="" F  S I=$O(^ZARPL(L,O,V,D,I)) Q:I=""  D
+ ...S R=^(I),S=$P(R,"|",2),R=$P(R,"|",1)
+ ...Q:R'["," 
+ ...S DT=$P(R,",",1),NI=$P(R,",",2),U=$P(R,",",3)
+ ...S DT=$$DI^DTUTL($$TRIM^TXTU(DT)) Q:DT=""  
+ ...S NI=$$TRIM^TXTU($P($$TRIM^TXTU(NI)," ",1)) I '$$EXIST^IPAC(NI) W !,NI,!,L_","_O_","_V_","_D_","_I Q 
+ ...S U=$$TRIM^TXTU($P($$TRIM^TXTU(U)," ",1)) Q:'$$CHECK^IPRICE(U,1) 
+ ...S (OT,VR,ID)="",Q=0
+ ...S KX="" F  S KX=$O(^PNF(NI,DT,KX)) Q:KX=""  D  Q:Q 
+ ....S VR=$P(KX,"|",1),OT=$P(KX,"|",2),ID=$P(KX,"|",3)
+ ....S X=$P($G(^ZNF(VR,OT,DT,ID,"e")),"~",3)
+ ....I U=X S Q=1 Q 
+ ...I OT="" W !,R Q
+ ...I 'KL,$D(^ZNFE(VR,OT,DT,ID,"zrp")) Q  ; don't change
+ ...S ^ZNFE(VR,OT,DT,ID,"zrp",VR)=S_"|"_L
+ Q
+CLRDV(DS,DE,LPU,CLR) ; Найти/очистить двойную выдачу з.п.
+ ; CLR - do clear
+ N VR,DT,H,S,LST
+ S CLR=$G(CLR)
+ S VR="" F  S VR=$O(^ZARV(LPU,VR)) Q:VR=""  D
+ .S DT=DS-1 F  S DT=$O(^ZARV(LPU,VR,DT)) Q:DT=""!(DT>DE)  D
+ ..K LST
+ ..S H="" F  S H=$O(^ZARV(LPU,VR,DT,H)) Q:H=""  D
+ ...S S=$P(^(H),"|",1) Q:'S 
+ ...I $D(LST(S)) W !,LPU_","_VR_","_DT_","""_LST(S)_"""="_S D:CLR ANLV^IZARP(LPU,0,VR,DT,LST(S)) S LST(S)=H
+ ...S LST(S)=H
+ Q
+UPDLPU(DAYS) ; Переслать заново с филиалов последние .. дней
+ N DS,DE,DT,VR,OT,LPU
+ S LPU=+$$^I("ilpu"),DE=+$H,DS=DE-DAYS
+ 
+ S VR="" F  S VR=$O(^ZARV(LPU,VR)) Q:VR=""  D
+ .S DT=DS-1 F  S DT=$O(^ZARV(LPU,VR,DT)) Q:DT=""!(DT>DE)  D REGL^IEXCH("^ZARV",LPU,VR,DT)
+ 
+ S OT="" F  S OT=$O(^ZARP(LPU,OT)) Q:OT=""  D
+ .S VR="" F  S VR=$O(^ZARP(LPU,OT,VR)) Q:VR=""  D
+ ..S DT=DS-1 F  S DT=$O(^ZARP(LPU,OT,VR,DT)) Q:DT=""!(DT>DE)  D REGL^IEXCH("^ZARP",LPU,OT,VR,DT)
+ Q
+MOVV(DS,DE,FV,TV) ; Перенести записи между сотрудниками
+ ; DS - начало периода
+ ; DE - конец периода
+ ; FV - с сотрудника
+ ; TV - на сотрудника
+ N LP,OT,DT
+ 
+ S LP="" F  S LP=$O(^ZARP(LP)) Q:LP=""  D
+ .S OT="" F  S OT=$O(^ZARP(LP,OT)) Q:OT=""  D
+ ..S DT=DS-1 F  S DT=$O(^ZARP(LP,OT,FV,DT)) Q:DT=""!(DT>DE)  D
+ ...M ^ZARP(LP,OT,TV,DT)=^ZARP(LP,OT,FV,DT)
+ ...K ^ZARP(LP,OT,FV,DT)
+ ...D GL^IEXCH("^ZARP",LP,OT,TV,DT)
+ ...D KGL^IEXCH("^ZARP",LP,OT,FV,DT)
+ ...D:$D(^ZARPI("uexc",LP,OT,FV,DT))
+ ....M ^ZARPI("uexc",LP,OT,TV,DT)=^ZARPI("uexc",LP,OT,FV,DT)
+ ....K ^ZARPI("uexc",LP,OT,FV,DT)
+ ....D GL^IEXCH("^ZARPI","uexc",LP,OT,TV,DT)
+ ....D KGL^IEXCH("^ZARPI","uexc",LP,OT,FV,DT)
+ 
+ 
+ S LP="" F  S LP=$O(^ZARPL(LP)) Q:LP=""  D
+ .S OT="" F  S OT=$O(^ZARPL(LP,OT)) Q:OT=""  D
+ ..S DT=DS-1 F  S DT=$O(^ZARPL(LP,OT,FV,DT)) Q:DT=""!(DT>DE)  D
+ ...M ^ZARPL(LP,OT,TV,DT)=^ZARPL(LP,OT,FV,DT)
+ ...K ^ZARPL(LP,OT,FV,DT)
+ ...D GL^IEXCH("^ZARPL",LP,OT,TV,DT)
+ ...D KGL^IEXCH("^ZARPL",LP,OT,FV,DT)
+ 
+ ; отдельно. DT - дата услуги 
+ S LP="" F  S LP=$O(^ZARPI("uexclog",LP)) Q:LP=""  D
+ .S OT="" F  S OT=$O(^ZARPI("uexclog",LP,OT)) Q:OT=""  D
+ ..S DT=DS-1
+ ..F  S DT=$O(^ZARPI("uexclog",LP,OT,FV,DT)) Q:DT=""!(DT>DE)  D
+ ...M ^ZARPI("uexclog",LP,OT,TV,DT)=^ZARPI("uexclog",LP,OT,FV,DT)
+ ...K ^ZARPI("uexclog",LP,OT,FV,DT)
+ ...D GL^IEXCH("^ZARPI","uexclog",LP,OT,TV,DT)
+ ...D KGL^IEXCH("^ZARPI""uexclog",,LP,OT,FV,DT)
+ 
+ ; TODO - коды услуг
+ D:$D(^ZARPI("uexcr",FV))  ; актуальное
+ .M ^ZARPI("uexcr",TV)=^ZARPI("uexcr",FV)
+ .K ^ZARPI("uexcr",TV)
+ .D GL^IEXCH("^ZARPI","uexcr",TV)
+ .D KGL^IEXCH("^ZARPI","uexcr",FV)
+ 
+ S LP="" F  S LP=$O(^ZARV(LP)) Q:LP=""  D
+ .S DT=DS-1 F  S DT=$O(^ZARV(LP,FV,DT)) Q:DT=""!(DT>DE)  D
+ ..M ^ZARV(LP,TV,DT)=^ZARV(LP,FV,DT)
+ ..K ^ZARV(LP,FV,DT)
+ ..D GL^IEXCH("^ZARV",LP,TV,DT)
+ ..D KGL^IEXCH("^ZARV",LP,FV,DT)
+ 
+ Q
+MOVDT(LP,VR,DFR,DTO) ; Перенести выплаты и налоги на другой день
+ N OT,DT,HH,FL
+ ; налоги
+ S OT="" F  S OT=$O(^ZARP(LP,OT)) Q:OT=""  D
+ .Q:'$D(^ZARP(LP,OT,VR,DFR)) 
+ .F FL="nalog","nalogs","nalogdsc" D:$D(^ZARP(LP,OT,VR,DFR,FL))
+ ..M ^ZARP(LP,OT,VR,DTO,FL)=^ZARP(LP,OT,VR,DFR,FL)
+ ..K ^ZARP(LP,OT,VR,DFR,FL)
+ ..D GL^IEXCH("^ZARP",LP,OT,VR,DTO,FL)
+ ..D KGL^IEXCH("^ZARP",LP,OT,VR,DFR,FL)
+ ; выплаты
+ S HH=0 F  S HH=$O(^ZARV(LP,VR,DFR,HH)) Q:HH=""  D
+ .M ^ZARV(LP,VR,DTO,HH)=^ZARV(LP,VR,DFR,HH)
+ .K ^ZARV(LP,VR,DFR,HH)
+ .D GL^IEXCH("^ZARV",LP,VR,DTO,HH)
+ .D KGL^IEXCH("^ZARV",LP,VR,DFR,HH)
+ Q
+SRTARR(DS,DE,PRM) ; Отсортировать массивы в ЗП
+ Q:PRM="" 
+ N LP,OT,VR,DT,R,R1
+ S LP="" F  S LP=$O(^ZARP(LP)) Q:LP=""  D
+ .S OT="" F  S OT=$O(^ZARP(LP,OT)) Q:OT=""  D
+ ..S VR="" F  S VR=$O(^ZARP(LP,OT,VR)) Q:VR=""  D
+ ...S DT=DS-1 F  S DT=$O(^ZARP(LP,OT,VR,DT)) Q:DT=""!(DT>DE)  D
+ ....Q:'$D(^ZARP(LP,OT,VR,DT,PRM)) 
+ ....S R=^(PRM)
+ ....S R1=$$sarr(R)
+ ....Q:R1=R 
+ ....S ^ZARP(LP,OT,VR,DT,PRM)=R1
+ ....D GL^IEXCH("^ZARP",LP,OT,VR,DT,PRM)
+ Q
+sarr(R) 
+ N I,LL,X
+ F I=1:1:$L(R,";") S X=$P(R,";",I),LL($P(X,":",1))=$P(X,":",2)
+ S (I,R)="" F  S I=$O(LL(I)) Q:I=""  S R=$S(R="":"",1:R_";")_I_":"_LL(I)
+ Q R

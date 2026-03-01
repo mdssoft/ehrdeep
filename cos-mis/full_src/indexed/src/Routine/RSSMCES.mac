@@ -1,0 +1,350 @@
+RSSMCES ; Шаблонные отчеты по стоматологии [ 12/16/2013  1:46 AM ]
+STOM1(DS,DE) 
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N TIT,A,B,FF,STOTD,SPIDX,LP,IDX,X1,X2,X3,DCNT
+ S FF='+$$FR^I()
+ M STOTD=^cfg("stom-otd")
+ S:$G(^cfg("stom-otd")) STOTD(^cfg("stom-otd"))=""
+ S SPIDX(101)=1,SPIDX(102)=2,SPIDX(105)=3,SPIDX(106)=3,SPIDX(103)=4,SPIDX(120)=5
+ K ^BUF($J,"t")
+ D MKALLPRC^IUSLSC(DS,DE,1,"STOMP1^RSSMCES","",FF)
+ D STOM1fp,STOM1z
+ D OWF^RWU(".txt")
+ D WC^RWU("rpt:C:2:Оперативный отчет сети стоматологических клиник "_$$TXTP^DTUTL(DS,DE))
+ S IDX=1,DCNT=DE-DS+1
+ S LP="" F  S LP=$O(^BUF($J,"t",LP)) Q:LP=""  D
+ .S B=6+IDX
+ .S A=CR_"rpt:B:"_B_":"_IDX
+ .S A=A_CR_"rpt:C:"_B_":"_$$NAME^ICONTR(LP)
+ .D WC^RWU(A)
+ .S X1=$G(^BUF($J,"t",LP,0)),X2=$G(^("fp"))*DCNT
+ .S A=CR_"rpt:D:"_B_":"_$$fn(X1)
+ .S A=A_CR_"rpt:E:"_B_":"_$$fn(X2)
+ .S A=A_CR_"rpt:F:"_B_":"_$$fn(X1-X2)
+ .S A=A_CR_"rpt:G:"_B_":"_$$fn($S('X2:0,1:100*(X1-X2)/X2))
+ .D WC^RWU(A)
+ .S A=CR_"rpt:H:"_B_":"_$$ffn($G(^BUF($J,LP,"z",1)))
+ .S A=A_CR_"rpt:I:"_B_":"_$$ffn($G(^BUF($J,LP,"z",2)))
+ .S A=A_CR_"rpt:J:"_B_":"_$$ffn($G(^BUF($J,LP,"z",3)))
+ .S A=A_CR_"rpt:K:"_B_":"_$$ffn($G(^BUF($J,LP,"z",4)))
+ .S A=A_CR_"rpt:L:"_B_":"_$$ffn($G(^BUF($J,LP,"z",5)))
+ .D WC^RWU(A)
+ .S X2=$G(^BUF($J,"t",LP,"l")),X3=$G(^("p"))
+ .S A=CR_"rpt:M:"_B_":"_$S('X2:0,1:$$fn(X1/X2))
+ .S A=A_CR_"rpt:N:"_B_":"_$$ffn($G(^BUF($J,"t",LP,"pp")))
+ .S A=A_CR_"rpt:O:"_B_":"_$$ffn(X3)
+ .S A=A_CR_"rpt:P:"_B_":"_$S('X3:0,1:$$fn(X1/X3))
+ .D WC^RWU(A)
+ .S IDX=IDX+1
+ D C^RWU
+ k ^BUF($J)
+ Q
+STOMP1 
+ Q:'$D(STOTD(OTD))
+ N CC,X,Z
+ S LPU=+$G(LPU)
+ S CC=$G(UL(U))
+ S X=$S($D(UL(U,1)):UL(U,1),1:$$PRICEH^IPRICE(U,PRC,DT)*KSKD*CC)
+ S ^BUF($J,"t",LPU,0)=$G(^BUF($J,"t",LPU,0))+X
+ I '$D(^BUF($J,"l",LPU,NI)) S ^(NI)="",^("l")=$G(^BUF($J,"t",LPU,"l"))+1
+ S Z=VR_","_DT_","_NI
+ I '$D(^BUF($J,"pos",LPU,Z)) S ^(Z)="",^("p")=$G(^BUF($J,"t",LPU,"p"))+1
+ S:$$IsFPOS^IUSL(NI,OTD,VR,DT,ID) ^("pp")=$G(^BUF($J,"t",LPU,"pp"))+1
+ Q
+STOM1fp ; finplan
+ N D
+ S LP="" F  S LP=$O(^BUF($J,"t",LP)) Q:LP=""  D
+ .S D=$O(^FPLN(LP,-1,-1,DE+1),-1) Q:D="" 
+ .S ^BUF($J,"t",LP,"fp")=$P(^FPLN(LP,-1,-1,D),"|",1)
+ Q
+STOM1z ; загрузка
+ N STAT,OT,SP,SPI,STATX
+ D ZVRI^RRASP(DS,DE,$S('FF:"",FF:"",1:+$$^I("ilpu")),1,1,1,0,2)
+ S LP="" F  S LP=$O(STAT(LP)) Q:LP=""  D
+ .S OT="" F  S OT=$O(STAT(LP,OT)) Q:OT=""  D
+ ..S SP="" F  S SP=$O(STAT(LP,OT,SP)) Q:SP=""  D:$D(SPIDX(SP))
+ ...S SPI=SPIDX(SP)
+ ...S X1=$G(STAT(LP,OT,SP,0)) Q:'X1 
+ ...S STATX(LP,SPI,1)=$G(STATX(LP,SPI,1))+$G(STAT(LP,OT,SP,1))
+ ...S STATX(LP,SPI,2)=$G(STATX(LP,SPI,2))+$G(STAT(LP,OT,SP,5))
+ S LP="" F  S LP=$O(STATX(LP)) Q:LP=""  D
+ .S SPI="" F  S SPI=$O(STATX(LP,SPI)) Q:SPI=""  D
+ ..S X1=$G(STATX(LP,SPI,1)) Q:'X1
+ ..S ^BUF($J,LP,"z",SPI)=+$J((100*$G(STATX(LP,SPI,2)))/X1,"",2)
+ Q
+STOM2(DS,DE) 
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N TIT,A,B,FF,STOTD,SPIDX,LP,IDX,X1,X2,X3,X4,DC,DK
+ S FF='+$$FR^I()
+ M STOTD=^cfg("stom-otd")
+ S:$G(^cfg("stom-otd")) STOTD(^cfg("stom-otd"))=""
+ S SPIDX(101)=1,SPIDX(102)=2,SPIDX(105)=3,SPIDX(106)=3,SPIDX(103)=4,SPIDX(120)=5
+ K ^BUF($J,"t")
+ D MKALLPRC^IUSLSC(DS,DE,1,"STOMP2^RSSMCES","",FF)
+ D STOM2kd,STOM2kk
+ D OWF^RWU(".txt")
+ D WC^RWU("rpt:C:2:Оперативный отчет сети стоматологических клиник "_$$TXTP^DTUTL(DS,DE))
+ S IDX=1,DC=DE-DS+1,DK=DC*4.8*3600
+ S LP="" F  S LP=$O(^BUF($J,"t",LP)) Q:LP=""  D
+ .S B=6+IDX
+ .S A=CR_"rpt:B:"_B_":"_IDX
+ .S A=A_CR_"rpt:C:"_B_":"_LP
+ .S A=A_CR_"rpt:D:"_B_":"_$$NAME^ICONTR(LP)
+ .D WC^RWU(A)
+ .S A=CR_"rpt:J:"_B_":"_$G(^BUF($J,"t",LP,"p",0))
+ .S A=A_CR_"rpt:K:"_B_":"_$G(^BUF($J,"t",LP,"p",1))
+ .S A=A_CR_"rpt:L:"_B_":"_$G(^BUF($J,"t",LP,"p",2))
+ .D WC^RWU(A)
+ .S A=CR_"rpt:E:"_B_":"_$$fn($G(^BUF($J,"t",LP,"k",1))/DK)
+ .S A=A_CR_"rpt:F:"_B_":"_$$fn($G(^BUF($J,"t",LP,"k",2))/DK)
+ .S A=A_CR_"rpt:G:"_B_":"_$$fn($G(^BUF($J,"t",LP,"k",3))/DK)
+ .S A=A_CR_"rpt:H:"_B_":"_$$fn($G(^BUF($J,"t",LP,"k",4))/DK)
+ .S A=A_CR_"rpt:I:"_B_":"_$$fn($G(^BUF($J,"t",LP,"k",5))/DK)
+ .D WC^RWU(A)
+ .S X1=$G(^BUF($J,"t",LP,0))
+ .S X2=$G(^BUF($J,"t",LP,"p",2))
+ .S X3=$G(^BUF($J,"t",LP,"k"))
+ .S X4=X3/DK
+ .S A=CR_"rpt:M:"_B_":"_$$fn($S(X2:X1/X2,1:0))
+ .S A=A_CR_"rpt:O:"_B_":"_$$fn($S(X3:X1/X3,1:0))
+ .D WC^RWU(A)
+ .S X3=X3/3600,X4=X1*DC*12
+ .S A=CR_"rpt:N:"_B_":"_$S(X4:$$fn(X3/X4),1:0)
+ .D WC^RWU(A)
+ .S IDX=IDX+1
+ D C^RWU
+ k ^BUF($J)
+ Q
+STOMP2 
+ Q:'$D(STOTD(OTD))
+ N CC,X
+ S LPU=+$G(LPU)
+ S CC=$G(UL(U))
+ S X=$S($D(UL(U,1)):UL(U,1),1:$$PRICEH^IPRICE(U,PRC,DT)*KSKD*CC)
+ S ^BUF($J,"t",LPU,0)=$G(^BUF($J,"t",LPU,0))+X
+ Q
+STOM2kk ; Кресла и кабинеты
+ N K,E,CAB
+ S LP="" F  S LP=$O(^BUF($J,"t",LP)) Q:LP=""  D
+ .S K="" F  S K=$O(^PLPU(LP,K)) Q:K=""  D
+ ..S E="" F  S E=$O(^PLPU(LP,K,E)) Q:E=""  D
+ ...S CAB="" F  S CAB=$O(^PLPU(LP,K,E,"cab",CAB)) Q:CAB=""  D
+ ....S X2=+$P($G(^(CAB)),"|",5)
+ ....S X1=$P($G(^(CAB,"p")),"|",2) Q:X1=""
+ ....S ^BUF($J,"t",LP,"p",0)=$G(^BUF($J,"t",LP,"p",0))+1
+ ....S ^BUF($J,"t",LP,"p",1)=$G(^BUF($J,"t",LP,"p",1))+X1
+ ....S:'X2 ^BUF($J,"t",LP,"p",2)=$G(^BUF($J,"t",LP,"p",2))+X1
+ Q
+STOM2kd ; Ставок из расп.
+ N STAT,OT,SP,SPI
+ D ZVRI^RRASP(DS,DE,$S('FF:"",FF:"",1:+$$^I("ilpu")),1,1,1,0,2)
+ S LP="" F  S LP=$O(STAT(LP)) Q:LP=""  D
+ .S OT="" F  S OT=$O(STAT(LP,OT)) Q:OT=""  D
+ ..S SP="" F  S SP=$O(STAT(LP,OT,SP)) Q:SP=""  D:$D(SPIDX(SP))
+ ...S SPI=SPIDX(SP)
+ ...S X1=$G(STAT(LP,OT,SP,1)) Q:'X1 
+ ...S ^BUF($J,"t",LP,"k",SPI)=$G(^BUF($J,"t",LP,"k",SPI))+X1
+ ...S ^BUF($J,"t",LP,"k")=$G(^BUF($J,"t",LP,"k"))+X1
+ Q
+STOME(DS,DE) ; Еженедельный
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N SPIDX,ULIDX,X1,X2,X3,X4,X5,X6,A,B,LP,VR,IDX,IDX0,SS,Z,IMP
+ N TIL,TI,TIT,LPUL,DWKL,DWKLR,I,DT,DWI,ZZ,ZPOS,ZPPL,ZPPL0,ZFPOS
+ S SPIDX(101)=1,SPIDX(102)=2,SPIDX(105)=3,SPIDX(106)=3,SPIDX(104)=3
+ S SPIDX(68)=9 ; rentgen
+ S ULIDX(54)=4,ULIDX(55)=5,ULIDX(56)=6,ULIDX(61)=7
+ S ULIDX(65)=9 ; rentgen
+ 
+ S I=1 F DT=DS:1:DE S DWKL(DT)=I I DT<DE S:$$DWEEK^DTUTL(DT)=7 I=I+1,DWKLR(I)=DT+1
+ S DWKLR(1)=DS ; 1-я дата - 1-я неделя
+ 
+ K ^BUF($J)
+ 
+ ; вкладки 
+ D MK^IRPRASP(DS,DE,"^BUF($J,0","USER1,LPU,VR","time,use",0,"STOMEsh^RSSMCES")
+ D MK^IRPUSL(DS,DE,"^BUF($J,0","USER1,LPU,VR","ppl,pls,pos,sum,cnt",0,"STOMEus^RSSMCES")
+ ; итоги
+ D MK^IRPRASP(DS,DE,"^BUF($J,0","USER1,LPU,VR","time,use",0,"STOMEsha^RSSMCES")
+ D MK^IRPUSL(DS,DE,"^BUF($J,0","USER1,LPU,VR","ppl,pls,pos,sum,cnt",0,"STOMEusa^RSSMCES")
+ 
+ S TIL(0)="СТОМАТОЛОГИЯ",TIL(1)="Терапия",TIL(2)="Ортопедия"
+ S TIL(3)="Хирургия",TIL(4)="Пародонтология",TIL(5)="Имплантология"
+ S TIL(6)="Ортодонтия",TIL(7)="Детство",TIL(8)="Рентген"
+ S TIL(9)="Динамика по неделям"
+ 
+ D OWF^RWU(".txt")
+ S A=":C:1:Еженедельный отчет по докторам "_$$TXTP^DTUTL(DS,DE),B=""
+ F TI=0:1:9 D WC^RWU(B_TIL(TI)_A) S B=CR
+ S IDX=0,LP="" F  S LP=$O(LPUL(LP)) Q:LP=""  S LPUL(LP)=IDX,IDX=IDX+1
+ ; По специальностям + общий
+ S TI="" F  S TI=$O(^BUF($J,0,TI)) Q:TI=""  I TI'[" ",TI<8 D
+ .S LP=-1 F  S LP=$O(^BUF($J,0,TI,LP)) Q:LP=""  D:LP'[" "
+ ..S IDX0=(LPUL(LP)*$S(TI:9,1:16))+4,IDX=IDX0+1,TIT=CR_TIL(TI)
+ ..D WC^RWU(TIT_":A:"_IDX0_":"_$$NAME^ICONTR(LP))
+ ..K SS
+ ..S VR="" F  S VR=$O(^BUF($J,0,TI,LP,VR)) Q:VR=""  D:VR'[" "
+ ...S B=":"_IDX_":"
+ ...S A=TIT_":B"_B_$$FIOSH^IKADRY(VR)_" ("_VR_")"
+ ...S X1=$G(^BUF($J,0,TI,LP,VR," sum"))
+ ...S X2=$G(^(" ppl")),X5=$G(^(" pls")),X3=$G(^(" pos"))
+ ...S X4=$G(^(" time"))/60,X6=$G(^(" use"))/60
+ ...S A=A_TIT_":C"_B_$$fn(X1),SS("C")=$G(SS("C"))+X1
+ ...S A=A_TIT_":D"_B_$$fn(X2),SS("D")=$G(SS("D"))+X2
+ ...S A=A_TIT_":E"_B_$$fn(X5),SS("E")=$G(SS("E"))+X5
+ ...S A=A_TIT_":F"_B_$$fn(X3),SS("F")=$G(SS("F"))+X3
+ ...S A=A_TIT_":G"_B_$S('X3:0,1:$$fn(X1/X3))
+ ...S A=A_TIT_":H"_B_$S('X2:0,1:$$fn(X1/X2))
+ ...S A=A_TIT_":I"_B_$S('X4:0,1:$$fn(X1/X4))
+ ...S A=A_TIT_":J"_B_$S('X6:0,1:$$fn(X1/X6)) ; факт.стоим.часа
+ ...S X1=$G(^BUF($J,0,TI,LP,VR," cnt")),Z=$G(^(" sum")) ; mcnt, msum
+ ...S A=A_TIT_":K"_B_$S('X1:0,1:$$fn(Z/X1)) ;,SS("J")=$G(SS("J"))+Z
+ ...S A=A_TIT_":L"_B_$$fn(X1),SS("L")=$G(SS("L"))+X1
+ ...S A=A_TIT_":M"_B_$S('X2:0,1:$$fn(X1/X2))
+ ...S A=A_TIT_":N"_B_$S('X3:0,1:$$fn(X1/X3))
+ ...S A=A_TIT_":O"_B_$$fn(X4),SS("O")=$G(SS("O"))+X4
+ ...S A=A_TIT_":P"_B_$$fn(X6),SS("P")=$G(SS("P"))+X6
+ ...S A=A_TIT_":Q"_B_$S('X4:0,1:$$fn((X6*100)/X4))
+ ...I TI<2 S A=A_TIT_":R"_B_$S('X4:0,1:$$fn(X5/X4))
+ ...D:TI=2
+ ....S X1=$G(^BUF($J,0,TI,LP,VR," slic")),X2=$G(^(" slsum"))
+ ....S A=A_TIT_":R"_B_$$fn(X1),SS("R")=$G(SS("R"))+X1
+ ....S A=A_TIT_":S"_B_$$fn(X2),SS("S")=$G(SS("S"))+X2
+ ....S A=A_TIT_":V"_B_$$fn(X1),SS("V")=$G(SS("V"))+X1
+ ....S A=A_TIT_":W"_B_$$fn(X2),SS("W")=$G(SS("W"))+X2
+ ...D:TI=3
+ ....S X1=$G(^BUF($J,0,TI,LP,VR," icnt1")),X2=$G(^(" isum1"))
+ ....S A=A_TIT_":R"_B_$$fn(X1),SS("R")=$G(SS("R"))+X1
+ ....S A=A_TIT_":S"_B_$$fn(X2),SS("S")=$G(SS("S"))+X2
+ ....S X1=$G(^BUF($J,0,TI,LP,VR," icnt2")),X2=$G(^(" isum2"))
+ ....S A=A_TIT_":T"_B_$$fn(X1),SS("T")=$G(SS("T"))+X1
+ ....S A=A_TIT_":U"_B_$$fn(X2),SS("U")=$G(SS("U"))+X2
+ ....S X1=$G(^BUF($J,0,TI,LP,VR," icnt3")),X2=$G(^(" isum3"))
+ ....S A=A_TIT_":V"_B_$$fn(X1),SS("V")=$G(SS("V"))+X1
+ ....S A=A_TIT_":W"_B_$$fn(X2),SS("W")=$G(SS("W"))+X2
+ ...D WC^RWU(A)
+ ...S IDX=IDX+1
+ ..S X1=$G(SS("C")),X2=$G(SS("D")),X5=$G(SS("E")),X3=$G(SS("F"))
+ ..S X4=$G(SS("O")),X6=$G(SS("P"))
+ ..S X2=$S('TI:$G(^BUF($J,2,LP,0,"ppl")),1:$G(^BUF($J,0,TI,LP," ppl"))) ;$G(^BUF($J,2,LP,0,"ppl")),SS("D")=X2
+ ..S SS("G")=$S('X3:0,1:X1/X3)
+ ..S SS("H")=$S('X2:0,1:X1/X2)
+ ..S SS("I")=$S('X4:0,1:X1/X4)
+ ..S SS("J")=$S('X6:0,1:X1/X6)
+ ..S SS("Q")=$S('X4:0,1:(X6*100)/X4)
+ ..I TI<2 S SS("R")=$S('X4:0,1:X5/X4)
+ ..S X1=$G(SS("L"))
+ ..S SS("M")=$S('X2:0,1:X1/X2)
+ ..S SS("N")=$S('X3:0,1:X1/X3)
+ ..S (A,Z)=""
+ ..F  S Z=$O(SS(Z)) Q:Z=""  S A=A_TIT_":"_Z_":"_IDX0_":"_$$fn(SS(Z))
+ ..D WC^RWU(A)
+ 
+ ; Рентген
+ 
+ ; Сводно
+ S TI=TIL(9)_":",IDX=0,A="",Z=$O(DWKLR(""),-1)
+ F I=1:1:Z S X1=DWKLR(I),X2=$S(I=Z:DE,1:DWKLR(I+1)),A=A_CR_TI_$C($A("B")+I)_":3:"_$P($$DT^DTUTL(X1),".",1,2)_"-"_$P($$DT^DTUTL(X2),".",1,2)
+ D WC^RWU(A)
+ 
+ S LP="" F  S LP=$O(^BUF($J,2,LP)) Q:LP=""  D
+ .S DWI="" F  S DWI=$O(^BUF($J,2,LP,DWI)) Q:DWI=""  D
+ ..S X1=$G(^(DWI,"sum")),B=$C($A("B")+DWI)_":"
+ ..S A=""
+ ..S:DWI A=CR_TI_B_(4+IDX)_":"_$$fn(X1)
+ ..S X1=$G(^("ppl")),A=A_CR_TI_B_(20+IDX)_":"_$$fn(X1)
+ ..S X1=$G(^("time"))/60,X2=$G(^("use"))/60
+ ..S A=A_CR_TI_B_(65+IDX)_":"_$S('X1:0,1:$$fn((X2*100)/X1))
+ ..I 'DWI D WC^RWU(A) Q  ; чтобы не затирать суммы
+ ..S X1=$G(^("fpos")),A=A_CR_TI_B_(50+IDX)_":"_$$fn(X1)
+ ..S B=$C($A("J")+DWI)_":"
+ ..S X1=$G(^("pos")),A=A_CR_TI_B_(4+IDX)_":"_$$fn(X1)
+ ..S B=$C($A("R")+DWI)_":"
+ ..S X1=$G(^("cnt")),A=A_CR_TI_B_(4+IDX)_":"_$$fn(X1)
+ ..S B=$C($A("Z")+(DWI*3))_":" ; импланты
+ ..S X1=$G(^("icnt")),A=A_CR_TI_B_(4+IDX)_":"_$$fn(X1)
+ ..S B=$C($A("Z")+(DWI*3)+1)_":"
+ ..S X1=$G(^("isum")),A=A_CR_TI_B_(4+IDX)_":"_$$fn(X1)
+ ..D WC^RWU(A)
+ .S IDX=IDX+1
+ D C^RWU
+ k ^BUF($J)
+ Q
+STOMEsh 
+ S USER1=+$G(SPIDX(SP))
+ S:'USER1 TEST=1
+ I LPU=2 S TEST=1 Q
+ Q
+STOMEsha 
+ S USER1=+$G(SPIDX(SP))
+ I 'USER1 S TEST=1 Q
+ I USER1=9 S TEST=1 Q
+ I LPU=2 S TEST=1 Q
+ S USER1=0
+ S DWI=DWKL(DT) Q:DWI>6
+ S X1=((PT-TM)/60) ; time
+ S ^("time")=$G(^BUF($J,2,LPU,DWI,"time"))+X1
+ S ^("time")=$G(^BUF($J,2,LPU,0,"time"))+X1
+ S:L'="" ^("use")=$G(^BUF($J,2,LPU,DWI,"use"))+X1
+ S:L'="" ^("use")=$G(^BUF($J,2,LPU,0,"use"))+X1
+ Q
+STOMEus 
+ S USER1=+$G(SPIDX(SP))
+ S IDX0=+$G(ULIDX($P(U,".",1)))
+ I 'USER1,'IDX0 S TEST=1 Q
+ I LPU=2 S TEST=1 Q
+ I IDX0=9 S TEST=1 Q
+ I USER1=2,$D(^ZNF(VR,OTD,DT,ID,"sln")) D
+ .S X1=NI_","_^("sln")
+ .S X2=$S($L(SUMM):SUMM,1:$$PRICEH^IPRICE(U,PRC,DT)*KSKD)*CC
+ .S ^(" slsum")=$G(^BUF($J,0,2,LPU,VR," slsum"))+X2
+ .I '$D(^BUF($J,"sln",LPU,VR,X1)) S ^(X1)="",^(" slic")=$G(^BUF($J,0,2,LPU,VR," slic"))+1
+ ;I USER1=3
+ S X1=$$GET^IPRICE(U,"acu",PRC,DT)
+ I $P(X1,".",5)="I" D
+ .S X2=$S($P(X1,".",4)="014":2,$P(X1,".",4)="015":3,1:1)
+ .S X3=$S($L(SUMM):SUMM,1:$$PRICEH^IPRICE(U,PRC,DT)*KSKD)*CC
+ .S ^(" icnt"_X2)=$G(^BUF($J,0,3,LPU,VR," icnt"_X2))+CC
+ .S ^(" isum"_X2)=$G(^BUF($J,0,3,LPU,VR," isum"_X2))+X3,USER1=3 ; индекс уже не по спец. а по услуге
+ .S DWI=DWKL(DT)
+ .S ^("icnt")=$G(^BUF($J,2,LPU,DWI,"icnt"))+CC ; сводная страница
+ .S ^("isum")=$G(^BUF($J,2,LPU,DWI,"isum"))+X3
+ Q:USER1=3
+ S:IDX0 USER1=IDX0 ; по подгруппам услуг
+ Q
+STOMEusa 
+ S USER1=+$G(SPIDX(SP))
+ S IDX0=+$G(ULIDX($P(U,".",1)))
+ I 'USER1,'IDX0 S TEST=1 Q 
+ I IDX0=9 S TEST=1 Q 
+ S LPU=$G(LPU) Q:LPU=""
+ I LPU=2 S TEST=1 Q
+ S LPUL(LPU)=""
+ S USER1=0
+ S DWI=DWKL(DT) Q:DWI>6 
+ S X1=$S($L(SUMM):SUMM,1:$$PRICEH^IPRICE(U,PRC,DT)*KSKD)*CC
+ 
+ S ZZ=VR_","_DT,ZPOS=0,ZPPL=0,ZPPL0=0
+ S ZFPOS=$$IsFPOS^IUSL(NI,OTD,VR,DT,ID)
+ 
+ I '$D(^BUF($J,"tpos",LPU,NI)) S ^(NI)="",ZPPL0=1
+ I '$D(^(NI,DWI)) S ^(DWI)="",ZPPL=1
+ I '$D(^(DWI,ZZ)) S ^(ZZ)="",ZPOS=1
+ 
+ S ^("cnt")=$G(^BUF($J,2,LPU,DWI,"cnt"))+CC
+ S ^("sum")=$G(^("sum"))+X1
+ S:ZPOS ^("pos")=$G(^("pos"))+1
+ S:ZPPL ^("ppl")=$G(^("ppl"))+1
+ S:ZFPOS ^("fpos")=$G(^("fpos"))+1
+ 
+ S:ZPPL0 ^("ppl")=$G(^BUF($J,2,LPU,0,"ppl"))+1
+ Q
+fn(X) 
+ Q $TR(+$J(X,"",2),".",",")
+ffn(X) 
+ Q:'X 0
+ Q $TR(X,".",",")
+REGIPROC 
+ S ^IPROC("ССМЦ","Стоматология","Оперативный отчет, часть 1")="STOM1_RSSMCES,8,2,d,Начальная дата периода,d,Конечная дата периода,,,,/ssmc/ssmc-stom-1.xls"
+ S ^IPROC("ССМЦ","Стоматология","Оперативный отчет, часть 2")="STOM2_RSSMCES,8,2,d,Начальная дата периода,d,Конечная дата периода,,,,/ssmc/ssmc-stom-2.xls"
+ S ^IPROC("ССМЦ","Стоматология","Еженедельный отчет")="STOME_RSSMCES,8,2,d,Начальная дата периода,d,Конечная дата периода,,,,/ssmc/ssmc-stom-e.xls"
+ Q

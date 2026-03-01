@@ -1,0 +1,90 @@
+A ; РАБОТА С КАРТАМИ [ 03/29/2022  2:05 AM ]
+CTP(NN) ; PIN КАРТЫ
+ Q:NN="" 
+ N L,TIP,TN
+ S L=$G(^CARD(NN)) I L="" Q 
+ S TIP=$P(L,"|",1)
+ I TIP="P" S ^JOB(%JOB,"card-ni")=$P(L,"|",2) D MSG^RWU(L) Q  ; TODO
+ I TIP="O" D MSG^RWU("P|"_$P(L,"|",2,255)) Q 
+ I TIP="D" S TN=$P(L,"|",2) D MSG^RWU("D|"_TN_"|"_$$FIOSH^YIKADRY(TN)_"|"_(+$$SPEC^IKADRY(TN))_"|"_(+$$OTD^IKADRY(TN))_"|4")
+ Q
+CTP1(NN) ;PIN КАРТЫ
+ Q:NN="" 
+ N L,TIP,TN
+ S L=$G(^CARD(NN)) I L="" Q 
+ S TIP=$P(L,"|",1)
+ I TIP="P" D MSG^RWU(L) Q 
+ I TIP="O" D MSG^RWU(L) Q 
+ I TIP="D" S TN=$P(L,"|",2) D MSG^RWU("D|"_TN_"|"_$$FIOSH^YIKADRY(TN)_"|"_(+$$SPEC^IKADRY(TN))_"|"_(+$$OTD^IKADRY(TN))_"|4")
+ Q
+SCNUM(CRD) 
+ Q:CRD="" 
+ D MSG^RWU($G(^CARD($$LU^TXTU(CRD),"num")))
+ Q
+LCRD(N) ; ЗАГРУЗКА
+ N FIO,R,POLE,TIP,R,PAC,OTD,SPE
+ I '$D(^CARD(N)) S N="",FIO="" D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<pcard><cardid>"),WC^RWU(N_"</cardid><fio>"_FIO_"</fio>") S R=N,POLE="hist_old" G CCCLC
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2)))
+ S TIP=$P(^CARD(N),"|",1),PAC=$P(^(N),"|",2),(OTD,SPE)=""
+ I TIP="D" S OTD=$$OTD^IKADRY(PAC),SPE=$$SPEC^IKADRY(PAC)
+ D W^RWU("<pcard><cardid>"_N_"</cardid>")
+ S LPU=$$NAME^ICONTR(+$$^I("ilpu"))
+ D:TIP="D" WC^RWU("<owner_name>"_$$FIO^YIKADRY(PAC)_"</owner_name><org>"_LPU_"</org><podr>"_OTD_"</podr><spec>"_SPE_"</spec>")
+ D:TIP="P" WC^RWU("<owner_name>"_$$FIO^IPAC(PAC)_"</owner_name><org>"_LPU_"</org>")
+ D WC^RWU("<ctype data="""_TIP_"""/>")
+ S POLE="" F  S POLE=$O(^CARD(N,POLE)) Q:POLE=""  D
+ .S R=$G(^(POLE)) D WTAGDC^RWU(POLE,$TR(R,"""","'")) Q
+CCCLC D W^RWU("</pcard></nb_console>")
+ D C^RWU
+ Q
+SCRD ;СОХРАНЕНИЕ ПАЦИЕНТА
+ N NS1,%J,N,TIP,PAC,PAC1,II
+ S NS1=0 D ORH^RWU
+ N @$$NEWVAR^YIXMLRR()
+ D RBUFH^YIXMLRR(1)
+ S N=$$LU^TXTU($G(XML("nb_console","pcard","cardid")))
+ I N="" S N=$O(^CARD(""),-1) S:$E(N)'="Q" N="Q0" S N="Q"_($E(N,2,255)+1)
+ S TIP=$G(XML("nb_console","pcard","ctype"))
+ S PAC=$G(XML("nb_console","pcard","owner"))
+ S PAC1=$G(XML("nb_console","pcard","oowner"))
+ I PAC1=1 S POLE=99999 F  S POLE=$O(^CARD(N,POLE)) Q:POLE=""  S ^CARD(N,+$H,POLE)=^(POLE)
+ S ^CARD(N)=TIP_"|"_PAC_"|"_$H_"|"_$G(%LOG)
+ S II=$S(TIP="P":"",1:TIP)_PAC
+ S:II'="" ^CARDI(II,N)=TIP
+ S POLE="" F  S POLE=$O(XML("nb_console","pcard",POLE)) Q:POLE=""  D:POLE'="oowner" POLE,SP
+ S ^CARD=1,^CARDI("upd",N)=""
+ D GL^IEXCH("^CARD",N)
+ D:II'="" GL^IEXCH("^CARDI",II)
+ Q
+POLE S C=$$WD^TXTU($G(XML("nb_console","pcard",POLE))) Q
+SP I C="" K ^CARD(N,POLE) Q
+ I C'="",POLE'="" S ^CARD(N,POLE)=C D WD^ISSG("^CARD("""_N_""","""_POLE_""")")
+ Q
+REG(N,NI) ; ЗАРЕГИСТРИРОВАТЬ КАРТУ
+ N TIP,PAC,X
+ S TIP=$P(NI,"|",1),PAC=$P(NI,"|",2)
+ I PAC=""!(TIP="") D MSG^RWU("ERR") Q 
+ I TIP="P",'$D(^BTN(PAC)) D MSG^RWU("ERR") Q 
+ I TIP="D",'$$CHECK^IKADRY(PAC) D MSG^RWU("ERR") Q
+ S X=$G(^cfg("scard","rereg"))
+ I 'X,$D(^CARD(N)),'$$CMP^ISCARD(N,TIP,PAC) D MSG^RWU("ERR") Q
+ I X=1,'$$IsLOG^ISCARD(N) D MSG^RWU("ERR") Q 
+ D DELCRD^ISCARD(N)
+ D REG^ISCARD(N,TIP,PAC)
+ D MSG^RWU("OK")
+ Q
+NI(N)          ; ВЫВЕСТИ НОМЕР ИСТОРИИ 
+ N L,NI
+ S L=$G(^CARD(N)),NI=$P(L,"|",2)
+ S:NI="" NI="ERR"
+ D MSG^RWU(NI)
+ Q
+nNUM() ; Получить новый очередной номер карты
+ N L,I,C
+ S L=$$^I("ilpu") S:L'="" L=$E("00",1,3-$L(L))_L
+ S I=$O(^CARD("G"),-1) ; 'G' after hex 'F'
+ F I=I+1:1 S C=$S(L="":I+1,1:($E(I,1,$L(I)-3)+1)_L) Q:'$D(^CARD(C)) 
+ Q C
+PREFIX ; Префикс для ручной регистрации
+ D MSG^RWU($$PREFIX^ISCARD())
+ Q

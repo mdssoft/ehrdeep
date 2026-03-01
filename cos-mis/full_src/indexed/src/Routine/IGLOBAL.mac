@@ -1,0 +1,29 @@
+IGLOBAL
+SIZE(database,filter="*") 
+ s rs=##class(%ResultSet).%New()
+ s rs.ClassName="%SYS.GlobalQuery"
+ s rs.QueryName="Size"
+ d rs.Execute(database,"",filter)
+ 
+ w !,rs.GetColumnName(1),$j("",30-$l(rs.GetColumnName(1))),$j(rs.GetColumnName(2),12),$j(rs.GetColumnName(3),12)
+ 
+ s AllocatedSum=0,UsedSum=0
+ while rs.Next(.sc)
+ {
+   s Name=rs.Get("Name")
+   s Allocated=$fn(rs.Get("Allocated MB"),"",3)
+   s Used=$fn(rs.Get("Used MB"),"",3)
+   s AllocatedSum=AllocatedSum+Allocated
+   s UsedSum=UsedSum+Used   
+   
+   w !,Name,$j("",30-$l(Name))
+   w $j(Allocated,12)
+   w $j(Used,12)
+ }
+ s delim="--------"
+ w !,delim,$j("",30-$l(delim)),$j(delim,12),$j(delim,12) 
+ 
+ s UsedSum=$fn(UsedSum,"",3)
+ s AllocatedSum=$fn(AllocatedSum,"",3)
+ w !,"Всего",$j("",30-$l("Всего")),$j(AllocatedSum,12),$j(UsedSum,12)
+ Q

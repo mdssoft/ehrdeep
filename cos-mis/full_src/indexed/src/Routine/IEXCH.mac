@@ -1,0 +1,477 @@
+IEXCH ; Server data exchange [ 01/20/2018  8:57 PM ]
+UPD(P,R) ; Register update
+ Q:'+$G(^cfg("exch")) 
+ N S
+ S S=$S(P="NULL"!(P="CMD"):"",1:$G(^EXCFG("p",P))) Q:S=""
+ I $D(^(P,0,0,R)),^(R)=0 Q  ; запрет отправки
+ I S["p" L +^EXCH("f",P) S ^EXCH("f",P,R)=$H L -^EXCH("f",P) 
+ D:S["a" UPDA(P,R,+$$^I("ilpu"))
+ Q
+UGL(R) ; Global data update
+ Q:'+$G(^cfg("exch")) 
+ N S
+ S S=$G(^EXCFG("p","GL"))
+ I S["p" L +^EXCH("f","GL") S ^EXCH("f","GL",R)=$H L -^EXCH("f","GL")
+ I S["a" D:+$G(^cfg("exch"))>1 UPDA("GL",R,+$$^I("ilpu"))
+ Q
+GL(R,%1,%2,%3,%4,%5,%6,%7,%8) ; update global w. subnodes
+ Q:'+$G(^cfg("exch"))  G:'$D(%1) UGL+2
+ N I,X S R=R_"("
+ F I=1:1:8 Q:'$D(@("%"_I))  S:I>1 R=R_"," S X=@("%"_I),R=R_$S(+X=X:X,1:""""_X_"""")
+ G UGL+2
+GLZ(R,%1,%2,%3,%4,%5,%6,%7,%8) ; update global node w.o. subnodes
+ Q:'+$G(^cfg("exch"))  G:'$D(%1) UGL+2
+ N I,X S R=R_"("
+ F I=1:1:8 Q:'$D(@("%"_I))  S:I>1 R=R_"," S X=@("%"_I),R=R_$S(+X=X:X,1:""""_X_"""")
+ S R=R_")"
+ G UGL+2
+KGL(R,%1,%2,%3,%4,%5,%6,%7,%8) ; kill global
+ Q:'+$G(^cfg("exch"))
+ I '$D(%1) S R="-"_R G UGL+2
+ S:$E(R,1)="-" $E(R,1)=""
+ N I,X S R=R_"("
+ F I=1:1:8 Q:'$D(@("%"_I))  S:I>1 R=R_"," S X=@("%"_I),R=R_$S(+X=X:X,1:""""_X_"""")
+ S R="-"_R_")"
+ G UGL+2
+REGL(R,%1,%2,%3,%4,%5,%6,%7,%8) ; kill and send global
+ Q:'+$G(^cfg("exch"))
+ N X,I
+ I '$D(%1) S X=R,R="-"_R D UGL+2 S R=X G UGL+2
+ S R=R_"("
+ F I=1:1:8 Q:'$D(@("%"_I))  S:I>1 R=R_"," S X=@("%"_I),R=R_$S(+X=X:X,1:""""_X_"""")
+ S X=R,R="-"_R_")"
+ D UGL+2
+ S R=X
+ G UGL+2
+UFIL(R) ; Global data update
+ Q:'+$G(^cfg("exch")) 
+ I $G(^EXCFG("p","DISK"))["p" L +^EXCH("f","DISK") S ^EXCH("f","DISK",R)=$H L -^EXCH("f","DISK")
+ I $G(^EXCFG("p","DISK"))["a" D:+$G(^cfg("exch"))>1 UPDA("DISK",R,+$$^I("ilpu"))
+ Q
+UFILES(R,LPU) ; System files data update
+ Q:'+$G(^cfg("exch")) 
+ I $G(^EXCFG("p","FILES"))["p" L +^EXCH("f","FILES") S ^EXCH("f","FILES",R)=$H L -^EXCH("f","FILES")
+ I $G(^EXCFG("p","FILES"))["a" D:+$G(^cfg("exch"))>1 UPDA("FILES",R,+$$^I("ilpu"),LPU)
+ Q
+DELUPD(P,R) 
+ Q:'+$G(^cfg("exch")) 
+ I $G(^EXCFG("p",P))["p" L +^EXCH("f",P) K ^EXCH("f",P,R) L -^EXCH("f",P)
+ Q
+UPDC(P,R) 
+ Q:+$G(^cfg("exch"))=0
+ N X,LPU S X=+$$^I("ilpu")
+ G UPDA1
+UPDA(P,R,X,LPU) ; Update for all nodes
+ ; X - sender LPU
+ N S,G,K,Fr,Fk
+UPDA1 S LPU=$G(LPU)
+ L +^EICH("f",P)
+ S ^EICH("f",P,R)=$H
+ S Fk=$D(^EICH("f",P,R,X)) ; есть ранее
+ I LPU="" F  S LPU=$O(^EXCFG("cn",LPU)) Q:LPU=""  S ^EICH("f",P,R,LPU)=""
+ S:LPU'="" ^EICH("f",P,R,LPU)=""
+ G:$L($D(^EXCFG("p",P)))'=2 UPDA2
+ ; роутинг
+ G:P="GL" UPDAg
+ F Fr=0,X S S="" F  S S=$O(^EXCFG("p",P,Fr,S)) Q:S=""  S K=^(S) K:K=0&(S=0) ^EICH("f",P,R) K:K=0&S ^EICH("f",P,R,S) S:K&S ^EICH("f",P,R,S)="" I S,$D(^EXCFG("p",P,Fr,S,R)),^(R)=0 K ^EICH("f",P,R,S) ; +prm
+ G UPDA2
+UPDAg ; для глобалов
+ S G=$P(R,"(",1) S:$E(G)="-" G=$E(G,2,99) ; вычленили чистый глобал
+ F Fr=0,X S S="" F  S S=$O(^EXCFG("p",P,Fr,G,S)) Q:S=""  S K=^(S) K:K=0&(S=0) ^EICH("f",P,R) K:K=0&S ^EICH("f",P,R,S) S:K&S ^EICH("f",P,R,S)=""
+UPDA2 I 'Fk,+$G(^cfg("exch"))<3 K ^EICH("f",P,R,X) ; если было - не удаляем ; ,$G(^i("ilpu"))=X
+ K:$O(^EICH("f",P,R,""))="" ^EICH("f",P,R)
+ L -^EICH("f",P)
+ Q
+WXCH(CLI,P,R) ; Get data for network update
+ X ("D WXCH^"_P_"(R)")
+ D:$G(^EXCFG("debug")) SYSLOG("WXCH^IEXCH("_CLI_","_P_","_R_")")
+ K ^ESCH(CLI,P,R)
+ ; D:+$G(^cfg("exch"))=2 UPDA(P,R,CLI) ; update for all w.o. this client
+ Q
+CLRES(CLI,P,R) ; Clear send buffer in node from client
+ ; TODO - compare item datetime
+ K ^ESCH(CLI,P,R)
+ S %L=""
+ Q
+THREAD ; Main thread for update system
+ D:$D(^$R("WWWSRV")) USRCONN^WWWSRV ; for Cache
+ N HT,X,IDX,IDU,EXIT
+ S HT=+$G(^EXCFG("time")),(IDU,EXIT)=0 S:HT=0 HT=300
+ S ^EXCFG("running")=1
+ L:60 +^EXCFG("job") K ^EXCFG("job") L -^EXCFG("job")
+THREAD1 S X=$G(^EXCFG("waittime"))
+ S:'X X=HT*8
+ F IDX=1:1:X Q:$S($D(^EXCFG("job")):0,$D(^EXCH("f")):1,1:$G(^EXCFG("do-upd")))  H 1 I $G(^SYNCJ("THREAD^IEXCH"))=1 S EXIT=1 Q ; wait for end update job
+ K:$D(^EXCFG("do-upd")) ^("do-upd")
+ G:EXIT THREAD2
+ L:999 +^EXCFG("job")
+ K ^EXCFG("job")
+ L -^EXCFG("job")
+ I $D(^EXCH("f"))=10 D JOB^IEXCH(0) S IDU=0 ; TODO: J->D
+ S IDU=IDU+1
+ I IDU=2 J JOB^IEXCH(1) S IDU=0 ; todo - server update signal
+ F IDX=1:1:HT Q:$S($D(^EXCFG("job")):0,1:$G(^EXCFG("do-upd")))  H 1 I $G(^SYNCJ("THREAD^IEXCH"))=1 S EXIT=1 Q 
+ G:EXIT=0 THREAD1
+THREAD2 K ^EXCFG("running"),^SYNCJ("THREAD^IEXCH")
+ Q
+JOB(M) ; Network update job
+ D:$D(^$R("WWWSRV")) USRCONN^WWWSRV ; for Cache
+ N CLI,SRV,PORT,SID,OK,P,R,A
+ S DEBUG=+$G(^EXCFG("debug"))
+ D:DEBUG SYSLOG("Start Update JOB("_M_")")
+ S $ZT="ZTSYS^IEXCH"
+ S %JOB="ihttp"_$J,CR=$C(13,10)
+ S %DISK=$G(^EXCFG("DISK")) S A=$E(%DISK,$L(%DISK))
+ S:A="\"!(A="/") %DISK=$E(%DISK,1,$L(%DISK)-1) 
+ S %ROOT=$G(^EXCFG("ROOT")) S A=$E(%ROOT,$L(%ROOT))
+ S:A="\"!(A="/") %ROOT=$E(%ROOT,1,$L(%ROOT)-1)
+ S CLI=+$$^I("ilpu")
+ S SRV=$G(^EXCFG("host")),PORT=$G(^EXCFG("port"))
+ Q:SRV="" 
+ L +^EXCFG("job")
+ S ^EXCFG("job")=1
+ S SID=$$OPEN^WWWCLI(SRV,PORT)
+ I SID="" D SYSLOG("Error connect to server") D  G JOBEND 
+ .I +$G(^EXCFG("log"))=+$H,$P(^EXCFG("log"),",",2)+1800>$P($H,",",2) Q 
+ .D SNDALERT
+ K FLL,FLS
+ S E=+$G(^EXCFG("enc"))
+ D SETAUTH^WWWCLI(SID,1,$G(^EXCFG("user")),$G(^EXCFG("passwd")))
+ D SETCONN^WWWCLI(SID,1)
+ D SETTO^WWWCLI(SID,120) ; 30 min
+ S OK=$$GET^WWWCLI(SID,"/LOGIN/INIT_IEXCH?P="_CLI)
+ I OK'=200 D CLOSE^WWWCLI(SID),SYSLOG("INIT="_OK) D  G JOBEND
+ .I +$G(^EXCFG("log"))=+$H,$P(^EXCFG("log"),",",2)+1800>$P($H,",",2) Q 
+ .D SNDALERT
+ 
+ G:M=1 JOBG ; no local data for update
+ S P="" F  S P=$O(^EXCH("f",P)) Q:P=""  D
+ .D:DEBUG SYSLOG("Update proc="_P)
+ .S STD=1
+ .L +^EXCH("f",P)
+ .I P="NULL" K ^EXCH("f",P) L -^EXCH("f",P) Q  ; only info
+ .M ^EXCH("f",P)=^EXCH("s",P) K ^EXCH("s",P) ; prev. failure transaction
+ .I P="GL" D MKGL L -^EXCH("f",P) Q 
+ .S R="" F  S R=$O(^EXCH("f",P,R)) Q:R=""  D
+ ..S ^EXCH("s",P,R)=$H K ^EXCH("f",P,R)
+ ..K ^BUFH(%JOB)
+ ..I P="DISK" S OK=$$PUT^WWWCLI(SID,P_"/"_R,%DISK_$$HASH16^YYBPAS(R),1),FLL(R)="",STD=0
+ ..I P="FILES" S OK=$$PUT^WWWCLI(SID,R,%ROOT_"/"_R,1),FLS(R)="",STD=0
+ ..I P="EXEC"!(P="ZEXEC") D SETBUF^WWWCLI(SID,R) S OK=$$POST^WWWCLI(SID,"DOEXE^IEXCH?"),STD=0
+ ..I STD X ("D WXCH^"_P_"(R)") D BUFH2B^WWWCLI(SID,$$GETFN(),E) S OK=$$POST^WWWCLI(SID,"RXCH_"_P_"?")
+ ..I OK=200 M ^EXCH("l",CLI,P,R)=^EXCH("s",P,R) K ^EXCH("s",P,R)
+ ..D:OK'=200 SYSLOG("W^"_P_"="_OK)
+ .L -^EXCH("f",P)
+ D WXLST ; Send update list from ^EXCH("l"
+ I $D(FLL) D  K FLL
+ .D:DEBUG SYSLOG("Update files")
+ .D OWBUF^WWWCLI(SID) S P="",R=""
+ .F  S P=$O(FLL(P)) Q:P=""  D WBUF^WWWCLI(SID,R_P) S R=CR
+ .D CBUF^WWWCLI(SID) K FLL
+ .S OK=$$POST^WWWCLI(SID,"FLIST_IEXCH?P="_CLI)
+ .D:OK'=200 SYSLOG("Err FLIST="_OK)
+ I $D(FLS) D  K FLS
+ .D:DEBUG SYSLOG("Update sys files")
+ .D OWBUF^WWWCLI(SID) S P="",R=""
+ .F  S P=$O(FLL(P)) Q:P=""  D WBUF^WWWCLI(SID,R_P) S R=CR
+ .D CBUF^WWWCLI(SID) K FLS
+ .S OK=$$POST^WWWCLI(SID,"FSLIST_IEXCH?P="_CLI)
+ .D:OK'=200 SYSLOG("Err FSLIST="_OK)
+JOBG D:DEBUG SYSLOG("Pre ULST")
+ ; список обновлений
+ S OK=$$GET^WWWCLI(SID,"ULST_IEXCH?P="_CLI)
+ D:OK=200&DEBUG SYSLOG("ULST OK="_OK)
+ I OK'=200 D CLOSE^WWWCLI(SID),SYSLOG("Err ULIST") G JOBEND ; todo - log error
+ D LULST(CLI,SID)
+ ; очистка списка на сервере
+ S OK=$$GET^WWWCLI(SID,"ULSTCLR_IEXCH?P="_CLI)
+ D:OK'=200 SYSLOG("ULSTCLR OK="_OK)
+ N B,K,E
+ S E=+$G(^EXCFG("enc"))
+ ; получение обновленных данных
+ S P="" F  S P=$O(^ESCH(CLI,P)) Q:P=""  D
+ .D:DEBUG SYSLOG("Get upd proc="_P)
+ .I P="GL" D GLCH(CLI) Q
+ .S R="" F  S R=$O(^ESCH(CLI,P,R)) Q:R=""  D
+ ..S K=$$TURL^TXTU(R),STD=1
+ ..I P="DISK" D
+ ...S A="DISK/"_K,B=%DISK_$$HASH16^YYBPAS(R)
+ ...S OK=$$FGET^WWWCLI(SID,A,B,1)
+ ...I OK=200 K ^ESCH(CLI,P,R) S OK=$$GET^WWWCLI(SID,"CLRES_IEXCH?C="_CLI_"&P="_P_"&R="_R)
+ ...S STD=0
+ ..I P="FILES" D
+ ...S A=K,B=%ROOT_$S($E(R,1)="/":"",1:"/")_R
+ ...S:$E(A)="/" $E(A,1)="" ; абсолютн. пути от пользователя
+ ...S OK=$$FGET^WWWCLI(SID,A,B,1)
+ ...I OK=200 K ^ESCH(CLI,P,R) S OK=$$GET^WWWCLI(SID,"CLRES_IEXCH?C="_CLI_"&P="_P_"&R="_R) ; удаление из очереди на сервере
+ ...S STD=0
+ ..I P="EXEC"!(P="ZEXEC") X R K ^ESCH(CLI,P,R) S STD=0
+ ..I STD D 
+ ...S A="WXCH_IEXCH?C="_CLI_"&P="_P_"&R="_K
+ ...S OK=$$GET^WWWCLI(SID,A)
+ ...I OK=200 D BUF2H^WWWCLI(SID,E) X ("D RXCH^"_P) K ^ESCH(CLI,P,R)
+ ..D:OK'=200 SYSLOG("R^"_P_"="_OK)
+ D SETCONN^WWWCLI(SID,0)
+ S OK=$$GET^WWWCLI(SID,"LOGOUT?")
+ D:OK'=200 SYSLOG("LOGOUT="_OK)
+ D CLOSE^WWWCLI(SID)
+JOBEND L -^EXCFG("job")
+ K ^EXCFG("job")
+ K ^BUFH(%JOB)
+ D:DEBUG SYSLOG("End Update JOB")
+ S ^EXCFG("log")=$H
+ Q
+ULST(CLI) ; Create update list for net
+ D:$G(^EXCFG("debug")) SYSLOG("ULST("_CLI_")")
+ D OWF^RWU(".nb-data")
+ N P,R,A,E
+ S E=+$G(^EXCFG("enc"))
+ L:60 +^EICH("s",CLI)
+ M ^EICH("f")=^EICH("s",CLI) ; retreive failed update list
+ S P="" F  S P=$O(^EICH("f",P)) Q:P=""  D
+ .L +^EICH("f",P)
+ .S R="" F  S R=$O(^EICH("f",P,R)) Q:R=""  D:$D(^EICH("f",P,R,CLI))
+ ..S ^ESCH(CLI,P,R)=$H
+ ..D:'E W^RWU(CLI_"|"_P_"|"_R_CR)
+ ..D:E WC^RWU(CLI_"|"_P_"|"_R_CR)
+ ..M ^EICH("s",CLI,P,R,CLI)=^EICH("f",P,R,CLI)
+ ..K ^EICH("f",P,R,CLI)
+ ..K:$D(^EICH("f",P,R))=1 ^EICH("f",P,R) ; if clear
+ .L -^EICH("f",P)
+ L -^EICH("s",CLI)
+ D C^RWU
+ Q
+ULSTCLR(CLI) ; Cleal update list
+ D:$G(^EXCFG("debug")) SYSLOG("ULSTCLR("_CLI_")")
+ L +^EICH("s",CLI)
+ K ^EICH("s",CLI)
+ L -^EICH("s",CLI)
+ Q
+LULST(CLI,SID) ; Decode loaded update list
+ N %J,A,X1,X2,X3
+ D BUF2H^WWWCLI(SID,+$G(^EXCFG("enc"))),ORH^RWU ; todo - native read
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  S X1=$E($P(A,"|",1),1,200),X2=$E($P(A,"|",2),1,200),X3=$E($P(A,"|",3,255),1,200) I X1'="",X2'="",X3'="" S ^ESCH(X1,X2,X3)=$H
+ D CR^RWU
+ Q
+WXLST ; Write update list to server
+ N GL S GL("E")="^EXCH(""l"""
+ D S^XGUNET("GL","exp.nb-data")
+ D BUFH2B^WWWCLI(SID,"exp.nb-data",+$G(^EXCFG("enc")))
+ S OK=$$POST^WWWCLI(SID,"RXLST_IEXCH?")
+ I OK'=200 D SYSLOG("RXLST="_OK) Q
+ K ^EXCH("l")
+ Q
+RXLST ; Read update list from server
+ D R^XGUNET("hpar")
+ N C,P,R,L
+ S C="",L=$$^I("ilpu")
+ F  S C=$O(^EXCH("l",C)) Q:C=""  D
+ .I +$G(^cfg("exch"))=3,C=L K ^EXCH("l",C) Q
+ .L +^EXCH("l",C)
+ .S P="" F  S P=$O(^EXCH("l",C,P)) Q:P=""  S R="" F  S R=$O(^EXCH("l",C,P,R)) Q:R=""  D UPDA(P,R,C) K ^EXCH("l",C,P,R)
+ .L -^EXCH("l",C)
+ Q
+MKGL ; Make data for all updated globals
+ N R,K,FF,GLG,I,J,F
+ D:$G(^EXCFG("debug")) SYSLOG("MKGL")
+ S F=0
+ L +MKGLEXCH
+ F J=1:1  D  Q:F  ; send by portion, not more 32768 records at one
+ .D OWBUF^WWWCLI(SID)
+ .S R="" F I=1:1 S R=$O(^EXCH("f","GL",R)) Q:R=""  D  Q:I>32768
+ ..S GLG(R)=$H
+ ..D SWCL^XGUNET(SID,R)
+ .D CBUF^WWWCLI(SID)
+ .S OK=$$POST^WWWCLI(SID,"GLEX_IEXCH?")
+ .I OK'=200 L -MKGLEXCH D SYSLOG("GLEX="_OK) S F=1 Q 
+ .S R="" F  S R=$O(GLG(R)) Q:R=""  K ^EXCH("f","GL",R)
+ .D OWBUF^WWWCLI(SID)
+ .S R="",FF=+$G(^EXCFG("enc"))
+ .F  S R=$O(^GLG(R)) Q:R=""  S K=$S(FF:$$DW^TXTU(R),1:R) D WBUF^WWWCLI(SID,CLI_"|"_K_CR)
+ .S OK=$$POST^WWWCLI(SID,"GLST_IEXCH?")
+ .I OK'=200 L -MKGLEXCH D SYSLOG("GLST="_OK) S F=1 Q 
+ .K GLG
+ L -MKGLEXCH
+ Q
+GLCH(CLI) ; Create lst, post, recv, set (retreive from node) 
+ N R,K,FF
+ D:$G(^EXCFG("debug")) SYSLOG("GLCH("_CLI_")")
+ D OWBUF^WWWCLI(SID),WBUF^WWWCLI(SID,CLI)
+ S R="",FF=+$G(^EXCFG("enc"))
+ F  S R=$O(^ESCH(CLI,"GL",R)) Q:R=""  S K=$S(FF:$$DW^TXTU(R),1:R) D:K'["""" WBUF^WWWCLI(SID,CR_K)
+ D CBUF^WWWCLI(SID)
+ S OK=$$POST^WWWCLI(SID,"GLECH_IEXCH?")
+ I OK'=200 D SYSLOG("GLCH="_OK) Q
+ D BUF2H^WWWCLI(SID,+$G(^EXCFG("enc")))
+ D R^XGUNET("hpar") ; todo - direct read from WWWCLI
+ K ^ESCH(CLI,"GL") ; todo - check err.
+ Q
+GLECH ; Read, send, kill ^ESCH
+ D:$G(^EXCFG("debug")) SYSLOG("GLECH")
+ N %J,A,C,CLI
+ K ^BUF($J)
+ D ORH^RWU
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  S:%J=1 CLI=A S:%J>1 ^BUF($J,%J)=A
+ S C=%J-1
+ D CR^RWU
+ Q:$G(CLI)=""
+ D OWF^RWU(".nb-data")
+ F %J=2:1:C S A=^BUF($J,%J) D SBH^XGUNET(A) K ^ESCH(CLI,"GL",A)
+ D C^RWU
+ K ^BUF($J)
+ Q
+GLEX ; Global get
+ D:$G(^EXCFG("debug")) SYSLOG("GLEX")
+ D R^XGUNET("hpar")
+ Q
+GLST ; Get and store global list
+ D:$G(^EXCFG("debug")) SYSLOG("GLST")
+ N %J,A,L,LL ; todo - CR in index
+ D ORH^RWU
+ S L=$$^I("ilpu")
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  I A'="" S LL=$P(A,"|",1) D:L'=LL UPDA("GL",$P(A,"|",2,255),LL)
+ D CR^RWU
+ Q
+FLIST(CLI) ; Receive list of updated files (!!!! param!!!)
+ D:$G(^EXCFG("debug")) SYSLOG("FLIST("_CLI_")")
+ N %J,A
+ D ORH^RWU
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  D UPDA("DISK",A,CLI)
+ D CR^RWU
+ Q
+FSLIST(CLI) ; Receive list of updated system files (!!!! param!!!)
+ D:$G(^EXCFG("debug")) SYSLOG("FSLIST("_CLI_")")
+ N %J,A
+ D ORH^RWU
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  D UPDA("FILES",A,CLI)
+ D CR^RWU
+ Q
+DOEXE ; Executing procedure
+ N X
+ D ORH^RWU
+ S X=$$R^RWU
+ D CR^RWU
+ Q:X="" 
+ X X
+ Q
+INIT(CLI) ; First http client connection
+ D:$G(^EXCFG("debug")) SYSLOG("INIT")
+ S:CLI'="" ^EXCFG("log",CLI)=$H ; Last login
+ D MSG^RWU("OK")
+ Q
+GETFN() ; Get FN from ^BUFH
+ S FN=$O(^BUFH(%JOB,""))
+ Q FN
+PENC(X) ; Encode url params
+ Q:X="" X N L,I,R,Z S L=$QL("^("_X_")"),R="",Z=""
+ F I=1:1:L S R=R_Z_"P"_I_"="_$$TURL^TXTU($QS("^("_X_")",I)),Z="&"
+ Q R
+ZTSYS 
+ L -^EXCFG("job"),-MKGLEXCH
+ D SYSLOG("ZTrap:"_$ZE) S $ZT="ZTSYS^IEXCH"
+ I $G(CLI)'="",$G(P)="EXEC"!($G(P)="ZEXEC"),$G(R)'="" K ^ESCH(CLI,P,R) ; clear execution
+ N S S S=$G(SID),SID="" ; if error in WWWCLI - not run second
+ H 1
+ D:S'="" 
+ .S OK=$$GET^WWWCLI(S,"LOGOUT?") D CLOSE^WWWCLI(S)
+ .I +$G(^EXCFG("log"))=+$H,$P(^EXCFG("log"),",",2)+1800>$P($H,",",2) Q 
+ .D SNDALERT
+ 
+ K ^EXCFG("job"),^BUF($J)
+ Q
+SYSLOG(TXT) ; -> SYSLOG
+ D LOG^ISSG(TXT)
+ Q
+ADRLPU(LPU) ; Get adress of LPU
+ Q:'$D(^EXCFG) ""
+ Q:$G(^EXCFG("cn",LPU,"offline")) ""
+ I '$$FR^I() Q:'$D(^EXCFG("host")) "" Q ^EXCFG("host")_":"_^("port") 
+ Q $G(^EXCFG("cn",LPU))
+CONLPU(LPU,LT) ; Connect to LPU as client
+ ; LT - w/o init connection
+ I '$$FR^I() Q:'$D(^EXCFG("host")) 0
+ E  Q:'$D(^EXCFG("cn",LPU)) 0
+ I '$D(%JOB) N %JOB,CR S %JOB="ihttp"_$J,CR=$C(13,10)
+ N R,SRV,PORT,OK
+ S R=$S('$$FR^I():^EXCFG("host")_":"_^EXCFG("port"),1:^EXCFG("cn",LPU))
+ S SRV=$P(R,":",1),PORT=$P(R,":",2) S:PORT="" PORT=80
+ Q:SRV="" 0
+ S %SID=$$OPEN^WWWCLI(SRV,PORT)
+ I %SID="" Q 0 
+ Q:$G(LT) 200
+ D SETAUTH^WWWCLI(%SID,1,$G(^EXCFG("user")),$G(^EXCFG("passwd")))
+ D SETCONN^WWWCLI(%SID,1)
+ S OK=$$GET^WWWCLI(%SID,"/LOGIN/info_yyuser?")
+ I OK'=200 D CLOSE^WWWCLI(%SID)
+ Q OK
+DISLPU(LPU,LT) ; Disconnect from LPU
+ ; LT - w/o logout
+ I $G(LT) D CLOSE^WWWCLI(%SID) K %SID Q 200
+ N OK
+ D SETCONN^WWWCLI(%SID,0)
+ S OK=$$GET^WWWCLI(%SID,"LOGOUT?")
+ D CLOSE^WWWCLI(%SID)
+ K %SID
+ Q OK
+LPUGET(LPU,URL,USR) ; Execute GET in LPU
+ ; USR - "fake" user in remote request
+ N OK,CT,%SID
+ S OK=$$CONLPU(LPU,1) Q:'OK 0
+ D:$G(USR)'="" SETHDR^WWWCLI(%SID,"X-From-User",USR) ; Посылаем юзера
+ D SETAUTH^WWWCLI(%SID,1,$G(^EXCFG("user")),$G(^EXCFG("passwd")))
+ S OK=$$GET^WWWCLI(%SID,"/AUTH/zIEXU"_$R(999)_"/"_URL)
+ I OK'=200 S OK=$$DISLPU(LPU,1) Q 0
+ S CT=$$CTYPE^WWWCLI(%SID)
+ D BUF2H^WWWCLI(%SID)
+ S OK=$$DISLPU(LPU,1)
+ Q CT
+LPUPOST(LPU,URL,USR) ; Execute POST in LPU
+ ; USR - "fake" user in remote request
+ N OK,CT,%SID
+ S OK=$$CONLPU(LPU,1) Q:'OK 0
+ D BUFH2B^WWWCLI(%SID,"hpar")
+ D:$G(USR)'="" SETHDR^WWWCLI(%SID,"X-From-User",USR) ; Посылаем юзера
+ D SETAUTH^WWWCLI(%SID,1,$G(^EXCFG("user")),$G(^EXCFG("passwd")))
+ S OK=$$POST^WWWCLI(%SID,"/AUTH/zIEXU"_$R(999)_"/"_URL)
+ I OK'=200 S OK=$$DISLPU(LPU,1) Q 0
+ S CT=$$CTYPE^WWWCLI(%SID)
+ D BUF2H^WWWCLI(%SID)
+ S OK=$$DISLPU(LPU,1)
+ Q CT
+REG ; First register 
+ I '+$G(^cfg("exch")) K ^EXCFG("p") Q
+ N T,P,X
+ S T=$S($G(^cfg("exch"))=2:$S(+$G(^EXCFG("node")):"ap",1:"a"),1:"p")
+ S P=""
+ F  S P=$O(^$R(P)) Q:P=""  I P'["." D
+ .X "S X=$T(RXCH^"_P_")" Q:X="" 
+ .S K=$G(^EXCFG("p",P))
+ .I K="" S ^EXCFG("p",P)=T
+ S (^EXCFG("p","EXEC"),^EXCFG("p","FILES"),^EXCFG("p","GL"),^EXCFG("p","NULL"),^EXCFG("p","ZEXEC"))="a"
+ Q
+START 
+ D:$$IsRUN() STOP
+ K ^SYNCJ("THREAD^IEXCH")
+ J THREAD^IEXCH
+ Q
+STOP 
+ S ^SYNCJ("THREAD^IEXCH")=1
+ F I=1:1:60 Q:'$$IsRUN()  H 1
+ K ^SYNCJ("THREAD^IEXCH"),^EXCFG("running"),^EXCFG("job")
+ Q
+IsRUN() 
+ I $ZV["Cache" Q ($$COUNTNM^IJOBUTL("IEXCH")>0)
+ Q $D(^EXCFG("running"))
+DONOW ; Update not (signal to thread)
+ Q:'$G(^EXCFG("running")) 
+ S ^EXCFG("do-upd")=1
+ Q
+ILPU 
+ Q:$D(^EXCFG("lpu")) ^("lpu")
+ Q $$^I("ilpu")
+SNDALERT 
+ N U,AU,R S U=""
+ F  S U=$O(^JOB(U)) Q:U=""  S R=$G(^(U,2)) S:R'="" AU(R)=""
+ S U="" F  S U=$O(^LOG(U)) Q:U=""  I $D(AU(U)),$$LCLUSR^NUSER(U,"sys","exch-alert") D
+ .D SENDUSR^YISYNC("MSGU^NISUTL","(""Сервер ЦО недоступен"")",U)
+ Q

@@ -1,0 +1,95 @@
+RPTBL ; Отчеты по табелю [ 08/04/2020  6:07 PM ]
+GR(DT,OTf,VT,LPf) ; График
+ ; DT - расчетная дата 
+ ; OTf - отделение
+ ; LPf - филиал 
+ N DE,DD,A,A1,I,R,LP,OT,OTH,VR,T,D,V,S,X1,X2,X,Y,Z,C,S1,FI,T0,T1,KX,BUF,MM,YY
+ S DD=$$DT^DTUTL($$DIH^DTUTL(DT)),MM=$P(DD,".",2),YY=$P(DD,".",3)
+ S DT=$$DI^DTUTL("01."_MM_"."_YY)
+ S MM=MM+1 S:MM=13 MM=1,YY=YY+1
+ S DE=$$DI^DTUTL("01."_MM_"."_YY)-1,DD=+$P($$DT^DTUTL(DE),".",1)
+ S (A,A1)="",LPf=+LPf
+ F I=1:1:15 S A=A_"|"_I,A1=A1_"|"_$S((I+15)'>DD:I+15,1:"X")
+ S:DD=31 A=A_"|X",A1=A1_"|"_31
+ D OWF^RWU(".txt")
+ D WC^RWU("Подразделение|Время"_A_";")
+ D WC^RWU(CR_" - Сотрудник|итого"_A1)
+ 
+ S LP="" F  S LP=$O(^PTBL(LP)) Q:LP=""  D:'LPf!(LPf&(LPf=LP))
+ .D:LP WC^RWU(CR_$$NAME^ICONTR(LP))
+ .S OT=""
+ .F  S OT=$O(^PTBL(LP,OT)) Q:OT=""  D:OTf=""!((OTf'="")&(OTf=OT))
+ ..S OTH=$S(+$G(^cfg("tablel","nootd")):"",1:CR_$$GOTD^YISPRAV(OT))
+ ..K BUF
+ ..S VR="" F  S VR=$O(^PTBL(LP,OT,VR)) Q:VR=""  D
+ ...S D=$O(^PTBL(LP,OT,VR,DT-1)) Q:D=""!(D>DE) 
+ ...S FI=$$FIODT^YIKADRY(VR,DE)
+ ...S KX=$E(FI,1,32)_"|"_VR,BUF(KX)=FI
+ ..S KX="" F  S KX=$O(BUF(KX)) Q:KX=""  D
+ ...S VR=$P(KX,"|",2),FI=BUF(KX)
+ ...I OTH'="" D WC^RWU(OTH) S OTH=""
+ ...S A=" - "_FI
+ ...S A=A_"|",R="",S=0,S1=0
+ ...S A1=""
+ ...F D=DT:1:DT+14 D LGRproc
+ ...D WC^RWU(CR_A_A1)
+ ...S A1=""
+ ...F D=DT+15:1:DE D LGRproc
+ ...D WC^RWU(CR_"|"_$$TM^DTUTL(S)_A1)
+ D C^RWU
+ Q
+LGRproc 
+ S X1=$G(^PTBL(LP,OT,VR,D,1)),X2=$G(^(2))
+ 
+ S X=$P(X1,"|",1),Z=$P($P(X2,"|",1),"@",1),T0=X,T1=Z
+ S S=S-X,S1=S1-Z ; итого , часть 1
+ S Y=X ; begin
+ S X=$P(X1,"|",2),Z=$P($P(X2,"|",2),"@",1)
+ ; если нет оконечного времени - не считаем
+ S S=S+$S(X:X,1:T0),S1=S1+$S($L(Z):Z,1:T1)
+ S A1=A1_"|"_$S('X:"",1:$$tmg(X-Y))
+ Q
+tmg(X) 
+ Q $S(VT:$TR(+$J(X/3600,"",2),".",","),1:$$TM^DTUTL(X))
+GRL(DS,DE,OTf,VT,LPf) ; График
+ ; DT - расчетная дата 
+ ; OTf - отделение
+ ; LPf - филиал 
+ N A,A1,I,R,LP,OT,OTH,VR,T,D,V,S,S1,X1,X2,X,Y,Z,C,FI,T0,T1,KX,BUF,YY,LL,noo
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S I="" F  S I=$O(^CGAI("flg","gd",I)) Q:I=""  I ("|"_$$GET^ICONTR(I,"flg",+$H)_"|")["|gd|" S LL(I)=$$NAME^ICONTR(I)
+ S A="",LPf=+$G(LPf)
+ S noo=+$G(^cfg("tablel","nootd"))
+ F I=DS:1:DE S A=A_"|"_$P($$DT^DTUTL(I),".",1)
+ D OWF^RWU(".txt")
+ D WC^RWU("Таб.№|Сотрудник "_$$TXTP^DTUTL(DS,DE)_"|"_$S(noo:"",1:"Отделение|")_$S(LPf:"",1:"Филиал|")_"Юрлицо|Итого"_A)
+ S LP="" F  S LP=$O(^PTBL(LP)) Q:LP=""  D:'LPf!(LPf&(LPf=LP))
+ .S OT=""
+ .F  S OT=$O(^PTBL(LP,OT)) Q:OT=""  D:OTf=""!((OTf'="")&(OTf=OT))
+ ..K BUF
+ ..S VR="" F  S VR=$O(^PTBL(LP,OT,VR)) Q:VR=""  D
+ ...S D=$O(^PTBL(LP,OT,VR,DS-1)) Q:D=""!(D>DE) 
+ ...S FI=$$FIODT^YIKADRY(VR,DE)
+ ...S KX=$E(FI,1,32)_"|"_VR,BUF(KX)=FI
+ ..S KX="" F  S KX=$O(BUF(KX)) Q:KX=""  D
+ ...S VR=$P(KX,"|",2),FI=BUF(KX)
+ ...S A=VR_"|"_FI_"|",S=0,S1=0,A1=""
+ ...S:'noo A=A_$$GOTD^YISPRAV(OT)_"|"
+ ...S:'LPf A=A_$$NAME^ICONTR(LP)_"|"
+ ...S A=A_$$mkgd(VR,DE)_"|"
+ ...S A1=""
+ ...F D=DS:1:DE D LGRproc
+ ...D WC^RWU(CR_A_$$TM^DTUTL(S)_A1)
+ D C^RWU
+ Q
+mkgd(VR,DT) ; Список головных подразделений по сотрудникам
+ S LL=$$GET^IKADRY(VR,"lpu",DT),R=""
+ F I=1:1:$L(LL,"|") S X=$P(LL,"|",I) I X'="",$D(LL(X)) S R=$S(R="":"",1:R_", ")_LL(X)
+ Q R
+REGIPROC 
+ N A,FF
+ S A="Зарплата и кадры"
+ S FF=$$FR^I()
+ S ^IPROC(A,"График работы на месяц")="GR_RPTBL,1,"_$S(FF:4,1:3)_",d,Дата отчета,te@storage:otd@1,Отделение,t@string:0/Часы-минуты#1/Десятичный,Формат вывода времени"_$S(FF:",t@storage:lpu,Филиал",1:"")
+ S ^IPROC(A,"График работы")="GRL_RPTBL,1,"_$S(FF:5,1:4)_",d,Дата начала периода,d,Дата окончания периода,te@storage:otd@1,Отделение,t@string:0/Часы-минуты#1/Десятичный,Формат вывода времени"_$S(FF:",t@storage:lpu,Филиал",1:"")
+ Q

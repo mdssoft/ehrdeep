@@ -1,0 +1,176 @@
+YDOCS ; Работа с общими документами [ 06/21/2016  11:18 PM ]
+A 
+ Q
+FNDDOC(NM,FLD) ; Поиск документа по имени
+ ; FLD - папка (опционально)
+ N DT,NUM,I,K
+ S (DT,NUM)="",FLD=$G(FLD)
+ G:FLD'="" FNDDOCf
+ F  Q:NUM'=""  S DT=$O(^CDOC(DT)) Q:DT=""  S I="" F  S I=$O(^CDOC(DT,I)) Q:I=""  I $G(^(I,"nm"))=NM S NUM=DT_","_I Q
+ Q NUM
+FNDDOCf 
+ S K=""
+ F  S K=$O(^CDOCI("fld",FLD,K)) Q:K=""  D  Q:NUM'="" 
+ .S DT=$P(K,",",1),I=$P(K,",",2)
+ .I $G(^CDOC(DT,I,"nm"))=NM S NUM=DT_","_I Q
+ Q NUM
+MKDOC(DOC,TP,FLD) ; Make document
+ S:'$D(FLD) FLD=0
+ I '$D(^CDT(TP))!(FLD&('$D(^CFLD(FLD)))) Q -1
+ N I,DT,L,LP,UI
+ S DT=+$H,LP=$$^I("ilpu"),L=$$GID^I(LP)
+ L +^CDOC(DT)
+ S I=$O(^CDOC(DT,""),-1)
+ S I=$S(L="":I+1,1:($E(I,1,$L(I)-3)+1)_L),^(I,"nm")=DOC
+ L -^CDOC(DT)
+ N DOC,F,IDX
+ S IDX=DT_","_I
+ M DOC=^CDT(TP) S F=$G(DOC("folder")) S:F'="" DOC("fld")=F
+ S DOC("owner")=$G(%LOG)_$S(LP="":LP,1:"@"_LP)
+ K DOC("name"),DOC("folder"),DOC("uindex")
+ M ^CDOC(DT,I)=DOC
+ S:FLD ^CDOC(DT,I,"fld")=FLD
+ S:TP ^CDOC(DT,I,"type")=TP
+ D:I'="" GL^IEXCH("^CDOC",DT,I)
+ D MKIDX(DT,I,TP)
+ Q IDX
+MKIDX(DT,ID,TP) ; Make index
+ N I,UI,L,IDX,R
+ S:$G(TP)="" TP=$G(^CDOC(DT,ID,"type")) Q:TP=""
+ S IDX=DT_","_ID
+ S L=$G(^CDT(TP,"folder"))
+ I L'="",'$D(^CDOCI("fld",L,IDX)) S ^(IDX)="" D GL^IEXCH("^CDOCI","fld",L,IDX)
+ I '$D(^CDOCI("type",TP,IDX)) S ^(IDX)="" D GL^IEXCH("^CDOCI","type",TP,IDX)
+ S UI=$G(^CDT(TP,"uindex"))
+ Q:UI=""
+ F I=1:1:$L(UI,"|") S L=$P(UI,"|",I) D:L'=""
+ .I '$D(^CDOCI("u-"_L,TP)) S ^(TP)=1 D GL^IEXCH("^CDOCI","u-"_L,TP)
+ .S R=$G(^CDOC(DT,ID,L)) Q:R=""
+ .Q:$D(^CDOCI("u-"_L,TP,R,IDX))
+ .S ^(IDX)=""
+ .D GL^IEXCH("^CDOCI","u-"_L,TP,R,IDX)
+ Q
+RMIDX(DT,ID,TP) ; Remove index
+ N I,UI,L,IDX,R
+ S:$G(TP)="" TP=$G(^CDOC(DT,ID,"type")) Q:TP=""
+ S IDX=DT_","_ID
+ S L=$G(^CDT(TP,"folder"))
+ I L'="",$D(^CDOCI("fld",L,IDX)) K ^(IDX) D KGL^IEXCH("^CDOCI","fld",L,IDX)
+ I $D(^CDOCI("type",TP,IDX)) K ^(IDX) D KGL^IEXCH("^CDOCI","type",TP,IDX)
+ S UI=$G(^CDT(TP,"uindex"))
+ Q:UI=""
+ F I=1:1:$L(UI,"|") S L=$P(UI,"|",I) D:L'=""
+ .S R=$G(^CDOC(DT,ID,L)) Q:R=""
+ .Q:'$D(^CDOCI("u-"_L,TP,R,IDX))
+ .K ^(IDX)
+ .D KGL^IEXCH("^CDOCI","u-"_L,TP,R,IDX)
+ Q
+FMDOCNM(DOC,TP,FLD,UID) ; Find or Make по имени,имени типа, имени папки, uid
+ N ID,D,I
+ S FLD=$$MKFLD^YDOCTP(FLD),TP=$$MKTP^YDOCTP(TP,"",FLD,$G(UID)),ID=""
+ F  S ID=$O(^CDOCI("type",TP,ID)) Q:ID=""  S D=$P(ID,",",1),I=$P(ID,",",2) I $G(^CDOC(D,I,"nm"))=DOC,$S(FLD="":1,1:$G(^CDOC(D,I,"fld"))=FLD) Q  
+ Q:ID'="" ID
+ Q $$MKDOC(DOC,TP,FLD)
+FNDOCNM(DOC,TP,FLD,UID) ; Поиск документа по имени,имени типа, имени папки, uid
+ N ID,D,I
+ S FLD=$$MKFLD^YDOCTP(FLD),TP=$$MKTP^YDOCTP(TP,"",FLD,$G(UID))
+ F  S ID=$O(^CDOCI("type",TP,ID)) Q:ID=""  S D=$P(ID,",",1),I=$P(ID,",",2) I $G(^CDOC(D,I,"nm"))=DOC,$S(FLD="":1,1:$G(^CDOC(D,I,"fld"))=FLD) Q  
+ Q ID
+MKDOCNM(DOC,TP,FLD,UID) ; Документ по имени,имени типа, имени папки, uid
+ S FLD=$$MKFLD^YDOCTP(FLD),TP=$$MKTP^YDOCTP(TP,"",FLD,$G(UID))
+ Q $$MKDOC(DOC,TP,FLD)
+DEL(DOC) ; Удалить документ
+ ; TODO - права
+ N DT,ID S DT=$P(DOC,",",1),ID=$P(DOC,",",2)
+ Q:'$D(^CDOC(DT,ID)) 
+ N TP,X,R
+ S TP=$G(^CDOC(DT,ID,"type"))
+ D RMIDX(DT,ID,TP)
+ S X="" F  S X=$O(^CDOC(DT,ID,X)) Q:X=""  S R=$G(^(X)) D:R'="" K^ISSG("^CDOC("_DT_","_ID_","""_X_""")="""_R_"""")
+ K ^CDOC(DT,ID)
+ D KGL^IEXCH("^CDOC",DT,ID)
+ Q
+SDEL(DOC) ; Установить статус удаленного документа
+ D SET(DOC,"del",1)
+ Q
+CHECK(ID) ; Check document
+ Q:$D(^CDOC($P(ID,",",1),$P(ID,",",2)))=0 0 Q 1
+GET(ID,PL) ; Получить данные из поля
+ Q $G(^CDOC($P(ID,",",1),$P(ID,",",2),PL))
+GETD(ID,IDX) ; Получить из поля data
+ Q $G(^CDOC($P(ID,",",1),$P(ID,",",2),"data",IDX))
+BOFD(ID,IDX) ; Не окончание данных
+ Q $D(^CDOC($P(ID,",",1),$P(ID,",",2),"data",IDX))
+SET(ID,PL,RR) ; Установить поле
+ N DT,R
+ S DT=$P(ID,",",1),ID=$P(ID,",",2) Q:'$D(^CDOC(DT,ID))
+ S R=$G(^(ID,PL))
+ Q:R=RR
+ I R'="" S ^("v",$H,PL)=R D GL^IEXCH("^CDOC",DT,ID,"v")
+ S ^CDOC(DT,ID,PL)=RR
+ D GL^IEXCH("^CDOC",DT,ID,PL)
+ Q:'$D(^CDOCI("u-"_PL))  ; нет пользовательских индексов
+ N TP,I
+ S TP=$G(^CDOC(DT,ID,"type")) Q:TP="" 
+ Q:'$D(^CDOCI("u-"_PL,TP))
+ S I=DT_","_ID
+ I R'="",$D(^CDOCI("u-"_PL,TP,R,I)) K ^(I) D KGL^IEXCH("^CDOCI","u-"_PL,TP,R,I)
+ Q:RR="" 
+ Q:$D(^CDOCI("u-"_PL,TP,RR,I))
+ S ^(I)=""
+ D GL^IEXCH("^CDOCI","u-"_PL,TP,RR,I)
+ Q
+OWSTR(ID) ; Open write
+ Q:$P(ID,",",1)=""  Q:$P(ID,",",2) 
+ K ^CDOC($P(ID,",",1),$P(ID,",",2),"data","")
+ Q
+WSTR(ID,R) ; Write string to "data"
+ Q:ID=""  N DT,I,X,K S DT=$P(ID,",",1),ID=$P(ID,",",2)
+ S I=$O(^CDOC(DT,ID,"data",""),-1),K=1,R=R_CR
+ S:I'="" R=$G(^(I))_R,I=I-1
+ F I=I+1:1 S X=$E(R,K,K+4095) Q:X=""  S K=K+4096,^CDOC(DT,ID,"data",I)=X
+ Q
+ORSTR ; Open read string
+ S FYDOCS=0 K FYDOCS(1) S:'$D(CR) CR=$C(13,10)
+ Q
+RSTR(ID) ; Read string
+ I ID="" S FYDOCS="" Q ""
+ Q:'$D(FYDOCS) "" Q:FYDOCS="" "" N I,P,PR,RE,DT
+ S DT=$P(ID,",",1),ID=$P(ID,",",2)
+ I '$D(^CDOC(DT,ID)) S FYDOCS="" Q ""
+ S I=FYDOCS,RE=$G(FYDOCS(1))
+RSTR1 I $F(RE,CR) S P=$P(RE,CR,1),FYDOCS(1)=$P(RE,CR,2,9999) Q P
+ S I=$O(^(ID,"data",I))
+ I I="" K FYDOCS S FYDOCS="" Q RE
+ S RE=RE_^(I),FYDOCS=I
+ G RSTR1
+SETD(ID,IDX,RR) ; Заполнить поле data
+ N DT S DT=$P(ID,",",1),ID=$P(ID,",",2) Q:DT=""!(ID)=""
+ Q:'$D(^CDOC(DT,ID))
+ N R S R=$G(^(ID,"data",IDX))
+ I R'="",R'=RR S ^CDOC(DT,ID,"v",$H,"data",IDX)=R
+ S ^CDOC(DT,ID,"data",IDX)=RR
+ D GL^IEXCH("^CDOC",DT,ID,"data",IDX)
+ Q
+KILLD(ID) ; Очистить поле data
+ N DT S DT=$P(ID,",",1),ID=$P(ID,",",2) Q:DT=""!(ID)=""
+ Q:'$D(^CDOC(DT,ID))
+ S ^CDOC(DT,ID,"v",$H,"data")=""
+ K ^CDOC(DT,ID,"data")
+ D KGL^IEXCH("^CDOC",DT,ID,"data")
+ Q
+SETDEF(ID) ; Set default attributes
+ N DT S DT=$P(ID,",",1),ID=$P(ID,",",2) Q:DT=""!(ID)="" 
+ Q:'$D(^CDOC(DT,ID))
+ S ^(ID,"date")=$H
+ N L S L=$$^I("ilpu"),^CDOC(DT,ID,"user")=$G(%LOG)_$S(L="":L,1:"@"_L)
+ D GL^IEXCH("^CDOC",DT,ID)
+ Q
+REIDX ; Reindex all documents
+ N DT,ID
+ K ^CDOCI
+ D KGL^IEXCH("^CDOCI")
+ S DT="" F  S DT=$O(^CDOC(DT)) Q:DT=""  D
+ .W "."
+ .S ID="" F  S ID=$O(^CDOC(DT,ID)) Q:ID=""  D MKIDX(DT,ID)
+ Q

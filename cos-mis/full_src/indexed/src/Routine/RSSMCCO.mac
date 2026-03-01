@@ -1,0 +1,190 @@
+ ; s DS="01.05.18", DE="31.05.18", MOD=5, DVX="", DEX="", LPUX=""
+ ; d TR^RSSMCCO(DS,DE,MOD,DVX,DEX,LPUX)
+RSSMCCO ; Отчеты врачей косметологов [ 12/04/2018  5:01 PM ]
+ ; DS	- начальная дата в формате $P($H,",",1)
+ ; DE	- конечная дата в формате $P($H,",",1)
+ ; MOD	- Вид отчета, 0:по клиникам, 2:по клиникам и врачам, 5:по клинике врачам пациентам
+ ; DVX	- Вид договора,"": не выбрано
+ ;						0: страховая компания
+ ;						1: страховая комп-я по предоплате
+ ;						2: прямой
+ ;						3: индивидуальный
+ ;						4: корпоратив (бартер)
+ ;						5: ОМС
+ ;						6: Льготный
+ ; DEX	- исключить договора
+ ; LPUX	- Филиал, 1..N
+TR(DS,DE,MOD,DVX,DEX,LPUX) 
+ N VR,OT,SP,DT,LP,KX,STOTD,SCOTD,SCSPC,STSPC,NI,I,R,RR,ID,U,CNT,ACU,DTPL,DTP,DEXL,DG
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE) 	; приведение дат к формату nnnnn
+ S DEX=$$DBLSP^TXTU($TR(DEX,",/;","   "))
+ I DEX'="" F I=1:1:$L(DEX," ") S R=$P(DEX," ",I) S:R'="" DEXL(R)=""
+ S:'$$FR^I() LPUX=$$^I("ilpu") 				; инфо об ЛПУ, LPUX=3
+ D MKSCOTD^IEDE 							; Мерж в STOTD,SCOTD перечня подразделений стоматологии и стационара
+										 /*  SCOTD(14)=""
+											 STOTD(10)=""
+											 STOTD(11)=""
+											 STOTD(12)=""
+											 STOTD(13)=""	*/
+ D MKSCSPC^IEDE 							; Мерж в STSPC,SCSPC перечня специальностей стоматологии и стационара
+										/*	 STSPC(101)=""
+											 STSPC(102)=""
+											 STSPC(103)=""
+											 STSPC(104)=""
+											 STSPC(105)=""
+											 STSPC(106)=""
+											 STSPC(200)=""	 */
+ k ^BUF($J)													; очищаем временный глобал
+ s jobId = $j
+ D ITERATE^IUSLD("TRu^RSSMCCO(VR,OT,DT,ID)",DS,DE,,,LPUX)	; Обход оказанных услуг за период
+ ;D ITERATE^IRASPR("TRdsh^RSSMCCO",DS,DE,1,LPUX)				; Итерация по расписанию
+ Q
+ ; ЭМК
+ S DT=DS-1 F  S DT=$O(^EPRI("dt",DT)) Q:DT=""!(DT>DE)  D
+ .S NI="" F  S NI=$O(^EPRI("dt",DT,NI)) Q:NI=""  D
+ ..S ID="" F  S ID=$O(^EPRI("dt",DT,NI,ID)) Q:ID=""  D
+ ...S LP=$P(^(ID),"|",1) I LPUX'="",LP'=LPUX Q 
+ ...S R=$G(^EPR(NI,ID,"o"))
+ ...Q:$P(R,"|",1)'="D" 
+ ...S SP=$P(R,"|",4) Q:SP=""  Q:$D(STSPC(SP)) 				; пропускаем если оказана специальностью стоматолога или стационара
+ ...S IDX=$S(MOD=2:LP_"|"_$P(R,"|",2),MOD=5:LP_"|"_$P(R,"|",2)_"|"_NI_"|"_DT,1:LP)
+ ...Q:$D(^BUF($J,IDX,3,NI_"|"_DT))
+ ...S DG=+$$GET^IPAC(NI,"stc",DT)
+ ...I $D(DEXL),$D(DEXL(DG)) Q 
+ ...I DVX'="" Q:$$TRdtp(DG,DT)'=DVX 
+ ...S ^BUF($J,IDX,3,NI_"|"_DT)=""
+ ...S ^BUF($J,IDX,3)=$G(^BUF($J,IDX,3))+1
+
+ ; Планы лечения
+ S DT=DS-1 F  S DT=$O(^NAZI("d",DT)) Q:DT=""!(DT>DE)  D		; Что за глобал? ^NAZ и ^NAZI
+ .S ID="" F  S ID=$O(^NAZI("d",DT,ID)) Q:ID=""  D
+ ..S R=^(ID) Q:$P(R,"|",1)'="z" 
+ ..S RR=$G(^NAZ(ID,"i")) Q:RR="" 
+ ..S VR=$P(RR,"|",3),LP=$P(RR,"|",4),NI=$P(RR,"|",2)
+ ..I LPUX'="",LP'=LPUX Q 
+ ..S IDX=$S(MOD=2:LP_"|"_VR,MOD=5:LP_"|"_VR_"|"_NI_"|"_DT,1:LP)
+ ..Q:$D(^BUF($J,IDX,5,NI_"|"_DT))
+ ..S DG=+$$GET^IPAC(NI,"stc",DT) 
+ ..I $D(DEXL),$D(DEXL(DG)) Q  
+ ..I DVX'="" Q:$$TRdtp(DG,DT)'=DVX 
+ ..S ^BUF($J,IDX,5,NI_"|"_DT)=""
+ ..S ^BUF($J,IDX,5)=$G(^BUF($J,IDX,5))+1
+ 
+ D OWF^RWU(".txt")
+ D WC^RWU("Филиал|"_$S(MOD=2:"Врач|",MOD=5:"Врач|Пациент|Дата|",1:"")_
+ 			"Записано пациентов|Пришло|ЭМК|Услуги|Первичных ФЛ|Дальнейшее назначение|Сосудистые звездочки|Эпиляция|Омоложение и шлифовка|Акне|Контурная пластика|Нити")
+ 		  	;			1			2	3	 4		   5				6						7			8				9			  10		11			   12
+ 		  	; OLD:
+ 		  	; "Записано пациентов|Пришло|ЭМК|Услуги|Первичных ФЛ|План лечения|Дальнейшее назначение|Имплантаты (все)|Имплантаты Astra Tech|ZOOM|Вкладки")
+ 		  	;			1			2	  3		4		5			6					7					8					9		   10(9)  11(10)
+ S IDX="" 
+ F  S IDX=$O(^BUF($J,IDX)) Q:IDX=""  D
+ .S RR=""
+ .S I="" F  S I=$O(^BUF($J,IDX,I)) Q:I=""  S $P(RR,"|",I)=^BUF($J,IDX,I)
+ .S NI=$P(IDX,"|",3)
+ .S group = $S(MOD=2:"|"_$$FIO^IKADRY($P(IDX,"|",2)), MOD=5:"|"_$$FIO^IKADRY($P(IDX,"|",2))_"|"_NI_" "_$$FIO^IPAC(NI)_"|"_$$DT^DTUTL($P(IDX,"|",4)),1:"")
+ .S RR=$$NAME^ICONTR($P(IDX,"|",1))_group_"|"_RR
+ .D WC^RWU(CR_RR)
+ D C^RWU
+ k ^BUF($J)
+ Q
+TRdtp(CSTC,DT) 					; тип договора
+ Q:DVX="" "" Q:CSTC="" ""
+ I '$D(DTPL(CSTC,DT)) S DTP=+$$GET^YNDOG(CSTC,"dvid",DT),DTPL(CSTC,DT)=DTP
+ E  S DTP=DTPL(CSTC,DT)
+ Q DTP
+TRdsh 							; Функция на каждую запись расписания
+ Q:$D(STOTD(OT)) 				; пропускаем записи в стационаре или у стоматолога
+ S NI=$P(R,"|",1) 				; номер Истории Болезни (ИБ)
+ Q:NI=""  						; пропуск если номер истории болезни пуст
+ 								w !,"NI = ",NI
+ 								; задаем вид индекса
+ S IDX=$S(MOD=2:LP_"|"_			; Филиал
+ 				VR,				; врач
+ 		  MOD=5:LP_"|"_			; Филиал
+ 		  		VR_"|"_			; врач
+ 		  		NI_"|"_			; ИБ
+ 		  		DT,				; дата
+ 		  1:LP)
+ Q:$D(^BUF($J,IDX,1,NI_"|"_DT))	; выход если в буфере уже есть такая запись
+ S DG=+$$GET^IPAC(NI,"stc",DT) 	; Получить значение поля по ИБ и дате
+ 								w !,$C(9),"DG = ",DG
+ I $D(DEXL),$D(DEXL(DG)) Q  
+ I DVX'="" Q:$$TRdtp(DG,DT)'=DVX
+  								w " is ok"
+ S ^BUF($J,IDX,1,NI_"|"_DT)=""
+ S ^BUF($J,IDX,1)=$G(^BUF($J,IDX,1))+1
+ Q:$P($G(^DSH(LP,OT,VR,SP,DT,TM,"c")),"|",1)=""  
+ S ^BUF($J,IDX,2)=$G(^BUF($J,IDX,2))+1 ; пришел
+ I $O(^DSHP(NI,DT))'="" S ^BUF($J,IDX,6)=$G(^BUF($J,IDX,6))+1	; следующие записи есть
+ Q
+TRu(VR,OT,DT,ID)									; функция на каждую оказанную услугу
+ 													w !,"VR=",VR,"  OT=",OT,"  DT=",DT,"  ID=",ID
+ ;Q:$D(STOTD(OT))									; пропуск, если услуга оказана в стационаре или в стоматологии					
+ ;Q:"wd"[$$GETSTAT^IUSL(VR,DT,OT,ID) 				; пропуск если статус услуги "wd"
+ 													w !,$C(9),"stat = ",$$GETSTAT^IUSL(VR,DT,OT,ID)
+ D GET^IUSL(VR,DT,OT,ID,1)							; получение записи об услуге, все атрибуты
+ ;S DG=$S($G(ISTC):ISTC,1:$$GET^IPAC(NI,"stc",DT))
+ 													;w !,$C(9),"DG = ",DG
+ ;I $D(DEXL),$D(DEXL(DG)) Q  						; фильтруем услуги с нужным типом договора, если задан фильтр по договору
+ ;I DVX'="" Q:$$TRdtp(DG,DT)'=DVX
+ 													w " is ok"
+ S LP=$$GETLPU^IUSL(VR,DT,OT,ID)					; код ЛПУ, в котором оказана услуга
+ S IDX=$S(MOD=2:LP_"|"_VR,MOD=5:LP_"|"_VR_"|"_NI_"|"_DT,1:LP)	; задаем вид индекса в буферном глобале
+ 													w !,$C(9),"IDX = ",IDX
+ 													w !,$C(9),"PRC = ",PRC
+ ;w !
+ ;zw
+ ;w !
+ ;r *key
+ 
+ S U="" F  S U=$O(UL(U)) Q:U=""  D
+ .S CNT=UL(U) S:'CNT CNT=1
+ .S ACU=$$GET^IPRICE(U,"acu",PRC,DT)
+ .W !,$C(9),"ACU = ",ACU
+ .I $P(ACU,".",5)="VA" S ^BUF($J,IDX,7)=$G(^BUF($J,IDX,7))+CNT		; Сосудистые звездочки		VA
+ .I $P(ACU,".",5)="E" S ^BUF($J,IDX,8)=$G(^BUF($J,IDX,8))+CNT		; Эпиляция					E
+ .I $P(ACU,".",5)="RR" S ^BUF($J,IDX,9)=$G(^BUF($J,IDX,9))+CNT		; Омоложение и шлифовка		RR
+ .I $P(ACU,".",5)="Ac" S ^BUF($J,IDX,10)=$G(^BUF($J,IDX,10))+CNT	; Акне						Ac
+ .I $P(ACU,".",5)="CP" S ^BUF($J,IDX,11)=$G(^BUF($J,IDX,11))+CNT	; Контурная пластика		CP
+ .I $P(ACU,".",5)="Th" S ^BUF($J,IDX,12)=$G(^BUF($J,IDX,12))+CNT	; Нити						Th
+ Q:$D(^BUF($J,IDX,4,NI_"|"_DT))										; пропуск если в буфере есть такое значение
+ S ^(NI_"|"_DT)=""
+ S ^BUF($J,IDX,4)=$G(^BUF($J,IDX,4))+1 								; есть услуги
+ Q
+ 
+DET(DS,DE,LPU) 
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D OWF^RWU(".txt")
+ D C^RWU
+ Q
+ 
+ ; d REGIPROC^RSSMCCO
+REGIPROC 
+ N F,FF
+ S F=$$FR^I()
+ S FF=$S(F:",t@storage:lpu,Филиал",1:"")
+ S ^IPROC("ССМЦ", "Контроль работы врачей-косметологов")=
+ 	"TR_RSSMCCO,1,"_$S(F:6,1:5)_
+ 	",d,Дата отчета,"_
+ 	"d,Дата по,"_
+ 	"t@string:0/По клиникам#2/По клинике и врачам#5/По клинике врачам пациентам,Вид отчета,"_
+ 	"t@net:NMLCR_NSPRAV(""dvid"")@1,Вид договора,"_
+ 	"s,Исключить договора"_FF
+ Q
+ ; d REGIPROCnew^RSSMCCO
+REGIPROCnew ; Новая процедура регистраци отчета
+ S F=$$FR^I()
+ S ^IPROC("ССМЦ", "Контроль работы врачей-косметологов") = "TR_RSSMCCO"
+ S ^IPROC("TR_RSSMCST") = "Контроль работы врачей-косметологов"
+ S ^IPROC("TR_RSSMCST","prm",1)  = "d|Дата отчета"
+ S ^IPROC("TR_RSSMCST","prm",2)  = "d|Дата по"
+ S ^IPROC("TR_RSSMCST","prm",3)  = "t|Вид отчета"
+ S ^IPROC("TR_RSSMCST","prm",3,1)  = "0|По клиникам"
+ S ^IPROC("TR_RSSMCST","prm",3,2)  = "2|По клинике и врачам"
+ S ^IPROC("TR_RSSMCST","prm",3,3)  = "5|По клинике врачам пациентам"
+ S ^IPROC("TR_RSSMCST","prm",4)  = "t|Вид договора|net:NMLCR_NSPRAV(""dvid"")|1"
+ S ^IPROC("TR_RSSMCST","prm",5)  = "s|Исключить договора"
+ S:F ^IPROC("TR_RSSMCST","prm",6)= "t|Филиал|storage:lpu"
+ Q 
+

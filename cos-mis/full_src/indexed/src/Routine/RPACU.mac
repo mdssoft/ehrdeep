@@ -1,0 +1,871 @@
+RPACU ; Дополнительные отчеты по контингенту [ 04/24/2023  4:22 PM ]
+NEWS(DTS,DTE,DGN,STAT) ; Новые прикрепленные за эту дату
+ S DTS=$$DIH^DTUTL(DTS),DTE=$$DIH^DTUTL(DTE)
+ N NI,DTMI,DTMX,ID,X,POL,IDX,ST
+ S DGN=DGN,CID=$C(9)_"s",NI="",IDX=1
+ S:DGN=9999 DGN=""
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|П.п.|№ И.Б.|Ф.И.О. пациента|Дата прикр.|Пол|Дата рожд.|Договор")
+ I DGN="" F  S NI=$O(^BTN(NI)) Q:NI=""!(NI[$C(9))  D DONEWs(NI)
+ E  F  S NI=$$NEXT^IPAC(NI,"stc",DGN) Q:NI=""  D DONEWs(NI)
+ D C^RWU
+ Q
+DONEWs(NI) ; Вспомогательная процедура для NEWS
+ S DTMI=99999,DTMX=0,ID=""
+ F  S ID=$O(^BTN(NI,ID)) Q:ID=""  S DT=$O(^(ID,-1)) S:DT'=""&(DT<DTMI) DTMI=DT 
+ Q:DTMI<DTS!(DTMI>DTE) 
+ I STAT'="" S ST=$$GET^IPAC(NI,"status",DTMI) I '$$FLinFL^TXTU(ST,STAT) Q
+ D WC^RWU(CR_NI_"|"_IDX_"|"_NI_"|"_$$FIO^IPAC(NI,DTMI)_"|"_$$DT^DTUTL(DTMI)_"|"_$$GETE^IPAC(NI,"pol",DTMI)_"|"_$$DT^DTUTL($$GET^IPAC(NI,"datar",DTMI))_"|"_$$NAME^IINSC($$GET^IPAC(NI,"stc",DTMI),DTMI))
+ S IDX=IDX+1
+ Q
+PVS(DGN,NOF) ; Половозрастная структура по дог.(или все) на тек. момент
+ ; DGN - договор
+ ; NOF - все пациенты (и снятые) 
+ N H,NI,SEX,AGE,STAT,UF,I,SS,tzP,tzD
+ S H=+$H,NI="",NOF=+$G(NOF)
+ S tzP=$$PLIDX^IPAC("pol"),tzD=$$PLIDX^IPAC("datar")
+ I DGN'="" F  S NI=$O(^BTI(" s",DGN,NI)) Q:NI=""  D
+ .I $$PIDXN^IPAC(NI,DGN,H)=-1 Q 
+ .D LNPVS
+ I DGN="" F  S NI=$$NEXT^IPAC(NI) Q:NI=""  D LNPVS
+ D OWF^RWU(".txt")
+ D WC^RWU("Договор: "_$S(DGN="":"Все",1:$$NAME^IINSC(DGN,H))_"||Всего|Всего||Пришедших|Пришедших;")
+ D WC^RWU(CR_"Возрастная группа|Всего лиц|М|Ж|Пришедших|М|Ж")
+ S I="" F  S I=$O(STAT(I)) Q:I=""  D
+ .S UF=$S(I=1:"менее года",I=2:"1-16 лет",I=3:"17-19 лет",I=20:"20-29 лет",I=30:"30-39 лет",I=40:"40-49 лет",I=50:"50-59 лет",I=60:"60-69 лет",I=70:"Свыше 70 лет",1:"Не определено")
+ .F H=1:1:6 S UF=UF_"|"_$G(STAT(I,H)),SS(H)=$G(SS(H))+$G(STAT(I,H))
+ .D WC^RWU(CR_UF)
+ S UF=" Итого" F H=1:1:6 S UF=UF_"|"_$G(SS(H))
+ D WC^RWU(CR_UF)
+ D C^RWU
+ Q
+LNPVS 
+ I 'NOF,'$$CHECK^IPAC(NI,H) Q 
+ S SEX=$$GETTZ^IPAC(NI,tzP,H)
+ S AGE=$$GETTZ^IPAC(NI,tzD,H)
+ S:AGE'="" AGE=$$AGE^DTUTL(AGE,H)
+ S UF=$D(^PNF(NI))
+ S I=$S(AGE="":999,AGE<1:1,AGE<17:2,AGE<20:3,AGE<30:20,AGE<40:30,AGE<50:40,AGE<60:50,AGE<70:60,1:70)
+ S STAT(I,1)=$G(STAT(I,1))+1
+ S:SEX=1 STAT(I,2)=$G(STAT(I,2))+1
+ S:SEX=2 STAT(I,3)=$G(STAT(I,3))+1
+ I UF>0 S STAT(I,4)=$G(STAT(I,4))+1 S:SEX=1 STAT(I,5)=$G(STAT(I,5))+1 S:SEX=2 STAT(I,6)=$G(STAT(I,6))+1
+ Q
+SVD(DT,DGN,sWRK,REMOV,STAT,STALL,TDGN,TPRG) ; Сводка по прикрепленному контингенту
+ ; sWRK - показывать по местам работы(1) или программам(2)
+ ; REMOV - учитывать снятых 
+ ; TDGN - текстовый договор
+ ; TPRG - текстовая программа
+ N NI,SEX,SUMM,UF,I,SS,WRK,R,X,Z,ALL,PIDX,AGE,plSd,plSp
+ S NI="",DT=$$DIH^DTUTL(DT),sWRK=+sWRK,REMOV=+REMOV
+ S TDGN=$$UL^TXTU($G(TDGN)),TPRG=$$UL^TXTU($G(TPRG))
+ K ^BUF($J)
+ D PRETZR^IPAC
+ S plSd=$$PLIDX^IPAC("stcdog"),plSp=$$PLIDX^IPAC("stcprg")
+ 
+ S:STAT'="" STAT="|"_STAT_"|"
+ S R=$G(STAT) K STAT
+ F I=1:1:$L(R,"|") S X=$P(R,"|",I) S:X'="" STAT("|"_X_"|")=""
+ 
+ F I=0:1:3 S SUM(I)=0
+ I DGN'="" S ALL=0 F  S NI=$O(^BTI(" s",DGN,NI)) Q:NI=""  D
+ .S PIDX=$$PIDXN^IPAC(NI,DGN,DT)
+ .Q:PIDX=-1  ; не найдено
+ .D SVDproc(DGN)
+ I DGN="" S ALL=1 F  S NI=$$NEXT^IPAC(NI) Q:NI=""  D
+ .F PIDX="",1,2 S DGN=$$GET^IPAC(NI,"stc"_PIDX,DT) D:DGN'="" SVDproc(DGN)
+ D OWF^RWU(".txt")
+ D WC^RWU("Договор|"_$S(sWRK=1:"Место работы|",sWRK=2:"Программа|",sWRK=3:"Страховой договор|",1:"")_"Всего лиц|М|Ж|Взрослые|Дети|Пришедших")
+ S DGN="" F  S DGN=$O(^BUF($J,DGN)) Q:DGN=""  D
+ .K SS S UF=$G(^(DGN,9)),SS=0,Z=""
+ .F  S Z=$O(^(Z)) Q:Z=""!(Z>5)!(Z="-")  S SS(Z)=^(Z)
+ .S SS=SS+$G(SS(1))+$G(SS(2))
+ .D WC^RWU(CR_$$NAME^IINSC(DGN,DT)_$S(sWRK:"|",1:"")_"|"_SS_"|"_$G(SS(1))_"|"_$G(SS(2))_"|"_$G(SS(4))_"|"_$G(SS(5))_"|"_UF)
+ .S SUM(0)=SUM(0)+SS,SUM(1)=SUM(1)+$G(SS(1)),SUM(2)=SUM(2)+$G(SS(2)),SUM(3)=SUM(3)+UF ; TODO - сумма по лицам
+ .S WRK="" F  S WRK=$O(^BUF($J,DGN,"-",WRK)) Q:WRK="-"!(WRK="")  D
+ ..K SS S UF=$G(^(WRK,9)),SS=0,Z=""
+ ..F  S Z=$O(^(Z)) Q:Z=""!(Z>5)  S SS(Z)=^(Z)
+ ..S SS=SS+$G(SS(1))+$G(SS(2))
+ ..S R=$S(WRK=0:"не указано",sWRK=2:$$NAME^IMPRP(WRK),sWRK=3:WRK,1:$$GET^ISPRAV(5,WRK))
+ ..D WC^RWU(CR_"|"_R_"|"_SS_"|"_$G(SS(1))_"|"_$G(SS(2))_"|"_$G(SS(4))_"|"_$G(SS(5))_"|"_UF)
+ S UF=" Итого"_$S(sWRK:"|",1:"") F I=0:1:3,4,5 S UF=UF_"|"_$G(SUM(I))
+ D WC^RWU(CR_UF)
+ D C^RWU
+ Q
+SVDproc(DGN) 
+ I 'REMOV,'$$CHECKIDX^IPAC(NI,DT,PIDX) Q 
+ I TDGN'="" S R=$$UL^TXTU($$GETTZ^IPAC(NI,plSd,DT)) Q:R'[TDGN 
+ I TPRG'="" S R=$$UL^TXTU($$GETTZ^IPAC(NI,plSp,DT)) Q:R'[TPRG 
+ S R=0
+ I $D(STAT) S R=1,X=$$GET^IPAC(NI,"status",DT) Q:X=""  D
+ .S X="|"_X_"|",Z=""
+ .I STALL S R=0 F  S Z=$O(STAT(Z)) Q:Z=""  I X'[Z S R=1 
+ .I 'STALL F  S Z=$O(STAT(Z)) Q:Z=""  I X[Z S R=0 Q
+ Q:R
+ S SEX=+$$GET^IPAC(NI,"pol",DT)
+ S AGE=$$GET^IPAC(NI,"datar",DT)
+ S AGE=$S(AGE="":99,1:+$$AGE^IPAC(NI,DT))
+ S AGE=$S(AGE<17:5,1:4)
+ S UF=$S($D(^PNF(NI)):1,1:0)
+ S ^(SEX)=$G(^BUF($J,DGN,SEX))+1
+ S ^(AGE)=$G(^(AGE))+1
+ S:UF ^(9)=$G(^(9))+1
+ Q:'sWRK
+ S R=$$GET^IPAC(NI,$S(sWRK=2:"prog"_PIDX,sWRK=3:"stcdog"_PIDX,1:"work"),DT)
+ I R="",sWRK=3 S R=" "
+ I sWRK=3,$L(R)>100 S R=$$OWF^TXTU(R,100)
+ F I=1:1:$L(R,"|") S X=$P(R,"|",I) D
+ .S:X="" X=0
+ .S ^(SEX)=$G(^BUF($J,DGN,"-",X,SEX))+1
+ .S ^(AGE)=$G(^(AGE))+1
+ .S:UF ^(9)=$G(^(9))+1
+ Q
+RBYDGN(DS,DE,FST,GTP) ; Новые прикрепления по договорам
+ ; FST - только по основному договору
+ ; GTP - группировать по видам или по разделам
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N STVL,STAT,STT,TP,DG,A,DS1,DE1,R,I,X,Z
+ S DS1=2*DS-DE-1,DE1=DS-1
+ 
+ D FLOWSTC^NPACUR(DS,DE,1,"","","",+$G(FST))
+ S DG="" F  S DG=$O(STAT(DG)) Q:DG=""  D
+ .S TP=$$GET^IINSC(DG,$S($G(GTP):"tp",1:"dvid"),DE)
+ .S:$D(^BTPLS("stc",DG)) TP=98
+ .S:TP="" TP=99
+ .S STT(TP,DG,1)=$G(STAT(DG,1))+$G(STAT(DG,6))
+ 
+ K STAT
+ D FLOWSTC^NPACUR(DS1,DE1,1,"","","",+$G(FST))
+ S DG="" F  S DG=$O(STAT(DG)) Q:DG=""  D
+ .S TP=$$GET^IINSC(DG,$S($G(GTP):"tp",1:"dvid"),DE)
+ .S:$D(^BTPLS("stc",DG)) TP=98
+ .S:TP="" TP=99
+ .S STT(TP,DG,2)=$G(STAT(DG,1))+$G(STAT(DG,6))
+ 
+ ; чистка
+ S TP="" F  S TP=$O(STT(TP)) Q:TP=""  S DG="" F  S DG=$O(STT(TP,DG)) Q:DG=""  K:'$G(STT(TP,DG,1)) STT(TP,DG,1) K:'$G(STT(TP,DG,2)) STT(TP,DG,2)
+ 
+ D MERGENM^ISPRAV($S($G(GTP):"dgtype",1:"dvid"),"STVL")
+ S STVL(98)="Абонементы",STVL(99)="Не указано"
+ 
+ D OWF^RWU(".txt")
+ D WC^RWU("Отчет по контингенту за период|Лиц|Лиц;")
+ D WC^RWU(CR_"Тип клиента|"_$$TXTP^DTUTL(DS,DE)_"|"_$$TXTP^DTUTL(DS1,DE1))
+ S TP="" F  S TP=$O(STT(TP)) Q:TP=""  D
+ .D WC^RWU(CR_$G(STVL(TP)))
+ .S DG="" F  S DG=$O(STT(TP,DG)) Q:DG=""  D
+ ..D WC^RWU(CR_" - "_$$NAME^IINSC(DG,DE)_"|"_(+$G(STT(TP,DG,1)))_"|"_(+$G(STT(TP,DG,2))))
+ D C^RWU
+ Q
+RBYDGNp 
+ S TP=9
+ I '$D(STVL(ST)) S STVL(ST)=$$GET^IINSC(ST,"dvid",D)
+ S:$D(BTPLS(ST)) TP=8
+ I TP'=8 S K=$G(STVL(ST)) S:K'="" TP=K
+ S D1=$$GET^IPAC(NI,"dog_from",DE),D2=$$GET^IPAC(NI,"dog_to"_PIDX)
+ S K=$S(D>DE1:1,1:2),STAT(TP,ST,K)=$G(STAT(TP,ST,K))+1
+ Q
+CNTBYDG(DTT,FST,SWS,STATUS,STALL,ACAT) ; Численность прикрепленного контингента на дату
+ ; FST - только по основному договору
+ ; SWS - показывать снятых
+ ; ACAT - категрия возраста (0/1/2=все/взрослые/дети)
+ S DTT=$$DIH^DTUTL(DTT)
+ N KD,KDP,KDO,D,BTPLS,NI,STAT,SS,ST,TP,STVL,K,D1,F,X,Z,I,tzD,AGE
+ N pS1,pOF,pDF,PDT
+ S FST=+$G(FST),SWS=+$G(SWS),ACAT=+$G(ACAT)
+ S KD=$$PLIDX^IPAC("fiof") Q:KD="" 
+ S KDP=+$$PLIDX^IPAC("pol")
+ S KDO=+$$PLIDX^IPAC("opfio")
+ S tzD=$$PLIDX^IPAC("datar")
+ S pS1=+$$PLIDX^IPAC("stc"),pS2=+$$PLIDX^IPAC("stc1"),pS3=+$$PLIDX^IPAC("stc2")
+ S pOF=+$$PLIDX^IPAC("ofor")
+ S F=0 F K="dog_from","dog_from1","dog_from2" S pDF(F)=$$PLIDX^IPAC(K),F=F+1
+ S F=0 F K="dog_to","dog_to1","dog_to2" S pDT(F)=$$PLIDX^IPAC(K),F=F+1
+ M BTPLS=^BTPLS("stc")
+ D PRETZR^IPAC
+ 
+ S:STATUS'="" STATUS="|"_STATUS_"|" 
+ S R=$G(STATUS) K STATUS
+ F I=1:1:$L(R,"|") S X=$P(R,"|",I) S:X'="" STATUS("|"_X_"|")=""
+ 
+ S NI="" F  S NI=$$NEXT^IPAC(NI) Q:NI=""  D
+ .S D=$O(^(NI,KD,0))
+ .S D1=$O(^BTN(NI,KDO,0)) S:D1="" D1=D
+ .S:D1<D D=D1 Q:D>DTT 
+ .I 'SWS S K=$$GETTZ^IPAC(NI,pOF,DTT) I K'="",K'=1 Q 
+ .I ACAT S AGE=$$GETTZ^IPAC(NI,tzD,DTT) S:AGE'="" AGE=$$AGE^DTUTL(AGE,DTT) Q:$S(AGE="":1,ACAT=1:AGE<17,ACAT=2:AGE>16,1:0)   
+ .S F=0
+ .S ST=$$GETTZ^IPAC(NI,pS1,DTT)
+ .I ST'="" D CNTBYDGp(ST,"",0) S F=1
+ .I 'FST D:ST="" CNTBYDGp(0,"",0) Q
+ .S ST=$$GETTZ^IPAC(NI,pS2,DTT)
+ .I ST'="" D CNTBYDGp(ST,1,0) S F=1
+ .S ST=$$GETTZ^IPAC(NI,pS3,DTT)
+ .I ST'="" D CNTBYDGp(ST,2,0) S F=1
+ .D:'F CNTBYDGp(0,"",0) ; пациенты без договора
+ ; TODO - произвольное число договоров
+ K STVL
+ S STVL(1)="Индивидуальные",STVL(2)="Абонементы",STVL(3)="Страховые компании",STVL(4)="СК по предоплате",STVL(5)="Прочие договора"
+ D OWF^RWU(".txt")
+ D WC^RWU("Прикрепленный контингент на "_$$DT^DTUTL(DTT)_";")
+ D WC^RWU(CR_"Тип клиента|Всего|Муж.|Жен.|Пришедших")
+ S TP="" F  S TP=$O(STAT(TP)) Q:TP=""  D
+ .S KD=STVL(TP),ST="" D WC^RWU(CR_KD)
+ .F  S ST=$O(STAT(TP,ST)) Q:ST=""  D
+ ..S SS(0)=$G(SS(0))+$G(STAT(TP,ST)),D=""
+ ..F K=1:1:3 S D1=+$G(STAT(TP,ST,K)),SS(K)=$G(SS(K))+D1,D=D_"|"_D1
+ ..S K=$$NAME^IINSC(ST,DTT) S:K="" K="Не указано"
+ ..D WC^RWU(CR_" - "_K_"|"_$G(STAT(TP,ST))_D)
+ S TP="" F K=0:1:3 S TP=TP_"|"_+$G(SS(K))
+ D WC^RWU(CR_"Всего"_TP)
+ D C^RWU
+ Q
+CNTBYDGM(DS,DE,FST,SWS) ; Средняя численность контингента за период
+ ; FST - только по основному договору
+ ; SWS - показывать снятых
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N KD,KDP,KDO,D,BTPLS,NI,STAT,SS,ST,TP,STVL,K,D1,F,DTT,CDT
+ N pOF,pS1,pS2,pS2,pDF,pDT
+ S CDT=(DE-DS+1)/4
+ S FST=+$G(FST),SWS=+$G(SWS)
+ S KD=$$PLIDX^IPAC("fiof") Q:KD="" 
+ S KDP=+$$PLIDX^IPAC("pol")
+ S KDO=+$$PLIDX^IPAC("opfio")
+ S pS1=+$$PLIDX^IPAC("stc"),pS2=+$$PLIDX^IPAC("stc1")
+ S pS3=+$$PLIDX^IPAC("stc2")
+ S pOF=+$$PLIDX^IPAC("ofor")
+ S F=0 F K="dog_from","dog_from1","dog_from2" S pDF(F)=$$PLIDX^IPAC(K),F=F+1
+ S F=0 F K="dog_to","dog_to1","dog_to2" S pDT(F)=$$PLIDX^IPAC(K),F=F+1
+ M BTPLS=^BTPLS("stc")
+ D PRETZR^IPAC
+ 
+ S NI="" F  S NI=$$NEXT^IPAC(NI) Q:NI=""  F DTT=DS:4:DE D
+ .S D=$O(^BTN(NI,KD,0))
+ .S D1=$O(^BTN(NI,KDO,0)) S:D1="" D1=D
+ .S:D1<D D=D1 Q:D>DTT 
+ .I 'SWS S K=$$GETTZ^IPAC(NI,pOF,DTT) I K'="",K'=1 Q 
+ .S F=0
+ .S ST=$$GETTZ^IPAC(NI,pS1,DTT)
+ .I ST'="" D CNTBYDGp(ST,"",1) S F=1
+ .I 'FST D:ST="" CNTBYDGp(0,"",1) Q
+ .S ST=$$GETTZ^IPAC(NI,pS2,DTT)
+ .I ST'="" D CNTBYDGp(ST,1,1) S F=1
+ .S ST=$$GETTZ^IPAC(NI,pS3,DTT)
+ .I ST'="" D CNTBYDGp(ST,2,1) S F=1
+ .D:'F CNTBYDGp(0,"",1) ; пациенты без договора
+ ; TODO - произвольное число договоров
+ K STVL
+ S STVL(1)="Индивидуальные",STVL(2)="Абонементы",STVL(3)="Страховые компании",STVL(4)="СК по предоплате",STVL(5)="Прочие договора"
+ D OWF^RWU(".txt")
+ D WC^RWU("Прикрепленный контингент "_$$TXTP^DTUTL(DS,DE)_";")
+ D WC^RWU(CR_"Тип клиента|Всего") ;|Муж.|Жен.")
+ S TP="" F  S TP=$O(STAT(TP)) Q:TP=""  D
+ .S KD=STVL(TP),ST="" D WC^RWU(CR_KD)
+ .F  S ST=$O(STAT(TP,ST)) Q:ST=""  D
+ ..S SS(0)=$G(SS(0))+($G(STAT(TP,ST))/CDT),D=""
+ ..; F K=1:1:1 S D1=+$G(STAT(TP,ST,K))/CDT,SS(K)=$G(SS(K))+D1,D=D_"|"_D1
+ ..S K=$$NAME^IINSC(ST,DE) S:K="" K="Не указано"
+ ..D WC^RWU(CR_" - "_K_"|"_$TR(+$J($G(STAT(TP,ST))/CDT,"",2),".",","))
+ ;S TP="" F K=0:1:3 S TP=TP_"|"_$TR(+$J(+$G(SS(K)),"",2),".",",")
+ D WC^RWU(CR_"Всего|"_$TR(+$J(+$G(SS(0)),"",2),".",","))
+ D C^RWU
+ Q
+CNTBYDGp(ST,PIDX,MOD) 
+ I 'SWS Q:$$GETTZ^IPAC(NI,pDF(+PIDX),DTT)>DTT  S K=+$$GETTZ^IPAC(NI,pDT(+PIDX),DTT) Q:K&(K<DTT) 
+ S R=0
+ I $D(STATUS) S R=1,X=$$GET^IPAC(NI,"status",DTT) Q:X=""  S X="|"_X_"|",Z="" F  S Z=$O(STATUS(Z)) Q:Z=""  I X[Z S R=0 Q
+ I $D(STATUS) S R=1,X=$$GET^IPAC(NI,"status",DTT) Q:X=""  D 
+ .S X="|"_X_"|",Z=""
+ .I STALL S R=0 F  S Z=$O(STATUS(Z)) Q:Z=""  I X'[Z S R=1  
+ .I 'STALL F  S Z=$O(STATUS(Z)) Q:Z=""  I X[Z S R=0 Q
+ Q:R 
+ S:'$D(STVL(ST)) STVL(ST)=$$GET^IINSC(ST,"dvid",DTT) ; DE
+ S TP=1 S:+$D(BTPLS(ST)) TP=2
+ S K=$S('ST:5,1:+$G(STVL(ST)))
+ S:K=0 TP=3
+ S:K=1 TP=4
+ S:K=2!(K>3) TP=5
+ S STAT(TP,ST)=$G(STAT(TP,ST))+1
+ Q:MOD  ; сокращенно
+ S:KDP=0 D="" S:KDP>0 D=+$O(^BTN(NI,KDP,0))
+ I D>0 S K=+$G(^(D)) S:K=1 STAT(TP,ST,1)=$G(STAT(TP,ST,1))+1 S:K=2 STAT(TP,ST,2)=$G(STAT(TP,ST,2))+1
+ S D=$O(^PNF(NI,0)) Q:D=""!(D>DTT)  
+ S STAT(TP,ST,3)=$G(STAT(TP,ST,3))+1
+ Q
+CNTBYPR(PRG,DTT,SWS,WRK,USH,STATUS,STALL) ; Численность контингента по программе на дату
+ ; SWS - показывать снятых
+ ; WRK - место работы
+ ; USH - участок
+ ; STATUS - статусы контингента
+ S DTT=$$DIH^DTUTL(DTT),PRG=$$WD^TXTU(PRG)
+ N KD,KDP,KDD,D,BTPLS,NI,STAT,SS,ST,TP,STVL,K,D1,PR,F,PIDX,R,Z,X,I
+ S SWS=+$G(SWS)
+ S KD=$$PLIDX^IPAC("fiof") Q:KD="" 
+ S KDP=+$$PLIDX^IPAC("pol")
+ S KDD=+$$PLIDX^IPAC("datar")
+ S PR="|"_PRG_"|"
+ M BTPLS=^BTPLS("stc")
+ 
+ S:STATUS'="" STATUS="|"_STATUS_"|" 
+ S R=$G(STATUS) K STATUS
+ F I=1:1:$L(R,"|") S X=$P(R,"|",I) S:X'="" STATUS("|"_X_"|")=""
+ 
+ S NI="" F  S NI=$$NEXT^IPAC(NI) Q:NI=""  D
+ .S F=0,PIDX=""
+ .S D=$$GET^IPAC(NI,"prog",DTT)
+ .I ("|"_D_"|")[PR S F=1
+ .I 'F S D=$$GET^IPAC(NI,"prog1",DTT) I ("|"_D_"|")[PR S F=1,PIDX=1
+ .I 'F S D=$$GET^IPAC(NI,"prog2",DTT) I ("|"_D_"|")[PR S F=1,PIDX=2
+ .Q:'F 
+ .I WRK'="",$$GET^IPAC(NI,"work",DTT)'=WRK Q 
+ .I USH'="",$$GET^IPAC(NI,"ush",DTT)'=USH Q 
+ .I 'SWS,'$$CHECKIDX^IPAC(NI,DTT,PIDX) Q 
+ .S ST=$$GET^IPAC(NI,"stc"_PIDX,DTT) Q:ST="" 
+ .S R=0
+ .I $D(STATUS) S R=1,X=$$GET^IPAC(NI,"status",DTT) Q:X=""  D
+ ..S X="|"_X_"|",Z=""
+ ..I STALL S R=0 F  S Z=$O(STATUS(Z)) Q:Z=""  I X'[Z S R=1  
+ ..I 'STALL F  S Z=$O(STATUS(Z)) Q:Z=""  I X[Z S R=0 Q
+ .Q:R 
+ .I '$D(STVL(ST)) S STVL(ST)=$$GET^IINSC(ST,"dvid",DTT)
+ .S TP=1 S:'$D(BTPLS(ST)) TP=2
+ .S K=+$G(STVL(ST))
+ .S:K=0!(K=1) TP=3
+ .S:K=2!(K>3) TP=4
+ .S STAT(TP,ST)=$G(STAT(TP,ST))+1
+ .S:KDP=0 D="" S:KDP D=$O(^BTN(NI,KDP,DTT+1),-1)
+ .I D S K=+$G(^(D)) S:K=1 STAT(TP,ST,1)=$G(STAT(TP,ST,1))+1 S:K=2 STAT(TP,ST,2)=$G(STAT(TP,ST,2))+1
+ .S:KDD=0 D="" S:KDD D=$O(^BTN(NI,KDD,DTT+1),-1)
+ .I D S K=+$G(^(D)) I K S K=$$AGE^DTUTL(K,DTT) S:K>16 STAT(TP,ST,4)=$G(STAT(TP,ST,4))+1 S:K<17 STAT(TP,ST,5)=$G(STAT(TP,ST,5))+1
+ .S D=$O(^PNF(NI,0)) Q:D=""!(D>DTT)  S STAT(TP,ST,3)=$G(STAT(TP,ST,3))+1
+ K STVL
+ S STVL(1)="Индивидуальные",STVL(2)="Абонементы",STVL(3)="Страховые компании",STVL(4)="Прочие договора"
+ D OWF^RWU(".txt")
+ D WC^RWU("Прикрепленный контингент на "_$$DT2^DTUTL(DTT)_" по "_$$NAMEH^IMPRP(PRG,DTT)_";")
+ D WC^RWU(CR_"Тип клиента|Всего|Муж.|Жен.|Взрослые|Дети|Пришедших")
+ S TP="" F  S TP=$O(STAT(TP)) Q:TP=""  D
+ .S KD=STVL(TP),ST="" D WC^RWU(CR_KD)
+ .F  S ST=$O(STAT(TP,ST)) Q:ST=""  D
+ ..S SS(0)=$G(SS(0))+$G(STAT(TP,ST)),D=""
+ ..F K=1,2,4,5,3 S D1=+$G(STAT(TP,ST,K)),SS(K)=$G(SS(K))+D1,D=D_"|"_D1
+ ..D WC^RWU(CR_" - "_$$NAME^IINSC(ST,DTT)_"|"_$G(STAT(TP,ST))_D)
+ S TP="" F K=0,1,2,4,5,3 S TP=TP_"|"_+$G(SS(K))
+ D WC^RWU(CR_"Всего"_TP)
+ D C^RWU
+ Q
+FNDUSH(STR,DS,DE,VR,OTD,USH) 
+ N NI,KDU,KDD,D,K,A,DR,AG,UU,FF
+ S DTT=$$DIH^DTUTL(DE)
+ S KDU=+$$PLIDX^IPAC("ush")
+ S KDD=+$$PLIDX^IPAC("datar")
+ S STR=$$UL^TXTU(STR)
+ D OWF^RWU(".txt")
+ D WC^RWU("№ И.Б.|Фамилия|Имя|Отчество|Договор|Срок")
+ I $G(USH)="" S USH=$$FIND^ISPRAV("uchastok",VR)
+ S:USH="" KDU=0
+ I KDU S NI="" F  S NI=$$NEXT^IPAC(NI) Q:NI=""  D
+ .S D=$O(^BTN(NI,KDU,DTT+1),-1) Q:D="" 
+ .S UU=^(D)
+ .Q:USH'=UU 
+ .S (AG,DR)="",D=$O(^BTN(NI,KDD,DTT+1),-1)
+ .S:D DR=+$G(^(D)),AG=$$AGE^DTUTL(DR,DTT)
+ .S FF=$$GET^IPAC(NI,"fiof")_"|"_$$GET^IPAC(NI,"fioi")_"|"_$$GET^IPAC(NI,"fioo")
+ .I STR'="",$$UL^TXTU(FF)'[STR Q 
+ .S A=NI_"|"_FF_"|"_$$GETE^IPAC(NI,"stc",DTT)_"|"
+ .S A=A_$$GETE^IPAC(NI,"dog_from",DTT)_"-"_$$GETE^IPAC(NI,"dog_to",DTT)
+ .D WC^RWU(CR_A)
+ D C^RWU
+ Q
+LSTBVR(DTT,USH,AGE,BDF,BDE) ; Список прикрепленных по врачу
+ ; USH - участок
+ ; AGE - возраст 0-все,1-взрослые,2-дети
+ ; BDF - начальная дата рождения
+ ; BDE - конечная дата рождения
+ N NI,KDU,KDD,D,K,A,DR,AG,UU
+ S DTT=$$DIH^DTUTL(DTT)
+ S BDF=$$DI^DTUTL(BDF),BDE=$$DI^DTUTL(BDE)
+ S KDU=+$$PLIDX^IPAC("ush")
+ S KDD=+$$PLIDX^IPAC("datar")
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|№ И.Б.|Ф.И.О. на "_$$DT^DTUTL(DTT)_" |Пол|Дата рожд.|Возраст|Телефон|Адрес|Родители"_$S(USH="":"|Участок (врач)",1:""))
+ I KDU S NI="" F  S NI=$$NEXT^IPAC(NI) Q:NI=""  D
+ .S D=$O(^BTN(NI,KDU,DTT+1),-1) Q:D="" 
+ .S UU=^(D)
+ .Q:USH'=UU 
+ .S (AG,DR)="",D=$O(^BTN(NI,KDD,DTT+1),-1)
+ .S:D DR=+$G(^(D)),AG=$$AGE^DTUTL(DR,DTT)
+ .I BDF,DR<BDF Q 
+ .I BDE,DR>BDE Q 
+ .I AGE,$S(AG="":1,(AG<17)&(AGE=1):1,(AG>16)&(AGE=2):1,1:0) Q 
+ .S A=NI_"|"_NI_"|"_$$FIO^IPAC(NI)_"|"_$$GETE^IPAC(NI,"pol",DTT)_"|"
+ .S A=A_$$DT^DTUTL(DR)_"|"_AG_"|"_$$TELS^IPAC(NI,DTT)
+ .S A=A_"|"_$$ADR^YIPACN(NI,DTT)_"|"_$$GET^IPAC(NI,"parents",DTT)
+ .S:USH="" A=A_"|"_$$GUCH^YISPRAV(UU)
+ .D WC^RWU(CR_A)
+ D C^RWU
+ Q
+FLOW(DS,DE,MOD,PRG,WRK,RSC) ; Движение контингента
+ ; MOD - фактически прикрепленные
+ ; PRG - медпрограмма
+ ; WRK - место работы
+ ; RSC - источник рекламы
+ S DS=$$DIH^DTUTL($G(DS)),DE=$$DIH^DTUTL($G(DE))
+ N STAT,STT,TP,DG,A,X1,X2,X3
+ D FLOWSTC^NPACUR(DS,DE,$G(MOD),$G(PRG),$G(WRK),$G(RSC))
+ S DG="" F  S DG=$O(STAT(DG)) Q:DG=""  M STT(+$$GET^IINSC(DG,"dvid",DE),DG)=STAT(DG)
+ K STAT
+ D MERGENM^ISPRAV("dvid","STAT")
+ D OWF^RWU(".txt")
+ D WC^RWU("Контингент за период "_$$DT2^DTUTL(DS)_"-"_$$DT2^DTUTL(DE)_"|На начало (лиц)|Прикрепилось|Открепилось|Миграция в дог.|Миграция из дог.|На конец (лиц)|% текучести")
+ S TP="" F  S TP=$O(STT(TP)) Q:TP=""  D
+ .D WC^RWU(CR_$G(STAT(TP)))
+ .S DG="" F  S DG=$O(STT(TP,DG)) Q:DG=""  D
+ ..S K=$S($$EXIST^YNDOG(DG):$$NAME^IINSC(DG,DE),1:"Договор не определен ("_DG_")")
+ ..S X1=$G(STT(TP,DG,2)),X2=$G(STT(TP,DG,5)),X3=$G(STT(TP,DG,3))
+ ..D WC^RWU(CR_" "_K_"|"_$G(STT(TP,DG,4))_"|"_$G(STT(TP,DG,1))_"|"_X1_"|"_$G(STT(TP,DG,6))_"|"_X2_"|"_X3_"|"_$S('X3:"",1:+$J(100*(X1+X2)/X3,"",2)))
+ D C^RWU
+ Q
+STRUCTSK(DS,DE) ; Движение контингента по СК
+ S DS=$$DIH^DTUTL($G(DS)),DE=$$DIH^DTUTL((DE))
+ N STAT,A,DG,SS,X1,X2
+ D FLOWSTC^NPACUR(DS,DE)
+ D OWF^RWU(".txt")
+ D WC^RWU("Наименование контрагента, тип прикрепления|На "_$$DT2^DTUTL(DS)_" (лиц)|Прикреплено за период|Откреплено за период|На "_$$DT2^DTUTL(DE)_" (лиц)")
+ S DG="" F  S DG=$O(STAT(DG)) Q:DG=""  D
+ .Q:$$GET^IINSC(DG,"dvid",DE)>1  
+ .S A=$S($$EXIST^YNDOG(DG):$$NAME^IINSC(DG,DE),1:"Не указано")
+ .S X1=$G(STAT(DG,1))+$G(STAT(DG,6)),X2=$G(STAT(DG,2))+$G(STAT(DG,5))
+ .S SS(1)=$G(SS(1))+$G(STAT(DG,4)),SS(2)=$G(SS(2))+X1
+ .S SS(3)=$G(SS(3))+X2,SS(4)=$G(SS(4))+$G(STAT(DG,3))
+ .D WC^RWU(CR_A_"|"_$G(STAT(DG,4))_"|"_X1_"|"_X2_"|"_$G(STAT(DG,3)))
+ D:$G(SS(4))>0 WC^RWU(CR_"ИТОГО:|"_SS(1)_"|"_SS(2)_"|"_SS(3)_"|"_SS(4))
+ D C^RWU
+ Q
+PBYDG(DS,DE) ; Контингент по договорам
+ S DS=$$DIH^DTUTL($G(DS)),DE=$$DIH^DTUTL($G(DE))
+ N NI,CC,SS,D,CS,X
+ S NI="" F  S NI=$$NEXT^IPAC(NI) Q:NI=""  D
+ .K CS
+ .D GETM^IPAC(NI,"stc","CC")
+ .S D=DS-1 F  S D=$O(CC(D)) Q:D=""!(D>DE)  S CS(+CC(D))=1
+ .D GETM^IPAC(NI,"stc1","CC")
+ .S D=DS-1 F  S D=$O(CC(D)) Q:D=""!(D>DE)  S CS(+CC(D))=1
+ .D GETM^IPAC(NI,"stc2","CC")
+ .S D=DS-1 F  S D=$O(CC(D)) Q:D=""!(D>DE)  S CS(+CC(D))=1
+ .S D="" F  S D=$O(CS(D)) Q:D=""  S SS(D)=$G(SS(D))+1
+ D OWF^RWU(".txt")
+ D WC^RWU("Договор за период "_$$DT^DTUTL(DS)_"-"_$$DT^DTUTL(DE)_"|Лиц")
+ S D="" F  S D=$O(SS(D)) Q:D=""  D WC^RWU(CR_$$NAME^IINSC(D)_"|"_SS(D))
+ D C^RWU
+ Q
+DGLST(DGN,PDS,PDE,BDG,PAYPD,WRK,OF,TDGN,TPRG) ; Прикрепленный контингент по договору
+ ; PDS,PDE - дата прикрепления с по ; BDG - по базовому договору
+ ; PAYPD - платежи в первый день y/n
+ ; TDGN - текстовый договор
+ ; TPRG - текстовая программа
+ N H,NI,M,I,R,D,A,T,OP,S,FR,SS,F,mx
+ S PDS=$$DIH^DTUTL(PDS),PDE=$$DIH^DTUTL(PDE),WRK=$G(WRK)
+ S H=+$H,NI="",I=0,FR=+$$FR^I(),SS=0,OF=+OF
+ S TDGN=$$UL^TXTU($G(TDGN)),TPRG=$$UL^TXTU($G(TPRG))
+ S:DGN=9999 DGN=""
+ D PRETZR^IPAC
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|№ И.Б.|"_$S(DGN="":"По всем договорам",1:$$NAME^IINSC(DGN,H))_" за период "_$$DT2^DTUTL(PDS)_"-"_$$DT2^DTUTL(PDE)_"|Дата прикрепления|Пол|Дата рождения|Телефон"_$S(PAYPD:"|Перв.платежи",1:"")_$S(FR:"|Филиал",1:""))
+ S mx=$G(^cfg("pac","mxlist")) S:mx="" mx=$$LCL^IUSER("lproc","mxlist")
+ S:mx="" mx=10000
+ I DGN'="" F  S NI=$O(^BTI(" s",DGN,NI)) Q:NI=""!(I>mx)  D
+ .D GETM^IPAC(NI,"stc","M")
+ .S D=PDS-1 F  S D=$O(M(D)) Q:D=""!(D>PDE)  Q:M(D)=DGN 
+ .S:D>PDE D="" I BDG Q:D="" 
+ .S F=""
+ .I D="" D GETM^IPAC(NI,"stc1","M") S D=PDS-1 F  S D=$O(M(D)) Q:D=""!(D>PDE)  I M(D)=DGN S F=1 Q
+ .I D="" D GETM^IPAC(NI,"stc2","M") S D=PDS-1 F  S D=$O(M(D)) Q:D=""!(D>PDE)  I M(D)=DGN S F=2 Q
+ .Q:D=""  D DGLSTPRC
+ I DGN="" S D=PDE F  S NI=$$NEXT^IPAC(NI) Q:NI=""!(I>mx)  S F="" D DGLSTPRC
+ D WC^RWU(CR_"|Итого: "_I_$S(PAYPD:"|||||"_SS,1:""))
+ D C^RWU
+ Q
+DGLSTPRC ; proc for DGLST
+ I OF,$$GET^IPAC(NI,"ofor",PDS)>1 Q:$$GET^IPAC(NI,"ofor",PDE)>1 
+ I OF,$S($$GET^IPAC(NI,"dog_to"_F,PDS)<PDS:1,$$GET^IPAC(NI,"dog_from"_F,PDE)>PDE:1,1:0) Q 
+ I WRK'="",$$GET^IPAC(NI,"work",D)'=WRK Q 
+ I TDGN'="" S R=$$UL^TXTU($$GET^IPAC(NI,"stcdog",PDE)) Q:R'[TDGN 
+ I TPRG'="" S R=$$UL^TXTU($$GET^IPAC(NI,"stcprg",PDE)) Q:R'[TPRG 
+ 
+ S I=I+1,A=$$GET^IPAC(NI,"dofor",D)
+ S R=NI_"|"_NI_"|"_$$FIO^IPAC(NI)_"|"_$$DT^DTUTL($S(A="":$$CREATED^IPAC(NI),1:A))
+ S R=R_"|"_$$GETE^IPAC(NI,"pol",D)_"|"_$$DT^DTUTL($$GET^IPAC(NI,"datar",D))_"|"_$$TELS^IPAC(NI,D)
+ I PAYPD S T="",S=0 F  S T=$O(^BILL(NI,D,T)) Q:T=""  D
+ .S A=^(T),TP=$P(A,"|",1) Q:'((TP="+")!(TP="-")) 
+ .S S=S+$P(A,"|",2)
+ S:PAYPD R=R_"|"_S,SS=SS+S
+ S:FR R=R_"|"_$$NAME^ICONTR($P($P($$GET^IPAC(NI,"opfio",D),"|",1),"@",2))
+ D WC^RWU(CR_R)
+ Q
+DGPSK(DGN,DT,BDG,WRK,PRG,STAT,OF,STDG,STPR) ; Список по договору для СК
+ N FVV,USH,WPP,PRES
+ S FVV=0
+ G dgp1
+DGP(DGN,DT,BDG,WRK,PRG,STAT,USH,OF,WPP,PRES) ;Список контингента по договору
+ ; OF - оформление или +ГП (2)
+ ; USH - участок
+ ; BDG - по базовому договору
+ ; WPP - выводить родителей
+ ; PRES - учитывать посещения
+ N STPR,STDG,FVV
+ S FVV=1
+dgp1 N H,NI,I,R,D,A,T,OP,S,FR,PIDX,F,X,Z,mx,OFF,iW,iSP,iSD
+ S DT=$$DIH^DTUTL(DT)
+ S H=+$H,FR=+$$FR^I(),OF=+OF,OFF=$S(OF=2:1,1:0)
+ S PRES=$G(PRES),WPP=$G(WPP),STPR=$$UL^TXTU($G(STPR)),STDG=$$UL^TXTU($G(STDG)),USH=$G(USH)
+ S:PRG'="" PRG="|"_PRG_"|"
+ S:STAT'="" STAT="|"_STAT_"|"
+ S A=$G(STAT) K STAT
+ I A'="" F I=1:1:$L(A,"|") S T=$P(A,"|",I) S:T'="" STAT("|"_T_"|")=""
+ D PRETZR^IPAC
+ S iW=+$G(TZRBTN("work")),iSP=+$G(TZRBTN("stcprg")),iSD=+$G(TZRBTN("stcdog"))
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|№ И.Б.|"_$S(DGN="":"По всем договорам",1:$$NAME^IINSC(DGN,H))_" на "_$$DT2^DTUTL(DT)_"|Оформлен|Срок прикрепления|Полис|Пол|Дата рождения|Телефон|Место работы|Программа"_$S(WPP:"|Родители",1:"")_$S(FVV:"|Статусы",1:"")_$S(FVV&(USH=""):"|Участок",1:"")_$S(FR&FVV:"|Филиал",1:""))
+ S I=0,NI=""
+ S mx=$G(^cfg("pac","mxlist")) S:mx="" mx=10000
+ I DGN'="" F  S NI=$$NEXT^IPAC(NI,"stc",DGN) Q:NI=""!(I>mx)  D
+ .S F=0,PIDX=""
+ .I $$GETTZ^IPAC(NI,TZRBTNs,DT)=DGN S F=1
+ .I 'F,BDG Q 
+ .I 'F,$$GETTZ^IPAC(NI,TZRBTNs1,DT)=DGN S PIDX=1,F=1
+ .I 'F,$$GETTZ^IPAC(NI,TZRBTNs2,DT)=DGN S PIDX=2,F=1
+ .Q:'F 
+ .I OF,'$$CHECKIDX^IPAC(NI,DT,PIDX,OFF) Q 
+ .I STPR'="" S R=$$UL^TXTU($$GETTZ^IPAC(NI,iSP,DT)) Q:R'=STPR 
+ .I STDG'="" S R=$$UL^TXTU($$GETTZ^IPAC(NI,iSD,DT)) Q:R'=STDG 
+ .D DGPPRC
+ I DGN="" S PIDX="" F  S NI=$$NEXT^IPAC(NI) Q:NI=""!(I>mx)  D
+ .I OF,'$$CHECKIDX^IPAC(NI,DT,"",OFF) Q 
+ .D DGPPRC
+ D WC^RWU(CR_"|Итого: "_I)
+ D C^RWU
+ Q
+DGPPRC ; proc for DGLST
+ I WRK'="",$$GETTZ^IPAC(NI,iW,DT)'=WRK Q  
+ I PRG'="","|"_$$GET^IPAC(NI,"prog"_PIDX,DT)_"|"'[PRG Q 
+ S CUSH=$$GET^IPAC(NI,"ush",DT)
+ I USH'="",CUSH'=USH Q 
+ S R=0
+ I $D(STAT) S R=1,X=$$GET^IPAC(NI,"status",DT) Q:X=""  S X="|"_X_"|",Z="" F  S Z=$O(STAT(Z)) Q:Z=""  I X[Z S R=0 Q
+ Q:R
+ I PRES,$S(PRES=1:$O(^PNF(NI,DT+1),-1)="",1:$O(^PNF(NI,DT+1),-1)'="") Q 
+ S I=I+1
+ S A=$$GET^IPAC(NI,"dofor",DT),A=$S(A="":$$CREATED^IPAC(NI),1:A)
+ S R=NI_"|"_NI_"|"_$$FIO^IPAC(NI)_"|"_$$DT^DTUTL(A)_"|"
+ S X=$$GETE^IPAC(NI,"dog_from"_PIDX,DT),Z=$$GETE^IPAC(NI,"dog_to"_PIDX,DT)
+ S R=R_$S(X=""&(Z=""):"",1:X_"-"_Z)_"|"_$$GET^IPAC(NI,"polis"_PIDX,DT)
+ S R=R_"|"_$$GETE^IPAC(NI,"pol",DT)_"|"
+ S R=R_$$GETE^IPAC(NI,"datar",DT)_"|"_$$TELS^IPAC(NI,DT)_"|"
+ S R=R_$$GETE^IPAC(NI,"work",DT)_"|"_$$GETE^IPAC(NI,"prog"_PIDX,DT)
+ S:WPP R=R_"|"_$$GET^IPAC(NI,"parents",DT)
+ S:FVV R=R_"|"_$$GETE^IPAC(NI,"status",DT)
+ S:USH=""&FVV R=R_"|"_$$GUCH^YISPRAV(CUSH)
+ S:FR&FVV R=R_"|"_$$NAME^ICONTR($P($P($$GET^IPAC(NI,"opfio",DT),"|",1),"@",2))
+ D WC^RWU(CR_R)
+ Q
+RELLST(DGN,DT,WRK,PRG,STAT,USH,OF) ; Список контингента с родственниками
+ N H,NI,I,R,D,A,T,OP,S,FR,PIDX,F,ST,SNI,mx,OFF,iW
+ S DT=$$DIH^DTUTL(DT)
+ S H=+$H,NI="",I=0,FR=+$$FR^I(),OF=+OF,OFF=$S(OF=2:1,1:0)
+ S:PRG'="" PRG="|"_PRG_"|"
+ S:STAT'="" STAT="|"_STAT_"|"
+ D PRETZR^IPAC
+ S iW=+$G(TZRBTN("work"))
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|№ И.Б.|"_$S(DGN="":"По всем договорам",1:$$NAME^IINSC(DGN,H))_" на "_$$DT2^DTUTL(DT)_"|Срок по|Пол|Дата рождения|Телефон|Место работы|Программа|Статусы|Посл.посещ.|Примечание"_$S(FR:"|Филиал",1:"")_"|Родство|№ И.Б.|Ф.И.О.|Дата рождения|Посл.посещ.|Примечание")
+ S mx=$G(^cfg("pac","mxlist")) S:mx="" mx=10000
+ I DGN'="" F  S NI=$O(^BTI(" s",DGN,NI)) Q:NI=""!(I>mx)  D
+ .S F=0,PIDX=""
+ .I $$GETTZ^IPAC(NI,TZRBTNs,DT)=DGN S F=1
+ .I 'F Q 
+ .I 'F,$$GETTZ^IPAC(NI,TZRBTNs1,DT)=DGN S PIDX=1,F=1
+ .I 'F,$$GETTZ^IPAC(NI,TZRBTNs2,DT)=DGN S PIDX=2,F=1
+ .Q:'F 
+ .I OF,'$$CHECKIDX^IPAC(NI,DT,PIDX,OFF) Q 
+ .D RELPRC
+ S PIDX=""
+ I DGN="" F  S NI=$$NEXT^IPAC(NI) Q:NI=""!(I>mx)  D
+ .I OF,'$$CHECKIDX^IPAC(NI,DT,"",OFF) Q 
+ .D RELPRC
+ D WC^RWU(CR_"|Итого: "_I)
+ D C^RWU
+ Q
+RELPRC ; proc for DGLST
+ S ST=-1
+ I WRK'="" Q:$$GETTZ^IPAC(NI,iW,DT)'=WRK 
+ I PRG'="" Q:"|"_$$GET^IPAC(NI,"prog"_PIDX,DT)_"|"'[PRG
+ I USH'="" Q:$$GET^IPAC(NI,"ush",DT)'=USH
+ I STAT'="" S ST=$$GET^IPAC(NI,"status",DT) Q:"|"_ST_"|"'[STAT
+ S:ST=-1 ST=$$GET^IPAC(NI,"status",DT)
+ S I=I+1
+ S R=NI_"|"_NI_"|"_$$FIO^IPAC(NI)_"|"_$$GETE^IPAC(NI,"dog_to"_PIDX,DT)
+ S R=R_"|"_$$GETE^IPAC(NI,"pol",DT)_"|"
+ S R=R_$$GETE^IPAC(NI,"datar",DT)_"|"
+ S T=$$OWF^TXTU($$TELS^IPAC(NI,DT),50)
+ S R=R_T_"|"
+ S T=$$OWF^TXTU($$GETE^IPAC(NI,"work",DT),50)
+ S R=R_T_"|"
+ S T=$$OWF^TXTU($$GETE^IPAC(NI,"prog"_PIDX,DT),50)
+ S R=R_T_"|"
+ S R=R_$TR(ST,"|",",")
+ S T=$O(^PNF(NI,DT+1),-1)
+ S R=R_"|"_$S(T="":"",1:$$DT^DTUTL(T))
+ S T=$$OWF^TXTU($TR($$GET^IPAC(NI,"text"_PIDX,DT),CR," "),55)
+ S R=R_"|"_T
+ S:FR R=R_"|"_$$NAME^ICONTR($P($P($$GET^IPAC(NI,"opfio",DT),"|",1),"@",2))
+ I '$D(^BTI("lnkhist",NI)) D WC^RWU(CR_R) Q 
+ S SNI="" F  S SNI=$O(^BTI("lnkhist",NI,SNI)) Q:SNI=""  D
+ .S T=$$GET^IPAC(SNI,"familyr"),T=$$NAME^ISPRAV("relationship",T)
+ .S R=R_"|"_T_"|"_SNI_"|"_$$FIO^IPAC(SNI,DT)
+ .S R=R_"|"_$$GETE^IPAC(SNI,"datar",DT)
+ .S T=$O(^PNF(SNI,DT+1),-1)
+ .S R=R_"|"_$S(T="":"",1:$$DT^DTUTL(T))
+ .S T=$$OWF^TXTU($TR($$GET^IPAC(SNI,"text"_PIDX,DT),CR," "),55)
+ .D WC^RWU(CR_R_"|"_T)
+ .S R="|||||||||||"_$S(FR:"|",1:"")
+ Q
+DGPCHK(DGN,DT,BDG,OFOR,DVD) ; Проверка контингента по договору
+ ; BDG - по базовому договору
+ N H,NI,I,R,D,A,T,OP,S,FR,F,PRG,J,IDX,PRGL,DTPL,mx
+ S DT=$$DIH^DTUTL(DT)
+ S H=+$H,NI="",I=0,FR=+$$FR^I()
+ S PRG="|"_$$GET^IINSC(DGN,"progs")_"|"_$$GET^IINSC(DGN,"progsa")_"|"
+ S:DGN=9999 DGN=""
+ D PRETZR^IPAC
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|№ И.Б.|"_$S(DGN="":"По всем договорам",1:$$NAME^IINSC(DGN,H))_" на "_$$DT2^DTUTL(DT)_"|Дата прикрепления|Пол|Дата рождения|Программа|Статусы"_$S(FR:"|Филиал",1:""))
+ S mx=$G(^cfg("pac","mxlist")) S:mx="" mx=10000
+ I DGN'="" F  S NI=$O(^BTI(" s",DGN,NI)) Q:NI=""!(I>mx)  D
+ .S IDX=""
+ .I $$GETTZ^IPAC(NI,TZRBTNs,DT)'=DGN Q:BDG  S IDX=1 I $$GETTZ^IPAC(NI,TZRBTNs1,DT)'=DGN S IDX=2 I $$GETTZ^IPAC(NI,TZRBTNs2,DT)'=DGN Q  
+ .I OFOR,$$GET^IPAC(NI,"ofor",DT)>1 Q 
+ .D DGPPRCC
+ S IDX=""
+ I DGN="" F  S NI=$$NEXT^IPAC(NI) Q:NI=""!(I>mx)  D
+ .I OFOR,$$GET^IPAC(NI,"ofor",DT)>1 Q 
+ .S DGN=$$GETTZ^IPAC(NI,TZRBTNs,DT)
+ .Q:DGN="" 
+ .I DVD'="" S T=$G(DTPL(DGN)) S:T="" T=$$GET^IINSC(DGN,"dvid",DT),DTPL(DGN)=T Q:T'=DVD  
+ .S:'$D(PRGL(DGN)) PRGL(DGN)="|"_$$GET^IINSC(DGN,"progs")_"|"_$$GET^IINSC(DGN,"progsa")_"|" 
+ .S PRG=PRGL(DGN) 
+ .D DGPPRCC
+ D WC^RWU(CR_"|Итого: "_I)
+ D C^RWU
+ Q
+DGPPRCC ; proc for DGLST
+ S R=$$GET^IPAC(NI,"prog"_IDX,DT),F=1
+ F J=1:1:$L(R,"|") I PRG'[("|"_$P(R,"|",J)_"|") S F=0 Q 
+ Q:F 
+ S I=I+1,A=$$GET^IPAC(NI,"dofor",DT)
+ S R=NI_"|"_NI_"|"_$$FIO^IPAC(NI)_"|"_$$DT^DTUTL($S(A="":$$CREATED^IPAC(NI),1:A))
+ S R=R_"|"_$$GETE^IPAC(NI,"pol",DT)_"|"
+ S R=R_$$GETE^IPAC(NI,"datar",DT)_"|"
+ S R=R_$$GETE^IPAC(NI,"prog"_IDX,DT)_"|"
+ S R=R_$$GETE^IPAC(NI,"status",DT)
+ S:FR R=R_"|"_$$NAME^ICONTR($P($P($$GET^IPAC(NI,"opfio",DT),"|",1),"@",2))
+ D WC^RWU(CR_R)
+ Q
+BYRS(DT,STATUS) ; Структура клиентов по рекламным носителям
+ S DT=$$DIH^DTUTL(DT)
+ N NI,TP,LST,R,I,X,Z
+ 
+ S:STATUS'="" STATUS="|"_STATUS_"|" 
+ S R=$G(STATUS) K STATUS
+ F I=1:1:$L(R,"|") S X=$P(R,"|",I) S:X'="" STATUS("|"_X_"|")=""
+ 
+ S NI="" F  S NI=$$NEXT^IPAC(NI) Q:NI=""  D
+ .S TP=+$$GET^IPAC(NI,"rsource",DT)
+ .I 'TP,$$CREATED^IPAC(NI)>DT Q  ; созданные позже - игнор
+ .S R=0
+ .I $D(STATUS) S R=1,X=$$GET^IPAC(NI,"status",DT) Q:X=""  S X="|"_X_"|",Z="" F  S Z=$O(STATUS(Z)) Q:Z=""  I X[Z S R=0 Q
+ .Q:R 
+ .S LST(TP)=$G(LST(TP))+1
+ D OWF^RWU(".txt")
+ D WC^RWU("Вид рекламы|Число лиц")
+ S TP="" F  S TP=$O(LST(TP)) Q:TP=""  D
+ .D WC^RWU(CR_$S('TP:"Не указано",1:$$NAME^ISPRAV("rsource",TP))_"|"_LST(TP))
+ D C^RWU
+ Q
+ADC(DGN,DT,WRK,STAT,USH,BDF,BDE,OF,WPP) ; Адреса и телефоны контингента
+ ; USH - участок
+ ; BDF - начальная дата рождения
+ ; BDE - конечная дата рождения
+ ; OF - оформлен
+ ; WPP - выводить родителей
+ N NI,I,R,D,A,T,OP,S,PIDX,F,X,Z,D1,D2,DR,mx,iW,OFF
+ S DT=$$DIH^DTUTL(DT),OF=+OF,OFF=$S(OF=2:1,1:0)
+ S BDF=$$DI^DTUTL(BDF),BDE=$$DI^DTUTL(BDE)
+ S:STAT'="" STAT="|"_STAT_"|"
+ S A=$G(STAT) K STAT
+ I A'="" F I=1:1:$L(A,"|") S T=$P(A,"|",I) S:T'="" STAT("|"_T_"|")=""
+ D PRETZR^IPAC
+ S iW=+$G(TZRBTN("work"))
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|№ И.Б.|"_$S(DGN="":"По всем договорам",1:$$NAME^IINSC(DGN,DT))_" на "_$$DT2^DTUTL(DT)_"|Пол|Дата рождения|Прикрепление|Телефон|Адрес|Email|Врач (участок)"_$S(WPP:"|Родители",1:""))
+ S I=0,NI=""
+ S mx=$G(^cfg("pac","mxlist")) S:mx="" mx=10000
+ I DGN'="" F  S NI=$$NEXT^IPAC(NI,"stc",DGN) Q:NI=""!(I>mx)  D
+ .S F=0,PIDX=""
+ .I $$GETTZ^IPAC(NI,TZRBTNs,DT)=DGN S F=1
+ .I 'F,$$GETTZ^IPAC(NI,TZRBTNs1,DT)=DGN S PIDX=1,F=1
+ .I 'F,$$GETTZ^IPAC(NI,TZRBTNs2,DT)=DGN S PIDX=2,F=1
+ .Q:'F 
+ .I OF,'$$CHECKIDX^IPAC(NI,DT,PIDX,OFF) Q 
+ .D ADCPRC
+ I DGN="" S PIDX="" F  S NI=$$NEXT^IPAC(NI) Q:NI=""!(I>mx)  D
+ .I OF,'$$CHECKIDX^IPAC(NI,DT,"",OFF) Q 
+ .D ADCPRC
+ D WC^RWU(CR_"|Итого: "_I)
+ D C^RWU
+ Q
+ADCPRC ; proc for DGLST
+ I WRK'="",$$GETTZ^IPAC(NI,iW,DT)'=WRK Q  
+ I USH'="",$$GET^IPAC(NI,"ush",DT)'=USH Q 
+ S R=0
+ I $D(STAT) S R=1,X=$$GET^IPAC(NI,"status",DT) Q:X=""  S X="|"_X_"|",Z="" F  S Z=$O(STAT(Z)) Q:Z=""  I X[Z S R=0 Q
+ Q:R
+ S DR=$$GET^IPAC(NI,"datar",DT)
+ I BDF'="",BDF>DR Q 
+ I BDE'="",DR>BDE Q
+ S D1=$$GETE^IPAC(NI,"dog_from"_PIDX,DT)
+ S D2=$$GETE^IPAC(NI,"dog_to"_PIDX,DT)
+ S R=NI_"|"_NI_"|"_$$FIO^IPAC(NI)_"|"_$$GETE^IPAC(NI,"pol",DT)_"|"
+ S R=R_$$DT^DTUTL(DR)_"|"_$S((D1="")&(D2=""):"",1:D1_"-"_D2)
+ S R=R_"|"_$$TELS^IPAC(NI,DT)_"|"
+ S R=R_$$ADR^YIPACN(NI,DT)_"|"_$$GET^IPAC(NI,"email",DT)_"|"_$$GETE^IPAC(NI,"ush",DT)
+ S:WPP R=R_"|"_$$GET^IPAC(NI,"parents",DT)
+ D WC^RWU(CR_R)
+ S I=I+1
+ Q
+DBL(CLPU,MODE,UBD) ; Find doublers MODE- 0-full/1-fi,fo; UBD-use born date
+ N NI,FF,FI,FO,H,KD,D,R,BD
+ S H=+$H S CLPU=$S(CLPU=1:+$$^I("ilpu"),1:"") 
+ S KD=$$PLIDX^IPAC("opfio"),BD=""
+ K ^BUF($J)
+ S NI="" F  S NI=$$NEXT^IPAC(NI) Q:NI=""  D
+ .I CLPU'="" S D=+$O(^BTN(NI,KD,0)) I D>0 S R=$P($G(^(D)),"@",2) Q:R'=""&(CLPU'=R)  
+ .S FF=$$LU^TXTU($$GET^IPAC(NI,"fiof",H))
+ .S FI=$$LU^TXTU($$GET^IPAC(NI,"fioi",H))
+ .S FO=$$LU^TXTU($$GET^IPAC(NI,"fioo",H))
+ .I UBD S BD="|"_$$GET^IPAC(NI,"datar",H)
+ .I MODE=0 S:FF'=""!(FI'="")!(FO'="") D=FF_"|"_FI_"|"_FO_BD,^BUF($J,D,NI)="",^(D)=$G(^BUF($J,D))+1 Q 
+ .S:FF'=""!(FI'="") D=FF_"|"_FI_BD,^BUF($J,"i",D,NI)=FO,^(D)=$G(^BUF($J,"i",D))+1
+ .S:FF'=""!(FO'="") D=FF_"|"_FO_BD,^BUF($J,"o",D,NI)=FI,^(D)=$G(^BUF($J,"o",D))+1
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|Фамилия|Имя|Отчество|№ И.Б.|Дата рожд.|Полис|Договор")
+ G:MODE=1 DBLM1
+ S FF="" F  S FF=$O(^BUF($J,FF)) Q:FF=""  K:$G(^(FF))=1 ^BUF($J,FF)
+ S FF="" F  S FF=$O(^BUF($J,FF)) Q:FF=""  D
+ .S NI="" F  S NI=$O(^BUF($J,FF,NI)) Q:NI=""  D
+ ..S D=$$GET^IPAC(NI,"stc",H),KD=$$GET^IPAC(NI,"datar",H)
+ ..S R=$P(FF,"|",1,3),BD=$$GET^IPAC(NI,"polis",H)
+ ..D WC^RWU(CR_NI_"|"_R_"|"_NI_"|"_$$DT^DTUTL(KD)_"|"_BD_"|"_$$NAME^IINSC(D))
+ .D WC^RWU(CR)
+ G DBLEND
+DBLM1 
+ S FF="" F  S FF=$O(^BUF($J,"i",FF)) Q:FF=""  K:^(FF)=1 ^(FF)
+ S FF="" F  S FF=$O(^BUF($J,"o",FF)) Q:FF=""  K:^(FF)=1 ^(FF)
+ S FF="" F  S FF=$O(^BUF($J,"i")) Q:FF=""  D
+ .S NI="" F  S NI=$O(^BUF($J,"i",FF,NI)) Q:NI=""  D
+ ..S FI=^(NI),R=$P(FF,"|",1,2)
+ ..S D=$$GET^IPAC(NI,"stc",H),KD=$$GET^IPAC(NI,"datar",H)
+ ..D WC^RWU(CR_$P(R,"|",1)_"|"_FI_"|"_$P(R,"|",2)_"|"_NI_"|"_$$DT^DTUTL(KD)_"|"_$$NAME^IINSC(D))
+ .D WC^RWU(CR)
+ S FF="" F  S FF=$O(^BUF($J,"o")) Q:FF=""  D
+ .S NI="" F  S NI=$O(^BUF($J,"i",FF,NI)) Q:NI=""  D
+ ..S FO=^(NI),R=$P(FF,"|",1,2),BD=$$GET^IPAC(NI,"polis",H)
+ ..S D=$$GET^IPAC(NI,"stc",H),KD=$$GET^IPAC(NI,"datar",H)
+ ..D WC^RWU(CR_R_"|"_FO_"|"_NI_"|"_$$DT^DTUTL(KD)_"|"_BD_"|"_$$NAME^IINSC(D))
+ .D WC^RWU(CR)
+DBLEND 
+ K ^BUF($J)
+ D C^RWU
+ Q
+EQNN2(X1,X2) 
+ Q $$EQN2(X1,X2)&$$EQN2(X2,X1)
+EQN2(X1,X2) ; различие по неболее чем 2м буквам
+ N I,K S I=$L(X1)
+ F K=1:1:$L(X1) S:X2[$E(X1,K) I=I-1
+ Q:I>2 0 Q 1
+PLST(DGN,DT,EQ,PL)      ; EQ - выражение, PL-поля
+ N NI,R,LST,I,PLL,Q,P,A,F,K,C9
+ S DT=$$DIH^DTUTL(DT),EQ=$$WD^TXTU(EQ),C9=$C(9)
+ S:DGN=9999 DGN=""
+ F I=1:1:99 S R=$$TRIM^TXTU($P(EQ,",",I)) Q:R=""  D
+ .S Q=""
+ .S F=1
+ .S:R["?" P=$P(R,"?",1),Q="[",A=$$LU^TXTU($P(R,"?",2)),F=0
+ .I F S:R["]" P=$P(R,"]",1),Q="]",A=$$LU^TXTU($P(R,"]",2)),F=0 ; flg
+ .I F S:R["=" P=$P(R,"=",1),Q="=",A=$P(R,"=",2),F=0
+ .I F S:R["<>" P=$P(R,"<>",1),Q="'=",A=$P(R,"<>",2),F=0
+ .I F S:R[">" P=$P(R,">",1),Q=">",A=$P(R,">",2),F=0
+ .I F S:R["<" P=$P(R,"<",1),Q="<",A=$P(R,"<",2),F=0
+ .Q:Q="" 
+ .S:$E(P,$L(P))="!" P=$E(P,2,99),Q="'"_Q
+ .S:$E(A,1)="#"&($E(A,$L(A))="#") A=$$DIH^DTUTL($E(A,2,$L(A)-1))
+ .S LST(P_C9_I)=A,LST(P_C9_I,1)=Q
+ 
+ S A="xpatient:patient|№ И.Б.|Ф.И.О. пациента"
+ F I=1:1:99 S R=$$TRIM^TXTU($P(PL,",",I)) Q:R=""  S PLL(I)=R,A=A_"|"_R
+ D OWF^RWU(".txt"),WC^RWU(A)
+ I DGN="" S NI="" F  S NI=$$NEXT^IPAC(NI) Q:NI=""  D PLSTprc
+ I DGN'="" S NI="" F  S NI=$$NEXT^IPAC(NI,"stc",DGN) Q:NI=""  D
+ .Q:$$PIDXN^IPAC(NI,DGN,DT)=-1 
+ .D PLSTprc
+ D C^RWU
+ Q
+PLSTprc ;
+ S I="",Q=1
+ I $D(LST) S Q=0 F  S I=$O(LST(I)) Q:I=""!(Q=1)  D
+ .S K=$P(I,C9,1),F=LST(I,1)
+ .S:$E(K,1)="!" R=$$GETE^IPAC(NI,$E(K,2,999),DT)
+ .S:$E(K,1)'="!" R=$$GET^IPAC(NI,K,DT)
+ .S:LST(I,1)="[" R=$$LU^TXTU(R)
+ .I F="=" S Q='(R=LST(I)) Q 
+ .I F="]" S Q='$$FLinFL^TXTU(LST(I),R) Q 
+ .X "S Q='(R"_F_"LST(I))"
+ Q:Q
+ S A=CR_NI_"|"_NI_"|"_$$FIOSH^IPAC(NI,DT)
+ S P="" F  S P=$O(PLL(P)) Q:P=""  S A=A_"|"_$TR($$GETE^IPAC(NI,PLL(P),DT),CR," ")
+ D WC^RWU(A)
+ Q
+REGIPROC 
+ N D,DG,K,W,M,U,PP,DT,so,so1
+ S D="Отчеты по пациентам",K="Контингент"
+ S DT="d,Дата отчета"
+ S DG="te@storage:dog,Договор"
+ S W="te@storage:mectorab@1,Место работы"
+ S M="te@net:LST_YMPRP(""""),Мед.программа"
+ S U="te@storage:uchastok@1,Участок (врач)"
+ S PP="d,Период прикрепления с,d,Период прикрепления по"
+ S so="t@string:0/Нет#1/Да,Показывать снятых пациентов"
+ S so1="t@string:0/Нет#1/Да#2/Нет. Включить ГП,Показывать снятых"
+ S ^IPROC(D,K,"Новые прикрепления контингента")="NEWS_RPACU,100,4,"_PP_","_DG_",te@net:NMLCR_NSPRAV(1),Статус пациента"
+ S ^IPROC(D,K,"Половозрастная структура контингента")="PVS_RPACU,1,2,"_DG_",t@string:0/Нет#1/Да,Учитывать снятых пациентов"
+ S ^IPROC(D,K,"Прикрепления контингента по типам")="RBYDGN_RPACU,1,4,"_PP_",t@string:0/Видам договоров#1/Разделам договоров,Отчет по,t@string:0/Нет#1/Да,Учитывать снятых пациентов"
+ S ^IPROC(D,K,"Контингент по договорам")="PBYDG_RPACU,1,2,"_PP
+ S ^IPROC(D,K,"Численность контингента на дату")="CNTBYDG_RPACU,1,6,"_DT_",t@string:0/Только по основному договору#1/По всем договорам,Учет пациентов,"_so_",c@net:NMLST_NSPRAV(1),Статус,t@string:0/Любой#1/Все отмеченные,Учитывать статус,t@string:0/Все#1/Взрослые#2/Дети,Контингент"
+ S ^IPROC(D,K,"Средняя численность контингента")="CNTBYDGM_RPACU,1,4,"_PP_",t@string:0/Только по основному договору#1/По всем договорам,Учет пациентов,"_so
+ 
+ S ^IPROC(D,K,"Прикрепленый контингент по программе")="CNTBYPR_RPACU,1,7,te@storage:aprog,Мед.программа,"_DT_","_so_","_W_","_U_",c@net:NMLST_NSPRAV(1),Статус,t@string:0/Любой#1/Все отмеченные,Учитывать статус"
+ S ^IPROC("Система","Пациенты","Поиск дублеров контингента")="DBL_RPACU,100,3,t@string:1/Да#0/Нет,По текущему филиалу,t@string:0/Полный#1/По 2-м реквизитам,Вид поиска,t@string:0/Нет#1/Да,Учитывать дату рождения"
+ S ^IPROC(D,K,"Прикрепление контингента по договору")="DGLST_RPACU,100,9,"_DG_","_PP_",t@string:1/Да#0/Нет,Поиск только по базовому договору,t@string:0/Нет#1/Да,Показывать сумму первичных платежей,"_W_","_so_",s,Текстовый договор,s,Текстовая программа"
+ S ^IPROC(D,K,"Список контингента по договору")="DGP_RPACU,100,10,"_DG_","_DT_",t@string:1/Да#0/Нет,Поиск только по базовому договору,"_W_","_M_",c@net:NMLST_NSPRAV(1),Статус,"_U_","_so1_",t@string:0/Нет#1/Да,Выводить родителей,t@string:0/Нет#1/Только посетившие#2/Только отсутствующие,Учитывать посещения"
+ S ^IPROC(D,K,"Несоответствие программ контингента по договору")="DGPCHK_RPACU,100,5,"_DG_","_DT_",t@string:1/Да#0/Нет,Поиск только по базовому договору,t@string:1/Да#0/Нет,Оформление,t@net:NMLCR_NSPRAV(""dvid""),Вид договора"
+ S ^IPROC(D,K,"Несоответствие программ контингента по договору")="DGPCHK_RPACU,100,5,"_DG_","_DT_",t@string:1/Да#0/Нет,Поиск только по базовому договору,t@string:1/Да#0/Нет,Оформление,te@storage:dvid@1,Вид договора"
+ S ^IPROC(D,K,"Адреса и контакты пациентов")="ADC_RPACU,100,9,"_DG_","_DT_","_W_",c@net:NMLST_NSPRAV(1),Статус,"_U_",d,Начальная дата рождения,d,Конечная дата рождения,"_so1_",t@string:0/Нет#1/Да,Выводить родителей"
+ S ^IPROC(D,K,"Список контингента и родственников")="RELLST_RPACU,100,7,"_DG_","_DT_","_W_","_M_",t@net:NMLST_NSPRAV(1)@1,Статус,"_U_",t@string:1/Нет#0/Да,Показывать снятых"
+ S ^IPROC(D,K,"Сводка по контингенту")="SVD_RPACU,1,8,"_DT_","_DG_",t@string:0/Нет#1/Местам работы#2/Программам прикрепления#3/Страховому договору,Детализировать по,"_so1_",c@net:NMLST_NSPRAV(1),Статус,t@string:0/Любой#1/Все отмеченные,Учитывать статус,s,Текстовый договор,s,Текстовая программа"
+ S ^IPROC(D,K,"Движение контингента")="FLOW_RPACU,1,6,"_PP_",t@string:0/Нет#1/Да,Выводить только фактически обслуживаемых,"_M_","_W_",te@storage:rsource@1,Источник рекламы"
+ S ^IPROC(D,K,"Структура клиентов по рекламным носителям")="BYRS^RPACU,1,2,d,Дата расчета,c@net:NMLST_NSPRAV(1),Статус"
+ S ^IPROC("Ежемесячная отчетность","Структура клиентской базы по СК")="STRUCTSK_RPACU,1,2,d,Период прикрепления с,d,Период прикрепления по"
+ S ^IPROC(D,K,"Структура клиентской базы по СК")="STRUCTSK_RPACU,1,2,"_PP
+ S ^IPROC(D,K,"Список контингента по врачу")="LSTBVR_RPACU,100,5,"_DT_","_U_",t@string:0/Не имеет значения#1/Взрослые#2/Дети,Возраст,d,Начальная дата рождения,d,Конечная дата рождения"
+ Q:'$$FR^I()&($$^I("ilpu")'="") 
+ S ^IPROC(D,K,"Выгрузка контингента")="PLST_RPACU,100,4,"_DG_","_DT_",s,Выражение фильтра,s,Выгружаемые поля"
+ Q

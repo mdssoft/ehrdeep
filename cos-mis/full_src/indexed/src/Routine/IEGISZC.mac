@@ -1,0 +1,80 @@
+IEGISZC ; Утилиты CDA документов
+VRINF(VR,SP)
+ N X
+ s xml=xml_CR_"<id root="""_$$rlpu^IEGISZ()_".70"" extension="""_VR_"""/>"
+ s xml=xml_CR_"<id root=""1.2.643.100.3"" extension="""_$$GET^IKADRY(VR,"snils")_"""/>"
+ S X=$$GETPL^ISPRAV("spec",SP,"fpos")
+ s xml=xml_CR_"<code code="""_X_""" codeSystem=""1.2.643.5.1.13.13.11.1002"" codeSystemVersion=""7.5"" codeSystemName=""Должности медицинских и фармацевтических работников"" displayName="""_$$dfl^IEGISZ("1.2.643.5.1.13.13.11.1002",X)_"""/>"
+ s xml=xml_CR_"<assignedPerson>"
+ s xml=xml_CR_"<name>"
+ s xml=xml_CR_"<family>"_$$GET^IKADRY(VR,"f")_"</family>"
+ s xml=xml_CR_"<given>"_$$GET^IKADRY(VR,"i")_"</given>"
+ s xml=xml_CR_"<identity:Patronymic xsi:type=""ST"">"_$$GET^IKADRY(VR,"o")_"</identity:Patronymic>"
+ s xml=xml_CR_"</name>"
+ s xml=xml_CR_"</assignedPerson>"
+ Q
+fixfl(NI,ID,DT,fl) ; получение данных из фиксированных полей ЭМК
+ N R,X,T
+ I fl="diag" D  Q R
+ .S X=$P($G(^EPRD(NI,ID,"diag"))," ",1),R=X_"|"_$$dfl^IEGISZ("1.2.643.5.1.13.13.11.1005",X)
+ Q ""
+wcash(NI,DT)
+ s xml=xml_CR_"<participant typeCode=""IND"">"
+ s xml=xml_CR_"<associatedEntity classCode=""GUAR"">"
+ s xml=xml_CR_"<code code=""4"" codeSystem=""1.2.643.5.1.13.13.11.1039"" codeSystemVersion=""4.3"" codeSystemName=""Источники оплаты медицинской помощи"" displayName=""Средства пациента""/>" ; TODO из справочника
+ s xml=xml_CR_"<identity:DocInfo>"
+ s xml=xml_CR_"<identity:IdentityDocType xsi:type=""CD"" code=""3"" codeSystem=""1.2.643.5.1.13.13.99.2.724"" codeSystemVersion=""1.1"" codeSystemName=""Типы документов оснований"" displayName=""Договор на оказание платных медицинских услуг""/>"
+ s xml=xml_CR_"<identity:InsurancePolicyType nullFlavor=""NA""/>"
+ s xml=xml_CR_"<identity:Series xsi:type=""ST"">"_$$YEAR^DTUTL($$GET^IPAC(NI,"dofor",DT))_"</identity:Series>"
+ S X=$$GET^IPAC(NI,"polis",DT) S:X="" X=NI
+ s xml=xml_CR_"<identity:Number xsi:type=""ST"">"_X_"</identity:Number>" ; TODO - из наличного договора
+ s xml=xml_CR_"<identity:INN nullFlavor=""NI""/>" ; ИНН - пустой
+ s xml=xml_CR_"<identity:effectiveTime>"
+ S X=$$GET^IPAC(NI,"dog_from",DT) S:X="" X=$$GET^IPAC(NI,"dofor",DT) S:X="" X=DT
+ s xml=xml_CR_"<identity:low xsi:type=""TS"" value="""_$$dt^IEGISZ(X)_"+0300""/>"
+ S X=$$GET^IPAC(NI,"dog_to",DT) S:X="" X=$$eofy^IEGISZ(DT)
+ s xml=xml_CR_"<identity:high xsi:type=""TS"" value="""_$$dt^IEGISZ(X)_"+0300""/>"
+ s xml=xml_CR_"</identity:effectiveTime>"
+ s xml=xml_CR_"</identity:DocInfo>"
+ s xml=xml_CR_"</associatedEntity>"
+ s xml=xml_CR_"</participant>"
+ Q
+wdms(NI,STC,DT)
+ N PIDX,X
+ S PIDX=$$PIDX^IPAC(NI,STC,DT)
+ s xml=xml_CR_"<participant typeCode=""IND"">"
+ s xml=xml_CR_"<associatedEntity classCode=""GUAR"">"
+ s xml=xml_CR_"<code code=""3"" codeSystem=""1.2.643.5.1.13.13.11.1039"" codeSystemVersion=""4.3"" codeSystemName=""Источники оплаты медицинской помощи"" displayName=""Средства добровольного медицинского страхования""/>" ; TODO из справочника
+ s xml=xml_CR_"<identity:DocInfo>"
+ s xml=xml_CR_"<identity:IdentityDocType xsi:type=""CD"" code=""2"" codeSystem=""1.2.643.5.1.13.13.99.2.724"" codeSystemVersion=""1.1"" codeSystemName=""Типы документов оснований"" displayName=""Полис ДМС""/>"
+ s xml=xml_CR_"<identity:InsurancePolicyType nullFlavor=""NA""/>"
+ ;<!-- [1..1] Серия документа -->
+ s xml=xml_CR_"<identity:Series xsi:type=""ST"">-</identity:Series>"
+ S X=$$GET^IPAC(NI,"polis"_PIDX,DT) S:X="" X="б.н."
+ s xml=xml_CR_"<identity:Number xsi:type=""ST"">"_X_"</identity:Number>"
+ s xml=xml_CR_"<identity:INN nullFlavor=""NI""/>"
+ s xml=xml_CR_"<identity:effectiveTime>"
+ S X=$$GET^IPAC(NI,"dog_from"_PIDX,DT) S:X="" X=$$GET^IPAC(NI,"dofor",DT) S:X="" X=DT
+ s xml=xml_CR_"<identity:low xsi:type=""TS"" value="""_$$dtm^IEGISZ(X)_"+0300""/>"
+ S X=$$GET^IPAC(NI,"dog_to"_PIDX,DT) S:X="" X=$$eofy^IEGISZ(DT)
+ s xml=xml_CR_"<identity:high xsi:type=""TS"" value="""_$$dtm^IEGISZ(X)_"+0300""/>"
+ s xml=xml_CR_"</identity:effectiveTime>"
+ s xml=xml_CR_"</identity:DocInfo>"
+ s xml=xml_CR_"<scopingOrganization>"
+ s xml=xml_CR_"<id root=""1.2.643.5.1.13.13.99.2.183"" extension="""_$$GET^IINSC(STC,"egisz",DT)_"""/>"
+ s xml=xml_CR_"<name>"_$$GET^IINSC(STC,"yname",DT)_"</name>"
+ s xml=xml_CR_"<telecom value=""tel:"_$$GET^IINSC(STC,"phone",DT)_""" use=""WP""/>"
+ s xml=xml_CR_"<addr>"
+ s xml=xml_CR_"<streetAddressLine>"_$$GET^IINSC(STC,"yaddr",DT)_"</streetAddressLine>"
+ S X=$$GET^IINSC(STC,"yregion",DT)
+ S:$L(X)>2 X=$E(X,1,2) ; код из двух символов
+ s xml=xml_CR_"<address:stateCode xsi:type=""CD"" code="""_X_""" codeSystem=""1.2.643.5.1.13.13.99.2.206"" codeSystemVersion=""6.4"" codeSystemName=""Субъекты Российской Федерации"" displayName="""_$$dfl^IEGISZ("1.2.643.5.1.13.13.99.2.206",X)_"""/>"
+ s xml=xml_CR_"<postalCode>"_$$GET^IINSC(STC,"yindex",DT)_"</postalCode>"
+ s xml=xml_CR_"<fias:Address nullFlavor=""NI""/>"
+ s xml=xml_CR_"</addr>"
+ s xml=xml_CR_"</scopingOrganization>"
+ s xml=xml_CR_"</associatedEntity>"
+ s xml=xml_CR_"</participant>"
+ Q
+woms(NI,STC,DT)
+ Q

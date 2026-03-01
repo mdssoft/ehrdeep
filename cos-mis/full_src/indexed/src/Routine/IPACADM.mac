@@ -1,0 +1,71 @@
+IPACADM ; Администрирование пациента [ 12/12/2016  11:11 PM ]
+USLKEY(NIB,GL) ; Таблица услуг
+ N @$$NEWVAR^IUSL,KX,ID,UX,CEN,SUMM,SB,OT,VR,VI,DT,KV,DTM,VF,CSTC
+ S DT="" F  S DT=$O(^PNF(NIB,DT)) Q:DT=""  S KX="",CSTC=$$GET^IPAC(NIB,"stc",DT) F  S KX=$O(^PNF(NIB,DT,KX)) Q:KX=""  D
+ .S DTM=$P(^(KX),"|",1)
+ .S OT=$P(KX,"|",2),VR=$P(KX,"|",1),ID=$P(KX,"|",3)
+ .D GET^IUSL(VR,DT,OT,ID,1)
+ .S STAT=$G(STAT)
+ .Q:STAT="d"!(STAT="")
+ .S A=VR_"@"_DT_"@"_OT_"@"_ID
+ .S @GL@(A)=""
+ Q
+UMOVG(FNIB,TNIB,GL) 
+ N KEY
+ S KEY="" F  S KEY=$O(@GL@(KEY)) Q:KEY=""  D
+ .D UMOV^NPACADM(FNIB,KEY,TNIB,1)
+ Q
+BILLKEY(NIB,GL) ; Таблица платежей
+ N DT,TI,A,TXT,L,OPE,TP,FR,K,T
+ S DT=999999
+ F  S DT=$O(^BILL(NIB,DT),-1) Q:DT=""  S TI="" F  S TI=$O(^BILL(NIB,DT,TI),-1) Q:TI=""  D
+ .S A=DT_"@"_TI
+ .S @GL@(A)=""
+ 
+ S DT="" F  S DT=$O(^BILL(NIB,"R",DT)) Q:DT=""  S TI="" F  S TI=$O(^BILL(NIB,"R",DT,TI)) Q:TI=""  D
+ .S L=^(TI),OPE=$P(L,"|",1) Q:OPE 
+ .S A="R"_DT_"@"_TI
+ .S @GL@(A)=""
+ Q
+BMOVG(FNIB,TNIB,GL) 
+ N KEY
+ S KEY="" F  S KEY=$O(@GL@(KEY)) Q:KEY=""  D
+ .D BMOV^NPACADM(FNIB,KEY,TNIB,1,1)
+ Q
+NAZKEY(NIB,GL) ; Таблица назначений
+ N ID,R,K,Z,I,X
+ S ID="" F  S ID=$O(^NAZI("n",NIB,ID)) Q:ID=""  S R=^(ID),Z=+$P(R,"|",5) I "acdlpzrh"[$P(R,"|",1) D
+ .S @GL@(ID)=""
+ Q
+NMOVG(FNIB,TNIB,GL) 
+ N KEY
+ S KEY="" F  S KEY=$O(@GL@(KEY)) Q:KEY=""  D
+ .D MOV^INAZN($P(KEY,"@",1),TNIB)
+ Q
+MLABKEY(NIB,GL) ; Лабораторные исследования
+ N ID
+ S ID="" F  S ID=$O(^MLAB(NIB,ID)) Q:ID=""  D
+ .S @GL@(NIB_","_ID)=""
+ Q
+MLMOVG(FNIB,TNIB,GL) 
+ N KEY,ID,NI
+ S KEY="" F  S KEY=$O(@GL@(KEY)) Q:KEY=""  D
+ .S NI=$P(KEY,",",1),ID=$P(KEY,",",2)
+ .S:FNIB'="" NI=FNIB
+ .D MOVPAC^IMLAB(NI,TNIB,ID)
+ Q
+DSHKEY(NI,GL) ; Расписание
+ N LP,OT,VR,SP,DT,TM,R,A
+ S DT="" F  S DT=$O(^DSHP(NI,DT)) Q:DT=""  D
+ .S TM="" F  S TM=$O(^DSHP(NI,DT,TM)) Q:TM=""  D
+ ..S VR="" F  S VR=$O(^DSHP(NI,DT,TM,VR)) Q:VR=""  D
+ ...S R=^(VR),LP=$P(R,"|",1),OT=$P(R,"|",2),SP=$P(R,"|",3)
+ ...S A=LP_"@"_OT_"@"_VR_"@"_SP_"@"_DT_"@"_TM
+ ...S @GL@(A)=""
+ Q
+DSHMOV(FNIB,TNIB,GL) 
+ N KEY,ID,NI
+ S KEY="" F  S KEY=$O(@GL@(KEY)) Q:KEY=""  D
+ .S LP=$P(KEY,"@",1),OT=$P(KEY,"@",2),VR=$P(KEY,"@",3),SP=$P(KEY,"@",4),DT=$P(KEY,"@",5),TM=$P(KEY,"@",6)
+ .D MOVKEY^IRASP2(LP,OT,VR,SP,DT,TM,TNIB)
+ Q

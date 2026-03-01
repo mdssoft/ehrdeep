@@ -1,0 +1,108 @@
+IMEDARH2 ; Взаимодействие с medarhiv.ru [ 10/28/2013  2:50 AM ]
+MKXML(IID,NI,TP,DT,TM) ; Создание XML файла
+ N IO,I,X,R,K,FN,CR,NM,PNM,PPM,EML,ETP,ANIB,A,FL,FFN
+ 
+ S CR=$C(13,10)
+ S NM=^MDDM("mean",TP)
+ S ETP=$G(^cfg("medarhiv","onlyid"))
+ S ANIB=$$GET^IPAC(NI,"anib")
+ S EML=$$GET^IPAC(NI,"email")
+ I ANIB="",EML="" Q 0
+ ;w "NEXT"
+ 
+ S A="<?xml version=""1.0"" encoding=""windows-1251""?>"
+ S A=A_CR_"<Inform>"
+ S A=A_CR_"<SourceID>FRUCT MD</SourceID>"
+ S A=A_CR_"<Patient>"
+ S:ETP A=A_"<ExternalID>"_ANIB_"</ExternalID>"
+ S:'ETP A=A_CR_"<Fio>"_$$DW^TXTU($$TAG^TXTU($$FIO^IPAC(NI)))_"</Fio>"
+ S:'ETP A=A_CR_"<Email>"_EML_"</Email>"
+ S:'ETP A=A_CR_"<BirthDate>"_$$GETE^IPAC(NI,"datar")_"</BirthDate>"
+ 
+ S A=A_CR_"<Events>"
+ S A=A_CR_"<Event>"
+ S A=A_CR_"<EventLocID>"_NI_","_DT_TM_"</EventLocID>"
+ 
+ S A=A_CR_"<Name>"_$$DW^TXTU($$TAG^TXTU(NM))_"</Name>"
+ S A=A_CR_"<CategoryID>"_$S(TP="ecg":58,1:5)_"</CategoryID>"
+ S A=A_CR_"<ExecDate>"_$$DTM^DTUTL(DT_","_TM)_"</ExecDate>"
+ S A=A_CR_"<ResultDate>"_$$DT^DTUTL(DT)_"</ResultDate>"
+ 
+ D:TP'="ecg"
+ .S A=A_CR_"<Lab_params>"
+ .S FL="" F  S FL=$O(^MDD(NI,DT,TM,FL)) Q:FL=""  D
+ ..S R=^(FL)
+ ..S K=$$PRM(TP,FL),PNM=$P(K,"|",1),PPM=$P(K,"|",2)
+ ..S A=A_"<param>"
+ ..S A=A_"<Name>"_$$DW^TXTU($$TAG^TXTU(PNM))_"</Name>"
+ ..S A=A_"<Units>"_$$DW^TXTU($$TAG^TXTU(PPM))_"</Units>"
+ ..S A=A_"<Value>"_R_"</Value></param>"
+ .S A=A_CR_"</Lab_params>"
+ 
+ D:TP="ecg"
+ .S FFN=$$MKPDF^IMDD(NI,DT,TM)
+ .S FN=$TR(FFN,"\","/")
+ .S FN=$P(FN,"/",$L(FN,"/"))
+ .;u 0 W !,"FN="_FN_" , FFN="_FFN
+ .S A=A_"<files><file><filename>data\"_FN_"</filename></file></files>"
+ .D SENDFN(IID,"/tools/medarhiv/data/"_FN,FFN)
+ 
+ S A=A_CR_"</Event>"
+ S A=A_CR_"</Events>"_CR_"</Patient>"_CR_"</Inform>"
+ ;u 0 W "PRO="_$L(A)
+ D SEND(IID,"/tools/medarhiv/xml",A)
+ Q 1
+PRM(TP,FL) 
+ I TP="bp" Q:FL="systolic" "Давление систолическое|мм рт.ст" Q:FL="diastolic" "Давление диастолическое|мм рт.ст" Q:FL="pulse" "Пульс|уд. в мин." Q ""
+ I UID="med_mon/diabet" Q $P("Хлебные ед.|Глюкоза в крови|Инсулин","|",POS)_"|"_$P("ХЕ|ммоль/л.|ед","|",POS)
+ I UID="med_mon/bread" Q $P("||Хлебные ед.|Калории|Белки|Углеводы|Жиры","|",POS)_"|"_$P("||ХЕ|ед","|",POS)
+ I TP="weight" Q:FL="weight" "Вес|кг"
+ Q ""
+DOSEND(IID) 
+ Q:'$D(^MSGOUT("medarhiv")) 
+ N DIR,I,NI,ID,KEY,FILL,FN,DT,TP,TM,IDX,R
+ S IDX="" F  S IDX=$O(^MSGOUT("medarhiv",IID,IDX)) Q:IDX=""  D
+ .S R=^(IDX),TO=$P(R,"|",2) 
+ .Q:$G(^(IDX,"chkfn"))'="" 
+ .S KEY=$G(^("sub"))
+ .S NI=$P(KEY,"|",1),TP=$P(KEY,"|",2),DT=$P(KEY,"|",3),TM=$P(KEY,"|",4)
+ .;u 0 W !,NI_","_TP_","_DT_","_TM
+ .Q:'$$MKXML(IID,NI,TP,DT,TM)
+ .;W !,"OK"
+ .K ^MSGOUT("medarhiv",IID,IDX)
+ Q
+DORECV(ID) 
+ Q
+INITDB 
+ S ^MSGHUB("medarhiv")="IMEDARH2"
+ S ^MSGHUB("medarhiv",1)="IMEDARH2"
+ Q
+SEND(IID,URL,TXT) 
+ N NET,IP,PRT
+ S IP=$G(^MSGHUB("medarhiv",IID,"server")) S:IP="" IP="127.0.0.1"
+ S PRT=$G(^MSGHUB("medarhiv",IID,"port")) S:PRT="" PRT=3000
+ S NET=$$OPEN^WWWCLI(IP,PRT)
+ Q:NET=""
+ D OWBUF^WWWCLI(NET)
+ D WBUF^WWWCLI(NET,TXT)
+ D CBUF^WWWCLI(NET)
+ D SETHDR^WWWCLI(NET,"Content-type","application/octet-stream") ;text/plain, charset=windows-1251")
+ S X=$$POST^WWWCLI(NET,URL)
+ D CLOSE^WWWCLI(NET)
+ Q
+SENDFN(IID,URL,FN) 
+ N NET,IP,PRT,I,R
+ S IP=$G(^MSGHUB("medarhiv",IID,"server")) S:IP="" IP="127.0.0.1"
+ S PRT=$G(^MSGHUB("medarhiv",IID,"port")) S:PRT="" PRT=3000
+ S NET=$$OPEN^WWWCLI(IP,PRT)
+ Q:NET=""
+ D OWBUF^WWWCLI(NET)
+ S I=$$OR^FIL(FN),L=0
+ U I F  R R#1024 Q:$$ST^FIL()=0  I R'="" D WBUF^WWWCLI(NET,R) s L=L+$L(R)
+ C I
+ D CBUF^WWWCLI(NET)
+ D SETHDR^WWWCLI(NET,"Content-type","application/octet-stream")
+ S X=$$POST^WWWCLI(NET,URL)
+ D CLOSE^WWWCLI(NET)
+ Q
+ 

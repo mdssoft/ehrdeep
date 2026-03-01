@@ -1,0 +1,54 @@
+NESUSL ; Распределение услуг внешних контрагентов [ 08/18/2012  10:09 PM ]
+TAB(DS,DE,MOD) ; Сводка по услугам
+ N VRL,VR,R,CON,OT,DT,ID,@$$NEWVAR^IUSL,U,P,PP
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ K ^BUF($J)
+ S VR="" F  S VR=$O(^KDR(VR)) Q:VR=""  D
+ .S R=$$GET^IKADRY(VR,"knum",DE) Q:R=""
+ .Q:$E(R,1,3)'="999"
+ .S VRL(VR)=$E(R,4,99)
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D:$D(VRL(VR))
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D
+ ..S DT=DS-1,CON=VRL(VR)
+ ..F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ...D GET^IUSL(VR,DT,OT,ID)
+ ...Q:"wd"[STAT
+ ...S U="" F  S U=$O(UL(U)) Q:U=""  D
+ ....;I MOD,$$isCON(U,PRC,DT,CON) Q 
+ ....S ^BUF($J,CON,U,PRC)=""
+ 
+ D OWF^RWU(".txt")
+ D WC^RWU("|Контрагент|Код|Сумма|Код усл.|Наименование|Стоимость")
+ S CON="" F  S CON=$O(^BUF($J,CON)) Q:CON=""  D
+ .S U="" F  S U=$O(^BUF($J,CON,U)) Q:U=""  D
+ ..S (PRC,P,PP)=""
+ ..F  S P=$O(^BUF($J,CON,U,P)) Q:P=""  S PP=PP_"@"_P,PRC=P
+ ..S R=CON_"@"_U_PP_"|"_$$NAME^ICONTR(CON)
+ ..S ID=$$GET2^IPRICE(U,"con",CON,PRC,DE)
+ ..S R=R_"|"_$P(ID,"|",2)_"|"_$P(ID,"|",1)
+ ..S R=R_"|"_U_"|"_$$NAME^IPRICE(U,PRC)
+ ..S R=R_"|"_$$PRICEH^IPRICE(U,PRC,DE)
+ ..D WC^RWU(CR_R)
+ K ^BUF($J)
+ D C^RWU
+ Q
+isCON(U,PRC,DT,CON) 
+ Q:'$D(^CNE(U,PRC,"con")) 0
+ S DT=$O(^("con",DT+1),-1) Q:DT="" 0
+ Q:'$D(^(DT,CON)) 0
+ Q 1
+SETC(DS,DE,KEY,CODE) ; Код услуги
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N PP,P,CON,USL,I
+ S CON=$P(KEY,"@",1),USL=$P(KEY,"@",2),PP=$P(KEY,"@",3,99)
+ F I=1:1:$L(PP,"@") S P=$P(PP,"@",I) D:P'=""
+ .S $P(^CNE(USL,P,"con",DS,CON),"|",2)=CODE
+ Q
+SETS(DS,DE,KEY,SUM) ; Сумма услуги
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S SUM=+$TR(SUM,", ",".")
+ N PP,P,CON,USL,I
+ S CON=$P(KEY,"@",1),USL=$P(KEY,"@",2),PP=$P(KEY,"@",3,99)
+ F I=1:1:$L(PP,"@") S P=$P(PP,"@",I) D:P'=""
+ .S $P(^CNE(USL,P,"con",DS,CON),"|",1)=SUM
+ Q

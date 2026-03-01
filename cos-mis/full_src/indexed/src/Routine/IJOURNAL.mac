@@ -1,0 +1,293 @@
+IJOURNAL ; Journal utilites
+LST(tFile,NSpace,type,GL,toGL) ; List and restore to another global
+	; tFile - full path to journal
+	; NSpace - full path to database
+	; type - SET,KILL,NULL
+	; GL - restored global (only name, w.o. index) , w. "^"
+	; toGL - restore to global (only name)
+	n tJournal,tRecord,tFirstOffset,tRecordE,tLastOffset
+	n rrc,gl,x,nspace,i,tp,pp,pos
+	
+	I NSpace'["\",NSpace'["/" S NSpace=$$dbdir(NSpace)
+	
+	Set tJournal = ##class(%SYS.Journal.File).%OpenId(tFile)
+	If $IsObject(tJournal) {
+		Set tRecord = tJournal.FirstRecord
+		If $IsObject(tRecord) {
+			Set tFirstOffset = tRecord.Address
+		}
+ 
+		Set tRecordE = tJournal.LastRecord
+		If $IsObject(tRecordE) {
+			Set tLastOffset = tRecordE.Address
+		}
+	}
+	else { Quit }
+	S NSpace=$$UL^TXTU(NSpace)
+	W !,"Process.. "
+	s rrc=tRecord,i=0,pp=0
+	s j=0,k=0
+	for  D  s rrc=tJournal.GetRecordAfter(pos) I '$IsObject(rrc) W !,"100 %" Q 
+	.s pos=rrc.Address
+	.;Q:pos<850020656 
+	.s x=(100*pos/tLastOffset)\5
+	.I pp'=x W !,5*pp_" % " s pp=x
+	.s ts=rrc.TimeStamp
+	.s tp=rrc.TypeName
+	.Q:tp["Trans"  Q:tp["Marker"   ; transaction (no 'DatabaseName')
+	.S nspace=$$UL^TXTU(rrc.DatabaseName)
+	.Q:nspace'=NSpace 
+	.I type'="",tp'=type Q 
+	.s j=j+1
+	.s gl=rrc.GlobalNode
+	.I GL'="" S x=$P(gl,"(",1) Q:gl'[GL  ;Q:x'=GL 
+	.s i=i+1,x=rrc.NewValue ; .OldValue
+	.; W !,"-------",!,tp_": "_gl_"  "_rrc.GlobalReference,!,">   "_x
+	.Q:toGL="" 
+	.S $P(gl,"(",1)=toGL,@gl=x
+	
+	W !,"Found: "_i_" records"
+	
+	Set tRecord = ""
+	Set tRecordE = ""
+	Set rrc=""
+	Q
+	; Example
+	; D LST^IJOURNAL("d:\intersystems\cache\mgr\journal\20100101.001","d:\intersystems\cache\mgr\user\","SET","^EPRPT","^EPRPTX")
+	;
+REST(tFile,NSpace,GLS,NFK) ; Restore globals
+	; tFile - full path to journal
+	; NSpace - full path to database
+	; GL - restored global (only name, w.o. index) , w. "^", list w. ';'
+	; NFK - not full kill
+	
+	n tJournal,tRecord,tFirstOffset,tRecordE,tLastOffset
+	n rrc,gl,x,nspace,i,tp,pp,pos,GLL,g
+	
+	I NSpace'["\",NSpace'["/" S NSpace=$$dbdir(NSpace)
+	F x=1:1:$L(GLS,";") S gl=$P(GLS,";",x) S:gl'="" GLL(gl)=""
+	s NFK=+$G(NFK)
+	zw GLL
+	
+	Set tJournal = ##class(%SYS.Journal.File).%OpenId(tFile)
+	If $IsObject(tJournal) {
+		Set tRecord = tJournal.FirstRecord
+		If $IsObject(tRecord) {
+			Set tFirstOffset = tRecord.Address
+		}
+ 
+		Set tRecordE = tJournal.LastRecord
+		If $IsObject(tRecordE) {
+			Set tLastOffset = tRecordE.Address
+		}
+	}
+	else { Quit }
+	S NSpace=$$UL^TXTU(NSpace)
+	W !,"Process.. "
+	s rrc=tRecord,i=0,pp=0
+	s j=0,k=0
+	for  D  s rrc=tJournal.GetRecordAfter(pos) I '$IsObject(rrc) W !,"100 %" Q 
+	.s pos=rrc.Address
+	.s x=(100*pos/tLastOffset)\5
+	.Q:pos>tLastOffset  
+	.I pp'=x W !,5*pp_" % " s pp=x
+	.s tp=rrc.TypeName
+	.Q:tp["Trans"  Q:tp["Marker"   ; transaction (no 'DatabaseName')
+	.S nspace=$$UL^TXTU(rrc.DatabaseName)
+	.Q:nspace'=NSpace  
+	.s ts=rrc.TimeStamp
+	.I tp'="SET",tp'="KILL" Q 
+	.s j=j+1
+	.s gl=rrc.GlobalNode
+	.S x=$P(gl,"(",1) Q:x=""  Q:'$D(GLL(x)) 
+	.I NFK,tp="KILL",gl'["(" Q  ; not full kill
+	.I NFK=2,tp="KILL" Q  ; not partial kill
+	.s i=i+1,x=rrc.NewValue
+	.w "."_gl
+	.I tp="SET" S @gl=x
+	.I tp="KILL" k @gl
+	
+	W !,"Found: "_i_" records"
+	
+	Set tRecord = ""
+	Set tRecordE = ""
+	Set rrc=""
+	Q
+SHOW(tFile,NSpace,type,GL,RCNT) ; List 
+	; tFile - full path to journal
+	; NSpace - full path to database, or short name
+	; type - SET,KILL,NULL
+	; GL - restored global , w. "^"
+	; RCNT - records count after
+	n tJournal,tRecord,tFirstOffset,tRecordE,tLastOffset
+	n rrc,gl,x,nspace,i,tp,pp,pos,j,vc
+	
+	I NSpace'["\",NSpace'["/" S NSpace=$$dbdir(NSpace)
+	S x=$E(NSpace,$L(NSpace))
+	I x'="/",x'="\" s NSpace=NSpace_"\"
+	
+	Set tJournal = ##class(%SYS.Journal.File).%OpenId(tFile)
+	If $IsObject(tJournal) {
+		Set tRecord = tJournal.FirstRecord
+		If $IsObject(tRecord) {
+			Set tFirstOffset = tRecord.Address
+		}
+ 
+		Set tRecordE = tJournal.LastRecord
+		If $IsObject(tRecordE) {
+			Set tLastOffset = tRecordE.Address
+		}
+	}
+	else { Quit }
+	S NSpace=$$UL^TXTU(NSpace),RCNT=+$G(RCNT)
+	W !,"Process.. "
+	s rrc=tRecord,i=0,pp=0,j=0,vc=0
+	for  D  s rrc=tJournal.GetRecordAfter(pos) I '$IsObject(rrc) W !,"100 %" Q 
+	.s pos=rrc.Address
+	.s x=(100*pos/tLastOffset)\5
+	.I pp'=x W !,5*pp_" % " s pp=x
+	.s tp=rrc.TypeName
+	.Q:tp["Trans"  Q:tp["Marker"  ; transaction (no 'DatabaseName')
+	.S nspace=$$UL^TXTU(rrc.DatabaseName)
+	.I NSpace'="",nspace'=NSpace Q 
+	.s j=j+1
+	.I type'="",tp'=type Q 
+	.s gl=rrc.GlobalNode,f=1
+	.I GL'="",gl'[GL s f=0 Q:'vc  s vc=vc-1
+	.s x=rrc.NewValue ; .OldValue
+	.W !,"---"_pos_"---",!,tp_"("_rrc.TimeStamp_"):",!,gl_"="_$S(+x=x:x,1:""""_x_"""")
+	.s:f vc=RCNT,i=i+1
+	
+	W !,"Found: "_i_" records"
+	
+	Set tRecord = ""
+	Set tRecordE = ""
+	Set rrc=""
+	Q
+SHOWD(tFile,NSpace,type,GL) ; List 
+	; tFile - full path to journal
+	; NSpace - full path to database or short name
+	; type - SET,KILL,NULL
+	; GL - data in global
+	n tJournal,tRecord,tFirstOffset,tRecordE,tLastOffset
+	n rrc,gl,x,nspace,i,tp,pp,pos,j
+	
+	I NSpace'["\",NSpace'["/" S NSpace=$$dbdir(NSpace)
+	
+	Set tJournal = ##class(%SYS.Journal.File).%OpenId(tFile)
+	If $IsObject(tJournal) {
+		Set tRecord = tJournal.FirstRecord
+		If $IsObject(tRecord) {
+			Set tFirstOffset = tRecord.Address
+		}
+ 
+		Set tRecordE = tJournal.LastRecord
+		If $IsObject(tRecordE) {
+			Set tLastOffset = tRecordE.Address
+		}
+	}
+	else { Quit }
+	S NSpace=$$UL^TXTU(NSpace)
+	W !,"Process.. "
+	s rrc=tRecord,i=0,pp=0
+	s j=0
+	for  D  s rrc=tJournal.GetRecordAfter(pos) I '$IsObject(rrc) W !,"100 %" Q 
+	.s pos=rrc.Address
+	.s x=(100*pos/tLastOffset)\5
+	.I pp'=x W !,5*pp_" % " s pp=x
+	.s tp=rrc.TypeName
+	.Q:tp["Trans"  Q:tp["Marker"  ; transaction (no 'DatabaseName')
+	.S nspace=$$UL^TXTU(rrc.DatabaseName)
+    .I NSpace'="",nspace'=NSpace Q 
+	.s j=j+1
+	.I type'="",tp'=type Q 
+	.s gl=rrc.GlobalNode
+	.s x=rrc.NewValue ; .OldValue
+	.I x="" Q
+	.I x'[GL Q
+	.s i=i+1
+	.W !,"---"_pos_"---",!,tp_"("_rrc.TimeStamp_"):",!,gl_"="_$S(+x=x:x,1:""""_x_"""")
+	
+	W !,"Found: "_i_" records"
+	
+	Set tRecord = ""
+	Set tRecordE = ""
+	Set rrc=""
+	Q
+STAT(tFile) ; Статистика по числу записей относительно глобалов
+	N GLS,GLI,tJournal,tRecord,tFirstOffset,tRecordE,tLastOffset
+	n rrc,gl,x,nspace,i,gl0,pp,pos,j
+	Set tJournal = ##class(%SYS.Journal.File).%OpenId(tFile)
+	If $IsObject(tJournal) {
+		Set tRecord = tJournal.FirstRecord
+		If $IsObject(tRecord) {
+			Set tFirstOffset = tRecord.Address
+		}
+ 
+		Set tRecordE = tJournal.LastRecord
+		If $IsObject(tRecordE) {
+			Set tLastOffset = tRecordE.Address
+		}
+	}
+	else { Quit }
+	W !,"Process.. "
+	s rrc=tRecord,i=0,pp=0,j=0
+	for  D  s rrc=tJournal.GetRecordAfter(pos) I '$IsObject(rrc) W !,"100 %" Q 
+	.s pos=rrc.Address
+	.s x=(100*pos/tLastOffset)\5
+	.I pp'=x W !,5*pp_" % " s pp=x
+	.s tp=rrc.TypeName
+	.Q:tp["Trans"  Q:tp["Marker"  ; transaction (no 'DatabaseName')
+	.s j=j+1
+	.s gl0=rrc.GlobalNode
+	.s gl=$P(gl0,"(",1),gl0=$E(gl0,1,22) Q:gl=""
+	.s GLS(gl)=$G(GLS(gl))+1
+	W !,"End.",!
+	I '$D(GLS) w "No records.",! q 
+	W "Stat is:"
+	S gl="" F  S gl=$O(GLS(gl)) Q:gl=""  s GLI(GLS(gl),gl)=""
+	s i="" F  s i=$O(GLI(i),-1) Q:i=""  D
+	.s gl="" f  s gl=$O(GLI(i,gl)) Q:gl=""  D
+	..s j=gl,$E(j,16,18)="= "
+	..w !,j,i
+	Q
+dbdir(NSP) ; Get database dir
+	N dblist,dir,db,ret
+	S NSP=$$UL^TXTU(NSP),ret=""
+	S:NSP="" NSP="USER"
+	do SystemDatabaseList^%SYS.DATABASE(.dblist)
+	s dir="" F  s dir=$O(dblist(dir)) q:dir=""  s db=$tr(dir,"\","/"),db=$P(db,"/",$L(db,"/")-1) I $$UL^TXTU(db)=NSP s ret=dir Q
+	q ret
+REC(tFile,pos) ; Show record by position
+	; tFile - full path to journal
+	; pos
+
+	n tJournal,tRecord,tFirstOffset,tRecordE,tLastOffset
+	n rrc,gl,x,i,tp,pp,j,vc
+	
+	Set tJournal = ##class(%SYS.Journal.File).%OpenId(tFile)
+	If $IsObject(tJournal) {
+		Set tRecord = tJournal.FirstRecord
+		If $IsObject(tRecord) {
+			Set tFirstOffset = tRecord.Address
+		}
+ 
+		Set tRecordE = tJournal.LastRecord
+		If $IsObject(tRecordE) {
+			Set tLastOffset = tRecordE.Address
+		}
+	}
+	else { Quit }
+
+	W !,"Process.. "
+	s i=0,pp=0,j=0,vc=0
+	s rrc=tJournal.GetRecordAfter(pos) I '$IsObject(rrc) W !,"100 %" Q 
+	s tp=rrc.TypeName
+	s gl=rrc.GlobalNode,f=1
+	s x=rrc.NewValue ; .OldValue
+	W !,"---"_pos_"---",!,tp_"("_rrc.TimeStamp_"):",!,gl_"="_$S(+x=x:x,1:""""_x_"""")
+
+	Set tRecord = ""
+	Set tRecordE = ""
+	Set rrc=""
+	Q

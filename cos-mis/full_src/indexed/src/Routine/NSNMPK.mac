@@ -1,0 +1,360 @@
+NSNMPK ; СНМП - карта вызова [ 07/21/2021  3:48 PM ]
+INIT ; Инициализация формы
+ N I,R,X
+ D OWF^RWU(".xmlb")
+ D W^RWU($G(^PP(0,2))_"<snmpkv>")
+ S R=$$LCL^IUSER("snmp","hide")
+ I R'="" F I=1:1:$L(R,"|") D W^RWU("<"_$P(R,"|",I)_" visible=""no""/>")
+ D W^RWU("</snmpkv></nb_console>"),C^RWU
+ Q
+L(ID) ; Загрузить К.В,
+ N NIB,R,F,I,TLST,NLST,HH,PRC,U,P,K
+ D OWF^RWU(".xmlb")
+ D W^RWU($G(^PP(0,2))_"<snmpkv>")
+ ; Неотображаемые поля (напрямую)
+ F F="dts","log","stat","disp","brig","m","u" S NLST(F)=""
+ ; Форматы
+ S F="" F  S F=$O(^STRUCT("snmpkv",F)) Q:F=""  S R=^(F) S:$P(R,"|",1)="T" TLST(F)=1 S:$P(R,"|",1)="D" TLST(F)=""
+ D WTAGD^RWU("id",ID)
+ S F="" F  S F=$O(^EMKV(ID,F)) Q:F=""  D
+ .Q:$D(NLST(F))    
+ .S R=^(F)
+ .I F="kplace" D WC^RWU("<kplace userdata="""_R_""" title="""_$$TKAV^TXTU($$NAME^YKLADR(R))_"""/>") Q 
+ .S:$D(TLST(F)) R=$S(TLST(F):$$TM^DTUTL(R),1:$$DT^DTUTL(R))
+ .D WTAGDC^RWU(F,R)
+ 
+ S HH=$G(^EMKV(ID,"dts"))
+ S PRC=$$PRC^IINSC($G(^EMKV(ID,"stc")),$G(^EMKV(ID,"nib")),+HH)
+ ; услуги
+ S (I,F)="" F  S I=$O(^EMKV(ID,"u",I)) Q:I=""  D
+ .S R=^(I)
+ .S U=$P(R,"|",1),P=$P(R,"|",2),K=$P(R,"|",4)
+ .S:P="" P=PRC
+ .S F=F_CR_I_"@"_K_"|"_U_"|"_$$CNAMEH^IPRICE(U,P,+HH)_"|"_$P(R,"|",3)_"|"
+ .S F=F_$$FIOSH^IKADRY(K)_"|"_$$PRICEH^IPRICE(U,P,+HH)_"|"_$P(R,"|",5)
+ D WTAGC^RWU("usls",F)
+ ; материалы
+ S (I,F)="" F  S I=$O(^EMKV(ID,"m",I)) Q:I=""  D
+ .S R=^(I)
+ .S F=F_CR_I_"|"_$$NAMENM^IWRHS(I)_"|"_R_"|"_$$MEANNM^IWRHS(I)
+ D WTAGC^RWU("matt",F)
+ 
+ D:$G(^EMKV(ID,"kvd"))="" WTAGDC^RWU("kvd",$$DT^DTUTL($P(HH,",",1)))
+ S R=$G(^EMKV(ID,"stat"))
+ S F=$G(^EMKV(ID,"disp"))
+ D WTAGDC^RWU("stat",^EMM("emkvst",R)_$S(F="":"",1:", дисп. "_$$FIOSH^IKADRY(F)))
+ S R=$G(^EMKV(ID,"diag"))
+ D WTAGDC^RWU("diag_txt",$$NAME^YMKB10(R))
+ S R=$G(^EMKV(ID,"pvv"))
+ D WTAGDC^RWU("tpvv",$$NMPV^NSNMPSP(R))
+ S R=$G(^EMKV(ID,"brig"))
+ D WTAGDC^RWU("kvb",$$GETGRP^ISNMPSP(R,"num",HH))
+ S R=$$GETGRP^ISNMPSP(R,"auto",HH)
+ D WTAGDC^RWU("kva",$$GAVT^NSNMPSP(R,HH))
+ D W^RWU("</snmpkv></nb_console>"),C^RWU
+ Q
+PRN(ID) ; TODO
+ Q 
+ N R,NIB,HH,A
+ S NIB=$G(^EMKV(ID,"nib"))
+ S HH=$O(^EMKV(ID,"nkv",""),-1) S:HH="" HH=$H
+ S A=$$AGET^IPAC(NIB,+HH)_"|"_$$GET^IPAC(NIB,"tel1",+HH)_"|"
+ S A=A_$$GET^IPAC(NIB,"pager",+HH)_"|"
+ S R=$G(^EMKV(ID,"brig")),HH=$O(^EMKV(ID,"brig",""),-1)
+ S A=A_$$FIOSH^IKADRY($$KADRBR^NSNMPSP(R,"vr",HH))_"|"
+ S A=A_$$FIOSH^IKADRY($$KADRBR^NSNMPSP(R,"fl",HH))_"|"
+ S A=A_$$FIOSH^IKADRY($$KADRBR^NSNMPSP(R,"vd",HH))
+ D MSG^RWU(A)
+ Q
+LPAC(NIB) ; Load patient data
+ I '$$EXIST^IPAC(NIB) D MSG^RWU(^PP(0,2)_"<snmpkv><nib data=""""/></snmpkv></nb_console>",".xmlb") Q
+ D OWF^RWU(".xmlb")
+ D W^RWU(^PP(0,2)_"<snmpkv>")
+ D LPACs
+ D W^RWU("</snmpkv></nb_console>")
+ D C^RWU
+ Q
+LPACs 
+ N IDP,DT,PL
+ S DT=+$H
+ D WTAGDC^RWU("nib",NIB)
+ F PL="fiof","fioi","fioo","pol","polis","stc","street","dom","stroen","kvart","domkod" D WTAGDC^RWU(PL,$$GET^IPAC(NIB,PL,DT))
+ 
+ D WTAGDC^RWU("datar",$$GETE^IPAC(NIB,"datar",DT))
+ D WTAGDC^RWU("tel1",$$TELS^IPAC(NIB))
+ 
+ S IDP=$O(^EMKVI("nib",NIB,""),-1)
+ Q:IDP="" 
+ D WTAGDC^RWU("entr",$G(^EMKV(IDP,"entr")))
+ D WTAGDC^RWU("floor",$G(^EMKV(IDP,"floor")))
+ Q
+SS ; Write and subscribe
+ N SBS S SBS=1
+ G WKV1
+S ; Write
+ N SBS S SBS=0
+WKV1 N ID,LOAD
+ D RBUFH^YIXMLRR(1)
+ D W
+ D CR^RWU
+ I $$IsMSG^RWU() Q
+ I $G(ID)'="",SBS D SBSYS(ID)
+ I $G(LOAD) D L(ID) Q 
+ D OWF^RWU(".xmlb")
+ D W^RWU($G(^PP(0,2))_"<snmpkv>")
+ D WTAGDC^RWU("id",ID)
+ D WTAGDC^RWU("nib",$G(^EMKV(ID,"nib")))
+ D W^RWU("</snmpkv></nb_console>"),C^RWU
+ Q
+W 
+ Q:$$LCL^IUSER("snmp","save")=0 
+ N K,B,NBC,F,R,HH,X1,X2,wALL,A,I,ELST,U,K,IDX,V
+ S B="snmpkv",NBC="nb_console"
+ S wALL=+$G(^cfg("snmp","updap"))
+ S ID=$G(XML(NBC,B,"id")),HH=$H
+ I $G(^JOB(%JOB,"snmp","disp"))="",$S(ID="":1,$G(^EMKV(ID,"disp"))="":1,1:0) D MSG^RWU("Не указан диспетчер.") Q 
+ S:ID="" ID=$$NEW^ISNMP()
+ S:$G(^EMKV(ID,"disp"))="" ^EMKV(ID,"disp")=^JOB(%JOB,"snmp","disp")
+ K XML(NBC,B,"id")
+ ; reformat
+ S F="" F  S F=$O(^STRUCT("snmpkv",F)) Q:F=""  S R=$P(^(F),"|",1) I "DT"[R,$D(XML(NBC,B,F)) S K=XML(NBC,B,F),XML(NBC,B,F)=$S(R="D":$$DI^DTUTL(K),K=":":"",1:$$TI^DTUTL(K))
+ 
+ ; pol
+ S R=$G(XML(NBC,B,"pol"))
+ I R="" S K=$G(XML(NBC,B,"fiof")) I K'="" S XML(NBC,B,"pol")=$$SEXF^YIFAM(K,$G(XML(NBC,B,"fioi")),$G(XML(NBC,B,"fioo")))
+ 
+ ; make patient
+ I $G(XML(NBC,B,"nib"))="" D:$G(XML(NBC,B,"fiof"))'="" MKNIB
+ ; set time
+ S X1=$G(XML(NBC,B,"t_ov")),X2=$G(XML(NBC,B,"t_pbv"))
+ S:X1&X2 XML(NBC,B,"t_zb")=$S(X1<X2:86400-X2+X1,1:X1-X2)
+ S X1=$G(XML(NBC,B,"t_vv")),X2=$G(XML(NBC,B,"t_prv"))
+ S:X1&X2 XML(NBC,B,"t_zv")=$S(X1<X2:86400-X2+X1,1:X1-X2)
+ 
+ ; услуги
+ S A=$G(XML(NBC,B,"usls"))
+ K XML(NBC,B,"usls")
+ S I="" F  S I=$O(^EMKV(ID,"u",I)) Q:I=""  S ELST(I)=""
+ F I=2:1:99 S R=$P(A,CR,I) Q:R=""  D
+ .S K=$P(R,"|",1),IDX=$P(K,"@",1),V=$P(K,"@",2),X2=$P(R,"|",4)
+ .K:IDX ELST(IDX)
+ .S X1=$S(IDX:^EMKV(ID,"u",IDX),1:"")
+ .S:'X2 X2=1
+ .S $P(X1,"|",1)=$P(R,"|",2)
+ .S $P(X1,"|",3)=X2
+ .S $P(X1,"|",4)=V
+ .S $P(X1,"|",5)=$P(R,"|",7)
+ .S:IDX="" IDX=$O(^EMKV(ID,"u",""),-1)+1
+ .S ^EMKV(ID,"u",IDX)=X1
+ S I="" F  S I=$O(ELST(I)) Q:I=""  K ^EMKV(ID,"u",I)
+ 
+ ; материалы
+ S A=$G(XML(NBC,B,"matt"))
+ K ^EMKV(ID,"m"),XML(NBC,B,"matt")
+ F I=2:1:99 S R=$P(A,CR,I) Q:R=""  D
+ .S F=$P(R,"|",1) S:F'="" ^EMKV(ID,"m",F)=$P(R,"|",3)
+ 
+ ; save data
+ S F="" F  S F=$O(XML(NBC,B,F)) Q:F=""  D
+ .S R=XML(NBC,B,F)
+ .D SET^ISNMP(ID,F,HH,R)
+ 
+ S:'$D(^EMKVI("crea",$H,ID)) ^EMKVI("crea",$H,ID)=$$USR^IUSER()
+ S:$G(^EMKV(ID,"dts"))="" ^EMKV(ID,"dts")=$G(^EMKV(ID,"kvd"))_",1"
+ D WLOG^ISNMP(ID)
+ S:$$CHKSTAT^ISNMP(ID) LOAD=1
+ D MKIDX^ISNMP(ID)
+ D SPAC(ID,wALL)
+ Q
+MKNIB ; Создать пациента
+ N NI,DT,NS,NE,X,F
+ S NS=$G(^cfg("snmp","startnib")),NE=$G(^("endnib"))
+ S:NS="" NS=50000 S:NE="" NE=NS+999999
+ S DT=$G(XML(NBC,"snmpkv","kvd")),NI=$$NEW^IPAC(NS,NE)
+ S:DT="" DT=+$H
+ S X=$G(XML(NBC,"snmpkv","stc"))
+ S:X="" X=$G(^cfg("snmp","defstc"))
+ S:X="" X=$G(^cfg("def-stc"))
+ L +^BTN(NI)
+ D SET^IPAC(NI,"ofor",DT,1)
+ D SET^IPAC(NI,"stc",DT,X)
+ L -^BTN(NI)
+ K ^QUOTA("^BTN",NI)
+ D SET^IPAC(NI,"dofor",DT,+$H)
+ S XML(NBC,"snmpkv","nib")=NI
+ F F="fiof","fioi","fioo","street","dom","stroen","korp","kvart","domkod","tel1" D SET^IPAC(NI,F,DT,$G(XML(NBC,"snmpkv",F)))
+ D SET^IPAC(NI,"datar",DT,$G(XML(NBC,"snmpkv","datar")),1)
+ S NIB=NI
+ D MKIDX^YIPACN(DT)
+ Q
+SPAC(ID,ALL) ; Сохранить недостающие данные в пациенте
+ ; ALL - заменять различающиеся данные в карте пациента
+ N X,F,FP,NI,DT
+ S NI=$G(^EMKV(ID,"nib")) Q:NI=""
+ S ALL=+$G(ALL),DT=$G(^EMKV(ID,"kvd"))
+ S:DT="" DT=+$H
+ F F="fiof","fioi","fioo","pol","stc","polis","kplace","street","dom","stroen","korp","kvart","domkod","tel1" S X=$G(^EMKV(ID,F)),FP=$S(F="kplace":"place",1:F) I X'="",$S(ALL:$$GET^IPAC(NI,FP)'=X,1:$$GET^IPAC(NI,FP)="") D SET^IPAC(NI,FP,DT,X)
+ Q
+NUM ; New V.Card number
+ N ID
+ S ID=$$NEW^ISNMP()
+ D MSG^RWU(ID_"|"_$G(^EMKV(ID,"nkv")))
+ Q
+DEL(ID) ; Удалить карту вызова
+ I '$$LCL^IUSER("snmp","sbsdel"),$G(^EMKV(ID,"sbsc"))=1 D MSG^RWU("Удаление невозможно - карта подписана.") Q 
+ D DEL^ISNMP(ID)
+ Q
+SBSYS(ID) 
+ I $G(^EMKV(ID,"sbsc")) Q 
+ I $G(^EMKV(ID,"stat"))=3 D:'$G(^("sbsc")) SET^ISNMP(ID,"sbsc",$H,1) Q
+ N RF,RT,RM,UR,UD,UM,VR,OT,D,NI,DIA,A,FLG
+ S RF=$G(^EMKV(ID,"roadf")),RT=$G(^("roadt")),RM=+$G(^("roadm"))
+ S UR=$G(^cfg("snmp","usl-by-road")),UM=$G(^cfg("snmp","usl-by-road-m"))
+ S UD=$G(^cfg("snmp","usl-def"))
+ S D=$G(^EMKV(ID,"dts"))
+ S DIA=$G(^EMKV(ID,"diag")),NI=$G(^EMKV(ID,"nib"))
+ S A=$G(^EMKV(ID,"brig"))
+ S VR=$$KADRBR^NSNMPSP(A,"vr",D) ; врач
+ S:VR="" VR=$$KADRBR^NSNMPSP(A,"fl",D) ; фельдшер
+ Q:VR="" 
+ S OT=$$OTD^IKADRY(VR,+D),FLG=""
+ S:$$GET^IINSC($$GET^IPAC(NI,"stc",+D),"dvid",+D)=3 FLG="kss"
+ I RF'="",RT'="",UR'="" D
+ .S RF=RT-RF
+ .S:RF>0 A=$$ADD^IUSL(VR,+D,OT,NI,UR_"*"_RF,DIA,"","","","","")
+ S:RM>0&(UM'="") A=$$ADD^IUSL(VR,+D,OT,NI,UM_"*"_RM,DIA,"","","","","")
+ S:UD'="" A=$$ADD^IUSL(VR,+D,OT,NI,UD,DIA,"","","","","")
+ D SBSYS^YNED(NI,VR,OT,$$DT^DTUTL(+D),1) ; allow credit
+ D SET^ISNMP(ID,"sbsc",$H,1)
+ D:$G(^EMKV(ID,"stat"))<2 SET^ISNMP(ID,"stat",$H,2)
+ Q
+REJECT(ID) ; Отмена без установки времени
+ D SET^ISNMP(ID,"stat",$H,3)
+ D WLOG^ISNMP(ID)
+ D L(ID)
+ Q
+SETSTAT(ID,STAT) ; Изменить статус
+ Q:STAT="" 
+ I '$$LCL^IUSER("snmp","setstat") D MSG^RWU("Вы не вправе произвольно изменять статус.") Q 
+ D SET^ISNMP(ID,"stat",$H,STAT)
+ D WLOG^ISNMP(ID)
+ D L(ID)
+ Q
+GETST(ID) ; Получить текущий этап вызова
+ N R
+ I $G(^EMKV(ID,"t_prv"))="",$G(^("street"))=""!($G(^("fiof"))="") D MSG^RWU(1) Q
+ I $G(^EMKV(ID,"t_prv"))="" D MSG^RWU(2) Q ; brig
+ I $G(^EMKV(ID,"stat"))=1 D MSG^RWU(3) Q ; end
+ D MSG^RWU(0)
+ Q
+ROADFK(ID,PLC) ; Получить типовой километраж от КАД
+ ; PLC - место по КЛАДР
+ N X
+ S:PLC="" PLC=$G(^EMKV(ID,"kplace"))
+ D MSG^RWU($$GET^YKLADR(PLC,"kmkad"))
+ Q
+ST1L1(ID) ; Загрузить 1-й шаг 1-го этапа в мастер
+ N X
+ D OWF^RWU(".xmlb")
+ D W^RWU($G(^PP(0,2))_"<snmpks1>")
+ S X=$G(^EMKV(ID,"nib"))
+ D WTAGDC^RWU("nib",X)
+ D:X'="" WC^RWU("<bts_pac title=""Выбран пациент: "_$$FIO^IPAC(X)_"""/>")
+ S X=$G(^EMKV(ID,"kplace"))
+ D WTAGDCU^RWU("fplace",$$NAME^YKLADR(X),X)
+ D WTAGDC^RWU("addr",$G(^EMKV(ID,"street")))
+ D WTAGDC^RWU("dom",$G(^EMKV(ID,"dom")))
+ D WTAGDC^RWU("korp",$G(^EMKV(ID,"korp")))
+ D WTAGDC^RWU("stroen",$G(^EMKV(ID,"stroen")))
+ D WTAGDC^RWU("kvart",$G(^EMKV(ID,"kvart")))
+ D WTAGDC^RWU("entr",$G(^EMKV(ID,"entr")))
+ D WTAGDC^RWU("floor",$G(^EMKV(ID,"floor")))
+ D WTAGDC^RWU("domkod",$G(^EMKV(ID,"domkod")))
+ D WTAGDC^RWU("orient",$G(^EMKV(ID,"orient")))
+ D W^RWU("</snmpks1></nb_console>"),C^RWU
+ Q
+ST1L2(ID) ; Загрузить 2-й шаг 1-го этапа в мастер
+ N X
+ D OWF^RWU(".xmlb")
+ D W^RWU($G(^PP(0,2))_"<snmpks1>")
+ S X=$G(^EMKV(ID,"pvv"))
+ D WTAGDCU^RWU("tpvv",$$NMPV^NSNMPSP(X),X)
+ D WTAGDC^RWU("pvvt",$G(^EMKV(ID,"pvvt")))
+ D WTAGDC^RWU("wcall",$G(^EMKV(ID,"wcall")))
+ D WTAGDC^RWU("tel",$G(^EMKV(ID,"tel1")))
+ D W^RWU("</snmpks1></nb_console>"),C^RWU
+ Q
+ST1L3(ID) ; Загрузить 3-й шаг 1-го этапа в мастер
+ D OWF^RWU(".xmlb")
+ D W^RWU($G(^PP(0,2))_"<snmpks1>")
+ D WTAGDC^RWU("fio",$$FIO^ISNMP(ID))
+ D WTAGDC^RWU("pol",$G(^EMKV(ID,"pol")))
+ D WTAGDC^RWU("datar",$$DT^DTUTL($G(^EMKV(ID,"datar"))))
+ D WTAGDC^RWU("polis",$G(^EMKV(ID,"polis")))
+ D WTAGDC^RWU("stc",$G(^EMKV(ID,"stc")))
+ D W^RWU("</snmpks1></nb_console>"),C^RWU
+ Q
+ST1NIB(ID,NIB) ; Выбрать для карты пациента с заполнением данных
+ N HH,H,IDP
+ S HH=$H,H=+HH
+ D SET^ISNMP(ID,"nib",HH,NIB)
+ D SET^ISNMP(ID,"fiof",HH,$$GET^IPAC(NIB,"fiof",H))
+ D SET^ISNMP(ID,"fioi",HH,$$GET^IPAC(NIB,"fioi",H))
+ D SET^ISNMP(ID,"fioo",HH,$$GET^IPAC(NIB,"fioo",H))
+ D SET^ISNMP(ID,"polis",HH,$$GET^IPAC(NIB,"polis",H))
+ D SET^ISNMP(ID,"datar",HH,$$GET^IPAC(NIB,"datar",H))
+ D SET^ISNMP(ID,"stc",HH,$$GET^IPAC(NIB,"stc",H))
+ D SET^ISNMP(ID,"street",HH,$$GET^IPAC(NIB,"street",H))
+ D SET^ISNMP(ID,"dom",HH,$$GET^IPAC(NIB,"dom",H))
+ D SET^ISNMP(ID,"korp",HH,$$GET^IPAC(NIB,"korp",H))
+ D SET^ISNMP(ID,"stroen",HH,$$GET^IPAC(NIB,"stroen",H))
+ D SET^ISNMP(ID,"kvart",HH,$$GET^IPAC(NIB,"kvart",H))
+ D SET^ISNMP(ID,"domkod",HH,$$GET^IPAC(NIB,"domkod",H))
+ 
+ S IDP=$O(^EMKVI("nib",NIB,""),-1)
+ I IDP'="" D WTAGDC^RWU("entr",$G(^EMKV(IDP,"entr"))),WTAGDC^RWU("floor",$G(^EMKV(IDP,"floor")))
+ 
+ D MKIDX^ISNMP(ID)
+ D MSG^RWU($$FIO^IPAC(NIB))
+ Q
+ST1S1(ID,PLC,STRT,DOM,KR,STR,KV,ENT,FL,KOD,OR) ; Сохранить 1-й шаг 1-го этапа из мастера
+ N HH
+ S STRT=$$WD^TXTU(STRT),KOD=$$WD^TXTU(KOD),OR=$$WD^TXTU(OR)
+ S HH=$H
+ D SET^ISNMP(ID,"kplace",HH,PLC)
+ D SET^ISNMP(ID,"street",HH,STRT)
+ D SET^ISNMP(ID,"dom",HH,DOM)
+ D SET^ISNMP(ID,"korp",HH,KR)
+ D SET^ISNMP(ID,"stroen",HH,STR)
+ D SET^ISNMP(ID,"kvart",HH,KV)
+ D SET^ISNMP(ID,"entr",HH,ENT)
+ D SET^ISNMP(ID,"floor",HH,FL)
+ D SET^ISNMP(ID,"domkod",HH,KOD)
+ D SET^ISNMP(ID,"orient",HH,OR)
+ D ST1L2(ID)
+ Q
+ST1S2(ID,PV,PVT,WHO,TEL) ; Сохранить 2-й шаг 1-го этапа из мастера
+ N HH
+ S PVT=$$WD^TXTU(PVT),WHO=$$WD^TXTU(WHO),TEL=$$WD^TXTU(TEL),HH=$H
+ D SET^ISNMP(ID,"pvv",HH,PV)
+ D SET^ISNMP(ID,"pvvt",HH,PVT)
+ D SET^ISNMP(ID,"wcall",HH,WHO)
+ D SET^ISNMP(ID,"tel1",HH,TEL)
+ D ST1L3(ID)
+ Q
+ST1S3(ID,NIB,FIO,AGE,SEX,DTR,POLIS,STC) ; Сохранить 3-й шаг 1-го этапа из мастера
+ N HH,X,A
+ S DTR=$$DI^DTUTL(DTR)
+ S FIO=$$WD^TXTU(FIO),POLIS=$$WD^TXTU(POLIS)
+ S HH=$H
+ D SET^ISNMP(ID,"nib",HH,NIB)
+ D SET^ISNMP(ID,"fiof",HH,$P(FIO," ",1))
+ D SET^ISNMP(ID,"fioi",HH,$P(FIO," ",2))
+ D SET^ISNMP(ID,"fioo",HH,$P(FIO," ",3))
+ I DTR="",$P(AGE,"|",1)'="" S X=$P(AGE,"|",2),AGE=$P(AGE,"|",1),DTR=$S(X=3:+HH-AGE,X=2:$$AFTERMN^DTUTL(HH,-AGE),1:$$AFTERY^DTUTL(HH,-AGE))
+ D SET^ISNMP(ID,"datar",HH,DTR)
+ D SET^ISNMP(ID,"pol",HH,SEX)
+ D SET^ISNMP(ID,"polis",HH,POLIS)
+ D SET^ISNMP(ID,"stc",HH,STC)
+ D MKIDX^ISNMP(ID)
+ Q

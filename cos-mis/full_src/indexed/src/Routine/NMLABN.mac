@@ -1,0 +1,308 @@
+NMLABN ; Обработка назначений в КДЛ [ 08/10/2022  3:15 AM ]
+INIT 
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<selnlab>")
+ D:$G(^cfg("lab","nopbar-nlab"))
+ .D W^RWU("<bt_prnbar visible=""no""/>")
+ .D WTAGU^RWU("bar",2) ; manual reg.
+ D W^RWU("</selnlab></nb_console>"),C^RWU
+ Q
+LIST(NIB,ID) ; Список услуг по назн.
+ I NIB="",ID="" Q 
+ I $$FLinFL^TXTU($P(ID,":",1),"PMO|LMK|PRF") D LISTP(ID) Q 
+ I ID'="",'$D(^NAZ($E(ID,1,99))) Q 
+ S:ID="" ID=$$fndnz(NIB)
+ Q:ID="" 
+ S:NIB="" NIB=$P(^NAZ(ID,"i"),"|",2) Q:NIB=""  
+ N DT,I,R,U,T,M,SK,P,PRC,DGN,A,PT,SS,LST,MLST,MLSTU,LID,MUL
+ S LID=$P($G(^NAZ(ID,"l")),"|",6)
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<selnlab>")
+ D WTAGD^RWU("id",ID)
+ D WTAGD^RWU("naz",ID)
+ D WTAGD^RWU("nib",NIB)
+ D WTAGD^RWU("lid",LID)
+ S R=$$FIO^IPAC(NIB)
+ D WTAGDCU^RWU("fio","Выбранный пациент: "_R_$S(LID="":"",1:" (материал взят) заявка №"_LID),R)
+ D W^RWU("<table>")
+ S R=$G(^NAZ(ID,"i"))
+ S DT=+$P(R,"|",5),DGN=$P(R,"|",9)
+ S:DGN="" DGN=$$GET^IPAC(NIB,"stc",DT)
+ S PRC=$$PRC^IINSC(DGN,NIB,DT)
+ S PRC=$$CORCP^IPRICET(PRC),VU=1
+ S LID=$TR(LID,"@","|")
+ S PT=$P($G(^NAZ(ID,"a")),"|",4)
+ I PT,$P(^NAZM("pt",PT,"f"),"|",5) S PT=0
+ I 'PT S I="" F  S I=$O(^NAZ(ID,"a",I)) Q:I=""  D
+ .S R=^(I),U=$P(R,"|",5),P=$P(R,"|",6),SK=+$P(R,"|",7)
+ .S:P="" P=PRC
+ .Q:'$$FLinFL^TXTU($$GET^IPRICE(U,"cls",P,DT),"lab") 
+ .S A=U_"|"_$$CNAMEH^IPRICE(U,P,DT)_"|1"
+ .S LST(U)=""
+ .D WC^RWU(CR_$S($$IsUL^IMLAB(NIB,LID,U):"OK",1:"(+)")_"|"_A)
+ I PT D WC^RWU(CR_$S(LID="":"(+)",1:"")_"|-|"_$P($G(^NAZM("pt",PT)),"|",1)_"|1") ; TODO
+ D mkulst
+ 
+ D W^RWU("</table>")
+ 
+ D wbio,wstc(NIB,DT)
+ 
+ D W^RWU("</selnlab></nb_console>"),C^RWU
+ Q
+mkulst 
+ N G
+ ; биоматериал
+ S U="" F  S U=$O(LST(U)) Q:U=""  D
+ .S T="" F  S T=$O(^LABTI("CT",U,T)) Q:T=""  D:'$G(^LABT("T",T,"d"))
+ ..S M="" F  S M=$O(^LABT("T",T,"b",M)) Q:M=""  D
+ ...S G=$G(^LABT("M",M,"g")),G=$S(G="":M,1:G_"|G")
+ ...S MLST(G,M)="",MUL(M)=""
+ ; услуги по биоматериалу
+ S (U,M)="" F  S M=$O(MUL(M)) Q:M=""  S U=U_"|"_$G(^LABT("M",M,"u"))
+ D MKULST^IMLABS(U,"MLSTU")
+ S U="" F  S U=$O(MLSTU(U)) Q:U=""  D
+ .D WC^RWU(CR_$S(LID="":"(+)",1:"")_"|"_U_"|"_$$CNAMEH^IPRICE(U,P,DT)_"|"_MLSTU(U))
+ Q
+wbio 
+ N G,K
+ D W^RWU("<bio>")
+ S G="",I=0
+ F  S G=$O(MLST(G)) Q:G=""  D
+ .I $P(G,"|",2)'="G" d WC^RWU(CR_G_"|"_$G(^LABT("M",G))) S I=I+1 Q 
+ .S (K,M)="" F  S M=$O(MLST(G,M)) Q:M=""  S K=$S(K="":"",1:K_"@")_M
+ .d WC^RWU(CR_K_"|"_$G(^LABT("GM",GM))) S I=I+1
+ ;D:I>1 WC^RWU(CR_"-|Все")
+ D:'$D(MLST) WC^RWU(CR_"|Не найдено")
+ D W^RWU("</bio>")
+ Q
+wstc(NIB,DT) 
+ S P=$$CNTSTC^IPAC(NIB,DT),R=""
+ F I="",1:1:P-1 S T=$$GET^IPAC(NIB,"stc"_I,DT),R=$S(R="":"",1:R_CR)_T_"|"_$$NAME^IINSC(T,DT)
+ D WTAGC^RWU("stc",R)
+ Q
+LISTP(ID) ; Из профосмотров
+ N NI,DT,U,T,M,P,R,PRC,A,CL,MLST,MLSTU,LST,LID,MUL,LIDS
+ S NI=$P(ID,":",2),DT=$P(ID,":",4)
+ 
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<selnlab>")
+ D WTAGD^RWU("id",ID)
+ D WTAGD^RWU("naz",ID)
+ D WTAGD^RWU("nib",NI)
+ S R=$$FIO^IPAC(NI)
+ D WTAGDCU^RWU("fio",$S($$EXIST^IPAC(NI):"Выбранный пациент: "_R,1:"Нет пациента"),R)
+ 
+ D W^RWU("<table>")
+ S LIDS=$$GETLID^IPROF(NI,DT,1),LIDS=$TR(LIDS,"@","|")
+ S PRC=$$PRC^IPROF(NI,"",DT,0)
+ S U="" F  S U=$O(^PROFP(NI,"n",DT,U)) Q:U=""  D
+ .S CL=$$GET^IPRICE(U,"cls",PRC,DT)
+ .I '$$FLinFL^TXTU(CL,"lab"),$G(^PROFV("u302",U,"t"))'="l" Q 
+ .S LST(U)=""
+ .S A=U_"|"_$$CNAMEH^IPRICE(U,PRC,DT)_"|1"
+ .D WC^RWU(CR_$S($$IsUL^IMLAB(NI,LIDS,U):"OK",1:"(+)")_"|"_A)
+ S P=PRC
+ D mkulst
+ D W^RWU("</table>")
+ D wbio,wstc(NI,DT)
+LISTPe 
+ D W^RWU("</selnlab></nb_console>"),C^RWU
+ Q
+fndnz(NIB) 
+ N I,II,K
+ S (II,I)=""
+ F  S I=$O(^NAZI("n",NIB,I),-1) Q:I=""  D:"alc"[$P(^(I),"|",1)  Q:II'="" 
+ .S II=I
+ Q II
+GETBAR(NI,ID,BIO) ; Получить штрихкод отдельно
+ N I,II,J,F,B,M
+ S B=""
+ F I=1:1:$L(ID,"@") S II=$P(ID,"@",I) D:II'=""  Q:B'="" 
+ .I BIO="" S B=$$getbar^NMLABJ(NI,II,"") Q  
+ .F J=1:1:$L(BIO,"@") S M=$P(BIO,"@",J) D:$D(^MLAB(NI,II,"mi",M))
+ ..S B=$$getbar^NMLABJ(NI,II,M)
+ D MSG^RWU(B)
+ Q
+mkLSTU(NAZ) ; Создать списки услуг
+ N R,P,DT,DGN,PRC
+ 
+ S R=$G(^NAZ(NAZ,"i"))
+ S DT=+$P(R,"|",5),DGN=$P(R,"|",9)
+ S:DGN="" DGN=$$GET^IPAC(NIB,"stc",DT)
+ S PRC=$$PRC^IINSC(DGN,NIB,DT)
+ S PRC=$$CORCP^IPRICET(PRC),VU=1
+ 
+ S I="" F  S I=$O(^NAZ(NAZ,"a",I)) Q:I=""  D
+ .S R=^(I),U=$P(R,"|",5),P=$P(R,"|",6),SK=+$P(R,"|",7)
+ .S:P="" P=PRC
+ .S LST(U)=""
+ Q
+CMD(NI,ID,KEY) ; Дополнительные команды
+ N CMD,X1,X2
+ S CMD=$P(KEY,":",2),X1=$P(KEY,":",3),X2=$P(KEY,":",4)
+ I CMD=91 D  Q  ; установить медсестру
+ .D SS^IUSER("kdl","nurse",X2)
+ .D MSG^RWU("м.с. "_$$FIOSH^IKADRY(X2))
+ Q
+ADDU(NI,NID,DGN,UL,VR) ; Добавить услугу
+ ; NI - пациент 
+ ; NID - номер направления
+ ; DGN - договор
+ ; UL - список услуг
+ ; VR - исполнитель
+ N A,U,DT,OT,ID
+ S OT=$$OTD^IKADRY(VR),DT=+$H
+ S U="" F  S U=$O(^CNLST(UL,"l",U)) Q:U=""  D
+ .S ID=$$ADD^IUSL(VR,DT,OT,NI,U,"","","",,,,DGN)
+ .S A=$$SETSTAT^IUSL(VR,DT,OT,ID,"w")
+ Q
+APPLY ; Создать лаб заявку из направления
+ N NB,FM,XML,NI,ID,DGN,BIO,TAB,U,UL,X,I,B,K,RR,R,CNT,LID,LLR,LAB,CI,DI,PRC,HH,DT,KSS,npB,BAR,LP,SG,SGL,NUR,BMU
+ D RBUFH^YIXMLRR(1)
+ S NB="nb_console",FM="selnlab",LAB=1
+ S npB=$$LCL^IUSER("lab","noprnbar")
+ S NUR=$$GS^IUSER("kdl","nurse") ; м.с.
+ S HH=$H,DT=+HH,KSS=0,LP=$$^I("ilpu")
+ S NI=$G(XML(NB,FM,"nib"))
+ S ID=$G(XML(NB,FM,"id"))
+ S DGN=$G(XML(NB,FM,"stc"))
+ S BIO=$G(XML(NB,FM,"bio")) S:BIO="-" BIO=""
+ S BAR=$G(XML(NB,FM,"bar"))
+ S:DGN="" DGN=$$GET^IPAC(NI,"stc",DT)
+ ; TODO - KSS from NAZ
+ 
+ S RR=$G(XML(NB,FM,"table")),B=$TR(BIO,"@","|")
+ F I=2:1:99 S R=$P(RR,CR,I) Q:R=""  D:$P(R,"|",1)["+"  ; only selected
+ .S U=$P(R,"|",2),CNT=$P(R,"|",4) Q:U=""
+ .Q:'$$UisBIO^IMLABS(U,B)  ; усл. не к этому биоматериалу 
+ .S UL(U)=CNT
+ 
+ I '$D(UL) D MSG^RWU("Ни одна из услуг не отмечена") Q 
+ 
+ I $$FLinFL^TXTU($P(ID,":",1),"PMO|LMK|PRF") G applyp
+ 
+ S LLR=$G(^NAZ(ID,"l"))
+ S LAB=$P(LLR,"|",2),CI=$P(LLR,"|",3),DI=$P(LLR,"|",4)
+ S LID="" ; $P(LLR,"|",6) ; TODO - multi ? добавление или всегда новая заявка 
+ S PRC=$$PRC^IINSC(DGN,NI,DT,KSS,"","") ; TODO - LAB otd
+ D:LID=""
+ .S:LAB="" LAB=$$FLAB^IMLABS(LP)
+ .S:DI="" DI=$$DIAG^INAZN(ID)
+ .S LID=$$MK^IMLAB(NI,HH,"",LAB,"",CI,PRC,"",0,ID)
+ .D:DI'="" SETDI^IMLAB(NI,LID,DI)
+ 
+ S U="" F  S U=$O(UL(U)) Q:U=""  D
+ .D ADDUSL^IMLAB(NI,LID,U,UL(U),0)
+ 
+ I LAB'="",$D(^LABC(LAB,"noprnbar")) S npB=^("noprnbar")
+ 
+ S X=$$MKPRMS^IMLAB(NI,LID)
+ 
+ I BIO'="" S ^MLAB(NI,LID,"mi")=$L(BIO,"@") F I=1:1:9 S B=$P(BIO,"@",I) Q:B=""  S ^MLAB(NI,LID,"mi",B)=1 ; TODO - с пробирками и тп
+ D mkbar(NI,LID,BIO,LP,LAB,BAR)
+ 
+ ; группы забора
+ S RR=$G(^MLAB(NI,LID,"pr"))
+ F I=1:1:$L(RR,"|") S K=$P($P(RR,"|",I),"@",1)  D:K'=""
+ .S B="" F  S B=$O(^LABT("T",K,"b",B)) Q:B=""  D
+ ..S X=^(B) S R=$P(X,"|",3) Q:R=""
+ ..S SGL(R)=$S($P(X,"|",2)="":0,1:$P(X,"|",2))
+ S (SG,X)="" F  S X=$O(SGL(X)) Q:X=""  S SG=$S(SG="":"",1:SG_CR)_$G(^LABT("SG",X))_" - "_$G(^LABT("CONT",SGL(X)))
+ 
+ D CLOSE^YIXMLRR
+ 
+ D:'$G(^cfg("lab","noaddm-nlab"))  ; TODO - NUR, nurse
+ .S RR=$$MKMUSL^IMLAB(NI,LID)
+ .F I=1:1:$L(RR,"|") D ADDUSL^IMLAB(NI,LID,$P(RR,"|",I),1,0)
+ 
+ S RR="|"_$P(BAR,"@",1)_"|"_SG_"|"_$S(LAB="":"",npB&$G(^LABC(LAB,"noprnbar")):LID,1:"")_"|"_LID
+ D DO^ITRIG("nlab","apply") 
+ 
+ S X=$G(^cfg("lab","nosbs-nlab"))
+ D:'X MSG^RWU($$SBS^IMLAB(LID)_RR) ; TODO -подпись на нужных сотрудников
+ 
+ D MSG^RWU(RR)
+ Q
+mkbar(NI,LID,BIO,LP,LAB,BARS) ; создать штрихкод и отправить в работу
+ ; без биоматериала, по всей заявке
+ S:BIO["@" BIO="" ; все материалы
+ D:'$G(^LABC(LAB,"noprnbar")) mkbar^NMLABED(NI,LID,BIO,LP,$G(BARS))
+ D:'npB SETSTAT^IMLAB(NI,LID,3,1) ; в работе
+ S BAR=$S(npB:"",1:$$getbar^NMLABJ(NI,LID,BIO))
+ I BAR'="",'npB D SETSTAT^IMLAB(NI,LID,31,1)
+ Q
+SETBAR(NI,ID,BAR) ; Присвоить заявке штрихкод
+ ; TODO - права
+ Q:NI=""  Q:ID=""  Q:BAR=""  
+ Q:'$D(^MLAB(NI,ID)) 
+ D SETBAR^IMLAB(NI,ID,BAR,"")
+ D SETSTAT^IMLAB(NI,ID,2,1) ; материал взят
+ D SETSTAT^IMLAB(NI,ID,31,1) ; маркирована
+ Q
+applyp ; Профосмотры
+ N PAC,PRM,FL
+ S DT=$P(ID,":",4),BAR=""
+ S PAC("nib")=NI
+ M PRM=UL
+ S:'$G(^cfg("lab","nosbs-nlab")) FL("sbsc")=1
+ S FL("prc")=$$PRC^IPROF(NI,"",DT,0)
+ S FL("stc")=DGN
+ S FL("bio")=BIO
+ S FL("lab")=$$FLAB^IMLABS(LP)
+ D INZ^IKDLIMP
+ S LID=$G(FL("id"))
+ 
+ D:LID'="" mkbar(NI,LID,BIO,LP,LAB)
+ D:LID'="" ADDLID^IPROF(NI,DT,LID)
+ 
+ S:BIO["@" BIO="" ; все материалы
+ 
+ D MSG^RWU($G(FL("sbsrez"))_"|"_$$getbar^NMLABJ(NI,LID,BIO))
+ Q
+CHKFNL(NI,PAT) ; Проверить и вывести поля
+ ; NI - пациент
+ ; PAT - профиль
+ N FLL,FL,RR,RD,I,L,DT,F1
+ S DT=+$H
+ S:$E(PAT,1,4)="PRO-" PAT=$E(PAT,5,99)
+ S FLL=$P(^LABT("PU",PAT),"|",8) Q:FLL=""
+ S RR="<field tp=""n"" nm=""pac""/>"
+ S RD="<pac>"_NI_"</pac>"
+ F I=1:1:$L(FLL,";") D
+ .S FL=$P(FLL,";",I) Q:FL="" 
+ .S RD=RD_"<"_FL_">"_$$TAG^TXTU($$cfl(NI,DT,FL))_"</"_FL_">"
+ .S F1=$P(FL,".",1)
+ .S RR=RR_$$MStFL^ISTRUCT(F1,$P(FL,".",2),$S(F1="pac"!(F1="prof"):1,1:0))
+ S RR=$G(^PP(0,1))_"<streport nm=""editor""><fields>"_RR_"</fields><data>"_RD_"</data></streport>"
+ D MSG^RWU(RR,"xml")
+ Q
+cfl(NI,DT,FL) 
+ N F1,F2
+ S F1=$P(FL,".",1),F2=$P(FL,".",2)
+ I F1="pac" Q $$GETE^IPAC(NI,F2,DT)
+ I F1="prof" Q $$GET^IPROF(NI,F2,DT)
+ Q
+sfl(NI,DT,FL,VAL) 
+ N F1,F2
+ S F1=$P(FL,".",1),F2=$P(FL,".",2)
+ I F1="pac" D SET^IPAC(NI,F2,DT,VAL) Q 
+ I F1="prof" D SET^IPROF(NI,F2,DT,VAL) Q
+ Q
+SFNL 
+ N NI,FL,R,DT
+ D RSXML^XMLU
+ S NI=$G(XML("streport","data","pac")) Q:NI="" 
+ S DT=+$H
+ K XML("streport","data","pac")
+ S FL="" F  S FL=$O(XML("streport","data",FL)) Q:FL=""  D
+ .S R=XML("streport","data",FL)
+ .Q:R=$$cfl(NI,DT,FL)
+ .D sfl(NI,DT,FL,R)
+ Q
+ADDPROF(NI,PAT) ; Добавить назначение из профиля
+ N ID,DT,VR,U
+ S:$E(PAT,1,4)="PRO-" PAT=$E(PAT,5,99)
+ S VR=$$KDR^IUSER(),DT=+$H
+ S ID=$P($$MKONE^INAZN(NI,"",VR,DT,3,,,,,,$P(^LABT("PU",PAT),"|",1),"",""),"|",1)
+ S U="" F  S U=$O(^LABT("PU",PAT,U)) Q:U=""  D
+ .D LNIADD^NNAZN(ID,U,1,"",1)
+ D MSG^RWU(ID)
+ Q
+ 

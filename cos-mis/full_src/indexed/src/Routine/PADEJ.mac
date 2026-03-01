@@ -1,0 +1,340 @@
+PADEJ ; Падежи-Склонения [ 08/31/2011  11:46 PM ]
+GET(Fio,Pol,Typ) 
+ s:$G(Typ)="" Typ="R"
+ s:$G(Pol)="" Pol=$$SEXFIO^YIFAM(Fio)
+ Q $$NORMFIOF^TXTU($$Str(Fio,Pol,Typ))
+Str(Str,Tp,Typ,Dlm) ; * Ф И О из именительного в другой падеж *
+ N str
+ ; Str - Фамилия Имя Отчество
+ ; Tp  - Пол (1-муж, 2-жен)
+ ; Typ - падеж (код из D_PDG)
+ ; Dlm - разделитель
+ S:$G(Tp)="" Tp=1
+ s:$g(Typ)="" Typ="R"
+ s:$g(Dlm)="" Dlm=" "
+ S Str=$$LU^TXTU(Str)
+ S str=Str
+ I $$YesIn() q str
+ D FAM($P(Str,Dlm,1))
+ D NAM($P(Str,Dlm,2))
+ D FAT($P(Str,Dlm,3))
+ Q str
+YesIn()                                ; Уже есть инициалы
+ i Str'["." q 0
+ n val
+ s val=$P(Str,Dlm)
+ I val["." D FAM($P(Str,Dlm,2),2) q 1
+ D FAM($P(Str,Dlm))
+ q 1
+FAM(Str,Pos)                           ; склонение фамилии
+ ; Pos - куда вставить фамилию
+ N ind
+ Q:Str=""
+ s Pos=$G(Pos,1)
+ S ind=Str_$C(31)_Tp_$C(31)_Typ
+ I $D(^ISLIB("FAM","SETF",ind)) S $P(str,Dlm,Pos)=^(ind) Q  ;$$New("FAM") Q 
+ I "ОЕУЮЫИЭ"[$$R(Str,1) S $P(str,Dlm,Pos)=Str Q 
+ I $$R(Str,2)="ОК" S $P(str,Dlm,Pos)=Str Q
+ I Typ="R" D FAMR Q
+ I Typ="D" D FAMD Q
+ I Typ="T" D FAMT Q
+ I Typ="W" D FAMW Q
+ I Typ="P" D FAMP Q
+ Q
+FAMP                                   ;    предложный
+ I Tp=1 D FAMPM Q
+ D FAMPW
+ Q
+FAMPM                                  ;       мужчины
+ I $$R(Str,2)="ИН" S $P(str,Dlm,Pos)=Str_"Е" Q
+ I $$R(Str,2)="ЫН" S $P(str,Dlm,Pos)=Str_"Е" Q
+ I $$R(Str,2)="ЯК" S $P(str,Dlm,Pos)=Str_"Е" Q
+ I $$R(Str,2)="ЕВ" S $P(str,Dlm,Pos)=Str_"Е" Q
+ I $$R(Str,2)="ОВ" S $P(str,Dlm,Pos)=Str_"Е" Q
+ I $$R(Str,2)="ИЙ" S $P(str,Dlm,Pos)=$$L(Str,2)_"ОМ" Q
+ S $P(str,Dlm,Pos)=Str
+ Q
+FAMPW                                  ;       женщины
+ I $$R(Str,3)="ИНА" S $P(str,Dlm,Pos)=$$L(Str,1)_"ОЙ" Q
+ I $$R(Str,3)="ЫНА" S $P(str,Dlm,Pos)=$$L(Str,1)_"ОЙ" Q
+ I $$R(Str,3)="ЕВА" S $P(str,Dlm,Pos)=$$L(Str,1)_"ОЙ" Q
+ I $$R(Str,3)="ОВА" S $P(str,Dlm,Pos)=$$L(Str,1)_"ОЙ" Q
+ I $$R(Str,2)="АЯ" S $P(str,Dlm,Pos)=$$L(Str,2)_"ОЙ" Q
+ S $P(str,Dlm,Pos)=Str
+ Q
+FAMW                                   ;    винительный
+ I Tp=1 D FAMWM Q
+ D FAMWW
+ Q
+FAMWM                                  ;       мужчины
+ I $$R(Str,2)="ИН" S $P(str,Dlm,Pos)=Str_"А" Q
+ I $$R(Str,2)="ЫН" S $P(str,Dlm,Pos)=Str_"А" Q
+ I $$R(Str,2)="ЯК" S $P(str,Dlm,Pos)=Str_"А" Q
+ I $$R(Str,2)="ЕВ" S $P(str,Dlm,Pos)=Str_"А" Q
+ I $$R(Str,2)="ОВ" S $P(str,Dlm,Pos)=Str_"А" Q
+ I $$R(Str,2)="ИЙ" S $P(str,Dlm,Pos)=$$L(Str,2)_"ОГО" Q
+ S $P(str,Dlm,Pos)=Str
+ Q
+FAMWW                                  ;       женщины
+ I $$R(Str,3)="ИНА" S $P(str,Dlm,Pos)=$$L(Str,1)_"У" Q
+ I $$R(Str,3)="ЫНА" S $P(str,Dlm,Pos)=$$L(Str,1)_"У" Q
+ I $$R(Str,3)="ЕВА" S $P(str,Dlm,Pos)=$$L(Str,1)_"У" Q
+ I $$R(Str,3)="ОВА" S $P(str,Dlm,Pos)=$$L(Str,1)_"У" Q
+ I $$R(Str,2)="АЯ" S $P(str,Dlm,Pos)=$$L(Str,2)_"УЮ" Q
+ S $P(str,Dlm,Pos)=Str
+ Q
+FAMT                                   ;    творительный
+ I Tp=1 D FAMTM Q
+ D FAMTW Q
+ Q
+FAMTM                                  ;       мужчины
+ I $$R(Str,2)="ИН" S $P(str,Dlm,Pos)=Str_"ЫМ" Q
+ I $$R(Str,2)="ЫН" S $P(str,Dlm,Pos)=Str_"ЫМ" Q
+ I $$R(Str,2)="ЯК" S $P(str,Dlm,Pos)=Str_"ОМ" Q
+ I $$R(Str,2)="ЕВ" S $P(str,Dlm,Pos)=Str_"ЫМ" Q
+ I $$R(Str,2)="ОВ" S $P(str,Dlm,Pos)=Str_"ЫМ" Q
+ I $$R(Str,2)="ИЙ" S $P(str,Dlm,Pos)=$$L(Str,1)_"М" Q
+ S $P(str,Dlm,Pos)=Str
+ Q
+FAMTW                                  ;       женщины
+ I $$R(Str,3)="ИНА" S $P(str,Dlm,Pos)=$$L(Str,1)_"ОЙ" Q
+ I $$R(Str,3)="ЫНА" S $P(str,Dlm,Pos)=$$L(Str,1)_"ОЙ" Q
+ I $$R(Str,3)="ЕВА" S $P(str,Dlm,Pos)=$$L(Str,1)_"ОЙ" Q
+ I $$R(Str,3)="ОВА" S $P(str,Dlm,Pos)=$$L(Str,1)_"ОЙ" Q
+ I $$R(Str,2)="АЯ" S $P(str,Dlm,Pos)=$$L(Str,2)_"ОЙ" Q
+ S $P(str,Dlm,Pos)=Str
+ Q
+FAMR                                   ;    родительный
+ I Tp=1 D FAMRM Q
+ D FAMRW 
+ Q
+FAMRM                                  ;       мужчины
+ I $$R(Str,2)="ИН" S $P(str,Dlm,Pos)=Str_"А" Q
+ I $$R(Str,2)="ЫН" S $P(str,Dlm,Pos)=Str_"А" Q
+ I $$R(Str,2)="ЯК" S $P(str,Dlm,Pos)=Str_"А" Q
+ I $$R(Str,2)="ЕВ" S $P(str,Dlm,Pos)=Str_"А" Q
+ I $$R(Str,2)="ОВ" S $P(str,Dlm,Pos)=Str_"А" Q
+ I $$R(Str,2)="ИЙ" S $P(str,Dlm,Pos)=$$L(Str,2)_"ОГО" Q
+ S $P(str,Dlm,Pos)=Str
+ Q
+FAMRW                                  ;       женщины
+ I $$R(Str,3)="ИНА" S $P(str,Dlm,Pos)=$$L(Str,1)_"ОЙ" Q
+ I $$R(Str,3)="ЫНА" S $P(str,Dlm,Pos)=$$L(Str,1)_"ОЙ" Q
+ I $$R(Str,3)="ЕВА" S $P(str,Dlm,Pos)=$$L(Str,1)_"ОЙ" Q
+ I $$R(Str,3)="ОВА" S $P(str,Dlm,Pos)=$$L(Str,1)_"ОЙ" Q
+ I $$R(Str,2)="АЯ" S $P(str,Dlm,Pos)=$$L(Str,2)_"ОЙ" Q
+ S $P(str,Dlm,Pos)=Str
+ Q
+FAMD                                   ;    дательный
+ I Tp=1 D FAMDM Q
+ D FAMDW 
+ Q
+FAMDM                                  ;       мужчины
+ s Str=$$LU^TXTU(Str)
+ I $$R(Str,2)="ИН" S $P(str,Dlm,Pos)=Str_"У" Q
+ I $$R(Str,2)="ЫН" S $P(str,Dlm,Pos)=Str_"У" Q
+ I $$R(Str,2)="УК" S $P(str,Dlm,Pos)=Str_"У" Q
+ I $$R(Str,2)="ЕВ" S $P(str,Dlm,Pos)=Str_"У" Q
+ I $$R(Str,2)="ОВ" S $P(str,Dlm,Pos)=Str_"У" Q
+ I $$R(Str,2)="ИЙ" S $P(str,Dlm,Pos)=$$L(Str,2)_"ОМУ" Q
+ S $P(str,Dlm,Pos)=Str
+ Q
+FAMDW                                  ;       женщины
+ s Str=$$LU^TXTU(Str)
+ I $$R(Str,3)="ИНА" S $P(str,Dlm,Pos)=$$L(Str,1)_"ОЙ" Q
+ I $$R(Str,3)="ЫНА" S $P(str,Dlm,Pos)=$$L(Str,1)_"ОЙ" Q
+ I $$R(Str,3)="ЕВА" S $P(str,Dlm,Pos)=$$L(Str,1)_"ОЙ" Q
+ I $$R(Str,3)="ОВА" S $P(str,Dlm,Pos)=$$L(Str,1)_"ОЙ" Q
+ I $$R(Str,2)="АЯ" S $P(str,Dlm,Pos)=$$L(Str,2)_"ОЙ" Q
+ S $P(str,Dlm,Pos)=Str
+ Q
+NAM(Str)                               ; склонение имени
+ N ind
+ Q:Str=""
+ S ind=Str_$C(31)_Typ
+ I $D(^ISLIB("NAM","SET",ind)) S $P(str,Dlm,2)=^(ind) Q  ;$$New("NAM") Q
+ I Typ="R" D NAMR Q
+ I Typ="D" D NAMD Q
+ I Typ="W" D NAMW Q
+ I Typ="P" D NAMP Q
+ I Typ="T" D NAMT Q
+ Q
+NAMT                                   ;    творитеьный
+ I Tp=1 D NAMTM Q
+ D NAMTW Q
+ Q
+NAMTM                                  ;       мужчины
+ I $$R(Str,2)="ЕЛ" S $P(str,Dlm,2)=$$L(Str,2)_"ЛОМ" Q
+ I $$R(Str,1)="Й" S $P(str,Dlm,2)=$$L(Str,1)_"ЕМ" Q
+ I $$Sg($$R(Str,1)) S $P(str,Dlm,2)=Str_"ОМ" Q
+ I $$R(Str,1)="Я" S $P(str,Dlm,2)=$$L(Str,1)_"ЕЙ" Q
+ I $$R(Str,1)="Ь" S $P(str,Dlm,2)=$$L(Str,1)_"ЕМ" Q
+ S $P(str,Dlm,2)=Str
+ Q
+NAMTW                                  ;       женщины
+ I $$R(Str,1)="А" S $P(str,Dlm,2)=$$L(Str,1)_"ОЙ" Q
+ I $$R(Str,1)="Я" S $P(str,Dlm,2)=$$L(Str,1)_"ЕЙ" Q
+ I $$R(Str,1)="Ь" S $P(str,Dlm,2)=Str_"Ю" Q
+ S $P(str,Dlm,2)=Str Q
+ Q
+NAMP                                   ;    предложный
+ I Tp=1 D NAMPM Q
+ D NAMPW Q
+ Q
+NAMPM                                  ;       мужчины
+ I $$R(Str,2)="ЕЛ" S $P(str,Dlm,2)=$$L(Str,2)_"ЛЕ" Q
+ I $$R(Str,2)="ИЙ" S $P(str,Dlm,2)=$$L(Str,1)_"И" Q
+ I $$R(Str,1)="Й" S $P(str,Dlm,2)=$$L(Str,1)_"Е" Q
+ I $$Sg($$R(Str,1)) S $P(str,Dlm,2)=Str_"Е" Q
+ I $$R(Str,1)="Я" S $P(str,Dlm,2)=$$L(Str,1)_"Е" Q
+ I $$R(Str,1)="Ь" S $P(str,Dlm,2)=$$L(Str,1)_"Е" Q
+ S $P(str,Dlm,2)=Str
+ Q
+NAMPW                                  ;       женщины
+ I $$R(Str,1)="А" S $P(str,Dlm,2)=$$L(Str,1)_"Е" Q
+ I $$R(Str,2)="ИЯ" S $P(str,Dlm,2)=$$L(Str,1)_"И" Q
+ I $$R(Str,1)="Я" S $P(str,Dlm,2)=$$L(Str,1)_"Е" Q
+ I $$R(Str,1)="Ь" S $P(str,Dlm,2)=$$L(Str,1)_"И" Q
+ S $P(str,Dlm,2)=Str Q
+ Q
+NAMW                                   ;    винительный
+ I Tp=1 D NAMWM Q
+ D NAMWW Q
+ Q
+NAMWM                                  ;       мужчины
+ I $$R(Str,2)="ЕЛ" S $P(str,Dlm,2)=$$L(Str,2)_"ЛА" Q
+ I $$R(Str,1)="Й" S $P(str,Dlm,2)=$$L(Str,1)_"Я" Q
+ I $$Sg($$R(Str,1)) S $P(str,Dlm,2)=Str_"А" Q
+ I $$R(Str,1)="Я" S $P(str,Dlm,2)=$$L(Str,1)_"Ю" Q
+ I $$R(Str,1)="Ь" S $P(str,Dlm,2)=$$L(Str,1)_"Я" Q
+ S $P(str,Dlm,2)=Str
+ Q
+NAMWW                                  ;       женщины
+ I $$R(Str,1)="А" S $P(str,Dlm,2)=$$L(Str,1)_"У" Q
+ I $$R(Str,1)="Я" S $P(str,Dlm,2)=$$L(Str,1)_"Ю" Q
+ S $P(str,Dlm,2)=Str Q
+ Q
+NAMR                                   ;    родительный
+ I Tp=1 D NAMRM Q
+ D NAMRW Q
+ Q
+NAMRM                                  ;       мужчины
+ I $$R(Str,1)="Й" S $P(str,Dlm,2)=$$L(Str,1)_"Я" Q
+ I $$Sg($$R(Str,1)) S $P(str,Dlm,2)=Str_"А" Q
+ I $$R(Str,1)="А" S $P(str,Dlm,2)=$$L(Str,1)_"Ы" Q
+ I $$R(Str,1)="Я" S $P(str,Dlm,2)=$$L(Str,1)_"Ю" Q
+ I $$R(Str,1)="Ь" S $P(str,Dlm,2)=$$L(Str,1)_"Я" Q
+ S $P(str,Dlm,2)=Str
+ Q
+NAMRW                                  ;       женщины
+ I $$R(Str,2)="ГА" S $P(str,Dlm,2)=$$L(Str,1)_"И" Q
+ I $$R(Str,2)="КА" S $P(str,Dlm,2)=$$L(Str,1)_"И" Q
+ I $$R(Str,1)="А" S $P(str,Dlm,2)=$$L(Str,1)_"Ы" Q
+ I $$R(Str,1)="Я" S $P(str,Dlm,2)=$$L(Str,1)_"И" Q
+ I $$R(Str,1)="Ь" S $P(str,Dlm,2)=$$L(Str,1)_"И" Q
+ S $P(str,Dlm,2)=Str Q
+ Q
+NAMD                                   ;    дательный
+ I Tp=1 D NAMDM Q
+ D NAMDW Q
+ Q
+NAMDM                                  ;       мужчины
+ I $$R(Str,2)="ЕЛ" S $P(str,Dlm,2)=$$L(Str,2)_"ЛУ" Q
+ I $$R(Str,1)="Й" S $P(str,Dlm,2)=$$L(Str,1)_"Ю" Q
+ I $$Sg($$R(Str,1)) S $P(str,Dlm,2)=Str_"У" Q
+ I $$R(Str,1)="Я" S $P(str,Dlm,2)=$$L(Str,1)_"Е" Q
+ I $$R(Str,1)="Ь" S $P(str,Dlm,2)=$$L(Str,1)_"Ю" Q
+ S $P(str,Dlm,2)=Str
+ Q
+NAMDW                                  ;       женщины
+ I $$R(Str,1)="А" S $P(str,Dlm,2)=$$L(Str,1)_"Е" Q
+ I $$R(Str,2)="ИЯ" S $P(str,Dlm,2)=$$L(Str,1)_"И" Q
+ I $$R(Str,1)="Я" S $P(str,Dlm,2)=$$L(Str,1)_"Е" Q
+ I $$R(Str,1)="Ь" S $P(str,Dlm,2)=$$L(Str,1)_"И" Q
+ S $P(str,Dlm,2)=Str
+ Q
+FAT(Str)                               ; склонение отчества
+ N ind
+ Q:Str=""
+ S ind=Str_$C(31)_Typ
+ I $D(^ISLIB("FAT","SET",ind)) S $P(str,Dlm,3)=^(ind) Q  ;$$New("FAT") Q
+ I Typ="R" D FATR Q
+ I Typ="D" D FATD Q
+ I Typ="W" D FATW Q
+ I Typ="T" D FATT Q
+ I Typ="P" D FATP Q
+ Q
+FATP                                   ;    предложный
+ I Tp=1 D FATPM Q
+ D FATPW Q
+ Q
+FATPM                                  ;       мужчины
+ I $$R(Str,1)="Ч" S $P(str,Dlm,3)=Str_"Е" Q
+ S $P(str,Dlm,3)=Str
+ Q
+FATPW                                  ;       женщины
+ I $$R(Str,1)="А" S $P(str,Dlm,3)=$$L(Str,1)_"Е" Q
+ S $P(str,Dlm,3)=Str
+ Q
+FATT                                   ;    винительный
+ I Tp=1 D FATTM Q
+ D FATTW Q
+ Q
+FATTM                                  ;       мужчины
+ I $$R(Str,1)="Ч" S $P(str,Dlm,3)=Str_"ЕМ" Q
+ S $P(str,Dlm,3)=Str
+ Q
+FATTW                                  ;       женщины
+ I $$R(Str,1)="А" S $P(str,Dlm,3)=$$L(Str,1)_"ОЙ" Q
+ S $P(str,Dlm,3)=Str
+ Q
+FATW                                   ;    винительный
+ I Tp=1 D FATWM Q
+ D FATWW Q
+ Q
+FATWM                                  ;       мужчины
+ I $$R(Str,1)="Ч" S $P(str,Dlm,3)=Str_"А" Q
+ S $P(str,Dlm,3)=Str
+ Q
+FATWW                                  ;       женщины
+ I $$R(Str,1)="А" S $P(str,Dlm,3)=$$L(Str,1)_"У" Q
+ S $P(str,Dlm,3)=Str
+ Q
+FATR                                   ;    родительный
+ I Tp=1 D FATRM Q
+ D FATRW Q
+ Q
+FATRM                                  ;       мужчины
+ I $$R(Str,1)="Ч" S $P(str,Dlm,3)=Str_"А" Q
+ S $P(str,Dlm,3)=Str
+ Q
+FATRW                                  ;       женщины
+ I $$R(Str,1)="А" S $P(str,Dlm,3)=$$L(Str,1)_"Ы" Q
+ S $P(str,Dlm,3)=Str
+ Q
+FATD                                   ;    дательный
+ I Tp=1 D FATDM Q
+ D FATDW Q
+ Q
+FATDM                                  ;       мужчины
+ I $$R(Str,1)="Ч" S $P(str,Dlm,3)=Str_"У" Q
+ S $P(str,Dlm,3)=Str
+ Q
+FATDW                                  ;       женщины
+ I $$R(Str,1)="А" S $P(str,Dlm,3)=$$L(Str,1)_"Е" Q
+ S $P(str,Dlm,3)=Str
+ Q
+New(Id)                                ; новое значение из базы
+ N urn,mg,nam
+ S nam="SET"
+ S:Id="FAM" nam="SETF"
+ S urn=$O(^K(Id,nam,ind,""))
+ S mg=$O(^K(Id,nam,ind,urn,""))
+ Q $G(^D(urn,"NEW",mg))
+Sg(Sym)                                ; * Согласная буква *
+ Q "БВГДЖЗКЛМНПРСТУФХЦЧШЩ"[Sym
+L(Str,N)                               ; * Len-N символов слева *
+ Q $E(Str,1,$L(Str)-N)
+R(Str,N)                               ; * N символов справа *
+ Q:N>$L(Str) Str
+ Q $E(Str,$L(Str)-N+1,$L(Str))

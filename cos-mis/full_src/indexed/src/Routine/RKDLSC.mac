@@ -1,0 +1,243 @@
+RKDLSC ; Отчеты по услугам лаборатории [ 12/28/2017  4:34 PM ]
+CNT(DS,DE,GRP,CSUM,ZAK,CON,LP) ; Количество/сумма лаб. услуг с группировкой
+ N NI,R,X,OT,VR,ID,FR,U,DT,CLS,S,CA,SS,SC,I,K,K0,@$$NEWVAR^IUSL
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S FR=+$$FR^I(),GRP=+$G(GRP),CSUM=+$G(CSUM),CON=$G(CON)
+ S LP=+$S(FR:$G(LP),1:$$^I("ilpu"))
+ K ^BUF($J)
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ..S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ...I LP,LP'=$G(^(ID,"l")) Q 
+ ...I ZAK'="" S NI=$$GETNIB^IUSL(VR,DT,OT,ID) Q:NI="" 
+ ...I ZAK'="" S K=$G(^ZNF(VR,OT,DT,ID,"li")) Q:K=""  Q:$P($G(^MLAB(NI,K,"zi")),"|",1)'=ZAK
+ ...D GET^IUSL(VR,DT,OT,ID)
+ ...Q:STAT="w"!(STAT="d")  Q:$D(ERR) 
+ ...S R=$S(GRP=1:VR,GRP=2:NI,1:"")_"|"
+ ...S K=$G(^ZNF(VR,OT,DT,ID,"c")),K0=$P(K,"|",3)
+ ...I CON,K0,K0'=CON Q  
+ ...S U="" F  S U=$O(UL(U)) Q:U=""  D
+ ....S CLS="|"_$$GET^IPRICE(U,"cls",PRC,DT)_"|",X=1
+ ....S:CLS["|lab|" X=0
+ ....I X S X=$$GET^IPRICE(U,"grp",PRC,DT) Q:"|"_$$FLG^NPRICEG(X)_"|"'["|lab|"
+ ....S S=$S($D(UL(U,1)):UL(U,1),1:$$USUM^IUSL(DT,U,UL(U)))
+ ....S X=$G(^BUF($J,R_U))
+ ....S $P(X,"|",1)=$P(X,"|",1)+UL(U)
+ ....S $P(X,"|",2)=$P(X,"|",2)+S
+ ....S $P(X,"|",3)=$P(X,"|",3)+($$GET^IPRICE(U,"scost",PRC,DT)*UL(U))
+ ....I $P(K,"|",1)="",K0="" S K0=$$GET2IDX^YNPRICE(U,"con",PRC,DT)
+ ....I CON,K0'=CON Q 
+ ....S SC=$S($P(K,"|",1):$P(K,"|",1),1:$P($$GET2^IPRICE(U,"con",K0,PRC,DT),"|",1)*UL(U))
+ ....S $P(X,"|",4)=$P(X,"|",4)+SC
+ ....S ^BUF($J,R_U)=X
+ ....S:'$D(^BUF($J,R_U,PRC)) ^(PRC)=DT
+ 
+ D OWF^RWU(".txt")
+ D WC^RWU($S(GRP=2:"Пациент|",1:"")_"Код|Альт. код|Услуга|Кол-во|Цена|Себест.|Поставщика")
+ S (VR,R)="" F  S R=$O(^BUF($J,R)) Q:R=""  D
+ .S X=^(R),PRC=$O(^(R,"")),DT=^(PRC),U=$P(R,"|",2),S=$P(R,"|",1)
+ .I GRP'=2,S'=VR D:$D(SS) WC^RWU(CR_"||Итого|"_$$FN($G(SS(1)))_"|"_$$FN($G(SS(2)))_"|"_$$FN($G(SS(3)))) D WC^RWU(CR_"|"_$$FIO^YIKADRY(S)) S VR=S K SS
+ .S CA=$O(^CNAI("u",U,""))
+ .D WC^RWU(CR_$S(GRP=2:$$FIOSH^YIPACN(S)_" ("_S_")|",1:"")_U_"|"_CA_"|"_$$OWF^TXTU($$NAMEH^IPRICE(U,PRC,DT),100)_"|"_$$FN($P(X,"|",1))_"|"_$$FN($P(X,"|",2))_"|"_$$FN($P(X,"|",3))_"|"_$$FN($P(X,"|",4)))
+ .Q:'CSUM 
+ .F I=1:1:4 S SS(I)=$G(SS(I))+$P(X,"|",I)
+ D:$D(SS) WC^RWU(CR_$S(GRP=2:"|",1:"")_"||Итого|"_$$FN($G(SS(1)))_"|"_$$FN($G(SS(2)))_"|"_$$FN($G(SS(3)))_"|"_$$FN($G(SS(4))))
+ D C^RWU
+ K ^BUF($J)
+ Q
+LSTU(DS,DE,CSUM,ZAK,CON,LP) ; лаб. услуги
+ N NI,R,X,OT,VR,ID,FR,U,DT,CLS,S,SS,Z,fNZ,A,K,K0,ES,@$$NEWVAR^IUSL
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S FR=+$$FR^I(),GRP=+$G(GRP)
+ S LP=+$S(FR:$G(LP),1:$$^I("ilpu"))
+ F X=1:1:3 S ES(X)=0
+ D OWF^RWU(".txt")
+ D WC^RWU("Дата|Пациент|Исполнитель|Код|Услуга|Кол-во|Цена|Себест.|Назначено")
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ..S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ...I LP,LP'=$G(^(ID,"l")) Q
+ ...D GET^IUSL(VR,DT,OT,ID)
+ ...Q:STAT="w"!(STAT="d")  Q:$D(ERR)
+ ...I ZAK'="" S K=$G(^ZNF(VR,OT,DT,ID,"li")) Q:K=""  Q:$P($G(^MLAB(NI,K,"zi")),"|",1)'=ZAK 
+ ...S R=$S(GRP=1:VR,GRP=2:NI,1:"")_"|"
+ ...I CON S K=$G(^ZNF(VR,OT,DT,ID,"c")),K0=$P(K,"|",3) I K0,K0'=CON Q 
+ ...S U="" F  S U=$O(UL(U)) Q:U=""  D
+ ....S CLS="|"_$$GET^IPRICE(U,"cls",PRC,DT)_"|",X=1
+ ....S:CLS["|lab|" X=0
+ ....I X S X=$$GET^IPRICE(U,"grp",PRC,DT) Q:"|"_$$FLG^NPRICEG(X)_"|"'["|lab|"
+ ....I CON,$P(K,"|",1)="",K0="",$$GET2IDX^YNPRICE(U,"con",PRC,DT)'=CON Q
+ ....S fNZ=$$GETPL^IUSL(VR,DT,OT,ID,"f")
+ ....S S=$S($D(UL(U,1)):UL(U,1),1:$$USUM^IUSL(DT,U,UL(U)))
+ ....S SS=$$GET^IPRICE(U,"scost",PRC,DT)*UL(U)
+ ....S A=$$FIOSH^YIPACN(NI)_" ("_NI_")|"_$$FIOSH^YIKADRY(VR)_"|"_U_"|"_$$OWF^TXTU($$NAMEH^IPRICE(U,PRC,DT),80)_"|"
+ ....I $L(fNZ) S fNZ=$$FIOSH^YIKADRY($$fromVRI^INAZN(fNZ))
+ ....D WC^RWU(CR_$$DT2^DTUTL(DT)_"|"_A_$$FN(UL(U))_"|"_$$FN(S)_"|"_$$FN(SS)_"|"_fNZ)
+ ....Q:'CSUM 
+ ....S ES(1)=ES(1)+UL(U),ES(2)=ES(2)+S,ES(3)=ES(3)+SS
+ I CSUM D WC^RWU(CR_"|||||"_$$FN(ES(1))_"|"_$$FN(ES(2))_"|"_$$FN(ES(3)))
+ D C^RWU
+ Q
+SBZ(DS,DE,CSUM,ZAK,LP) ; Сводка по заказчику
+ N D,DT,I,Z,OT,VR,ID,N,ULL,J,K,X,KX,@$$NEWVAR^IUSL
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),LP=+$G(LP)
+ K ^BUF($J)
+ S D=DS-1 F  S D=$O(^MLABI("d",D)) Q:D=""!(D>DE)  S I="" F  S I=$O(^MLABI("d",D,I)) Q:I=""  D
+ .S N=^(I)
+ .S Z=$G(^MLAB(N,I,"zi")) Q:Z="" 
+ .Q:$P(Z,"|",1)'=ZAK
+ .S ULL=$G(^("up")) Q:ULL="" 
+ .F J=1:1 S Z=$P(ULL,"|",J) Q:Z=""  S KX=$P(Z,"/",1),Z=$P(Z,"/",2),VR=$P(KX,":",1),OT=$P(KX,":",2),DT=$P(KX,":",3) F K=1:1 S ID=$P(Z,":",K) Q:ID=""  D
+ ..D GET^IUSL(VR,DT,OT,ID)
+ ..Q:STAT="w"!(STAT="d")  Q:$D(ERR) 
+ ..S R="|"
+ ..S U="" F  S U=$O(UL(U)) Q:U=""  D
+ ...S CLS="|"_$$GET^IPRICE(U,"cls",PRC,DT)_"|",X=1
+ ...S:CLS["|lab|" X=0 ; флаг услуги
+ ...I X S X=$$GET^IPRICE(U,"grp",PRC,DT) Q:"|"_$$FLG^NPRICEG(X)_"|"'["|lab|" ; флаг группы
+ ...S S=$S($D(UL(U,1)):UL(U,1),1:$$USUM^IUSL(DT,U,UL(U)))
+ ...S X=$G(^BUF($J,R_U))
+ ...S $P(X,"|",1)=$P(X,"|",1)+UL(U)
+ ...S $P(X,"|",2)=$P(X,"|",2)+S
+ ...S ^BUF($J,R_U)=X
+ ...S:'$D(^BUF($J,R_U,PRC)) ^(PRC)=DT
+ D OWF^RWU(".txt")
+ D WC^RWU("Код|Услуга для "_$$NAME^ICONTR(ZAK)_"|Кол-во|Цена")
+ S (VR,R)="" F  S R=$O(^BUF($J,R)) Q:R=""  D
+ .S X=^(R),PRC=$O(^(R,"")),DT=^(PRC),U=$P(R,"|",2),S=$P(R,"|",1)
+ .D WC^RWU(CR_U_"|"_$$OWF^TXTU($$NAMEH^IPRICE(U,PRC,DT),100)_"|"_$$FN($P(X,"|",1))_"|"_$$FN($P(X,"|",2)))
+ .Q:'CSUM 
+ .F I=1:1:2 S SS(I)=$G(SS(I))+$P(X,"|",I)
+ D:$D(SS) WC^RWU(CR_"||Итого|"_$$FN($G(SS(1)))_"|"_$$FN($G(SS(2))))
+ D C^RWU
+ K ^BUF($J)
+ Q
+AGC(DS,DE,TYP,AGC,CSUM,UUSL,LP) ; Сводка по агентам
+ ; TYP=1 - подробно, =2 - пациенты по дням
+ ; AGC - код агента
+ ; CSUM - подсчет итогов
+ ; UUSL - исключить услуги
+ N D,DT,I,Z,OT,VR,ID,N,ULL,J,K,X,KX,SS,CC,C,Idx,@$$NEWVAR^IUSL
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),LP=+$G(LP)
+ s UUSL=$TR($$DBLSP^TXTU($G(UUSL)),";/, ","|||")
+ S:UUSL'="" UUSL="|"_UUSL_"|"
+ K ^BUF($J)
+ S Idx=0
+ S D=DS-1 F  S D=$O(^MLABI("d",D)) Q:D=""!(D>DE)  S I="" F  S I=$O(^MLABI("d",D,I)) Q:I=""  D
+ .S N=^(I)
+ .S Z=$G(^MLAB(N,I,"zi")) Q:Z="" 
+ .S ZAG=$P(Z,"|",4) Q:ZAG=""  
+ .I AGC'="",AGC'=ZAG Q 
+ .S ULL=$G(^("up")) Q:ULL="" 
+ .S (SS,CC)=0
+ .F J=1:1 S Z=$P(ULL,"|",J) Q:Z=""  S KX=$P(Z,"/",1),Z=$P(Z,"/",2),VR=$P(KX,":",1),OT=$P(KX,":",2),DT=$P(KX,":",3) F K=1:1 S ID=$P(Z,":",K) Q:ID=""  D
+ ..I UUSL'="",UUSL[("|"_$P($$GETUSLS^IUSL(VR,DT,OT,ID),"*",1)_"|") Q 
+ ..D GET^IUSL(VR,DT,OT,ID)
+ ..Q:STAT="w"!(STAT="d")  Q:$D(ERR) 
+ ..S U="" F  S U=$O(UL(U)) Q:U=""  D
+ ...S CLS="|"_$$GET^IPRICE(U,"cls",PRC,DT)_"|",X=1
+ ...S:CLS["|lab|" X=0 ; флаг услуги
+ ...I X S X=$$GET^IPRICE(U,"grp",PRC,DT) Q:"|"_$$FLG^NPRICEG(X)_"|"'["|lab|" ; флаг группы
+ ...S C=UL(U),S=$S($D(UL(U,1)):UL(U,1),1:$$USUM^IUSL(DT,U,C))
+ ...S CC=CC+C
+ ...Q:'S
+ ...S SS=SS+S
+ ...I TYP=2 S X=$G(^BUF($J,ZAG,NI,DT)),$P(X,"|",1)=$P(X,"|",1)+C,$P(X,"|",2)=$P(X,"|",2)+S,^(DT)=X Q 
+ ...Q:TYP'=1 
+ ...S ^BUF($J,ZAG,NI,Idx)=$$NAMEH^IPRICE(U,PRC,DT)_"|"_$TR(UL(U),".",",")_"|"_$TR(S,".",",")
+ ...S Idx=Idx+1
+ .I 'SS,'CC Q
+ .S X=$G(^BUF($J,ZAG,N))
+ .S $P(X,"|",1)=$P(X,"|",1)+CC,$P(X,"|",2)=$P(X,"|",2)+SS
+ .S ^(NI)=X
+ D OWF^RWU(".txt")
+ D WC^RWU($S(TYP=2:"Дата|",1:"")_"Пациент|"_$S(TYP=1:"Наименование услуги|",1:"")_"Услуг|Сумма")
+ S ZAG="" F  S ZAG=$O(^BUF($J,ZAG)) Q:ZAG=""  D
+ .S X=$$FIONUM^IPEOPL(ZAG) S:X'="" X=", "_X
+ .D WC^RWU(CR_$S(TYP=2:"|",1:"")_"Агентский код "_ZAG_X)
+ .K SS
+ .I TYP'=2 S NI="" F  S NI=$O(^BUF($J,ZAG,NI)) Q:NI=""  D
+ ..S X=^(NI),R=$$FIO^IPAC(NI)
+ ..S R=R_" ("_NI_")|"_$S(TYP=1:"Всего|",1:"")
+ ..D WC^RWU(CR_R_$$FN($P(X,"|",1))_"|"_$$FN($P(X,"|",2)))
+ ..I CSUM F I=1:1:2 S SS(I)=$G(SS(I))+$P(X,"|",I)
+ ..Q:'TYP 
+ ..S Idx="" F  S Idx=$O(^BUF($J,ZAG,NI,Idx)) Q:Idx=""  D WC^RWU(CR_"|"_^(Idx))
+ .I TYP=2 S NI="" F  S NI=$O(^BUF($J,ZAG,NI)) Q:NI=""  D  ; по дням
+ ..S X=^(NI),R=$$FIO^IPAC(NI)_" ("_NI_")|"
+ ..I CSUM S SS(0)=$G(SS(0))+1 F I=1:1:2 S SS(I)=$G(SS(I))+$P(X,"|",I)
+ ..S Idx="" F  S Idx=$O(^BUF($J,ZAG,NI,Idx)) Q:Idx=""  D WC^RWU(CR_$$DT2^DTUTL(Idx)_"|"_R_^(Idx))
+ .D:$D(SS) WC^RWU(CR_"Итого|"_$S(TYP=2:$G(SS(0))_"|",1:"")_$$FN($G(SS(1)))_"|"_$$FN($G(SS(2))))
+ D C^RWU
+ K ^BUF($J)
+ Q
+SS(DS,DE,STP,LPU) ; Сравнительная сводка
+ N VR,OT,DT,ID,U,CLS,I,X,K,DX,TABLE,DGL,DGT,DXL,SS,@$$NEWVAR^IUSL
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S FR=+$$FR^I(),GRP=+STP
+ S LPU=+$S(FR:$G(LPU),1:$$^I("ilpu"))
+ K ^BUF($J)
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ..S DX=""
+ ..S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ...I LPU,LPU'=$G(^(ID,"l")) Q 
+ ...D GET^IUSL(VR,DT,OT,ID)
+ ...Q:STAT="w"!(STAT="d")  Q:$D(ERR) 
+ ...S:DX="" DX=$S(STP=1:$$YEAR^DTUTL(DT)_","_$P($$DT^DTUTL(DT),".",2),STP=2:$$YEAR^DTUTL(DT)_","_$$QDT^DTUTL(DT),1:DT)
+ ...S:'$G(ISTC) ISTC=$$GETTZ^YIPACN(NI,$G(TZRBTN("stc")),DT)
+ ...S DGT=$$GETDGT^IRPUSL(ISTC,DT)
+ ...S:STAT=2 DGT=3
+ ...S U="" F  S U=$O(UL(U)) Q:U=""  D
+ ....S CLS="|"_$$GET^IPRICE(U,"cls",PRC,DT)_"|",X=1
+ ....S:CLS["|lab|" X=0
+ ....I X S X=$$GET^IPRICE(U,"grp",PRC,DT) Q:"|"_$$FLG^NPRICEG(X)_"|"'["|lab|"
+ ....S S=$S($D(UL(U,1)):UL(U,1),1:$$USUM^IUSL(DT,U,UL(U)))
+ ....S TABLE(1,DGT,DX)=$G(TABLE(1,DGT,DX))+S
+ ....S TABLE(2,DGT,DX)=$G(TABLE(2,DGT,DX))+UL(U)
+ ....S:'$D(^BUF($J,DGT,NI)) TABLE(3,DGT,"Z")=$G(TABLE(3,DGT,"Z"))+1
+ ....S:'$D(^(NI,DX)) ^(DX)="",TABLE(3,DGT,DX)=$G(TABLE(3,DGT,DX))+1
+ ....S DXL(DX)=""
+ D OWF^RWU(".txt")
+ S (X,DT)="" F  S DT=$O(DXL(DT)) Q:DT=""  S X=X_"|"_$S('STP:$$DT^DTUTL(DT),STP=1:DT,1:DT_"К")
+ D WC^RWU("Сводка "_$$TXTP^DTUTL(DS,DE)_X_"|Итого")
+ S K="" F  S K=$O(TABLE(K)) Q:K=""  D  Q:K=3 
+ .S DGT="" F  S DGT=$O(TABLE(K,DGT)) Q:DGT=""  D
+ ..S DT="" F  S DT=$O(TABLE(K,DGT,DT)) Q:DT=""  D
+ ...S U=TABLE(K,DGT,DT)
+ ...S SS(K,DT)=$G(SS(K,DT))+TABLE(K,DGT,DT)
+ ...I K<3,DT'="Z" S TABLE(K,DGT,"Z")=$G(TABLE(K,DGT,"Z"))+U
+ ..S (TABLE(4,DGT),TABLE(5,DGT))=0
+ 
+ S DXL("Z")="" ; show end
+ S K="" F  S K=$O(TABLE(K)) Q:K=""  D
+ .S (X,DT)="",I=1
+ .F  S DT=$O(DXL(DT)) Q:DT=""  D
+ ..S U=$S(K>3:0,1:$G(SS(K,DT)))
+ ..I K=4 S U=$G(SS(3,DT)) S:U U=$G(SS(2,DT))/U
+ ..I K=5 S U=$G(SS(2,DT)) S:U U=$G(SS(1,DT))/U
+ ..S $P(X,"|",I)=+$J(U,"",2),I=I+1
+ .S U=$S(K=1:"Стоимость оказанных услуг, руб.",K=2:"Количество услуг",K=3:"Количество лиц",K=4:"Кол-во услуг на 1-но лицо",K=5:"Средняя стоимость 1 услуги",1:"")
+ .D WC^RWU(CR_U_"|"_$TR(X,".",","))
+ .S DGT="" F  S DGT=$O(TABLE(K,DGT)) Q:DGT=""  D
+ ..S X="",I=1
+ ..S DT="" F  S DT=$O(DXL(DT)) Q:DT=""  D
+ ...S U=$S(K>3:0,1:$G(TABLE(K,DGT,DT)))
+ ...I K=4 S U=$G(TABLE(3,DGT,DT)) S:U U=$G(TABLE(2,DGT,DT))/U
+ ...I K=5 S U=$G(TABLE(2,DGT,DT)) S:U U=$G(TABLE(1,DGT,DT))/U
+ ...S $P(X,"|",I)=+$J(U,"",2),I=I+1
+ ..D WC^RWU(CR_" - "_$$NAME^ISPRAV("dvid",DGT)_"|"_$TR(X,".",","))
+ D C^RWU
+ Q
+FN(X) 
+ Q $TR(X,".",",")
+REGIPROC 
+ N FF,F
+ S FF=+$$FR^I()
+ S F=$S(FF:",t@storage:lpu,Филиал",1:"")
+ S ^IPROC("Лаборатория","Отчет по услугам лаборатории")="CNT_RKDLSC,1,"_$S(FF:7,1:6)_",d,Дата начала периода,d,Дата окончания периода,t@string:0/Нет#1/По исполнителю#2/По пациенту,Группировать,t@string:0/Нет#1/Да,Подсчет итогов,t@net:LSTFLG_YCONTR(""cli"";""1""),Заказчик,t@net:LSTFLG_YCONTR(""prt"";""1""),Поставщик"_F
+ S ^IPROC("Лаборатория","Список по услугам лаборатории")="LSTU_RKDLSC,1,"_$S(FF:6,1:5)_",d,Дата начала периода,d,Дата окончания периода,t@string:0/Нет#1/Да,Подсчет итогов,t@net:LSTFLG_YCONTR(""cli"";""1""),Заказчик,t@net:LSTFLG_YCONTR(""prt"";""1""),Поставщик"_F
+ S ^IPROC("Лаборатория","Сводка по заказчику")="SBZ_RKDLSC,1,"_$S(FF:5,1:4)_",d,Дата начала периода,d,Дата окончания периода,t@string:0/Нет#1/Да,Подсчет итогов,t@net:LSTFLG_YCONTR(""cli""),Заказчик"_F
+ S ^IPROC("Лаборатория","Сводка по агентам")="AGC_RKDLSC,1,"_$S(FF:7,1:6)_",d,Дата начала периода,d,Дата окончания периода,t@string:0/По пациентам#1/Подробно по услугам#2/По датам и пациентам,Вид отчета,s,Агентский код,t@string:0/Нет#1/Да,Подсчет итогов,s,Исключить услуги"_F
+ S ^IPROC("Лаборатория","Сравнительная сводка по КДЛ")="SS_RKDLSC,1,"_$S(FF:4,1:3)_",d,Дата начала периода,d,Дата окончания периода,t@string:0/День#1/Месяц#2/Квартал,Период стравнения"_F
+ Q

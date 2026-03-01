@@ -1,0 +1,47 @@
+NDEBT ; Долги [ 07/19/2011  7:33 PM ]
+TAB(NIB) ; Вывод таблицы
+ S NIB=$$GNIB^YNEDK(NIB)
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<ikdebt>")
+ I NIB="" D W^RWU("<table></table></ikdebt></nb_console>"),C^RWU Q 
+ N A,DT,TM,VR,OT,ID,IDL,N,U,DTT,I,X,H,K,CNT,CEN,S1,S2,Z,X1,X2
+ D WTAGDC^RWU("deposit",$$NOW^IBILL(NIB))
+ D WTAGDC^RWU("debt",$$DEBT^IBILL(NIB))
+ D WTAGDC^RWU("pfio",NIB_" "_$$FIO^IPAC(NIB))
+ D WC^RWU("<table>Дата, время|Код|Наименование услуги|К-во|Сотрудник|Цена|Долг")
+ S DT="",N=$$REALNIB^IBILL(NIB),(S1,S2)=0
+ F  S DT=$O(^BILL(N,"D",DT)) Q:DT=""  S TM="" F  S TM=$O(^BILL(N,"D",DT,TM)) Q:TM=""  D
+ .S A=^(TM),U=$P(A,"|",6),I=$P(U,"/",1),X1=$P(A,"|",1),X2=$P(A,"|",2)
+ .Q:X1=X2 
+ .S K=X1/X2
+ .I S1>0!(S2>0) D WC^RWU(CR_"||||||"_+S1_"|"_$FN(S2,"",2)) S (S1,S2)=0
+ .S H=(X2-X1)_"~"_$S(+$G(^cfg("inkss","realnib"))=0:"R",1:"")_N_"~"_DT_"~"_TM_"|"_$$DT^DTUTL(DT)_", "_$$TM^DTUTL(TM)_"|"
+ .S VR=$P(I,":",2),OT=$P(I,":",3),DTT=$P(I,":",4) K IDL
+ .F I=2:1:99 S A=$P(U,"/",I) Q:A=""  S A=$P(A,":",3) S:A'="" IDL(A)=""
+ .S X="|"_VR_" "_$$FIOSH^YIKADRY(VR)_"|"
+ .S ID="" F  S ID=$O(IDL(ID)) Q:ID=""  D
+ ..D GET^IUSL(VR,DTT,OT,ID)
+ ..S U="" F  S U=$O(UL(U)) Q:U=""  D
+ ...S CNT=$G(UL(U)),CEN=$S($D(UL(U,1)):UL(U,1),1:$$USUM^IUSL(DTT,U,CNT)),Z=$FN((CEN-(CEN*K)),"",2)
+ ...D WC^RWU(CR_H_U_"|"_$$NAMEH^IPRICE(U,PRC,DTT)_"|"_CNT_X_CEN_"|"_Z)
+ ...S S1=S1+CEN,S2=S2+Z,H=$P(H,"|",1)_"||" ; без даты
+ I S1>0!(S2>0) D WC^RWU(CR_"||||||"_+S1_"|"_$FN(S2,"",2))
+ D W^RWU("</table></ikdebt></nb_console>"),C^RWU
+ Q
+PAY(KEY,SUM) ; Оплата долга
+ N NIB
+ S NIB=$P(KEY,"~",2),SUM=+$TR(SUM,",",".")
+ D:SUM>0 PDEBT^IBILL($$GNIB^YNEDK(NIB),$TR($P(KEY,"~",3,4),"~",","),SUM)
+ D TAB(NIB)
+ Q
+PAYF(NIB) ; Pay first
+ N DT,TM,A
+ S DT=$O(^BILL(NIB,"D",99999),-1) Q:DT="" 
+ S TM=$O(^BILL(NIB,"D",DT,99999),-1) Q:TM=""  
+ S A=^(TM),A=($P(A,"|",2)-$P(A,"|",1)) Q:A'>0 
+ D:A>0 PDEBT^IBILL(NIB,DT_","_TM,A)
+ Q
+PAYL(N) ; List for pay (N=NIB)
+ N A,DT,TM,H,S1,S2
+ S DT="",H=""
+ F  S DT=$O(^BILL(N,"D",DT)) Q:DT=""  S TM="" F  S TM=$O(^BILL(N,"D",DT,TM)) Q:TM=""  S A=^(TM),S1=+$P(A,"|",1),S2=+$P(A,"|",2) S:S1'=S2 H=H_(S2-S1)_"@"_DT_","_TM_"|"_$$DT2^DTUTL(DT)_", "_$$TM^DTUTL(TM)_CR
+ Q H

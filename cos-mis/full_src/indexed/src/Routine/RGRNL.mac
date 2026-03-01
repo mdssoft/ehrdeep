@@ -1,0 +1,100 @@
+RGRNL ; Отчеты по гарантийным письмам [ 05/08/2018  3:11 PM ]
+J(DS,DE,TPX,DGNX,SWT) ; Журнал гарантийных писем
+ ; TPX - тип. 1-инф, 2-согласование
+ ; DGN - договор
+ ; SWT - выводить текст письма
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N NI,R,DT,A,DTM,I,D,P,GDG,DGN
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|Дата|№ И.Б.|Пациент "_$$TXTP^DTUTL(DS,DE)_"|Письмо №|Период действия|Вид|По договору|Договор пациента|"_$S(SWT:"Содержание|",1:"")_"Изменено|Оператор")
+ S NI="" F  S NI=$O(^GRNL(NI)) Q:NI=""  D
+ .S DT=(DS-1)_".999"
+ .F  S DT=$O(^GRNL(NI,DT)) Q:DT=""!($P(DT,".",1)>DE)  D
+ ..S D=$G(^(DT)),N=$G(^(DT,"n")),I=$G(^("inf")),DTM=$G(^("log")),P=$G(^("up"))
+ ..S GDG=$G(^GRNL(NI,DT,"s")),DGN=GDG
+ ..I TPX=1,'$G(^("inf")) Q 
+ ..I TPX=2,$G(^("agr"))'=1 Q 
+ ..I TPX=3,$G(^("agr"))'=3 Q
+ ..I DGNX'="",$S(DGN=DGNX:0,$$PIDXN^IPAC(NI,DGNX,DT)=-1:1,1:0) Q 
+ ..S:DGN="" DGN=$$GET^IPAC(NI,"stc",DT)
+ ..S A=$$DT^DTUTL(DT)_"|"_NI_"|"_$$FIO^IPAC(NI)_"|"
+ ..S A=A_$P(N,"|",2)
+ ..S A=A_$S($P(N,"|",1)="":"",1:" от "_$$DT^DTUTL($P(N,"|",1)))_"|"
+ ..S A=A_$S(D="":"",1:$$DT^DTUTL(DT)_"-"_$$DT^DTUTL(D))_"|"
+ ..S A=A_$S(I:"Информационное",P:"В рамках программы",1:"")_"|"
+ ..S A=A_$$NAMEH^YNDOG(DGN,DT)_"|"
+ ..S A=A_$S(GDG="":"тот же",1:$$GETE^IPAC(NI,"stc",DT))_"|"
+ ..S:SWT A=A_$TR($$txt(NI,DT,170),"|"_CR,"  ")_"|"
+ ..S A=A_$$DTM^DTUTL($P(DTM,"|",2))_"|"_$$FIOSH^NUSER($P(DTM,"|",1))
+ ..D WC^RWU(CR_NI_"|"_A)
+ D C^RWU
+ Q
+txt(NI,DT,NN) ; Получить комментарий с обрезкой
+ N I,T,L
+ S:'$G(NN) NN=256
+ S (I,T)="",L=0 F  S I=$O(^GRNL(NI,DT,"c",I)) Q:I=""  S T=$S(T="":"",1:T_CR)_^(I) Q:$L(T)>NN 
+ Q $$OWF^TXTU(T,NN)
+JR(DS,DE) ; Журнал регистрации гарантийных писем
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N NI,R,DT,A,DTM,I,D,P,DGN,DTL,L,FF
+ S FF=+$$FR^I()
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|Дата|№ И.Б.|Пациент "_$$TXTP^DTUTL(DS,DE)_"|Письмо №|Период действия|Вид|По договору|Зарегистрировано|Оператор"_$S(FF:"|Филиал",1:""))
+ S NI="" F  S NI=$O(^GRNL(NI)) Q:NI=""  D
+ .S DT="" F  S DT=$O(^GRNL(NI,DT)) Q:DT=""  D
+ ..S DTL=$O(^(DT,"log",""),-1) Q:DTL=""  
+ ..Q:+DTL<DS  Q:+DTL>DE 
+ ..S D=$G(^GRNL(NI,DT)),N=$G(^(DT,"n")),I=$G(^("inf")),DTM=$G(^("log")),P=$G(^("up"))
+ ..S DGN=$G(^GRNL(NI,DT,"s")) S:DGN="" DGN=$$GET^IPAC(NI,"stc",DT)
+ ..S A=$$DT^DTUTL(DT)_"|"_NI_"|"_$$FIO^IPAC(NI)_"|"
+ ..S A=A_$P(N,"|",2)
+ ..S A=A_$S($P(N,"|",1)="":"",1:" от "_$$DT^DTUTL($P(N,"|",1)))_"|"
+ ..S A=A_$S(D="":"",1:$$DT^DTUTL(DT)_"-"_$$DT^DTUTL(D))_"|"
+ ..S A=A_$S(I:"Информационное",P:"В рамках программы",1:"")_"|"
+ ..S A=A_$$NAMEH^YNDOG(DGN,DT)_"|"
+ ..S L=^GRNL(NI,DT,"log",DTL)
+ ..S A=A_$$DTM^DTUTL(DTL)_"|"_$$FIOSH^NUSER(L)
+ ..S:FF A=A_"|"_$$NAME^ICONTR($P(L,"@",2))
+ ..D WC^RWU(CR_NI_"|"_A)
+ D C^RWU
+ Q
+EVGRN(DS,DE,LPU) ; События регистрации услуг по ГП
+ S TP=$$FNDUTP^ICCME("ed-grn")
+ S:'+$$FR^I() LPU=$$^I("ilpu")
+ D evusl(DS,DE,TP,$G(LPU))
+ Q
+EVSOGL(DS,DE,LPU) ; События регистрации услуг по согласованию
+ S TP=$$FNDUTP^ICCME("ed-coo")
+ S:'+$$FR^I() LPU=$$^I("ilpu")
+ D evusl(DS,DE,TP,$G(LPU))
+ Q
+evusl(DS,DE,TP,LPU) 
+ N KX,DT,TM,II,NI,NIB,KEY,VR,DTT,OTD,ID,R,C,U,CNT,@$$NEWVAR^IUSL
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|Дата, время|Врач|Пациент "_$$TXTP^DTUTL(DS,DE)_"|Г.П. №|Описание|Услуга|Кол-во")
+ S NIB="" F  S NIB=$O(^CMEI("t",TP,NIB)) Q:NIB=""  D
+ .S KX=(DS-1)_"|0|0" F  S KX=$O(^CMEI("t",TP,NIB,KX)) Q:KX=""!($P(KX,"|",1)>DE)  D
+ ..S DT=$P(KX,"|",1),TM=$P(KX,"|",2),II=$P(KX,"|",3)
+ ..S R=$G(^CME(DT,TM,II)) Q:R="" 
+ ..I LPU'="",$P(R,"|",11)'=LPU Q 
+ ..S KEY=$G(^(II," s")),C=$G(^(" c")),GRN=$G(^("grn"))
+ ..S GRN=$$NAME^IGRNL($P(GRN,",",1),$P(GRN,",",2)),U="",CNT="",NI=""
+ ..D:KEY'=""
+ ...S VR=$P(KEY,"~",1),DTT=$P(KEY,"~",2),OT=$P(KEY,"~",3),ID=$P(KEY,"~",4)
+ ...D GETSC^IUSL(VR,DTT,OT,ID,1)
+ ...S U=$O(UL("")) Q:U="" 
+ ...S CNT=UL(U) S:CNT="" CNT=1 S U=U_" "_$$NAMEH^IPRICE(U,PRC,DTT)
+ ..D WC^RWU(CR_NIB_"|"_$$DTM^DTUTL(DT_","_TM)_"|"_$$FIOSH^IKADRY(VR)_"|"_NIB_" "_$$FIO^IPAC(NIB,DT)_"|"_GRN_"|"_C_"|"_U_"|"_CNT)
+ D C^RWU
+ Q
+REGIPROC 
+ N D,FF,F
+ S FF=+$$FR^I(),F=$S(FF:",t@storage:lpu,Филиал",1:"")
+ S D="J_RGRNL,100,5,d,Начальная дата,d,Конечная дата,t@string:0/#1/Информационно-справочное#2/Согласование#3/Согласованы,Тип письма,te@storage:dog@1,Договор,t@string:0/Нет#1/Да,Выводить текст письма"
+ S ^IPROC("Отчеты по пациентам","Журналы событий","Гарантийные письма")=D
+ S ^IPROC("Отчеты по страховым компаниям","Журнал гарантийных писем")=D
+ S ^IPROC("Отчеты по пациентам","Журналы событий","Регистрация гарантийных писем")="JR_RGRNL,100,2,d,Начальная дата регистрации,d,Конечная дата регистрации"
+ S ^IPROC("Отчеты по пациентам","Журналы событий","Регистрация услуг по Г.П.")="EVGRN_RGRNL,100,"_$S(FF:3,1:2)_",d,Начальная дата,d,Конечная дата"_F
+ S ^IPROC("Отчеты по пациентам","Журналы событий","Регистрация услуг по согласованию")="EVSOGL_RGRNL,100,"_$S(FF:3,1:2)_",d,Начальная дата,d,Конечная дата"_F
+ Q

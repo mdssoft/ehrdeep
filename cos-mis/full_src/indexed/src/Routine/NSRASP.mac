@@ -1,0 +1,280 @@
+NSRASP ; Экраны расписания [ 04/25/2023  3:17 PM ]
+PNLCAB(CAB,FRM,ID) ; Регистрация обратной связи по кабинету
+ ; D UREGU^IRASP2
+ S A=$$CABVR(CAB,+$H,$P($H,",",2))
+ S VR=$P(A,"@",2),OT=$P(A,"@",1),SP=$P(A,"@",3),A=+$$^I("ilpu")
+ S:OT="" OT="-k-"_CAB
+ S ^FPNL(CAB)=FRM_"@"_OT_"@"_VR_"@"_SP
+ D REGULT^IRASP2(A,OT,SP,VR,"PNLC"_ID_"^NSRASP("""_CAB_""")")
+ G PNLCL
+DDC(DT) ; Приведение даты к единому виду
+ Q $$DT^DTUTL($$DI^DTUTL(DT))
+PNLC1(CAB) N ID S ID=1 G PNLC+1
+PNLC2(CAB) N ID S ID=2 G PNLC+1
+PNLC3(CAB) N ID S ID=3 G PNLC+1
+PNLC4(CAB) N ID S ID=4 G PNLC+1
+PNLC5(CAB) N ID S ID=5 G PNLC+1
+PNLC6(CAB) N ID S ID=6 G PNLC+1
+PNLC(CAB) ; Табло по кабинету
+ N FRM S FRM=$G(^FPNL(CAB))
+PNLCL N DT,TM,LPU,Iz,Ix
+ S DT=+$H,TM=$P($H,",",2),LPU=+$$^I("ilpu"),Iz=+$G(^MN("raspzt"))
+ N NIST,PFIO,PTM,PSTAT,NIBLB,TTS,TTE,TML,FIOL,NIL,A,R
+ S (PFIO,PTM,PSTAT)="",NIBLB="no"
+ S A=$$CABFND(CAB,DT,TM),VR=$P(A,"@",2),OT=$P(A,"@",1),SP=$P(A,"@",3)
+ I OT'=""!(OT'=$P(FRM,"@",2))!(VR'=$P(FRM,"@",3))!(SP'=$P(FRM,"@",4)) D
+ .D UREGID^IRASP2(LPU,$P(FRM,"@",2),$P(FRM,"@",4),$P(FRM,"@",3))
+ .D REGULT^IRASP2(LPU,OT,SP,VR,"PNLC"_ID_"^NSRASP("""_CAB_""")")
+ .S ^FPNL(CAB)=$P(FRM,"@",1)_"@"_OT_"@"_VR_"@"_SP
+ S FRM=$P(FRM,"@",1)
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<"_FRM_">")
+ D WTAGDC^RWU("spec",$$SPECS^NRASP(SP))
+ D WTAGDC^RWU("fio",$$VFIOSH^IRASP2(VR))
+ D WTAGDC^RWU("kab","каб. "_CAB)
+ I $D(^DSH(LPU,OT,VR,SP,DT))=0 S PSTAT="Кабинет закрыт" G PNLCE
+ I VR="" S PSTAT="Кабинет закрыт" G PNLCE
+ I $O(^DSH(LPU,OT,VR,SP,DT,TM),-1)="" S PSTAT="Кабинет закрыт" G PNLCE
+ S (TML,NIL,FIOL,TMSTRT,TTS,TTE,A)="",CH=TM-1800,Ix=0
+ S TM="" F  S TM=$O(^DSH(LPU,OT,VR,SP,DT,TM)) Q:TM=""  D
+ .S TMS=$$TM^DTUTL(TM),NI=$P($G(^(TM)),"|",1)
+ .S:TTS="" TTS=$$TM^DTUTL(TM)
+ .S:NI="*" TTE=$$TM^DTUTL(TM)
+ .I NI="",$D(^(TM,"t")) S R=$G(^MN(Iz,+^("t"))) I $P(R,"|",3)=0 S ST="t",PSTAT=$P(R,"|",2) Q  ; если у статуса запрещена запись
+ .Q:NI=""!(NI="*")  Q:$D(^(TM,"c"))!(TM<CH)  
+ .S R=$G(^("i"))
+ .S Ix=Ix+1 Q:Ix>10  ; если много записей - самые новые
+ .S NI=$S(NI?1.N:NI_"|"_$$FIOIO^YIPACN(NI),R'="":"|"_$P(R,"|",6)_" "_$P(R,"|",7),1:"|"_NI)
+ .S:TMSTRT="" TMSTRT=TM,NIST=$P(NI,"|",1),PFIO=$P(NI,"|",2)
+ .S TML=TML_A_TMS,NIL=NIL_A_$P(NI,"|",1),FIOL=FIOL_A_$P(NI,"|",2),A=CR
+ S ST=$P(^DSH(LPU,OT,VR,SP,DT),"|",4) S:ST="" ST="s"
+ I ST="s" D
+ .I $D(NIST),+$G(^cfg("rasp-s-pretm")) K:(TMSTRT-$P($H,",",2))>2700 NIST
+ .S:$D(NIST) PSTAT="Проходите пожалуйста",NIBLB="yes"
+ .S:'$D(NIST) PSTAT="Врач свободен",NIBLB="no"
+ S:ST="p" PSTAT="Врач принимает пациента",NIBLB="no"
+ S:ST="z" PSTAT="Кабинет закрыт",NIBLB="no"
+ G:ST="s"!(ST="p")!(ST="z") PNLCE
+ S PSTAT="Кабинет закрыт",NIBLB="no"
+PNLCE 
+ S A="<pstat data="""_PSTAT_"""/><pnib data="""_$G(NIST)_"""/><pfio data="""_PFIO_"""/><nib_label visible="""_NIBLB_"""/><times data="""_$G(TTS)_"-"_$G(TTE)_"""/>"_CR
+ D WC^RWU(A)
+ D WTAGDC^RWU("time_tab",$G(TML))
+ D WTAGDC^RWU("nib_tab",$G(NIL))
+ D WTAGDC^RWU("fio_tab",$G(FIOL))
+ D W^RWU("</"_FRM_"></nb_console>"),C^RWU
+ Q
+CABFND(KAB,DT,TM) ; Отд|Врач|Спец по каб, дате, времени (контр. по концу)
+ Q:KAB="" ""
+ N LPU,KX,TT,RET,LL
+ S LPU=+$$^I("ilpu"),RET=""
+ S KX="" F  S KX=$O(^DSHI("cab",LPU,KAB,DT,KX)) Q:KX=""  D
+ .S TT=^(KX) Q:TT=""  S LL(TT)=KX ; OT@VR@SP
+ S TT=$O(LL(TM-1)) Q:TT'="" LL(TT)
+ Q "" ; A=VR_"|"_OT_"|"_SP
+CABVR(KAB,DT,TM) ; Отд|Врач|Спец по каб, ближайшей дате
+ Q:KAB="" ""
+ N LPU,TT,RET,LL
+ S LPU=+$$^I("ilpu"),RET=""
+ S DT=$O(^DSHI("cab",LPU,KAB,DT+1),-1) Q:DT="" ""
+ Q $O(^(DT,""))
+PJOB K ^SYNCJ("PJOB^NSRASP") ; todo - move to cron
+ D:$D(^$R("WWWSRV")) USRCONN^WWWSRV ; for Cache
+PJOB1 F I=1:1:4000 H 1 Q:$G(^SYNCJ("PJOB^NSRASP"))=1  Q:$P($H,",",2)#1800=0 
+ Q:$G(^SYNCJ("PJOB^NSRASP"))=1 
+ J PING^NSRASP
+ G PJOB1
+PING 
+ N %JOB,PR,JB,ID,R
+ S %JOB=77777
+ S PR="" F  S PR=$O(^AS(PR)) Q:PR=""  S JB="" F  S JB=$O(^AS(PR,JB)) Q:JB=""  S ID="" F  S ID=$O(^AS(PR,JB,ID)) Q:ID=""  S R=$G(^(ID)) I (R["PNLC")&(R["NSRASP") D UPDI^YISYNC("DUP^IRASP2",ID) H 1 Q:$G(^SYNCJ("PJOB^NSRASP"))=1
+ Q 
+START 
+ K ^SYNCJ("PJOB^NSRASP")
+ J PJOB^NSRASP
+ Q
+STOP 
+ S ^SYNCJ("PJOB^NSRASP")=1
+ Q
+LSTLPU(MOD,OTDL) ; Список ЛПУ с допинформацией
+ ; OTDL - ограничение по отделениям
+ N LP,R,X,C,I,DE,OI,XE
+ D OWF^RWU(".txt")
+ S MOD=+$G(MOD),OTDL=$TR($G(OTDL),",; ","||"),OI=$S(OTDL="":0,1:$L(OTDL,"|"))
+ S DE=+$G(^cfg("rasp-vr-old")) S:'DE DE=180 ; Последняя дата появления
+ S DE=$H-DE
+ S (LP,C)="" F  S LP=$O(^DSH(LP)) Q:LP=""  D:$G(^(LP))>DE
+ .S (X,XE)=0
+ .I OI S X=1 F I=1:1:OI S R=$P(OTDL,"|",I) I $D(^DSH(LP,R))=11 S X=0,XE=$S($G(^(R))>XE:^(R),1:XE) ; [0 - если нет подмножества
+ .I XE,XE<DE Q 
+ .Q:X
+ .I $$FLinFL^TXTU($$GET^ICONTR(LP,"flg"),"nwebzp") Q 
+ .S R=$S(MOD:$$GET^ICONTR(LP,"mname"),1:"")
+ .S:R="" R=$$NAME^ICONTR(LP)
+ .S R=LP_"|"_R
+ .S R=R_"|"_$$ADDR^ICONTR(LP,+$H,1)
+ .S R=R_"|"_$$GET^ICONTR(LP,"phone")
+ .S R=R_"|"_$$GET^ICONTR(LP,"internet")
+ .D WC^RWU(C_R) S C=CR
+ D C^RWU
+ Q
+OTLST(LPU) ; Список отделений в расписании
+ S:'$G(LPU) LPU=+$$^I("ilpu")
+ D MSG^RWU($$OTLSTs^NSPRASP(LPU,"www"))
+ Q
+SPLST(LPU,OTDL) ; Список специальностей в расписании
+ ; OTDL - допустимые отделения
+ S:$G(LPU)="" LPU=+$$^I("ilpu")
+ S OTDL=$TR($G(OTDL),",; ","||")
+ D MSG^RWU($S(LPU="*":$$SPLSTa(OTDL),1:$$SPLSTs^NCRASP(LPU,"",OTDL))) ;www
+ Q
+SPLSTa(OTDL) ; Все специалисты
+ N L,SP,LST,X
+ S OTDL=$G(OTDL)
+ S:OTDL'="" OTDL="|"_OTDL_"|"
+ S L="" F  S L=$O(^DSHI("sp",L)) Q:L=""  S SP="" F  S SP=$O(^DSHI("sp",L,SP)) Q:SP=""  D
+ .I OTDL="" S LST(SP)="" Q 
+ .S X="" F  S X=$O(^DSHI("sp",L,SP,X)) Q:X=""  I OTDL[("|"_$P(X,"|",1)_"|") S LST(SP)="" Q
+ S (L,SP)="" F  S SP=$O(LST(SP)) Q:SP=""  S L=$S(L="":"",1:L_CR)_SP_"|"_$$GSPEC^YISPRAV(SP)
+ Q L
+VRLST ; По всем ЛПУ
+ N LP,OT,VR,LST,H
+ S LP="" F  S LP=$O(^DSH(LP)) Q:LP=""  D
+ .S OT="" F  S OT=$O(^DSH(LP,OT)) Q:OT=""  S VR="" F  S VR=$O(^DSH(LP,OT,VR)) Q:VR=""  S LST(VR)=""
+ D OWF^RWU(".txt")
+ S (LP,VR)="",H=+$H  F  S VR=$O(LST(VR)) Q:VR=""  D:$$USED^IKADRY(VR,H)
+ .D WC^RWU(LP_VR_"|"_$$GET^IKADRY(VR,"f")_"|"_$$GET^IKADRY(VR,"i")_"|"_$$GET^IKADRY(VR,"o")_"|"_$TR($$GET^IKADRY(VR,"pol"),12,"MF")_"||")
+ .S LP=CR
+ D C^RWU
+ Q
+OTTIME(OT,DS,CDT,LPU) ; Расписание по отделению
+ ; DS - с даты
+ ; CDT - число дней
+ N VR,SP,DT,TM,R,I,T1,T2,X,A,B,CAB,NOVR
+ S:$G(LPU)="" LPU=+$$^I("ilpu")
+ S:'$G(CDT) CDT=7
+ S DS=$$DI^DTUTL(DS),B=""
+ I $$FLinFL^TXTU($$GET^ICONTR(LPU,"flg",DS),"nwww") Q 
+ F I=1:1:CDT S DT=DS+I-1,$P(B,"|",I)=$P($$DT^DTUTL(DT),".",1,2)_" "_$$DWKNML^DTUTL($$DWEEK^DTUTL(DT))
+ D OWF^RWU(".txt")
+ D WC^RWU("||||"_B) 
+ S CDT=DS+CDT-1
+ S VR="" F  S VR=$O(^DSH(LPU,OT,VR)) Q:VR=""  D
+ .I $D(NOVR(VR)) Q 
+ .I $$FLinFL^TXTU($$GET^IKADRY(VR,"flg",DS),"nwww") S NOVR(VR)="" Q 
+ .S SP="" F  S SP=$O(^DSH(LPU,OT,VR,SP)) Q:SP=""  D
+ ..S (A,B,SPT)=""
+ ..F I=1:1:9 S X=$P(SP,"|",I) Q:X=""  S:$L(SPT) SPT=SPT_", " S SPT=SPT_$$GSPEC^YISPRAV(X)
+ ..S FW=0
+ ..S DT=DS-1 F  S DT=$O(^DSH(LPU,OT,VR,SP,DT)) Q:DT=""!(DT>CDT)  D
+ ...S R=$G(^(DT)),X=$P($P(R,"|",1),"@",1),CAB=$P(R,"|",2)
+ ...S T1=$O(^(DT,"")),T2=$O(^(86401),-1) 
+ ...I CAB'="",$$FLinFL^TXTU($$CABFL^IPLPU(LPU,CAB,"cls"),"nwww") Q 
+ ...S:T1 FW=1
+ ...S $P(B,"|",DT-DS+1)=$S(T1="":"",1:$$TM^DTUTL(T1)_"-"_$$TM^DTUTL(T2))
+ ...S:A="" A=OT_"|"_$$VFIOSHD^IRASP2(VR,DT)_"|"_SPT_"|"_CAB_"|"
+ ..Q:'FW
+ ..D WC^RWU(CR_A_B)
+ D C^RWU
+ Q
+SPTIME(SPX,DS,CDT,LPU,KMOD,WCOM) ; Расписание по специальности
+ ; DS - с даты
+ ; CDT - число дней
+ ; KMOD - вывод системного ключа записи, =2 - только системные ключи, =3 показ занятых времен
+ ; WCOM - выводить комментарий
+ N OT,SP,SI,VR,DT,TM,R,I,T,T1,T2,X,A,B,CAB,NOVR,COM,REZ,RO,RX,RR,SPL,SX,CH,OTF
+ S:$G(LPU)="" LPU=+$$^I("ilpu")
+ S:'$G(CDT) CDT=7
+ S DS=$$DI^DTUTL(DS),B="",KMOD=+$G(KMOD)
+ S SPX=$TR($$FURL^TXTU(SPX),",","|")
+ I $$FLinFL^TXTU($$GET^ICONTR(LPU,"flg",DS),"nwww") Q 
+ I $$FLinFL^TXTU($$GETPL^ISPRAV("spec",SPX,"flg"),"nwww") Q  
+ F I=1:1:CDT S DT=DS+I-1,$P(B,"|",I)=$P($$DT^DTUTL(DT),".",1,2)_" "_$$DWKNML^DTUTL($$DWEEK^DTUTL(DT))
+ D OWF^RWU(".txt")
+ S COM=$S($G(WCOM):$$GETPL^ISPRAV("spec",SPX,"wwwcom"),1:"")
+ D WC^RWU(COM_$S(KMOD:"|",1:"")_"||||"_B)
+ S CDT=DS+CDT-1
+ S OT="" F  S OT=$O(^DSH(LPU,OT)) Q:OT=""  S OTF=$$GETPL^ISPRAV("otd",OT,"flg") I '$$FLinFL^TXTU(OTF,"nwww") S VR="" F  S VR=$O(^DSH(LPU,OT,VR)) Q:VR=""  D  
+ .I $D(NOVR(VR)) Q 
+ .I $$FLinFL^TXTU($$GET^IKADRY(VR,"flg",DS),"nwww") S NOVR(VR)="" Q 
+ .S CH=$S($$FLinFL^TXTU(OTF,"child"):"C",1:"")
+ .S (A,B,SPT)=""
+ .F I=1:1:9 S X=$P(SPX,"|",I) Q:X=""  S:$L(SPT) SPT=SPT_", " S SPT=SPT_$$GSPEC^YISPRAV(X)
+ .S FW=0,RO=0
+ .I $$FLinFL^TXTU($$GET^ICONTR(LPU,"flg"),"nwebzp") S RO=1
+ .I 'RO,$$FLinFL^TXTU($$GETPL^ISPRAV("otd",OT,"flg"),"nwebzp") S RO=1
+ .I 'RO,$$FLinFL^TXTU($$GETPL^ISPRAV("spec",SPX,"flg"),"nwebzp") S RO=1
+ .I 'RO,$$FLinFL^TXTU($$GET^IKADRY(VR,"flg",DS),"nwebzp") S RO=1
+ .F SI=1:1:$L(SPX,"|") S SP=$P(SPX,"|",SI) I $D(^DSHI("sp",LPU,SP,OT_"|"_VR)) D
+ ..K SPL M SPL=^DSHI("sp",LPU,SP,OT_"|"_VR) S SPL(SP)=1
+ ..S SX="" F  S SX=$O(SPL(SX)) Q:SX=""  S DT=DS-1 F  S DT=$O(^DSH(LPU,OT,VR,SX,DT)) Q:DT=""!(DT>CDT)  D
+ ...S R=$G(^(DT)),X=$P($P(R,"|",1),"@",1),CAB=$P(R,"|",2)
+ ...S RR=$P(R,"|",9)
+ ...I RR=""!SPL(SX),SX'=SP Q  ; only one spec
+ ...I RR'="",'SPL(SX),("@"_RR_"@")'[("@"_SP_"@") Q  ; add. specs not eq
+ ...S T1=$O(^(DT,"")),T2=$O(^(86401),-1),T=0
+ ...I KMOD=3,$$IsFULL^IRASP2(LPU,OT,VR,SP,DT) S T=1
+ ...I CAB'="",$$FLinFL^TXTU($$CABFL^IPLPU(LPU,CAB,"cls"),"nwww") Q 
+ ...Q:'$$USED^IKADRY(VR,DT)  
+ ...S:T1 FW=1
+ ...S TML=$S(T:"!",1:"")_$S(T1="":"",1:$$TM^DTUTL(T1)_"-"_$$TM^DTUTL(T2))_$S(RO:"-L",1:"") ; time1-time2-lock-child
+ ...S:CH'="" $P(TML,"-",4)=CH
+ ...S $P(B,"|",DT-DS+1)=TML 
+ ...S:A="" A=OT_"|"_$S(KMOD=2:VR,1:$$VFIOSHD^IRASP2(VR,DT))_"|"_$S(KMOD=2:SP,1:$$GSPEC^YISPRAV(SP))_"|"_CAB_"|" ; SPT->$$GSPEC
+ .Q:'FW
+ .D WC^RWU(CR_$S(KMOD:LPU_","_OT_","_VR_","_SP_","_DS_"|",1:"")_A_B)
+ D C^RWU
+ Q
+ONTIME(DT,OTL,KMOD) ; Расписание на дату по всем филиалам
+ ; DT - на дату
+ ; KMOD=3 - вывод системного ключа записи, =2 - только системные ключи, =3 показ занятых времен
+ N OT,VR,TM,R,I,T,T1,T2,X,A,B,CAB,NOVR,COM,LPU,SP,TAB,J
+ S DT=$$DIH^DTUTL(DT),B="",KMOD=+$G(KMOD),OTL=$TR($G(OTL),", ","||")
+ D OWF^RWU(".txt")
+ D WC^RWU("||||||"_$P($$DT^DTUTL(DT),".",1,2)_" "_$$DWKNML^DTUTL($$DWEEK^DTUTL(DT)))
+ S J=0
+ S LPU="" F  S LPU=$O(^DSH(LPU)) Q:LPU=""  D:'$$FLinFL^TXTU($$GET^ICONTR(LPU,"flg",DT),"nwww")
+ .S OT="" F  S OT=$O(^DSH(LPU,OT)) Q:OT=""  S VR="" F  S VR=$O(^DSH(LPU,OT,VR)) Q:VR=""  D
+ ..I OTL'="",'$$FLinFL^TXTU(OTL,OT) Q 
+ ..I $D(NOVR(VR)) Q 
+ ..I $$FLinFL^TXTU($$GET^IKADRY(VR,"flg",DT),"nwww") S NOVR(VR)="" Q 
+ ..S (A,B)=""
+ ..S SP="" F  S SP=$O(^DSH(LPU,OT,VR,SP)) Q:SP=""  D:$D(^(SP,DT))
+ ...S R=$G(^(DT)),X=$P($P(R,"|",1),"@",1),CAB=$P(R,"|",2),T=0
+ ...S T1=$O(^(DT,"")),T2=$O(^(86401),-1) Q:T1="" 
+ ...I KMOD=3,$$IsFULL^IRASP2(LPU,OT,VR,SP,DT) S T=1 
+ ...I CAB'="",$$FLinFL^TXTU($$CABFL^IPLPU(LPU,CAB,"cls"),"nwww") Q 
+ ...S B=$S(T:"!",1:"")_$S(T1="":"",1:$$TM^DTUTL(T1)_"-"_$$TM^DTUTL(T2))
+ ...S A=LPU_"|"_OT_"|"_VR_"|"_SP_"|"_CAB_"|"
+ ...S TAB(LPU_"|"_SP,J)=LPU_","_OT_","_VR_","_SP_","_DT_"|"_A_B,J=J+1
+ S T1=0
+ S T="" F  S T=$O(TAB(T)) Q:T=""  D
+ .S J="" F  S J=$O(TAB(T,J)) Q:J=""  D WC^RWU(CR_TAB(T,J))
+ .D W^RWU(CR_"!") ; End complex
+ D C^RWU
+ Q
+VRDAY(KEY,FR,INF,MODS) ; Получить информацию и времена для записи
+ ; FR - только свободные времена
+ ; INF - выводить в первой строке информацию
+ ; MODS=1 - вывод времен в системном виде
+ N LPU,OT,VR,SP,DT,TM,TE,A,NI,R,TL,P,iDTM,fDTM,ZT,TLL
+ S INF=+$G(INF),FR=+$G(FR),MODS=+$G(MODS)
+ S LPU=$P(KEY,",",1),OT=$P(KEY,",",2),VR=$P(KEY,",",3),SP=$P(KEY,",",4),DT=$P(KEY,",",5)
+ Q:'$D(^DSH(LPU,OT,VR,SP,DT)) 
+ S (iDTM,A)="",fDTM=$G(^cfg("rasp","zt-nwebzp"))
+ S R=$P($G(^DSH(LPU,OT,VR,SP,DT)),"|",2) ; cab
+ S:INF A=$$GET^ICONTR(LPU,"mname"),A=KEY_"|"_$S(A="":$$NAME^ICONTR(LPU),1:A)_"|"_$$GOTD^YISPRAV(OT)_"|"_$$GSPEC^YISPRAV(SP)_"|"_$$VFIO^IRASP2(VR)_"|"_R_"|"_$$DT^DTUTL(DT)_"|"_$$TIMEST^IRASP2(LPU,OT,VR,SP,DT)
+ S TM="" F  S TM=$O(^DSH(LPU,OT,VR,SP,DT,TM+50)) Q:TM=""!(TM>86400)  D
+ .S R=$G(^(TM)),NI=$P(R,"|",1)
+ .Q:R="*"  
+ .I FR,NI'="" Q 
+ .S TE=$O(^(TM+50)) S:TE="" TE=TM+1800 ; default=30 min., 50 - multirec
+ .S ZT=$G(^(TM,"t"))
+ .S TL=$$TM^DTUTL(TM),TLL=(TE-TM)/60
+ .S TL=$S(MODS:TM_"|"_TL_"|"_TLL,1:TL_", "_TLL_" мин.")
+ .I ZT'="" S P=$P(ZT,"|",5) I P'="" S TM=TM+P-51 ; перескок времени
+ .I ZT'="",fDTM'=2 Q:fDTM=1  S:iDTM="" iDTM=+$G(^MN("raspzt")) S P=$P(ZT,"|",1) Q:$P($G(^MN(iDTM,P)),"|",3)  ; резервы времени
+ .S A=$S(A="":"",1:A_CR)_TL
+ .Q:FR  Q:NI="" 
+ .S A=A_"|"_$S($$EXIST^IPAC(NI):$$FIO^IPAC(NI),1:NI)
+ D MSG^RWU(A)
+ Q

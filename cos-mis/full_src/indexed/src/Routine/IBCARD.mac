@@ -1,0 +1,86 @@
+IBCARD ; Бонусные и пр. карты [ 09/07/2023  1:22 AM ]
+ADD(NUM,SUM,PRICE,NP,DT,DAYS) ; Зарег. карту
+ ; PRICE - стоимость карты
+ ; NP - not pay
+ ; DT - срок действия
+ ; DAYS - срок действия в днях
+ Q:NUM="" 
+ S ^ML("bcard",NUM)=SUM,^ML("bcard",NUM,"log")=$$USRH^IUSER()
+ S:$G(NP) ^ML("bcard",NUM,"pay")=0
+ S:$G(PRICE) ^ML("bcard",NUM,"prc")=PRICE
+ S:$G(DT) ^ML("bcard",NUM,"dt")=DT
+ S:$G(DAYS) ^ML("bcard",NUM,"dc")=DAYS
+ D GL^IEXCH("^ML","bcard",NUM)
+ Q
+GET(NUM) ; Получить сумму и цену
+ Q:NUM="" ""
+ Q:'$D(^ML("bcard",NUM)) ""
+ Q $G(^ML("bcard",NUM))_"|"_$G(^ML("bcard",NUM,"prc"))
+DOPAY(NUM) ; Проплатить карту
+ Q:$G(^ML("bcard",NUM,"pay"))'=0 0
+ K ^ML("bcard",NUM,"pay")
+ S $P(^ML("bcard",NUM,"plog"),"|",2)=$$USRH^IUSER()
+ S:$G(^ML("bcard",NUM,"dc")) ^("dt")=+$H+^("dc")
+ D KGL^IEXCH("^ML","bcard",NUM,"pay")
+ D GL^IEXCH("^ML","bcard",NUM,"plog")
+ Q 1
+SETPAY(NUM,NIB,KEY) ; Установить ключ платежа
+ S $P(^ML("bcard",NUM,"plog"),"|",3)=NIB_","_KEY
+ D GL^IEXCH("^ML","bcard",NUM,"plog")
+ Q
+CBILLBC(LN,FR,TO) ; Изменить ключ платежа с на для временных сертификатов
+ Q:FR=""  Q:TO=""  Q:FR=TO 
+ N R,NUM
+ S LN=$P(LN,"|",6) Q:$P(LN,":",1)'="BC" 
+ S NUM=$P(LN,":",2) Q:NUM="" 
+ Q:'$D(^ML("bcard",NUM,"plog"))  ; с платежом (!)
+ S R=^ML("bcard",NUM,"plog") Q:$P($P(R,"|",3),",",2,3)'=FR 
+ S $P(R,"|",3)=$P($P(R,"|",3),",",1)_","_TO
+ S ^ML("bcard",NUM,"plog")=R
+ D GL^IEXCH("^ML","bcard",NUM,"plog")
+ Q
+ISPRC(NUM) ; Есть цена продажи
+ Q:$G(^ML("bcard",NUM,"prc")) 1
+ Q 0
+APPL(NUM,NI) ; Использовать бонусную карту
+ Q:NUM="" 0
+ Q:$G(^ML("bcard",NUM,"pay"))=0 0 ; не продана
+ Q:$D(^ML("bcarda",NUM)) 0 ; уже было
+ N S
+ S S=$G(^ML("bcard",NUM,"dt"))
+ I S,+$H>S Q 0
+ S S=+$G(^ML("bcard",NUM)) Q:'S 0
+ M ^ML("bcarda",NUM)=^ML("bcard",NUM)
+ S ^ML("bcarda",NUM,"appl")=$$USRH^IUSER()_"|"_$G(NI)
+ K ^ML("bcard",NUM)
+ D KGL^IEXCH("^ML","bcard",NUM)
+ D GL^IEXCH("^ML","bcarda",NUM)
+ Q S
+GEN(CNT,LEN,SUM,PRC) ; Сгенерить список карт
+ ; CNT - кол-во карт
+ ; LEN - число знаков
+ ; SUM - номинал
+ ; PRC - стоимость
+ N I,N,F
+ S F=$E(999999999999,1,LEN),PRC=$G(PRC)
+ F I=1:1:CNT D
+ .F  S N=$R(F) Q:'$D(^ML("bcard",N)) 
+ .S ^(N)=SUM
+ .S:PRC ^(N,"prc")=PRC
+ .D GL^IEXCH("^ML",N)
+ Q
+CRTSKS(NUM,DT,SS) ; Получить скидку или сумму из сертификата
+ ; SS - 0/1=сумму/скидку
+ S DT=$O(^BCARD(NUM,DT+1),-1) Q:DT="" "" 
+ Q $P($G(^(DT,"f")),"|",3+$G(SS))
+MOV(N1,N2) ; Поменять местами сертификаты
+ N K1,K2,L1,L2
+ S K1=$G(^ML("bcard",N1,"plog")),K2=$G(^ML("bcard",N2,"plog"))
+ M L1=^ML("bcard",N1),L2=^ML("bcard",N2)
+ I $D(L1) k ^ML("bcard",N1) d KGL^IEXCH("^ML","bcard",N1)
+ I $D(L2) k ^ML("bcard",N2) d KGL^IEXCH("^ML","bcard",N2)
+ I $D(L1) m ^ML("bcard",N2)=L1 d KGL^IEXCH("^ML","bcard",N2)
+ I $D(L2) m ^ML("bcard",N1)=L2 d KGL^IEXCH("^ML","bcard",N1)
+ I K1'="" S N=$P(K1,",",1),D=$P(K1,",",2),T=$P(K1,",",3),$P(^BILL(N,D,T),"|",6)="BC:"_N2
+ I K2'="" S N=$P(K2,",",1),D=$P(K2,",",2),T=$P(K2,",",3),$P(^BILL(N,D,T),"|",6)="BC:"_N1
+ Q

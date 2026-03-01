@@ -1,0 +1,103 @@
+RBR13P ; Отчеты Бранчевский раздел 1.3x-1.4x [ 10/04/2018  3:49 PM ]
+F130(DS,DE) 
+ N REZ,LP,I
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S REZ("sheets","list","A6")=$$MNNM^DTUTL($$MONTH^DTUTL(DS))
+ S I=0
+ S LP="" F  S LP=$O(^DSH(LP)) Q:LP=""  D
+ .S REZ("sheets","list","A"_(10+I))=$$NAME^ICONTR(LP)
+ .S I=I+1
+ D MAKE^IDOCGEN("1_30.xlsx","REZ","xlsx")
+ Q
+F131(DS,DE) 
+ N REZ
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S REZ("sheets","list","A7")=$$YEAR^DTUTL(DS)_" г"
+ D MAKE^IDOCGEN("1_31.xlsx","REZ","xlsx")
+ Q
+F132(DS,DE) 
+ N REZ,LPU
+ S LPU=3
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S REZ("sheets","list","A5")=$$NAME^ICONTR(LPU)_" за "_$$YEAR^DTUTL(DS)_" г"
+ D MAKE^IDOCGEN("1_32.xlsx","REZ","xlsx")
+ Q
+F133(DS,DE) 
+ N REZ
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S REZ("sheets","list","A9")="Отчет о выполнении плана АПП за "_$$YEAR^DTUTL(DS)_" г"
+ D MAKE^IDOCGEN("1_33.xlsx","REZ","xlsx")
+ Q
+F134(DS,DE) 
+ N REZ
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S REZ("sheets","list","A8")="Отчет о выполнении плана ВЫРУЧКИ по АПП за "_$$YEAR^DTUTL(DS)_" г"
+ D MAKE^IDOCGEN("1_34.xlsx","REZ","xlsx")
+ Q
+F135(DS,DE) 
+ N REZ
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S REZ("sheets","list","A7")="Отчет о  выполнении плана ОПЕРАЦИЙ в "_$$YEAR^DTUTL(DS)_" г"
+ D MAKE^IDOCGEN("1_35.xlsx","REZ","xlsx")
+ Q
+F136(DS,DE) 
+ N REZ
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D MAKE^IDOCGEN("1_36.xlsx","REZ","xlsx")
+ Q
+F137(DS,DE) 
+ N REZ
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D MAKE^IDOCGEN("1_37.xlsx","REZ","xlsx")
+ Q
+F138(DS,DE) 
+ N REZ
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D MAKE^IDOCGEN("1_38.xlsx","REZ","xlsx")
+ Q
+F139(DS,DE) 
+ N REZ,TAB,DNU,LPU,LPI,UU,POS,KEY,X1,X2,P1,P2
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D FILLU^ICNLIST("c01.01","DNU",1)
+ K ^BUF($J,"pp")
+ D ITERATE^IUSLD("f139p^RBR13P",DS,DE,,,"")
+ 
+ S REZ("sheets","list","A7")="Выполнение плана стоимости привлечения первичного пациента "_$$TXTP^DTUTL(DS,DE)
+ 
+ S LPI="" F  S LPI=$O(TAB(LPI)) Q:LPI=""  D
+ .S X1=$G(TAB(LPI,1)),X2=$G(TAB(LPI,2))
+ .S REZ("sheets","list","C"_(12+LPI))=X1
+ .S REZ("sheets","list","F"_(12+LPI))=$S(X2:+$J(X1/X2,"",2),1:0)
+ .S LPU=$S(LPI=1:1,LPI=2:2,LPI=5:4,LPI=6:3,1:0)
+ .Q:'LPU 
+ .S P1=$$GETPLP^NFPLAN(LPU,"c01.01","pos",DS,DE)
+ .S P2=$$GETPLP^NFPLAN(LPU,"c01.01","kss",DS,DE)
+ .S REZ("sheets","list","E"_(12+LPI))=$S(P1:+$J(P2/P1,"",2),1:0)
+ 
+ D MAKE^IDOCGEN("1_39.xlsx","REZ","xlsx")
+ Q
+f139p 
+ S LPU=$$GETPL^IUSL(VR,DT,OT,ID,"l")
+ S LPI=$S(LPU=1&(OT=1):1,LPU=5&(OT=1):2,OT=3:3,LPU=4&(OT=1):5,LPU=3&(OT=1):6,1:0)
+ Q:'LPI 
+ ; TODO - детский прием
+ Q:"wd"[$$GETSTAT^IUSL(VR,DT,OT,ID)
+ D GET^IUSL(VR,DT,OT,ID)
+ S UU=$O(UL("")) Q:UU=""
+ Q:'KASS 
+ I LPI'=3,'$D(DNU(UU)) Q 
+ S KEY=LPI_"|"_NI_"|"_VR_"|"_DT,POS=0
+ I '$D(^BUF($J,"pp",KEY)) S ^(KEY)="",POS=1
+ S TAB(LPI,1)=$G(TAB(LPI,1))+$$SUMM^IUSL(VR,DT,OT,ID)
+ S:POS TAB(LPI,1)=$G(TAB(LPI,1))+1
+ Q
+F140(DS,DE) 
+ N REZ
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D MAKE^IDOCGEN("1_40.xlsx","REZ","xlsx")
+ Q
+F142(DS,DE) 
+ N REZ
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D MAKE^IDOCGEN("1_42.xlsx","REZ","xlsx")
+ Q

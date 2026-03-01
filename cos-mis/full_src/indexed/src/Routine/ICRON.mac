@@ -1,0 +1,216 @@
+ICRON ; Cron service [ 12/08/2021  1:08 PM ]
+A ;
+ G CFG
+DTM(DT,TM,PROC,PRM) ; Add for executing once on time
+ S TM=+TM,DT=+DT,PRM=$G(PRM) Q:PROC=""  S:TM=0 TM=10000
+ S ^CRON("time",DT,TM,PROC,$O(^CRON("time",DT,TM,PROC,""),-1)+1)=PRM
+ Q
+PERIOD(TM,PROC,PRM) ; Periodic, every time
+ S TM=+TM,PRM=$G(PRM) Q:PROC=""  S:TM=0 TM=10000
+ S ^CRON("period",TM,PROC,$O(^CRON("period",TM,PROC,""),-1)+1)=PRM
+ Q
+DAYLY(TM,PROC,PRM) ; Periodic, every day, on time
+ S TM=+TM,PRM=$G(PRM) Q:PROC=""  S:TM=0 TM=10000
+ S ^CRON("day",TM,PROC,$O(^CRON("day",TM,PROC,""),-1)+1)=PRM
+ Q
+WEEKLY(WD,TM,PROC,PRM) ; On day of week
+ S TM=+TM,DT=+DT,PRM=$G(PRM) Q:PROC=""  S:TM=0 TM=10000
+ S:WD<1 WD=1 S:WD>7 WD=7
+ S ^CRON("week",WD,TM,PROC,$O(^CRON("week",WD,TM,PROC,""),-1)+1)=PRM
+ Q
+MONTHLY(DOM,TM,PROC,PRM) ; On day i month
+ S TM=+TM,DOM=+DOM,PRM=$G(PRM) Q:PROC=""  S:TM=0 TM=10000
+ S:DOM<1 DOM=1 S:DOM>31 DT=31
+ S ^CRON("month",DOM,TM,PROC,$O(^CRON("month",DOM,TM,PROC,""),-1)+1)=PRM
+ Q
+DEL(TYPE,PROC,PRM) ; Delete from 1/2/3/4-Dtm/Day/Week/Month
+ Q
+JOB 
+ I $ZV'["Cache",$D(^CRON("sys","running")) Q 
+ S ^CRON("sys","running")=1,QQ=0,CR=$C(13,10),%LOG="sys",%JOB=77777
+ S DGB=$G(^cfg("cron","debug"))
+ D:$D(^$R("WWWSRV")) JSRVL^WWWSRV ; for Cache
+ S PDT=+$H,PTM=$P($H,",",2),PDD=$$DWEEK^DTUTL(PDT)
+ F  Q:QQ  S DT=+$H,TM=$P($H,",",2) D  Q:QQ  H 1
+ .I $D(^SYNCJ("JOB^ICRON")) S QQ=1 Q 
+ .S DOW=$$DWEEK^DTUTL(DT)
+ .S DOM=+$P($$DT^DTUTL(DT),".",1)
+ .S DX=PDT F  S DX=$O(^CRON("time",DX)) Q:DX=""  Q:DX<(DT+1)  D
+ ..S TX=PTM F  S TX=$O(^CRON("time",DX,TX)) Q:TX=""  Q:TX>TM  D
+ ...S PP="" F  S PP=$O(^CRON("time",DX,TX,PP)) Q:PP=""  S ID="" F  S ID=$O(^CRON("time",DX,TX,PP,ID)) Q:ID=""  D PROC(PP,$G(^(ID)))
+ .S TX=PTM F  S TX=$O(^CRON("day",TX)) Q:TX=""  Q:TX>TM  D
+ ..S PP="" F  S PP=$O(^CRON("day",TX,PP)) Q:PP=""  S ID="" F  S ID=$O(^CRON("day",TX,PP,ID)) Q:ID=""  D PROC(PP,$G(^(ID)))
+ .S TX=PTM F  S TX=$O(^CRON("week",DOW,TX)) Q:TX=""  Q:TX>TM  D
+ ..S PP="" F  S PP=$O(^CRON("week",DOW,TX,PP)) Q:PP=""  S ID="" F  S ID=$O(^CRON("week",DOW,TX,PP,ID)) Q:ID=""  D PROC(PP,$G(^(ID)))
+ .S TX=PTM F  S TX=$O(^CRON("month",DOM,TX)) Q:TX=""  Q:TX>TM  D
+ ..S PP="" F  S PP=$O(^CRON("month",DOM,TX,PP)) Q:PP=""  S ID="" F  S ID=$O(^CRON("month",DOM,TX,PP,ID)) Q:ID=""  D PROC(PP,$G(^(ID)))
+ .S PDT=DT,PTM=TM,PDD=DOW S:TM=86399 TM=-1
+ .S TX="" F  S TX=$O(^CRON("period",TX)) Q:TX=""  D
+ ..S PP="" F  S PP=$O(^CRON("period",TX,PP)) Q:PP=""  D
+ ...S ID="" F  S ID=$O(^CRON("period",TX,PP,ID)) Q:ID=""  D
+ ....S DX=+$G(^CRON("sys",TX,PP,ID)),T=$P($H,",",2)
+ ....I 'DX S ^(ID)=T Q 
+ ....I T<DX,T-DX+86400<TX Q 
+ ....I T'<DX,T-DX<TX Q 
+ ....D PROC(PP,$G(^CRON("period",TX,PP,ID)))
+ ....S ^CRON("sys",TX,PP,ID)=$P($H,",",2)
+ .; todo - month
+ K ^SYNCJ("JOB^ICRON"),^CRON("sys","running")
+ Q
+PROC(PROC,PRM) 
+ S:DGB ^ISLOG("CRON",$H,PROC)=PRM
+ N (PROC,PRM,CR,%LOG,%JOB)
+ S $ZT="ZT^ICRON"
+ D @(PROC_PRM)
+ S ^CRONLOG(PROC_PRM)=$H
+ Q
+ZT S ^ERLOG("CRON-"_$E($G(PROC)_$G(PRM),1,200),+$H,$P($H,",",2))=$ZE
+ K PROC,PRM H 2
+ G JOB
+START 
+ D:$$IsRUN() STOP
+ K ^SYNCJ("JOB^ICRON")
+ J JOB^ICRON
+ Q
+STOP 
+ S ^SYNCJ("JOB^ICRON")=1
+ H 5
+ F I=1:1:55 Q:'$$IsRUN()  H 1
+ K ^SYNCJ("JOB^ICRON"),^CRON("sys","running")
+ Q
+IsRUN() 
+ I $ZV["Cache" Q ($$COUNTNM^IJOBUTL("ICRON")>0)
+ Q $G(^CRON("sys","running"))=1
+CFG ; Настройка задач CRON
+ W !,$C(9),"Планировщик задач"
+ W !,"1. Список задач"
+ W !,"2. Добавить задачу"
+ W !,"7. Статус планировщика"
+ W !,"8. Запустить планировщик"
+ W !,"9. Остановить планировщик"
+ W !,"0. Выход"
+ W !,">" R CMD
+ Q:CMD=0 
+ I CMD=1 D LSTTSK
+ I CMD=2 D ADDTSK
+ 
+ I CMD=7 w !,"Планировщик "_$S($$IsRUN():"запущен",1:"остановлен")
+ I CMD=8 D START w !,"OK"
+ I CMD=9 D STOP w !,"OK"
+ G CFG
+LSTTSK 
+ N J,DX,TX,PP,ID,LST
+lst1 
+ K LST
+ S J=1
+ S DX="" F  S DX=$O(^CRON("time",DX)) Q:DX=""  D
+ .S TX="" F  S TX=$O(^CRON("time",DX,TX)) Q:TX=""  D
+ ..S PP="" F  S PP=$O(^CRON("time",DX,TX,PP)) Q:PP=""  S ID="" F  S ID=$O(^CRON("time",DX,TX,PP,ID)) Q:ID=""  D
+ ...S LST(J)="t,"_DX_","_TX_","_ID_","_PP
+ ...W !,$J(J,2)_". На "_$$DT^DTUTL(DX)_", "_$$TIME^DTUTL(TX)_", процедура: "_PP_^CRON("time",DX,TX,PP,ID)
+ ...S J=J+1
+ 
+ S TX="" F  S TX=$O(^CRON("day",TX)) Q:TX=""  D
+ .S PP="" F  S PP=$O(^CRON("day",TX,PP)) Q:PP=""  S ID="" F  S ID=$O(^CRON("day",TX,PP,ID)) Q:ID=""  D
+ ..S LST(J)="d,"_TX_","_ID_","_PP
+ ..W !,$J(J,2)_". Ежедневно в "_$$TIME^DTUTL(TX)_", процедура: "_PP_^CRON("day",TX,PP,ID)
+ ..S J=J+1
+ 
+ S DX="" F  S DX=$O(^CRON("week",DX)) Q:DX=""  D
+ .S TX="" F  S TX=$O(^CRON("week",DX,TX)) Q:TX=""  D
+ ..S PP="" F  S PP=$O(^CRON("week",DX,TX,PP)) Q:PP=""  S ID="" F  S ID=$O(^CRON("week",DX,TX,PP,ID)) Q:ID=""  D
+ ...S LST(J)="w,"_DT_","_TX_","_ID_","_PP
+ ...W !,$J(J,2)_". На "_$$DWKNM^DTUTL(DX)_" в "_$$TIME^DTUTL(TX)_", процедура: "_PP_^CRON("week",DX,TX,PP,ID)
+ ...S J=J+1
+ 
+ S DX="" F  S DX=$O(^CRON("month",DX)) Q:DX=""  D
+ .S TX="" F  S TX=$O(^CRON("month",DX,TX)) Q:TX=""  D
+ ..S PP="" F  S PP=$O(^CRON("month",DX,TX,PP)) Q:PP=""  S ID="" F  S ID=$O(^CRON("month",DX,TX,PP,ID)) Q:ID=""  D
+ ...S LST(J)="m,"_DT_","_TX_","_ID_","_PP
+ ...W !,$J(J,2)_". На "_$$MNNM^DTUTL(DX)_" в "_$$TIME^DTUTL(TX)_", процедура: "_PP_^CRON("month",DX,TX,PP,ID)
+ ...S J=J+1
+ ; TODO - period
+ 
+ W !,">" R CMD
+ Q:CMD="" 
+ I CMD'="",'$D(LST(CMD)) G lst1
+ D edittsk(LST(CMD))
+ Q
+edittsk(LN) ; Изменение задачи
+ N KEY,P1,DT,TM,ID,PROC,PRM,X,M
+ S (KEY,P1,DT,TM,ID,PROC,PRM)=""
+ S M=$P(LN,",",1),KEY=$P(LN,",",2,99)
+ W !,$C(9),"Изменение задачи"
+ W !,"1. Изменить"
+ W !,"2. Удалить"
+ Q:CMD="" 
+ I CMD=2 D deltsk Q 
+ D:M="t" ADDt D:M="d" ADDd D:M="w" ADDw D:M="m" ADDm
+ Q
+deltsk ; Удаление задачи
+ W !,"Удалить задачу <Y/N>: " R X S:(X="Y")!(X="y") X=1 S X=+X
+ S P1=$P(KEY,",",1),ID=$P(KEY,",",2)
+ I M="t" K ^CRON("time",P1,ID,$P(KEY,",",4,99),$P(KEY,",",3))
+ I M="d" K ^CRON("day",P1,$P(KEY,",",3,99),ID)
+ I M="w" K ^CRON("week",P1,ID,$P(KEY,",",4,99),$P(KEY,",",3))
+ I M="m" K ^CRON("month",P1,ID,$P(KEY,",",4,99),$P(KEY,",",3))
+ Q
+ADDTSK 
+ N KEY,P1,DT,TM,ID,PROC,PRM,X
+ S (KEY,P1,DT,TM,ID,PROC,PRM)=""
+ W !,$C(9),"Добавить задачу"
+ W !,"1. По времени"
+ W !,"2. Ежедневную"
+ W !,"3. Еженедельную"
+ W !,"4. Ежемесячную"
+ ;W !,"5. Задачу в периоде"
+ W !,"0. Выход"
+ W !,">" R CMD
+ D:CMD=1 ADDt D:CMD=2 ADDd D:CMD=3 ADDw D:CMD=4 ADDm
+ Q
+ADDt 
+ R !,"Дата:",X
+ S X=$$DI^DTUTL(X) S:X'="" DT=X
+ I DT="" w !,"Дата указано неверно !" G ADDt
+ D inproc Q:PROC="" 
+ I KEY'="" K ^CRON("time",$P(KEY,",",1),$P(KEY,",",2),$P(KEY,",",4,99),$P(KEY,",",3))
+ S ID=$O(^CRON("time",DT,TM,PROC,""))+1
+ S ^CRON("time",DT,TM,PROC,ID)=PRM
+ Q
+ADDd 
+ D inproc Q:PROC="" 
+ I KEY'="" K ^CRON("day",$P(KEY,",",1),$P(KEY,",",3,99),$P(KEY,",",2))
+ S ID=$O(^CRON("day",TM,PROC,""))+1
+ S ^CRON("day",TM,PROC,ID)=PRM
+ Q
+ADDw 
+ R !,"День недели (1-Пн, 2-Вт, 3-Ср, 4-Чт, 5-Пт, 6-Сб, 7-Вс):",X#1
+ S:X'="" P1=X Q:P1="" 
+ I +P1>7!(+P1<1) W !,"День недели указан неверно" G ADDw
+ D inproc Q:PROC="" 
+ I KEY'="" K ^CRON("week",$P(KEY,",",1),$P(KEY,",",2),$P(KEY,",",4,99),$P(KEY,",",3))
+ S ID=$O(^CRON("week",P1,TM,PROC,""))+1
+ S ^CRON("week",P1,TM,PROC,ID)=PRM
+ Q
+ADDm 
+ R !,"Месяц (1..12):",X
+ S:X'="" P1=X Q:P1="" 
+ I +P1>12!(+P1<1) W !,"Месяц указан неверно" G ADDw
+ D inproc Q:PROC="" 
+ I KEY'="" K ^CRON("month",$P(KEY,",",1),$P(KEY,",",2),$P(KEY,",",4,99),$P(KEY,",",3))
+ S ID=$O(^CRON("month",P1,TM,PROC,""))+1
+ S ^CRON("month",P1,TM,PROC,ID)=PRM
+ Q
+inproc 
+ R !,"Время:",X
+ S X=$$TI^DTUTL(X) S:X'="" X=TM
+ I TM="" w !,"Время указано неверно !" G inproc
+inproc1 
+ R !,"Процедура:",X
+ S:X'="" PROC=X
+ G:PROC="" inproc1
+ X "S X=$T("_PROC_")" S X=$P(X,";",2,99)
+ I X'="" W !,"Описание процедуры: "_X
+ R !,"Параметр:",X
+ S:X'="" PRM=X
+ Q

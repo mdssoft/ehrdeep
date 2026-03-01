@@ -1,0 +1,35 @@
+NKDLDEV ; KDL network devices [ 10/17/2012  12:49 PM ]
+CMD(CMD,DEV) ; call from driver
+ N IP,R
+ S %L=""
+ S IP=$G(^JOB(%JOB,6)) Q:IP="" 
+ S DEV=$G(DEV)
+ I CMD="register" D  Q 
+ .S R=$G(^LABT("DEV",DEV,"i")) Q:R="" 
+ .S ^MLABD(DEV)=IP_"|"_$H
+ .D MSG^RWU($P(R,"|",4,5))
+ I CMD="registerm" D  Q 
+ .S R=$G(^LABT("DEV",DEV,"i")) Q:R="" 
+ .S ^MLABD(DEV)=IP_"|"_$H_"||1" ; multi.
+ .D MSG^RWU($P(R,"|",4,5))
+ I CMD="ping",DEV'="" S $P(^MLABD(DEV),"|",1,2)=IP_"|"_$H  Q
+ I CMD="unregister" D  Q 
+ .K ^MLABD(DEV)
+ Q
+IMPORT ; import from remote device
+ D INDEVS("") ; find by IP
+ Q
+INDEVS(DEV) ; import from multidev client
+ N X,IP
+ S IP=$G(^JOB(%JOB,6))
+ S:$G(DEV)="" DEV=$$fndDEV(IP) Q:DEV="" 
+ S $P(^MLABD(DEV),"|",1,2)=IP_"|"_$H
+ S X=$G(^LABT("DEV",DEV,"ex")) Q:X="" 
+ S X=X_"("""_DEV_""",""I"")"
+ D @X
+ D MSG^RWU("OK")
+ Q
+fndDEV(IP) ; find device by IP
+ N I
+ S I="" F  S I=$O(^MLABD(I)) Q:I=""  I $P(^(I),"|",1)=IP Q 
+ Q I

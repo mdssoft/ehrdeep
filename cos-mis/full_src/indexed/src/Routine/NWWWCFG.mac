@@ -1,0 +1,52 @@
+NWWWCFG ; Управление web сервисами [ 01/29/2020  2:49 PM ]
+LST 
+ N R
+ D OWF^RWU(".txt"),WC^RWU("Наименование хоста")
+ S R="" F  S R=$O(^WWW("host",R)) Q:R=""  D WC^RWU(CR_R)
+ D C^RWU
+ Q
+L(SRV) 
+ D OWF^RWU(".xmlb")
+ D W^RWU($G(^PP(0,2))_"<wwwsrv>")
+ D WTAGDC^RWU("id",SRV)
+ D WTAGDC^RWU("cnt",+$G(^WWW("host",SRV)))
+ D WTAGDC^RWU("addr",$G(^WWW("host",SRV,4)))
+ D WTAGDC^RWU("port",$G(^WWW("host",SRV,5)))
+ D WTAGDC^RWU("sname",$G(^WWW("host",SRV,6)))
+ D WTAGDC^RWU("idx",$G(^WWW("host",SRV,1)))
+ D WTAGDC^RWU("root",$$DBLSLH^TXTU($G(^WWW("host",SRV,0))))
+ D WTAGDC^RWU("basis",$G(^WWW("host",SRV,9)))
+ D WTAGDC^RWU("dirs",$$DBLSLH^TXTU($G(^WWW("host",SRV,10))))
+ D WTAGDC^RWU("log",+$G(^WWW("host",SRV,3)))
+ D WTAGDC^RWU("susr",$G(^WWW("host",SRV,14)))
+ D W^RWU("</wwwsrv></nb_console>"),C^RWU
+ Q
+S 
+ N SRV,N,F,ADR,PRT
+ N @$$NEWVAR^YIXMLRR()
+ D RBUFH^YIXMLRR(1)
+ S N="nb_console",F="wwwsrv"
+ S SRV=$G(XML(N,F,"id")),ADR=$G(XML(N,F,"addr")),PRT=$G(XML(N,F,"port"))
+ S:PRT="" PRT=80
+ S A=ADR_$S(PRT=80:"",ADR="default":"",1:":"_PRT)
+ I SRV'="",SRV'=A K ^WWW("host",SRV) D KD^ISSG("^WWW(""host"","""_SRV_""")")
+ S SRV=A
+ S ^WWW("host",SRV)=+$G(XML(N,F,"cnt"))
+ S ^(SRV,0)=$G(XML(N,F,"root"))
+ S ^(1)=$G(XML(N,F,"idx"))
+ S ^(3)=$G(XML(N,F,"log"))
+ S:ADR'="default" ^(4)=ADR
+ S ^(5)=PRT
+ S ^(6)=$G(XML(N,F,"sname"))
+ S ^(9)=$G(XML(N,F,"basis"))
+ S ^(10)=$G(XML(N,F,"dirs"))
+ S ^(14)=$G(XML(N,F,"susr"))
+ D W^ISSG("^WWW(""host"","""_SRV_""")")
+ D L(SRV)
+ Q
+DEL(SRV) 
+ G:SRV=""!(SRV="default") DELe
+ D KD^ISSG("^WWW(""host"","""_SRV_""")")
+ K ^WWW("host",SRV)
+DELe D LST
+ Q

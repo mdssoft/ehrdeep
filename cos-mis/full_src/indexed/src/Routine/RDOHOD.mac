@@ -1,0 +1,348 @@
+RDOHOD ; Общие отчеты по доходам [ 09/04/2018  4:39 PM ]
+KSSD(DS) ; Отчет по кассовой выручке за день
+ S DS=$$DIH^DTUTL($G(DS))
+ N DT,TM,L,CM,SUM,OPE,TP,STAT,STOTD,LP,PLST,SS,C9,NI,OT,DS1,DS7,I
+ N TRS,TRE,TD2,TD3,X1,X2,TRS1
+ S I=$G(^cfg("stom-otd")) S:I'="" STOTD(I)="" M STOTD=^cfg("stom-otd")
+ S C9=$C(9),DS1=DS-1,DS7=DS-7
+ D CALCLO^RZARP(DS,DS) M X1=STAT K STAT
+ D CALCLO^RZARP(DS1,DS1) M X2=STAT K STAT
+ I '+$$FR^I() S L="" F  S L=$O(X1(L)) Q:L=""  K:+$$^I("ilpu")'=L X1(L),X2(L)
+ S L="" F  S L=$O(X1(L)) Q:L=""  S I="",STAT(L,1,1)=$G(X1(L))  F  S I=$O(X1(L,I)) Q:I=""  S:$D(STOTD(I)) STAT(L,1,3)=X1(L,I) S:'$D(STOTD(I)) STAT(L,1,2)=$G(STAT(L,1,2))+X1(L,I)
+ S L="" F  S L=$O(X2(L)) Q:L=""  S I="",STAT(L,2,1)=$G(X2(L))  F  S I=$O(X2(L,I)) Q:I=""  S:$D(STOTD(I)) STAT(L,2,3)=X2(L,I) S:'$D(STOTD(I)) STAT(L,2,2)=$G(STAT(L,2,2))+X2(L,I)
+ S I=1,SS(I,1)=0,SS(I,2)=0,SS(I,3)=0,LP="" F  S LP=$O(STAT(LP)) Q:LP=""  D
+ .S SS(I,1)=SS(I,1)+$G(STAT(LP,I,1)),SS(I,2)=SS(I,2)+$G(STAT(LP,I,2))
+ .S SS(I,3)=SS(I,3)+$G(STAT(LP,I,3))
+ S I=2,SS(I,1)=0,SS(I,2)=0,SS(I,3)=0,LP="" F  S LP=$O(STAT(LP)) Q:LP=""  D
+ .S SS(I,1)=SS(I,1)+$G(STAT(LP,I,1)),SS(I,2)=SS(I,2)+$G(STAT(LP,I,2))
+ .S SS(I,3)=SS(I,3)+$G(STAT(LP,I,3))
+ K X1,X2
+ 
+ S TRS="<tr class=""s3""><td class=""s4"">",TRE="</td></tr>"
+ S TD2="</td><td>",TRS1="<tr class=""s3""><td class=""s5"">"
+ S TD3="</td><td class=""s6"">"
+ D OWF^RWU(".htm")
+ F I=1:1:17 D WC^RWU($E($T(KSSD1+I),4,999)_CR)
+ D WC^RWU($$DT^DTUTL(DS)_"</div></td></tr></table>")
+ D WC^RWU($E($T(KSSD2+1),4,999)_CR)
+ D WC^RWU("<td rowspan=""2"">Доходы (руб.)</td><td rowspan=""2"">"_$$DT^DTUTL(DS)_"</td><td rowspan=""2"">"_$$DT^DTUTL(DS1)_"</td><td colspan=""2"">отклонения</td><td rowspan=""2"">"_$$DT^DTUTL(DS7)_"</td><td colspan=""2"">отклонения</td></tr>")
+ D WC^RWU($E($T(KSSD3+1),4,999)_CR)
+ S X1=+$G(SS(1,1)),X2=+$G(SS(2,1)),L=CR_TRS_"Москва (всего)"_TD3_$$FFN(X1)_$$KSSDFN(),X2=+$G(SS(3,1)),L=L_$$KSSDFN()_TRE
+ D WC^RWU(L)
+ S X1=+$G(SS(1,2)),X2=+$G(SS(2,2)),L=CR_TRS1_"Поликлиника"_TD3_$$FFN(X1)_$$KSSDFN(),X2=$G(SS(3,2)),L=L_$$KSSDFN()_TRE
+ D WC^RWU(L)
+ S X1=+$G(SS(1,3)),X2=+$G(SS(2,3)),L=CR_TRS1_"Стоматология"_TD3_$$FFN(X1)_$$KSSDFN(),X2=+$G(SS(3,3)),L=L_$$KSSDFN()_TRE
+ D WC^RWU(L)
+ S LP="" F  S LP=$O(STAT(LP)) Q:LP=""  D
+ .S X1=+$G(STAT(LP,1,1)),X2=+$G(STAT(LP,2,1)),L=CR_TRS_$$NAME^ICONTR(LP)_" (всего)"_TD3_$$FFN(X1)_$$KSSDFN(),X2=+$G(STAT(LP,3,1)),L=L_$$KSSDFN()_TRE
+ .D WC^RWU(L)
+ .S X1=+$G(STAT(LP,1,2)),X2=+$G(STAT(LP,2,2)),L=CR_TRS1_"Поликлиника"_TD3_$$FFN(X1)_$$KSSDFN(),X2=+$G(STAT(LP,3,2)),L=L_$$KSSDFN()_TRE
+ .D WC^RWU(L)
+ .S X1=+$G(STAT(LP,1,3)),X2=+$G(STAT(LP,2,3)),L=CR_TRS1_"Стоматология"_TD3_$$FFN(X1)_$$KSSDFN(),X2=+$G(STAT(LP,3,3)),L=L_$$KSSDFN()_TRE
+ .D WC^RWU(L)
+ ; ---------- POLIS ------------
+ K STAT,SS D MKPSD(DS,DS,1),MKPSD(DS1,DS1,2),MKPSD(DS7,DS7,3)
+ D WC^RWU("</table><br>"_$E($T(KSSD2+1),4,999)_CR)
+ D WC^RWU("<td rowspan=""2"">Продажи годовых абонементов</td><td rowspan=""2"">"_$$DT^DTUTL(DS)_"</td><td rowspan=""2"">"_$$DT^DTUTL(DS1)_"</td><td colspan=""2"">отклонения</td><td rowspan=""2"">"_$$DT^DTUTL(DS7)_"</td><td colspan=""2"">отклонения</td></tr>")
+ D WC^RWU($E($T(KSSD3+1),4,999)_CR)
+ S X1=+$G(SS(1)),X2=+$G(SS(2)),L=CR_TRS_"Москва"_TD2_X1_$$KSSDFP(),X2=+$G(SS(3)),L=L_$$KSSDFP()_TRE
+ D WC^RWU(L)
+ S LP="" F  S LP=$O(STAT(LP)) Q:LP=""  D
+ .S X1=+$G(STAT(LP,1)),X2=+$G(STAT(LP,2)),L=CR_TRS_$$NAME^ICONTR(LP)_TD2_X1_$$KSSDFP(),X2=+$G(STAT(LP,3)),L=L_$$KSSDFP()_TRE
+ .D WC^RWU(L)
+ D W^RWU("</table></body></html>") 
+ D C^RWU
+ Q
+KSSP(DS,DE) ; Отчет по кассовой выручке за период
+ S DS=$$DIH^DTUTL($G(DS)),DE=$$DIH^DTUTL($G(DE))
+ N DT,TM,L,CM,SUM,OPE,TP,STAT,STOTD,LP,PLST,SS,C9,NI,OT,DS1,DE1,I
+ N TRS,TRE,TD2,X1,X2,TRS1,ITG
+ S C9=$C(9),DS1=2*DS-DE-1,DE1=DS-1
+ S I=$G(^cfg("stom-otd")) S:I'="" STOTD(I)="" M STOTD=^cfg("stom-otd")
+ D CALCLO^RZARP(DS,DE) M X1=STAT K STAT
+ D CALCLO^RZARP(DS1,DE1) M X2=STAT K STAT
+ I '+$$FR^I() S L="" F  S L=$O(X1(L)) Q:L=""  K:+$$^I("ilpu")'=L X1(L),X2(L)
+ S L="" F  S L=$O(X1(L)) Q:L=""  S I="",STAT(L,1,1)=$G(X1(L))  F  S I=$O(X1(L,I)) Q:I=""  S:$D(STOTD(I)) STAT(L,1,3)=X1(L,I) S:'$D(STOTD(I)) STAT(L,1,2)=$G(STAT(L,1,2))+X1(L,I)
+ S L="" F  S L=$O(X2(L)) Q:L=""  S I="",STAT(L,2,1)=$G(X2(L))  F  S I=$O(X2(L,I)) Q:I=""  S:$D(STOTD(I)) STAT(L,2,3)=X2(L,I) S:'$D(STOTD(I)) STAT(L,2,2)=$G(STAT(L,2,2))+X2(L,I)
+ S I=1,SS(I,1)=0,SS(I,2)=0,SS(I,3)=0,LP="" F  S LP=$O(STAT(LP)) Q:LP=""  D
+ .S SS(I,1)=SS(I,1)+$G(STAT(LP,I,1)),SS(I,2)=SS(I,2)+$G(STAT(LP,I,2))
+ .S SS(I,3)=SS(I,3)+$G(STAT(LP,I,3))
+ S I=2,SS(I,1)=0,SS(I,2)=0,SS(I,3)=0,LP="" F  S LP=$O(STAT(LP)) Q:LP=""  D
+ .S SS(I,1)=SS(I,1)+$G(STAT(LP,I,1)),SS(I,2)=SS(I,2)+$G(STAT(LP,I,2))
+ .S SS(I,3)=SS(I,3)+$G(STAT(LP,I,3))
+ K X1,X2
+ S ITG="касса"
+ S TRS="<tr class=""s3""><td class=""s4"">",TRE="</td></tr>"
+ S TD2="</td><td>",TRS1="<tr class=""s3""><td class=""s5"">"
+ S TD3="</td><td class=""s6"">"
+ D OWF^RWU(".htm")
+ F I=1:1:16 D WC^RWU($E($T(KSSD1+I),4,999)_CR)
+ D WC^RWU($E($T(KSSP1+1),4,999)_CR)
+ D WC^RWU($$DT^DTUTL(DS)_"-"_$$DT^DTUTL(DE)_"</div></td></tr></table>")
+ D WC^RWU($E($T(KSSD2+1),4,999)_CR)
+ D WC^RWU("<td rowspan=""2"">Доходы (руб.)</td><td rowspan=""2"">"_$$DT^DTUTL(DS)_" - "_$$DT^DTUTL(DE)_"</td><td rowspan=""2"">"_$$DT^DTUTL(DS1)_" - "_$$DT^DTUTL(DE1)_"</td><td colspan=""2"">отклонения</td></tr>")
+ D WC^RWU($E($T(KSSP3+1),4,999)_CR)
+ S X1=+$G(SS(1,1)),X2=+$G(SS(2,1)),L=CR_TRS_"Москва ("_ITG_")"_TD3_$$FFN(X1)_$$KSSDFN()_TRE
+ D WC^RWU(L)
+ S X1=+$G(SS(1,2)),X2=+$G(SS(2,2)),L=CR_TRS1_"Поликлиника"_TD3_$$FFN(X1)_$$KSSDFN()_TRE
+ D WC^RWU(L)
+ S X1=+$G(SS(1,3)),X2=+$G(SS(2,3)),L=CR_TRS1_"Стоматология"_TD3_$$FFN(X1)_$$KSSDFN()_TRE
+ D WC^RWU(L)
+ S LP="" F  S LP=$O(STAT(LP)) Q:LP=""  D
+ .S X1=+$G(STAT(LP,1,1)),X2=+$G(STAT(LP,2,1)),L=CR_TRS_$$NAME^ICONTR(LP)_" ("_ITG_")"_TD3_$$FFN(X1)_$$KSSDFN()_TRE
+ .D WC^RWU(L)
+ .S X1=+$G(STAT(LP,1,2)),X2=+$G(STAT(LP,2,2)),L=CR_TRS1_"Поликлиника"_TD3_$$FFN(X1)_$$KSSDFN()_TRE
+ .D WC^RWU(L)
+ .S X1=+$G(STAT(LP,1,3)),X2=+$G(STAT(LP,2,3)),L=CR_TRS1_"Стоматология"_TD3_$$FFN(X1)_$$KSSDFN()_TRE
+ .D WC^RWU(L)
+ ; ---------- POLIS ------------
+ K STAT,SS D MKPSD(DS,DE,1),MKPSD(DS1,DE1,2)
+ D WC^RWU("</table><br>"_$E($T(KSSD2+1),4,999)_CR)
+ D WC^RWU("<td rowspan=""2"">Продажи годовых абонементов</td><td rowspan=""2"">"_$$DT^DTUTL(DS)_" - "_$$DT^DTUTL(DE)_"</td><td rowspan=""2"">"_$$DT^DTUTL(DS1)_" - "_$$DT^DTUTL(DE1)_"</td><td colspan=""2"">отклонения</td>")
+ D WC^RWU($E($T(KSSP3+1),4,999)_CR)
+ S X1=+$G(SS(1)),X2=+$G(SS(2)),L=CR_TRS_"Москва"_TD2_X1_$$KSSDFP()_TRE
+ D WC^RWU(L)
+ S LP="" F  S LP=$O(STAT(LP)) Q:LP=""  D
+ .S X1=+$G(STAT(LP,1)),X2=+$G(STAT(LP,2)),L=CR_TRS_$$NAME^ICONTR(LP)_TD2_X1_$$KSSDFP()_TRE
+ .D WC^RWU(L)
+ D W^RWU("</table></body></html>")
+ D C^RWU
+ Q
+KSSPT(DS,DE) ; Таблица по кассовой выручке за период
+ S DS=$$DIH^DTUTL($G(DS)),DE=$$DIH^DTUTL($G(DE))
+ N DT,TM,L,CM,SUM,OPE,TP,STAT,STOTD,LP,PLST,SS,C9,NI,OT,DS1,DE1,I
+ N X1,X2,ITG
+ S C9=$C(9),DS1=2*DS-DE-1,DE1=DS-1
+ S I=$G(^cfg("stom-otd")) S:I'="" STOTD(I)="" M STOTD=^cfg("stom-otd")
+ D CALCLO^RZARP(DS,DE) M X1=STAT K STAT
+ D CALCLO^RZARP(DS1,DE1) M X2=STAT K STAT
+ I '+$$FR^I() S L="" F  S L=$O(X1(L)) Q:L=""  K:+$$^I("ilpu")'=L X1(L),X2(L)
+ S L="" F  S L=$O(X1(L)) Q:L=""  S I="",STAT(L,1,1)=$G(X1(L))  F  S I=$O(X1(L,I)) Q:I=""  S:$D(STOTD(I)) STAT(L,1,3)=X1(L,I) S:'$D(STOTD(I)) STAT(L,1,2)=$G(STAT(L,1,2))+X1(L,I)
+ S L="" F  S L=$O(X2(L)) Q:L=""  S I="",STAT(L,2,1)=$G(X2(L))  F  S I=$O(X2(L,I)) Q:I=""  S:$D(STOTD(I)) STAT(L,2,3)=X2(L,I) S:'$D(STOTD(I)) STAT(L,2,2)=$G(STAT(L,2,2))+X2(L,I)
+ S I=1,SS(I,1)=0,SS(I,2)=0,SS(I,3)=0,LP="" F  S LP=$O(STAT(LP)) Q:LP=""  D
+ .S SS(I,1)=SS(I,1)+$G(STAT(LP,I,1)),SS(I,2)=SS(I,2)+$G(STAT(LP,I,2))
+ .S SS(I,3)=SS(I,3)+$G(STAT(LP,I,3))
+ S I=2,SS(I,1)=0,SS(I,2)=0,SS(I,3)=0,LP="" F  S LP=$O(STAT(LP)) Q:LP=""  D
+ .S SS(I,1)=SS(I,1)+$G(STAT(LP,I,1)),SS(I,2)=SS(I,2)+$G(STAT(LP,I,2))
+ .S SS(I,3)=SS(I,3)+$G(STAT(LP,I,3))
+ K X1,X2
+ S ITG="касса"
+ D OWF^RWU(".txt")
+ D WC^RWU("Доход по кассе (руб.)|"_$$DT^DTUTL(DS)_"-"_$$DT^DTUTL(DE)_"|"_$$DT^DTUTL(DS1)_" - "_$$DT^DTUTL(DE1)_"|Абс. отклонение|% отклонения")
+ S X1=+$G(SS(1,1)),X2=+$G(SS(2,1))
+ D WC^RWU(CR_"Москва (касса)|"_$$FFN(X1)_$$KSSDFNT())
+ S X1=+$G(SS(1,2)),X2=+$G(SS(2,2))
+ D WC^RWU(CR_" Поликлиника|"_$$FFN(X1)_$$KSSDFNT())
+ S X1=+$G(SS(1,3)),X2=+$G(SS(2,3))
+ D WC^RWU(CR_" Стоматология|"_$$FFN(X1)_$$KSSDFNT())
+ S LP="" F  S LP=$O(STAT(LP)) Q:LP=""  D
+ .S X1=+$G(STAT(LP,1,1)),X2=+$G(STAT(LP,2,1))
+ .D WC^RWU(CR_$$NAME^ICONTR(LP)_" (касса)|"_$$FFN(X1)_$$KSSDFNT())
+ .S X1=+$G(STAT(LP,1,2)),X2=+$G(STAT(LP,2,2))
+ .D WC^RWU(CR_" Поликлиника|"_$$FFN(X1)_$$KSSDFNT())
+ .S X1=+$G(STAT(LP,1,3)),X2=+$G(STAT(LP,2,3))
+ .D WC^RWU(CR_" Стоматология|"_$$FFN(X1)_$$KSSDFNT())
+ D C^RWU
+ Q
+KSOTD(DS,DE,TR) ; Таблица по кассовой выручке за период по отделениям
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N DT,TM,L,CM,SUM,OPE,TP,STAT,PLST,SS,C9,NI,OT,I,R
+ S C9=$C(9)
+ I 'TR D CALCLO^RZARP(DS,DE) G KSOT1
+ S DT=DS-1 F  S DT=$O(^BILLI(DT)) Q:DT=""!(DT>DE)  S TM="" F  S TM=$O(^BILLI(DT,TM)) Q:TM=""  S NI="" F  S NI=$O(^BILLI(DT,TM,NI)) Q:NI=""  D
+ .S L=$G(^BILL(NI,DT,TM)) Q:L="" 
+ .Q:$P(L,"|",1)'=""  ; OPE
+ .S I=$P($P(L,"|",6),"/",1),R=$P(I,":",1) Q:R'="ZNF"&(R'="ZND") 
+ .S SUM=+$P(L,"|",2),L=+$P($P(L,"|",5),"@",2) Q:SUM=0 
+ .S OT=+$P(I,":",3),STAT(L,OT)=$G(STAT(L,OT))-SUM
+KSOT1 I '+$$FR^I() S L="" F  S L=$O(STAT(L)) Q:L=""  K:+$$^I("ilpu")'=L STAT(L)
+ S L=""
+ F  S L=$O(STAT(L)) Q:L=""  S OT="" F  S OT=$O(STAT(L,OT)) Q:OT=""  S I=STAT(L,OT),SS(-1)=$G(SS(-1))+I,STAT(-1,OT)=$G(STAT(-1,OT))+I,SS(L)=$G(SS(L))+I
+ D OWF^RWU(".txt")
+ D WC^RWU("Доход по кассе (руб.)|"_$$DT^DTUTL(DS)_"-"_$$DT^DTUTL(DE))
+ S L=""  F  S L=$O(SS(L)) Q:L=""  D
+ .D WC^RWU(CR_$S(L<0:"Всего",1:$$NAME^ICONTR(L))_" (сумма)|"_$$FFN(SS(L)))
+ .S OT="" F  S OT=$O(STAT(L,OT)) Q:OT=""  D
+ ..D WC^RWU(CR_" - "_$$GOTD^YISPRAV(OT)_"|"_$$FFN(STAT(L,OT)))
+ D C^RWU
+ Q
+KSDGN(DS,DE) ; Таблица по кассовой выручке за период по договорам
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N DT,TM,L,SUM,TP,STAT,SS,NI,DG,I,R
+ S DT=DS-1 F  S DT=$O(^BILLI(DT)) Q:DT=""!(DT>DE)  S TM="" F  S TM=$O(^BILLI(DT,TM)) Q:TM=""  S NI="" F  S NI=$O(^BILLI(DT,TM,NI)) Q:NI=""  D
+ .S L=$G(^BILL(NI,DT,TM)) Q:L="" 
+ .Q:$P(L,"|",1)'=""  ; OPE
+ .S R=$P($P($P(L,"|",6),"/",1),":",1) Q:R'="ZNF"&(R'="ZND") 
+ .S SUM=+$P(L,"|",2),L=+$P($P(L,"|",5),"@",2)
+ .S DG=+$$GET^IPAC(NI,"stc",DT),STAT(L,DG)=$G(STAT(L,DG))-SUM
+ I '+$$FR^I() S L="" F  S L=$O(STAT(L)) Q:L=""  K:+$$^I("ilpu")'=L STAT(L)
+ S L=""
+ F  S L=$O(STAT(L)) Q:L=""  S DG="" F  S DG=$O(STAT(L,DG)) Q:DG=""  S I=STAT(L,DG),SS(-1)=$G(SS(-1))+I,STAT(-1,DG)=$G(STAT(-1,DG))+I,SS(L)=$G(SS(L))+I
+ D OWF^RWU(".txt")
+ D WC^RWU("Доход по кассе (руб.)|"_$$DT^DTUTL(DS)_"-"_$$DT^DTUTL(DE))
+ S L=""  F  S L=$O(SS(L)) Q:L=""  D
+ .D WC^RWU(CR_$S(L<0:"Всего",1:$$NAME^ICONTR(L))_" (сумма)|"_$$FFN(SS(L)))
+ .S DG="" F  S DG=$O(STAT(L,DG)) Q:DG=""  D WC^RWU(CR_" - "_$$NAME^IINSC(DG)_"|"_$$FFN(STAT(L,DG)))
+ D C^RWU
+ Q
+KSVD(DS,DE) ; Кассовая сводка
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N SSTAT,LP,STOTD,I,SS,X,R
+ S I=$G(^cfg("stom-otd")) S:I'="" STOTD(I)="" M STOTD=^cfg("stom-otd")
+ D MKSVD(DS,DE)
+ D OWF^RWU(".txt")
+ D WC^RWU("За период "_$$DT^DTUTL(DS)_"-"_$$DT^DTUTL(DE)_"||||Поликлиника|Поликлиника|Стоматология|Стоматология|Абонементы|Абонементы|||;")
+ D WC^RWU(CR_"Филиал|Касса|Б.нал.|БСО|Из авансов|Из кассы|Из авансов|Из кассы|Из авансов|Из кассы|В аванс|Возвраты|Не списано")
+ S LP="" F  S LP=$O(SSTAT(LP)) Q:LP=""  D
+ .S X=$$NAME^ICONTR(LP)
+ .S SSTAT(LP,10)=$G(SSTAT(LP,1))+$G(SSTAT(LP,2))+$G(SSTAT(LP,3))-$G(SSTAT(LP,5))-$G(SSTAT(LP,7))-$G(SSTAT(LP,9))
+ .S SSTAT(LP,12)=SSTAT(LP,10)-$G(SSTAT(LP,4))-$G(SSTAT(LP,6))+$G(SSTAT(LP,11))
+ .F I=1:1:12 S R=$G(SSTAT(LP,I)),X=X_"|"_$$FFN(R),SS(I)=$G(SS(I))+R
+ .D WC^RWU(CR_X)
+ S X="Всего" F I=1:1:12 S X=X_"|"_$$FFN($G(SS(I)))
+ D WC^RWU(CR_X)
+ D C^RWU
+ Q
+KSSDFN() ; Get line for KSSD
+ Q TD3_$$FFN(X2)_TD3_$$FFN(X1-X2)_TD2_$S(X2=0:"0,0",X1=0:"-100,0",1:$$FFN1((100*(X1-X2))/X1))
+KSSDFNT() ; Get line for KSSD
+ Q "|"_$$FFN(X2)_"|"_$$FFN(X1-X2)_"|"_$S(X2=0:"0,0",X1=0:"-100,0",1:$$FFN1((100*(X1-X2))/X1))
+KSSDFP() ; Get line for KSSD
+ Q TD2_X2_TD2_$$FFN(X1-X2)_TD2_$S(X2=0:"0,0",X1=0:"-100,0",1:$$FFN1((100*(X1-X2))/X1))
+ 
+KSSD1 
+ ; <html><head>
+ ; <title>Отчет по кассовой выручке</title>
+ ; <meta http-equiv="Content-Type" content="text/html; charset=windows-1251">
+ ; <style type="text/css">
+ ; <!--
+ ; .s1{  font-family: "Times New Roman", Times, serif; font-size: 22px; font-weight: bold}
+ ; .s2 {  font-family: Arial, Helvetica, sans-serif; font-size: 14px; font-weight: bold; text-align: center}
+ ; .s3 {  font-family: Arial, Helvetica, sans-serif; font-size: 12px; text-align: center}
+ ; .s4 {  font-style: italic; font-weight: bold; text-align: right}
+ ; .s5 {  font-style: italic; font-weight: none; text-align: right}
+ ; .s6 {  text-align: right }
+ ; -->
+ ; </style>
+ ; </head>
+ ; <body bgcolor="#FFFFFF" text="#000000">
+ ; <table width="100%" border="0" class="s1">
+ ; <tr><td>Отчет по кассовой выручке - ежедневный</td><td><div align="right">
+KSSP1 
+ ; <tr><td>Отчет по кассовой выручке - за период</td><td><div align="right">
+KSSD2 
+ ; <table width="100%" border="1" cellspacing="0"><tr class="s2" bgcolor="#CCCCCC">
+KSSD3 
+ ; <tr class="s2" bgcolor="#CCCCCC"><td>абсолют.</td><td>относит.</td><td>абсолют.</td><td>относит.</td></tr>
+KSSP3 
+ ; <tr class="s2" bgcolor="#CCCCCC"><td>абсолют.</td><td>относит.</td></tr>
+MKPSD(DS,DE,I) 
+ N LPU,FF
+ S SS(I)=0,FF=+$$FR^I(),LPU=$$^I("ilpu")
+ S TP=$G(^BTPL(C9_"t","wdt")),NI=""
+ I TP'="" F  S NI=$O(^BTPL(NI)) Q:NI=""!(NI[C9)  S L="" F  S L=$O(^BTPL(NI,L)) Q:L=""  D
+ .S DT=+$O(^(L,TP,-1))
+ .Q:DT<DS  Q:DT>DE
+ .S LP=+$P($G(^(DT)),"@",2),CM=+$$GET^IPOLIS(NI,L,"summ")
+ .I FF=0 Q:LP'=LPU 
+ .I CM>0 S STAT(LP,I)=$G(STAT(LP,I))+1,SS(I)=SS(I)+1
+ Q
+MKSVD(DS,DE) ; for KSVD ->SSTAT
+ K ^BUF($J,"av") ; Авансы на начало периода
+ N NI,DT,TM,Sa,Sk,Sl,R,Z,LP,TP,OPE,S,OT,TO,z
+ S z="z"
+ S DT=DS-1 F  S DT=$O(^BILLI(DT)) Q:DT=""!(DT>DE)  S TM="" F  S TM=$O(^BILLI(DT,TM)) Q:TM=""  S NI="" F  S NI=$O(^BILLI(DT,TM,NI)) Q:NI=""  D
+ .S R=$G(^(NI)),Z=$G(^BILL(NI,DT,TM)) Q:R=""  Q:Z="" 
+ .I '$D(^BUF($J,"av",NI)) S Sa=$P(R,"|",1)-$P(R,"|",2) S:Sa<0 Sa=0 S ^(NI)=Sa
+ .E  S Sa=+$G(^(NI))
+ .S LP=+$P($P(R,"|",4),"@",2)
+ .S OPE=$P(Z,"|",1),S=$P(Z,"|",2),TP=$P(Z,"|",6)
+ .Q:OPE'="+"&(OPE'="-")&$L(OPE)  Q:S=0 
+ .S TP=$P($P(Z,"|",6),"/",1),OT=$P(TP,":",3),TP=$P(TP,":",1)
+ .S TO=$P(Z,"|",3)
+ .I '((OPE="-")&(S<0)) S ^(z)=S+$G(^(NI,z)),^(LP)=S+$G(^(LP)),R=$S(TO=3:3,TO>2:2,1:1) S:TP'="BILL" SSTAT(LP,R)=$G(SSTAT(LP,R))+S Q 
+ .I OPE="-" S ^(z)=S+$G(^(NI,z)),^(LP)=S+$G(^(LP)),SSTAT(LP,11)=$G(SSTAT(LP,11))+S Q 
+ .S Sk=+$G(^(NI,z)),Sl=+$G(^(LP)) ; приход (^BUF)
+ .; todo - перевод со счета на счет
+ .S R=$S(TP="ZNF"!(TP="ZND"):$S($D(STOTD(OT)):6,1:4),TP="BTPL":8,1:12)
+ .Q:R=12  ; todo - other types
+ .D:Sa=0 ; не с локального ЛПУ списывается с авансов
+ ..S ^(z)=Sk+S
+ ..S:Sl>0 Z=$S(S+Sl<0:-Sl,1:S),S=S-Z,^(LP)=Sl+Z,SSTAT(LP,R+1)=$G(SSTAT(LP,R+1))-Z 
+ ..S:S>0 SSTAT(LP,R)=$G(SSTAT(LP,R))-S 
+ .Q:Sa=0 
+ .S Z=$S(Sa+S<0:Sa,1:0-S),S=0-(Z+S)
+ .S ^BUF($J,"av",NI)=Sa-Z,SSTAT(LP,R)=$G(SSTAT(LP,R))+Z
+ .Q:S=0 
+ .S ^(NI,z)=Sk-S,SSTAT(LP,R+1)=$G(SSTAT(LP,R+1))+S
+ K ^BUF($J)
+ Q
+USTAB(DS,DE) ; Сводная таблица по видам оплат
+ N TABLE,PX,D,LBL,DTPL,s,LP,STAT,SUMM
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ K ^BUF($J,"p"),^BUF($J,"b")
+ S D=$$DI^DTUTL("01."_$P($$DT^DTUTL(DS),".",2,3)),PX=0
+ D MKALLPRC^IUSLSC(DS,DE,1,"USTABp^RDOHOD","",0)
+ S PX=1
+ D MKALLPRC^IUSLSC(D,DE,1,"USTABp^RDOHOD","",0)
+ 
+ K SUMM
+ D TPDAYS^RBILL(DS,DE,"USTABb^RDOHOD")
+ S LP="" F  S LP=$O(SUMM(LP)) Q:LP=""  D
+ .S TABLE(LP,4,1)=$G(SUMM(LP,1)) ; nal
+ .S TABLE(LP,3,1)=$G(SUMM(LP,2)) ; bank
+ K SUMM
+ D TPDAYS^RBILL(D,DE)
+ S LP="" F  S LP=$O(SUMM(LP)) Q:LP=""  D
+ .S TABLE(LP,4,2)=$G(SUMM(LP,1)) ; nal
+ .S TABLE(LP,3,2)=$G(SUMM(LP,2)) ; bank
+ 
+ D OWF^RWU(".txt")
+ S LBL(1)="Страховые, факт",LBL(2)="Страховые, предоплата"
+ S LBL(3)="Физлица, банк.карты",LBL(4)="Физлица, наличные"
+ S LBL(5)="Прочие"
+ D WC^RWU("Филиал|Платежи|Лиц|Сумма за "_$$DT2^DTUTL(DS)_"-"_$$DT2^DTUTL(DE)_"|Сумма с начала месяца")
+ S LP="" F  S LP=$O(TABLE(LP)) Q:LP=""  D
+ .S D=$S(LP="z":"Итого",1:$$NAME^ICONTR(LP))
+ .S PX="" F  S PX=$O(TABLE(LP,PX)) Q:PX=""  D
+ ..I LP'="z" S TABLE("z",PX,1)=$G(TABLE("z",PX,1))+$G(TABLE(LP,PX,1)),TABLE("z",PX,2)=$G(TABLE("z",PX,2))+$G(TABLE(LP,PX,2))
+ ..S D=D_"|"_LBL(PX)_"|"_(+$G(TABLE(LP,PX,0)))_"|"_$$FFN($G(TABLE(LP,PX,1)))_"|"_$$FFN($G(TABLE(LP,PX,2)))
+ ..D WC^RWU(CR_D)
+ ..S D=""
+ D C^RWU
+ K ^BUF($J,"p"),^BUF($J,"b")
+ Q
+USTABp 
+ Q:U=""
+ I '$D(DTPL(CSTC,DT)) S DTP=+$$GET^YNDOG(CSTC,"dvid",DT),DTPL(CSTC,DT)=DTP
+ E  S DTP=DTPL(CSTC,DT)
+ Q:KASS ; касса
+ Q:DTP=3
+ S DTP=$S(DTP>1:5,1:DTP+1)
+ I 'PX,'$D(^BUF($J,"p",LPU,NI,DTP)) S ^(DTP)="",TABLE(LPU,DTP,0)=$G(TABLE(LPU,DTP,0))+1
+ I 'PX,'$D(^BUF($J,"p","z",NI,DTP)) S ^(DTP)="",TABLE("z",DTP,0)=$G(TABLE("z",DTP,0))+1
+ S s=$S($D(UL(U,1)):UL(U,1),1:$$PRICEH^IPRICE(U,PRC,DT)*KSKD*UL(U))
+ S TABLE(LPU,DTP,PX+1)=$G(TABLE(LPU,DTP,PX+1))+s
+ Q
+USTABb 
+ Q:TP>2  ; bill type
+ S s=$S(TP=2:3,1:4)
+ I '$D(^BUF($J,"b",LP,NI)) S ^(NI)="",TABLE(LP,s,0)=$G(TABLE(LP,s,0))+1
+ I '$D(^BUF($J,"b","z",NI)) S ^(NI)="",TABLE("z",s,0)=$G(TABLE("z",s,0))+1
+ Q
+FFN(X) 
+ Q $TR($TR($FN(X,",",2),","," "),".",",")
+FFN1(X) 
+ Q $TR($TR($FN(X,",",1),","," "),".",",")
+REGIPROC 
+ N D S D="Общие отчеты"
+ S ^IPROC(D,"Отчет по кассовой выручке за день")="KSSD_RDOHOD,3,1,d,Дата отчета,t@string:1/Да#0/Нет,Ограничить списание текущим днем"
+ S ^IPROC(D,"Отчет по кассовой выручке за период")="KSSP_RDOHOD,3,2,d,Начальная дата отчета,d,Конечная дата отчета,t@string:1/Да#0/Нет,Ограничить списание текущим днем"
+ S ^IPROC(D,"Таблица по кассовой выручке за период")="KSSPT_RDOHOD,1,2,d,Начальная дата отчета,d,Конечная дата отчета"
+ S ^IPROC(D,"Кассовая выручка по отделениям")="KSOTD_RDOHOD,1,3,d,Начальная дата отчета,d,Конечная дата отчета,t@string:0/С полным покрытием#1/Фактически,Расчет"
+ S ^IPROC(D,"Кассовая выручка по договорам")="KSDGN_RDOHOD,1,2,d,Начальная дата отчета,d,Конечная дата отчета"
+ Q:+$$FR^I()=0
+ S ^IPROC(D,"Сводная таблица по кассовой выручке")="KSVD_RDOHOD,1,2,d,Начальная дата отчета,d,Конечная дата отчета"
+ S ^IPROC(D,"Сводная таблица по видам оплат")="USTAB_RDOHOD,1,2,d,Начальная дата отчета,d,Конечная дата отчета"
+ Q
+ 

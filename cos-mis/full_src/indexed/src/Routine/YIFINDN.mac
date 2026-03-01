@@ -1,0 +1,551 @@
+YIFINDN ; ПОИСК ПАЦИЕНТА  [ 02/12/2022  2:20 PM ]
+ Q
+YF(STR,FTP,uCL,NOSDG) ; Поиск по номеру/периоду истории
+ ; uCL - use colors
+ ; NOSDG - без дублирования договоров
+ K MRR,DOGG,YFDU,NIB
+ S FTP=+$G(FTP),uCL=+$G(uCL) ; не вар. поиск
+YFLOC N IDX,IFIO,IFI,IFO,FIOI,FIOO,NIB,IFLG,COLS,COLOR,I,%MXIDX,LS,L,FLST,X,WHO,I2FIO,IEC,A,FIO,cLPU,cAGE,DV,adFF,adFFL,cSTC,cWRK,OK,OKm
+ K NIB,POLIS
+ D YFHDR
+ S STR=$$TRIM^TXTU(STR),STR=$TR($E(STR,1,128),"""",""),IE=+$P(STR,"-",2)
+ S (IDX,LS)=0,DH=+$H,RZ=$C(9)
+ S:$D(YFDU) DH=DT
+ S cLPU=$S($$LCL^IUSER("patients"," clpu"):$$^I("ilpu"),1:"")
+ S cSTC=$$LCL^IUSER("patients"," stc")
+ S cWRK=$$LCL^IUSER("patients"," work")
+ S cAGE=$$LCL^IUSER("patients"," age")
+ S STR=$$WD^TXTU(STR)
+ ; phone search
+ I $E(STR)="+",$G(^cfg("xpac","phnidx")) D  G YFCLS
+ .S STR=$E(STR,2,99),STR=$$MPHN^TXTU(STR),IEC=$$RSH^IHASH(STR)#65536
+ .S NIB="" F  S NIB=$O(^BTI("phn",IEC,NIB)) Q:NIB=""  D  Q:IDX=%MXIDX
+ ..S X=1
+ ..I $$MPHN^TXTU($P($$GET^IPAC(NIB,"tel1",DH),",",1))=STR S X=0
+ ..I X,$$MPHN^TXTU($P($$GET^IPAC(NIB,"tel2",DH),",",1))=STR S X=0
+ ..I X,$$MPHN^TXTU($P($$GET^IPAC(NIB,"pager",DH),",",1))=STR S X=0
+ ..Q:X
+ ..D YFPC
+ 
+ I $TR($E(STR,1),"rКк","RRR")="R" S X=$$GNIB^IPAC($E(STR,2,32)) I X'="" S NIB=X D YFPC G YFCLS
+ I $$EXIST^IPAC($$NI^IPAC(STR)) S NIB=STR D YFPC G YFCLS
+ I cSTC'="",'$D(^BTI(" s",cSTC)) G YFCLS
+ I cWRK'="",'$D(^BTI(" w",cWRK)) G YFCLS
+ I STR["-",+$P(STR,"-",1)=$P(STR,"-",1),$P(STR,"-",2)=IE D
+ .S NIB=$P(STR,"-",1)-1 ; TODO RNI
+ .F  S NIB=$$NEXT^IPAC(NIB) Q:NIB>IE!(NIB="")  D YFPC  Q:IDX=%MXIDX
+ G:$D(NIB) YFCLS
+ S STR=$$LU^TXTU(STR)
+ ; Здесь надо самые новые
+ I STR="" S NIB="",IDX=0 F  S NIB=$$NEXT^IPAC(NIB) Q:NIB=""  D YFPC Q:IDX=%MXIDX
+ I STR="" G YFCLS
+ S STR=$$DBLSP^TXTU($TR(STR,"."," ")) ; точки в имени отчестве
+ S IFI=$P(STR," ",2),IFO=$E($P(STR," ",3),1,5),STR=$P(STR," ",1)
+ S:IFI="?" IFI=""
+ S IFIO=$S(FTP:$TR(STR,"Ё","Е"),1:$$F^YIFAM(STR))
+ S IFI=$TR(IFI,"Ё","Е"),IFO=$TR(IFO,"Ё","Е")
+ S STR=$$LU^TXTU(STR),LS=$L(STR)
+ I $E(STR,LS)="?" S STR=$E(STR,1,LS-1),LS=LS-1 G:LS=0 YFALL G YFFIO
+ ; Похожие ФИО
+ I 'FTP S NIB="" F  S NIB=$O(^BTI(" i",IFIO,NIB)) Q:NIB=""  S IFLG=1 D YFPC Q:IDX=%MXIDX 
+ G:$D(IFLG) YFCLS ; если нашли полные ФИО - закончили
+ ; F.I.O.
+YFFIO 
+ S L=LS,STR=$TR(STR,"Ё """_$C(9),"Е"),IEX="" S:L>5 L=5
+ F I=1:1:L S:I'=1 IEX=IEX_""",""" S IEX=IEX_$E(STR,I)
+ I $L(IEX) S NIB="" F  S NIB=$O(@("^BTI("""_IEX_""","""_RZ_""","""_NIB_""")")) Q:NIB=""  D YFPC Q:IDX=%MXIDX 
+ D YFSTK(IEX)
+YFCLS K IE,IEX,IFIO,NIB,IFLG
+ D C^RWU
+ Q
+YFALL ; Когда ФИО=""
+ S NIB="",IDX=0
+ F  S NIB=$$NEXT^IPAC(NIB) Q:NIB=""  D YFPC Q:IDX=%MXIDX 
+ G YFCLS
+YFHDR ; Header
+ D OWF^RWU(".txt")
+ M COLS=^cfg("fpac-col")
+ M:uCL COLOR=^cfg("fpac-color")
+ S:$D(^JOB(%JOB,"YFP")) adFF=^JOB(%JOB,"YFP")
+ M adFFL=^JOB(%JOB,"YFP")
+ N A,I S (A,I)=""
+ F  S I=$O(COLS(I)) Q:I=""  S A=A_"|"_$G(COLS(I,"n"))
+ D WC^RWU("№ И.Б.|Фамилия|Имя|Отчество|Оформ.|Договор|Срок"_A)
+YFHDR1 S %MXIDX=+$G(^cfg("mxsearchcnt")) S:%MXIDX=0 %MXIDX=1000
+ S WHO=$G(^cfg("who-pfind"))
+ Q
+YFSTK(IEX) ; Для поиска
+ N CH,G
+ S CH="" F  S CH=$O(@("^BTI("""_IEX_""","""_CH_""")")) Q:CH=""  D  Q:IDX=%MXIDX
+ .S IEC=IEX_""","""_CH,G="^BTI("""_IEC_""","""_RZ_""")"
+ .S NIB="" F  S NIB=$O(@G@(NIB)) Q:NIB=""!(NIB[RZ)  D YFPC Q:IDX=%MXIDX
+ .D YFSTK(IEC)
+ Q
+YFPC 
+ S OK=0 Q:IDX=%MXIDX  
+ I '$D(YFDU),$D(FLST(NIB)) Q  ; already find
+ I $D(DOGG),$$GET^IPAC(NIB,"stc",DH)'=DOGG Q:$$GET^IPAC(NIB,"stc1",DH)'=DOGG 
+ I $D(MRR),$$GET^IPAC(NIB,"work",DH)'=MRR Q 
+ I $D(YFDU) S A=+$$LOCATE^IUSL(NIB,DF) Q:A<DF!(A>DT) 
+YFPCN S DV=DH,OK=0
+ S FIO=$$GET^IPAC(NIB,"fiof",DV)
+ I FIO="" S DV=$$FIRSTDT^IPAC(NIB),DV=$S(DV>DH:DV,1:DH),FIO=$$GET^IPAC(NIB,"fiof",DV)
+ I $G(cLPU) S X=$$GET^IPAC(NIB,"lpu",DV) I X'="","|"_X_"|"'[("|"_cLPU_"|") Q 
+ I $G(cSTC),$$PIDXN^IPAC(NIB,cSTC,DV)=-1 Q 
+ I $G(cWRK),$$GET^IPAC(NIB,"work",DV)'=cWRK Q
+ I $G(cAGE) S X=$$AGE^IPAC(NIB,DV) I X Q:$S(cAGE>0:cAGE>X,1:0)  Q:$S(cAGE<0:-cAGE<X,1:0)
+ S X=+$G(POLIS)
+ I X=0,'$D(IFLG),$G(LS) Q:'($TR($$LU^TXTU(FIO),"Ё","Е")[STR) 
+ I X'=1,X'=3,$D(IFLG),'FTP S I2FIO=$$GET^IPAC(NIB,"idxfio",DV) Q:I2FIO'=IFIO 
+ S FIOI=$$GET^IPAC(NIB,"fioi",DV)
+ I X=0,$L($G(IFI)),'$G(LS)!$L(FIOI) Q:$TR($$LU^TXTU($E(FIOI,1,$L(IFI))),"Ё","Е")'=IFI 
+ I X=2,$L($G(IFI)) Q:FIOI=""  Q:$F($TR($$LU^TXTU(FIOI),"Ё","Е"),IFI)'=IFIl 
+ S FIOO=$$GET^IPAC(NIB,"fioo",DV)
+ I X'=1,X'=3,$L($G(IFO)),$L(FIOO) Q:$TR($$LU^TXTU($E(FIOO,1,$L(IFO))),"Ё","Е")'=IFO 
+ I WHO'="" S A=$$GET^IPAC(NIB,"whop",DV) I A'="",WHO'[A S A="" Q  ; whop - принадлежность, 1 символ (0...9)
+ I X=2 S A=NIB,OK=1 Q 
+ ; доп параметры
+ I $G(adFF)'="" S A=0 D  Q:A 
+ .I adFF["m",'$D(^BTI("phn",adFFL("phni"),NIB)) S A=1 Q 
+ .I adFF["o",$$GET^IPAC(NIB,"ofor",DV)'=adFFL("ofor") S A=1 Q
+ .I adFF["x",$$GET^IPAC(NIB,"pol",DV)'=adFFL("pol") S A=1 Q
+ .I adFF["y",$P($$GETE^IPAC(NIB,"datar",DV),".",3)'=adFFL("year") S A=1 Q 
+ .I adFF["s",'$$FLinFL^TXTU($$GET^IPAC(NIB,"status",DV),adFFL("stat")) S A=1 Q 
+ .I adFF["p" S X=adFFL("phn") I $$reDIG($$GET^IPAC(NIB,"tel1",DV))'[X,$$reDIG($$GET^IPAC(NIB,"tel2",DV))'[X,$$reDIG($$GET^IPAC(NIB,"pager",DV))'[X S A=1 Q 
+ .I adFF["e",$$UL^TXTU($$GET^IPAC(NIB,"email",DV))'[adFFL("mail") S A=1 Q 
+ .I adFF["F",$$GET^IPAC(NIB,"familyr",DV)'=adFFL("fr") S A=1 Q
+ 
+ S IDX=IDX+1,OK=1 
+ I IDX=%MXIDX D WC^RWU(CR_"|Число найденых|пациентов|превышает|"_%MXIDX) Q 
+ S A=$$RNI^IPAC(NIB)_"|"_FIO_"|"_FIOI_"|"_FIOO_"|"_$$GETE^IPAC(NIB,"ofor",DV)_"|"
+ S:X'=1 DN=$$GET^IPAC(NIB,"stc",DV),A=A_$$NAME^IINSC(DN)
+ S:X=1 A=A_$$GET^IPAC(NIB,"polis",DV)
+ S:'$D(YFDU) FLST(NIB)=""
+ S A=A_"|"_$$DT^DTUTL($$GET^IPAC(NIB,"dog_to",DV))
+ S I=$$GETNEXT^YIPACN(NIB,"dog_to",DV) S:I'="" A=A_" ("_$$DT2^DTUTL(I)_")"
+ I $D(COLS) S I="" F  S I=$O(COLS(I)) Q:I=""  S A=A_"|"_$S($D(COLS(I,"e")):$$DOexec(NIB,COLS(I,"e"),"",DV),1:$$GETE^IPAC(NIB,COLS(I),DV))
+ I uCL,$D(COLOR) S I="" X:COLOR'="" "S I="_COLOR S A=I_"|"_A
+ D WC^RWU(CR_A)
+ Q:X=1 
+ I $D(DOGG),DOGG'="" Q  ; только по одному договору
+ I $D(NOSDG) Q 
+ S I=$$GET^IPAC(NIB,"cntstc",DV)
+ S I=$S(I:I,$$GET^IPAC(NIB,"stc1",DV)'="":2,1:1)
+ Q:I<2 
+ N C,N
+ F I=1:1:I-1 D
+ .S C=$$GET^IPAC(NIB,"stc"_I,DV)
+ .Q:C=""!(C=DN) 
+ .S $P(A,"|",6)=$$NAME^IINSC(C)
+ .S N=$$GETNEXT^YIPACN(NIB,"dog_to"_I,DV) S:N'="" N=" ("_$$DT2^DTUTL(N)_")"
+ .S $P(A,"|",7)=$$DT^DTUTL($$GET^IPAC(NIB,"dog_to"_I,DV))_N
+ .I $D(COLS) S FIO=7,N="" F  S N=$O(COLS(N)) Q:N=""  S X=COLS(N),X=$S(X="polis":"polis"_I,X="dog_from":"dog_from"_I,$D(COLS(N,"e")):1,1:""),FIO=FIO+1 I X'="" S $P(A,"|",FIO)=$S($D(COLS(N,"e")):$$DOexec(NIB,COLS(N,"e"),I,DV),1:$$GETE^IPAC(NIB,X,DV))
+ .D WC^RWU(CR_A)
+ Q
+DOexec(NIB,EXE,IDX,DT) ; Выполнить код
+ ; результат - в X
+ Q:EXE="" 
+ N (NIB,EXE,IDX,DT,%LOG,%JOB,CR,TZRBTN)
+ S X=""
+ X EXE
+ Q X
+YFD(STR,DOGG,FTP,NOSDG,uCL) ; ПОИСК ИСТОРИИ ПО ДОГОВОРУ
+ N IDX,IFIO,IFI,IFO,FIOI,FIOO,NIB,COLS,I,LS,PLS,POLIS,IFIl,MRR,L,S1
+ S IFIO="",FTP=+$G(FTP),uCL=+$G(uCL)
+ I STR'=""!(DOGG="") K:DOGG="" DOGG G YFLOC
+ N COLOR,%MXIDX,WHO,cLPU,cAGE,DH,DV,adFF,adFFL,cSTC,cWRK,OK,OKs
+ D YFHDR
+ S NIB="",DH=+$H,IDX=0
+ S cLPU=$S($$LCL^IUSER("patients"," clpu"):$$^I("ilpu"),1:"")
+ S cSTC=$$LCL^IUSER("patients"," stc")
+ S cWRK=$$LCL^IUSER("patients"," work")
+ S cAGE=$$LCL^IUSER("patients"," age")
+ I cSTC'="",'$D(^BTI(" s",cSTC)) G YFDe
+ I cWRK'="",'$D(^BTI(" w",cWRK)) G YFDe
+ F  S NIB=$O(^BTI(" s",DOGG,NIB)) Q:NIB=""  D  Q:IDX'<%MXIDX
+ .S S1=$$GET^IPAC(NIB,"stc",DH),DV=DH
+ .I S1="" S DV=$$FIRSTDT^IPAC(NIB),DV=$S(DV>DH:DV,1:DH),S1=$$GET^IPAC(NIB,"stc",DH)
+ .S:S1'=DOGG S1=$$GET^IPAC(NIB,"stc1",DV) 
+ .Q:S1'=DOGG
+ .D YFPCN
+YFDe D C^RWU
+ Q
+YFDU(STR,DOGG,DF,DT,uCL) ; ПОИСК ИСТОРИИ ПО ДОГОВОРУ, ЕСЛИ ЕСТЬ УСЛУГИ
+ N IDX,IFIO,IFI,IFO,FIOI,FIOO,NIB,COLS,I,NIB,LS,PLS,POLIS,IFIl,MRR,YFDU,L,FTP,NOSDG,PIDX,PI
+ S (FTP,YFDU)=0,IFIO="",NOSDG=1,uCL=+$G(uCL)
+ S DF=$$DIH^DTUTL($G(DF)),DT=$$DIH^DTUTL($G(DT))
+ I $L(STR)!(DOGG="") K:DOGG="" DOGG G YFLOC
+ N COLOR,%MXIDX,WHO,cLPU,cAGE,DH,DV,adFF,adFFL,cSTC,cWRK,OK,OKs
+ D YFHDR
+ K adFF ; no sub.
+ S NIB="",DH=DT,IDX=0
+ S cLPU=$S($$LCL^IUSER("patients"," clpu"):$$^I("ilpu"),1:"")
+ S cSTC=$$LCL^IUSER("patients"," stc")
+ S cWRK=$$LCL^IUSER("patients"," work")
+ S cAGE=$$LCL^IUSER("patients"," age")
+ F  S NIB=$O(^BTI(" s",DOGG,NIB)) Q:NIB=""  D  Q:IDX'<%MXIDX
+ .S PIDX=$$PIDXN^IPAC(NIB,DOGG,DH) Q:PIDX=-1 
+ .S A=+$$LOCATE^IUSL(NIB,DF) Q:A<DF!(A>DT) 
+ .S PI=PIDX
+ .D YFPCN
+ D C^RWU Q
+YFM(STR,MRR,FTP,uCL,NOSDG) ; ПОИСК ИСТОРИИ ПО МЕСТУ РАБОТЫ
+ N DOGG,IFIO,L,LS
+ S FTP=+$G(FTP),uCL=+$G(uCL)
+ I $L(STR) K:MRR="" MRR G YFLOC
+ N COLS,COLOR,%MXIDX,WHO,IDX,cLPU,cAGE,DH,DV,adFF,adFFL,cSTC,cWRK,OK,OKs
+ D YFHDR S NIB="",DH=+$H,IDX=0
+ S cLPU=$S($$LCL^IUSER("patients"," clpu"):$$^I("ilpu"),1:"")
+ S cSTC=$$LCL^IUSER("patients"," stc")
+ S cWRK=$$LCL^IUSER("patients"," work")
+ S cAGE=$$LCL^IUSER("patients"," age")
+ F  S NIB=$O(^BTI(" w",MRR,NIB)) Q:NIB=""  D YFPCN Q:IDX'<%MXIDX 
+ D C^RWU
+ Q
+YFPL(STR,DOGG,FTP,uCL,NOSDG) ; ПОИСК ИСТОРИИ ПО ПОЛИСУ
+ N %MXIDX,NIB,PL,WHO,adFF,adFFL
+ N COLS,COLOR,IDX,SH,X,FF,cLPU,cAGE,DH,DV,cSTC,cWRK,OK,OKs
+ D YFHDR1 ; alt header
+ S:$D(^JOB(%JOB,"YFP")) adFF=^JOB(%JOB,"YFP")
+ M adFFL=^JOB(%JOB,"YFP")
+ D OWF^RWU(".txt")
+ D WC^RWU("№ И.Б.|Фамилия|Имя|Отчество|Оформ.|Полис|Срок")
+ S uCL=+$G(uCL)
+ G:STR="" YFPLC
+ S STR=$$WD^TXTU(STR),FTP=+$G(FTP)
+ S STR=$$PLCNV($E(STR,1,128)),POLIS=1,DH=+$H,IDX=0,SH=$$RSH^IHASH(STR)#16384,FF=1
+ S cLPU=$S($$LCL^IUSER("patients"," clpu"):$$^I("ilpu"),1:"")
+ S cSTC=$$LCL^IUSER("patients"," stc")
+ S cWRK=$$LCL^IUSER("patients"," work")
+ S cAGE=$$LCL^IUSER("patients"," age")
+ S NIB="" F  S NIB=$O(^BTI("pls",SH,NIB)) Q:NIB=""  D  I X=STR D YFPCN Q:IDX'<%MXIDX  S FF=0
+ .S X=$$GET^IPAC(NIB,"polis",DH)
+ .S:X="" DV=$$FIRSTDT^IPAC(NIB),DV=$S(DV>DH:DV,1:DH),X=$$GET^IPAC(NIB,"polis",DV)
+ .S X=$$PLCNV(X)
+ I FF,$L(STR) S NIB="" F  S NIB=$O(^BTI(" s",DOGG,NIB)) Q:NIB=""  D  I $L(X),$L(STR),X[STR D YFPCN Q:IDX'<%MXIDX
+ .S X=$$GET^IPAC(NIB,"polis",DH)
+ .S:X="" DV=$$FIRSTDT^IPAC(NIB),DV=$S(DV>DH:DV,1:DH),X=$$GET^IPAC(NIB,"polis",DV)
+ .S X=$$PLCNV(X)
+YFPLC K POLIS
+ D C^RWU
+ Q
+NIBYPL(PL,DGN,H) ; Поиск истории по полису (DGN - не обязат.)
+ N P,R,HP,NIB,X,DV
+ S P=$$PLCNV($E(PL,1,128)),HP=$$RSH^IHASH(P)#16384,H=$G(H),DGN=$G(DGN),R=""
+ S:H="" H=+$H
+ ; TODO - только первый полис
+ S NIB="" F  S NIB=$O(^BTI("pls",HP,NIB)) Q:NIB=""!$L(R)  D
+ .S X=$$GET^IPAC(NIB,"polis",H) 
+ .S:X="" DV=$$FIRSTDT^IPAC(NIB),DV=$S(DV>H:DV,1:H),X=$$GET^IPAC(NIB,"polis",DV)
+ .Q:X'=PL 
+ .I DGN'="",$$PIDXN^IPAC(NIB,DGN,H)=-1 Q 
+ .S R=NIB Q 
+ Q R
+YFADD(POL,YY,ST,PH,EM,FM) ; Поиск по произвольным полям
+ N A,OF,X
+ S PH=$$reDIG(PH),OF=""
+ S EM=$$UL^TXTU(EM)
+ S A=""
+ K ^JOB(%JOB,"YFP")
+ S:OF ^JOB(%JOB,"YFP","ofor")=OF,A="o"
+ S:POL ^JOB(%JOB,"YFP","pol")=POL,A=A_"x"
+ S:YY ^JOB(%JOB,"YFP","year")=YY,A=A_"y"
+ S:ST'="" ^JOB(%JOB,"YFP","stat")=ST,A=A_"s"
+ I PH'="" S ^JOB(%JOB,"YFP","phn")=PH,X=$$MPHN^TXTU(PH),A=A_"p" S:$L(X)=12&$G(^cfg("xpac","phnidx")) ^JOB(%JOB,"YFP","phni")=$$RSH^IHASH(X)#65536,A=A_"m"
+ S:EM'="" ^JOB(%JOB,"YFP","mail")=EM,A=A_"e"
+ S:FM'="" ^JOB(%JOB,"YFP","fmy")=FM,A=A_"F"
+ S ^JOB(%JOB,"YFP")=A ; маркеры поиска
+ Q
+YFCLR ; Очистка доп условий поиска
+ K ^JOB(%JOB,"YFP")
+ Q
+reDIG(X) ; Перекодировать оставив числа
+ Q $TR(X,$TR(X,"1234567890",""),"")
+FCALLC(STR,POLIS) ; Упрощенный поиск по фамилии (не по включеннию)
+ N %MXIDX,WHO,uCL,adFF,adFFL
+ S POLIS=+POLIS,uCL=0
+ S:POLIS=2 POLIS=3 ; internal number
+ K MRR,DOGG,YFDU
+ N IDX,IFIO,IFI,IFO,FIOI,FIOO,NIB,COLS,I,NIB,LS,PLS,FLST,X,NOSDG,A,FIO,cLPU,cSTC,cWRK,cAGE,fX,OK,OKs
+ D YFHDR1,OWF^RWU(".txt")
+ S:POLIS=0 X="№ И.Б.|Фамилия|Имя|Отчество|Оформ.|Договор|Срок"
+ S:POLIS=1 X="№ И.Б.|Фамилия|Имя|Отчество|Оформ.|Полис|Срок|Договор"
+ S:POLIS=3 X="№ И.Б.|Фамилия|Имя|Отчество|Оформ.|Договор|Срок"
+ D WC^RWU(X)
+ K COLS
+ S %MXIDX=100,(LS,IDX)=0,DH=+$H,RZ=$C(9)
+ S cLPU=$S($$LCL^IUSER("patients"," clpu"):$$^I("ilpu"),1:"")
+ S cSTC=$$LCL^IUSER("patients"," stc")
+ S cWRK=$$LCL^IUSER("patients"," work")
+ S cAGE=$$LCL^IUSER("patients"," age")
+ I $TR($E(STR,1),"rКк","RRR")="R" S X=$$GNIB^IPAC($E(STR,2,32)) I X'="" S NIB=X D YFPC G YFCLS
+ I $$EXIST^IPAC(STR) S NIB=STR D YFPC G YFCLS
+ G:$D(NIB) YFCLS
+ S STR=$$LU^TXTU($$WD^TXTU(STR))
+ S:POLIS=0 STR=$TR(STR,"."," ") ; точки в имени отчестве
+ S IFI=$P(STR," ",2),IFO=$E($P(STR," ",3),1,5)
+ S:POLIS<2 STR=$P(STR," ",1)
+ S IFIO=$$F^YIFAM(STR),STR=$$LU^TXTU($TR($E(STR,1,128),"""","")),LS=$L(STR)
+ ; Похожие ФИО
+ I POLIS=0 S NIB="" F  S NIB=$O(^BTI(" i",IFIO,NIB)) Q:NIB=""  D YFPC
+ I POLIS=1 S NIB="",COLS(1)="stc" D
+ .S STR=$$PLCNV($E(STR,1,128)),PLS=$$RSH^IHASH(STR)#16384
+ .F  S NIB=$O(^BTI("pls",PLS,NIB)) Q:NIB=""  S I=$$PLCNV($$GET^IPAC(NIB,"polis",DH)) I $L(STR),$L(I),I[STR D YFPCN Q:IDX'<%MXIDX
+ I POLIS=3 S NIB="" D
+ .S STR=$$MPHN^TXTU(STR),PLS=$$RSH^IHASH(STR)#65536,LS=0
+ .F  S NIB=$O(^BTI("phn",PLS,NIB)) Q:NIB=""  D  Q:IDX'<%MXIDX
+ ..S fX=1
+ ..I $$MPHN^TXTU($P($$GET^IPAC(NIB,"tel1"),",",1))=STR S fX=0
+ ..I fX,$$MPHN^TXTU($P($$GET^IPAC(NIB,"tel2"),",",1))=STR S fX=0
+ ..I fX,$$MPHN^TXTU($P($$GET^IPAC(NIB,"pager"),",",1))=STR S fX=0
+ ..Q:fX
+ ..D YFPCN
+ G YFCLS
+ Q
+FEQ(STR,MODE) ; Упрощенный поиск по фамилии (не по включеннию)
+ N %MXIDX,WHO,uCL,adFF,adFFL
+ K MRR,DOGG,YFDU
+ N IDX,IFIO,IFI,IFO,FIOI,FIOO,NIB,COLS,I,NIB,LS,PLS,POLIS,IFIl,OK,OKs
+ N A,HD,R,D,FLST,X,NOSDG,FIO,cLPU,cSTC,cWRK,cAGE
+ S MODE=+$G(MODE),uCL=0
+ D YFHDR1
+ D:'MODE OWF^RWU(".txt")
+ S HD="|Ф.И.О.|Дата рожд.|Договор"
+ K COLS
+ S %MXIDX=64,(LS,IDX)=0,DH=+$H,RZ=$C(9),POLIS=2
+ S cLPU=$S($$LCL^IUSER("patients"," clpu"):$$^I("ilpu"),1:"")
+ S cSTC=$$LCL^IUSER("patients"," stc")
+ S cWRK=$$LCL^IUSER("patients"," work")
+ S cAGE=$$LCL^IUSER("patients"," age")
+ I $TR($E(STR,1),"rКк","RRR")="R" S X=$$GNIB^IPAC($E(STR,2,32)) I X'="" S STR=X
+ I $$EXIST^IPAC(STR) S NIB=STR D  G:'MODE YFCLS Q 
+ .D YFPC,FEQproc
+ .I MODE=1 S %L=%L_CR_A_"@"_FIO_"|"_FIO_$S(X="":"",1:", "_X)_", "_R Q
+ .D WC^RWU(CR_A_"|"_FIO_"|"_X_"|"_R)
+ S STR=$$LU^TXTU($$WD^TXTU(STR))
+ S STR=$TR(STR,"."," ") ; точки в имени отчестве
+ S STR=$$DBLSP^TXTU(STR)
+ S IFI=$P(STR," ",2),IFO=$E($P(STR," ",3),1,5),STR=$P(STR," ",1)
+ S IFIO=$$F^YIFAM(STR),STR=$TR(STR,"""",""),LS=$L(STR)
+ S STR=$TR(STR,"""","")
+ S IFIl=$L(IFI)+1
+ ; Похожие ФИО
+ S NIB="" F  S NIB=$O(^BTI(" i",IFIO,NIB)) Q:NIB=""  D  I MODE,$L(%L)>10000 S %L=%L_CR_"|Уточните поиск - найдено слишком много пациентов" 
+ .K A D YFPC
+ .Q:'$D(A) 
+ .D FEQproc
+ .I MODE=1 S %L=%L_CR_A_"@"_FIO_"|"_FIO_$S(X="":"",1:", "_X)_", "_R Q 
+ .D WC^RWU(CR_A_"|"_FIO_"|"_X_"|"_R)
+ G:'MODE YFCLS
+ Q
+FEQproc 
+ I $L(HD),'MODE D WC^RWU(HD) S HD=""
+ S R=$$OWF^TXTU($$GETE^IPAC(A,"stc"),32)
+ S FIO=FIO_" "_FIOI_" "_FIOO,X=$$GETE^IPAC(A,"datar")
+ Q
+FFND(STR,MODE,STRICT,OFV,PROC) ; Упрощенный поиск по фамилии (+ по включеннию)
+ ; MODE - 0/1/2/3 = полный/краткий вывод/функц/проц. (число пациентов)
+ ; STRICT - 0/1/2 = нестрогий/строгий поиск/совсем строгий
+ ; OFV - 0/1 = отмечать ofor>1
+ N %MXIDX,WHO,uCL,adFF,adFFL
+ K MRR,DOGG,YFDU
+ N IDX,IFIO,IFI,IFO,FIOI,FIOO,COLS,I,NIB,LS,PLS,POLIS,IFIl,A,HD,R,D,X
+ N L,IEX,RZ,F,Z,FLST,NOSDG,FIO,TEST,IFLG,FTP,cLPU,cSTC,cWRK,cAGE,OK,OKs
+ S MODE=+$G(MODE),STRICT=+$G(STRICT),OFV=+$G(OFV),PROC=$G(PROC),uCL=0
+ S OKs=1 ; w.o. write data
+ D YFHDR1
+ D:'MODE OWF^RWU(".txt")
+ S:MODE=1 %L=""
+ S HD="|Ф.И.О.|Дата рожд.|Договор"
+ K COLS
+ S %MXIDX=64,(F,IDX,LS)=0,DH=+$H,RZ=$C(9),POLIS=2
+ S cLPU=$S($$LCL^IUSER("patients"," clpu"):$$^I("ilpu"),1:"")
+ S cSTC=$$LCL^IUSER("patients"," stc")
+ S cWRK=$$LCL^IUSER("patients"," work")
+ S cAGE=$$LCL^IUSER("patients"," age")
+ I $TR($E(STR,1),"rКк","RRR")="R" S X=$$GNIB^IPAC($E(STR,2,32)) I X'="" S STR=X
+ I $$EXIST^IPAC(STR) S NIB=STR,A=STR D  G:'MODE YFCLS Q 
+ .D YFPC
+ .;Q:'$G(OK)
+ .D FFNDproc
+ .I MODE=2 X PROC Q
+ .I MODE=3 D @PROC Q
+ .I MODE=1 S %L=%L_CR_A_"@"_FIO_"|"_FIO_$S(X="":"",1:", "_X)_", "_R Q
+ .D WC^RWU(CR_A_$S(OFV:"@"_$$FFNDOfv(A),1:"")_"|"_FIO_"|"_X_"|"_R)
+ S STR=$$LU^TXTU($$WD^TXTU(STR))
+ S STR=$TR(STR,"."," ") ; точки в имени отчестве
+ S STR=$$DBLSP^TXTU(STR)
+ S IFI=$P(STR," ",2),IFO=$E($P(STR," ",3),1,5),STR=$P(STR," ",1)
+ S IFIO=$$F^YIFAM(STR),STR=$$LU^TXTU($TR(STR,"""","")),LS=$L(STR)
+ S IFIl=$L(IFI)+1
+ S:MODE=1 %L=""
+ ; Похожие ФИО
+ I 'STRICT,IFIO'="" S NIB="" F  S NIB=$O(^BTI(" i",IFIO,NIB)) Q:NIB=""  D  I MODE=1,$L(%L)>9999 S %L=%L_CR_"|Уточните поиск - найдено слишком много пациентов",F=1 Q 
+ .D YFPC
+ .Q:'$G(OK) 
+ .S F=1
+ .D FFNDproc
+ .I MODE=2 X PROC Q 
+ .I MODE=3 D @PROC Q
+ .I MODE=1 S %L=%L_CR_A_"@"_FIO_"|"_FIO_$S(X="":"",1:", "_X)_", "_R Q 
+ .D WC^RWU(CR_A_$S(OFV:"@"_$$FFNDOfv(A),1:"")_"|"_FIO_"|"_X_"|"_R)
+ G:F FFNDe
+ S L=LS,(NIB,IEX)="",RZ=$C(9) S:L>5 L=5
+ F I=1:1:L S:$L(IEX) IEX=IEX_""",""" S IEX=IEX_$TR($E(STR,I),"Ё","Е")
+ I IEX'="" F  S NIB=$O(@("^BTI("""_IEX_""","""_RZ_""","""_NIB_""")")) Q:NIB=""  D  I MODE=1,$L(%L)>10000 S %L=%L_CR_"|Уточните поиск - найдено слишком много пациентов" Q 
+ .D YFPC
+ .Q:'$G(OK) 
+ .Q:$L(FIO)<$L(STR)  ; относительно длины фам. и строки поиска
+ .I F,23[STRICT,$L(IFI),$$LU^TXTU(FIO)'=STR Q ; если что-то нашли дальше только по одинаковым или есть имя
+ .I STRICT=3,$$LU^TXTU(FIO)'[STR Q  
+ .S F=1
+ .D FFNDproc
+ .I MODE=2 X PROC Q 
+ .I MODE=3 D @PROC Q
+ .I MODE=1 S %L=%L_CR_A_"@"_FIO_"|"_FIO_$S(X="":"",1:", "_X)_", "_R Q 
+ .D WC^RWU(CR_A_$S(OFV:"@"_$$FFNDOfv(A),1:"")_"|"_FIO_"|"_X_"|"_R)
+ G:F FFNDe
+ I MODE=1,$L(%L)>10000 G FFNDe
+ D:'F FFNDf(IEX)
+FFNDe G:'MODE YFCLS
+ Q
+FFNDOfv(NI) ; Style proc
+ S TEST=0
+ D DO^ITRIG("pfind","ffnd")
+ Q:TEST TEST
+ S Z=$$GET^IPAC(NI,"ofor")
+ Q:Z<2 1
+ Q:$$CHECK^IGRNL(NI,+$H,"") 3
+ Q 2 
+FFNDf(IEX) 
+ Q:IEX="" 
+ N CH,IEC,NIB,I,N,NN,T S CH=""
+ F  S CH=$O(@("^BTI("""_IEX_""","""_CH_""")")) Q:CH=""  D:CH'=RZ  I MODE=1,$L(%L)>10000 Q
+ .S IEC=IEX_""","""_CH,NIB=""
+ .F  S NIB=$O(@("^BTI("""_IEC_""","""_RZ_""","""_NIB_""")")) Q:NIB=""!(NIB[RZ)  D  I MODE=1,$L(%L)>10000 S %L=%L_CR_"|Уточните поиск - найдено слишком много пациентов" Q 
+ ..D YFPC
+ ..Q:'$G(OK) 
+ ..D FFNDproc
+ ..I MODE=2 X PROC Q 
+ ..I MODE=3 D @PROC Q
+ ..I MODE=1 S %L=%L_CR_A_"@"_FIO_"|"_FIO_$S(X="":"",1:", "_X)_", "_R Q 
+ ..D WC^RWU(CR_A_"|"_FIO_"|"_X_"|"_R)
+ .D FFNDf(IEC)
+ Q
+FFNDproc 
+ I $L(HD),'MODE D WC^RWU(HD) S HD=""
+ S I=$$GETE^IPAC(A,"cntstc"),R="",T=$S(I>2:16,I>1:20,1:32)
+ S I=$S('I:"",1:I-1)
+ F N="",1:1:I S NN=$$OWF^TXTU($$GETE^IPAC(A,"stc"_N),T) S R=$S(R="":"",1:R_", ")_NN
+ S FIO=FIO_" "_$G(FIOI)_" "_$G(FIOO),X=$$GETE^IPAC(A,"datar")
+ Q
+FNDNIBi(FF,FI,FO,DTB,STC,POLIS,TEL,DOC,NODTB,DHDR) 
+ ; NODTB - не учитывать дату рождения
+ ; DHDR - вывод заголовка только при наличии данных
+ ; Фамилия, Имя, Отчество, Компания, Полис, Тел., Документ
+ S DHDR=$G(DHDR)
+ D:'DHDR WC^RWU("И.Б.|Фамилия|Имя|Отчество|Дата рожд.|Совпадение|Договор|Полис")
+ Q:FF="" 
+ N IDX,IFIO,IFI,IFO,FIOI,FIOO,NI,A,D,P,FX,Y,FY,X,uCL,PY,Y,cLPU,cAGE,H,DV,cSTC,cWRK,OK
+ S IFIO=$$F^YIFAM(FF),FF=$TR($$LU^TXTU(FF),"Ё","Е"),uCL=0
+ S TEL=$$PLCNV(TEL),DOC=$$PLCNV(DOC),POLIS=$$PLCNV($E(POLIS,1,128))
+ S FI=$$LU^TXTU(FI),FO=$$LU^TXTU(FO),NI="",H=+$H
+ S DTB=$G(DTB),DTBp=$S(DTB="":0,1:1) S:DTB="-" DTB=0
+ S NODTB='+$G(NODTB),FY=$S(DTB="":"",1:$$YEAR^DTUTL(DTB))
+ S PY=+$G(^cfg("pfind","yearcmp")) ; сравнивать только по году рожд.
+ S cLPU=$S($$LCL^IUSER("patients"," clpu"):$$^I("ilpu"),1:"")
+ S cSTC=$$LCL^IUSER("patients"," stc")
+ S cWRK=$$LCL^IUSER("patients"," work")
+ S cAGE=$$LCL^IUSER("patients"," age")
+ S NI="" F  S NI=$O(^BTI(" i",IFIO,NI)) Q:NI=""  D
+ .Q:$TR($$LU^TXTU($$GET^IPAC(NI,"fiof",H)),"Ё","Е")'=FF
+ .S IFI=$$GET^IPAC(NI,"fioi",H),DV=H
+ .I IFI="" S DV=$$FIRSTDT^IPAC(NI),DV=$S(DV>H:DV,1:H),IFI=$$GET^IPAC(NI,"fiof",DV)
+ .S:$L(FI) A=$$LU^TXTU(IFI)
+ .I $L(FI) Q:$L(A)=1&(A'=$E(FI,1))  Q:$L(A)'=1&(A'=FI) 
+ .S (P,D)=0
+ .S IFO=$$GET^IPAC(NI,"fioo",DV),FX=0
+ .S:$L(FO) A=$$LU^TXTU(IFO)
+ .I $L(FO),A'[FO,FO'[A S:$L(A)=1&(A'=$E(FO,1)) FX=1 S:$L(A)>1&($E(A,1,3)'=$E(FO,1,3)) FX=1 ; отч. не совп
+ .I $E(A)'=$E(FO) S D=D+10 ; не совп. отчество
+ .I $E(A,1,3)'=$E(FO,1,3) S D=D+5 ; не совп. отчество (3 букв)
+ .I A'="",A=FO S P=P+5 ; полное совп отчества
+ .S:DTB'="" D=D+10 S:DTB="" D=D+5
+ .S A=$$GET^IPAC(NI,"datar",DV),Y=""
+ .S:A'="" Y=$$YEAR^DTUTL(A)
+ .I FX Q:Y'=FY  ; не отчество и не год и при несовп. отчестве не пустые
+ .I 'FX,DTBp,Y="" S P=P+5  ; отчество + второй год пустой
+ .I 'FX,Y'="",FY=Y S P=P+5  ; год совпал в любом случае
+ .I DTB'="",PY,A'="",Y'=FY Q:NODTB  S D=D+10  ; только год
+ .I DTB'="",'PY,A'="",A'=DTB Q:NODTB  S D=D+10 ; полная дата
+ .I A=DTB S P=P+15
+ .S:STC="" D=D+5
+ .I $L(STC) S D=D+10 S:$S($$GET^IPAC(NI,"stc",DV)=STC:1,$$GET^IPAC(NI,"stc1",DV)=STC:1,$$GET^IPAC(NI,"stc2",DV)=STC:1,1:0) P=P+10
+ .S:POLIS="" D=D+5
+ .I $L(POLIS) S D=D+10 S:$$PLCNV($$GET^IPAC(NI,"polis",DV))=POLIS P=P+5
+ .I $L(TEL) S D=D+10 S:$$PLCNV($$GET^IPAC(NI,"tel1",DV))=TEL P=P+10
+ .I $L(DOC) S D=D+10 S:$$PLCNV($$GET^IPAC(NI,"pasp",DV))=DOC P=P+10
+ .S P=100+P-D S:P<0 P=1 S:P>100 P=100
+ .I cLPU S A=$$GET^IPAC(NI,"lpu",DV) I A'="","|"_A_"|"'[("|"_cLPU_"|") Q
+ .I cSTC'="",$$PIDXN^IPAC(NI,cSTC,DV)=-1 Q
+ .I cWRK'="",$$GET^IPAC(NI,"work",DV)'=cWRK Q 
+ .I cAGE S A=$$AGE^IPAC(NI,DV) I A Q:$S(cAGE>0:cAGE>A,1:0)  Q:$S(cAGE<0:-cAGE<A,1:0)
+ .I DHDR D WC^RWU("И.б.|Фамилия|Имя|Отчество|Дата рожд.|Совпадение|Договор|Полис") S DHDR=0,REZ=1
+ .D WC^RWU(CR_$$RNI^IPAC(NI)_"|"_FF_"|"_IFI_"|"_IFO_"|"_$$DT^DTUTL(A)_"|"_P_"%|"_$$GETE^IPAC(NI,"stc",DV)_"|"_$$GET^IPAC(NI,"polis",DV))
+ Q
+PLCNV(STR) ; конвертирование полиса
+ Q $$LU^TXTU($TR(STR,",.<>/?;:[]{}-_|\+=()&^%$#@!~` "_$C(13,10),""))
+FIO(NI,NN) ; ФИО пациента (NN - не показывать "нет пац")
+ N A
+ S NI=$$WD^TXTU(NI)
+ I '$$CHKLCL^IPACFND(NI,+$H) S A="" G FIOe 
+ S A=$$FIO^IPAC(NI)
+FIOe I '$G(NN) S:A="" A="нет пациента" 
+ D MSG^RWU(A)
+ Q
+FIOFN(NI) ; ФИО пациента по номеру или строгий поиск
+ N NNI
+ S NNI=$$WD^TXTU(NI)
+ I '$$EXIST^IPAC(NNI) D FEQ(NI,1) G FIOFNe
+ I '$$CHKLCL^IPACFND(NNI,+$H) S %L="" q
+ S %L=$$FIO^IPAC(NNI)
+FIOFNe D MSG^RWU(%L)
+ Q
+FIOFD(NI) ; ФИО пациента по номеру или нестрогий поиск
+ N NNI
+ S NNI=$$NI^IPAC($$WD^TXTU(NI))
+ I '$$EXIST^IPAC(NNI) D FFND(NI,1) G FIOFDe
+ I '$$CHKLCL^IPACFND(NNI,+$H) S %L="" q
+ S %L=$$FIO^IPAC(NNI)
+FIOFDe D MSG^RWU(%L)
+ Q
+FIOSH(NI,FULL,DT,ADV) ; Ф И.О. пациента
+ ; DT - на дату (или сегодня)
+ ; FULL - полное ФИО
+ ; ADV - расширенный формат ФИО|ofor|cntstc
+ N A
+ S DT=$$DIH^DTUTL($G(DT)),A="",ADV=$G(ADV)
+ S NI=$$NI^IPAC(NI)
+ I '$$CHKLCL^IPACFND(NI,DT) S NI=""
+ S:NI'="" A=$S($G(FULL):$$FIO^IPAC(NI),1:$$FIOSH^IPAC(NI))
+ I A="" D MSG^RWU("нет пациента"_$S(ADV:"|0",1:"")) Q 
+ S:ADV A=A_"|"_$$CHECK^IPAC(NI,DT)_"|"_$$CNTSTC^IPAC(NI,DT)
+ D MSG^RWU(A)
+ Q
+AGE(NI,MODE) ; Возраст пациента
+ ; MODE=1 - дата рождения (возраст)
+ S NI=$$WD^TXTU(NI)
+ S NI=$$NI^IPAC(NI)
+ Q:'$$CHKLCL^IPACFND(NI,+$H) 
+ I '$G(MODE) D MSG^RWU($$AGE^IPAC(NI)) Q
+ D MSG^RWU($$GETE^IPAC(NI,"datar")_"( "_$$AGET^IPAC(NI)_" )")
+ Q
+STCLST(NI,DT) ; Список страховых компаний по пациенту
+ S:$G(DT)="" DT=+$H
+ N I,L,A,X
+ S NI=$$NI^IPAC(NI)
+ S DT=$$DIH^DTUTL($G(DT)),L=$$CNTSTC^IPAC(NI,DT)
+ S A=$$GET^IPAC(NI,"stc",DT),A=A_"|"_$$NAME^IINSC(A,DT)
+ I L>1 F I=1:1:L S X=$$GET^IPAC(NI,"stc"_I,DT) S:X'="" A=A_CR_X_"|"_$$NAME^IINSC(X,DT)
+ D MSG^RWU(A)
+ Q

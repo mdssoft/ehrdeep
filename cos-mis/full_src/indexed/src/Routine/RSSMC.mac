@@ -1,0 +1,311 @@
+RSSMC ; Отчеты ССМЦ [ 09/04/2013  2:47 AM ]
+MED(DS,DE,LPUx,OTDx,SPx,SPo,APP,ACF) 
+ ; APP - алгоритм первичных пациентов
+ ; ACF - аналитический фильтр <позиция в коде>:<значение>;<>:<>...
+ ; SPo - только базовая специальность врача
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),SPo=+$G(SPo)
+ N LPU,R,X1,X2,X3,X4,DGL,DG,TX,SP,VR,PCLS,AF1,AF2,AFT,xFLT,ACFN,NULL,ACU
+ S ACF=$TR(ACF,";,/\ ",";;;;"),ACFN=$S(ACF="":0,1:$L(ACF,";"))
+ S:OTDx=999 OTDx=""
+ S:SPx=999 SPx=""
+ K ^BUF($J,0),^(1),^(2),^(3),^(4)
+ S R=$S(SPo:"LPU,VR,NULL",1:"LPU,VR,SP"),NULL=0
+ D MK^IRPRASP(DS,DE,"^BUF($J,0",R,"time,use",1,"PROCSm^RSSMC")
+ D MK^IRPUSL(DS,DE,"^BUF($J,0",R,"ppl,pos,sum"_$S('APP:",pps",1:""),0,"PROCUm^RSSMC")
+ D MKNAZ
+ D MKPOLIS
+ S (X1,X2)="" F TX=1:1:ACFN S X3=$P(ACF,";",TX),$P(X1,"|",TX+1)="Код",$P(X2,"|",TX+1)=TX_"("_$S($P(X3,":",2)="":$P(X3,":",4),1:$P(X3,":",2))_")"
+ D OWF^RWU(".txt")
+ D WC^RWU("Сотрудник|Специальность|Часов|Первичных|Повторных|Пришедших|Назн.|Выполн.|Назн.|Выполн.|Продано|Проц.|Сумма"_X1_";")
+ D WC^RWU(CR_$$TXTP^DTUTL(DS,DE)_"|||приемов|приемов|лиц|Д.М.Д.|Д.М.Д.|Д.М.Л.|Д.М.Л.|прогр.|загрузки|услуг"_X2)
+ S LPU=0 F  S LPU=$O(^BUF($J,0,LPU)) Q:LPU=""  D
+ .D WC^RWU(CR_$$NAME^ICONTR(LPU))
+ .S VR="" F  S VR=$O(^BUF($J,0,LPU,VR)) Q:VR=""  D:$E(VR,1)'=" "
+ ..S X1=$$FIO^IKADRY(VR)
+ ..S SP="" F  S SP=$O(^BUF($J,0,LPU,VR,SP)) Q:SP=""  D:$E(SP,1)'=" "
+ ...S X2=$$GSPEC^YISPRAV($S(SP=0:$$SPEC^IKADRY(VR),1:SP))
+ ...S R=X1_"|"_X2_"|"_$$FN($G(^BUF($J,0,LPU,VR,SP," time"))/60)_"|"
+ ...S X3=$G(^BUF($J,0,LPU,VR,SP," pos")),X4=$S(APP:$G(^(" pp")),1:$$mFN(" pps"))
+ ...S R=R_X4_"|"_X3
+ ...S R=R_"|"_$$mFN(" ppl")_"|"
+ ...S R=R_$$mFN("dmdn")_"|"_$$mFN("dmd")_"|"
+ ...S R=R_$$mFN("dmln")_"|"_$$mFN("dml")_"|"
+ ...S R=R_$G(^("abn"))_"|"
+ ...S X4=$G(^(" time"))
+ ...S R=R_$S(X4:$$FN(100*$G(^(" use"))/X4),1:"")_"|"_$$mFN(" sum")
+ ...F TX=1:1:ACFN S R=R_"|"_$$mFN("ac"_TX)
+ ...D WC^RWU(CR_R)
+ D C^RWU
+ K ^BUF($J,0),^(1),^(2),^(3),^(4)
+ Q
+mFN(PL) ; from field
+ Q $TR($G(^BUF($J,0,LPU,VR,SP,PL)),".",",")
+maFN(PL) ; from field
+ Q $TR($G(^BUF($J,0,VR,PL)),".",",")
+FN(X) ; only digits
+ Q $TR(+$J(X,0,2),".",",")
+FNN(X) ; w. NULL string
+ Q $TR(X,".",",")
+PROCUm ; Filter proc USL
+ I $L(OTDx),OTD'=OTDx S TEST=1 Q 
+ I $L(SPx),SP'=SPx S TEST=1 Q 
+ I $L(LPUx),LPU'=LPUx S TEST=1 Q 
+ S:SPo SP=0
+ S PCLS="|"_$$GET^IPRICE(U,"cls",PRC,DT)_"|"
+ ; первичный, альт. вариант
+ I APP,PCLS["|pervp|" S ^("pp")=$G(^BUF($J,0,LPU,VR,SP,"pp"))+1
+ ;I 'APP
+ ; доп методы лечения
+ ;I PCLS["|dml|" S ^("dml")=$G(^BUF($J,0,LPU,VR,SP,"dml"))+1
+ Q:ACF="" 
+ S ACU=$$GET^IPRICE(U,"acu",PRC,DT)
+ F TX=1:1:ACFN S X1=$P(ACF,";",TX),AF1=$P(X1,":",1),AF2=$P(X1,":",2),AFT=$P(X1,":",3),xFLT=$P(X1,":",3) S:AFT="" AFT=AF1 D:$P(ACU,".",AF1,AFT)=AF2!$L(xFLT)!(AF1="U")
+ .I AF1="U",AF2'=U Q
+ .S AFT=$L(xFLT),xFLT="|"_xFLT_"|"
+ .I AFT,xFLT["|kss|","|"_FLG_"|"'["|kss|",STAT'=2 Q  ; касса
+ .I AFT,xFLT["|nokss|" Q:"|"_FLG_"|"["|kss|"!(STAT=2)  ; не касса
+ .I AFT,"|"_PCLS_"|"'[xFLT Q
+ .S ^("ac"_TX)=$G(^BUF($J,0,LPU,VR,SP,"ac"_TX))+1
+ Q
+PROCSm ; Filter for DSH
+ I $L(OTDx),OT'=OTDx S TEST=1 Q 
+ I $L(SPx),SP'=SPx S TEST=1 Q 
+ I $L(LPUx),LPU'=LPUx S TEST=1 Q 
+ Q
+MKNAZ ; ^NAZ
+ N ID,DT,R,LP,NI,U,P,PRC,I
+ S DT=DS-1 F  S DT=$O(^NAZI("d",DT)) Q:DT=""!(DT>DE)  S ID="" F  S ID=$O(^NAZI("d",DT,ID)) Q:ID=""  
+ .Q:'$D(^NAZ(ID,"a")) 
+ .S R=$G(^("i")) Q:R="" 
+ .S LPU=$P(R,"|",4) I LPUx'="",LPU'=LPUx Q 
+ .S VR=$P(R,"|",3)
+ .S SP=$$SPEC^IKADRY(VR) I SPx'="",SP'=SPx Q 
+ .S:SPo SP=0
+ .S OTD=$$OTD^IKADRY(VR) I OTDx'="",OTD'=OTDx Q 
+ .S NI=$P(R,"|",2)
+ .S PRC=$$GET^YNDOG($$GET^IPAC(NI,"stc",DT),"price",DT)
+ .S PRC=$$CORCP^IPRICET(PRC)
+ .S I="" F  S I=$O(^NAZ(ID,"a",I)) Q:I=""  D
+ ..S R=^(I),U=$P(R,"|",5),P=$P(R,"|",6)
+ ..S:P="" P=PRC
+ ..S PCLS="|"_$$GET^IPRICE(U,"cls",P,DT)_"|"
+ ..Q:PCLS="||" 
+ ..I PCLS["|dml|" S ^("dmln")=$G(^BUF($J,0,LPU,VR,SP,"dmln"))+1
+ ..I PCLS["|dmd|" S ^("dmdn")=$G(^BUF($J,0,LPU,VR,SP,"dmdn"))+1
+ ..Q:$P(R,"|",11)=""  ; без услуг
+ ..I PCLS["|dml|" S ^("dml")=$G(^BUF($J,0,LPU,VR,SP,"dml"))+1
+ ..I PCLS["|dmd|" S ^("dmd")=$G(^BUF($J,0,LPU,VR,SP,"dmd"))+1
+ Q
+MKPOLIS ; Make polis data
+ N LST,R
+ D AGPSUMM^RPOLIS(DS,DE,"LST")
+ ;D AGPCNT^RPOLIS(DS,DE,"LST")
+ S LPU="" F  S LPU=$O(LST(LPU)) Q:LPU=""  I LPUx=""!(LPUx=LPU) D
+ .S VR="" F  S VR=$O(LST(LPU,VR)) Q:VR=""  D
+ ..S SP=$$SPEC^IKADRY(VR) I $L(SPx),SP'=SPx Q 
+ ..S:SPo SP=0
+ ..S OTD=$$OTD^IKADRY(VR) I $L(OTDx),OTD'=OTDx Q 
+ ..S R=LST(LPU,VR)
+ ..S ^("abn")=$G(^BUF($J,0,LPU,VR,SP,"abn"))+R ; +1
+ Q
+FIN(DS,DE,LPUx,OTDx,SPx,SPo,ACF) ; Finance
+ ; APF - аналитический фильтр <позиция в коде>:<значение>:<позиция по>:<флаг>;<>:<>...
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),SPo=+$G(SPo)
+ N LPU,R,X1,X2,X3,X4,DGL,DG,TX,SP,VR,PCLS,AF1,AF2,AFT,xFLT,ACFN,DVID,DVV,NULL,fNZ,VF,SF,ACU
+ S ACF=$TR(ACF,";,/\ ",";;;;"),ACFN=$S(ACF="":0,1:$L(ACF,";"))
+ S:OTDx=999 OTDx=""
+ S:SPx=999 SPx=""
+ K ^BUF($J,0),^(1),^(2),^(3),^(4),^(5),^(6)
+ S R=$S(SPo:"LPU,VR,NULL",1:"LPU,VR,SP"),NULL=0
+ D MK^IRPRASP(DS,DE,"^BUF($J,0",R,"time,use",1,"PROCSf^RSSMC",1)
+ D MK^IRPUSL(DS,DE,"^BUF($J,0",R,"ppl,pos,sum,pps",0,"PROCUf^RSSMC",1)
+ D MKNAZ
+ D MKPOLIS
+ ; pvpk
+ S X1="" F  S X1=$O(^BUF($J,4,X1)) Q:X1=""  D
+ .S LPU=$P(X1,",",1),VR=$P(X1,",",2),SP=$P(X1,",",3)
+ .S X2="" F  S X2=$O(^BUF($J,4,X1,X2)) Q:X2=""  I $G(^BUF($J,5,X2)) S ^("pvpk")=$G(^BUF($J,0,LPU,VR,SP,"pvpk"))+1
+ 
+ S (X1,X2)="" F TX=1:1:ACFN S X3=$P(ACF,";",TX),$P(X1,"|",TX+1)="Код",$P(X2,"|",TX+1)=TX_"("_$S($P(X3,":",2)="":$P(X3,":",4),1:$P(X3,":",2))_")"
+ D OWF^RWU(".txt")
+ 
+ D WC^RWU("Сотрудник|Специальность|Часов|Новых|Новых|Новых|Платных|Платных|Платных|Повторных|Платных|Число|Число|Продано|Процент|Сумма|Сумма|Сумма|Сумма|Средний|Выдано"_X1_";")
+ D WC^RWU(CR_$$TXTP^DTUTL(DS,DE)_"|||пациентов|платных|пациентов|вернулось|вернулось|повторных|пациентов|повторных|посещений|посещений|программ|загрузки|услуг|услуг|услуг|лаб. по|чек (факт)|З.П."_X2_";")
+ D WC^RWU(CR_"||||пациентов|по врачу|в клинику|к врачу|по врачу||пациентов||по факту|на сумму||по факту|факт от СК|по дог.|назнач.|по посещ.|")
+ S LPU=0 F  S LPU=$O(^BUF($J,0,LPU)) Q:LPU=""  D
+ .D WC^RWU(CR_$$NAME^ICONTR(LPU))
+ .S VR="" F  S VR=$O(^BUF($J,0,LPU,VR)) Q:VR=""  D:$E(VR,1)'=" "
+ ..S VF=$$FIO^IKADRY(VR)
+ ..I $L(OTDx) Q:$$OTD^IKADRY(VR)'=OTDx 
+ ..S SP="" F  S SP=$O(^BUF($J,0,LPU,VR,SP)) Q:SP=""  D:$E(SP,1)'=" "
+ ...S SF=$S(SP=0:$$SPEC^IKADRY(VR),1:SP)
+ ...I $L(SPx) Q:SF'=SPx 
+ ...S SF=$$GSPEC^YISPRAV(SF)
+ ...S R=VF_"|"_SF_"|"_$$FN($G(^BUF($J,0,LPU,VR,SP," time"))/60)_"|"
+ ...S R=R_$$mFN("pps")_"|"_$$mFN("ppsf")_"|"_$$mFN("ppsv")_"|" ; " pps"
+ ...S R=R_$$mFN("pvpk")_"|"
+ ...S R=R_$$mFN("pvpv")_"|"
+ ...S R=R_$$mFN("pvv")_"|"
+ ...S R=R_$$mFN("povp")_"|"_$$mFN("povpf")
+ ...S X3=$G(^("posf"))
+ ...S R=R_"|"_$$mFN(" pos")_"|"_$$FNN(X3)_"|"
+ ...S R=R_$G(^("abn"))_"|"
+ ...S X4=$G(^(" time"))
+ ...S R=R_$S(X4:$$FN(100*$G(^(" use"))/X4),1:"")_"|"
+ ...S X1=$$mFN("sumf"),X2=$$mFN("sumfs")
+ ...S R=R_X1_"|"_X2_"|"_$$FN($G(^("sum"))-X1-X2)_"|"
+ ...S R=R_$$mFN("flab")_"|"
+ ...S:X3 R=R_$$FN(X1+X2/X3)
+ ...S R=R_"|"_$$GETsump^IZARP(DS,DE,LPU,$$OTD^IKADRY(VR),VR)
+ ...F TX=1:1:ACFN S R=R_"|"_$$mFN("ac"_TX)
+ ...D WC^RWU(CR_R)
+ D C^RWU
+ K ^BUF($J,0),^(1),^(2),^(3),^(4),^(5),^(6),^(7)
+ Q
+IsVR(NI,VR,DT) ; Пациент был у врача (на дату или вообще)
+ N KX,F S F=0
+ F  Q:F  S DT=$O(^PNF(NI,DT),-1) Q:DT=""  S KX="" F  S KX=$O(^PNF(NI,DT,KX)) Q:KX=""  I $P(KX,"|",1)=VR S F=1 Q
+ Q F
+PROCUf ; Filter proc USL
+ ;I $L(OTDx),OTD'=OTDx S TEST=1 Q 
+ ;I $L(SPx),SP'=SPx S TEST=1 Q 
+ I $L(LPUx),LPU'=LPUx S TEST=1 Q 
+ S:SPo SP=0
+ S PCLS="|"_$$GET^IPRICE(U,"cls",PRC,DT)_"|"
+ S DVV=$$GET^YNDOG(CSTC,"dvid",DT)
+ S DVID=(DVV=3)!(STAT=2)
+ I DVID K var("pvk",1),var("pvv",1) ; убрали блок.
+ I 'DVID S (var("pvk",1),var("pvv",1))="" ; добавили блок.
+ I DVID,$$IsFPOS^IUSL(NI,OTD,VR,DT,ID) S ^("ppsv")=$G(^BUF($J,0,LPU,VR,SP,"ppsv"))+1
+ 
+ S:DVV=3 TX=$O(^PNF(NI,DS),-1) ; до этого в периоде не было
+ ; уже был, но на другую дату
+ I DVV=3,TX="",$D(^BUF($J,5,NI)),$G(^(NI))="",'$D(^(NI,DT)) S ^BUF($J,5,NI)=1
+ ; первый приход не считаем
+ I DVV=3,TX="",'$D(^BUF($J,5,NI,DT)) S ^(DT)=""
+ ; уже был, но на другую дату (doctor)
+ I DVV=3,TX="",$D(^BUF($J,6,VR,NI)),$G(^(NI))="",'$D(^(NI,DT)) S ^BUF($J,6,VR,NI)=1,^("pvpv")=$G(^BUF($J,0,LPU,VR,SP,"pvpv"))+1
+ ; первый приход не считаем
+ I DVV=3,TX="",'$D(^BUF($J,6,VR,NI,DT)) S ^(DT)=""
+ 
+ S:'$D(^BUF($J,4,LPU_","_VR_","_SP,NI)) ^(NI)=""
+ 
+ S TX=$O(^PNF(NI,DT),-1) ; до этого в периоде не было
+ I '$D(^BUF($J,1,NI,VR)),$L(TX) S ^(VR)="",^("povp")=$G(^BUF($J,0,LPU,VR,SP,"povp"))+1 S:DVID ^("povpf")=$G(^("povpf"))+1
+ I '$L(TX),'$D(^BUF($J,2,NI,VR)) S ^(VR)="",^("pps")=$G(^BUF($J,0,LPU,VR,SP,"pps"))+1 S:DVID ^("ppsf")=$G(^("ppsf"))+1
+ I DVV=3,$L(TX),'$D(^BUF($J,3,NI,VR)),$$IsVR(NI,VR,DT) S ^BUF($J,3,NI,VR)="",^("pvv")=$G(^BUF($J,0,LPU,VR,SP,"pvv"))+1
+ 
+ S A=VR_","_DT_",f,"_NI
+ I DVV=3 S:'$D(^BUF($J,0,LPU,VR,SP," ",A)) ^(A)=NI,^("posf")=$G(^BUF($J,0,LPU,VR,SP,"posf"))+1
+ S X=$S($D(UL(U,1)):UL(U,1),1:$$PRICEH^IPRICE(U,PRC,DT)*KSKD*CC)
+ S ^("sum")=$G(^BUF($J,0,LPU,VR,SP,"sum"))+X
+ I DVV=3 S ^("sumf")=$G(^("sumf"))+X
+ I DVID,DVV'=3 S ^("sumfs")=$G(^("sumfs"))+X
+ S fNZ=$$GETPL^IUSL(VR,DT,OTD,ID,"f")
+ I $L(fNZ) N V,S S V=$$fromVRI^INAZN(fNZ),S=$S(SPo:0,1:$$SPEC^IKADRY(V))
+ G:"|"_$$FLG^NPRICEG($$GET^IPRICE(U,"grp",PRC,DT))_"|"["|lab|" PROCSf0 ; альт. лаб. флаг
+ G:PCLS'["|lab|" PROCSf1
+PROCSf0 
+ G:fNZ="" PROCSf1 
+ S ^("flab")=$G(^BUF($J,0,LPU,V,S,"flab"))+X
+PROCSf1 Q:ACF="" 
+ S ACU=$$GET^IPRICE(U,"acu",PRC,DT)
+ F TX=1:1:ACFN S X1=$P(ACF,";",TX),AF1=$P(X1,":",1),AF2=$P(X1,":",2),AFT=$P(X1,":",3),xFLT=$P(X1,":",4) S:AFT="" AFT=AF1 D:$P(ACU,".",AF1,AFT)=AF2!$L(xFLT)!(AF1="U")
+ .I AF1="U",AF2'=U Q 
+ .S AFT=$L(xFLT),xFLT="|"_xFLT_"|"
+ .I AFT,xFLT["|kss|","|"_FLG_"|"'["|kss|",STAT'=2 Q  ; касса
+ .I AFT,xFLT["|nokss|" Q:"|"_FLG_"|"["|kss|"!(STAT=2)  ; не касса
+ .I AFT,"|"_PCLS_"|"'[xFLT Q
+ .S ^("ac"_TX)=$G(^BUF($J,0,LPU,VR,SP,"ac"_TX))+1
+ .S:$L(fNZ) ^("ac"_TX)=$G(^BUF($J,0,LPU,V,S,"ac"_TX))+1
+ Q
+PROCSf ; Filter for DSH
+ ;I $L(OTDx),OT'=OTDx S TEST=1 Q 
+ I $L(LPUx),LPU'=LPUx S TEST=1 Q 
+ I $L(SPx),$S(SPo:$$SPEC^IKADRY(VR),1:SP)'=SPx S TEST=1 Q 
+ I $L(OTDx),$$OTD^IKADRY(VR)'=OTDx S TEST=1 Q 
+ Q
+AFIN(DS,DE,OTP,LPUx) ; Finance
+ ; OTP - все/мед/стом
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),LPUx=$G(LPUx)
+ N LPU,R,X1,X2,X3,X4,DGL,DG,TX,SP,VR,PCLS,xFLT,DVID,DVV,NULL,fNZ,VF,SF,STOM
+ K ^BUF($J,0),^(1),^(2),^(3),^(4),^(5),^(6),^(7)
+ M STOM=^cfg("stom-otd") S R=$G(^cfg("stom-otd")) S:R'="" STOM(R)=""
+ 
+ D MK^IRPRASP(DS,DE,"^BUF($J,0","VR","time,use",0,"PROCSaf^RSSMC",1)
+ D MK^IRPUSL(DS,DE,"^BUF($J,0","VR","ppl,pos,sum,pps,zrp",0,"PROCUaf^RSSMC",1)
+ ;D MKNAZ
+ ;D MKPOLIS
+ ; pvpk
+ S X1="" F  S X1=$O(^BUF($J,4,X1)) Q:X1=""  D
+ .S LPU=$P(X1,",",1),VR=$P(X1,",",2),SP=$P(X1,",",3)
+ .S X2="" F  S X2=$O(^BUF($J,4,X1,X2)) Q:X2=""  I $G(^BUF($J,5,X2)) S ^("pvpk")=$G(^BUF($J,0,VR,"pvpk"))+1
+ 
+ D OWF^RWU(".txt")
+ 
+ D WC^RWU("|Число|Вернулось|Лиц|Часы|Процент|Сумма|Сумма|Сумма|Средний|Начислено;")
+ D WC^RWU(CR_"|первичных|||работы|загрузки|услуг|услуг|услуг|чек на|ЗП;")
+ D WC^RWU(CR_"Сотрудник "_$$TXTP^DTUTL(DS,DE)_"|ФЛ|ФЛ|всего|врача|врача|факт|СК факт|по дог.|посещение")
+ S VR="" F  S VR=$O(^BUF($J,0,VR)) Q:VR=""  D:$E(VR,1)'=" "
+ .S VF=$$FIO^IKADRY(VR)
+ .S R=VF_"|"_$$maFN("ppsf")_"|"
+ .S R=R_$$maFN("pvpv")_"|"
+ .S R=R_$$maFN("ll")_"|"
+ .S X4=$G(^BUF($J,0,VR," time")),X3=$G(^("posf"))
+ .S R=R_$$FN(X4/60)_"|"
+ .S R=R_$S(X4:$$FN(100*$G(^(" use"))/X4),1:"")_"|"
+ .S X1=$$maFN("sumf"),X2=$$maFN("sumfs")
+ .S R=R_X1_"|"_X2_"|"_$$FN($G(^("sum"))-X1-X2)_"|"
+ .S R=R_$S(X3:$$FN(X1+X2/X3),1:"")_"|"
+ .S R=R_$$maFN(" zrp")
+ .D WC^RWU(CR_R)
+ D C^RWU
+ K ^BUF($J,0),^(1),^(2),^(3),^(4),^(5),^(6)
+ Q
+PROCUaf ; Filter proc USL
+ I OTP,$S(OTP=2:'$D(STOM(OTD)),1:$D(STOM(OTD))) S TEST=1 Q
+ I LPUx'="",LPU'=LPUx S TEST=1 Q 
+ S DVV=$$GET^YNDOG(CSTC,"dvid",DT)
+ S DVID=(DVV=3)!(STAT=2)
+ I DVID K var("pvk",1),var("pvv",1) ; убрали блок.
+ I 'DVID S (var("pvk",1),var("pvv",1))="" ; добавили блок.
+ I DVID,$$IsFPOS^IUSL(NI,OTD,VR,DT,ID) S ^("ppsv")=$G(^BUF($J,0,VR,"ppsv"))+1
+ ; лиц
+ I '$D(^BUF($J,7,VR,NI)) S ^(NI)="",^("ll")=$G(^BUF($J,0,VR,"ll"))+1
+ 
+ S:DVV=3 TX=$O(^PNF(NI,DS),-1) ; до этого в периоде не было
+ ; уже был, но на другую дату
+ I DVV=3,TX="",$D(^BUF($J,5,NI)),$G(^(NI))="",'$D(^(NI,DT)) S ^BUF($J,5,NI)=1
+ ; первый приход не считаем
+ I DVV=3,TX="",'$D(^BUF($J,5,NI,DT)) S ^(DT)=""
+ ; уже был, но на другую дату (doctor)
+ I DVV=3,TX="",$D(^BUF($J,6,VR,NI)),$G(^(NI))="",'$D(^(NI,DT)) S ^BUF($J,6,VR,NI)=1,^("pvpv")=$G(^BUF($J,0,VR,"pvpv"))+1
+ ; первый приход не считаем
+ I DVV=3,TX="",'$D(^BUF($J,6,VR,NI,DT)) S ^(DT)=""
+ 
+ S:'$D(^BUF($J,4,LPU_","_VR_","_SP,NI)) ^(NI)=""
+ 
+ S TX=$O(^PNF(NI,DT),-1) ; до этого в периоде не было
+ I '$D(^BUF($J,1,NI,VR)),$L(TX) S ^(VR)="",^("povp")=$G(^BUF($J,0,VR,"povp"))+1 S:DVID ^("povpf")=$G(^("povpf"))+1
+ I '$L(TX),'$D(^BUF($J,2,NI,VR)) S ^(VR)="",^("pps")=$G(^BUF($J,0,VR,"pps"))+1 S:DVID ^("ppsf")=$G(^("ppsf"))+1
+ I DVV=3,$L(TX),'$D(^BUF($J,3,NI,VR)),$$IsVR(NI,VR,DT) S ^BUF($J,3,NI,VR)="",^("pvv")=$G(^BUF($J,0,VR,"pvv"))+1
+ 
+ S A=VR_","_DT_",f,"_NI
+ I DVV=3 S:'$D(^BUF($J,0,VR," ",A)) ^(A)=NI,^("posf")=$G(^BUF($J,0,VR,"posf"))+1
+ S X=$S($D(UL(U,1)):UL(U,1),1:$$PRICEH^IPRICE(U,PRC,DT)*KSKD*CC)
+ S ^("sum")=$G(^BUF($J,0,VR,"sum"))+X
+ I DVV=3 S ^("sumf")=$G(^("sumf"))+X
+ I DVID,DVV'=3 S ^("sumfs")=$G(^("sumfs"))+X
+ s TEST=0
+ Q
+PROCSaf ; Filter for DSH
+ I LPUx'="",LPU'=LPUx S TEST=1 Q  
+ I OTP,$S(OTP=2:'$D(STOM(OT)),1:$D(STOM(OT))) S TEST=1 Q 
+ Q
+REGIPROC 
+ N FF
+ s FF=+$$FR^I()
+ S ^IPROC("Управленческая отчетность","Медицина","Работа сотрудников")="MED_RSSMC,1,8,d,Дата начала периода,d,Дата окончания периода,t@storage:lpu,Филиал,te@storage:otd@1,Отделение,te@storage:spec@1,Специальность,t@string:1/Да#0/Нет,Расчет только по основной специальности,t@string:0/По посещениям#1/По услугам,Алгоритм первичных пациентов,s,Фильтр аналитических кодов"
+ S ^IPROC("Управленческая отчетность","Финансы","Работа сотрудников")="FIN_RSSMC,1,7,d,Дата начала периода,d,Дата окончания периода,t@storage:lpu,Филиал,te@storage:otd@1,Отделение,te@storage:spec@1,Специальность,t@string:1/Да#0/Нет,Расчет только по основной специальности,s,Фильтр аналитических кодов"
+ S ^IPROC("Управленческая отчетность","Финансы","Работа сотрудников, сводно")="AFIN_RSSMC,1,"_$S(FF:4,1:3)_",d,Дата начала периода,d,Дата окончания периода,t@string:0/Всем разделам#1/Поликлинике#2/Стоматологии,Расчет по"_$S(FF:",t@storage:lpu,Филиал",1:"")
+ Q

@@ -1,0 +1,38 @@
+BIOID ; Biolink Fingerprint Identification
+LoadLib() 
+	Q:$d(%slib("bioid")) 
+	n filename,deflocation,tmp
+	s tmp=$zu(86)
+	s deflocation=$P(tmp,"\",1,$L(tmp,"\")-1)
+	s filename=deflocation_"\bin\bioid.dll"
+	s %slib("bioid","lib")=$zf(-4,1,filename)
+	s %slib("bioid","func","version")=$zf(-4,3,%slib("bioid","lib"),"version")
+	s %slib("bioid","func","open")=$zf(-4,3,%slib("bioid","lib"),"open")
+	s %slib("bioid","func","load")=$zf(-4,3,%slib("bioid","lib"),"load")
+	s %slib("bioid","func","close")=$zf(-4,3,%slib("bioid","lib"),"close")
+	s %slib("bioid","func","compare")=$zf(-4,3,%slib("bioid","lib"),"compare")
+	s %slib("bioid","func","compareslow")=$zf(-4,3,%slib("bioid","lib"),"compareslow")
+	q
+UnloadLib() 
+	d:$d(%slib("bioid")) $zf(-4,2,%slib("bioid","lib"))
+	K %slib("bioid")
+	Q
+Open()
+	D:'$D(%slib("bioid")) LoadLib()
+	Q $zf(-5,%slib("bioid","lib"),%slib("bioid","func","open"))
+Close()
+	D $zf(-5,%slib("bioid","lib"),%slib("bioid","func","close"))
+	Q
+Compare(X1,X2,Mode)
+	Q:+$G(Mode) $zf(-5,%slib("bioid","lib"),%slib("bioid","func","compareslow"),X1,X2)
+	Q $zf(-5,%slib("bioid","lib"),%slib("bioid","func","compare"),X1,X2)
+Version()
+	Q $zf(-5,%slib("bioid","lib"),%slib("bioid","func","version"))
+TEST(X)
+	D LoadLib^BIOID()
+	W !,"Ver="_$$Version()
+	D Open^BIOID()
+	W !,"Res="_$$Compare(X,X)
+	D Close^BIOID()
+	D UnloadLib^BIOID()
+	Q

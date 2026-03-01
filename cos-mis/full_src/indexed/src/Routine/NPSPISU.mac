@@ -1,0 +1,38 @@
+NPSPISU ; Утилиты загрузки списков [ 05/27/2012  1:42 PM ]
+PRCLST ; 
+ D OWF^RWU(".txt")
+ D LSTs^NSPRAV("pspisprc",0,0)
+ D C^RWU
+ Q
+PLSTsys 
+ D LSTs^NSPRAV("pspisprc",0,0)
+ Q
+DO(ID,STR,NI) 
+ N X,P1,P2,P3,P4,P5
+ S X=$P($$GET^ISPRAV("pspisprc",ID),"|",2,99)
+ Q:X="" STR
+ X X
+ Q STR
+prm(NM) ; Получить данные по имени
+ S NM=$G(REFPL($$DW^TXTU(NM)))
+ Q:NM="" ""
+ Q $P(STR,"|",NM)
+setprm(NM,V) ; Установить данные по имени
+ S NM=$G(REFPL($$DW^TXTU(NM)))
+ Q:NM="" 
+ S $P(STR,"|",NM)=V
+ Q
+dt(NM) ; Получить $H дату по имени
+ Q $$DI^DTUTL($$prm(NM))
+setdt(NM,V) ; Установить $H дату по имени
+ D setprm(NM,$$DT^DTUTL(V))
+ Q
+pget(FL) ; Получить данные у сущ. пациента
+ Q:NI="" ""
+ Q $$GET^IPAC(NI,FL)
+pgete(FL) ; Получить данные у сущ. пациента (расшифрованные)
+ Q:NI="" ""
+ Q $$GETE^IPAC(NI,FL)
+INITDB 
+ S ^MN("root","pspisprc")="Алгоритм обработки списков контингента"
+ Q

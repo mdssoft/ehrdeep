@@ -1,0 +1,522 @@
+NOPERSH ; Операционное расписание [ 07/16/2021  1:21 PM ]
+INIT(LP) ; Инициализация формы
+ N OTDL,X,C
+ S:$G(LP)="" LP=+$$^I("ilpu")
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<opersh><lpu>")
+ D LSTFIsys^YCONTR("")
+ D W^RWU("</lpu><oplist>")
+ D OPLSTs("",LP)
+ D W^RWU("</oplist><otd>")
+ S (C,X)="" F  S X=$O(OTDL(X)) Q:X=""  D WC^RWU(C_X_"|"_$$GETPL^ISPRAV("otd",X,"sname")) S C=CR
+ D W^RWU("</otd>")
+ D:$$LCL^IUSER("opersh","new")=0 W^RWU("<bt_new visible=""no""/>")
+ S X=$$GETUD^IUSER("opersh","opstate")
+ D:X'="" W^RWU("<oplist state="""_X_"""/>")
+ D WTAGD^RWU("lpu",LP) ; set default LPU
+ D W^RWU("</opersh></nb_console>"),C^RWU
+ Q
+OPLSTL 
+ N OTX,LPU
+ G OPLST+1
+OPLST(OTX,LPU) ; Список операционных
+ ; OTX - фильтр по отделению	
+ N OTDL
+ S OTX=$G(OTX),LPU=$G(LPU) S:LPU="" LPU=+$$^I("ilpu")
+ D OWF^RWU(".txt")
+ D OPLSTs(OTX,LPU)
+ D C^RWU
+ Q
+OPLSTs(OTX,LP) ; Перечень операционных (системно)
+ N I,J,FL,CAB,R,X,O
+ S (I,C)=""
+ F  S I=$O(^PLPU(LP,I)) Q:I=""  S FL="" F  S FL=$O(^PLPU(LP,I,FL)) Q:FL=""  S CAB="" F  S CAB=$O(^PLPU(LP,I,FL,"cab",CAB)) Q:CAB=""  D
+ .S R=$G(^(CAB)) Q:$P(R,"|",1)'=11
+ .S X=$P(R,"|",3)
+ .S O=$G(^(CAB,"otd"))
+ .I OTX'="",O'=OTX Q 
+ .I OTX="",O'="" S OTDL(O)=""
+ .D WC^RWU(C_CAB_"|"_$S(X="":"Каб."_$P(R,"|",2),1:X))
+ .S C=CR
+ Q
+TAB(DTT,OT,CABS,USE,LP) ; Вывод расписания
+ ; DTT - дата расписания
+ ; OT - выбранное отделение
+ ; CABS - выбранные операционные
+ ; USE - открытые операционные
+ ; LP - филиал
+ N DS,DE,DT,CDT,DT,TM,TL,NI,R,TAB,J,CAB,H1,H2,NM,ST,CL,RR,VTP,X,KEY,SRT,KX,TTS,TTE,TS,TE,TO
+ S:$G(LP)="" LP=+$$^I("ilpu")
+ S ^JOB(%JOB,"opersh","dtt")=DTT
+ S ^("lpu")=LP,^("ot")=OT,^("cab")=CABS,^("use")=USE
+ S:OT=-1 OT="" S:CABS=-1 CABS=""
+ D SETUD^IUSER("opersh","opstate",CABS)
+ S VTP=$$LCL^IUSER("opersh","vtfields")
+ S:VTP="" VTP=$G(^cfg("opersh","vtfields"))
+ S:VTP="" VTP="tp|an"
+ S SRT=$G(^cfg("opersh","sort"))
+ S DE=$P(DTT,":",2),DS=$P(DTT,":",1)
+ S DS=$$DIH^DTUTL(DS),DE=$S(DE="":DS,1:$$DIH^DTUTL(DE))
+ S TTS=$$TI^DTUTL($G(^cfg("opersh","tmstart")))
+ S:TTS="" TTS=28800
+ S TTE=$$TI^DTUTL($G(^cfg("opersh","tmend")))
+ S:TTE="" TTE=75600
+ F J=1:1:99 S CAB=$P(CABS,"|",J) Q:CAB=""  D
+ .F DT=DS:1:DE S TAB($S(SRT=1:DT_"|"_CAB,1:CAB_"|"_DT)_"|"_LP_"|0")=0
+ .S DT=DS-1 F  S DT=$O(^OPSH(LP,0,CAB,DT)) Q:DT=""!(DT>DE)  D
+ ..S KX=$S(SRT=1:DT_"|"_CAB,1:CAB_"|"_DT)_"|"_LP_"|0" ; LP_OT
+ ..S R=$G(^(DT))
+ ..S TAB(KX)=$P(R,"|",1)_"|"_$P(R,"|",3)_"|"_$P(R,"|",4)
+ ..S TM="" F  S TM=$O(^OPSH(LP,0,CAB,DT,TM)) Q:TM=""  D
+ ...S R=$G(^(TM)),TL=$P(R,"|",2),CL=$P(R,"|",5),RR=R Q:R="" 
+ ...S R=$P(R,"|",1,4),X=$G(^(TM,"w")),TO=$P($G(^("r")),"|",1)
+ ...I VTP["vr" S $P(R,"|",5)=$P($G(^("g")),"|",1)
+ ...I VTP["comm" S $P(R,"|",6)=$G(^("c")) ; full comment
+ ...I VTP["coms" S $P(R,"|",6)=$$OWF^TXTU($G(^("c")),60) ; short comment
+ ...S:X'="" $P(R,"|",7)=X
+ ...S:$P(RR,"|",8) $P(R,"|",8)=1 ; prep.
+ ...S X=$P(RR,"|",7)
+ ...S $P(R,"|",9)=$S(X=9:1,X=8:3,X=7:2,1:0) ; res/end/close
+ ...S TAB(KX,TM)=R
+ ...S:TO'="" TAB(KX,TM,"r")=TO
+ ...S:TL="" TL=30
+ ...S:CL TAB(KX,TM+(TL*60))="@C|"_CL
+ ...S:TTS>TM TTS=TM
+ ...S:TTE<TM TTE=TM
+ 
+ D MINHDR^IHTML("График операций")
+ D CSS^IHTML
+ D CSSI^IHTML(".tit","14px",,"bold","#DDDDDD","center")
+ D CSSI^IHTML(".k1","14px",,,"#FFFFCC","center")
+ D CSSI^IHTML(".k2","14px",,,"#CCFFFF","center")
+ D CSSI^IHTML(".k3","14px",,,"#CCCCCC","center")
+ D CSSI^IHTML(".k4","14px",,,"#FF2222","center")
+ D CSSI^IHTML(".k5","14px",,,"#FFCCCC","center")
+ D CSSI^IHTML(".k6","14px",,,"#DDAAAA","center") ; резерв
+ D CSSI^IHTML(".k7","14px",,,"#C0F0CC","center") ; предв.
+ D CSSI^IHTML(".k8","14px",,,"#E0D0FE","center") ; заверш.
+ D CSSI^IHTML(".k9","14px",,,"#E0FED0","center") ; отмена
+ 
+ D CSSI^IHTML(".i1","14px",,,"#99FF99","center")
+ D CSSI^IHTML(".i2","14px",,,"#6699FF","center")
+ D CSSI^IHTML(".i3","14px",,,"#FF6666","center")
+ 
+ D CSSI^IHTML(".cl","14px","#FFFFFF",,"#858585","center")
+ D CSSI^IHTML(".wa","14px","#FFFFFF",,"#FF2222")
+ 
+ D W^RWU(CR_"a { text-decoration: none; }")
+ 
+ D CSSE^IHTML
+ D W^RWU("</head><body bgcolor=""#8CADD5"" text=""#000000""><table width=""100%"">")
+ S (H1,H2)="",CDT=0
+ S KX="" F  S KX=$O(TAB(KX)) Q:KX=""  D
+ .S ST=$P($G(TAB(KX)),"|",1)
+ .I 'USE,ST=7 Q  ; closed
+ .S:'SRT CAB=$P(KX,"|",1),DT=$P(KX,"|",2)
+ .S:SRT=1 CAB=$P(KX,"|",2),DT=$P(KX,"|",1)
+ .S NM=$$CABNAME^NPLPU(LP,CAB)
+ .S NM=$S($P(NM,"|",2)="":"Каб."_$P(NM,"|",1),1:$P(NM,"|",2))
+ .S H1=H1_"<td class="""_$S(ST=7:"k4",1:"k3")_"""><a href=""int:opersh_h?"_CAB_"."_DT_""">"_$$TAG^TXTU(NM)_"</a></td>"
+ .S H2=H2_"<td class="""_$S(ST=7:"k4",1:"k3")_"""><a href=""int:opersh_h?"_CAB_"."_DT_""">"_$$DT2^DTUTL(DT)_"</a></td>"
+ .S CDT=CDT+1
+ D WC^RWU(CR_"<tr><td class=""k3"""_$S(CDT<3:" width=""15%""",1:"")_">&nbsp;</td>"_H1_"</tr>")
+ D WC^RWU(CR_"<tr><td class=""k3"">Время</td>"_H2_"</tr>")
+ F TM=TTS:1800:TTE D 
+ .s H1=""
+ .S KX="" F  S KX=$O(TAB(KX)) Q:KX=""  D
+ ..S ST=$G(TAB(KX)),TS=$P(ST,"|",2),TE=$P(ST,"|",3),ST=$P(ST,"|",1)
+ ..I 'USE,ST=7 Q 
+ ..S:'SRT CAB=$P(KX,"|",1),DT=$P(KX,"|",2)
+ ..S:SRT=1 CAB=$P(KX,"|",2),DT=$P(KX,"|",1)
+ ..S KEY=CAB_"."_DT_"."_TM_"."_$P(KX,"|",3)_"."_$P(KX,"|",4)
+ ..I $D(TAB(KX,TM)) D  Q
+ ...S R=TAB(KX,TM) Q:R=-1  ; =-1 - colspan
+ ...S NI=$P(R,"|",1),TL=$P(R,"|",2)/30,RR=$P(R,"|",3,9)
+ ...S R=$S(TL:" rowspan="""_TL_"""",1:"")
+ ...D wt
+ ...S TL=TL*30*60
+ ...F R=TM+1800:1800:TM+TL-1800 S:'$D(TAB(KX,R)) TAB(KX,R)=-1 ; пропуски
+ ..I (TS&(TM<TS))!(TE&(TM>TE)) S H1=H1_"<td class=""k3"">&nbsp;</td>" Q 
+ ..S H1=H1_"<td class=""k1""><a href=""int:opersh_tm?"_KEY_""">+</a></td>"
+ .D WC^RWU(CR_"<tr><td class=""k3"">"_$$TM^DTUTL(TM)_"</td>"_H1_"</tr>")
+ D W^RWU("</table>")
+ D END^IHTML
+ Q
+wt 
+ I NI="@C" S H1=H1_"<td class=""cl"""_R_">Уборка</td>" Q
+ I (TS&(TM<TS))!(TE&(TM>TE)) S H1=H1_"<td class=""k56"""_R_">&nbsp;</td>" Q  ; no time
+ I $P(RR,"|",7)=2 S H1=H1_"<td class=""k6"""_R_"><a href=""int:opersh_tm?"_KEY_""">Закрыта</a></td>" Q 
+ 
+ S X=$P(RR,"|",7)
+ S H1=H1_"<td class="""_$S(NI="":"k6",X=3:"k9",X:"k8",$P(RR,"|",6):"k7",1:"k5")_""""_R_">"
+ S H1=H1_"<a href=""int:opersh_ni?"_KEY_$S(NI="":".C",1:"")_""">"
+ 
+ S H1=H1_$S(NI="":"Резерв",1:$$TAG^TXTU(NI_" "_$$FIO^IPAC(NI)))
+ S:$G(TAB(KX,TM))'="" H1=H1_" [+}" ; пациент оформлен
+ S H1=H1_"</a>"
+ S X=$P(RR,"|",1)
+ I VTP["tp" S:X>0 H1=H1_"<br>"_$$TAG^TXTU($$NAME^ISPRAV("sopertp",X))
+ S X=$P(RR,"|",2)
+ I VTP["an" S:X>0 H1=H1_"<br>"_$$TAG^TXTU($$NAME^ISPRAV("soperan",X))
+ S X=$P(RR,"|",3)
+ I VTP["vr" S:X'="" H1=H1_"<br>"_$$TAG^TXTU($$FIOSH^IKADRY(X))
+ S X=$P(RR,"|",4)
+ I VTP["comm" S:X'="" H1=H1_"<br>"_$$TAG^TXTU(X)
+ S X=$P(RR,"|",5) ; warn
+ S:X'="" H1=H1_"<br><span class=""wa"">&nbsp;"_$$TAG^TXTU(X)_"&nbsp;</span>"
+ S H1=H1_"</td>"
+ Q
+LINIT ; Инициализация редактирования
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<inopersh><tp>")
+ D LSTs^NSPRAV("sopertp")
+ D W^RWU("</tp><ta>")
+ D LSTs^NSPRAV("soperan")
+ D W^RWU("</ta>")
+ D WTAGU^RWU("pac",+$$LCL^IUSER("opersh","reserve"))
+ D WTAGU^RWU("cln",+$$LCL^IUSER("opersh","addclean"))
+ D W^RWU("</inopersh></nb_console>"),C^RWU
+ Q
+LI(KEY) ; Загрузить запись
+ N LP,OT,CAB,DT,TM,R,I,A
+ S LP=^JOB(%JOB,"opersh","lpu"),OT=+^("ot")
+ S CAB=$P(KEY,".",1),DT=$P(KEY,".",2),TM=$P(KEY,".",3)
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<inopersh>")
+ 
+ D WTAGD^RWU("id",KEY)
+ D WTAGD^RWU("dt",$$DT^DTUTL(DT))
+ D WTAGD^RWU("tm",$$TM^DTUTL(TM))
+ 
+ G:'$D(^OPSH(LP,OT,CAB,DT,TM)) LIe
+ 
+ S R=^(TM),NI=$P(R,"|",1)
+ D WTAGDC^RWU("pac",NI)
+ D WTAGDC^RWU("fio",$S(NI="":"резерв",1:$$FIO^IPAC(NI)))
+ D WTAGD^RWU("tl",$P(R,"|",2))
+ D WTAGD^RWU("tp",$P(R,"|",3))
+ D WTAGD^RWU("ta",$P(R,"|",4))
+ D WTAGD^RWU("cln",+$P(R,"|",5)'=0)
+ D WTAGD^RWU("preres",+$P(R,"|",8))
+ D WTAGD^RWU("hosp",$G(^OPSH(LP,OT,CAB,DT,TM,"hs")))
+ S R=$P($G(^OPSH(LP,OT,CAB,DT,TM,"g")),"|",1)
+ D WTAGDC^RWU("vr",R)
+ D WTAGDC^RWU("vr_name",$S(R="":"Не указан",1:$$FIO^IKADRY(R)))
+ 
+ S (A,I)="" F  S I=$O(^OPSH(LP,OT,CAB,DT,TM,"g",I)) Q:I=""  S $P(A,"|",I)=^OPSH(LP,OT,CAB,DT,TM,"g",I)
+ D WTAGDC^RWU("team",A)
+ 
+ D WTAGDC^RWU("comm",$G(^OPSH(LP,OT,CAB,DT,TM,"c")))
+ D WTAGDC^RWU("warn",$G(^OPSH(LP,OT,CAB,DT,TM,"w")))
+ 
+LIe D WC^RWU("</inopersh></nb_console>"),C^RWU
+ Q
+SI ; Записать
+ N %J,A,ID K XML,XMLR
+ D RBUFH^YIXMLRR(1)
+ D WI
+ K XML,XMLR
+ Q
+WI 
+ N KEY,N,F,LP,OT,CAB,DT,TM,TL,NI,VR,TP,R,RO,CL,FKEY,I,curTL
+ S N="nb_console",F="inopersh"
+ S KEY=$G(XML(N,F,"id"))
+ S LP=^JOB(%JOB,"opersh","lpu"),OT=+^("ot")
+ S CAB=$P(KEY,".",1),ODT=$P(KEY,".",2),OTM=$P(KEY,".",3)
+ S CL=$G(^cfg("opersh","cleanlen")) S:'CL CL=30
+ S DT=$$DIH^DTUTL($G(XML(N,F,"dt")))
+ I +$H>DT,'$$LCL^IUSER("opersh","aotime") D MSG^RWU("Изменение за прошедшие даты запрещено.") Q 
+ S TM=$$TI^DTUTL($G(XML(N,F,"tm")))
+ S TM=TM+(1800-TM#1800) ; Округление до 30 мин. TODO
+ S NI=$G(XML(N,F,"pac"))
+ S TP=$G(XML(N,F,"tp"))
+ S TL=$G(XML(N,F,"tl"))
+ D DO^ITRIG("opersh","save")
+ I $S(ODT="":1,OTM="":1,1:'$D(^OPSH(LP,OT,CAB,ODT,OTM))),$$LCL^IUSER("opersh","new")=0 D MSG^RWU("Создание записей запрещено.") Q
+ I ODT'="",OTM'="",$D(^OPSH(LP,OT,CAB,ODT,OTM)),$$LCL^IUSER("opersh","save")=0 D MSG^RWU("Изменение записей запрещено.") Q  
+ I $$chklen(LP,OT,CAB,DT,TM,TL,ODT,OTM) D MSG^RWU("В указанном периоде присутствуют операции.") Q  
+ D RMIDX^IOPERSH(LP,OT,CAB,DT,TM)
+ S VR=$G(^OPSH(LP,OT,CAB,DT,TM,"g"))
+ I ODT'="",OTM'="",(ODT'=DT)!(OTM'=TM) D  ; change position
+ .M ^OPSH(LP,OT,CAB,DT,TM)=^OPSH(LP,OT,CAB,ODT,OTM)
+ .D WLOG(LP,OT,CAB,DT,TM,NI,"M",TL,COM,VR) 
+ .K ^OPSH(LP,OT,CAB,ODT,OTM)
+ .D KGL^IEXCH("^OPSH",LP,OT,CAB,ODT,OTM)
+ S NI=$G(XML(N,F,"pac"))
+ S TP=$G(XML(N,F,"tp"))
+ S FKEY=LP_"@"_OT_"@"_CAB_"@"_DT_"@"_TM ; full key
+ S R=$G(^OPSH(LP,OT,CAB,DT,TM))
+ D:R="" WLOG(LP,OT,CAB,DT,TM,NI,"",TL,COM,VR)
+ S curTL=$P(R,"|",2)
+ D:((+curTL)'=(+TL))&(curTL'="") WLOG(LP,OT,CAB,DT,TM,NI,"L",TL,COM,VR)
+ S $P(R,"|",1)=NI,$P(R,"|",2)=TL,$P(R,"|",3)=TP,$P(R,"|",4)=$G(XML(N,F,"ta"))
+ S:$G(XML(N,F,"cln")) $P(R,"|",5)=CL
+ S:'$G(XML(N,F,"cln")) $P(R,"|",5)=""
+ S $P(R,"|",8)=+$G(XML(N,F,"preres"))
+ S ^OPSH(LP,OT,CAB,DT,TM)=R
+ 
+ K ^OPSH(LP,OT,CAB,DT,TM,"g")
+ S R=$G(XML(N,F,"team"))
+ F I=1:1:$L(R,"|") S RO=$P(R,"|",I) S:RO'="" ^OPSH(LP,OT,CAB,DT,TM,"g",I)=RO
+ 
+ S R=$G(XML(N,F,"vr"))
+ S ^OPSH(LP,OT,CAB,DT,TM,"g")=R
+ S R=$G(XML(N,F,"hosp")),RO=$G(^OPSH(LP,OT,CAB,DT,TM,"hs"))
+ S ^OPSH(LP,OT,CAB,DT,TM,"hs")=R
+ D:R'="" SETOP^IHOSP(R,FKEY)
+ D:RO=""&(RO'=R) DELOP^IHOSP(RO,FKEY)
+ S R=$G(XML(N,F,"warn"))
+ S:R'="" ^OPSH(LP,OT,CAB,DT,TM,"w")=R K:R="" ^OPSH(LP,OT,CAB,DT,TM,"w")
+ S R=$G(XML(N,F,"comm"))
+ S:R'="" ^OPSH(LP,OT,CAB,DT,TM,"c")=R K:R="" ^OPSH(LP,OT,CAB,DT,TM,"c")
+ S ^OPSH(LP,OT,CAB,DT,TM,"log")=$$USRH^IUSER()
+ D GL^IEXCH("^OPSH",LP,OT,CAB,DT,TM)
+ D MKIDX^IOPERSH(LP,OT,CAB,DT,TM)
+ D DO^ITRIG("opersh","end")
+ 
+ Q:$G(^OPSH(LP,OT,CAB,DT,TM,"u"))'=""
+ N U,V,O,ID
+ S U=$G(^KKCN("oper",TP)) Q:U="" 
+ S V=^OPSH(LP,OT,CAB,DT,TM,"g") Q:V=""
+ S O=$$OTD^IKADRY(V)
+ S ID=$$ADD^IUSL(V,DT,O,NI,U,"","","","","","")
+ S R=$$SETSTAT^IUSL(V,DT,O,ID,"w")
+ S ^OPSH(LP,OT,CAB,DT,TM,"u")=V_"@"_DT_"@"_O_"@"_ID
+ D SBSYS^YNED(NI,V,O,$$DT^DTUTL(DT),1) ; allow credit
+ Q
+chklen(LP,OT,CAB,DT,TM,TL,ODT,OTM) ; 
+ N T,TE,F
+ S TE=TM+(TL*60),T=TM-1,F=0
+ F  S T=$O(^OPSH(LP,OT,CAB,DT,T)) Q:T=""!(T>TE)  I T'=OTM,$G(^(T))'="" S F=1 Q
+ Q F
+DI(KEY) ; Удалить
+ N LP,OT,CAB,DT,TM,R,NI,COM,TL,VR
+ I $$LCL^IUSER("opersh","del")=0 D MSG^RWU("Удаление записей запрещено.") Q
+ S LP=^JOB(%JOB,"opersh","lpu"),OT=+^("ot")
+ S CAB=$P(KEY,".",1),DT=$P(KEY,".",2),TM=$P(KEY,".",3)
+  I +$H>DT,'$$LCL^IUSER("opersh","aotime") D MSG^RWU("Удаление за прошедшие даты запрещено.") Q
+ S NI=$P($G(^OPSH(LP,OT,CAB,DT,TM),""),"|",1)
+ S COM=$G(^OPSH(LP,OT,CAB,DT,TM,"c"))
+ S TL=$P($G(^OPSH(LP,OT,CAB,DT,TM)),"|",2)
+ s VR=$G(^OPSH(LP,OT,CAB,DT,TM,"g"))
+ D DO^ITRIG("opersh","del")
+ D RMIDX^IOPERSH(LP,OT,CAB,DT,TM)
+ S R=$G(^OPSH(LP,OT,CAB,DT,TM,"hs"))
+ D:R'="" DELOP^IHOSP(R,LP_"@"_OT_"@"_CAB_"@"_DT_"@"_TM)
+ k ^OPSH(LP,OT,CAB,DT,TM)
+ D KGL^IEXCH("^OPSH",LP,OT,CAB,DT,TM)
+ D:NI'="" WLOG(LP,OT,CAB,DT,TM,NI,"K",TL,COM,VR)
+ Q
+MOV(FKEY,TKEY) ; Перенести операцию в другую операционную
+ N L1,O1,C1,D1,T1,L2,O2,C2,D2,T2,FK,R
+ 
+ I $$LCL^IUSER("opersh","save")=0 D MSG^RWU("Изменение записей запрещено.") Q
+ 
+ S L1=$P(FKEY,".",4),O1=$P(FKEY,".",5),C1=$P(FKEY,".",1),D1=$P(FKEY,".",2),T1=$P(FKEY,".",3)
+ S L2=$P(TKEY,".",4),O2=$P(TKEY,".",5),C2=$P(TKEY,".",1),D2=$P(TKEY,".",2),T2=$P(TKEY,".",3)
+ 
+ I L1=""!(L2="")!(T1="")!(T2="") D MSG^RWU("Ошибка перемещения записи.") Q 
+ S TL=$P($G(^OPSH(L1,O1,C1,D1,T1)),"|",2)
+ I $$chklen(L2,O2,C2,D2,T2,TL,D1,T1) D MSG^RWU("В указанном периоде присутствуют операции.") Q  
+ 
+ D DO^ITRIG("opersh","move")
+ 
+ D RMIDX^IOPERSH(L1,O1,C1,D1,T1)
+ M ^OPSH(L2,O2,C2,D2,T2)=^OPSH(L1,O1,C1,D1,T1)
+ K ^OPSH(L1,O1,C1,D1,T1)
+ D KGL^IEXCH("^OPSH",L1,O1,C1,D1,T1)
+ S ^OPSH(L2,O2,C2,D2,T2,"log")=$$USRH^IUSER()
+ D GL^IEXCH("^OPSH",L2,O2,C2,D2,T2)
+ D MKIDX^IOPERSH(L2,O2,C2,D2,T2)
+ 
+ S FK=L2_"@"_O2_"@"_C2_"@"_D2_"@"_T2 ; full key
+ S R=$G(^OPSH(L2,O2,C2,D2,T2,"hs"))
+ D:R'="" SETOP^IHOSP(R,FK)
+ 
+ Q
+TEAML(DX,KEY) ; Шаблон + данные бригады
+ N LL,I,J,R,X,A,V,SP
+ S R=$G(^cfg("opsh","team")) ; name:spec1,spec2..|
+ F I=1:1:$L(R,"|") S X=$P(R,"|",I) S:X'="" LL(I)=$P(X,":",2)_"@@"_I_"|"_$P(X,":",1)
+ 
+ F I=1:1:$L(DX,"|") S X=$P(DX,"|",I) S:X'="" $P(LL(I),"@",2)=$P(X,"@",2)
+ 
+ S (A,I)="" F  S I=$O(LL(I)) Q:I=""  D
+ .S R=LL(I),V=$P(R,"@",2),$P(R,"|",3)=$$FIOSH^IKADRY(V)
+ .S A=A_CR_R
+ D MSG^RWU("|"_A) 
+ Q
+GETNIB(KEY) ; Получить № И.Б.
+ N LP,OT,CAB,DT,TM,NI
+ S LP=^JOB(%JOB,"opersh","lpu"),OT=+^("ot")
+ S CAB=$P(KEY,".",1),DT=$P(KEY,".",2),TM=$P(KEY,".",3)
+ S NI=$P($G(^OPSH(LP,OT,CAB,DT,TM)),"|",1)
+ S:'$$EXIST^IPAC(NI) NI=""
+ D MSG^RWU(NI)
+ Q
+GETPVR(KEY) ; Основной врач и его специальность
+ N LP,OT,CAB,DT,TM,VR
+ S LP=^JOB(%JOB,"opersh","lpu"),OT=+^("ot")
+ S CAB=$P(KEY,".",1),DT=$P(KEY,".",2),TM=$P(KEY,".",3)
+ S VR=$P($G(^OPSH(LP,OT,CAB,DT,TM),"g"),"|",1)
+ D MSG^RWU(VR_"|"_$$SPEC^IKADRY(VR)_"|"_$$FIO^IKADRY(VR))
+ Q
+FIOSH(TXT) 
+ I TXT="" D MSG^RWU("Резерв") Q
+ D FIOSH^YIFINDN(TXT,1)
+ Q
+LSTST 
+ D MSG^RWU("0|Действующая"_CR_"7|Закрыта")
+ Q
+OSTAT(DT,ST) ; Изменить статус
+ N CAB,LP,OT
+ I $$LCL^IUSER("opersh","state")=0 D MSG^RWU("Изменение статуса запрещено.") Q
+ S CAB=$P(DT,".",1),DT=$P(DT,".",2)
+ S LP=^JOB(%JOB,"opersh","lpu"),OT=+^("ot")
+ S $P(^OPSH(LP,OT,CAB,DT),"|",1)=ST
+ D GLZ^IEXCH("^OPSH",LP,OT,CAB,DT)
+ Q
+DOCNL(KEY) ; "Отменить" операцию
+ N LP,OT,CAB,DT,TM,ST,R
+ S LP=^JOB(%JOB,"opersh","lpu"),OT=+^("ot")
+ S CAB=$P(KEY,".",1),DT=$P(KEY,".",2),TM=$P(KEY,".",3)
+ I '$D(^OPSH(LP,OT,CAB,DT,TM)) D MSG^RWU("Запись отсутствует") Q 
+ S ST=$P(^OPSH(LP,OT,CAB,DT,TM),"|",7)
+ Q:ST=8!(ST=7) 
+ S $P(^OPSH(LP,OT,CAB,DT,TM),"|",7)=8
+ S R=$G(^(TM,"tm"))
+ S $P(R,"|",3)=$H,$P(R,"|",6)=$$USR^IUSER()
+ S ^OPSH(LP,OT,CAB,DT,TM,"tm")=R
+ D GL^IEXCH("^OPSH",LP,OT,CAB,DT,TM)
+ Q
+DOOFOR(KEY) ; "Пациент оформлен" к операции
+ N LP,OT,CAB,DT,TM,R
+ S LP=^JOB(%JOB,"opersh","lpu"),OT=+^("ot")
+ S CAB=$P(KEY,".",1),DT=$P(KEY,".",2),TM=$P(KEY,".",3)
+ I '$D(^OPSH(LP,OT,CAB,DT,TM)) D MSG^RWU("Запись отсутствует") Q 
+ Q:789[(+$P(^OPSH(LP,OT,CAB,DT,TM),"|",7))  ; не закрытые
+ S ^OPSH(LP,OT,CAB,DT,TM,"r")=$H_"|"_$$USR^IUSER()
+ D GL^IEXCH("^OPSH",LP,OT,CAB,DT,TM,"r")
+ Q
+DOSTART(KEY) ; "Начать операцию" операцию
+ N LP,OT,CAB,DT,TM,R
+ S LP=^JOB(%JOB,"opersh","lpu"),OT=+^("ot")
+ S CAB=$P(KEY,".",1),DT=$P(KEY,".",2),TM=$P(KEY,".",3)
+ I '$D(^OPSH(LP,OT,CAB,DT,TM)) D MSG^RWU("Запись отсутствует") Q 
+ Q:789[(+$P(^OPSH(LP,OT,CAB,DT,TM),"|",7))  ; не закрытые
+ S R=$G(^OPSH(LP,OT,CAB,DT,TM,"tm"))
+ S $P(R,"|",1)=$H,$P(R,"|",4)=$$USR^IUSER()
+ S ^OPSH(LP,OT,CAB,DT,TM,"tm")=R
+ D GL^IEXCH("^OPSH",LP,OT,CAB,DT,TM)
+ Q
+DOEND(KEY) ; "Завершить" операцию
+ N LP,OT,CAB,DT,TM,R
+ S LP=^JOB(%JOB,"opersh","lpu"),OT=+^("ot")
+ S CAB=$P(KEY,".",1),DT=$P(KEY,".",2),TM=$P(KEY,".",3)
+ I '$D(^OPSH(LP,OT,CAB,DT,TM)) D MSG^RWU("Запись отсутствует") Q 
+ Q:$P(^OPSH(LP,OT,CAB,DT,TM),"|",7)=9 
+ S $P(^(TM),"|",7)=9
+ S R=$G(^(TM,"tm"))
+ S $P(R,"|",2)=$H,$P(R,"|",5)=$$USR^IUSER()
+ S ^OPSH(LP,OT,CAB,DT,TM,"tm")=R
+ D GL^IEXCH("^OPSH",LP,OT,CAB,DT,TM)
+ Q
+SREZ(KEY) ; Установить/снять резерв
+ N LP,OT,CAB,DT,TM,X
+ S LP=^JOB(%JOB,"opersh","lpu"),OT=+^("ot")
+ S CAB=$P(KEY,".",1),DT=$P(KEY,".",2),TM=$P(KEY,".",3)
+ S X=$P($G(^OPSH(LP,OT,CAB,DT,TM)),"|",7)
+ I X=2 S X=""
+ E  S X=2
+ S $P(^(TM),"|",7)=X
+ S ^OPSH(LP,OT,CAB,DT,TM,"log")=$$USRH^IUSER()
+ D GL^IEXCH("^OPSH",LP,OT,CAB,DT,TM)
+ Q
+TMSTAT(KEY,ST) ; "Завершить" операцию
+ N LP,OT,CAB,DT,TM
+ S LP=^JOB(%JOB,"opersh","lpu"),OT=+^("ot")
+ S CAB=$P(KEY,".",1),DT=$P(KEY,".",2),TM=$P(KEY,".",3)
+ S:ST=0 ST=""
+ Q:$P($G(^OPSH(LP,OT,CAB,DT,TM)),"|",7)=ST 
+ I ST="" K ^(TM)
+ E  S $P(^(TM),"|",7)=ST S ^OPSH(LP,OT,CAB,DT,TM,"log")=$$USRH^IUSER()
+ D REGL^IEXCH("^OPSH",LP,OT,CAB,DT,TM)
+ Q
+INITJ ; Инициализация формы журнала
+ N OTDL,X,C,LP
+ S LP=+$$^I("ilpu")
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<opershj><lpu>")
+ D LSTFIsys^YCONTR("")
+ D W^RWU("</lpu><oper>")
+ D OPLSTs("",LP)
+ D W^RWU("</oper><tp>")
+ D LSTs^NSPRAV("sopertp")
+ D W^RWU("</tp><ta>")
+ D LSTs^NSPRAV("soperan")
+ D W^RWU("</ta>")
+ D WTAGD^RWU("lpu",LP) ; set default LPU
+ D W^RWU("</opershj></nb_console>"),C^RWU
+ Q
+JRNR(DS,DE,XCAB,OTP,LPX) ; Журнал операций (для отчета)
+ N OTA,TXT,OT
+ G JRN+1
+JRN(DS,DE,XCAB,OTP,OT,LPX,OTA,TXT) ; Журнал операций
+ ; XCAB - фильтр по операционной
+ ; OTP - тип операции
+ ; OT - отделение (TODO, пока=0)
+ N LP,CAB,DT,TM,R,NI,TL,V,COM,A,TP,TA
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),XCAB=$G(XCAB),OTP=$G(OTP)
+ S LP=$S($G(LPX):LPX,1:+$$^I("ilpu")),OT=+$G(OT),OTA=$G(OTA)
+ S TXT=$$UL^TXTU($G(TXT))
+ D OWF^RWU(".txt")
+ D WC^RWU("№ И.Б.|Пациент|Дата|Время|Длительность|Вид операции|Вид анестезии|Ответственный|"_$S(XCAB="":"Место|",1:"")_"Примечание")
+ S CAB="" F  S CAB=$O(^OPSH(LP,OT,CAB)) Q:CAB=""  D:XCAB=""!(XCAB=CAB)
+ .S DT=DS-1 F  S DT=$O(^OPSH(LP,OT,CAB,DT)) Q:DT=""!(DT>DE)  D
+ ..S TM="" F  S TM=$O(^OPSH(LP,OT,CAB,DT,TM)) Q:TM=""  D
+ ...S R=^(TM)
+ ...S TP=$P(R,"|",3) I OTP'="",OTP'=TP Q 
+ ...S TA=$P(R,"|",4) I OTA'="",OTA'=TA Q 
+ ...S NI=$P(R,"|",1),TL=$P(R,"|",2)*60,V=$G(^(TM,"g")),COM=$G(^("c"))
+ ...I TXT'="",$$UL^TXTU(COM)'[TXT Q 
+ ...S:'TL TL=1800
+ ...S A=NI_"|"_$$FIO^IPAC(NI)_"|"_$$DT2^DTUTL(DT)_"|"_$$TM^DTUTL(TM)_"|"_$$TMT^DTUTL(TL)_"|"_$$NAME^ISPRAV("sopertp",TP)
+ ...S A=A_"|"_$$NAME^ISPRAV("soperan",TA)
+ ...S A=A_"|"_$$FIOSH^IKADRY(V)
+ ...S:XCAB="" A=A_"|"_$P($$CABNAME^NPLPU(LP,CAB),"|",2)
+ ...D WC^RWU(CR_A_"|"_$TR($$OWF^TXTU(COM,100),CR," "))
+ D C^RWU
+ Q
+IsNIB(NI,DT,WK) ; Пациент на дату запланирован на операцию
+ ; WK - записывать в результат ключ
+ N LP,OT,CAB,TM,F
+ S WK=$G(WK),LP=+$$^I("ilpu"),F=""
+ ; TODO - w. index
+ S OT="" F  S OT=$O(^OPSH(LP,OT)) Q:OT=""  D  Q:F'=""
+ .S CAB="" F  S CAB=$O(^OPSH(LP,OT,CAB)) Q:CAB=""  D  Q:F'=""
+ ..S TM="" F  S TM=$O(^OPSH(LP,OT,CAB,DT,TM)) Q:TM=""  I $P(^(TM),"|",1)=NI S F=$S(WK:LP_","_OT_","_CAB_","_DT_","_TM,1:1) Q
+ Q $S(WK:F,1:+F)
+WLOG(LPU,OT,CAB,DT,TM,NI,act,durat,COM,dTabNum) 
+ S HH=$H
+ S LOG=$$USR^IUSER()
+ S ^OPSHW(HH,LPU,OT,CAB,DT,TM)=NI_"|"_LOG_"|"_act_"|"_durat_"|"_COM_"|"_dTabNum
+ S ^OPSHWI(LPU,CAB,HH)=""
+ ;D GL^IEXCH("^OPSHW",HH,LPU,OT,TN,SP,DT,TIME)
+ ;D GL^IEXCH("^OPSHWI",LPU,CAB,HH)
+ Q
+INITDB 
+ N I
+ S ^MN("root","sopertp")="Виды операций в стационаре"
+ S ^("sopertp","fname")="Наименование|Раздел|Архив",^("arch")=3
+ S ^("fcode")="name|section|arch"
+ 
+ S ^MN("root","soperan")="Виды анестезии в стационаре"
+ D:'$D(^MN("sopertp"))
+ .S ^MN("root","sopertp","uniq")=1
+ .S I=$$NEWIDX^ISPRAV("sopertp")
+ D:'$D(^MN("soperan"))
+ .S ^MN("root","soperan","uniq")=1
+ .S I=$$NEWIDX^ISPRAV("soperan")
+ Q
+REGIPROC 
+ N FF,F
+ S FF=+$$FR^I()
+ S F=$S(FF:",t@storage:lpu,Филиал",1:"")
+ S ^IPROC("Стационар","Журнал операций")="JRNR_NOPERSH,1,"_$S(FF:5,1:4)_",d,Начальная дата,d,Конечная дата,te@net:OPLSTL_NOPERSH()@1,Операционная,te@net:NMLST_NSPRAV(""sopertp"")@1,Вид операции"_F
+ Q

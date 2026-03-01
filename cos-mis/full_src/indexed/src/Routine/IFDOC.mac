@@ -1,0 +1,38 @@
+IFDOC ; Финансовые документы [ 12/22/2011  1:12 AM ]
+INITDB 
+ ; X)="name|page|from|to|list proc|sub sc.|sub sc.2
+ ; "p")="type|file"
+ ; "p",field)=<поле счета>|<поле справочника из поля счета>
+ Q:$D(^FDM("doc")) 
+ S ^FDM("doc",1)="Счет за медуслуги|1|lpu|dgn,contr|LSTSC^NFINDOC|10|10"
+ S ^FDM("doc",1,"p",1)="|schet.xml|Счет"
+ S ^FDM("doc",1,"p",2)="|sch_fak.xml|Счет-фактура"
+ S ^FDM("doc",1,"p",3)="|akt_sdp.xml|Акт сдачи-приемки"
+ ;S ^FDM("doc",1,"p",":A:1")="from|name"
+ S ^FDM("doc",2)="П.п. за медуслуги|2|lpu,dgn,contr|LSC1^NFINDOC|10|10"
+ S ^FDM("doc",3)="Акт по услугам|3|dgn,contr|lpu|LSC1^NFINDOC|10|10"
+ S ^FDM("doc",4)="Счет за прикрепление|1|lpu|dgn,contr|LSTSC^NFINDOC|10|10"
+ S ^FDM("doc",4,"p",1)="|schet.xml|Счет"
+ S ^FDM("doc",4,"p",2)="|sch_fak.xml|Счет-фактура"
+ S ^FDM("doc",7)="Счет по внешн.усл.|1|contr|lpu|LSTESC^NFINDOC|20|20"
+ S ^FDM("doc",8)="П.п. по внешн.усл.|2|lpu|contr|LSC2^NFINDOC|20|20"
+ S ^FDM("doc",9)="Акт возвр. по внешн.усл.|3|contr|lpu|LSC2^NFINDOC|20|20"
+ S ^FDM("doc",10)="Счет|1|contr|lpu||40|40"
+ S ^FDM("doc",10,"p",1)="|schet.xml|Счет"
+ S ^FDM("doc",10,"p",2)="|sch_fak.xml|Счет-фактура"
+ S ^FDM("doc",11)="П.п.|2|lpu|contr|LSC3^NFINDOC|40|40"
+ S ^FDM("doc",12)="Акт возврата покупки|3|lpu|contr|LSC3^NFINDOC|40|40"
+ S ^FDM("doc",20)="Остаток на начало|4||lpu||60|60"
+ Q
+REIDX ; Переиндексация
+ N D,T,I,R,X,FR,TO
+ K ^FDCI
+ S D="" F  S D=$O(^FDC(D)) Q:D=""  D
+ .S T="" F  S T=$O(^FDC(D,T)) Q:T=""  D
+ ..S I="" F  S I=$O(^FDC(D,T,I)) Q:I=""  D
+ ...S R=^(I),FR=$P(R,"|",5),TO=$P(R,"|",6)
+ ...S X=T_","_I
+ ...S:FR'="" ^FDCI("con",FR,D,X)=""
+ ...S:TO'="" ^FDCI("con",TO,D,X)=""
+ D REGL^IEXCH("^FDCI")
+ Q

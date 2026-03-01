@@ -1,0 +1,79 @@
+BIOIDG ; Griaule Fingerprint Identification
+LoadLib() 
+	Q:$d(%slib("cbzip")) 
+	n filename,deflocation,tmp
+	s tmp=$zu(86)
+	s deflocation=$P(tmp,"\",1,$L(tmp,"\")-1)
+	s filename=deflocation_"\bin\cbzip.dll"
+	s %slib("cbzip","lib")=$zf(-4,1,filename)
+	s %slib("cbzip","func","version")=$zf(-4,3,%slib("cbzip","lib"),"version")
+	s %slib("cbzip","func","encode")=$zf(-4,3,%slib("cbzip","lib"),"encode")
+	s %slib("cbzip","func","decode")=$zf(-4,3,%slib("cbzip","lib"),"decode")
+	s %slib("cbzip","func","encode64")=$zf(-4,3,%slib("cbzip","lib"),"encode64")
+	s %slib("cbzip","func","decode64")=$zf(-4,3,%slib("cbzip","lib"),"decode64")
+	s %slib("cbzip","func","decode64f")=$zf(-4,3,%slib("cbzip","lib"),"decode64fil")
+	q
+UnloadLib() 
+	d:$d(%slib("cbzip")) $zf(-4,2,%slib("cbzip","lib"))
+	K %slib("cbzip")
+	Q
+Enc(X) ; Now not work
+	D:'$D(%slib("cbzip")) LoadLib()
+	Q $zf(-5,%slib("cbzip","lib"),%slib("cbzip","func","encode"),X)
+Dec(X) ; Now not work
+	D:'$D(%slib("cbzip")) LoadLib()
+	Q $zf(-5,%slib("cbzip","lib"),%slib("cbzip","func","decode"),X)
+EncB64(X) ; Base64 strings - compress
+	D:'$D(%slib("cbzip")) LoadLib()
+	Q $zf(-5,%slib("cbzip","lib"),%slib("cbzip","func","encode64"),X)
+DecB64(X) ; Base64 strings - decompress
+	D:'$D(%slib("cbzip")) LoadLib()
+	Q $zf(-5,%slib("cbzip","lib"),%slib("cbzip","func","decode64"),X)
+DecFB64(X) ; Decode from Base64
+	D:'$D(%slib("cbzip")) LoadLib()
+	Q $system.Encryption.Base64Decode($zf(-5,%slib("cbzip","lib"),%slib("cbzip","func","decode64"),X))
+DecFB64F(X,FN) ; Decode from Base64 to file
+	D:'$D(%slib("cbzip")) LoadLib()
+	S X=$system.Encryption.Base64Decode($zf(-5,%slib("cbzip","lib"),%slib("cbzip","func","decode64f"),X,FN))
+	Q
+Version()
+	D:'$D(%slib("cbzip")) LoadLib()
+	Q $zf(-5,%slib("cbzip","lib"),%slib("cbzip","func","version"))
+EB64(X)
+	N FN,T S FN="tmp"_$J
+	D DEL^FIL(FN)
+	D OW^FIL(FN) U FN W X C FN
+	D BZIP(FN)
+	S FN=FN_".bz2"
+	D OR^FIL(FN) U FN R T C FN
+	D DEL^FIL(FN)
+	Q $system.Encryption.Base64Encode(T)
+BZIP(FROM) 
+	n tmp,deflocation,filename
+	s tmp=$TR($zu(86),"\","/")
+	s deflocation=$P(tmp,"/",1,$L(tmp,"/")-1)
+	s filename=$S($$UL^TXTU($ZV)["unix":"zip",1:deflocation_"/bin/bzip2.exe")
+	X "d $zf(-1,filename_"" -q -z ""_FROM)"
+	Q
+TEST(X)
+	D LoadLib()
+	W !,"Ver="_$$Version()
+	S X1="1234567890"
+	S X1=$system.Encryption.Base64Encode(X1)
+	S X2=$$EncB64(X1)
+	W !,"Enc=",$L(X2)
+	s X2=$$DecB64(X2)
+	W !,"Dec=",X2
+	W !,"Rez="_$system.Encryption.Base64Decode(X2)
+	D UnloadLib()
+	Q
+TESTF(X)
+	D LoadLib()
+	W !,"Ver="_$$Version()
+	S X1="1234567890"
+	S X1=$system.Encryption.Base64Encode(X1)
+	S X2=$$EncB64(X1)
+	W !,"Enc=",$L(X2)
+	D DecFB64F(X2,"C:\21.bin")
+	D UnloadLib()
+	Q

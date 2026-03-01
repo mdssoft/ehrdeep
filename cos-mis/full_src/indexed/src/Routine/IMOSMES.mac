@@ -1,0 +1,426 @@
+IMOSMES ; Стандарты [ 08/10/2018  2:09 PM ]
+ ; Медико-экономические стандарты Московской области
+ ; mofoms.ru
+LOAD 
+ K ^MOSMES
+ F I=1:1:35 D:I'=12 R("c:\msm\mes\"_I_".txt",1)
+ Q
+R(FN,KILL) 
+ ; STATE 0-init,1-mes type,2-diags,3-info,4-tab,5-tab delim,
+ N I
+ S ST=0
+ K DIAG,FLST
+ K:'+$G(KILL) ^MOSMES
+ S MES="",Is="",MODE="",VID=""
+ K DIAG,FLST
+ O 51:(FN:"R")
+ F I=1:1 U 51 R A Q:$ZC  D
+ .S A=$$WD^TXTU(A)
+ .I $TR(A,$C(9),"")="" Q 
+ .I A["МЭС сформировани СУБД" Q 
+ .I A["медицинские услуги оказываемые в профильном отделении" Q 
+ .I $$TRIM^TXTU($P(A,$C(9),1))="Разработчик" Q 
+ .I ST=0 D  Q 
+ ..I A["Клинический протокол" D NEWMES($P(A,$C(9),2,3)) S ST=1 U 0 W !,"Mes="_MES Q
+ .I ST=1 D  Q ; заголовок
+ ..I A["Диагнозы:" S R=$P(A,$C(9),3),ST=2 D ADDIAG(R) U 0 W !,"Di="_R Q 
+ .I ST=2 D  Q ; диагнозы
+ ..I A["Вид помощи:" S ST=3,Is=I,(MODE,VID)=0 D FIELDS(A) Q 
+ ..S R=$P(A,$C(9),2) D ADDIAG(R) U 0 W !,"Dia="_R
+ .I ST=3 D  Q  ; поля
+ ..I A["Медицинская услуга" S ST=4,Is=0 D SETFLST Q  ; end
+ ..D FIELDS(A)
+ .I ST=4 D  Q  ; таблица
+ ..I A["Клинический протокол (модель пациента)" D NEWMES($P(A,$C(9),2,3)) S ST=1 U 0 W !,"Mes="_MES Q 
+ ..S R=$P(A,$C(9),2) Q:R="" 
+ ..I $P(A,$C(9),4)="",$P(A,$C(9),5)="" S Is=1,PVID=VID,VID=R Q  ; type
+ ..I Is=1 S MODE=VID,VID=PVID
+ ..S CNT=$P(A,$C(9),5),NM=$P(A,$C(9),3),Is=0
+ ..U 0 W !,"Usl="_R_", CNT="_CNT_$S(MODE="":"",1:", "_MODE)
+ ..S ^MOSMES("usl",R)=NM
+ ..S V=+$$ADDVID(VID),M=+$$ADDMODE(MODE)
+ ..S ^MOSMES("base",MES,"u",V,M,R)=CNT
+ C 51
+ Q
+FIELDS(A) 
+ Q:I-Is=2 
+ F X=1:2:10 S N=$P(A,$C(9),X),P=$$TRIM^TXTU($P(A,$C(9),X+1)) I N'="",P'="" S Z=$$ADDFL(P),FLST(Z)=N
+ Q
+SETFLST 
+ Q:'$D(FLST) 
+ M ^MOSMES("base",MES,"f")=FLST
+ Q
+NEWMES(X) 
+ S MODE="",VID="",PVID=""
+ S X=$S($P(X,$C(9),2)="":$P(X,$C(9),1),1:$P(X,$C(9),2))
+ S MES=X
+ K DIAG
+ Q
+ADDIAG(X) 
+ Q:X=""
+ S:$L(X)>3 X=$E(X,1,3)_"."_$E(X,4,5)
+ S DIAG(X)="",^MOSMES("base",MES,"d",X)="",^MOSMES("dia",X,MES)=""
+ Q
+ADDVID(X) ; Раздел услуги
+ Q:X="" ""
+ S P="" F  S P=$O(^MOSMES("vid",P)) Q:P=""  I ^(P)=X Q 
+ I P="" S P=$O(^MOSMES("vid",P),-1)+1,^(P)=X
+ Q P
+ADDMODE(X) ; Тип услуги 
+ Q:X="" ""
+ S P="" F  S P=$O(^MOSMES("mod",P)) Q:P=""  I ^(P)=X Q 
+ I P="" S P=$O(^MOSMES("mod",P),-1)+1,^(P)=X
+ Q P
+ADDFL(X) ; Добавить поле
+ S P="" F  S P=$O(^MOSMES("fl",P)) Q:P=""  I ^(P)=X Q 
+ I P="" S P=$O(^MOSMES("fl",P),-1)+1,^(P)=X
+ Q P
+MSMES ; Merge from ^SMES (результат лечения)
+ N DIA,SM,ID,I,R
+ S DIA="",I=0 F  S DIA=$O(^MOSMES("dia",DIA)) Q:DIA=""  D
+ .Q:'$D(^SMES("D",DIA))
+ .S SM=^(DIA),R=$G(^SMES(SM,"N")) Q:R=""
+ .S ID="" F  S ID=$O(^MOSMES("dia",DIA,ID)) Q:ID=""  D
+ ..S:'$D(^MOSMES("base",ID,"n")) ^("n")=R,I=I+1
+ W !,"Merged "_I_" items",!
+ Q
+MKIDX ; Make index
+ N ID,DI
+ K ^MOSMES("dia")
+ S ID="" F  S ID=$O(^MOSMES("base",ID)) Q:ID=""  D
+ .Q:$G(^MOSMES("base",ID,"use"))=0
+ .S DI="" F  S DI=$O(^MOSMES("base",ID,"d",DI)) Q:DI=""  D
+ ..S ^MOSMES("dia",DI,ID)=""
+ D REGL^IEXCH("^MOSMES","dia")
+ Q
+CMPPRC ; Поиск соответствия с прейскурантом
+ ; Орбитотомия
+ K ^BUF("ct"),^BUF("mt")
+ N C,NM,P,WRD,CNT,W,X,CNI,Y,Z
+ S P=$$CORCP^IPRICET(1)
+ S C="" F  S C=$O(^CN(C)) Q:C=""  D
+ .S NM=$$NAME^IPRICE(C,P)
+ .S NM=$TR(NM,"Ёё(),.:;-_'""","Ее          ")
+ .S NM=$$UL^TXTU($$DBLSP^TXTU(NM))
+ .D mkWRDY(NM,C)
+ .M ^BUF("ct")=WRD
+ S C="" F  S C=$O(^MOSMES("usl",C)) Q:C=""  D
+ .S NM=^(C) Q:$D(^(C,"a")) 
+ .W !,"----------------------------------------------------"
+ .W !,NM
+ .W !,"----------------------------------------------------"
+ .S NM=$TR(NM,"Ёё(),.:;-_'""","Ее          ")
+ .S NM=$$UL^TXTU($$DBLSP^TXTU(NM))
+ .D mkWRD(NM)
+ .M ^BUF("cm")=WRD
+ .K CNT,CNI
+ .S W="" F  S W=$O(WRD(W)) Q:W=""  D:$D(^BUF("ct",W))
+ ..S X="" F  S X=$O(^BUF("ct",W,X)) Q:X=""  S CNT(X)=$G(CNT(X))+1
+ .S X="" F  S X=$O(CNT(X)) Q:X=""   S CNI(CNT(X),X)=""
+ .S X="",W=1,Z=$O(CNI(""),-1)
+ .K CNT
+ .F  S X=$O(CNI(X),-1) Q:X=""  S Y="" F  S Y=$O(CNI(X,Y)) Q:Y=""  D:$S(Z>1:W<10!(X>1),1:1)
+ ..W !,W_" - "_X_" = "_Y_" "_$$NAME^IPRICE(Y,P)_$$grp(Y,P)
+ ..S CNT(W)=Y,W=W+1
+ .W !,":" R X Q:X=""  Q:'$D(CNT(X)) 
+ .S ^MOSMES("usl",C,"a")=CNT(X)
+ .W !,!,!
+ W !,!,"OK"
+ Q
+grp(COD,PRC) 
+ N R S R=$$GET^IPRICE(COD,"grp",PRC,+$H)
+ Q:R="" ""
+ Q " "_$E($P($G(^CNG(R)),"|",1),1,64)
+CMPCLR ; Clear aliaces
+ N C S C=""
+ F  S C=$O(^MOSMES("usl",C)) Q:C=""  K ^MOSMES("usl",C,"a")
+ W !,"OK"
+ Q
+mkWRDY(X,Y) 
+ N I,C,R S C=$L(X," ")
+ K WRD
+ F I=1:1:C S R=$P(X," ",I) D:$L(R)>1
+ .S:R="первичная" R="первичный"
+ .S:R="повторная" R="повторный"
+ .S WRD(R,Y)=""
+ Q
+mkWRD(X) 
+ N I,C,R S C=$L(X," ")
+ K WRD
+ F I=1:1:C S R=$P(X," ",I) I $L(R)>1 S WRD(R)=""
+ Q
+LXLS ; Общий формат
+ N %J,R,X,A,MES,DIA,VID,M,U,CNT,NTR,LEK,REZ
+ D MKMESU
+ D ORH^RWU
+ S ^MOSMES("vid",91)="Инструментальная диагностика"
+ S ^MOSMES("vid",93)="Направления на консультации"
+ S ^MOSMES("vid",95)="Лабораторные исследования"
+ S ^MOSMES("mod",1)="обязательно"
+ S ^MOSMES("mod",2)="по показаниям"
+ S (MES,DIA,VID,U,CNT,NTR,LEK,REZ)=""
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D:%J>1
+ .S A=$$DBLSP^TXTU(A)
+ .S R=$P(A,"|",1) I R'="" D LXLSp S MES=R
+ .S R=$$RECODE^YMKB10($P(A,"|",2)) I R'="",MES'="" S DIA=R,^MOSMES("dia",DIA,MES)="",^MOSMES("base",MES,"d",DIA)=""
+ .S R=$$UL^TXTU($P(A,"|",4)) I R'="" S VID=$S(R["лаб":95,R["инст":91,R["кон":93,1:"") ; vid
+ .S M=$S($$TRIM^TXTU($P(A,"|",5))="":2,1:1) ; mod
+ .S U=$$TRIM^TXTU($P(A,"|",6)),U=$$ADDUSL(U,"")
+ .S CNT=$$TRIM^TXTU($P(A,"|",7)) S:CNT="" CNT=1
+ .S R=$P($P(A,"|",8)," ",1) S:R'="" NTR=R
+ .S R=$P(A,"|",9) S:R'="" LEK=$S(LEK="":"",1:LEK_CR)_R
+ .S R=$P(A,"|",10) S:R'="" REZ=$S(REZ="":"",1:REZ_CR)_R
+ .I MES'="",VID'="",U'=""  S ^MOSMES("base",MES,"u",VID,M,U)=CNT
+ D CR^RWU
+ D LXLSp
+ K ^BUF($J,"mesu")
+ Q
+LXLSp 
+ Q:MES="" 
+ S ^MOSMES("base",MES,"n")=NTR_"|"_REZ
+ S:LEK'="" ^MOSMES("base",MES,"l")=LEK
+ S (MES,DIA,VID,U,CNT,NTR,LEK,REZ)=""
+ Q
+LXLS1 ; Формат 2
+ ; МЭС|Диагноз|Услуга|Код услуги|Кол-во|Обязательно|Нетруд.|Лечение|дети
+ N A,%J,R,X,MES,DI,DIS,DIE,UN,U,CNT,RQ,NTR,COM,UL,DL,DIL,PRC,LU,UF,AGE
+ S PRC=$$CORCP^IPRICET(1)
+ S LU=$O(^MOSMES("usl",999999),-1)+1,UF=0
+ S ^MOSMES("vid",1)="Общие"
+ S ^MOSMES("mod",1)="обязательно"
+ S ^MOSMES("mod",2)="по показаниям"
+ D ORH^RWU
+ S MES=$O(^MOSMES("base",""),-1)+1,(NTR,COM,AGE)=""
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D:%J>1
+ .S A=$$DBLSP^TXTU(A)
+ .S R=$P(A,"|",1)
+ .S:R'="" MES=R
+ .S UN=$P(A,"|",3),U=$P(A,"|",4),CNT=$P(A,"|",5)
+ .S RQ=$P(A,"|",6)
+ .S R=$P(A,"|",7) S:R'="" NTR=R
+ .S R=$P(A,"|",8) S:R'="" COM=$S(COM="":"",1:COM_CR)_R
+ .I U'=""!(UN'="") S:U="" U=LU,LU=LU+1,UF=1 S UL(U)=UN_"|"_CNT_"|"_RQ_"|"_UF,UF=0
+ .S R=$P(A,"|",9)
+ .S:R'="" AGE=R
+ .S R=$P(A,"|",2)
+ .I R'="" S DI=$TR(R," ",""),DIS=$P(DI,"-",1),DIE=$P(DI,"-",2) S:DIE="" DIE=DIS D CHKDI(DIS,DIE),MKDIL^IMOSMES(DIS,DIE) M DL=DIL
+ .I R="",U="",UN="",CNT="",RQ="" D LXLS1p
+ D CR^RWU
+ D REGL^IEXCH("^MOSMES")
+ Q
+LXLS1p ; Процедура добавления
+ Q:'$D(DL)
+ Q:MES=""  
+ S ^MOSMES("base",MES,"n")=NTR
+ S:COM'="" ^MOSMES("base",MES,"l")=COM
+ S:AGE'=""&(AGE'=0) ^MOSMES("base",MES,"a")=AGE
+ S U="" F  S U=$O(UL(U)) Q:U=""  D
+ .S X=UL(U),UF='$P(X,"|",4)
+ .I UF,'$$EXIST^IPRICE(U,PRC) s ^MOSMES("err","usl",U,MES)="" Q 
+ .S:$P(X,"|",1)="" $P(X,"|",1)=$$NAME^IPRICE(U,PRC)
+ .S ^MOSMES("usl",U)=$P(X,"|",1)
+ .S:UF ^MOSMES("usl",U,"a")=U
+ .S RQ=$TR($P(X,"|",3),"XxХх+",11111) S:RQ=0 RQ="" ; required
+ .S RQ=$S(RQ:1,1:2)
+ .S ^MOSMES("base",MES,"u",1,RQ,U)=$P(X,"|",2)
+ S X="" F  S X=$O(DL(X)) Q:X=""  D
+ .S ^MOSMES("base",MES,"d",X)=""
+ .S ^MOSMES("dia",X,MES)=""
+ K UL,DL
+ S MES=MES+1,(NTR,COM,AGE)=""
+ Q
+CHKDI(DI1,DI2) ; Проверить диагнозы
+ S:DI1=DI2 DI2=""
+ I DI1'="",'$$CHECK^YMKB10(DI1) S ^MOSMES("err","dia",DI1,MES)=""
+ I DI2'="",'$$CHECK^YMKB10(DI2) S ^MOSMES("err","dia",DI2,MES)=""
+ Q 
+MKMESU ; Создать временный индекс по услугам
+ N U,R
+ K ^BUF($J,"mesu")
+ S U="" F  S U=$O(^MOSMES("usl",U)) Q:U=""  D
+ .S R=$P(^(U),"|",1),R=$$LU^TXTU(R) Q:R="" 
+ .S R=$$CRC32^IHASH(R)_$E(R,1,100) ; ограничение индекса + уникальность
+ .S ^BUF($J,"mesu",R)=U
+ Q
+ADDUSL(NM,COD) ; Добавить/найти услугу
+ ; COD - алиас услуги учреждения
+ Q:NM="" ""
+ N R,U
+ S R=$$LU^TXTU(NM),R=$$CRC32^IHASH(R)_$E(R,1,100)
+ S U=$G(^BUF($J,"mesu",R)) Q:U'="" U
+ S U=$O(^MOSMES("usl",""),-1)+1
+ S ^MOSMES("usl",U)=NM
+ S:COD'="" ^MOSMES("usl",U,"a")=COD
+ S ^BUF($J,"mesu",R)=U
+ Q U
+LSSMC ; Из формата ССМЦ
+ N A,%J,DIA,DIS,DIE,X,Start,ST,DIL,U,T,CNT,V
+ D ORH^RWU
+ S Start=0,(ST,T)=""
+ S ^MOSMES("vid",99)="Диагностика"
+ S ^MOSMES("vid",98)="Направления на консультацию"
+ S ^MOSMES("mod",1)="обязательно"
+ S ^MOSMES("mod",2)="по показаниям"
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  D
+ .I %J=1 Q
+ .S A=$$WD^TXTU(A)
+ .S X=$$TRIM^TXTU($TR(A,"|",""))
+ .I '$L(X) D  Q 
+ ..I $L(ST),$L(T) S ^MOSMES("base",ST,"l")=T,T=""
+ ..S Start=0,ST=""
+ .D:'Start
+ ..S DIA=$TR($P(A,"|",1)," "_CR,""),DIS=$P(DIA,"-",1),DIE=$P(DIA,"-",2)
+ ..D MKDIL(DIS,DIE)
+ ..S ST=$O(^MOSMES("base","SSMC.999999"),-1) S:ST'["SSMC" ST=".0"
+ ..S ST="SSMC."_($P(ST,".",2)+1),T=""
+ ..S Start=1
+ .S U=$P(A,"|",3),CNT=$P(A,"|",4),X=$P(A,"|",5)
+ .S:$L(X) T=$S($L(T):T_CR,1:"")_X
+ .S X=$$CHECK^IPRICE(U) ; услуга
+ .S:$$LU^TXTU(U)["направление" U=$P(U," ",2)
+ .I 'X,$$CHECK^ISPRAV("spec",U) S U="SP:"_U,X=2 ; код спец.
+ .I 'X S X=$$FNDSPEC(U) S:X'="" U="SP:"_X,X=2 ; специальность
+ .I 'X  S ^ERLOG("IMOSMES",+$H,U)=""  Q  ; непойми что
+ .I '$D(^MOSMES("usl",U)) S ^MOSMES("usl",U)=$S(X=2:$$GSPEC^YISPRAV($P(U,":",2)),1:$$NAME^IPRICE(U,1)),^MOSMES("usl",U,"a")=U
+ .S V=$S(X=2:98,1:99) ; вид услуг
+ .S:CNT="" CNT=1
+ .S ^MOSMES("base",ST,"u",V,1,U)=CNT
+ .M ^MOSMES("base",ST,"d")=DIL
+ .S X="" F  S X=$O(DIL(X)) Q:X=""  S ^MOSMES("dia",X,ST)=""
+ D CR^RWU
+ Q
+LSSMCT(FN) ; ССМЦ текстовый
+ ; TODO - неск. диагнозов
+ N IO,I,J,R,ST,DI,RR,CR,FL,FI,FLI
+ S IO=$$ORT^FIL(FN) Q:IO=""
+ K ^BUF("m0"),^BUF("m1")
+ S ST=0,CR=$C(13,10)
+ U IO F J=1:1  R R Q:$$ST^FIL()=0  D:R'=""
+ .I ST=0,R["<DT><FONT SIZE=4>" S DI=$P($P(R,"<B>",2),"</B>",1) U 0 W !,DI U IO S DI=$$RECODE^YMKB10($$TRIM^TXTU(DI)) S:DI'="" ST=1 Q 
+ .Q:ST=0 
+ .I ST=1,R["<TABLE WIDTH=" S ST=2 Q
+ .I ST=2,R["</TABLE>" S ST=0 Q
+ .S ^BUF("m0",DI,J)=$$WD^TXTU(R)
+ C IO
+ U 0
+ S DI="" F  S DI=$O(^BUF("m0",DI)) Q:DI=""  D
+ .S ^MOSMES("dia",DI,"SM."_DI)="" 
+ .S ST=0,I=0,RR="",FL=""
+ .S J="" F  S J=$O(^BUF("m0",DI,J)) Q:J=""  D
+ ..S R=^(J)
+ ..I ST=0,R["<TD WIDTH" S ST=1,I=I+1,FLI=(I#2=1),RR="" Q
+ ..Q:ST=0 
+ ..I ST=1,R["</TD>" D  Q 
+ ...S ST=0,RR=$$splitHTM(RR,FLI),^BUF("m1",DI,I)=RR
+ ...I FLI S FL=RR S FI=$S(RR="Критерии эффективности лечения, ориентировочные":777,1:$$ADDVID(RR)) Q
+ ...S:FI'=777 ^MOSMES("base","SM."_DI,"t",FI)=RR
+ ...S:FI=777 ^MOSMES("base","SM."_DI,"n")="|"_RR
+ ..S RR=RR_CR_R
+ Q
+splitHTM(X,MOD) 
+ N K,E
+ F  S K=$F(X,"<") Q:'K  S E=$F(X,">",K) Q:'E  S $E(X,K-1,E-1)=""
+ S X=$TR(X,$C(9)," ")
+ S:MOD X=$$DBLSP^TXTU($TR(X,$C(13,10)," "))
+ S X=$$TRIM^TXTU(X)
+ Q X
+LTAB 
+ N A,%J,DIA,DIS,DIE,X,Start,ST,DIL,U,T,CNT,V,PST,PL
+ D ORH^RWU
+ S PST="",V=""
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  D
+ .I %J=1 Q
+ .S A=$$WD^TXTU(A)
+ .S ST=$P(A,"|",1)
+ .; I ST="",PST'="" D  Q 	..
+ .I ST="" S V=""
+ .Q:ST="" 
+ .S PL=$P(A,"|",2),X=$P(A,"|",3)
+ .I PL="",X="" Q 
+ .Q:PL="x"  ; TODO
+ .I PL="diag" S ^MOSMES("dia",X,ST)="",^MOSMES("base",ST,"d",X)="" Q 
+ .I PL="netr" S $P(^MOSMES("base",ST,"n"),"|",1)=X Q 
+ .I PL="age" Q  S ^MOSMES("base",ST,"f",6)=X_"-"_$P(A,"|",4) Q  ; TODO
+ .I PL="text" S ^MOSMES("base",ST,"t")=X Q 
+ .I PL="rez" S $P(^MOSMES("base",ST,"n"),"|",2)=X Q 
+ .I PL="",X'="" S V=$$ADDVID(X) Q 
+ .I PL'="",X'="" S ^MOSMES("base",ST,"u",+V,0,PL)="",^MOSMES("usl",PL)=X
+ D CR^RWU
+ Q
+FNDSPEC(TXT) ; Поиск специальности по тексту
+ N I,X,R1,R2
+ S TXT=$$LU^TXTU(TXT),I=$$IDX^ISPRAV("spec"),X=""
+ F  S X=$O(^MN(I,X)) Q:X=""  S R1=$G(^(X,"fname")),R2=$G(^("sname")),R1=$$LU^TXTU(R1),R2=$$LU^TXTU(R2) Q:TXT=R1  Q:TXT=R2  
+ Q X
+MKDIL(DS,DE) ; Создать перечень диагнозов из периода -> DIL
+ K DIL
+ S DS=$$RECODE^YMKB10(DS),DE=$$RECODE^YMKB10(DE)
+ Q:DS=""
+ I DE="" S DIL(DS)="" Q 
+ I DS=DE S DIL(DS)="" Q
+ N DSZ,DEZ,D,P
+ S DSZ=$P(DS,".",2),DS=$P(DS,".",1),DEZ=$P(DE,".",2),DE=$P(DE,".",1)
+ S D=$O(^D(DS),-1),P=DSZ
+ F  S D=$O(^D(D)) Q:D=""!(D]DE)  D
+ .F  D  Q:'$L(DEZ)&(D=DE)  S P=$O(^D(D,"z",P)) Q:P=""!($L(DEZ)&(D=DE)&(DEZ<P))
+ ..I P="" S DIL(D)="" Q
+ ..S DIL(D_"."_P)=""
+ .S P=""
+ Q
+RESUSL ; Проверить и объединить одинаковые услуги
+ N U,U1,R,X1,X2,S
+ K ^BUF($J,"mesu")
+ S U="" F  S U=$O(^MOSMES("usl",U)) Q:U=""  D
+ .S R=$P(^(U),"|",1),R=$$LU^TXTU(R) Q:R=""
+ .S R=$$CRC32^IHASH(R)_$E(R,1,100) ; ограничение индекса + уникальность
+ .I '$D(^BUF($J,"mesu",R)) S ^(R)=U Q
+ .S U1=^BUF($J,"mesu",R)
+ .I ^MOSMES("usl",U)'=^MOSMES("usl",U1) Q 
+ .W !,":"
+ .K ^MOSMES("usl",U)
+ .S S="" F  S S=$O(^MOSMES("base",S)) Q:S=""  D
+ ..S X1="" F  S X1=$O(^MOSMES("base",S,"u",X1)) Q:X1=""  D
+ ...S X2="" F  S X2=$O(^MOSMES("base",S,"u",X1,X2)) Q:X2=""  D
+ ....Q:'$D(^(X2,U)) 
+ ....M:'$D(^(U1)) ^MOSMES("base",S,"u",X1,X2,U1)=^MOSMES("base",S,"u",X1,X2,U)
+ ....K ^MOSMES("base",S,"u",X1,X2,U) 
+ ....W "."
+ K ^BUF($J,"mesu")
+ Q
+DEL(MES) ; Удалить стандарт
+ N X
+ S X=""
+ F  S X=$O(^MOSMES("base",MES,"d",X)) Q:X=""  K ^MOSMES("dia",X,MES)
+ K ^MOSMES("base",MES)
+ Q
+REUSLNM ; Установить на услуги типовые наименования
+ N U,RU,P,NM,G
+ S U="" F  S U=$O(^MOSMES("usl",U)) Q:U=""  D:$D(^(U,"a"))
+ .S RU=^("a")
+ .S P=$$STARTTP^IPRICE(RU,+$H,0)
+ .S NM=U_" "_$$NAME^IPRICE(RU,P)
+ .I $$UL^TXTU(NM)["прием" S G=$$GET^IPRICE(RU,"grp",P,+$H) S:G'="" NM=NM_" ("_$$NAME^NPRICEG(G)_")"
+ .S ^MOSMES("usl",U)=NM
+ D REGL^IEXCH("^MOSMES","usl")
+ Q
+DAYS(ST,UL) ; Число дней по стандарту
+ ; ST - код стандарта
+ ; UL - код услуги (опционально)
+ Q:ST="" ""
+ N C1,C2
+ S C1=0
+ I $G(UL)'="" S C1=$G(^MOSMES("usl",UL,"p"))
+ S C2=$P($G(^MOSMES("base",ST,"n")),"|",1)
+ Q $S(C1>C2:C1,1:C2)
+ALLUDT(MOD) ; Включить или выключить все используемые стандарты
+ ; MOD - 0 (выкл), 1 (вкл)
+ N ID,M
+ S MOD=+$G(MOD)
+ S ID="" F  S ID=$O(^MOSMES("base",ID)) Q:ID=""  D
+ .I MOD=0,$G(^MOSMES("base",ID,"use"))=0 
+ .I MOD=1,$G(^MOSMES("base",ID,"use"))'=0 
+ .S $P(^MOSMES("base",ID,"udt"),"|",$S(MOD=0:2,1:1))=+$H
+ .S ^MOSMES("base",ID,"use")=MOD
+ .D GL^IEXCH("^MOSMES","base",ID,"use")
+ D MKIDX
+ Q

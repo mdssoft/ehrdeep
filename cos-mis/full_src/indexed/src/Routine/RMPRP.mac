@@ -1,0 +1,170 @@
+RMPRP ; Статистика по программа обслуживания [ 09/30/2024  3:05 PM ]
+CENN(DS,DE) ; Стоимости программ
+ N PP,X,R,A,SS,NI,S,Z
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D:$G(^MPRPI)+2<+$H MKidxC^YMPRPU
+ K ^BUF($J,"mprp")
+ D OWF^RWU(".txt")
+ D WC^RWU("Программа|Стоимость (мин)|Стоимость (ср)|Стоимость (макс)|Лиц")
+ D MKALLPRC^IUSLSC(DS,DE,1,"CENNprc^RMPRP","USLER^RMPRP",0)
+ S S=0,PP="" F  S PP=$O(^BUF($J,"mprp",PP)) Q:PP=""  D
+ .F X=2:1:4 S SS(X)=0
+ .S (S,Z)=0,SS(1)=9999999999
+ .S NI="" F  S NI=$O(^BUF($J,"mprp",PP,NI)) Q:NI=""  S R=^(NI) S:R<0 R=0 S Z=Z+1,S=S+R S:R<SS(1) SS(1)=R S:R>SS(2) SS(2)=R
+ .Q:Z=0 
+ .S:SS(1)=9999999999 SS(1)=0
+ .D WC^RWU(CR_$$NAMEH^IMPRP(PP,DE)_"|"_$$FFN(SS(1))_"|"_$$FFN(S/Z)_"|"_$$FFN(SS(2))_"|"_Z)
+ K ^BUF($J,"mprp")
+ D C^RWU
+ Q
+FFN(X) 
+ Q $TR($S(X[".":$FN(X,"",2),1:X),".",",")
+CENNprc 
+ Q:U="" 
+ S PP=$$GET^IPAC(NI,"prog",DT) Q:PP=""  
+ S PP="|"_PP_"|"
+ S X="" F  S X=$O(^MPRPI("u",U,X)) Q:X=""  I PP[("|"_X_"|") Q 
+ Q:X="" 
+ S SUMM=$$PRICEH^IPRICE(U,PRC,DT)*KSKD*$G(UL(U)) ; todo
+ S ^(NI)=$G(^BUF($J,"mprp",X,NI))+SUMM
+ Q
+USLER 
+ Q
+VCENN(DT,PRG,PRC) ; Анализ стоимости программы (теоретический)
+ N U,STAT,R,DD,DA,CN,G,I,X,SUM,MC,Q,MX
+ S PRG=$$WD^TXTU(PRG)
+ S DT=$$DIH^DTUTL(DT)
+ S DA=$O(^MPRP(PRG,"u","a",DT+1),-1)
+ S DD=$O(^MPRP(PRG,"u","d",DT+1),-1)
+ I DD="",DA="" S %L=CR_$$DW^TXTU("Не определены условия обслуживания"),%B=".txt" Q 
+ D VCENNmi,VCENNmx
+ D OWF^RWU(".txt")
+ D WC^RWU($$NAME^IMPRP(PRG)_"|Минимум (руб)|Максимум (руб)")
+ D WC^RWU(CR_"Стоимость|"_$$FN($G(STAT(1,1)))_"|"_$$FN($G(STAT(2,1))))
+ D WC^RWU(CR_"Себестоимость|"_$$FN($G(STAT(1,2)))_"|"_$$FN($G(STAT(2,2))))
+ D WC^RWU(CR_"Цена материалов|"_$$FN($G(STAT(1,3)))_"|"_$$FN($G(STAT(2,3))))
+ ;D WC^RWU(CR_"Цена продажи материалов")
+ D C^RWU
+ Q
+VCENNmi 
+ K STAT(1)
+ K ^BUF($J)
+ S U="" F  S U=$O(^MPRP(PRG,"u","a",DA,U)) Q:U=""  D
+ .S R=^(U),G=$P(R,"|",4)
+ .S R=$P(R,"|",1)_"|"_$P(R,"|",5)_"|"_$$PRICEH^IPRICE(U,PRC,DT)
+ .F I=1:1:$L(G,";") S ^BUF($J,1,+$P(G,";",1),U)=R
+ ; Сортировка по сумме в группе
+ S G="" F  S G=$O(^BUF($J,1,G)) Q:G=""  D
+ .K ^BUF($J,2)
+ .S U="" F  S U=$O(^BUF($J,1,G,U)) Q:U=""  D
+ ..S R=^(U)
+ ..S ^BUF($J,2,+$P(R,"|",3),U)=R
+ .S SUM="",MC=0 F  S SUM=$O(^BUF($J,2,SUM),-1) Q:SUM=""  D
+ ..S U="" F  S U=$O(^BUF($J,2,SUM,U)) Q:U=""  D
+ ...S R=^(U),MU=0
+ ...S MX=$P(R,"|",1),Q=0 I MX="",$P(R,"|",2)="" S MX=1
+ ...I $P(R,"|",2)'="" Q:+$P(R,"|",2)'>MC  
+ ...I MX'="",MU'<MX S Q=1 Q ; превышение кол-ва
+ ...I $P(R,"|",2) Q:+$P(R,"|",1)'>MU  ; если не указано отдельно по грп
+ ...S MC=MC+1,MU=MU+1
+ ...S STAT(1,1)=$G(STAT(1,1))+SUM
+ ...S STAT(1,2)=$G(STAT(1,2))+$$GET^IPRICE(U,"scost",PRC,DT)
+ ...S X=$$GET^IPRICE(U,"mat",PRC,DT) Q:X="" 
+ ...S STAT(1,3)=$G(STAT(1,3))+$$CENNALL^IWRHS(X,DT)
+ Q
+VCENNmx 
+ K STAT(2)
+ Q:$G(^MPRP(PRG,"u","a",DA))'=1  ; нет списка только разрешенных
+ K ^BUF($J)
+ S U="" F  S U=$O(^MPRP(PRG,"u","a",DA,U)) Q:U=""  D
+ .S R=^(U),G=$P(R,"|",4)
+ .S R=$P(R,"|",1)_"|"_$P(R,"|",5)_"|"_$$PRICEH^IPRICE(U,PRC,DT)
+ .F I=1:1:$L(G,";") S ^BUF($J,1,+$P(G,";",1),U)=R
+ ; Сортировка по сумме в группе
+ S G="" F  S G=$O(^BUF($J,1,G)) Q:G=""  D
+ .K ^BUF($J,2)
+ .S U="" F  S U=$O(^BUF($J,1,G,U)) Q:U=""  D
+ ..S R=^(U)
+ ..S ^BUF($J,2,+$P(R,"|",3),U)=R
+ .S SUM="",MC=0 F  S SUM=$O(^BUF($J,2,SUM),-1) Q:SUM=""  D
+ ..S U="" F  S U=$O(^BUF($J,2,SUM,U)) Q:U=""  D
+ ...S R=^(U),MU=0
+ ...S MX=$P(R,"|",1),Q=0 I MX="",$P(R,"|",2)="" S MX=1
+ ...F I=1:1:99 D  Q:Q
+ ....I $P(R,"|",2)'="" Q:+$P(R,"|",2)'>MC  
+ ....I MX'="",MU'<MX S Q=1 Q ; превышение кол-ва
+ ....I $P(R,"|",2) Q:+$P(R,"|",1)'>MU  ; если не указано отдельно по грп
+ ....S MC=MC+1,MU=MU+1
+ ....S STAT(2,1)=$G(STAT(2,1))+SUM
+ ....S STAT(2,2)=$G(STAT(2,2))+$$GET^IPRICE(U,"scost",PRC,DT)
+ ....S X=$$GET^IPRICE(U,"mat",PRC,DT) Q:X="" 
+ ....S STAT(2,3)=$G(STAT(2,3))+$$CENNALL^IWRHS(X,DT)
+ Q
+FN(X) 
+ Q $TR(+$J(X,"",2),".",",")
+PACREST(NI,DGN,DH,SPRG) ; Отстаток по программа у пациента в договоре
+ ; SPRG - отдельные выбранные программы
+ N PIDX,U,PRG,DA,DD,DT,I,UC,USL,K,DS,R,Ig,PRG,UN,K
+ S DT=$$DIH^DTUTL($G(DH))
+ S:DGN="" DGN=$$GET^IPAC(NI,"stc",DT)
+ S PIDX=$$PIDXN^IPAC(NI,DGN,DT)
+ I PIDX=-1 D MSG^RWU("Выбран договор, отсутствующий у пациента") Q 
+ S PRG=$S($G(SPRG)="":$$GET^IPAC(NI,"prog"_PIDX,DT),1:SPRG)
+ S PRC=$$GET^YNDOG(DGN,"price",DT)
+ S DA=$O(^MPRP(PRG,"u","a",DT+1),-1)
+ S DD=$O(^MPRP(PRG,"u","d",DT+1),-1)
+ S DS=$$GET^IPAC(NI,"dog_from"_PIDX,DT)
+ S X=$$FLCNG^IPAC(NI,"stc"_PIDX,DT)
+ S DS=$S(DS="":X,X>DS:X,1:DS)
+ ; S:DT-R<DS R=DT-DS+1
+ 
+ k ^BUF($J,"g")
+ S USL="" F  S USL=$O(^MPRP(PRG,"u","a",DA,USL)) Q:USL=""  D PACRESTp
+ D OWF^RWU(".txt")
+ D WC^RWU("Код|Наименование услуги|Остаток|Цена")
+ S G="" F  S G=$O(^BUF($J,"g",G)) Q:G=""   D
+ .D:G WC^RWU(CR_"|"_$E($$NAME^NPRICEG(G),1,80))
+ .S USL="" F  S USL=$O(^BUF($J,"g",G,USL)) Q:USL=""  D WC^RWU(CR_^(USL))
+ k ^BUF($J,"g")
+ D C^RWU
+ Q
+PACRESTp 
+ K UC
+ S R=$$CNTUA^YMPRP(PRG,DT,USL,"UC"),I=+$P(R,"|",1),Ig=+$P(R,"|",5)
+ ; S:Ig
+ S R=+$P(R,"|",2) S:R=0 R=99999
+ S R=$S(R<0:-R,DT-R<DS:DT-DS+1,1:R) 
+ S UC=USL,UC(USL)=""
+ S CU=$$CNTUSL^IUSL(NI,DT,R,"UC",+$G(^cfg("allow-vusl")),"",1,0,,,"npg")
+ S K=-999
+ ; максимальный остаток
+ I Ig S R=Ig-$P(CU,"|",1) I K<R S K=R
+ I Ig,I S R=I-$P(CU,"|",2) I K<R S K=R
+ I 'Ig S R=I-$P(CU,"|",1) I K<R S K=R
+ S K=$S(K=999:"Не ограничено",K=-999:"",1:K)
+ S UN=$$OWF^TXTU($$NAME^IPRICE(USL,PRC),80)
+ S G=+$$GET^IPRICE(USL,"grp",PRC,DT)
+ S ^BUF($J,"g",G,USL)=USL_"|"_UN_"|"_K_"|"_$$PRICE^IPRICE(USL,PRC)
+ Q
+LST(DT,USE) ; Список программ обслуживания
+ N N,A,F,H
+ D OWF^RWU(".txt")
+ S DT=$$DIH^DTUTL(DT)
+ D WC^RWU("Код|Наименование на "_$$DT^DTUTL(DT)_"|Раздел|Прейскурант|Цена")
+ S N="" F  S N=$O(^MPRP(N)) Q:N=""  D
+ .S F=$$CHECK^IMPRP(N,DT)
+ .I USE,'F q 
+ .I 'USE,F q 
+ .S F=$$GET^IMPRP(N,"fld",DT)
+ .S A=N_"|"_$$GET^IMPRP(N,"pname",DT)_"|"_$$GET^ISPRAV("mprpfld",F)
+ .S A=A_"|"_$$GET^ISPRAV("tprice",$$GET^IMPRP(N,"price",DT))
+ .S A=A_"|"_$$GET^IMPRP(N,"cn",DT)
+ .D WC^RWU(CR_A)
+ D C^RWU
+ Q
+REGIPROC 
+ S ^IPROC("Экономика","Стоимость программ")="CENN_RMPRP,1,2,d,Дата начала периода,d,Дата окончания периода"
+ S ^IPROC("Экономика","Оценка стоимости программ")="VCENN_RMPRP,1,3,d,Дата расчета,te@net:LST_YMPRP(""""),Программа,t@storage:tprice,Прейскурант"
+ S ^IPROC("Отчеты по пациентам","Услуги","Остаток услуг по программе")="PACREST_RMPRP,1,2,e@pac,Код пациента,te@storage:dog,Договор"
+ S ^IPROC("Система","Экспорт программ обслуживания")="LST_RMPRP,1,2,d,Дата экспорта,t@string:1/Да#0/Нет,Программа активна"
+ Q

@@ -1,0 +1,259 @@
+RCCME ; Reports for call-center [ 12/12/2023  1:18 PM ]
+BYRSC(DS,DE,NPR,XLPU) ; По типу рекламных носителей на дату (входящие)
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),NPR=+$G(NPR),XLPU=$G(XLPU)
+ N DT,TM,ID,I,A,SS,R,RS,L
+ S:'$$FR^I() XLPU=$$^I("ilpu")
+ S I=$$IDX^ISPRAV("rsource")
+ S DT=DS-1 F  S DT=$O(^CME(DT)) Q:DT=""!(DT>DE)  S TM="" F  S TM=$O(^CME(DT,TM)) Q:TM=""  S ID="" F  S ID=$O(^CME(DT,TM,ID)) Q:ID=""  D
+ .S R=0,A=^(ID) S:$P(A,"|",1)=1 R=+$G(^(ID,"rsource"))
+ .S L=$P($P(A,"|",9),"@",2)
+ .I XLPU'="",L'="",XLPU'=L Q 
+ .S:'NPR!(NPR&R) SS(DT,R)=$G(SS(DT,R))+1
+ S R="Вид рекламы",DT=""
+ F  S DT=$O(SS(DT)) Q:DT=""  S R=R_"|"_$$DT2^DTUTL(DT) M RS=SS(DT)
+ S ID="" F  S ID=$O(^MN(I,ID)) Q:ID=""  S:^(ID)'="" RS(ID)=^(ID)
+ D OWF^RWU(".txt"),WC^RWU(R)
+ S R="" F  S R=$O(RS(R)) Q:R=""  D
+ .S ID=$G(RS(R)),DT="" 
+ .S:R=0 ID="Прочие"
+ .F  S DT=$O(SS(DT)) Q:DT=""  S ID=ID_"|"_+$G(SS(DT,R))
+ .D WC^RWU(CR_ID)
+ D C^RWU
+ Q
+TPRSC(DS,DE,XLPU) ; Рекламные носители по типу звонков (входящие)
+ S DS=$$DIH^DTUTL($G(DS)),DE=$$DIH^DTUTL($G(DE)),XLPU=$G(XLPU)
+ N DT,TM,ID,I,SS,R,RS,K,L
+ S:'$$FR^I() XLPU=$$^I("ilpu")
+ S I=$$IDX^ISPRAV("rsource")
+ S DT=DS-1 F  S DT=$O(^CME(DT)) Q:DT=""!(DT>DE)  S TM="" F  S TM=$O(^CME(DT,TM)) Q:TM=""  D
+ .S ID="" F  S ID=$O(^CME(DT,TM,ID)) Q:ID=""  D
+ ..S A=^(ID) Q:$P(A,"|",1)'=1
+ ..S L=$P($P(A,"|",9),"@",2)
+ ..I XLPU'="",L'="",XLPU'=L Q
+ ..S K=+$P(A,"|",7),R=+$G(^(ID,"rsource"))
+ ..S SS(K,R)=$G(SS(K,R))+1
+ S R="Вид рекламы за период "_$$DT2^DTUTL(DS)_"-"_$$DT2^DTUTL(DE),ID=""
+ F  S ID=$O(SS(ID)) Q:ID=""  S K=$G(^CMM("start",ID)),R=R_"|"_$S(K="":"Не указано",1:K) M RS=SS(ID)
+ D OWF^RWU(".txt"),WC^RWU(R)
+ S R="" F  S R=$O(RS(R)) Q:R=""  D
+ .S ID=$G(^MN(I,R)),K="" S:R=0 ID="Прочие"
+ .F  S K=$O(SS(K)) Q:K=""  S ID=ID_"|"_+$G(SS(K,R))
+ .D WC^RWU(CR_ID)
+ D C^RWU
+ Q
+RSCLST(DS,DE,TYP,WDSH,XLPU) ; Список по рекламному носителю
+ ; WDSH - 0/1/2 = только события/только с записью/все
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),XLPU=$G(XLPU)
+ N DT,TM,ID,A,R,NI,L,PH,FIO,SS
+ S:'$$FR^I() XLPU=$$^I("ilpu")
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|№ И.Б.|Пациент "_$$TXTP^DTUTL(DS,DE)_" по "_$$NAME^ISPRAV("rsource",TYP)_"|Дата, время|Телефон"_$S(WDSH:"|Запись",1:""))
+ S DT=DS-1 F  S DT=$O(^CME(DT)) Q:DT=""!(DT>DE)  S TM="" F  S TM=$O(^CME(DT,TM)) Q:TM=""  S ID="" F  S ID=$O(^CME(DT,TM,ID)) Q:ID=""  D
+ .S R=0,A=^(ID) Q:$P(A,"|",1)'=1  Q:$P(A,"|",7)>2  ; in, call or write
+ .S L=$P($P(A,"|",9),"@",2)
+ .I XLPU'="",L'="",XLPU'=L Q 
+ .S R=+$G(^(ID,"rsource")) Q:R'=TYP 
+ .S NI=$P(A,"|",3)
+ .S:NI="" FIO=$TR($P($G(^(" f")),"|",1,3),"|"," ")
+ .S SS=$G(^(" s"))
+ .I 'WDSH,SS'="" Q 
+ .I WDSH=1,SS="" Q 
+ .S PH=$G(^(" ph")) S:PH="" PH=$$TELS^IPAC(NI)
+ .S FIO=$S(NI="":$$TRIM^TXTU(FIO),1:$$FIO^IPAC(NI))
+ .S SS=$S('WDSH:"",SS="":"|",1:"|"_$$GSPEC^YISPRAV($P(SS,"|",1))_", "_$$DT2^DTUTL($P(SS,"|",2))_", "_$$TM^DTUTL($P(SS,"|",3)))
+ .D WC^RWU(CR_NI_"|"_NI_"|"_FIO_"|"_$$DTM^DTUTL(DT_","_TM)_"|"_PH_SS)
+ D C^RWU
+ Q
+RCREZ ; Список результатов по обзвону
+ N TP,I,A
+ S TP=$$FNDTP^ICCME("Обзвон пациентов","dsh-call")
+ Q:TP="" 
+ S A="|",I="" F  S I=$O(^CMM("result",TP,I)) Q:I=""  S A=A_CR_I_"|"_$P(^(I),"|",1)
+ D MSG^RWU(A)
+ Q
+RCALL(DS,DE,REZ,LPU) ; Отзвон по расписанию (входящие)
+ ; REZ - вид результата
+ S DS=$$DIH^DTUTL($G(DS)),DE=$$DIH^DTUTL($G(DE)),LPU=$G(LPU)
+ N DT,TM,ID,X,T,SS,R,A,TP,PH,CM,RZ
+ S LPU=$S('$$FR^I():$$^I("ilpu"),1:LPU)
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|Пациент "_$$TXTP^DTUTL(DS,DE)_"|Запись|Дата, время|Контакты|Результат|Комментарий|Оператор")
+ S DT=DS-1,TP=$$FNDTP^ICCME("Обзвон пациентов","dsh-call")
+ F  S DT=$O(^CME(DT)) Q:DT=""!(DT>DE)  S TM="" F  S TM=$O(^CME(DT,TM)) Q:TM=""  D
+ .S ID="" F  S ID=$O(^CME(DT,TM,ID)) Q:ID=""  S R=^(ID) D:$P(R,"|",1)=2
+ ..Q:$P(R,"|",7)'=TP
+ ..I LPU'="",$P($P(R,"|",9),"@",2)'=LPU q 
+ ..S RZ=+$P(R,"|",8)
+ ..I REZ'="",REZ'=RZ Q 
+ ..S SS=$G(^(ID," s")),PH=$G(^(" ph")),CM=$G(^(" c"))
+ ..S X=$P(R,"|",5),T=$P(R,"|",6)
+ ..S A=$S(T=3:X,1:"")_"|"_$S(T=3:$$FIO^IPAC(X,DT),1:X)_"|"
+ ..S A=A_$$GSPEC^YISPRAV($P(SS,"|",1))_", "_$$DT2^DTUTL($P(SS,"|",2))_", "_$$TM^DTUTL($P(SS,"|",3))
+ ..S A=A_"|"_$$DT2^DTUTL(DT)_", "_$$TM^DTUTL(TM)_"|"_PH
+ ..S A=A_"|"_$P($G(^CMM("result",TP,RZ)),"|",1)_"|"_CM_"|"
+ ..D WC^RWU(CR_A_$$FIO^IUSER($P(R,"|",9),2))
+ D C^RWU
+ Q
+RCSTAT(DS,DE,VTP,LPU) ; Статистика по отказам
+ ; VTP - по врачам(0)/специальностям(1)
+ S DS=$$DIH^DTUTL($G(DS)),DE=$$DIH^DTUTL($G(DE)),LPU=$G(LPU)
+ N DT,TM,ID,X,SS,R,A,TP,TR,STAT,LP,TPS,K
+ S LPU=$S('$$FR^I():$$^I("ilpu"),1:LPU)
+ S DT=DS-1,TP=$$FNDTP^ICCME("Обзвон пациентов","dsh-call")
+ F  S DT=$O(^CME(DT)) Q:DT=""!(DT>DE)  S TM="" F  S TM=$O(^CME(DT,TM)) Q:TM=""  D
+ .S ID="" F  S ID=$O(^CME(DT,TM,ID)) Q:ID=""  S R=^(ID) D:$P(R,"|",1)=2
+ ..Q:$P(R,"|",7)'=TP
+ ..S LP=$P($P(R,"|",9),"@",2)
+ ..I LPU'="",LP'=LPU q 
+ ..S SS=$G(^(ID," s"))
+ ..S TR=+$P(R,"|",8),K=+$P(SS,"|",$S(VTP:1,1:6))
+ ..S:'$D(TPS(TR)) TPS(TR)=""
+ ..S STAT(+LP,K,TR)=$G(STAT(+LP,K,TR))+1
+ D OWF^RWU(".txt")
+ S (TR,A)=""
+ F  S TR=$O(TPS(TR)) q:TR=""  S A=A_"|"_$P($G(^CMM("result",TP,TR)),"|",1)
+ D WC^RWU("Сотрудники "_$$TXTP^DTUTL(DS,DE)_A)
+ S LP="" F  S LP=$O(STAT(LP)) Q:LP=""  D
+ .S K="" F  S K=$O(STAT(LP,K)) Q:K=""  D
+ ..S SS=1,(A,TR)=""
+ ..F  S TR=$O(TPS(TR)) q:TR=""  S $P(A,"|",SS)=$G(STAT(LP,K,TR)),SS=SS+1
+ ..D WC^RWU(CR_$S(VTP:$$GSPEC^YISPRAV(K),1:$$FIO^IKADRY(K))_"|"_A)
+ D C^RWU
+ Q
+NIBSTAT(NIB) 
+ N DT,TM,I,R,TP,SS,CM
+ D OWF^RWU(".txt")
+ D WC^RWU("Запись|Дата, время|Результат|Комментарий|Оператор")
+ S TP=$$FNDTP^ICCME("Обзвон пациентов","dsh-call")
+ S DT="" F  S DT=$O(^CMEI("p",NIB,DT)) Q:DT=""  D
+ .S TM="" F  S TM=$O(^CMEI("p",NIB,DT,TM)) Q:TM=""  S I="" F  S I=$O(^CMEI("p",NIB,DT,TM,I)) Q:I=""  D
+ ..S R=$G(^CME(DT,TM,I)) Q:$P(R,"|",7)'=TP 
+ ..S SS=$G(^(I," s")),CM=$G(^(" c"))
+ ..S A=$$GSPEC^YISPRAV($P(SS,"|",1))_", "_$$DT2^DTUTL($P(SS,"|",2))_", "_$$TM^DTUTL($P(SS,"|",3))
+ ..S A=A_"|"_$$DT2^DTUTL(DT)_", "_$$TM^DTUTL(TM)
+ ..S A=A_"|"_$P($G(^CMM("result",TP,+$P(R,"|",8))),"|",1)_"|"_CM_"|"
+ ..D WC^RWU(CR_A_$P(R,"|",9))
+ D C^RWU
+ Q
+NIBSTsys(NIB,IsKEY) ; Контакты пациента
+ N DT,TM,I,R,TP,SS,CM,C
+ S TP=$$FNDTP^ICCME("Обзвон пациентов","dsh-call"),IsKEY=$G(IsKEY)
+ S DT="" F  S DT=$O(^CMEI("p",NIB,DT)) Q:DT=""  D
+ .S TM="" F  S TM=$O(^CMEI("p",NIB,DT,TM)) Q:TM=""  S I="" F  S I=$O(^CMEI("p",NIB,DT,TM,I)) Q:I=""  D
+ ..S R=$G(^CME(DT,TM,I)) Q:$P(R,"|",7)'=TP 
+ ..S SS=$G(^(I," s")),CM=$G(^(" c"))
+ ..S R=$G(^CMM("result",TP,+$P(R,"|",8)))
+ ..Q:","_$P(R,"|",2)_","'[",del,"  ; только события с удалением
+ ..S A=$S(IsKEY:"CME~"_DT_"~"_TM_"~"_I,1:"")_"|"
+ ..S A=A_$$DT2^DTUTL($P(SS,"|",2))_"|"_$$TM^DTUTL($P(SS,"|",3))_"||"
+ ..S A=A_$$FIOSH^IKADRY($P(SS,"|",6))_"|"_$$GSPEC^YISPRAV($P(SS,"|",1))
+ ..S A=A_"||"_$$NAME^ICONTR($P(SS,"|",4))_"|"
+ ..S C=$P(R,"|",1)
+ ..S:CM'="" C=$S(C="":"",1:C_", ")_CM
+ ..D WC^RWU(CR_A_C)
+ Q
+HTML(KEY) ; Информация по событию в HTML
+ N DT,TM,ID,R,T,TP,NI,X,Y,TPr,SS
+ S:$P(KEY,"~",1)="CME" DT=$P(KEY,"~",2),TM=$P(KEY,"~",3),ID=$P(KEY,"~",4)
+ S:KEY["@" DT=$P(KEY,"@",1),TM=$P(KEY,"@",1),ID=$P(KEY,"@",2)
+ S R=$G(^CME(DT,TM,ID))
+ S T=$P(R,"|",1),NI=$P(R,"|",$S(T=1:3,1:5)),TP=$P(R,"|",7)
+ S TPr=$$FNDTP^ICCME("Обзвон пациентов","dsh-call")
+ 
+ D MINHDR^IHTML(NI_" "_$$FIO^IPAC(NI))
+ D W^RWU(CR_"</head><body>")
+ D WTAGC^RWU("b",$$PFIO^ICCME(DT,TM,ID)_$S(NI'="":" и.б.№ "_NI,1:""))
+ D W^RWU("<br>")
+ S X=$P($G(^CMM("start",TP)),"|",1),Y=""
+ S:$P(R,"|",8) Y=$P($G(^CMM("result",TP,$P(R,"|",8))),"|",1)
+ D WC^RWU(CR_"<br><b>"_$$TAG^TXTU(X)_"</b>"_$S(Y="":"",1:", результат: <b>"_$$TAG^TXTU(Y)_"</b>"))
+ S X=$$DTM^DTUTL($P(R,"|",10)),Y=$$FIO^IUSER($P(R,"|",9),3)
+ D WC^RWU(CR_"<br>В <b>"_$$TAG^TXTU(X)_"</b>, "_$$TAG^TXTU(Y))
+ 
+ S SS=$G(^CME(DT,TM,ID," s"))
+ D:TP=TPr
+ .S X=$$DT2^DTUTL($P(SS,"|",2))_","_$$TIMET^IRASP2($P(SS,"|",3))
+ .S X=X_", "_$$GSPEC^YISPRAV($P(SS,"|",1))_", "
+ .S X=X_$$VFIOSH^IRASP2($P(SS,"|",6))_", "
+ .S X=X_$$OWF^TXTU($$NAME^ICONTR($P(SS,"|",4)),50)
+ .D WC^RWU(CR_"<hr>Запись к врачу: "_$$TAG^TXTU(X)_"<hr>") 
+ 
+ I TP'=TPr D W^RWU("<br>")
+ 
+ S X=$G(^CME(DT,TM,ID," ph"))
+ D:X'="" WC^RWU(CR_"<b>Контакты:</b> "_$$TAG^TXTU(X)_"<br>")
+ S X=$G(^CME(DT,TM,ID," c"))
+ D:X'="" WC^RWU(CR_"<b>Примечание:</b> "_$$TAG^TXTU(X)_"<br>")
+ S X=$G(^CME(DT,TM,ID,"rsource"))
+ D:X'="" WC^RWU(CR_"<b>Источник рекламы:</b> "_$$TAG^TXTU($$NAME^ISPRAV("rsource",X))_"<br>")
+ 
+ D END^IHTML
+ Q
+BYTP(DS,DE,TP,LPU) ; Контакты с пациентами
+ N D,R,TM,FR,A,I,C,NI,X,T,NII
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),LPU=+$G(LPU)
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|Дата|Время|Пациент|Результат|Способ|Описание|Зарегистрировал|Договор|Статус|Примечание")
+ S D=DS-1 F  S D=$O(^CME(D)) Q:D=""!(D>DE)  D
+ .S TM="" F  S TM=$O(^CME(D,TM)) Q:TM=""  S I="" F  S I=$O(^CME(D,TM,I)) Q:I=""  D
+ ..S R=$G(^(I)) Q:$P(R,"|",7)'=TP
+ ..S C=$G(^(I," c")),T=$P(R,"|",1)
+ ..S NI=$P(R,"|",$S(T=1:3,1:5)) ; в завис. от вида события in/out
+ ..S NII=NI,NI=$S($P(R,"|",$S(T=1:4,1:6))=3:NI,1:"")
+ ..S A=NI_"|"_$$DT^DTUTL(D)_"|"_$$TM^DTUTL(TM)_"|"
+ ..S A=A_$S(NI="":NII,1:$$FIO^IPAC(NI,D))_"|"
+ ..S X=$P(R,"|",8),X=$S(X="":"",1:$P($G(^CMM("result",TP,X)),"|",1))
+ ..S A=A_X_"|"
+ ..S X=$P(R,"|",2),X=$S(X="":"",1:$P($G(^CMM("tconn",X)),"|",1))
+ ..S A=A_X_"|"_C_"|"_$$FIOSH^NUSER($P(R,"|",9),1)_"|"
+ ..S:NI'="" A=A_$$GETE^IPAC(NI,"stc",D)_"|"_$$GETE^IPAC(NI,"status",D)_"|"
+ ..S:NI'="" A=A_$TR($E($$GET^IPAC(NI,"text",D),1,255),$C(9)_CR," ")
+ ..D WC^RWU(CR_A)
+ D C^RWU
+ Q
+OPSTAT(DS,DE,MOD,LPU) ; Статистика по операторам
+ S DS=$$DIH^DTUTL($G(DS)),DE=$$DIH^DTUTL($G(DE)),LPU=$G(LPU)
+ N DT,TM,ID,X,SS,R,A,TP,TR,STAT,LP,TPS,K,OP,TTP
+ S LPU=$S('$$FR^I():$$^I("ilpu"),1:LPU)
+ S TTP=$$FNDTP^ICCME("Обзвон пациентов","dsh-call")
+ S DT=DS-1
+ F  S DT=$O(^CME(DT)) Q:DT=""!(DT>DE)  S TM="" F  S TM=$O(^CME(DT,TM)) Q:TM=""  D
+ .S ID="" F  S ID=$O(^CME(DT,TM,ID)) Q:ID=""  S R=^(ID) D:$P(R,"|",1)=2
+ ..S TP=$P(R,"|",7) Q:TP="" 
+ ..S LP=$P($P(R,"|",9),"@",2)
+ ..I LPU'="",LP'=LPU q 
+ ..S TR=+$P(R,"|",8),OP=$P(R,"|",9)
+ ..I 'MOD S STAT(+LP,OP,+$P(R,"|",1))=$G(STAT(+LP,OP,+$P(R,"|",1)))+1 Q
+ ..S:'$D(TPS(TR)) TPS(TR)=""
+ ..S K=OP_"|"_TP_"|"_$P(R,"|",1) ; (1=in/2-out)
+ ..S STAT(+LP,K,TR)=$G(STAT(+LP,K,TR))+1
+ D OWF^RWU(".txt")
+ S (TR,A)=""
+ F  S TR=$O(TPS(TR)) q:TR=""  S A=A_"|"_$P($G(^CMM("result",TTP,TR)),"|",1)
+ I 'MOD S A="|Входящие|Исходящие"
+ D WC^RWU("Оператор "_$$TXTP^DTUTL(DS,DE)_$S(MOD:"|Вид|Тип звонка",1:"")_A)
+ S LP="" F  S LP=$O(STAT(LP)) Q:LP=""  D
+ .S K="" F  S K=$O(STAT(LP,K)) Q:K=""  D
+ ..S OP=$$FIO^IUSER($P(K,"|",1))
+ ..I 'MOD D WC^RWU(CR_OP_"|"_(+$G(STAT(LP,K,1)))_"|"_(+$G(STAT(LP,K,2)))) Q
+ ..S TP=$P(K,"|",2)
+ ..S R=OP_"|"_$S($P(K,"|",3)=1:"Входящий",1:"Исходящий")_"|"
+ ..S R=R_$P($G(^CMM("start",TP)),"|",1)
+ ..S SS=1,(A,TR)=""
+ ..F  S TR=$O(TPS(TR)) q:TR=""  S $P(A,"|",SS)=$G(STAT(LP,K,TR)),SS=SS+1
+ ..D WC^RWU(CR_R_"|"_A)
+ D C^RWU
+ Q
+REGIPROC 
+ N D,FF,F
+ S D="Центр обработки вызовов",FF=+$$FR^I()
+ S F=$S(FF:",t@storage:lpu,Филиал",1:"")
+ S ^IPROC(D,"Рекламные носители по датам")="BYRSC_RCCME,1,"_$S(FF:4,1:3)_",d,Начальная дата,d,Конечная дата,t@string:0/Да#1/Нет,Учитывать все виды контактов"_F
+ S ^IPROC(D,"Статистика по операторам")="OPSTAT_RCCME,1,"_$S(FF:4,1:3)_",d,Начальная дата,d,Конечная дата,t@string:0/Краткий#1/Полный,Вид отчета"_F
+ S ^IPROC(D,"Рекламные носители по типам звонков")="TPRSC_RCCME,1,"_$S(FF:3,1:2)_",d,Начальная дата,d,Конечная дата"_F
+ S ^IPROC(D,"Список контактов по виду рекламы")="RSCLST_RCCME,100,"_$S(FF:5,1:4)_",d,Начальная дата,d,Конечная дата,t@net:NMLST_NSPRAV(""rsource""),Вид рекламы,t@string:0/Только события#1/Только запись на прием#2/Все,Учитывать виды контактов"_F
+ S ^IPROC("Расписание приемов","Списки","Обзвон пациентов")="RCALL_RCCME,100,"_$S(FF:4,1:3)_",d,Начальная дата,d,Конечная дата,t@net:RCREZ_RCCME(),Результат"_F
+ S ^IPROC("Расписание приемов","Статистика","Сводка по обзвону пациентов")="RCSTAT_RCCME,1,"_$S(FF:4,1:3)_",d,Начальная дата,d,Конечная дата,t@string:0/По сотрудникам#1/По специальностям,Группировать по"_F
+ S ^IPROC("Отчеты по пациентам","Журналы событий","Контакты с пациентами")="BYTP_RCCME,100,3,d,Начальная дата,d,Конечная дата,t@net:TPLST_NCMS(),Тип контакта"
+ 
+ Q

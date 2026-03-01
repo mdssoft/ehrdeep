@@ -1,0 +1,85 @@
+RMEDST1Z ; Медстатистика, фозма 1-здрав [ 12/28/2017  2:59 PM ]
+DO(DS,DE) 
+ N ARR,LNI
+ N VR,OT,DT,ID,Fp,@$$NEWVAR^IUSL,TP,C,U,LN
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S ARR("year")=$$YEAR^DTUTL(DE)
+ S ARR("lpuname")=$$^I("iname")
+ K ^BUF("1z")
+ d filp
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D
+ ..S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ...S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ....S DIA=$$GETDI^IUSL(VR,DT,OT,ID)
+ ....Q:DIA=""  S DIA=$P(DIA,".",1)
+ ....S LN=$G(^BUF("d1z",DIA)) Q:'LN 
+ ....D GETLT^IUSL(VR,DT,OT,ID)
+ ....Q:STAT="w"!(STAT="d")  Q:$D(ERR)
+ ....S FLG="|"_$G(FLG)_"|"
+ ....Q:FLG["|0|"  ; неут
+ ....S:'$D(^BUF("1z",DIA,NI)) ^BUF("1z",DIA,NI)=""
+ 
+ S DIA="" F  S DIA=$O(^BUF("1z",DIA)) Q:DIA=""  D
+ .S LN=$G(^BUF("d1z",DIA)) 
+ .S NI="" F  S NI=$O(^BUF("1z",DIA,NI)) Q:NI=""  D
+ ..S AGE=$$AGE^IPAC(NI,DE)
+ ..S C=$S(AGE=0:3,AGE<16:2,1:"")
+ ..S U="t8_"_LN_"_"
+ ..S ARR(U_1)=$G(ARR(U_1))+1
+ ..S:C'="" ARR(U_C)=$G(ARR(U_C))+1
+ ..S ARR("t8_1_1")=$G(ARR("t8_1_1"))+1
+ ..S:C'="" ARR("t8_1_"_C)=$G(ARR("t8_1_"_C))+1
+ 
+ K ^BUF("1z")
+ K ^BUF("d1z")
+ ;k ^KKK m ^KKK=ARR
+ D MAKE^IDOCGEN("1zdrav.docx","ARR")
+ Q
+filp 
+ N D
+ K ^BUF("d1z")
+ S ^BUF("d1z","A00")=2,^("B99")=2
+ S ^("C00")=3,^("D48")=3
+ S ^("D50")=4,^("D89")=4
+ S ^("E00")=5,^("E89")=5
+ S ^("F01")=6,^("F03")=6,^("F99")=6
+ S ^("G00")=7,^("G98")=7
+ S ^("H00")=8,^("H59")=8
+ S ^("H60")=9,^("H95")=9
+ S ^("I00")=10,^("I99")=10
+ S ^("J00")=11,^("J98")=11
+ S ^("K00")=12,^("K92")=12
+ S ^("L00")=13,^("L98")=13
+ S ^("M00")=14,^("M99")=14
+ S ^("N00")=15,^("N99")=15
+ S ^("O00")=16,^("O99")=16
+ S ^("P00")=17,^("P96")=17
+ S ^("Q00")=18,^("Q99")=18
+ S ^("R00")=19,^("R99")=19
+ S ^("S00")=20,^("T98")=20
+ 
+ S D="" F  S D=$O(^D(D)) Q:D=""  D
+ .I D]"A00",D']"B99" S ^BUF("d1z",D)=2
+ .I D]"C00",D']"D48" S ^BUF("d1z",D)=3
+ .I D]"D50",D']"D89" S ^BUF("d1z",D)=4
+ .I D]"E00",D']"E89" S ^BUF("d1z",D)=5
+ .I D]"F03",D']"F99" S ^BUF("d1z",D)=6
+ .I D]"G00",D']"G98" S ^BUF("d1z",D)=7
+ .I D]"H00",D']"H59" S ^BUF("d1z",D)=8
+ .I D]"H60",D']"H95" S ^BUF("d1z",D)=9
+ .I D]"I00",D']"I99" S ^BUF("d1z",D)=10
+ .I D]"J00",D']"J98" S ^BUF("d1z",D)=11
+ .I D]"K00",D']"K92" S ^BUF("d1z",D)=12
+ .I D]"L00",D']"L98" S ^BUF("d1z",D)=13
+ .I D]"M00",D']"M99" S ^BUF("d1z",D)=14
+ .I D]"N00",D']"N99" S ^BUF("d1z",D)=15
+ .I D]"O00",D']"O99" S ^BUF("d1z",D)=16
+ .I D]"P00",D']"P96" S ^BUF("d1z",D)=17
+ .I D]"Q00",D']"Q99" S ^BUF("d1z",D)=18
+ .I D]"R00",D']"R99" S ^BUF("d1z",D)=19
+ .I D]"S00",D']"T98" S ^BUF("d1z",D)=20
+ Q
+REGIPROC 
+ S ^IPROC("Медстатистика","Форма 1-ЗДРАВ")="DO_RMEDST1Z,15,2,d,Начальная дата периода,d,Конечная дата периода"
+ Q

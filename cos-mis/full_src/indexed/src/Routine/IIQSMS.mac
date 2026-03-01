@@ -1,0 +1,63 @@
+IIQSMS ; Отправка SMS iqsms.ru [ 12/13/2016  12:41 PM ]
+DORECV(ID) 
+ Q
+DOSEND(ID) 
+ N SRV,USR,PAS,I,R,IDX,FR,TO,F,FROM,SF,DEBUG
+ S SRV=$G(^MSGHUB("sms",ID,"server")) ; first
+ S USR=$G(^("login")),PAS=$G(^("passwd"))
+ Q:USR=""  Q:PAS="" 
+ S SF=$G(^MSGHUB("sms",ID,"safemod"))
+ S DEBUG=$G(^MSGHUB("sms",ID,"debug"))
+ S FROM=$G(^("from")),F=0 
+ S IDX="" F  S IDX=$O(^MSGOUT("sms",ID,IDX)) Q:IDX=""  D
+ .S R=^(IDX),FR=$P(R,"|",1),TO=$P(R,"|",2),R=""
+ .Q:TO="" 
+ .Q:$G(^(IDX,"chkfn"))'=""  Q:$G(^("wait")) 
+ .Q:$$timeout^IMSGHUB("sms",ID,IDX) 
+ .S I="" F  S I=$O(^MSGOUT("sms",ID,IDX,"data",I)) Q:I=""  S R=R_^(I)
+ .Q:R=""
+ .I 'SF,'F D OPEN(USR,PAS,"",SRV) S F=1
+ .D:SF OPEN(USR,PAS)
+ .S:DEBUG ^ISLOG("IIQSMS")=$H_"|"_TO_"|"_R_"|"_FR
+ .S:FR="" FR=FROM
+ .Q:'$$SMS(TO,R,FR) 
+ .D endsend^IMSGHUB("sms",ID,IDX)
+ .D:SF CLOSE
+ D:F CLOSE
+ Q
+OPEN(USR,PAS,ADR) 
+ K %IIQSMS
+ S:$G(ADR)="" ADR="gate.iqsms.ru"
+ S %IIQSMS("u")=USR,%IIQSMS("p")=PAS
+ S %IIQSMS("a")=ADR
+ S %SID=$$OPEN^WWWCLI(ADR,80)
+ Q
+CLOSE 
+ D CLOSE^WWWCLI(%SID)
+ K %IIQSMS
+ Q
+SMS(DST,TXT,SRC) 
+ Q:'$D(%IIQSMS) 
+ S DST=$TR(DST," /-()+","")
+ Q:DST=""  Q:TXT="" 
+ S:$E(DST,1)=8 $E(DST,1)=7
+ I $L(DST)=10,$E(DST,1)=9 S DST=7_DST
+ N R,I,X
+ D SETCONN^WWWCLI(%SID,2)
+ D SETAUTH^WWWCLI(%SID,1,%IIQSMS("u"),%IIQSMS("p"))
+ S R="/send/?"
+ S R=R_"&phone="_DST
+ S R=R_"&text="_$$TURL^TXTU($$WU8^TXTU($$DW^TXTU(TXT)))
+ S R=$$GET^WWWCLI(%SID,R)
+ ;U 0 W !,"GET OK="_R
+ D OBUF^WWWCLI(%SID)
+ S R="",I=$$BUFCNT^WWWCLI(%SID) F X=1:1:I S R=R_$$RBUF^WWWCLI(%SID)
+ D CBUF^WWWCLI(%SID)
+ S R=$P(R,"=",2)
+ Q $S(R="not enough credits":0,1:1) ; ошибки формата игнорим
+T(TEL,L,P) 
+ D OPEN(L,P)
+ S A=$$SMS(TEL,"Провёръка отправки SMS","SMSTEST")
+ D CLOSE
+ Q
+ 

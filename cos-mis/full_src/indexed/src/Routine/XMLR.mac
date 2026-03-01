@@ -1,0 +1,164 @@
+XMLR ; XML parser [ 11/26/2017  0:46 AM ]
+OEV(PSTART,PDATA,PEND) ; Open event-based parser
+ ; PSTART - start tag proc (w. additional params)
+ ; PDATA - in-tag data procedure
+ ; PEND - end of tag
+ K %XM,%XT,%XD
+ S %XT="",%XD="",%XM(1)=0,%XM(3)=0
+ S %XM(7)=PSTART,%XM(8)=PDATA,%XM(9)=PEND
+ Q
+REV(X) ; Read data
+ D DO(X)
+ Q
+CEV ; Close and free data
+ K %XM,%XT,%XD
+ Q
+OB(GL,TP) ; Read into global
+ ; TP - simple/extend (0/1): tag,tag)=""/tag1,x1,tag2,x2)= ,x2," ")=patt
+ K %XM,%XT,%XD
+ S %XT="",%XD="",%XM(1)=0,%XM(3)=0
+ S %XM(7)="RBTG",%XM(8)="RBDT",%XM(9)="RBTGE",%XM("g")=GL,%XM("t")=TP
+ Q
+RB(X) ; Read
+ G DO+1 
+CB ; Close
+ K %XT,%XD,%XM
+ Q
+RBTG 
+ Q:%XM(2)="xml" 
+ N S,I,F
+ W !,$E("     ",1,$O(%XM(4,""),-1)-1),"Tag="_%XM(2)
+ G:%XM("t")=1 RBTG1
+ S S=%XM("g")_"(",I="",F=""
+ F  S I=$O(%XM(4,I)) Q:I=""  S S=S_F_""""_%XM(4,I)_"""",F=","
+ W !,"TestS="_S_")"
+ S S=S_")" S @S="",%XM("g",$O(%XM(4,""),-1))=S
+ Q
+RBTG1 
+ ; todo
+ Q
+RBDT 
+ ;W !,$E("     ",1,$O(%XM(4,""),-1)-1),"Data="_%XD
+ N S S S=%XM("g",$O(%XM(4,""),-1)) W !,"TestD="_S
+ S @S=$G(@S)_%XD
+ Q
+RBTGE 
+ ; W !,$E("     ",1,$O(%XM(4,""),-1)-1),"TagEnd="_%XM(2)
+ Q
+DO(X) 
+ ; %XM(1)=find tag(0/1), (2)=tag, (3)=in tag(0/1), (4,X)=tag stack
+ ; (5) - encoding (0-1251,1-866,2-KOI8,3-UTF8
+ ; (7) - tag proc, (8) - data proc, (9) - end tag
+ ; (10) - be trim,(11 - find index
+ 
+ N I,I1,I2,I3,I4 S %XT=%XT_X
+ ; todo: полная обрезка пробельных символов в начале и в конце
+DO1 Q:%XT="" 
+ I %XM(1) Q:%XT'[">"  S I1=$$ftage(),%XM(2)=$E(%XT,1,I1-2),%XT=$E(%XT,I1,99999),%XM(1)=0 D ITG G DO1 
+ S %XM(11)=$F(%XT,"<")
+ I %XM(11) D  G DO1
+ .I ($L(%XD)+$L($E(%XT,1,%XM(11)-2)))>16384 D TRIMDL,DATA
+ .S %XD=%XD_$E(%XT,1,%XM(11)-2),%XT=$E(%XT,%XM(11),999999),%XM(1)=1
+ .D:$L(%XD)>0 TRIMDR,DATA
+ I ($L(%XD)+$L(%XT))>16384 D TRIMDL,DATA 
+ S %XD=%XD_%XT,%XT=""
+ Q
+ADTG(TG) 
+ S %XM(4,$O(%XM(4,""),-1)+1)=TG
+ Q
+DLTG 
+ K:$O(%XM(4,""),-1)'="" %XM(4,$O(%XM(4,""),-1))
+ Q
+DATA 
+ D DECOD
+ ;W !,$E("     ",1,$O(%XM(4,""),-1)-1),"Data="_%XD
+ I %XM(8)'="",$D(%XM(2)) D @%XM(8)
+ S %XD=""
+ Q
+TT 
+ S T=$P($H,",",2)
+ F I=1:1:39999999 S %XD="df 3e d3 ",$E(%XD,4)=""
+ W !,$P($H,",",2)-T
+TRIMDR ; trim data right
+ F  Q:$TR($E(%XD,$L(%XD)),$C(9,13,10,32),"    ")'=" "  S %XD=$E(%XD,1,$L(%XD)-1)
+ Q
+TRIMDL ; trim data left
+ Q:$D(%XM(10))
+ F  Q:$TR($E(%XD,1),$C(9,13,10,32),"    ")'=" "  S %XD=$E(%XD,2,99999)
+ S %XM(10)=1
+ Q
+ftage() ; detect tag end
+ S I1=$F(%XT,">"),I2=$F(%XT,""">")
+ S I3=0,I4=$F(%XT,"<",I1-1)
+ I I1=I2,I1=$F(%XT,"="">"),I4>$F(%XT,"""",I1-1) s I3=I1-1,I1=$F(%XT,">",I1),I2=$F(%XT,""">",I1) G ftage+2 ; try to find next
+ S:'I2 I3=$F(%XT,"""/>") ; if not found I2
+ S:I2>I4 I2=0 S:I3>I4 I3=0 ; TODO - посимвольный поиск
+ I 'I3,'I2,I1 Q I1
+ I I3 Q I3
+ I I2 Q I2
+ Q 0
+ITG ; internal, decode in tag params
+ N P,K,I,N,ip,c,et,e1,x
+ S I=$L(%XM(2)),K=0,et=0,e1=$E(%XM(2),1)
+ I e1="?",$E(%XM(2),I)="?" S %XM(3)=0,%XM(2)=$E(%XM(2),2,I-1),K=0 G ITG0 ; xml header
+ I e1="!" S %XM(3)=0,%XM(2)=$E(%XM(2),2,I-1),K=0 G ITG0 ; xml comment
+ I e1="/" S %XM(3)=0,$E(%XM(2),1)="",et=1 G ITG0
+ S K=1
+ I $E(%XM(2),I)="/" S %XM(3)=0,$E(%XM(2),I)=""
+ E  S %XM(3)=1
+ I '%XM(3) D:$L(%XD)>0 TRIMDR,TRIMDL,DATA
+ITG0 S P=$P(%XM(2)," ",1) D:K ADTG(P) K %XM(2,"p")
+ S $P(%XM(2)," ",1)="",ip=0,K="",N="",x=(P="xml")
+ ;w !,"%XM(2):="_%XM(2),!
+ F I=1:1:$L(%XM(2)) S c=$E(%XM(2),I) Q:c=""  D
+ .I x,ip=9!(ip=2) s:c="'" c="""" ; for xml header
+ .I ip=9 S ip=$S(c="""":2,1:1) Q:ip=2  ; цифра/строка
+ .I ip=2 S:c="""" %XM(2,"p",N)=$$DCP(K),ip=0,(K,N)="" S:c'="""" K=K_c Q 
+ .I ip S:c=" " %XM(2,"p",N)=$$DCP(K),ip=0,(K,N)="" S:c'=" " K=K_c Q 
+ .Q:c=" "   
+ .I c="=" S ip=9 S:x&($$UL^TXTU(N)="encoding") N="encoding" Q 
+ .S N=N_c
+ 
+ I ip S:N'="" %XM(2,"p",N)=$$DCP(K)
+ I x S K=$$UL^TXTU($G(%XM(2,"p","encoding"))),%XM(5)=$S(K="utf-8":3,K="koi-8r"!(K="koi8-u"):2,K="ibm866"!(K="cp866"):1,1:0) ; default 1251
+ 
+ S I=+$G(%XM(5))
+ S %XM(2)=$S(I=1:$$WD^TXTU(P),I=2:$$K8D^TXTU(P),I=3:$$U8D^TXTU(P),1:P)
+ I et D:$G(%XM(9))'="" @%XM(9) K %XM(10)
+ I 'et D:$G(%XM(7))'="" @%XM(7) K %XM(10)
+ ;W !,$E("     ",1,$O(%XM(4,""),-1)-1),$S(et:"End",1:"")_"Tag="_P
+ITGE D:'%XM(3) DLTG
+ Q
+DECOD 
+ S X=+$G(%XM(5))
+ I X=1 S %XD=$$WD^TXTU(%XD) ; 688
+ I X=2 S %XD=$$K8D^TXTU(%XD) ; KOI-8
+ I X=3 S %XD=$$U8W^TXTU(%XD) ; utf-8
+ Q:%XD'["&"  N X
+ S X=1 F  S X=$F(%XD,"&gt;",X) Q:X=0  S $E(%XD,X-4,X-1)=">",X=X-3
+ S X=1 F  S X=$F(%XD,"&lt;",X) Q:X=0  S $E(%XD,X-4,X-1)="<",X=X-3
+ S X=1 F  S X=$F(%XD,"&amp;",X) Q:X=0  S $E(%XD,X-5,X-1)="&",X=X-4
+ S X=1 F  S X=$F(%XD,"&quot;",X) Q:X=0  S $E(%XD,X-6,X-1)="&",X=X-5
+ Q
+DCP(X) ; Decode parameter data
+ I +$G(%XM(5))=1 S X=$$WD^TXTU(X) ; 866
+ I $G(%XM(5))=2 S X=$$K8D^TXTU(X) ; KOI-8
+ I $G(%XM(5))=3 S X=$$U8W^TXTU(X) ; utf-8
+ Q X
+test 
+ D OEV^XMLR("testTS^XMLR","testTD^XMLR","")
+ D REV^XMLR("<?xml version=""1.0"" encoding=""Windows-1251""?>")
+ S a=$E($T(t1+1^XMLR),3,999)
+ D REV^XMLR("<root><ii1>123</ii1><ii2 p="">d"" t="""">000</ii2>"_a_"</root>")
+ D CEV^XMLR
+ Q
+testTS 
+ zw %XM(2)
+ zw %XM(2,"p")
+ Q
+testTD 
+ w !,$G(%XD),!
+ Q
+t1	
+	;<Item GroupName="Общий анализ мочи" GroupCode="ОКИ-01-01" GroupRank="1" TestGroupRank="3" Name="Удельный вес (S.G)" Code="10-008-10" OrderCode="B03.016.006" BiomaterialCode="51001" Barcode="1000000601" Value=">1.025" ValueDate="20.05.2019 11:13:29" ValueType="1" UnitName="" Defected="false" Defects="" DefectCode="" Comment="" NormsFlag="1" NormsComment="" Norms="1,010 - 1,030" NormPoint2="1.01" NormPoint3="1.03" Source="UroMeter 720" DoctorName="Цыбулина И. П." DoctorCode="13" DoctorProf="" DoctorSnils="" DoctorExportCode="" DoctorRoleCode="" DoctorSpecialityCode="" AssistantName="Овчинникова А. Н." AssistantCode="6" AssistantProf=""/>
+	Q

@@ -1,0 +1,37 @@
+RDOGLST ; Списки по договорам [ 01/14/2015  1:19 PM ]
+BYPRG(DGN,PRG,DS,DE,PPV) ; По программам
+ S DS=$$DIH^DTUTL($G(DS)),DE=$$DIH^DTUTL($G(DE))
+ N CN,NI,R,ML,D,F,I,SS,SC,LNRUN,SDI,DD,SSN
+ S DGN=$$WD^TXTU(DGN),PRG=$$WD^TXTU(PRG),CN=$$GET^YMPRP(PRG,"cn",DE)
+ D OWF^RWU(".txt")
+ S R=$$NAMEH^IMPRP(PRG,DE)
+ S:R="" R=$$NAME^IINSC(DGN,DE)
+ D WC^RWU("xpatient:patient|||"_R_" за "_$$DT2^DTUTL(DS)_"-"_$$DT2^DTUTL(DE)_";"_CR)
+ D WC^RWU("|П.п.|№ И.Б.|Ф.И.О. пациента|Полис|Первый визит|Последний визит"_"|Услуг|"_$S(CN="":"Сумма",1:"Сумма по прог.")_"|Диагноз|Сумма полиса")
+ I DGN=""!(DGN=9999) D WC^RWU(CR_"||Выберите конкретный договор") G BYPRGE
+ S NI="",I=0 F  S NI=$O(^BTI(" s",DGN,NI)) Q:NI=""  D
+ .D GETM^IPAC(NI,"stc","ML")
+ .S D=$O(ML(DS+1),-1)-1,F=1,DD=DE
+ .F  S D=$O(ML(D)) Q:D=""!(D>DE)  I ML(D)=DGN S F=0,DD=D Q 
+ .Q:F 
+ .D GETM^IPAC(NI,"polis","ML")
+ .S D=$O(ML(DS+1),-1)-1,F=1
+ .I PPV'="" F  S D=$O(ML(D)) Q:D=""!(D>DE)  I ML(D)'="",ML(D)[PPV S F=0 Q 
+ .I PPV'="" Q:F  
+ .D GETM^IPAC(NI,"prog","ML")
+ .S D=$O(ML(DS),-1)-1,F=1,R="|"_PRG_"|"
+ .i PRG'="" F  S D=$O(ML(D)) Q:D=""!(D>DE)  I ("|"_ML(D)_"|")[R S F=0 Q
+ .i PRG'="" Q:F  
+ .K ML S D=$O(^PNF(NI,"")),ML=$O(^PNF(NI,""),-1),I=I+1
+ .S LNRUN="BYPPROC^RDOGLST",(SS,SC,SSN)=0,SDI="" D:ML'="" DOSC^NPACSC(NI,DS,DE,,DGN)
+ .D WC^RWU(CR_NI_"|"_I_"|"_NI_"|"_$$FIO^IPAC(NI,DE)_"|"_$$GET^IPAC(NI,"polis",DD)_"|"_$$DT^DTUTL(D)_"|"_$$DT^DTUTL(ML)_"|"_$$fn(SC)_"|"_$$fn(+$FN($S(CN="":SS,1:CN),"",2))_"|"_SDI_"|"_$$GET^IPAC(NI,"psumm",DD)_"|"_$$fn(SSN))
+BYPRGE D C^RWU
+ Q
+BYPPROC 
+ S U="" F  S U=$O(UL(U)) Q:U=""  S CNT=$G(UL(U)),SC=SC+CNT S:$G(DIA)'="" SDI=DIA I CN="" S SS=SS+$S($D(UL(U,1)):UL(U,1),1:$$PRICEH^IPRICE(U,$G(PRC),DT)*KSKD*CNT)
+ Q
+fn(X) 
+ Q $TR(+X,".",",")
+REGIPROC 
+ S ^IPROC("Отчеты по страховым компаниям","Список лиц по договору и программе")="BYPRG_RDOGLST,100,5,te@storage:dog,Договор,t@storage:aprog@1,Программа,d,Дата начала периода,d,Дата окончания периода,s,Полис включает"
+ Q

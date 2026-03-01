@@ -1,0 +1,31 @@
+ICSPUSR ; CSP users
+FIO(ID,RETVR) ; Полное ФИО или таб. номер (RETVR=1) по логину
+ Q:ID="" ""  N K
+ I ID["@" S:$P(ID,"@",2)=$$^I("ilpu") K=$G(^LOG($P(ID,"@",1),"kadry")) S:$P(ID,"@",2)'=$$^I("ilpu") K=$G(^LOGA(ID,"kadry"))
+ S:ID'["@" K=$G(^LOG($P(ID,"@",1),"kadry"))
+ Q:K="" K Q:$G(RETVR)=1 K Q $$FIO^YIKADRY(K)_$S($G(RETVR)=2:" ("_ID_")",1:"")
+KDR() ; Таб. номер по текущему %LOG
+ I $G(%LOG)="" S %LOG=$Get(%session.Data("%LOG"))
+ Q:%LOG="" ""
+ Q $G(^LOG(%LOG,"kadry"))
+USR() 
+ I $G(%LOG)="" S %LOG=$Get(%session.Data("%LOG"))
+ Q:%LOG="" ""
+ N L S L=+$$^I("ilpu")
+ Q %LOG_$S(L=0:"",1:"@"_L)
+SETLOG(LOG)
+ S %session.Data("%LOG")=LOG
+ s %LOG=LOG
+ Q
+AUTH(LOG,PASS)
+ Q:LOG="" 0
+ Q:PASS="" 0
+ Q:$G(^PAS(LOG))'=PASS 0
+ S %JOB=%session.SessionId
+ S %LOG=LOG
+ Q 1
+CHKAUTH(LOG,PASS)
+ Q:LOG="" 0
+ Q:PASS="" -1
+ Q:$G(^PAS(LOG))'=PASS -1
+ Q 1

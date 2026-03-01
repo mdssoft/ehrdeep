@@ -1,0 +1,123 @@
+RLPUPOS ; Отчеты по посещаемости [ 09/04/2018  4:40 PM ]
+OBRS(DS,DE,LPUx) ; Сводка по обратившимся
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),LPUx=$G(LPUx)
+ K ^BUF($J,"p")
+ N FF,TABLE,STOM,X,R,X1,X2,PCLS,DTP,DTPL,NI
+ S FF=+$$FR^I()
+ ; Calc
+ M STOM=^cfg("stom-otd") S X=$G(^cfg("stom-otd")) S:X'="" STOM(X)=""
+ D MKALLPRC^IUSLSC(DS,DE,1,"OBRSpr^RLPUPOS","",'FF)
+ ; Process
+ S NI="" F  S NI=$O(^BUF($J,"p",NI)) Q:NI=""  D
+ .S TABLE(-1,1)=$G(TABLE(-1,1))+1
+ .S:$D(^(NI,-1,1)) TABLE(-1,7)=$G(TABLE(-1,7))+1 ; stom
+ .S:$D(^(2)) TABLE(-1,8)=$G(TABLE(-1,8))+1 ; lab
+ .S:$D(^(3)) TABLE(-1,6)=$G(TABLE(-1,6))+1 ; pol
+ .S X1=$$AGE^IPAC(NI,DE),X2=+$$GET^IPAC(NI,"pol",DE)
+ .I X1>16 S TABLE(-1,2)=$G(TABLE(-1,2))+1 ; old
+ .I X1>0,X1<17 S TABLE(-1,3)=$G(TABLE(-1,3))+1 ; young
+ .S:X2=1 TABLE(-1,4)=$G(TABLE(-1,4))+1 ; male
+ .S:X2=2 TABLE(-1,5)=$G(TABLE(-1,5))+1 ; female
+ .S DTP=-1 F  S DTP=$O(^BUF($J,"p",NI,DTP)) Q:DTP=""  D
+ ..S TABLE(DTP,1)=$G(TABLE(DTP,1))+1
+ ..S:$D(^(DTP,1)) TABLE(DTP,7)=$G(TABLE(DTP,7))+1
+ ..S:$D(^(2)) TABLE(DTP,8)=$G(TABLE(DTP,8))+1
+ ..S:$D(^(3)) TABLE(DTP,6)=$G(TABLE(DTP,6))+1
+ ..I X1>16 S TABLE(DTP,2)=$G(TABLE(DTP,2))+1
+ ..I X1>0,X1<17 S TABLE(DTP,3)=$G(TABLE(DTP,3))+1
+ ..S:X2=1 TABLE(DTP,4)=$G(TABLE(DTP,4))+1
+ ..S:X2=2 TABLE(DTP,5)=$G(TABLE(DTP,5))+1
+ 
+ ; Output
+ D OWF^RWU(".txt")
+ D WC^RWU("Вид договора "_$$TXTP^DTUTL(DS,DE)_"|Всего лиц|Взрослых|Детей|Муж.|Жен.|Поликлиника|Стоматология|Лаборатория")
+ S DTP="" F  S DTP=$O(TABLE(DTP)) Q:DTP=""  D
+ .S R=$S(DTP=-1:"Всего за период "_$$DT2^DTUTL(DS)_"-"_$$DT2^DTUTL(DE),1:$$NAME^ISPRAV("dvid",DTP))
+ .F X=1:1:8 S R=R_"|"_$G(TABLE(DTP,X))
+ .D WC^RWU(CR_R)
+ D C^RWU
+ K ^BUF($J,"p")
+ Q
+OBRSpr 
+ I LPUx'="",LPUx'=LPU Q 
+ ; тип договора
+ I '$D(DTPL(CSTC,DT)) S DTP=+$$GET^IINSC(CSTC,"dvid",DT),DTPL(CSTC,DT)=DTP
+ E  S DTP=DTPL(CSTC,DT)
+ S:KASS DTP=3 ; касса
+ S PCLS="|"_$$GET^IPRICE(U,"cls",PRC,DT)_"|",(X1,X2)=0,X=1
+ S:$D(STOM(OTD)) X1=1,X=0
+ I 'X1,PCLS["|stom|" S X1=1,X=0
+ S:PCLS["|lab|" X2=1,X=0 ; TODO - group flag
+ 
+ I '$D(^BUF($J,"p",NI,DTP)) S ^(DTP)=""
+ I X1,'$D(^BUF($J,"p",NI,DTP,1)) S ^(1)=""
+ I X2,'$D(^BUF($J,"p",NI,DTP,2)) S ^(2)=""
+ I X,'$D(^BUF($J,"p",NI,DTP,3)) S ^(3)=""
+ I '$D(^BUF($J,"p",NI,-1)) S ^(-1)=""
+ I X1,'$D(^BUF($J,"p",NI,-1,1)) S ^(1)=""
+ I X2,'$D(^BUF($J,"p",NI,-1,2)) S ^(2)=""
+ I X,'$D(^BUF($J,"p",NI,-1,3)) S ^(3)=""
+ Q
+OBP(DS,DE,LPUx) ; Сводка по посещаемости и обращаемости
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),LPUx=$G(LPUx)
+ K ^BUF($J,"p")
+ N FF,TABLE,CTAB,X,R,NI,X1,X2,DTP,DTPL,NI,CC,CCS
+ S FF=+$$FR^I()
+ ; Calc
+ D MKALLPRC^IUSLSC(DS,DE,1,"OBPpr^RLPUPOS","",'+$$FR^I())
+ ; Process
+ S NI="" F  S NI=$O(^BUF($J,"p",NI)) Q:NI=""  D
+ .S DTP="" F  S DTP=$O(^BUF($J,"p",NI,DTP)) Q:DTP=""  D
+ ..S CTAB(DTP,3)=$G(CTAB(DTP,3))+1 ; лиц
+ ..S X1="" F  S X1=$O(^BUF($J,"p",NI,DTP,X1)) Q:X1=""  D
+ ...S CTAB(DTP,4)=$G(CTAB(DTP,4))+1 ; обращений
+ ...S X2="" F  S X2=$O(^BUF($J,"p",NI,DTP,X1,X2)) Q:X2=""  D
+ ....S CTAB(DTP,5)=$G(CTAB(DTP,5))+1 ; посещений
+ K ^BUF($J,"p")
+ 
+ ; Output
+ D OWF^RWU(".txt")
+ D WC^RWU("Вид договора|Всего|Посещений|Услуг на|Средний чек|Число услуг;")
+ D WC^RWU(CR_$$TXTP^DTUTL(DS,DE)_"|обращений|на обращение|посещение|на посещение|на лицо")
+ S DTP="" F  S DTP=$O(CTAB(DTP)) Q:DTP=""  D
+ .S R=$$NAME^ISPRAV("dvid",DTP)_"|"
+ .S X2=$G(CTAB(DTP,4))
+ .S R=R_X2_"|"
+ .S X1=$G(CTAB(DTP,5))
+ .S R=R_$S('X2:0,1:$$fn(X1/X2))_"|"
+ .S X2=$G(CTAB(DTP,1))
+ .S R=R_$S('X1:0,1:$$fn(X2/X1))_"|"
+ .S X2=$G(CTAB(DTP,2))
+ .S R=R_$S('X1:0,1:$$fn(X2/X1))_"|"
+ .S X1=$G(CTAB(DTP,3))
+ .S X2=$G(CTAB(DTP,1))
+ .S R=R_$S('X1:0,1:$$fn(X2/X1))
+ .D WC^RWU(CR_R)
+ D C^RWU
+ K ^BUF($J,"p")
+ Q
+OBPpr 
+ I LPUx'="",LPUx'=LPU Q 
+ ; тип договора
+ I '$D(DTPL(CSTC,DT)) S DTP=+$$GET^IINSC(CSTC,"dvid",DT),DTPL(CSTC,DT)=DTP
+ E  S DTP=DTPL(CSTC,DT)
+ S:KASS DTP=3 ; касса
+ 
+ S CC=$G(UL(U))
+ S CCS=$S($D(UL(U,1)):UL(U,1),1:$$PRICEH^IPRICE(U,PRC,DT)*KSKD*CC)
+ S CTAB(DTP,1)=$G(CTAB(DTP,1))+CC
+ S CTAB(DTP,2)=$G(CTAB(DTP,2))+CCS
+ 
+ I '$D(^BUF($J,"p",NI,DTP)) S ^(DTP)="" ; лиц
+ I '$D(^(DTP,DT)) S ^(DT)="" ; обращ..
+ I '$D(^(DT,VR)) S ^(VR)="" ; посещ.
+ Q
+fn(X) 
+ Q $TR(+$FN(X,"",2),".",",")
+REGIPROC ;
+ N FF,F
+ S FF=+$$FR^I()
+ S F=$S(FF:",t@storage:lpu,Филиал",1:"")
+ S ^IPROC("Отчеты ЛПУ","Посещаемость и обращаемость","Сводка по обратившимся")="OBRS_RLPUPOS,1,"_$S(FF:3,1:2)_",d,Период посещений с,d,Период посещений по"_F
+ S ^IPROC("Отчеты ЛПУ","Посещаемость и обращаемость","Сводка по посещаемости и обращаемости")="OBP_RLPUPOS,1,"_$S(FF:3,1:2)_",d,Период посещений с,d,Период посещений по"_F
+ Q

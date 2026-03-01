@@ -1,0 +1,305 @@
+NKADRYU ; Кадровые утилиты [ 09/18/2024  3:43 PM ]
+LSPIS ; Загрузка списка сотрудников
+ ; ФИО|Таб.№ кадр. службы|Дата рожд.|Отделение ID|Спец. ID|Сотовый тел.|Дом.тел.|email|ID(фиксированный)|дата изм.
+ ; Существующих не загружаем
+ N VR,FIO,%J,A,KN,DTR,OT,SP,X,DT
+ D ORH^RWU
+ S DT=+$H
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  D:%J>1
+ .S A=$$DBLSP^TXTU($$WD^TXTU(A))
+ .S X=$P(A,"|",10)
+ .S:X'="" DT=$$DI^DTUTL(X)
+ .S FIO=$$TRIM^TXTU($P(A,"|",1)) Q:FIO="" 
+ .S KN=$$TRIM^TXTU($P(A,"|",2))
+ .S DTR=$$TRIM^TXTU($P(A,"|",3))
+ .S OT=$$TRIM^TXTU($P(A,"|",4))
+ .S:'$$CHECK^ISPRAV("otd",OT) OT=$$fndNM^YISPRAV(OT,"otd")
+ .S SP=$$TRIM^TXTU($P(A,"|",5))
+ .S:'$$CHECK^ISPRAV("spec",SP) SP=$$fndNM^YISPRAV(SP,"spec")
+ .S VR=$$TRIM^TXTU($P(A,"|",9))
+ .I VR="" S VR=$$FNDFIO^NVFIND(FIO) Q:VR="" 
+ .S:VR="" VR=$$NTABsys^YIKADRY() Q:VR=""
+ .D SET^IKADRY(VR,"f",DT,$P(FIO," ",1))
+ .D SET^IKADRY(VR,"i",DT,$P(FIO," ",2))
+ .D SET^IKADRY(VR,"o",DT,$P(FIO," ",3))
+ .D:DTR'="" SET^IKADRY(VR,"bdate",DT,DTR)
+ .D:OT'="" SET^IKADRY(VR,"otd",DT,OT)
+ .D:SP'="" SET^IKADRY(VR,"spec",DT,SP)
+ .D:KN'="" SET^IKADRY(VR,"knum",DT,KN)
+ .S X=$P(A,"|",6)
+ .D:X'="" SET^IKADRY(VR,"mphone",DT,X)
+ .S X=$P(A,"|",7)
+ .D:X'="" SET^IKADRY(VR,"tel",DT,X)
+ .S X=$P(A,"|",8)
+ .D:X'="" SET^IKADRY(VR,"email",DT,X)
+ .D SET^XMLU("^KDR",VR,"opfio",+$H,$$USRH^IUSER())
+ .D W^ISSG("^KDR("_VR_")"),UPD^IEXCH("YIKADRY",VR)
+ .S DT=+$H
+ S ^KDR=$H
+ D CR^RWU
+ Q
+LFIELD ; Загрузка отдельных полей
+ ; id|field|data
+ N VR,FIO,%J,A,KN,DTR,OT,SP,FL,DT,OP,R
+ S DT=+$H
+ D ORH^RWU
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  D:%J>1
+ .S A=$$DBLSP^TXTU($$WD^TXTU(A))
+ .S VR=$$TRIM^TXTU($P(A,"|",1)) Q:VR="" 
+ .S FL=$$UL^TXTU($$TRIM^TXTU($P(A,"|",2))) Q:FL="" 
+ .S OP=$P(A,"|",4)
+ .S A=$$TRIM^TXTU($P(A,"|",3))
+ .D setfl
+ S ^KDR=$H
+ D CR^RWU
+ Q
+LFIELDD ; Загрузка отдельных полей с датой
+ ; id|field|dt|data
+ N VR,FIO,%J,A,KN,DTR,OT,SP,FL,DT,R,OP
+ S DT=+$H
+ D ORH^RWU
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  D:%J>1
+ .S A=$$DBLSP^TXTU($$WD^TXTU(A))
+ .S VR=$$TRIM^TXTU($P(A,"|",1)) Q:VR="" 
+ .S FL=$$UL^TXTU($$TRIM^TXTU($P(A,"|",2))) Q:FL="" 
+ .S DT=$$DIH^DTUTL($P(A,"|",3)),OP=$P(A,"|",5)
+ .S A=$$TRIM^TXTU($P(A,"|",4))
+ .D setfl
+ S ^KDR=$H
+ D CR^RWU
+ Q
+setfl ; system proc for LFIELDx
+ Q:'$$CHECK^IKADRY(VR,DT) 
+ I OP="" D SET^IKADRY(VR,FL,DT,A,1) Q 
+ S R=$$GET^IKADRY(VR,FL,DT)
+ I OP="+" S R=R_A
+ I OP="sflg" S R=$$STFLG^TXTU(R,A)
+ I OP="dflg" S R=$$EXFLG^TXTU(R,A)
+ D SET^IKADRY(VR,FL,DT,R,1)
+ Q
+LDFIN ; Импорт начислений/удержаний
+ ; таб.ном.|дата|тип(1,2-Нач,Удерж.)|основание|сумма|процент|филиал|день
+ ; Тип - слова или цифры
+ N VR,DT,%J,A,TP,REA,SS,SPP,LPU,DD,I,KX
+ S DT=+$H
+ D ORH^RWU
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  D:%J>1
+ .S A=$$DBLSP^TXTU($$WD^TXTU(A))
+ .S VR=$$TRIM^TXTU($P(A,"|",1)) Q:VR=""  Q:'$D(^KDR(VR)) 
+ .S DT=$$DI^DTUTL($P(A,"|",2)) Q:DT=""
+ .S TP=$E($$LU^TXTU($P(A,"|",3)),1)
+ .S TP=$S(TP=1:1,TP=2:2,TP="Н":1,TP="У":2,1:"") Q:TP="" 
+ .S REA=$P(A,"|",4)
+ .S SS=$$NNUM^TXTU($P($P(A,"|",5),"\",1))
+ .S SPP=$$NNUM^TXTU($P($P(A,"|",6),"\",1))
+ .I 'SS,'SPP Q  ; ни суммы ни процента
+ .S LPU=$TR($P(A,"|",7)," ","") I LPU'="",'$D(^CGA(LPU)) Q 
+ .S DD=$$NNUM^TXTU($P(A,"|",8))
+ .S:SPP=0 SPP=""
+ .S:SS=0 SS=""
+ .F I=1:1:99 Q:'$D(^KDR(VR,"dfin",DT_"."_I))
+ .S ^KDR(VR,"dfin",DT_"."_I)=REA_"|"_TP_"|"_SPP_"|"_SS_"|"_LPU_"|"_DD_"|"_$H_"|"_%LOG
+ .D GL^IEXCH("^KDR",VR,"dfin",DT_"."_I)
+ S ^KDR=$H
+ D CR^RWU
+ D MSG^RWU("Документ успешно импортирован.")
+ Q
+EXPINF(DT,OFX,MOD,LPUX) ; Экспорт описания и информации по врачам
+ N N,A,H
+ S DT=$$DIH^DTUTL(DT)
+ D OWF^RWU(".txt")
+ D WC^RWU("Таб. №, ФИО|"_$S(MOD:"Отделение|",1:"")_"email|Аспирантура|Метро|Выезд на дом|Категория|Образование|В компании с|Окончание ВУЗа|Докторантура|Должнось|Ин.языки|Имя|")
+ D WC^RWU("Интернатура|Клиники|Награды|Патенты|Научная деятельность|Научное звание|Ординатура|Специальность|Отчество|Зарубежное пов. квал.|")
+ D WC^RWU("Пов. квал.|Публикации|Сертификаты|Специализация|Стоимость перв. приема|Тел.общий|Ученая степень|Фамилия|Входит в первичный прием|Услуги в приеме|Статусы")
+ 
+ S N="" F  S N=$O(^KDR(N)) Q:N=""  D
+ .I LPUX,'$$IsLPU^IKADRY(N,LPUX,DT) Q  
+ .I OFX,'$$USED^IKADRY(N,DT) Q 
+ .S H=N_" "_$$FIO^IKADRY(N),A=""
+ .S $P(A,"|",2)=$$GET^IKADRY(N,"email",DT)
+ .S $P(A,"|",3)=$$GET^IKADRY(N,"aspir",DT) ; Аспирантура
+ .S $P(A,"|",5)=$S($$GET^IKADRY(N,"flg",DT)["pnd":"да",1:"") ; Выезд на дом 
+ .S $P(A,"|",6)=$$GETE^IKADRY(N,"attk",DT) ; Категория
+ .S $P(A,"|",7)=$$GET^IKADRY(N,"obr",DT) ; Образование
+ .S $P(A,"|",8)=$$DT^DTUTL($$GET^IKADRY(N,"pstaj",DT)) ; В компании с
+ .S $P(A,"|",9)=$$DT^DTUTL($$GET^IKADRY(N,"obr_d",DT)) ; Окончание ВУЗа
+ .S $P(A,"|",10)=$$GET^IKADRY(N,"doctorat",DT) ; Докторантура
+ .S $P(A,"|",11)=$$GETE^IKADRY(N,"doljn",DT) ; Должность
+ .S $P(A,"|",12)=$$GET^IKADRY(N,"lang1",DT) ; Языки
+ .S $P(A,"|",13)=$$GET^IKADRY(N,"i",DT) ; Имя (отдельно)
+ .S $P(A,"|",14)=$$GET^IKADRY(N,"inter",DT) ; Интернатура
+ .S $P(A,"|",15)=$$GETE^IKADRY(N,"lpu",DT) ; Клиники
+ .S $P(A,"|",16)=$$GET^IKADRY(N,"honors",DT) ; Награды
+ .S $P(A,"|",17)=$$GET^IKADRY(N,"patent",DT) ; Патенты
+ .S $P(A,"|",18)=$$GET^IKADRY(N,"sciwrk",DT) ; Научная деятельность
+ .S $P(A,"|",19)=$$GETE^IKADRY(N,"ust",DT) ; Научное звание
+ .S $P(A,"|",20)=$$GET^IKADRY(N,"ordin",DT) ; Ординатура
+ .S $P(A,"|",21)=$$GETE^IKADRY(N,"spec",DT) ; Специальность
+ .S $P(A,"|",22)=$$GET^IKADRY(N,"o",DT) ; Отчество (отдельно)
+ .S $P(A,"|",23)=$$GET^IKADRY(N,"up_kvz",DT) ; Зарубежное пов. квал.
+ .S $P(A,"|",24)=$$GET^IKADRY(N,"up_kv",DT) ; пов. квал.
+ .S $P(A,"|",25)=$$GET^IKADRY(N,"scipub",DT) ; Публикации
+ .S $P(A,"|",26)=$$GET^IKADRY(N,"certs",DT) ; Сертификаты
+ .S $P(A,"|",27)=$$GET^IKADRY(N,"sptext",DT) ; Специализация
+ .S $P(A,"|",28)=$$GET^IKADRY(N,"ppcenn",DT) ; Первичный прием
+ .S $P(A,"|",29)=$$GET^ICONTR($P($$GET^IKADRY(N,"lpu",DT),"|",1),"phone",DT) ; тел. клиники
+ .S $P(A,"|",30)=$$GETE^IKADRY(N,"ust",DT) ; Ученая степень
+ .S $P(A,"|",31)=$$GET^IKADRY(N,"f",DT) ; Фамилия (отдельно)
+ .S $P(A,"|",32)=$$GET^IKADRY(N,"pri_dsc",DT) ; ; Входит в первичный прием
+ .S $P(A,"|",33)=$TR($$GET^IKADRY(N,"prefu",DT),"|",";") ; Усл. в перв.п.
+ .S $P(A,"|",34)=$TR($$GET^IKADRY(N,"flg",DT),"|",";")
+ .D WC^RWU(CR_H_$S(MOD:"|"_$$GOTD^YISPRAV($$OTD^IKADRY(N)),1:"")_$TR(A,CR," "))
+ D C^RWU
+ Q
+LCINF ; Описание и информация по врачам
+ N %J,A,X,FIO,VR,H,ETXT
+ D ORH^RWU
+ S H=+$H,ETXT=""
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  D:%J>1
+ .S A=$$DBLSP^TXTU($$WD^TXTU(A))
+ .S FIO=$P($P($P(A,"|",1),",",1)," ",1,3)
+ .S VR=$$FNDFIO^NVFIND(FIO) I VR="" S ETXT=$G(ETXT)_CR_FIO Q
+ .S X=$$lcval(A,2)
+ .I X'="",$$GET^IKADRY(VR,"email",H)="" D SET^IKADRY(VR,"email",H,X,1)
+ .S X=$$lcval(A,3) ; Аспирантура
+ .I X'="",$$GET^IKADRY(VR,"aspir",H)="" D SET^IKADRY(VR,"aspir",H,X,1)
+ .S X=$$bool($$lcval(A,5)) ; Выезд на дом
+ .I X,$$GET^IKADRY(VR,"flg",H)'["pnd" D SET^IKADRY(VR,"flg",H,$$STFLG^TXTU($$GET^IKADRY(VR,"flg",H),"pnd"),1)
+ .S X=$$decat($$lcval(A,6)) ; Категория
+ .I X'="",$$GET^IKADRY(VR,"attk",H)="" D SET^IKADRY(VR,"attk",H,X,1)
+ .S X=$$lcval(A,7) ; Образование
+ .I X'="",$$GET^IKADRY(VR,"obr",H)="" D SET^IKADRY(VR,"obr",H,X,1)
+ .S X=$$ydtod($$lcval(A,8)) ; В компании с
+ .I X'="",$$GET^IKADRY(VR,"pstaj",H)="" D SET^IKADRY(VR,"pstaj",H,X,1)
+ .S X=$$ydtod($$lcval(A,9)) ; Окончание ВУЗа
+ .I X'="",$$GET^IKADRY(VR,"obr_d",H)="" D SET^IKADRY(VR,"obr_d",H,X,1)
+ .S X=$$lcval(A,10) ; Докторантура
+ .I X'="",$$GET^IKADRY(VR,"doctorat",H)="" D SET^IKADRY(VR,"doctorat",H,X,1)
+ .S X=$$lcval(A,12)
+ .I X'="",$$GET^IKADRY(VR,"lang1",H)="" D SET^IKADRY(VR,"lang1",H,X,1)
+ .S X=$$lcval(A,14)
+ .I X'="",$$GET^IKADRY(VR,"inter",H)="" D SET^IKADRY(VR,"inter",H,X,1)
+ .S X=$$lcval(A,16) ; Награды
+ .I X'="",$$GET^IKADRY(VR,"honors",H)="" D SET^IKADRY(VR,"honors",H,X,1)
+ .S X=$$lcval(A,17) ; Патенты
+ .I X'="",$$GET^IKADRY(VR,"patent",H)="" D SET^IKADRY(VR,"patent",H,X,1)
+ .S X=$$lcval(A,18) ; Научная деятельность
+ .I X'="",$$GET^IKADRY(VR,"sciwrk",H)="" D SET^IKADRY(VR,"sciwrk",H,X,1)
+ .S X=$$decsi($$lcval(A,19)) ; Научное звание
+ .I X'="",$$GET^IKADRY(VR,"ust",H)="" D SET^IKADRY(VR,"ust",H,X,1)
+ .S X=$$lcval(A,20) ; Ординатура
+ .I X'="",$$GET^IKADRY(VR,"ordin",H)="" D SET^IKADRY(VR,"ordin",H,X,1)
+ .S X=$$lcval(A,23) ; Зарубежное пов. квал.
+ .I X'="",$$GET^IKADRY(VR,"up_kvz",H)="" D SET^IKADRY(VR,"up_kvz",H,X,1)
+ .S X=$$lcval(A,24)
+ .I X'="",$$GET^IKADRY(VR,"up_kv",H)="" D SET^IKADRY(VR,"up_kv",H,X,1)
+ .S X=$$lcval(A,25) ; Публикации
+ .I X'="",$$GET^IKADRY(VR,"scipub",H)="" D SET^IKADRY(VR,"scipub",H,X,1)
+ .S X=$$lcval(A,26)
+ .I X'="",$$GET^IKADRY(VR,"certs",H)="" D SET^IKADRY(VR,"certs",H,X,1)
+ .S X=$$lcval(A,27)
+ .I X'="",$$GET^IKADRY(VR,"sptext",H)="" D SET^IKADRY(VR,"sptext",H,X,1)
+ .S X=$$lcval(A,28) ; Первичный прием
+ .I X'="",$$GET^IKADRY(VR,"ppcenn",H)="" D SET^IKADRY(VR,"ppcenn",H,$$NNUM^TXTU(X),1)
+ .S X=$$decsi($$lcval(A,30)) ; Ученая степень
+ .I X'="",$$GET^IKADRY(VR,"ust",H)="" D SET^IKADRY(VR,"ust",H,X,1)
+ .S X=$$lcval(A,32) ; Входит в первичный прием
+ .I X'="",$$GET^IKADRY(VR,"pri_dsc",H)="" D SET^IKADRY(VR,"pri_dsc",H,X,1)
+ .S X=$$lcval(A,33) ; 
+ D CR^RWU
+ D MSG^RWU($S(ETXT="":"Документ успешно импортирован.",1:ETXT))
+ Q
+bool(X) ; Булевое преобразование
+ S X=$$UL^TXTU($E($TR(X," ","")))
+ Q:X="" 0
+ Q:"дty"[X 1
+ Q 0
+ydtod(X) ; Год или дату с дату
+ I X[".",$L(X)>9 Q $$DI^DTUTL($P(X," ",1))
+ Q $$ytod(X)
+ytod(X) ; Год в дату
+ S X=$$NNUM^TXTU(X)
+ Q:$L(X)<2 ""
+ Q:X["." $$DI^DTUTL(X)
+ Q $$DI^DTUTL("01.01."_X)
+decat(X) ; Категории
+ S X=$$UL^TXTU($TR(X," ",""))
+ Q:X["перв" 1
+ Q:X["втор" 2
+ Q:X["трет" 3
+ Q:X["высш" 9
+ S X=$$NNUM^TXTU(X)
+ S:X>3 X=""
+ Q X
+decsi(X) ; Звание
+ S X=$$UL^TXTU(X)
+ Q:X["к.м.н" 1
+ Q:X["кмн" 1
+ Q:X["кандидат медицинских наук" 1
+ Q:X["д.м.н" 2
+ Q:X["дмн" 2
+ Q:X["проф" 3
+ Q ""
+lcval(X,POS) 
+ S X=$$DBLSP^TXTU($P(X,"|",POS))
+ Q:X=0 ""
+ Q:X="нет" ""
+ Q X
+LPHURL(ID,URL) ; Load photo URL
+ Q:ID=""  Q:URL=""  Q:'$D(^KDR(ID)) 
+ D SET^IKADRY(ID,"photo_url",+$H,URL)
+ Q
+NINF(OTD) ; Отсутствие информации по сотруднику
+ N N,D
+ S D=+$H
+ D OWF^RWU(".txt")
+ D WC^RWU("Таб.№|Ф.И.О.|Отделение|Специальность|Оформлен|Фото|Филиалы")
+ S N="",F=0 F  S N=$O(^KDR(N)) Q:N=""  D
+ .Q:'$$USED^IKADRY(N,D) 
+ .I OTD'="",'$$IsOTD^IKADRY(N,OTD,D) Q 
+ .Q:$$GET^IKADRY(N,"norsp",D)=1  
+ .Q:$$GET^IKADRY(N,"sptext",D)'=""  ; специализация
+ .Q:$$GET^IKADRY(N,"dis_dsc",D)'=""  ; заболевания
+ .Q:$$GET^IKADRY(N,"pri_dsc",D)'=""  ; на приеме 
+ .Q:$$GET^IKADRY(N,"certs",D)'=""  ; сертификаты
+ .Q:$$GET^IKADRY(N,"ppr",D)'=""  ; дипломы
+ .D WC^RWU(CR_N_"|"_$$FIO^IKADRY(N)_"|"_$$GETE^IKADRY(N,"otd",D)_"|"_$$GETE^IKADRY(N,"spec",D)_"|"_$$GETE^IKADRY(N,"dofor",D)_"|"_$S($$GET^IKADRY(N,"photo_url",D)="":"",1:"+")_"|"_$$GETE^IKADRY(N,"lpu",D))
+ D C^RWU 
+ Q
+PHURL(OTD) ; Идентификатор фотографий
+ N N,D
+ S D=+$H
+ D OWF^RWU(".txt")
+ D WC^RWU("Таб.№|Кадровый №|Ф.И.О.|Отделение|Специальность|URL")
+ S N="",F=0 F  S N=$O(^KDR(N)) Q:N=""  D
+ .Q:'$$USED^IKADRY(N,D) 
+ .I OTD'="",'$$IsOTD^IKADRY(N,OTD,D) Q 
+ .D WC^RWU(CR_N_"|"_$$GETE^IKADRY(N,"knum",D)_"|"_$$FIO^IKADRY(N)_"|"_$$GETE^IKADRY(N,"otd",D)_"|"_$$GETE^IKADRY(N,"spec",D)_"|"_$$GET^IKADRY(N,"photo_url",D))
+ D C^RWU 
+ Q
+Ccfin ; Конвертирование cfin в унифицированный формат
+ ; lpu<->month
+ N N,D,R,X1,X2
+ S N="" F  S N=$O(^KDR(N)) Q:N=""  D
+ .S D="" F  S D=$O(^KDR(N,"cfin",D)) Q:D=""  D
+ ..S R=^(D),X1=$P(R,"|",5),X2=$P(R,"|",6)
+ ..I X1="",X2="" Q 
+ ..I X2["~" Q  ; already
+ ..S $P(R,"|",5)=X2,$P(R,"|",6)=X1
+ ..S ^(D)=R
+ ..D GL^IEXCH("^KDR",N,"cfin",D)
+ Q
+gender ; Проставить пол на основании ФИО, где нет
+ N N,H,X
+ S H=+$H
+ S N="" F  S N=$O(^KDR(N)) Q:N=""  D
+ .Q:$$GET^IKADRY(N,"pol",H)'="" 
+ .D SET^IKADRY(N,"pol",H,$$SEX^YIFAM($$FIO^IKADRY(N)),1)
+ Q
+REGIPROC 
+ S ^IPROC("Зарплата и кадры","Служебные","Отсутствие маркетинговой информации")="NINF_NKADRYU,1,1,te@storage:otd@1,Отделение"
+ S ^IPROC("Зарплата и кадры","Служебные","Идентификатор фотографий")="PHURL_NKADRYU,1,1,te@storage:otd@1,Отделение"
+ S ^IPROC("Зарплата и кадры","Служебные","Экспорт маркетинговой информации")="EXPINF_NKADRYU,1,4,d,Дата отчета,t@string:0/нет#2/да,Отображать только оформленных,t@string:0/Типовой#1/С отделениями,Вид отчета,t@storage:lpu,Филиал"
+ 
+ S ^IMPROC("Маркетинговая информация по сотрудникам")="LCINF_NKADRYU()"
+ Q

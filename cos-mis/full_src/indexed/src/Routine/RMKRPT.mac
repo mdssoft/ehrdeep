@@ -1,0 +1,222 @@
+RMKRPT ; Создание отчетов [ 03/23/2010  11:05 AM ]
+LST ; Список отчетов
+ D OWF^RWU(".txt")
+ N I,C S (C,I)=""
+ F  S I=$O(^SRPT(I)) Q:I=""  D WC^RWU(C_I_"|"_^(I)) S C=CR
+ D C^RWU
+ Q
+INITRPT(ID) ; Инициализация отчета
+ S %L="",%B=".txt"
+ ;S %L=$$DW^TXTU("Ошибка в описании структуры объектов"),%B=".txt"
+ N I,F,T,ENT,R,X,RF,RR
+ S I="" F  S I=$O(^SRPT(ID,"entity",I)) Q:I=""  D
+ .S ENT=^(I),X=""
+ .F  S X=$O(^SRPT(ID,"entity",I,"f",X)) Q:X=""  D
+ ..S F=^(X,"f")
+ ..S R=$G(^("v")) Q:R=""  Q:$P(R,":",1)'="I" 
+ ..S RR=""
+ ..S T=$P(^STRUCT(ENT,F),"|",1) S:T="" T="S" ; Type of field
+ ..S RF=$G(^STRUCT(ENT,F,"r"))
+ ..S:T="P" RR=$S(RF[":":"net:NMLST^NSPRAV("""_$P(RF,":",2)_""",2)",1:"storage:"_RF)
+ ..S %L=$S($L(%L):%L_CR,1:"")_T_$C(1)_$P(R,":",2)_$C(1)_RR
+ S %L=$$DW^TXTU(%L)
+ Q
+OBJLST ; Список объектов
+ N P
+ S (%L,P)="",%B=".txt"
+ F  S P=$O(^STRUCT(P)) Q:P=""  S %L=$S($L(%L):%L_CR,1:"")_P_"|"_^(P," ")
+ S %L=$$DW^TXTU(%L)
+ Q
+MAKE 
+ N SID,rptIN
+ ;S SID=1,rptIN("1.pol")=1
+ K ^BUF($J,"rpt")
+ D IDEC
+ D DO
+ D WTAB
+ K ^BUF($J,"rpt")
+ Q
+IDEC ; Input decoder
+ N I,F,T,ENT,R,TMP,X,A,IDX
+ S IDX=0
+ ; Read input
+ D ORH^RWU
+ F IDX=0:1 S A=$$R^RWU Q:%IFN["Z"  D
+ .I 'IDX S SID=A Q  ; первая строка
+ .S TMP(IDX)=$$WD^TXTU(A)
+ D CR^RWU
+ Q:'IDX  ; ничего не пришло
+ ; Recode input
+ S IDX=1
+ S I="" F  S I=$O(^SRPT(SID,"entity",I)) Q:I=""  D
+ .S ENT=^(I),X=""
+ .F  S X=$O(^SRPT(SID,"entity",I,"f",X)) Q:X=""  D
+ ..S F=^(X,"f")
+ ..S R=$G(^("v")) Q:R=""  Q:$P(R,":",1)'="I"  ; only input
+ ..S T=$P(^STRUCT(ENT,F),"|",1) ; Type of field
+ ..S R=TMP(IDX)
+ ..S:T="D" R=$$DI^DTUTL(R)
+ ..S:T="T" R=$$TI^DTUTL(R)
+ ..S rptIN(I_"."_F)=R
+ ..S IDX=IDX+1
+ Q
+DO ; Internal main function
+ N I,R,X,iter,itab
+ N TFL,FFL,EID,IFLT,ENT,ENTP,flKEY,FLGET,FLT,FLTGRP,EIDKEY,EIDKPRC
+ 
+ S EID="" F  S EID=$O(^SRPT(SID,"entity",EID)) Q:EID=""  D
+ .S ENT=^(EID) ; object name
+ .S ENTP=^STRUCT(ENT," ","p")
+ .D mkTFL(SID,EID)
+ .D mkIFLT(SID,EID)
+ .D mkFLGET(SID,EID,ENT)
+ .S iter=$G(^SRPT(SID,"entity",EID,"ii")) S:iter="" iter="iterator"
+ .S iter=iter_"^"_ENTP_"(""IFLT"",""iterPRC^RMKRPT"")"
+ .K FLTGRP
+ .M FLTGRP=^SRPT(SID,"entity",EID,"g",1)
+ .S FLTGRP=$G(FLTGRP) ; если корень не определен
+ .S EIDKEY=$G(^SRPT(SID,"entity",EID,"k"))
+ .S EIDKPRC=$G(^("k","e")) ; eXec - TODO
+ .K FLT M FLT=^SRPT(SID,"entity",EID,"f")
+ .S I="" F  S I=$O(FLT(I)) Q:I=""  S R=FLT(I,"v"),FLT(I,"v")=$S($E(R)="I":$G(rptIN(EID_"."_FLT(I,"f"))),$E(R)="V":$E(R,3,999),1:"") ; fill flt. values
+ .S itab=1
+ .D deFLTGRP
+ .D @iter
+ D mkTAB
+ Q
+mkTFL(SID,EID) ; Make table fields
+ K TFL
+ S I="" F  S I=$O(^SRPT(SID,"table",I)) Q:I=""  S R=^(I,"d") I $L(R),$P(R,".",1)=EID S TFL($P(R,".",2))=I
+ Q
+mkTFLR(SID,EID) ; Make reverse table fields
+ K TFL
+ S I="" F  S I=$O(^SRPT(SID,"table",I)) Q:I=""  S R=^(I,"d") I $L(R),$P(R,".",1)=EID S TFL(I)=$P(R,".",2)
+ Q
+mkIFLT(SID,EID) ; Создать фильтр итератора
+ K IFLT
+ S I="" F  S I=$O(^SRPT(SID,"entity",EID,"f",I)) Q:I=""  S:$G(^(I,"o"))="=" IFLT(^("f"))=""
+ Q
+deFLTGRP ; Преобразовать имена ф-ций к числовым значениям
+ S I="" F  S I=$O(FLTGRP(I)) Q:I=""  D
+ .S R=FLTGRP(I)
+ .S:R="MIN" R=1
+ .S:R="MAX" R=2
+ .S:R="AVG" R=3
+ .S:R="COUNT" R=4
+ .S:R="FIRST" R=5
+ .S:R="LAST" R=6
+ .S FLTGRP(I)=R
+ Q
+mkFLGET(SID,EID,ENT) ; создать ф-ции получения данных для полей
+ K FLGET
+ ; собрать поля
+ S I="" F  S I=$O(^SRPT(SID,"table",I)) Q:I=""  S R=$G(^(I,"d")) I $P(R,".",1)=EID S FLGET($P(R,".",2))=""
+ S I="" F  S I=$O(^SRPT(SID,"entity",EID,"f",I)) Q:I=""  S R=^(I,"f") S:$L(R) FLGET(R)=""
+ ; создать ф-ции
+ S X=^STRUCT(ENT," ","p") ; основная ф-ция
+ S I="" F  S I=$O(FLGET(I)) Q:I=""  D
+ .S R=$G(^STRUCT(ENT,I,"k"))
+ .I $L(R) S FLGET(I)="X" Q  ; ключ
+ .S R=$G(^STRUCT(ENT,I,"e"))
+ .I $L(R) S FLGET(I)=R Q  ; строка @Function
+ .S FLGET(I)="$$GET^"_X_"(X,"""_I_""")"
+ Q
+mkFLREZ(SID,EID) ; Собрать поля для вывода результата
+ K FLGET
+ N FN,SubP,RF,ENT,X,RP
+ S ENT=$G(^SRPT(SID,"entity",EID))
+ S I="" F  S I=$O(^SRPT(SID,"table",I)) Q:I=""  S R=$G(^(I,"d")) I $P(R,".",1)=EID S FLGET($P(R,".",2))=""
+ ; создать ф-ции
+ S X=^STRUCT(ENT," ","p") ; основная ф-ция
+ S I="" F  S I=$O(FLGET(I)) Q:I=""  D
+ .S RF=$G(^STRUCT(ENT,I,"r")) ; main reference
+ .I '$L(RF) S FLGET(I)="" Q  ; без расшифровки
+ .I RF[":" S FLGET(I)="$$NAME^ISPRAV("""_$P(RF,":",2)_""",X)" Q 
+ .S SubP=$G(^STRUCT(RF," ","p"))
+ .I '$L(SubP) S FLGET(I)="" Q  ; не справочника
+ .S RP=$G(^STRUCT(RF," ","br"))
+ .I '$L(RP) S FLGET(I)="$$NAME^"_SubP_"(X)" Q  ; по умолчанию без 'br'
+ .S X=$G(^STRUCT(RF,RP,"e"))
+ .I '$L(X) S FLGET(I)="$$GET^"_SubP_"(X,"""_RP_""")" Q
+ .; TODO - если eXecute
+ Q
+getKEY(ENT) ; Получить имя ключевого поля объекта
+ Q
+iterPRC(X) ; Процедура итератора
+ N X1,X2,R,F,PLL,FL,OP,P,Q,i
+ ; фильтрация
+ S (P,Q)=0,F="" F  S F=$O(FLT(F)) Q:F=""  D
+ .S FL=FLT(F,"f"),OP=FLT(F,"o"),X2=FLT(F,"v"),i=$G(FLT(F,"p"))
+ .X "S X1="_FLGET(FL)
+ .S PLL(FL)=X1
+ .I $L(i),@i S Q=1,P=1
+ .I OP="IN" S Q=$D(^BUF($J,"rpt","rez",X2,X1)),P=Q Q 
+ .S R="X2"_OP_"X1"
+ .I @R S Q=1,P=1
+ .; TODO - отношения к предыдущему фильтру 
+ Q:'Q 
+ ; получение данных в FL
+ S P=itab
+ ; fill key data (optional)
+ I $L(EIDKEY) S X2=$D(PLL(EIDKEY)) S:X2 P=PLL(EIDKEY) X:'X2 "S P="_FLGET(EIDKEY)_",PLL(EIDKEY)=P"
+ ; fill first step result
+ S F="" F  S F=$O(TFL(F)) Q:F=""  D
+ .S i=TFL(F),Q=$G(FLTGRP(F))
+ .I Q=4 D grpCNT Q  ; calculate count
+ .S X2=$D(PLL(F))
+ .I X2 S X1=PLL(F)
+ .I 'X2 X "S X1="_FLGET(F) S PLL(F)=X1 ; в PLL для повторного исп.
+ .I Q=1 D grpMIN Q  ; aggregation
+ .I Q=2 D grpMAX Q 
+ .I Q=3 D grpAVG Q 
+ .I Q=5 D grpFIRST Q 
+ .S ^BUF($J,"rpt","rez",EID,P,i)=X1
+ S itab=itab+1
+ Q
+grpMIN 
+ S:$G(^BUF($J,"rpt","rez",EID,P,i))>X ^(i)=X1
+ Q
+grpMAX 
+ S:$G(^BUF($J,"rpt","rez",EID,P,i))<X ^(i)=X1
+ Q
+grpAVG 
+ S X2=$G(^BUF($J,"rpt","rez",EID,P,i))
+ S $P(X2,"|",1)=$P(X2,"|",1)+X1
+ S $P(X2,"|",2)=$P(X2,"|",2)+1
+ S ^(i)=X2
+ Q
+grpCNT 
+ S ^(i)=$G(^BUF($J,"rpt","rez",EID,P,i))+1
+ Q
+grpFIRST 
+ Q:$D(^BUF($J,"rpt","rez",EID,P,i))
+ S ^(i)=X1
+ Q
+mkTAB ; Make table
+ N KF,F,X1,X2,X,P
+ S EID="" F  S EID=$O(^BUF($J,"rpt","rez",EID)) Q:EID=""  D
+ .D mkFLREZ(SID,EID)
+ .D mkTFLR(SID,EID)
+ .S I="" F  S I=$O(^BUF($J,"rpt","rez",EID,I)) Q:I=""  D
+ ..S F="" F  S F=$O(^BUF($J,"rpt","rez",EID,I,F)) Q:F=""  D
+ ...S X=^(F)
+ ...S P=TFL(F),P=FLGET(P)
+ ...I $L(P) X "S X="_P ; decode field
+ ...S ^BUF($J,"rpt","tab",I,F)=X
+ K ^BUF($J,"rpt","rez")
+ Q
+WTAB ; Write table
+ N R,X,I,Z
+ D OWF^RWU(".txt")
+ S X="",Z=$O(^SRPT(SID,"table",""),-1)
+ F I=1:1:Z S $P(X,"|",I)=^(I)
+ D WC^RWU(X)
+ S R="" F  S R=$O(^BUF($J,"rpt","tab",R)) Q:R=""  D
+ .S X=^(R,1)
+ .F I=2:1:Z S $P(X,"|",I)=^(I)
+ .D WC^RWU(CR_X)
+ D C^RWU
+ Q
+TSTTAB ;
+ 
+ Q

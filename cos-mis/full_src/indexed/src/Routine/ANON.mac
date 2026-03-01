@@ -1,0 +1,74 @@
+ANON ; Функции анонимизации БД
+DOALL ; Пациенты и кадры
+ N K,NML,LF,FFL,TZRBTN,S,X,D,T,FL,N
+ S NML(1,0)="Иван"
+ S NML(1,1)="Петр"
+ S NML(1,2)="Семен"
+ S NML(1,3)="Гаврила"
+ S NML(1,4)="Алексей"
+ S NML(2,0)="Анна"
+ S NML(2,1)="Мария"
+ S NML(2,2)="Наталья"
+ S NML(2,3)="Надежда"
+ S NML(2,4)="Екатерина"
+ S NML(0,0)="Женя"
+ S NML(0,1)="Валя"
+ S NML(0,2)="Саша"
+ S NML(0,3)="Саша"
+ S NML(0,4)="Ли"
+ S FFL(0)="Носик"
+ S FFL(1)="Пак"
+ S FFL(2)="Снежко"
+ S FFL(3)="Нетребко"
+ S FFL(4)="Соловей"
+ ; Список фамилий
+ K ^TMPFIO
+ S K="",LF=1 F  S K=$O(^ISLIB("fiof",K)) Q:K=""  D
+ .S S=$$SEX^YIFAM(K) Q:S="" 
+ .S ^TMPFIO(S,+$G(LF(S)))=K
+ .S LF(S)=$G(LF(S))+1
+ ; Кадры
+ S K="" F  S K=$O(^KDR(K)) Q:K=""  D
+ .S X=$$GET^IKADRY(K,"pol")
+ .S T=$$f(X)
+ .S D="" F  S D=$O(^KDR(K,"f",D)) Q:D=""  s ^(D)=T
+ .S T=$S(X="":"Юзер",1:NML(X,$R(5)))
+ .S D="" F  S D=$O(^KDR(K,"i",D)) Q:D=""  s ^(D)=T
+ .S D="" F  S D=$O(^KDR(K,"tel",D)) Q:D=""  s ^(D)="(495)1231212"
+ .S D="" F  S D=$O(^KDR(K,"mphone",D)) Q:D=""  s ^(D)="(916)1231212"
+ .S D="" F  S D=$O(^KDR(K,"email",D)) Q:D=""  s ^(D)="test@mail.ru"
+ ; Пациенты
+ M TZRBTN=^BTN($C(9)_"t")
+ S N="" F  S N=$$NEXT^IPAC(N) Q:N=""  D
+ .S X=$$GET^IPAC(K,"pol")
+ .S T=$$f(X)
+ .S FL=+$G(TZRBTN("fiof"))
+ .S D="" F  S D=$O(^BTN(N,FL,D)) Q:D=""  S ^(D)=T
+ .S T=NML(+X,$R(5))
+ .S FL=+$G(TZRBTN("fioi"))
+ .S D="" F  S D=$O(^BTN(N,FL,D)) Q:D=""  s ^(D)=T
+ .S FL=+$G(TZRBTN("datar"))
+ .S D="" F  S D=$O(^BTN(N,FL,D)) Q:D=""  s ^(D)=^(D)-200+$R(400)
+ .S FL=+$G(TZRBTN("street"))
+ .S D="" F  S D=$O(^BTN(N,FL,D)) Q:D=""  s ^(D)="ул. Строителей д.1"
+ .S FL=+$G(TZRBTN("tel1"))
+ .S D="" F  S D=$O(^BTN(N,FL,D)) Q:D=""  s ^(D)="123-12-12"
+ .S FL=+$G(TZRBTN("tel2"))
+ .S D="" F  S D=$O(^BTN(N,FL,D)) Q:D=""  s ^(D)="123-12-12"
+ .S FL=+$G(TZRBTN("pager"))
+ .S D="" F  S D=$O(^BTN(N,FL,D)) Q:D=""  s ^(D)="8(999)111-11-11"
+ .S FL=+$G(TZRBTN("email"))
+ .S D="" F  S D=$O(^BTN(N,FL,D)) Q:D=""  s ^(D)=N_"@mail.ru"
+ .S FL=+$G(TZRBTN("text"))
+ .S D="" F  S D=$O(^BTN(N,FL,D)) Q:D=""  s ^(D)="-"
+ d idxfio
+ D CREAIDX^YIPACN(0)
+ Q
+idxfio
+ S N="" F  S N=$$NEXT^IPAC(N) Q:N=""  D
+ .S FL=+$G(TZRBTN("fiof")),FL1=+$G(TZRBTN("idxfio"))
+ .S D="" F  S D=$O(^BTN(N,FL,D)) Q:D=""  S ^BTN(N,FL1,D)=$$F^YIFAM(^(D))
+ Q
+f(POL)
+ Q:POL="" FFL($R(5))
+ Q ^TMPFIO(POL,$R(LF(POL))) 

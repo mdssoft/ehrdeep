@@ -1,0 +1,453 @@
+A ; ДОГОВОРА [ 02/13/2020  3:16 PM ]
+DF(R,V,T,US) ; Таблица+поиск договоров
+ ; V - вид, T - раздел, US - только действ.
+ N N,NM,DGL,H,TP
+ S R=$$LU^TXTU($$WD^TXTU(R)),H=+$H,V=$G(V),T=$G(T),US=+$G(US)
+ D OWF^RWU(".txt"),WC^RWU("Код|Наименование")
+ 
+ I R'="",$D(^DGN(R)) D DFprc(R,1) G DFv
+ S N="" F  S N=$O(^DGN(N)) Q:N=""  D DFprc(N,0)
+DFv S TP="" F  S TP=$O(DGL(TP)) Q:TP=""  D
+ .D:TP WC^RWU(CR_"|"_$$NAME^ISPRAV("dgtype",TP))
+ .S N="" F  S N=$O(DGL(TP,N)) Q:N=""  D WC^RWU(CR_N_"|"_$$GET(N,"shortname",H))
+ D C^RWU
+ Q
+DFprc(N,nN) ; Процедура поиска
+ I V'="",$$GET(N,"dvid",H)'=V Q 
+ I US,$$GET(N,"use",H)=0 Q 
+ S TP=$$GET(N,"tp",H)
+ I T'="",T'=TP Q 
+ I 'nN,$$LU^TXTU($$GET(N,"shortname",H))'[R,$$LU^TXTU($$GET(N,"oname",H))'[R Q
+ S DGL(+TP,N)=""
+ Q
+DL(N,DT) ; Загрузка
+ N DTF,PL,DS,R S N=+N
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<fdog>")
+ G:'$D(^DGN(N)) DLEND
+ D WTAGD^RWU("ndog",N)
+ S (DTF("dog_from"),DTF("dog_to"),DTF("init_date"),PL)=""
+ S DT=$$DIH^DTUTL($G(DT))
+ F  S PL=$O(^DGN(N,PL)) Q:PL=""  D
+ .Q:PL="LOG" 
+ .I PL="texts" S R=$$DGNTXTS(N,DT) D WTAGC^RWU(PL,R) Q 
+ .S DS=$O(^DGN(N,PL,DT+1),-1) Q:DS=""  S R=^(DS)
+ .I PL="progs" S R=$$DGNPROG(DT) D WTAGC^RWU(PL,R) Q
+ .I PL="progsa" S R=$$DGNPROG(DT) D WTAGC^RWU(PL,R) Q
+ .I PL="skdprog" S R=$$DGNPROG(DT) D WTAGC^RWU(PL,R) Q
+ .S:PL="txtdogfil"!(PL="txtprilfil") R=$$GET^YDOCS(R,"file")
+ .S:$D(DTF(PL)) R=$$DT^DTUTL(R)
+ .D WTAGDC^RWU(PL,R)
+DLEND D W^RWU("</fdog></nb_console>"),C^RWU
+ Q
+PRDT(N,DT) ; Previous change date
+ N P,PD,CD
+ S DT=$$DIH^DTUTL($G(DT))
+ S P="",PD=0
+ F  S P=$O(^DGN(N,P)) Q:P=""  I P'="texts" S CD=+$O(^(P,DT),-1) S:CD>0&(CD>PD) PD=CD
+ S:PD=0 PD=DT
+ D MSG^RWU($$DT^DTUTL(PD))
+ Q
+NXDT(N,DT) ; Next change date
+ N P,PD,CD
+ S DT=$$DIH^DTUTL($G(DT))
+ S P="",PD=99999
+ F  S P=$O(^DGN(N,P)) Q:P=""  I P'="texts" S CD=+$O(^(P,DT)) S:CD>0&(CD<PD) PD=CD
+ S:PD=99999 PD=DT
+ D MSG^RWU($$DT^DTUTL(PD))
+ Q
+DGNPROG(DT) 
+ N C,A,J,X S (A,C)=""
+ F J=1:1 S X=$P(R,"|",J) Q:X=""  S A=A_C_X_"|"_$$NAMEH^IMPRP(X,DT),C=CR
+ Q A
+DGNTXTS(N,DT) 
+ N P,D,A,CC
+ S (A,P,CC)=""
+ F  S P=$O(^DGN(N,"texts",P)) Q:P=""  D
+ .S D=$O(^(P,DT+1),-1) Q:D=""  Q:^(D)="" 
+ .S A=A_CC_P_"|"_$S(P="-":"По умолчанию",1:$$NAMEH^IMPRP(P,DT)),CC=CR
+ Q A
+CONVERT ; Conversion tool
+ W "Convert ^DOG -> ^DGN",!,"Do you want to process <N>:" R YN Q:YN'="Y"
+ W !,"Process"
+ S TG="05",NDG="",CR=$C(13,10),%LOG="sys"
+ F  S NDG=$O(^DOG(NDG)) Q:NDG=""  S N=NDG D
+ .S TG="" F  S TG=$O(^DOG(NDG,TG)) Q:TG=""  D
+ ..S DTS=$$DI^DTUTL("01.01."_$TR($J(TG,2)," ",0))
+ ..D OLDDL(N),W W "."
+ W "OK",!
+ Q
+OLDDL(N) 
+ K XML
+ Q:'$D(^DOG(+N,TG)) 
+ S XML("nb_console","fdog","savedate")=DTS
+ S XML("nb_console","fdog","dgn")=N
+ S XML("nb_console","fdog","dognum")=N
+ F J=3:1:23 S C(J)=""
+ F J=3:1:23 S C(J)=$G(^DOG(N,TG,J))
+ S R=15,POLE="skid",PL=POLE D:C(R)'="" POLE
+ S R=5,POLE="inn",PL=POLE D:C(R)'="" POLE
+ S R=3,POLE="oname",PL=POLE D POLE
+ S R=3,POLE="shortname",PL=POLE D POLE
+ ;S R=16,POLE="no_usl" D POLE
+ S R=4,POLE="addr",PL=POLE D:C(R)'="" POLE S PL="yaddr" D POLE
+ ;S R=13,POLE="rekviz" D POLE
+ S R=7,POLE="phone",PL=POLE D:C(R)'="" POLE
+ S R=8,POLE="fax",PL=POLE D:C(R)'="" POLE
+ S R=14,POLE="email",PL=POLE D:C(R)'="" POLE
+ S R=9,POLE="fioo",PL=POLE D:C(R)'="" POLE
+ S R=11,POLE="dog_from",PL=POLE D:C(R)'="000000" POLED
+ S R=12,POLE="dog_to",PL=POLE D:C(R)'="000000" POLED
+ S R=10,POLE="init_date",PL=POLE D:C(R)'="000000" POLED
+ S R=17,POLE="text",PL=POLE D:C(R)'="" POLE
+ S R=18,POLE="bank",PL=POLE D:C(R)'="" POLE
+ S R=19,POLE="kors",PL=POLE D:C(R)'="" POLE
+ S R=20,POLE="kpp",PL=POLE D:C(R)'="" POLE
+ S R=21,POLE="gbank",PL=POLE D:C(R)'="" POLE
+ S R=22,POLE="rsch",PL=POLE D:C(R)'="" POLE
+ S R=23,POLE="dvid",PL=POLE S:C(R)="" C(R)=0 D POLE
+ S R=6,POLE="progs" I $D(C(R)) S C(R)=$P(C(R),"  ",1),C(R)=$TR(C(R)," ","|") D POLE
+CCC ;
+ Q
+POLE 
+POLE1 S XML("nb_console","fdog",POLE)=$$DW^TXTU(C(R)) Q
+POLED S R=C(R) S:R="000000"!(R="") R="" S:$E(R,1,2)="00"!($E(R,3,4)="00") R="0107"_$E(R,5,6) S:$E(R,5,6)="" R="" S R=$S($E(R,5,6)>50:$E(R,1,4)_"19"_$E(R,5,6),1:$E(R,1,4)_"20"_$E(R,5,6))
+ S XML("nb_console","fdog",POLE)=$E(R,1,2)_"."_$E(R,3,4)_"."_$E(R,5,8)
+ Q
+DS ;Запись договора
+ Q:$$LCL^NUSER("dgn","save")=0 
+ D ORH^RWU
+ N %J,A K XML,XMLR
+ F %J=1:1 S A=$$RA^RWU Q:%IFN["Z"  D XMLAN^YIXMLRR
+ D CR^RWU
+ D W
+ Q
+W N NB,PT,DTS,DTF,PL,R,DTPV,PR,NVD
+ S NB="nb_console",PT="fdog",DTS=$G(XML(NB,PT,"savedate"))
+ S DTS=$$DIH^DTUTL(DTS),N=$G(XML(NB,PT,"ndog"))
+ K XML(NB,PT,"ndog")
+ K XML(NB,PT,"savedate"),XML(NB,PT,"texts")
+ K:$G(XML(NB,PT,"tp"))=-1 XML(NB,PT,"tp")
+ S (DTF("dog_from"),DTF("dog_to"),DTF("init_date"))=""
+ I N="",$$LCL^IUSER("dgn","new")=0 D MSG^RWU("Нет прав на создание договора.") Q  
+ D:N'="" RMIDX^IINSC(N)
+ I N="" L +^DGN S N=$O(^DGN(99999),-1)+1,NVD=1
+ S PL="" F  S PL=$O(XML(NB,PT,PL)) Q:PL=""  D
+ .S R=$$WD^TXTU($G(XML(NB,PT,PL))) S:$D(DTF(PL)) R=$$DI^DTUTL(R)
+ .S:PL="progs" R=$$GPROGS(R)
+ .S:PL="progsa" R=$$GPROGS(R)
+ .S:PL="skdprog" R=$$GPROGS(R)
+ .S DTPV=$O(^DGN(N,PL,DTS),-1),PR=""
+ .S:$L(DTPV) PR=^(DTPV)
+ .I $D(^(DTS)),^(DTS)'=R K ^(DTS)
+ .S:PR'=R ^(DTS)=R
+ .S DTPV=$O(^(DTS)) I $L(DTPV),R=^(DTPV) K ^(DTPV)
+ L -^DGN
+ S ^DGN(N,"log",DTS)=$$USRH^IUSER()
+ D W^ISSG("^DGN("_N_")")
+ D MKIDX^IINSC(N)
+ 
+ I $D(NVD) D MSG^RWU($G(^PP(0,2))_"<fdog><ndog>"_N_"</ndog></fdog></"_NB_">",".xmlb")
+ S ^DGN=$H
+ D KGL^IEXCH("^DGN",N)
+ D GL^IEXCH("^DGN",N)
+ d SYNC^ICHIFR("dog")
+ Q
+GPROGS(X) 
+ N A,J,K
+ S A=""
+ F J=1:1 S K=$P(X,CR,J) Q:K=""  S A=$S(A="":"",1:A_"|")_$P(K,"|",1)
+ S:A="0" A=""
+ Q A
+GET(N,POLE,DT) ; Значение поля
+ Q:N="" "" S:$G(DT)="" DT=$H
+ S DT=$O(^DGN(N,POLE,DT+1),-1) Q:DT="" "" Q ^(DT)
+GETD(N,POLE) 
+ Q:N="" "" S N=$O(^DGN(N,POLE,$H+1),-1) Q:N="" "" Q ^(N)
+GETM(N,POLE,RET) 
+ K @RET M @RET=^DGN(N,POLE) Q
+GETL2(N,PL1,PL2,DT) ; Get field level 2
+ S:$G(DT)="" DT=$H Q:PL2="" ""
+ S DT=$O(^DGN(N,PL1,PL2,DT+1),-1) Q:DT="" "" Q ^(DT)
+ Q
+GETL2LN(N,PL1,PL2,DT,IDX) ; Get field level 2 w. add index
+ S:$G(DT)="" DT=$H Q:PL2="" ""
+ S DT=$O(^DGN(N,PL1,PL2,DT+1),-1) Q:DT="" "" 
+ Q:IDX="" $G(^(DT))
+ Q $G(^(DT,IDX))
+IS(N,POLE,DT) ; Exists field
+ S:$G(DT)="" DT=$H
+ S DT=$O(^DGN(N,POLE,DT+1),-1) Q:DT="" 0
+ Q 1
+ISL2(N,PL1,PL2,DT) ; Exists field level 2
+ S:$G(DT)="" DT=$H Q:PL2="" 1
+ S DT=$O(^DGN(N,PL1,PL2,DT+1),-1) Q:DT="" 0
+ Q 1
+SET(N,POLE,DT,R) 
+ S:+DT=0 DT=$H N DTPV,PR
+ S:POLE="dog_from"!(POLE="dog_to")!(POLE="init_date") R=$$DI^DTUTL(R)
+ S:POLE="progs" R=$$GPROGS(R)
+ S:POLE="progsa" R=$$GPROGS(R)
+ S:POLE="skdprog" R=$$GPROGS(R)
+ S DTPV=$O(^DGN(N,POLE,DT),-1),PR=""
+ S:$L(DTPV) PR=^(DTPV)
+ I $D(^(DT)),^(DT)'=R K ^(DT)
+ S:PR'=R ^(DT)=R
+ S DTPV=$O(^(DT)) I $L(DTPV),R=^(DTPV) K ^(DTPV)
+ D GL^IEXCH("^DGN",N)
+ S ^DGN=$H
+ Q
+NAME(N) ; Наименование договора
+ Q:N="" ""
+ S N=$O(^DGN(N,"shortname",$H+1),-1) Q:N="" "" Q ^(N)
+NAMEH(N,DT) ; Наименование на дату
+ Q:N="" ""
+ S DT=$O(^DGN(N,"shortname",DT+1),-1) Q:DT="" "" Q ^(DT)
+NAMEF(N) ; Полное наименование
+ Q:N="" ""
+ S N=$O(^DGN(N,"oname",$H+1),-1) Q:N="" "" Q ^(N)
+EXIST(N) ; Проверка договора на наличие
+ Q:N="" 0
+ Q:'$D(^DGN(N)) 0
+ Q:'$D(^(N,"shortname")) 0
+ Q 1
+CHECK(N,DT) ; Проверка на активность/наличие
+ Q:N="" 0
+ Q:'$D(^DGN(N)) 0
+ S:$G(DT)="" DT=$H
+ S DT=$O(^(N,"use",DT+1),-1) Q:DT="" 1 Q +^(DT)
+PrcIn(PRC) ; Прейскурант есть в договоре (возврат первого)
+ N N,F
+ S N="",F=0 F  S N=$O(^DGN(N)) Q:N=""  D  Q:F
+ .I $$ANYDTV(N,"price",PRC) S F=1 Q
+ .I $$ANYDTV(N,"cprice",PRC) S F=1 Q
+ .I $$ANYDTV(N,"pprice",PRC) S F=1 Q
+ .I $$ANYDTV(N,"kprice",PRC) S F=1 Q
+ .I $$ANYDTV(N,"sprice",PRC) S F=1 Q
+ .I $$ANYDTV(N,"dprice",PRC) S F=1 Q
+ Q N
+ANYDTV(N,FL,VAL) ; Значение есть хоть в каком значении поля на дату
+ N D
+ S D="" F  S D=$O(^DGN(N,FL,D)) Q:D=""  Q:^DGN(N,FL,D)=VAL 
+ Q D'=""
+PROGS(N,DT,BASE) ; Список всех используемых в договоре программ
+ ; BASE - только базовые программы
+ N R,D
+ S R=$$GET(N,"progs",DT)
+ Q:$G(BASE) R
+ S D=$$GET(N,"progsa",DT)
+ S:D'="" R=$S(R="":"",1:R_"|")_D
+ Q R
+DEL(N) ; Удалить договор
+ ; D MSG^RWU("Ошибка при удалении договора")
+ Q:N="" 
+ Q:$$LCL^NUSER("dgn","del")=0
+ I $$CHKSTCP^IRPAC(N) D MSG^RWU("К договору прикреплен контингент") Q
+ D K^ISSG("^DGN("_N_")")
+ K ^DGN(N)
+ D KGL^IEXCH("^DGN",N)
+ Q
+SDDOC(N) ; Файл договора 
+ I '$D(^DGN(N)) Q 
+ S DN=$$FMDOCNM^YDOCS("Текст договора, "_$$NAME(N),"Договор на мед. услуги","Медицинские договора")
+ N FIL S FIL="DBDIR/dgn/"_DN_"-1.rtf"
+ D SET^YDOCS(DN,"file",FIL)
+ D SET(N,"txtdogfil",+$H,DN)
+ D MSG^RWU(FIL)
+ Q
+SPDOC(N,FIL) ; Файл приложения
+ I '$D(^DGN(N)) Q
+ S DN=$$FMDOCNM^YDOCS("Текст приложения, "_$$NAME(N),"Договор на мед. услуги","Медицинские договора")
+ N FIL S FIL="DBDIR/dgn/"_DN_"-2.rtf"
+ D SET^YDOCS(DN,"file",FIL)
+ D SET(N,"txtprilfil",+$H,DN)
+ D MSG^RWU(FIL)
+ Q
+STXT ; Дополнительная информация по договору (описание по договору)
+ Q:$$LCL^NUSER("dgn","save")=0 
+ N %J,XML,XMLR,R,DT,DTP,I,PRG,IDX,F,MxS
+ K ^BUF($J,"stx")
+ S MxS=$S($ZV["MSM":7000,1:16384)
+ D ORH^RWU,OEV^XMLR("TAGST^YNDOG","TAGDT^YNDOG","")
+ F %J=1:1 S A=$$RA^RWU Q:%IFN["Z"  D REV^XMLR(A)
+ D CEV^XMLR,CR^RWU
+ 
+ S I=$G(^BUF($J,"stx","id"))
+ S DT=$$DIH^DTUTL($G(^BUF($J,"stx","savedate")))
+ S PRG=$$WD^TXTU(^BUF($J,"stx","prg"))
+ Q:I=""!(PRG="")
+ ; сравнение
+ S DTP=$O(^DGN(I,"texts",PRG,DT+1),-1),F=$S(DT="":0,1:1)
+ I F,$G(^DGN(I,"texts",PRG,DTP))'=$G(^BUF($J,"stx","txt")) S F=0 
+ I F S IDX="" F  S IDX=$O(^DGN(I,"texts",PRG,DTP,IDX)) Q:IDX=""  I $G(^(IDX))'=$G(^BUF($J,"stx","txt",IDX)) S F=0 Q
+ I F S IDX="" F  S IDX=$O(^BUF($J,"stx","txt",IDX)) Q:IDX=""  I $G(^(IDX))'=$G(^DGN(I,"texts",PRG,DTP,IDX)) S F=0 Q 
+ Q:F 
+ K ^DGN(I,"texts",PRG,DT)
+ M ^DGN(I,"texts",PRG,DT)=^BUF($J,"stx","txt")
+ D REGL^IEXCH("^DGN",I,"texts",PRG)
+ K ^BUF($J,"stx")
+ Q
+TAGST ; Start text tag
+ S A=%XM(2)
+ Q:A="xml"!(A="nb_console")!(A="fdogtxt")
+ S ^BUF($J,"stx",A)=""
+ Q
+TAGDT ; Tag data
+ S A=%XM(2)
+ Q:A="xml"!(A="nb_console")!(A="fdogtxt")
+ I A'="txt" S ^(A)=^BUF($J,"stx",A)_%XD  Q
+ S I=+$O(^BUF($J,"stx",A,""),-1)
+ I 'I S F=$G(^BUF($J,"stx",A)),N=$L(F),^(A)=F_$E(%XD,1,MxS-N),%XD=$E(%XD,MxS-N+1,99999)
+ F  Q:'$L(%XD)  S I=+$O(^BUF($J,"stx",A,""),-1),F=$G(^(I)) S:'I I=1 S:$L(F)=MxS I=I+1,F="" S N=$L(F),^(I)=F_$E(%XD,1,MxS-N),%XD=$E(%XD,MxS-N+1,99999)
+ Q
+GTXT(N,PRG,DT) ; Получить описание программы
+ I N=""!(PRG="") Q  
+ S DT=$$DIH^DTUTL(DT),PRG=$$WD^TXTU(PRG)
+ N I,R
+ D OWF^RWU(".txt")
+ F I="",1:1:99 S R=$$GETL2LN(N,"texts",PRG,DT,I) Q:R=""  D WC^RWU(R)
+ D C^RWU
+ Q
+DTXT(N,PRG,DT) ; Удалить описание программы
+ G:N=""!(PRG="") DTXTe
+ N DTPV
+ S DT=$$DIH^DTUTL(DT),PRG=$$WD^TXTU(PRG)
+ S DTPV=$O(^DGN(N,"texts",PRG,DT+1),-1) G:DTPV="" DTXTe
+ S:$L(^(DTPV)) ^(DT)=""
+ D KGL^IEXCH("^DGN",N,"texts",PRG)
+DTXTe D MSG^RWU($$DGNTXTS(N,DT))
+ Q
+LSTDT(N) ; Список измененных дат
+ N A,L,P,D
+ S (P,A)="" F  S P=$O(^DGN(N,P)) Q:P=""  S D="" F  S D=$O(^DGN(N,P,D)) Q:D=""  S L(D)=""
+ S D="" F  S D=$O(L(D)) Q:D=""  D
+ .S A=$S(A="":"",1:A_CR)_$$DT^DTUTL(D)
+ .S L=$G(^DGN(N,"log",D)) Q:L=""
+ .S A=A_", "_$$FIOSH^NUSER($P(L,"|",1))_" "_$$DTM^DTUTL($P(L,"|",2))
+ D MSG^RWU(A)
+ Q
+LST 
+ D OWF^RWU(".txt")
+ D LSTsys(0)
+ D C^RWU
+ Q
+LSTsys(MODE,NNUM) ; Простой список договоров
+ ; MODE - вывод только действующих в данном филиале
+ N N,C,H,L
+ S MODE=+$G(MODE)
+ I MODE S L=+$$^I("ilpu")
+ S (N,C)="",H=+$H F  S N=$O(^DGN(N)) Q:N=""  D
+ .Q:'$$CHECK(N,H)
+ .I MODE,'$$ISLPU^IINSC(N,H,L) Q 
+ .D WC^RWU(C_N_"|"_$S($G(NNUM):N_" ",1:"")_$$TAG^TXTU($$NAMEH(N,H)))
+ .S C=CR
+ Q
+GETNET(DGN,PL,DT) ; Network get
+ S DT=$$DIH^DTUTL($G(DT))
+ D MSG^RWU($$GET(DGN,PL,DT))
+ Q
+SKDTAB(ID,DT,STR) ; Загрузить таблицу скидок
+ N I,X,A
+ S STR=$$WD^TXTU(STR),A=""
+ F I=1:1:$L(STR,"|") S X=$P(STR,"|",I) D:X'=""
+ .S A=A_CR_X_"|"_$P(X,":",1)_"|"_$P(X,":",3)_"|"_$$NAME^IDSCN($P(X,":",4))_"|"_$$NAME^ISPRAV("tprice",$P(X,":",5))
+ D MSG^RWU(A)
+ Q
+iterator(fFLT,PROC) ; итератор с фильтрами
+ S PROC=PROC_"(X)"
+ N X S X="" F  S X=$O(^DGN(X)) Q:X=""  D @PROC
+ Q
+INIT ;
+ N R,I
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<fdog><skd>")
+ D LIST^IDSCN(1,1),W^RWU("</skd><cskd>")
+ D LIST^IDSCN(1,1),W^RWU("</cskd><ow>|"_CR)
+ D LSTNFs^YCONTR("cli"),W^RWU("</ow><pccst>")
+ D LSTs^NSPRAV("patccst"),W^RWU("</pccst><findvid>")
+ D LSTs^NSPRAV("dvid"),W^RWU("</findvid><dvid>")
+ D LSTs^NSPRAV("dvid"),W^RWU("</dvid><lpu>")
+ D LSTFILTs^YCONTR
+ D W^RWU("</lpu>")
+ D WTAGU^RWU("texts",$S($G(^cfg("pac-prog-htm")):"htm",1:""))
+ S R=$$LCL^NUSER("dgn","hide")
+ F I=1:1:$L(R,"|") D W^RWU("<"_$P(R,"|",I)_" visible=""no""/>")
+ D:$$LCL^IUSER("dgn","new")=0 W^RWU("<new_btn visible=""no""/>")
+ D W^RWU("</fdog></nb_console>")
+ D C^RWU
+ Q
+LOAD ; Import from file
+ ; ID|Имя|Коротк.имя|адрес|тел|конт.лицо|юр.адрес|номер.дог|инн|кпп|бик|корр.счет|счет|ВИд договора|примечание
+ N %J,A,DT,ID,NM,ADR,TEL,COM,CONT,R
+ S DT=+$H
+ D ORH^RWU
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU()) Q:%IFN["Z"  D:%J>1
+ .S A=$$DBLSP^TXTU(A),ID=$P(A,"|",1),NM=$$TRIM^TXTU($P(A,"|",2))
+ .S:ID="" ID=$O(^DGN(""),-1)+1
+ .S ADR=$P(A,"|",4),TEL=$P(A,"|",5),COM=$P(A,"|",15),CONT=$P(A,"|",6)
+ .D SET(ID,"ndog",DT,ID)
+ .D SET(ID,"oname",DT,NM)
+ .S X=$$TRIM^TXTU($P(A,"|",3)) S:X="" X=NM
+ .D SET(ID,"shortname",DT,X)
+ .D SET(ID,"use",DT,1)
+ .D:ADR'="" SET(ID,"addr",DT,ADR)
+ .D:TEL'="" SET(ID,"phone",DT,TEL)
+ .D:COM'="" SET(ID,"text",DT,COM)
+ .D:CONT'="" SET(ID,"fioo",DT,CONT)
+ .S X=$P(A,"|",7)
+ .D:X'="" SET(ID,"yaddr",DT,X)
+ .S X=$P(A,"|",8)
+ .D:X'="" SET(ID,"dognum",DT,X)
+ .S X=$P(A,"|",9)
+ .D:X'="" SET(ID,"inn",DT,X)
+ .S X=$P(A,"|",10)
+ .D:X'="" SET(ID,"kpp",DT,X)
+ .S X=$P(A,"|",11)
+ .D:X'="" SET(ID,"bik",DT,X)
+ .S X=$P(A,"|",12)
+ .D:X'="" SET(ID,"kors",DT,X)
+ .S X=$P(A,"|",13)
+ .D:X'="" SET(ID,"rsch",DT,X)
+ .S X=$P(A,"|",14)
+ .D:X'="" SET(ID,"dvid",DT,X)
+ D CR^RWU
+ Q
+EXP(DT,DVID,ALL) ; Экспорт списка договоров
+ ; DVID - вид договора
+ D OWF^RWU(".txt")
+ D WC^RWU("Код|Наименование|Краткое наименование|Адрес|Телефон|Контактное лицо|Юр.адрес|№ догвора|ИНН|КПП|БИК|Корр.счет|Расч.счет|Вид договора|Примечание")
+ N A,DT,ID,FL,R,DV
+ S DT=+$H
+ S ID="" F  S ID=$O(^DGN(ID)) Q:ID=""  D
+ .I 'ALL,$$GET(ID,"use",DT)=0 Q 
+ .S DV=$$GET(ID,"dvid",DT)
+ .I DVID'="",DVID'=DV Q 
+ .S A=ID
+ .F FL="oname","shortname","addr","phone","fioo","yaddr","dognum","inn","kpp","bik","kors","rsch","dvid","text" S A=A_"|"_$TR($$GET(ID,FL,DT),"|"_CR,"   ")
+ .D WC^RWU(CR_A)
+ D C^RWU
+ Q
+REGLCL ;
+ K ^LCLI("dgn")
+ S ^LCLI("dgn")="Договора"
+ S ^LCLI("dgn","save")="Сохранение (=0 - запрет)"
+ S ^LCLI("dgn","del")="Удаление (=0 - запрет)"
+ S ^LCLI("dgn","hide")="Скрывать контролы (имена через |)"
+ S ^LCLI("dgn","new")="Создание (=0 - запрет)"
+ Q
+INITDB 
+ S ^MN("root","dvid")="Вид договора"
+ S ^MN("root","dgtype")="Разделы договоров"
+ N I
+ D:'$D(^MN("dvid"))
+ .S I=$$NEWIDX^YISPRAV("dvid")
+ .s ^MN(I,0)="Страховая компания"
+ .s ^MN(I,1)="Страховая компания по предоплате"
+ .s ^MN(I,2)="Прямой"
+ .s ^MN(I,3)="Индивидуальный"
+ .s ^MN(I,4)="Корпоратив (Бартер)"
+ .s ^MN(I,5)="ОМС"
+ .s ^MN(I,6)="Льготный"
+ .s ^MN(I,7)="Прямой (предоплата)"
+ Q
+REGIPROC 
+ S ^IPROC("Система","Список договоров")="EXP_YNDOG,1,3,d,Дата отчета,t@net:NMLCR_NSPRAV(""dvid""),Вид договора,t@string:0/Действующие#0/Все,Показывать договора"
+ Q

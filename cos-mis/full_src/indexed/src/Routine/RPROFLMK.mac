@@ -1,0 +1,221 @@
+RPROFLMK ; Отчеты по ЛМК [ 10/10/2016  1:38 PM ]
+BYCATT(DS,DE,DGN,WRK) ; по категориям
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S:DGN=999 DGN="" S:WRK=999 WRK=""
+ N D,R,NI,U,STAT,F
+ D OWF^RWU(".txt")
+ D WC^RWU("Категория|Лиц|Пришедших")
+ S NI="" F  S NI=$O(^PROFP(NI)) Q:NI=""  D
+ .S D=+$O(^PROFP(NI,"n",DE+1),-1) Q:D<DS 
+ .I DGN'="",$$GET^IPAC(NI,"stc",D)'=DGN Q 
+ .I WRK'="",$$GET^IPAC(NI,"work",D)'=WRK Q 
+ .S R=$$GET^NPROF(NI,"lmk",D) Q:R="" 
+ .S D=DS-1 F  S D=$O(^PROFP(NI,"n",D)) Q:D=""!(D>DE)  D
+ ..S U="",F=0 F  S U=$O(^PROFP(NI,"n",D,U)) Q:U=""  I $P($G(^(U)),"|",3,6)'="" S F=1 Q
+ .S STAT(R,1)=$G(STAT(R,1))+1
+ .S:F STAT(R,2)=$G(STAT(R,2))+1
+ S R="" F  S R=$O(STAT(R)) Q:R=""  D WC^RWU(CR_$S(R=-1:"Не указано",1:$G(^PROFM("lmk",R)))_"|"_$G(STAT(R,1))_"|"_$G(STAT(R,2)))
+ D C^RWU
+ Q
+BYGR(DS,DE,DGN,WRK) ; по гражданству
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S:DGN=999 DGN="" S:WRK=999 WRK=""
+ N D,R,NI,U,STAT,F
+ D OWF^RWU(".txt")
+ D WC^RWU("Гражданство|Лиц|Пришедших")
+ S NI="" F  S NI=$O(^PROFP(NI)) Q:NI=""  D
+ .S D=+$O(^(NI,"n",DE+1),-1) Q:D<DS 
+ .I DGN'="",$$GET^IPAC(NI,"stc",D)'=DGN Q 
+ .I WRK'="",$$GET^IPAC(NI,"work",D)'=WRK Q 
+ .Q:$$GET^NPROF(NI,"lmk",D)="" 
+ .S R=$$GET^NPROF(NI,"nation",D) S:R="" R="-"
+ .S D=DS-1 F  S D=$O(^PROFP(NI,"n",D)) Q:D=""!(D>DE)  D
+ ..S U="",F=0 F  S U=$O(^PROFP(NI,"n",D,U)) Q:U=""  I $P($G(^(U)),"|",3,6)'="" S F=1 Q
+ .S STAT(R,1)=$G(STAT(R,1))+1
+ .S:F STAT(R,2)=$G(STAT(R,2))+1
+ S R="" F  S R=$O(STAT(R)) Q:R=""  D WC^RWU(CR_$S(R="-":"Не указано",1:R)_"|"_$G(STAT(R,1))_"|"_$G(STAT(R,2)))
+ D C^RWU
+ Q
+BYUSL(DS,DE,DGN,WRK) ; по услугам
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S:DGN=999 DGN="" S:WRK=999 WRK=""
+ N D,R,NI,U,STAT,P
+ D OWF^RWU(".txt")
+ D WC^RWU("Код|Наименование услуги|Назначено|Выполнено|Сумма")
+ S NI="" F  S NI=$O(^PROFP(NI)) Q:NI=""  D
+ .S D=+$O(^(NI,"n",DE+1),-1) Q:D<DS 
+ .I DGN'="",$$GET^IPAC(NI,"stc",D)'=DGN Q 
+ .I WRK'="",$$GET^IPAC(NI,"work",D)'=WRK Q 
+ .Q:$$GET^NPROF(NI,"lmk",D)="" 
+ .S P=$$GET^NPROF(NI,"prc",D)
+ .S:P="" P=+$$GET^YNDOG($$GET^IPAC(NI,"stc"),"pprice",D)
+ .S:P=0 P=+$G(^cfg("prof-price")) S:P=0 P=1
+ .S D=DS-1 F  S D=$O(^PROFP(NI,"n",D)) Q:D=""!(D>DE)  D
+ ..S U="" F  S U=$O(^PROFP(NI,"n",D,U)) Q:U=""  D
+ ...S F=$G(^(U)) Q:F=""  Q:$P(F,"|",3,6)="" 
+ ...S R=U_"|"_$E($$NAMEH^IPRICE(U,P,D),1,199)
+ ...S STAT(R,1)=$G(STAT(R,1))+1
+ ...S STAT(R,3)=$G(STAT(R,3))+$$PRICE^IPRICE(U,P)
+ ...S:$P(F,"|",3,6)'="" STAT(R,2)=$G(STAT(R,2))+1
+ S R="" F  S R=$O(STAT(R)) Q:R=""  D
+ .S U=$P(R,"|",1),P=$P(R,"|",2)
+ .D WC^RWU(CR_U_"|"_P_"|"_$G(STAT(R,1))_"|"_$G(STAT(R,2))_"|"_$G(STAT(R,3)))
+ D C^RWU
+ Q
+BYGRUL(DS,DE,DGN,WRK) ; по гражданству и услугам
+ Q
+REZ(DS,DE,DGN,WRK) ; по результатам гигиенической подготовки
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D OWF^RWU(".htm")
+ N R,NI,D,STAT,X,z
+ S R="" F  S R=$O(^PROFM("lmk",R)) Q:R=""  S STAT(R,3)=0
+ S z="<td><div align=""center"">"
+ S NI="" F  S NI=$O(^PROFP(NI)) Q:NI=""  D
+ .S D=+$O(^(NI,"n",DE+1),-1) Q:D<DS 
+ .I DGN'="" Q:$$GET^IPAC(NI,"stc",D)'=DGN 
+ .I WRK'="" Q:$$GET^IPAC(NI,"work",D)'=WRK 
+ .S R=$$GET^NPROF(NI,"lmk",D) Q:R="" 
+ .S D=DS-1 F  S D=$O(^PROFP(NI,"n",D)) Q:D=""!(D>DE)  D
+ ..S U="",F=0
+ ..F  S U=$O(^PROFP(NI,"n",D,U)) Q:U=""  D
+ ...S X=$G(^(U)) Q:$P(X,"|",3,6)="" 
+ ...S:U=23501 STAT(R,3)=$G(STAT(R,3))+1,STAT(R,7)=$G(STAT(R,7))+1
+ ...S:U=23502 STAT(R,4)=$G(STAT(R,4))+1
+ ...S:U=23503 STAT(R,4)=$G(STAT(R,4))+1
+ ...S:U=23504 STAT(R,8)=$G(STAT(R,8))+1
+ ...S:U=23506 STAT(R,4)=$G(STAT(R,4))+1
+ D FILHTM("HTML1^RPROFLMK",49)
+ S R="" F  S R=$O(STAT(R)) Q:R=""  D
+ .S STAT(R,6)=$G(STAT(R,3))+$G(STAT(R,4))+$G(STAT(R,6))
+ .F X=3:1:8 S STAT(12,X)=$G(STAT(12,X))+$G(STAT(R,X))
+ .S D="<tr class=""u12"">"_z_R_"</div></td><td>"_$S(R=12:"ИТОГО",1:$G(^PROFM("lmk",R)))_"</td>"
+ .F X=3:1:8 S D=D_z_(+$G(STAT(R,X)))_"</div></td>"
+ .D WC^RWU(CR_D_"</tr>") 
+ D FILHTM("HTML2^RPROFLMK",34)
+ D C^RWU
+ Q
+FILHTM(LABEL,TO) 
+ N I,R,K,E,C,X
+ F I=1:1:TO D
+ .X "S R=$T("_$P(LABEL,"^",1)_"+"_I_"^"_$P(LABEL,"^",2)_")"
+ .S R=$E(R,3,999)
+ .F  S K=$F(R,"!_") Q:K=0  S E=$F(R,"_!",K) Q:E=0  D
+ ..S C=$E(R,K,E-3),X=""
+ ..S:C="YEAR" X=$$YEAR^DTUTL(DE),C=""
+ ..S:C="MONTH" X=$$MNNM^DTUTL($$MONTH^DTUTL(DE)),C=""
+ ..S:C'="" X=$$^I(C)
+ ..S $E(R,K-2,E-1)=X
+ .D WC^RWU(CR_R)
+ Q
+LSTWRK(DTT,WRKS) ; По месту работы список
+ S DTT=$$DIH^DTUTL(DTT)
+ N D,R,NI,U,STAT,F,JJ
+ D OWF^RWU(".txt")
+ D WC^RWU("Расписка|;")
+ D WC^RWU(CR_$$DT^DTUTL(DTT)_"|"_WRKS)
+ S WRKS=$$UL^TXTU(WRKS),JJ=1
+ S NI="" F  S NI=$O(^PROFP(NI)) Q:NI=""  D
+ .Q:'$D(^PROFP(NI,"lmk",DTT))
+ .Q:$$UL^TXTU($G(^PROFP(NI,"work",DTT)))'[WRKS  
+ .D WC^RWU(CR_JJ_"|"_$$FIO^IPAC(NI))
+ D W^RWU(CR_CR_CR)
+ D WC^RWU(CR_"|Пересчитал доставил______шт______________дата____________ подпись")
+ D W^RWU(CR)
+ D WC^RWU(CR_"|Пересчитал принял _______шт______________дата____________ подпись")
+ D W^RWU(CR)
+ D WC^RWU(CR_"|Исполнитель ; Козлова С.А________")
+ D C^RWU
+ Q
+REGIPROC 
+ N D S D="Профмедицина"
+ S ^IPROC(D,"ЛМК по категориям")="BYCATT_RPROFLMK,1,4,d,Дата начала периода,d,Дата окончания периода,t@storage:dog,Договор,t@storage:mectorab@1,Место работы"
+ S ^IPROC(D,"ЛМК по гражданству")="BYGR_RPROFLMK,1,4,d,Дата начала периода,d,Дата окончания периода,t@storage:dog,Договор,t@storage:mectorab@1,Место работы"
+ S ^IPROC(D,"ЛМК по услугам")="BYUSL_RPROFLMK,1,4,d,Дата начала периода,d,Дата окончания периода,t@storage:dog,Договор,t@storage:mectorab@1,Место работы"
+ S ^IPROC(D,"ЛМК по результатам гигиенической подготовки")="REZ_RPROFLMK,3,4,d,Дата начала периода,d,Дата окончания периода,t@storage:dog,Договор,t@storage:mectorab@1,Место работы"
+ S ^IPROC(D,"Список в КДЛ по месту работы")="LSTWRK_RPROFLMK,1,2,d,Дата,d,Место работы,s"
+ Q
+HTML1 ; 49
+ ;<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+ ;<html>
+ ;<head>
+ ;<title>Untitled	Document</title>
+ ;<meta http-equiv="Content-Type" content="text/html; charset=windows-1251">
+ ;<style type="text/css">
+ ;<!--
+ ;.u12 { font-family: "Times New Roman", Times, serif; font-size: 12px; }
+ ;.u12b { font-family: "Times New Roman", Times, serif; font-size: 12px; font-weight: bold; }
+ ;.u10 { font-family: "Times New Roman", Times, serif; font-size: 10px; }
+ ; -->
+ ;</style>
+ ;</head>
+ ;<body>
+ ;<p align="center" class="u12b">ОТЧЕТ о результатах профессиональной гигиенической подготовки за !_MONTH_! месяц !_YEAR_! год </p>
+ ;<table width="100%" border="0" cellspacing="0" cellpadding="0">
+ ; <tr class="u12"> 
+ ;   <td width="52%">Организация !_ifname_!</td>
+ ;   <td colspan="2"> 
+ ;     <p>Руководитель_________/ !_igldr_!</p></td>
+ ; </tr>
+ ; <tr class="u12"> 
+ ;   <td>&nbsp;</td>
+ ;   <td width="25%">подпись</td>
+ ;   <td width="23%">М.П.</td>
+ ; </tr>
+ ;</table>
+ ;<br>
+ ;<table width="100%" border="1" cellspacing="0" cellpadding="0">
+ ; <tr class="u12"> 
+ ;   <td width="3%"><div align="center">N</div></td>
+ ;   <td width="43%">Группы контингентов связанные с:</td>
+ ;   <td width="9%"><div align="center">Проведено первичных аттестаций</div></td>
+ ;   <td width="9%"><div align="center">Проведено очередных аттестаций</div></td>
+ ;   <td width="9%"><div align="center">Не аттестовано по знаниям</div></td>
+ ;   <td width="9%"><div align="center">ВСЕГО обучено</div></td>
+ ;   <td width="9%"><div align="center">Выдано личных медицинских книжек</div></td>
+ ;   <td width="9%"><div align="center">Выдано учебных пособий</div></td>
+ ; </tr>
+ ; <tr class="u12">
+ ;   <td><div align="center">1</div></td>
+ ;   <td><div align="center">2</div></td>
+ ;   <td><div align="center">3</div></td>
+ ;   <td><div align="center">4</div></td>
+ ;   <td><div align="center">5</div></td>
+ ;   <td><div align="center">6</div></td>
+ ;   <td><div align="center">7</div></td>
+ ;   <td><div align="center">8</div></td>
+ ; </tr>
+HTML2 ; 34
+ ;</table>
+ ;<br>
+ ;<table width="100%" border="1" cellspacing="0" cellpadding="0">
+ ; <tr class="u12"> 
+ ;   <td width="16%">&nbsp;</td>
+ ;   <td width="14%"><div align="center">Остаток на начало отчетного месяца</div></td>
+ ;   <td width="14%"><div align="center">Получено</div></td>
+ ;   <td width="14%"><div align="center">Выдано</div></td>
+ ;   <td width="14%"><div align="center">Выдано дубликатов ЛМК</div></td>
+ ;  <td width="14%"><div align="center">Брак</div></td>
+ ;   <td width="14%"><div align="center">Остаток на конец отчетного месяца</div></td>
+ ; </tr>
+ ;<tr class="u12"> 
+ ;   <td>ЛМК</td>
+ ;   <td>&nbsp;</td>
+ ;   <td>&nbsp;</td>
+ ;   <td>&nbsp;</td>
+ ;   <td>&nbsp;</td>
+ ;   <td>&nbsp;</td>
+ ;   <td>&nbsp;</td>
+ ; </tr>
+ ; <tr class="u12"> 
+ ;   <td>Голограммы</td>
+ ;   <td>&nbsp;</td>
+ ;   <td>&nbsp;</td>
+ ;   <td>&nbsp;</td>
+ ;   <td>&nbsp;</td>
+ ;   <td>&nbsp;</td>
+ ;   <td>&nbsp;</td>
+ ; </tr>
+ ;</table>
+ ;<p class="u12">Дата____________ Исполнитель______________ тел !_itel_!</p>
+ ;</body>
+ ;</html>

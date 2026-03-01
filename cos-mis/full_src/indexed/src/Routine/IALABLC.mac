@@ -1,0 +1,34 @@
+IALABLC ; AlphaLab local client import [ 10/22/2015  12:11 PM ]
+IMP 
+ N XML,FF,FI,FO,BD,DI,NI,VR,OT,DT,ULST,U,UX,P,X
+ 
+ S (FF,FI,FO,BD,DI)=""
+ D OEVH^XMLU("impS^IALABLC","impD^IALABLC","")
+ S BD=$$DIISO^DTUTL(BD)
+ 
+ S VR=$$FNDFIO^NVFIND("Процедурная Мед Сестра")
+ S:VR="" VR=$$FNDFIO^NVFIND("Процедурный кабинет") Q:VR="" 
+ S OT=$$OTD^IKADRY(VR),DT=+$H
+ S NI=$$GETNIB^IPACFND(FF,FI,FO,BD,"",1) Q:NI=""
+ S P=$$CORCP^IPRICET($$GET^IINSC($$GET^IPAC(NI,"stc",DT),"price",DT))
+ S U="" F  S U=$O(ULST(U)) Q:U=""  D
+ .S UX=U
+ .I '$D(^CN(U)),$D(^CNA(U)) S UX=^(U)
+ .Q:'$$CHECK^IPRICE(UX,P)
+ .Q:$$FNDUSL^IUSL(NI,DT,UX,"",0,0)'="" 
+ .S X=$$ADD^IUSL(VR,DT,OT,NI,UX,DI,"","")
+ .S X=$$SETSTAT^IUSL(VR,DT,OT,X,"w")
+ D MSG^RWU("OK")
+ Q
+impS 
+ Q
+impD ; XML data tag
+ S X=%XM(2)
+ Q:X="xml"!(X="nb_console")  Q:%XD="" 
+ S:X="PatientLastName" FF=$G(FF)_%XD
+ S:X="PatientFirstName" FI=$G(FI)_%XD
+ S:X="PatientMiddleName" FO=$G(FO)_%XD
+ S:X="PatientBirthDate" BD=$G(BD)_%XD
+ S:X="PatientDiag" DI=$G(DI)_%XD
+ I X="ServiceCode" S ULST(%XD)=""
+ Q

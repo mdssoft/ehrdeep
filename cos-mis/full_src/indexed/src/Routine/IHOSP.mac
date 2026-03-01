@@ -1,0 +1,67 @@
+IHOSP ; Госпитализации [ 04/18/2023  3:07 PM ]
+IN(NI,DT) ; Госпитализация
+ N KX,ID,NUM,LP,R
+ S KX=$O(^HOSPI("n",NI,(DT+1)_"|"),-1)
+ I $P(KX,"|",1)<($H-100) S KX=""
+ I KX'="",'$$IsNIB^NHOSP(NI,$P(KX,"|",1)) S KX="" 
+ Q:KX'="" 0
+ S LP=+$$^I("ilpu")
+ S ID=$$NNUM^IHOSP(DT)
+ S NUM=$$GET^IINKR("hosp","num") S:$G(^cfg("hosp","numbylpu")) NUM=NUM_"/"_LP
+ S R=NI_"|"_NUM_"|"_0_"|"_$H
+ S ^HOSP(DT,ID)=R
+ S:$G(^HOSP(DT,ID,"nn"))="" ^HOSP(DT,ID,"nn")=$$GET^IINKR("hosp","nn")
+ S ^HOSPI("n",NI,DT_"|"_ID)=""
+ S ^HOSPI("ns",NUM)=DT_"|"_ID
+ S ^HOSP(DT,ID,"log")=$$USRH^IUSER()
+ S ^HOSPI("in",DT_"|"_ID)=""
+ Q NUM
+OUT(NI,DTX) ; Выбытие
+ N ID,R,KX
+ S KX=$O(^HOSPI("n",NI,""),-1)
+ S DT=$P(KX,"|",1),ID=$P(KX,"|",2)
+ Q:ID="" 
+ S R=^HOSP(DT,ID)
+ S $P(R,"|",5)=$H
+ S $P(R,"|",13)=1
+ S $P(R,"|",14)=1
+ S ^HOSP(DT,ID)=R
+ S ^HOSP(DT,ID,"gs")="|"
+ S ^HOSP(DT,ID,"log")=$$USRH^IUSER()
+ K ^HOSPI("in",DT_"|"_ID)
+ Q
+NNUM(DT) ; Создать новый номер
+ ; DT - дата госпитализации
+ N C,X,I
+ S X=$$^I("ilpu"),C=$$RGID^I(X)
+ S C=$S(+C:"."_C,1:"")
+ L +^HOSP(DT)
+ S I=$P($O(^HOSP(DT,""),-1),".",1)+1_C
+ F  Q:'$D(^HOSP(DT,I))  S I=$P(I,".",1)+1_C
+ S ^(I)=""
+ L -^HOSP(DT)
+ Q I
+SETOP(KEY,ID) ; Присвоить ID операции
+ N DT,I,X
+ S DT=$P(KEY,"@",1),I=$P(KEY,"@",2),ID=$TR(ID,".","@")
+ S X="" F  S X=$O(^HOSP(DT,I,"s",X)) Q:X=""  I ^(X)=ID Q 
+ Q:X'="" 
+ S X=$O(^HOSP(DT,I,"s",""),-1)+1,^(X)=ID
+ D GL^IEXCH("^HOSP",DT,I,"s",X)
+ Q
+DELOP(KEY,ID) ; Удалить ID операции
+ N DT,I,X
+ S DT=$P(KEY,"@",1),I=$P(KEY,"@",2),ID=$TR(ID,".","@")
+ S X="" F  S X=$O(^HOSP(DT,I,"s",X)) Q:X=""  I ^(X)=ID K ^(X) D KGL^IEXCH("^HOSP",DT,I,"s",X)
+ Q
+GETL(NI,FL,DTX) ; Получить поле по последней госпитализации
+ N KX,DT,ID
+ S KX=$O(^HOSPI("n",NI,(DTX+1)_"|"),-1) Q:KX="" ""
+ S DT=$P(KX,"|",1),ID=$P(KX,"|",2)
+ I FL="dt" Q $$DT^DTUTL(DT)
+ I FL="de" Q $$DT^DTUTL($P(^HOSP(DT,ID),"|",5))
+ I FL="dtt" Q $$TM^DTUTL($P(^HOSP(DT,ID),"|",4))
+ I FL="det" Q $$TM^DTUTL($P(^HOSP(DT,ID),"|",5))
+ I FL="num" Q $P(^HOSP(DT,ID),"|",2)
+ I FL="diag" Q $P(^HOSP(DT,ID),"|",7)
+ Q ""

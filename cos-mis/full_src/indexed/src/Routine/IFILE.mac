@@ -1,0 +1,37 @@
+IFILE ; file IO for IMSGHUB [ 04/27/2015  3:09 PM ]
+DOSEND(ID) ; for IMSGHUB
+ N IDX,IO,TO,R,DIR,I
+ S DIR=$G(^MSGHUB("file",ID,"outpath")) Q:DIR="" 
+ S IDX="" F  S IDX=$O(^MSGOUT("file",ID,IDX)) Q:IDX=""  D
+ .S R=^(IDX),TO=$P(R,"|",2)
+ .Q:$G(^(IDX,"chkfn"))'=""  Q:$G(^("wait")) 
+ .Q:$$timeout^IMSGHUB("file",ID,IDX) 
+ .S IO=$$OW^FIL(DIR_TO) Q:IO="" 
+ .U IO
+ .S I="" F  S I=$O(^MSGOUT("file",ID,IDX,"data",I)) Q:I=""  W ^(I)
+ .C IO
+ .D endsend^IMSGHUB("file",ID,IDX)
+ Q
+DORECV(ID) ; for IMSGHUB
+ N DIR,DLIST,PP,a,fn,file,IO,R
+ S DIR=$G(^MSGHUB("file",ID,"path"))
+ Q:DIR=""
+ S PP=$G(^("recvfn"))
+ D DIR^FIL(DIR,"DLIST")
+ If '$D(DLIST) Q
+ Set fn=""
+ For  s fn=$O(DLIST(fn)) Quit:fn=""  D 
+ .s file=DIR_fn
+ .s IO=$$OR^FIL(file)
+ .D OWF^RWU("hpar")
+ .U IO F  R R Q:$$ST^FIL()=0  D:R'="" W^RWU(R)
+ .D C^RWU
+ .C IO U 0
+ .D DEL^FIL(file)
+ .q:PP=""
+ .s a="D "_PP
+ .X a
+ Q
+INITDB 
+ S ^MSGHUB("file")="IFILE"
+ Q

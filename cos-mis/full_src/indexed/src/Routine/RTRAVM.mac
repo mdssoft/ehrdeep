@@ -1,0 +1,55 @@
+RTRAVM ; Отчеты по травмам [ 12/12/2016  11:22 PM ]
+SVD(DS,DE,LPU) ; Сведения о травмах
+ N DT,STT,LST,I,TAB,R,X1,X2,X3,NI,SS
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S LPU=$G(LPU)
+ S:'+$$FR^I() LPU=$$^I("ilpu")
+ S I="" F  S I=$O(^EPRSP("flg",I)) Q:I=""  I I'="travm",I["travm" S LST(I)=""
+ D ITERATE^IUSLD("SVDp^RTRAVM(VR,OT,DT,ID)",DS,DE,,,LPU)
+ 
+ D OWF^RWU(".txt")
+ D WC^RWU("Вид травмы "_$$TXTP^DTUTL(DS,DE)_"|Мужчин|Женщин|Не опред.|Всего случаев")
+ S I="" F  S I=$O(LST(I)) Q:I=""  D
+ .S X1=$G(TAB(I,1)),X2=$G(TAB(I,2)),X3=$G(TAB(I,0))
+ .D WC^RWU(CR_^EPRSP("flg",I,"nf")_"|"_X1_"|"_X2_"|"_X3_"|"_(X1+X2+X3))
+ .S SS(1)=$G(SS(1))+X1,SS(2)=$G(SS(2))+X2,SS(3)=$G(SS(3))+X3
+ D:$D(SS) WC^RWU(CR_"Итого|"_"|"_SS(1)_"|"_SS(2)_"|"_SS(3)_"|"_(SS(1)+SS(2)+SS(3)))
+ D C^RWU
+ Q
+SVDp(VR,OT,DT,ID) 
+ Q:"wd"[$$GETSTAT^IUSL(VR,DT,OT,ID) 
+ S STT=$$GETFLG^IUSL(VR,DT,OT,ID) Q:STT'["travm"
+ S NI=$$GETNIB^IUSL(VR,DT,OT,ID)
+ S X2=+$$GET^IPAC(NI,"pol",DT)
+ F I=1:1:9 S X1=$P(STT,"|",I) I X1["travm" S TAB(X1,X2)=$G(TAB(X1,X2))+1
+ Q
+PLST(DS,DE,OT,LPU) ; Журнал регистрации травм
+ N I,LST,STT,DIA,VTT,NI
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S LPU=$G(LPU)
+ S:'+$$FR^I() LPU=$$^I("ilpu")
+ S I="" F  S I=$O(^EPRSP("flg",I)) Q:I=""  I I'="travm",I["travm" S LST(I)=""
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|№ И.Б.|Пациенты "_$$TXTP^DTUTL(DS,DE)_"|Дата|Вид травмы|Диагноз|Врач")
+ D ITERATE^IUSLD("PLSTp^RTRAVM(VR,OT,DT,ID)",DS,DE,,OT,LPU)
+ D C^RWU
+ Q
+PLSTp(VR,OT,DT,ID) 
+ S STT=$$GETFLG^IUSL(VR,DT,OT,ID) Q:STT'["travm"
+ Q:"wd"[$$GETSTAT^IUSL(VR,DT,OT,ID) 
+ S NI=$$GETNIB^IUSL(VR,DT,OT,ID)
+ S DIA=$$GETDI^IUSL(VR,DT,OT,ID)
+ S VTT=$$exFLG(STT,"travm")
+ D WC^RWU(CR_NI_"|"_NI_"|"_$$FIO^IPAC(NI)_"|"_$$DT2^DTUTL(DT)_"|"_^EPRSP("flg",VTT,"nf")_"|"_$$NAME^YMKB10(DIA)_"|"_$$FIOSH^IKADRY(VR))
+ Q
+exFLG(X,T) ; Выделить флаг по включению текста
+ N I,R,Z
+ S Z=""
+ F I=1:1:99 S R=$P(X,"|",I) Q:R=""  I R[T S Z=R Q
+ Q Z
+REGIPROC 
+ N F
+ S F=+$$FR^I()
+ S ^IPROC("Медстатистика","Сводка по травмам")="SVD_RTRAVM,1,"_$S(F:3,1:2)_",d,Начальная дата,d,Конечная дата"_$S(F:",t@storage:lpu,Филиал",1:"")
+ S ^IPROC("Медстатистика","Журнал регистрации травм")="PLST_RTRAVM,100,"_$S(F:4,1:3)_",d,Начальная дата,d,Конечная дата,te@storage:otd@1,Отделение"_$S(F:",t@storage:lpu,Филиал",1:"")
+ Q

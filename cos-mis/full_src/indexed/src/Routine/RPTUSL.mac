@@ -1,0 +1,891 @@
+RPTUSL ; Отчет по услугам [ 11/29/2023  1:34 AM ]
+INIT ; Инициализация формы и справочников
+ N FL,NM,C,P
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<rptusl><fl>")
+ S (FL,C)="" F  S FL=$O(^SRPTUSLM("out",FL)) Q:FL=""  D WC^RWU(C_FL_"|"_^(FL)) S C=CR
+ D W^RWU("</fl><dofl>")
+ D WC^RWU("NIk:xpatient:patient|Пациент")
+ D WC^RWU(CR_"NIk:mhist:env:pac|ЭМК")
+ D WC^RWU(CR_"NIk:nzlist:env:pac|Лист назначений")
+ D WC^RWU(CR_"NIk:pacrasp:patient|Расписание пациента")
+ D WC^RWU(CR_"NIk:tth:env:pac|Краткий эпикриз")
+ D WC^RWU(CR_"NIk:pdigest:env:pac|Дайджест пациента")
+ D WC^RWU(CR_"NIk:ksopac:env:pac|Платежи пациента")
+ D W^RWU("</dofl><ucls>")
+ S FL="kss|Касса"_CR_"!kss|Не касса"
+ S FL=FL_CR_"grn|Гарант. письмо"_CR_"!grn|Не гарант. письмо"
+ S FL=FL_CR_"nop|Неоплачиваемо"_CR_"!nop|Не неоплачиваемо"
+ S FL=FL_CR_"acu|Острое сост."_CR_"!acu|Не острое сост."
+ S FL=FL_CR_"npg|Игнор. программы"_CR_"!npg|Не игнор. программы"
+ S FL=FL_CR_"npd|Игнор. диагноз"_CR_"!npd|Не игнор. диагноз"
+ D WC^RWU(FL)
+ S FL=""
+ F  S FL=$O(^EPRSP("flg",FL)) Q:FL=""  S NM=$G(^(FL,"nf")) I NM'="",FL'="kss",FL'="grn",FL'="nop",FL'="acu",FL'="npg",FL'="npd" D WC^RWU(CR_FL_"|"_NM_CR_"!"_FL_"|Не "_NM)
+ D W^RWU("</ucls><pcls>")
+ S (FL,C)=""
+ F  S FL=$$NEXT^ISPRAV("pricecls",FL) Q:FL=""  S NM=$$NAME^ISPRAV("pricecls",FL) D WC^RWU(C_FL_"|"_NM_CR_"!"_FL_"|Не "_NM) S C=CR
+ D W^RWU("</pcls><lpu>")
+ D LSTFIsys^YCONTR("")
+ D W^RWU("</lpu><roles>")
+ D LSTs^NROLES("")
+ D W^RWU("</roles><fld>")
+ D LSTs^NSPRAV("rptuslfld")
+ D W^RWU("</fld>")
+ S P=$$PRC^IINSC("","",+$H,1) ; kss
+ D WTAGD^RWU("price",P)
+ D WTAGD^RWU("cuprice",P)
+ D W^RWU("</rptusl></nb_console>")
+ D C^RWU
+ Q
+LST ; Список отчетов
+ D LSTF("")
+ Q
+LSTF(STR) ; Список отчетов с поиском
+ N I,C,R,RR,A,F,FC,LL
+ S STR=$$UL^TXTU($$TRIM^TXTU($$WD^TXTU(STR)))
+ D OWF^RWU(".txt")
+ S (I,C)="",RR="|"_$$ROLE^NUSER()_"|"
+ F  S I=$O(^SRPTUSL(I)) Q:I=""  D
+ .S R=^(I),A=$G(^(I,"roles"))
+ .I A'="",("|"_A_"|")'[RR Q  ; нет прав для просмотра
+ .S F=+$G(^("fld"))
+ .I STR'="",$$UL^TXTU(R)'[STR Q 
+ .S LL(F,I)=R
+ S F="" F  S F=$O(LL(F)) Q:F=""  D
+ .I F D WC^RWU(C_"|"_$$NAME^ISPRAV("rptuslfld",F)) S C=CR
+ .S FC=$S(F:$C(9),1:"")
+ .S I="" F  S I=$O(LL(F,I)) Q:I=""  D
+ ..D WC^RWU(C_FC_I_"|"_LL(F,I))
+ ..S C=CR 
+ D C^RWU
+ Q
+L(ID) ; Загрузить параметры отчета
+ Q:ID=""  Q:'$D(^SRPTUSL(ID)) 
+ N R,FL,I,X,RX,RXX,PRM,K,LST,I
+ K ^JOB(%JOB,"rptusl","t") ; clear temp buf.
+ S ^JOB(%JOB,"rptusl","id")=ID
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<rptusl>")
+ S R=^SRPTUSL(ID)
+ D WTAGDC^RWU("id",ID)
+ D WTAGDC^RWU("infolabel",R)
+ D WTAGDC^RWU("nm",R)
+ F FL="df","dt","otd","spec","lpu","pid","text","roles","prnpt","ro","fld" D WTAGDC^RWU(FL,$G(^SRPTUSL(ID,FL)))
+ S R=$G(^SRPTUSL(ID,"vr")),K=""
+ F I=1:1 S X=$P(R,"|",I) Q:X=""  S K=$S(K="":"",1:K_CR)_X_"|"_$$FIO^IKADRY(X)
+ D WTAGC^RWU("vr",K)
+ S K=""
+ ; загрузка таблицы колонок и фильтров
+ S R="" F  S R=$O(^SRPTUSL(ID,"tab",R)) Q:R=""  S X=^(R),LST(X)=R
+ 
+ S X="" F  S X=$O(LST(X)) Q:X=""  D
+ .S R=LST(X),K=$S(K="":"",1:K_CR)_R_"|"_$S(R=0:"Основной фильтр таблицы",1:$G(^SRPTUSL(ID,"tab",R,"flnm")))
+ .F FL="flnm","fl","flagr","ucls","pcls","usls","flsym","diag","psumm","psummi","fltexe","dfnexe","dofl","rfnx","rfnln" S ^JOB(%JOB,"rptusl","t",R,FL)=$$DW^TXTU($G(^SRPTUSL(ID,"tab",R,FL)))
+ .S (FL,RX)="" F  S FL=$O(^SRPTUSL(ID,"tab",R,"acl",FL)) Q:FL=""  S RX=RX_CR_FL_"|"_^(FL)
+ .S ^JOB(%JOB,"rptusl","t",R,"acl")=RX ; аналитические коды
+ .S I="",RX="x" F  S I=$O(^SRPTUSL(ID,"tab",R,"flt",I)) Q:I=""  D
+ ..S FL=^(I),RX=RX_CR_FL_"|",FX=""
+ ..S PRM=$P(FL,"@",1),$P(FX,"|",1)=$S(PRM="":"",$E(PRM)="=":$E(PRM,2,99),$D(^SRPTUSLM("out",PRM)):^(PRM),1:^SRPTUSLM("prm",PRM))
+ ..S PRM=$P(FL,"@",2),$P(FX,"|",2)=$S(PRM="":"",1:^SRPTUSLM("oper",PRM))
+ ..S PRM=$P(FL,"@",3),$P(FX,"|",3)=$S(PRM="":"",$E(PRM)="=":$E(PRM,2,99),$D(^SRPTUSLM("out",PRM)):^(PRM),1:^SRPTUSLM("prm",PRM))
+ ..S PRM=$P(FL,"@",4),$P(FX,"|",4)=$S(PRM="":"",1:^SRPTUSLM("func",PRM))
+ ..S RX=RX_FX
+ .S ^JOB(%JOB,"rptusl","t",R,"flt")=$$DW^TXTU(RX) ; фильтры
+ 
+ S:'$L(K) K="0|Основной фильтр таблицы"
+ D WTAGC^RWU("tab",K)
+ 
+ K LST,K
+ D WTAGC^RWU("descr",$G(^SRPTUSL(ID,"descr")))
+ D W^RWU("</rptusl></nb_console>")
+ D C^RWU
+ Q
+MK ; Создать новый отчет
+ K ^JOB(%JOB,"rptusl")
+ Q
+DELRPT(ID,NLST) ; Удалить отчет
+ ; NLST - без вывода списка
+ Q:ID="" 
+ S NLST=$G(NLST)
+ I $$LCL^IUSER("rptusl","del")=0 D:'NLST LST D:NLST MSG^RWU("Нет прав на удаление") Q
+ I $G(^cfg("rptusl","backup")) M ^SRPTUSLB($H,ID)=^SRPTUSL(ID)
+ K ^SRPTUSL(ID)
+ D KGL^IEXCH("^SRPTUSL",ID)
+ D:'NLST LST
+ Q
+S ; Сохранить параметры отчета
+ D RBUFH^YIXMLRR(1)
+ D W
+ D CLOSE^YIXMLRR
+ Q
+W ; Запись
+ N R,RR,NBC,ID,FL,I,X,K,A,IDX
+ S NBC="nb_console",ID=$G(XML(NBC,"rptusl","id"))
+ I ID'="",$$LCL^IUSER("rptusl","save")=0 D MSG^RWU("Изменение отчета запрещено - нет прав.") Q 
+ I ID'="",$G(^SRPTUSL(ID,"ro")),$G(XML(NBC,"rptusl","ro")) D MSG^RWU("Сохранение отчета запрещено.") Q
+ I ID="",$$LCL^IUSER("rptusl","new")=0 D MSG^RWU("Создание отчета запрещено - нет прав.") Q 
+ I ID="" L ^SRPTUSL S ID=$O(^SRPTUSL(""),-1)+1,^(ID)="" L -^SRPTUSL
+ S R=$G(XML(NBC,"rptusl","nm"))
+ S:R="" R="Новый отчет "_ID
+ S ^SRPTUSL(ID)=R
+ F FL="df","dt","otd","spec","lpu","pid","text","roles","prnpt","ro","fld" S ^SRPTUSL(ID,FL)=$G(XML(NBC,"rptusl",FL))
+ S R=$G(XML(NBC,"rptusl","vr")),RR=""
+ F I=1:1 S X=$P(R,CR,I) Q:X=""  S $P(RR,"|",I)=X
+ S ^SRPTUSL(ID,"vr")=RR
+ ; таблица и фильтры
+ S R=$G(XML(NBC,"rptusl","tab"))
+ K ^SRPTUSL(ID,"tab")
+ F I=1:1 S X=$P(R,CR,I) Q:X=""  D
+ .S IDX=$P(X,"|",1)
+ .S ^SRPTUSL(ID,"tab",IDX)=I-1
+ .F FL="flnm","fl","flagr","flsym","ucls","pcls","usls","diag","psumm","psummi","fltexe","dfnexe","price","dofl","rfnx","rfnln" S ^SRPTUSL(ID,"tab",IDX,FL)=$$WD^TXTU($G(^JOB(%JOB,"rptusl","t",IDX,FL)))
+ .S X=$G(^JOB(%JOB,"rptusl","t",IDX,"acl")) ; аналит. коды
+ .F K=2:1 S A=$$WD^TXTU($P(X,CR,K)) Q:A=""  S:$P(A,"|",1)'="" ^SRPTUSL(ID,"tab",IDX,"acl",$P(A,"|",1))=$P(A,"|",2)
+ .S X=$G(^JOB(%JOB,"rptusl","t",IDX,"flt")) ; фильтры
+ .F K=2:1 S A=$P(X,CR,K) Q:A=""  S A=$P(A,"|",1) S:A'="" ^SRPTUSL(ID,"tab",IDX,"flt",K-1)=$$WD^TXTU(A)
+ 
+ S ^SRPTUSL(ID,"log",$H)=$$USRH^IUSER()
+ 
+ D MSG^RWU(^PP(0,2)_"<rptusl><id data="""_ID_"""/></rptusl></nb_console>",".xmlb")
+ D REGL^IEXCH("^SRPTUSL",ID)
+ Q
+STAB ; Save temporary table field
+ N ID,NB,FL
+ D RBUFH^YIXMLRR(0)
+ S NB="nb_console",ID=$G(XML(NB,"rptusl","tabid"))
+ S:ID="" ID=$O(^JOB(%JOB,"rptusl","t",""),-1)+1,^(ID,"flnm")=""
+ K ^JOB(%JOB,"rptusl","t",ID)
+ K XML(NB,"rptusl","tabid")
+ M ^JOB(%JOB,"rptusl","t",ID)=XML(NB,"rptusl")
+ S ^JOB(%JOB,"rptusl","id")=$G(XML(NB,"rptusl","id"))
+ Q
+LTAB(ID) ; Load temporary table field
+ N FL,R,PRC,X,I,C
+ D OWF^RWU(".xmlb")
+ D W^RWU(^PP(0,2)_"<rptusl>")
+ F FL="flnm","fl","flagr","flsym","psumm","psummi","fltexe","dfnexe","price","dofl","rfnx","rfnln" D WTAGD^RWU(FL,$G(^JOB(%JOB,"rptusl","t",ID,FL)))
+ F FL="ucls","pcls","acl","flt" D WTAG^RWU(FL,$G(^JOB(%JOB,"rptusl","t",ID,FL)))
+ S PRC=$$CORCP^IPRICET(1),R=$G(^JOB(%JOB,"rptusl","t",ID,"usls")),C=""
+ D W^RWU("<usls>")
+ F I=1:1 S X=$P(R,CR,I) Q:X=""  D WC^RWU(C_$$TAG^TXTU(X_"|"_X_" "_$$NAME^IPRICE(X,PRC))) S C=CR
+ D W^RWU("</usls><diag>")
+ S R=$G(^JOB(%JOB,"rptusl","t",ID,"diag")),C=""
+ F I=1:1 S X=$P(R,CR,I) Q:X=""  D WC^RWU(C_X_"|"_$$NAME^YMKB10(X)) S C=CR
+ D W^RWU("</diag></rptusl></nb_console>")
+ D C^RWU
+ Q
+DTAB(ID) ; Delete temporary table field
+ Q:ID="" 
+ K ^JOB(%JOB,"rptusl","t",ID)
+ Q
+NTAB(NM) ; New number
+ S %L=$O(^JOB(%JOB,"rptusl","t",""),-1)+1,^(%L,"flnm")=NM,%B=".txt"
+ Q
+DO ; Выполнить отчет
+ N NBC,DS,DE,OTL,VRL,SPL,LPUL,DT,OT,VR,ID,IDX,I,R,X,K,FLT,TABLN,QQ,VARPL
+ N FI,FX,FR,FK,U,FLGl,PCLS,ACLS,BIDX,FL,IsAG,idx,CSTC,kVAR,zSTOM,AGF,FX1
+ N tKEY,tKEYI,EXEFN,PRM1,PRM2,PRM3,NoPHN,IsIDX,DEFPRC,DEFCPRC,Q1,Q2,Q3
+ N NIBX,FX2,Bidx,FOP,FFN,FFQ,DTSY,DTEY
+ N TZpol,TZstat,TZwork,TZdatar,TZstc
+ N @$$NEWVAR^IUSL,KSKD,SUM,CEN,CNT
+ ; FLT - фильтры (ID,
+ ; TABLN - вывод таблицы
+ ; VARPL - поле является переменной
+ ; IsAG - есть аггрегация полей
+ D RBUFH^YIXMLRR(1)
+ K ^BUF($J)
+ D DOw
+ D CLOSE^YIXMLRR
+ I DS>DE D MSG^RWU("Начальная дата меньше конечной.") Q  
+ S X=$$LCL^IUSER("rptusl","mindate")
+ I X,(DS<($H-X))!(DS<($H-X)) D MSG^RWU("Указанные даты вне разрешенного периода.") Q 
+ S NoPHN=+$$LCL^IUSER("rptusl","nophn")
+ S DTSY=$$DI^DTUTL("01.01."_$P($$DT^DTUTL(DS),".",3))
+ S DTEY=$$DI^DTUTL("31.12."_$P($$DT^DTUTL(DS),".",3))
+ 
+ D PRETZR^IPAC
+ S TZstc=$G(TZRBTN("stc")),TZstat=$G(TZRBTN("status"))
+ S TZwork=$G(TZRBTN("work")),TZpol=$G(TZRBTN("pol"))
+ S TZdatar=$G(TZRBTN("datar"))
+ S DEFPRC=$$DEFPRC^IINSC("",DS,0),DEFCPRC=DEFPRC
+ S idx=0
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D:'$D(VRL)!$D(VRL(VR))
+ .S X=0
+ .I $D(LPUL) S U="",X=1 F  S U=$O(LPUL(U)) Q:U=""  I $D(^ZNFI("l",U,VR)) S X=0 Q  ; подх. лпу
+ .Q:X 
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D:'$D(OTL)!$D(OTL(OT))
+ ..S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ...I $D(LPUL) S LPU=$G(^(ID,"l")) Q:LPU=""  Q:'$D(LPUL(LPU)) 
+ ...S A=VR
+ ...D DOproc
+ 
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<rptusl>")
+ S R=^SRPTUSL(^JOB(%JOB,"rptusl","id"))
+ S R=R_" "_$$TXTP^DTUTL(DS,DE)
+ D WTAGDC^RWU("infolabel",R)
+ D W^RWU("<table>")
+ D DOout
+ D W^RWU("</table></rptusl></nb_console>")
+ D C^RWU
+ 
+ K ^BUF($J)
+ Q
+DOw ; Decode report parameters
+ N IsFLT,aG,FLIN
+ M zSTOM=^cfg("stom-otd")
+ S:$G(^cfg("stom-otd")) zSTOM(^("stom-otd"))=""
+ S (tKEY,tKEYI)=""
+ 
+ S NBC="nb_console"
+ S DS=$G(XML(NBC,"rptusl","df")) S:DS="" DS=+$H
+ S DE=$G(XML(NBC,"rptusl","dt")) S:DE="" DE=+$H
+ S R=$G(XML(NBC,"rptusl","otd"))
+ F I=1:1 S X=$P(R,"|",I) Q:X=""  S OTL(X)=""
+ S R=$G(XML(NBC,"rptusl","spec"))
+ F I=1:1 S X=$P(R,"|",I) Q:X=""  S SPL(X)=""
+ S R=$G(XML(NBC,"rptusl","lpu"))
+ F I=1:1 S X=$P(R,"|",I) Q:X=""  S LPUL(X)=""
+ S R=$G(XML(NBC,"rptusl","vr"))
+ F I=1:1 S X=$P($P(R,CR,I),"|",1) Q:X=""  S VRL(X)=""
+ 
+ K NIBX
+ S R=$TR($G(XML(NBC,"rptusl","pid")),"; ",",")
+ F I=1:1:$L(R,",") S X=$P(R,",",I) S:X'="" NIBX(X)=""
+ 
+ S X=$G(XML(NBC,"rptusl","cusls"))
+ F FI=1:1 S FX=$P(X,CR,FI) Q:FX=""  S ^BUF($J,"f",0,"usl",FX)=""
+ 
+ S R=$G(XML(NBC,"rptusl","tab")),BIDX=""
+ F I=1:1 S X=$P(R,CR,I) Q:X=""  D
+ .S IDX=$P(X,"|",1),FL=$G(^JOB(%JOB,"rptusl","t",IDX,"fl"))
+ .S IsFLT=0,aG=0
+ .I I>1 Q:FL="" 
+ .S X=$G(^JOB(%JOB,"rptusl","t",IDX,"pcls"))
+ .S:X'="" FLT(IDX,"pcls")=X,IsFLT=1
+ .S X=$G(^JOB(%JOB,"rptusl","t",IDX,"ucls"))
+ .S:X'="" FLT(IDX,"ucls")=X,IsFLT=1
+ .S X=$G(^JOB(%JOB,"rptusl","t",IDX,"fltexe"))
+ .S:X'="" FLT(IDX,"fltexe")=X,IsFLT=1
+ .S X=$G(^JOB(%JOB,"rptusl","t",IDX,"dfnexe"))
+ .S:X'="" FLT(IDX,"dfn")="s X="_X
+ .S X=$G(^JOB(%JOB,"rptusl","t",IDX,"usls"))
+ .F FI=1:1 S FX=$P(X,CR,FI) Q:FX=""  S ^BUF($J,"f",IDX,"usl",FX)=""
+ .S:$O(^BUF($J,"f",IDX,"usl",""))'="" FLT(IDX,"usls")=1,IsFLT=1
+ .S X=$G(^JOB(%JOB,"rptusl","t",IDX,"diag"))
+ .F FI=1:1 S FX=$P(X,CR,FI) Q:FX=""  S ^BUF($J,"f",IDX,"diag",FX)=""
+ .S:$O(^BUF($J,"f",IDX,"diag",""))'="" FLT(IDX,"diag")=1,IsFLT=1
+ .S X=$G(^JOB(%JOB,"rptusl","t",IDX,"acl")),idx=1
+ .F FI=2:1 S FX=$P(X,CR,FI) Q:FX=""  S FX=$P(FX,"|",1) S:FX'="" FLT(IDX,"acu",idx)=FX,FLT(IDX,"acu")=idx,idx=idx+1,IsFLT=1
+ .S X=$G(^JOB(%JOB,"rptusl","t",IDX,"dofl"))
+ .S:X'="" tKEY=$P(X,":",1),tKEYI=$P(X,":",2,9)
+ .; приведение фильтров к четкой последовательности + перекодир.
+ .S X=$G(^JOB(%JOB,"rptusl","t",IDX,"flt")),idx=1
+ .F FI=2:1 S FX=$P(X,CR,FI) Q:FX=""  D
+ ..S FX=$P(FX,"|",1) Q:FX="" 
+ ..S FX=$$WD^TXTU(FX)
+ ..S K=$P(FX,"@",1) I $E(K,1,2)="=#",$E(K,$L(K))="#" S $P(FX,"@",1)="="_(+$$DI^DTUTL($E(K,3,$L(K)-1))) ; decode #date#
+ ..S K=$P(FX,"@",3) I $E(K,1,2)="=#",$E(K,$L(K))="#" S $P(FX,"@",3)="="_(+$$DI^DTUTL($E(K,3,$L(K)-1))) ; decode #date@
+ ..S FLT(IDX,"flt",idx)=FX,FLT(IDX,"flt")=idx
+ ..S idx=idx+1,IsFLT=1
+ .D:I>1 
+ ..S TABLN(I-1)=$G(^("flnm"))
+ ..S X=$G(^("flagr"))
+ ..S:X'="" TABLN(I-1,1)=X,aG=1
+ ..S TABLN(I-1,2)=FL
+ ..S TABLN(I-1,3)=IDX
+ ..S:X'="" TABLN(I-1,4)="" ; есть фильтр или агрегатное поле
+ ..I 'IsFLT,'aG S TABLN(I-1,10)=$S($E(FL,1,3)="NI4":2,1:1) ; фильтр и агрегат не может быть индексом  
+ ..S X=$G(^("flsym"))
+ ..S:X'="" TABLN(I-1,5)=X
+ ..S X=$G(^("psumm"))
+ ..S:X'="" TABLN(I-1,6)=X
+ ..S X=$G(^("psummi"))
+ ..S:X'="" TABLN(I-1,61)=X
+ ..S X=$G(^("rfnx"))
+ ..S:X'="" TABLN(I-1,7)=X
+ ..S X=$G(^("rfnln"))
+ ..S:X'="" TABLN(I-1,8)=X
+ ..S X=$G(^("dfnexe"))
+ ..S:X'="" TABLN(I-1,9)="s X="_X
+ .I I>1,$D(FLT(IDX)) S TABLN(I-1,4)=""
+ K NBC
+ 
+ ; need idx counter
+ S I="",IsIDX=1 F  S I=$O(TABLN(I)) Q:I=""  I $D(TABLN(I,1)) S IsIDX=0 Q 
+ S (kVAR,FL)="" F  S FL=$O(^SRPTUSLM("out",FL)) Q:FL=""  I FL'="OT",FL'="VR",FL'="DT",FL'="ID" S kVAR=$S(kVAR="":"",1:kVAR_",")_FL
+ S FL="" F  S FL=$O(^SRPTUSLM("prm",FL)) Q:FL=""  S kVAR=$S(kVAR="":"",1:kVAR_",")_FL
+ Q
+DOproc ; 
+ K PCLS,ACLS,CSTC,PIDX,@kVAR
+ D GETLT^IUSL(VR,DT,OT,ID)
+ I $D(NIBX),'$D(NIBX(NI)) Q 
+ Q:STAT="d" 
+ I $D(SPL) S:'$D(SP) SP=$$SPEC^IKADRY(VR,DT) Q:'$D(SPL(SP))  
+ S FLG=$G(FLG)
+ S:FLG'="" FLG="|"_FLG_"|" S FLGl=$L(FLG)
+ S DIA=$G(DIA),NI=$G(NI)
+ S KSKD=1 S:$D(SKID) KSKD=SKID/100
+ S PIDX=$S($G(ISTC)="":"",1:$$PIDX^IPAC(NI,ISTC,DT))
+ S U="" F  S U=$O(UL(U)) Q:U=""  D
+ .S CNT=UL(U)
+ .Q:'$$DOflt(0) 
+ .S BIDX=$S(IsIDX:idx,1:"")
+ .S I="" F  S I=$O(TABLN(I)) Q:I=""  S FL=$$DOgetpl(TABLN(I,2)) D:$D(TABLN(I,10)) bidx(FL)
+ .S:BIDX="" BIDX=idx ; linear
+ .S ^BUF($J,0,BIDX)=""
+ .S I="" F  S I=$O(TABLN(I)) Q:I=""  I $D(TABLN(I,4)),$$DOflt(TABLN(I,3)) S X=$G(^BUF($J,0,BIDX,I)),^BUF($J,0,BIDX,I)=$$DOagr(X,BIDX)
+ .I tKEY'="" S I=$$DOgetpl(tKEY) S ^BUF($J,0,BIDX,"k")=I ; ключ
+ .S:IsIDX idx=idx+1
+ Q
+bidx(X) ; make base index
+ S Bidx=TABLN(I,10)
+ I $D(TABLN(I,9)) X TABLN(I,9) ; S X=""
+ S:Bidx=1 $P(BIDX,"|",I+1)=$E(X,1,64) ; обычные значения 
+ S:Bidx=2 $P(BIDX,"|",I+1)=$E(X,1,99) ; текст. из пациента
+ Q
+DOflt(IDf) ; Фильтр по ID
+ Q:'$D(FLT(IDf)) 1
+ S (Q1,Q2)=0
+ I $D(FLT(IDf,"ucls")) S FR=FLT(IDf,"ucls") S Q1=1 F FI=1:1 S FX=$P(FR,"|",FI) Q:FX=""  D  Q:Q1!Q2 
+ .I $E(FX)'="!",FLG[("|"_FX_"|") S Q1=0 Q 
+ .I $E(FX)="!",FLG'[("|"_$E(FX,2,999)_"|") S Q1=0
+ Q:Q1 0
+ I $D(FLT(IDf,"usls")),'$D(^BUF($J,"f",IDf,"usl",U)) Q 0 
+ I $D(FLT(IDf,"diag")) Q:DIA="" 0 I '$D(^BUF($J,"f",IDf,"diag",DIA)) Q 0
+ 
+ I 'PRC S CSTC=$S($D(CSTC):CSTC,$D(ISTC):ISTC,1:$$GETTZ^IPAC(NI,TZstc,DT)),PRC=+$$GET^IINSC(CSTC,"price",DT) S:'PRC PRC=DEFPRC
+ S DEFCPRC=DEFPRC
+ 
+ I $D(FLT(IDf,"pcls")) S QQ=0 D  Q:QQ 0
+ .S:'$D(PCLS) PCLS=$$GET^IPRICE(U,"cls",PRC,DT) 
+ .S FK=FLT(IDf,"pcls")
+ .I PCLS="",FK'["!" S QQ=1 Q 
+ .S PCLS="|"_PCLS_"|",(Q1,Q2,Q3)=0
+ .F FI=1:1 S FX=$P(FK,"|",FI) Q:FX=""  D   
+ ..I $E(FX)'="!" S Q3=1 I PCLS[("|"_FX_"|") S Q1=1 Q 
+ ..I $E(FX)="!",PCLS[("|"_$E(FX,2,999)_"|") S Q2=1
+ .I Q2 S QQ=1 Q 
+ .I Q3,'Q1 S QQ=1 Q 
+ 
+ S QQ=0
+ I $D(FLT(IDf,"acu")) S:'$D(ACLS) ACLS=$$GET^IPRICE(U,"acu",PRC,DT) S QQ=1 Q:ACLS="" 0 D
+ .S FR=FLT(IDf,"acu") 
+ .F FI=1:1:FR I $$IsAclEq(ACLS,FLT(IDf,"acu",FI)) S QQ=0 Q 
+ Q:QQ 0
+ S QQ=0
+ I $D(FLT(IDf,"fltexe")) S FK=FLT(IDf,"fltexe") I FK'="" S QQ=1 I @FK S QQ=0 ; произв. фильтр
+ Q:QQ 0
+ D:$D(FLT(IDf,"flt"))  ; программа фильтра
+ .S FR=FLT(IDf,"flt")
+ .F FI=1:1:FR D  Q:QQ 
+ ..S FX=FLT(IDf,"flt",FI)
+ ..S FX1=$P(FX,"@",1),FOP=$P(FX,"@",2),FX2=$P(FX,"@",3),FFN=$P(FX,"@",4)
+ ..S FX1=$S(FX1="":"",$E(FX1)="=":$E(FX1,2,999),1:$$DOgetpl(FX1)),FFQ=1
+ ..S FX2=$S(FX2="":"",$E(FX2)="=":$E(FX2,2,999),1:$$DOgetpl(FX2))
+ ..S:FOP="" FOP="="
+ ..I FOP="!" S FK=(FX1'=""),FFQ=0
+ ..I FOP="F" S FK=";"_$TR(FX1,"|",";")_";"[(";"_FX2_";"),FFQ=0
+ ..I FOP="FF" S FK=$$FLinFL^TXTU($TR(FX1,";","|"),$TR(FX2,";,","||")),FFQ=0
+ ..I FOP="[]" S FK=$S(FX1="":0,1:$D(^BUF(FX2,FX1))),FFQ=0
+ ..I FOP="'[]" S FK='$S(FX1="":0,1:$D(^BUF(FX2,FX1))),FFQ=0
+ ..I FOP="[" S FK=$$UL^TXTU(FX1)[$$UL^TXTU(FX2),FFQ=0
+ ..I FFQ,FOP="'F" S FK=";"_$TR(FX1,"|",";")_";"'[(";"_FX2_";"),FFQ=0
+ ..X:FFQ "S FK=FX1"_FOP_"FX2"
+ ..S:FI=1 X=FK
+ ..I FFN="",'FK S QQ=1,X=0 Q 
+ ..I FFN="и" S X=X&FK
+ ..I FFN="или" S X=X!FK
+ .S QQ='X
+ Q:QQ 0
+ Q 1
+DOagr(X,KEY) ; агрегатная ф-ция
+ S FN=$G(TABLN(I,1))
+ I FN="" S RX=X,X=$$DOgetpl(TABLN(I,2)) Q:'$D(TABLN(I,9)) X X TABLN(I,9) Q X 
+ I $D(TABLN(I,9)) S RX=X,X=$$DOgetpl(TABLN(I,2)) X TABLN(I,9) S RXX=RX,RX=X,X=RXX 
+ I FN="COUNT" Q X+1
+ S:'$D(TABLN(I,9)) RX=$$DOgetpl(TABLN(I,2))
+ I FN="SET" Q RX
+ I FN="SUM" Q X+RX
+ I FN="MIN" Q $S(RX<X:RX,1:X)
+ I FN="MAX" Q $S(RX>X:RX,1:X)
+ I FN="FIRST" Q $S(X="":RX,1:X) 
+ S X=RX,RX=""
+ I FN="UCNT",X'="" S RX=$G(^BUF($J,"t","a",KEY,I)) I '$D(^(I,X)) S ^(X)="",RX=RX+1,^BUF($J,"t","a",KEY,I)=RX
+ Q RX
+DOgetpl(PL) ; Поле по наименованию
+ I PL="COMM" S COMM=$G(COMM) Q COMM
+ I PL="CRNC" S CRNC=$G(CRNC) Q CRNC
+ I PL="CSTC" S:'$D(CSTC) CSTC=$S($D(ISTC):ISTC,1:$$GETTZ^IPAC(NI,TZstc,DT)) Q CSTC
+ I PL="DIA" Q DIA
+ I PL="DIAk" S DIAk=DIA Q DIAk
+ I PL="DT" Q DT
+ I PL="FLG" Q FLG
+ I PL="FLGt" S:'$D(FLGt) FLGt=$TR($P(FLG,"|",2,$L(FLG,"|")-1),"|",",") Q FLGt
+ I PL="LPU" S:'$D(LPU) LPU=$$GETPL^IUSL(VR,DT,OT,ID,"l") Q LPU
+ I PL="OT" Q OT
+ I PL="OTk" S OTk=OT Q OT
+ I PL="PRC" S:'$D(PRC) PRC=$$getPRC() Q PRC
+ I PL="UPRG" Q $G(UPRG) 
+ I PL="SKD" S:'$D(SKD) SKD=$G(SKID),SKD=$S(SKD:100-SKD,1:"") Q SKD
+ I PL="SP" S:'$D(SP) SP=$$SPEC^IKADRY(VR,DT) Q SP
+ I PL="SPrt" S:'$D(SP) SP=$$SPEC^IKADRY(VR,DT) S:'$D(SPrt) SPrt=$$GETPL^ISPRAV("spec",SP,"rtp") Q SPrt
+ I PL="U" Q U
+ I PL="Uk" S Uk=U Q U
+ I PL="Un" S Un=U Q Un
+ I PL="Ud" S Ud=U_"@"_$$getPRC()_"@"_DT Q Ud
+ I PL="VR" Q VR
+ I PL="VRk" S VRk=VR Q VR
+ I PL="sbsc" S:'$D(sbsc) sbsc=(STAT'="w")&(STAT'="d") Q sbsc
+ I PL="USLsdtm" S:'$D(USLsdtm) USLsdtm=$$GETSDTM^IUSL(VR,DT,OT,ID) Q USLsdtm
+ I PL="CUspdn" S:'$D(CUspdn) CUspdn=NI_","_$S('$D(SP):$$SPEC^IKADRY(VR,DT),1:SP)_","_DT Q CUspdn
+ I PL="CUvrdn" S:'$D(CUvrdn) CUvrdn=NI_","_VR_","_DT Q CUvrdn
+ I PL="CUspd" S:'$D(CUspd) CUspd=$S('$D(SP):$$SPEC^IKADRY(VR,DT),1:SP)_","_DT Q CUspd
+ I PL="CUvrd" S:'$D(CUvrd) CUvrd=VR_","_DT Q CUvrd
+ I PL="CUlvo" S:'$D(LPU) LPU=$$GETPL^IUSL(VR,DT,OT,ID,"l") S:'$D(CUlvo) CUlvo=LPU_","_VR_","_OT Q CUlvo
+ I PL="CUlvr" S:'$D(LPU) LPU=$$GETPL^IUSL(VR,DT,OT,ID,"l") S:'$D(CUlvr) CUlvr=LPU_","_VR Q CUlvr
+ I PL="CUlvs" S:'$D(LPU) LPU=$$GETPL^IUSL(VR,DT,OT,ID,"l") S:'$D(CUlvs) CUlvs=LPU_","_VR_","_SP Q CUlvs
+ I PL="NUfpos" S:'$D(NUfpos) NUfpos=$$fnFpos() Q NUfpos
+ I PL="abon" S:'$D(abon) abon=$D(^BTPLS("stc",$$getSTC())) Q abon
+ I PL="cenn" S:'$D(cenn) cenn=$$PRICEH^IPRICE(U,$$getPRC(),DT)*CNT Q cenn
+ I PL="cenn1" S:'$D(cenn1) cenn1=$$PRICEH^IPRICE(U,DEFPRC,DT)*CNT Q cenn1
+ I PL="cnt" S:'$D(cnt) cnt=CNT Q cnt
+ I PL="dvid" S:'$D(dvid) dvid=$$GET^IINSC($$getSTC(),"dvid",DT) Q dvid
+ I PL="dgtype" S:'$D(dgtype) dgtype=$$GET^IINSC($$getSTC(),"tp",DT) Q dgtype
+ I PL="kv" S:'$D(kv) kv=$$GETPL^IUSL(VR,DT,OT,ID,"kv") Q kv
+ I PL="naz" S:'$D(naz) naz=$$GETPL^IUSL(VR,DT,OT,ID,"f") Q naz
+ I PL="nazid" S:'$D(nazid) nazid=$$GETPL^IUSL(VR,DT,OT,ID,"fex") Q nazid
+ I PL="fnaz" S:'$D(fnaz) fnaz=$$fromVRI^INAZN($$DOgetpl("naz")) Q fnaz
+ I PL="fnazs" S:'$D(fnazs) fnazs=$$SPEC^IKADRY($$DOgetpl("naz")) Q fnazs
+ I PL="nazdl" S:'$D(nazdl) nazdl=$$fromDT^INAZN($$DOgetpl("naz")),nazdl=$S(nazdl:DT-nazdl,1:0) Q nazdl 
+ I PL="frap" S:'$D(frap) frap=$$GET^IPAC(NI,"frap",DT),frap=$S(frap="":$$get^IINSC($$getSTC(),"frap",DT),1:"") q frap
+ I PL="fras" S:'$D(fras) fras=$$GET^IPAC(NI,"fras",DT),fras=$S(fras="":$$get^IINSC($$getSTC(),"fras",DT),1:"") q fras
+ I PL="fpos" S:'$D(fpos) fpos=$$IsPRPA^IUSL(NI,OT,VR,DT,ID) Q fpos
+ I PL="fusl" S:'$D(fusl) fusl=$$IsFUSL^IUSL(NI,U,VR,DT,OT,ID) Q fusl
+ I PL="mat" S:'$D(mat) mat=$$cvSMATT()*CNT Q mat
+ I PL="matnm" S:'$D(matnm) matnm=$$cvNMATT() Q matnm
+ I PL="matwrh" S:'$D(matwrh) matwrh=$$cvWSMATT()*CNT Q matwrh
+ I PL="ms" S:'$D(ms) ms=$P($G(^ZNF(VR,OT,DT)),"|",1),ms=$S(ms="":$$LASTMS^IUSL(VR,DT,OT,$G(^ZNF(VR,OT,DT,ID,"l"))),1:ms) Q ms
+ I PL="kadry" S:'$D(kadry) kadry=$$KDR^IUSER() q kadry
+ I PL="kspec" S:'$D(kspec) kspec=$$SPEC^IUSER() q kspec
+ I PL="kotd" s:'$D(kotd) kotd=$$OTD^IUSER() q kotd 
+ I PL="quartd" s:'$D(quartd) quartd=$$QDT^DTUTL(DT) q quartd
+ I PL="month" s:'$D(month) month=$$MONTH^DTUTL(DT) q month
+ I PL="upaytp" s:'$D(upaytp) upaytp=$$getPTP(NI,VR,DT,OT,ID) q upaytp
+ I PL="upaydt" s:'$D(upaydt) upaydt=$$GETPL^IUSL(VR,DT,OT,ID,"p") q upaydt
+ I PL="STAT" Q STAT
+ I PL="NI" Q NI
+ I PL="NIk" S NIk=NI Q NI
+ I PL="NI4addr" S:'$D(NI4addr) NI4addr=NI Q NI4addr
+ I PL="NI4age" S:'$D(NI4age) NI4age=$$AGE^IPAC(NI,DT) Q NI4age
+ I PL="NI4datar" S:'$D(NI4datar) NI4datar=$$GETTZ^IPAC(NI,TZdatar,DT) Q NI4datar
+ I PL="NI4phone" S:'$D(NI4phone) NI4phone=NI Q NI4phone
+ I PL="NI4mphone" S:'$D(NI4mphone) NI4mphone=NI Q NI4mphone
+ I PL="NI4f" S:'$D(NI4f) NI4f=$$GET^IPAC(NI,"fiof",DT) Q NI4f
+ I PL="NI4i" S:'$D(NI4i) NI4i=$$GET^IPAC(NI,"fioi",DT) Q NI4i
+ I PL="NI4o" S:'$D(NI4o) NI4o=$$GET^IPAC(NI,"fioo",DT) Q NI4o
+ I PL="NI4pol" S:'$D(NI4pol) NI4pol=$$GETTZ^IPAC(NI,TZpol,DT) Q NI4pol
+ I PL="NI4polis" S:'$D(NI4polis) NI4polis=$$GET^IPAC(NI,"polis"_PIDX,DT) Q NI4polis
+ I PL="NI4df" S:'$D(NI4df) NI4df=$$GET^IPAC(NI,"dog_from"_PIDX,DT) Q NI4df
+ I PL="NI4dt" S:'$D(NI4dt) NI4dt=$$GET^IPAC(NI,"dog_to"_PIDX,DT) Q NI4dt
+ I PL="NI4prg" S:'$D(NI4prg) NI4prg=$TR($$GET^IPAC(NI,"prog"_PIDX,DT),"|",";") Q NI4prg
+ I PL="NI4stat" S:'$D(NI4stat) NI4stat=$TR($$GETTZ^IPAC(NI,TZstat,DT),"|",";") Q NI4stat
+ I PL="NI4wrk" S:'$D(NI4wrk) NI4wrk=$$GETTZ^IPAC(NI,TZwork,DT) Q NI4wrk
+ I PL="NI4ush" S:'$D(NI4ush) NI4ush=$$GET^IPAC(NI,"ush",DT) Q NI4ush
+ I PL="NI4rsource" S:'$D(NI4rsource) NI4rsource=$$GET^IPAC(NI,"rsource",DT) Q NI4rsource
+ I PL="NI4psumm" S:'$D(NI4psumm) NI4psumm=$$GET^IPAC(NI,"psumm"_PIDX,DT) Q NI4psumm
+ I PL="NI4sumlimit" S:'$D(NI4sumlimit) NI4sumlimit=$$GET^IPAC(NI,"sumlimit"_PIDX,DT) Q NI4sumlimit
+ I PL="NI4stcdog" S:'$D(NI4stcdog) NI4stcdog=$$GET^IPAC(NI,"stcdog",DT) Q NI4stcdog
+ I PL="NI4stcprg" S:'$D(NI4stcprg) NI4stcprg=$$GET^IPAC(NI,"stcprg",DT) Q NI4stcprg
+ I PL="NI4email" S:'$D(NI4email) NI4email=$$GET^IPAC(NI,"email",DT) Q NI4email
+ I PL="NI4crea" S:'$D(NI4crea) NI4crea=$$CREATED^IPAC(NI) Q NI4crea
+ I PL="NI4vagent" S:'$D(NI4vagent) NI4vagent=$P($$GET^IPAC(NI,"agent",DT),"@",1) Q NI4vagent
+ I PL="NI4cagent" S:'$D(NI4cagent) NI4cagent=$P($$GET^IPAC(NI,"agent",DT),"@",2,3) Q NI4cagent
+ I PL="NI4ecagent" S:'$D(NI4ecagent) NI4ecagent=$P($$GET^IPAC(NI,"agent",DT),"@",4) Q NI4ecagent
+ I PL="ntime" S:'$D(ntime) ntime=$$GET^IPRICE(U,"tim",$$getPRC(),DT)*CNT Q ntime
+ I PL="nzub" S:'$D(nzub) nzub=$$GETPL^IUSL(VR,DT,OT,ID,"nz") Q nzub
+ I PL="cntzub" S:'$D(nzub) nzub=$$GETPL^IUSL(VR,DT,OT,ID,"nz") S:'$D(cntzub) cntzub=$$NZCNT^ISTOM(nzub) Q cntzub
+ I PL="rgd" S:'$D(rgd) rgd=$$GETPL^IUSL(VR,DT,OT,ID,"rgd") Q rgd
+ I PL="sbs" S:'$D(sbs) sbs=$$GET^IPRICE(U,"scost",$$getPRC(),DT)*CNT Q sbs
+ I PL="uslkc" S:'$D(uslkc) uslkc=$$GET^IPRICE(U,"kctr",$$getPRC(),DT)*CNT Q uslkc
+ I PL="uetv" S:'$D(uetv) uetv=$$GET^IPRICE(U,"uetv",$$getPRC(),DT)*CNT Q uetv
+ I PL="uetms" S:'$D(uetms) uetms=$$GET^IPRICE(U,"uetms",$$getPRC(),DT)*CNT Q uetms
+ I PL="pgrp" S:'$D(pgrp) pgrp=$$GET^IPRICE(U,"grp",$$getPRC(),DT) Q pgrp
+ I PL="summ" S:'$D(summ) summ=$S($D(UL(U,1)):UL(U,1),1:$$PRICEH^IPRICE(U,$$getPRC(),DT)*KSKD*CNT) Q summ
+ I PL="summ1" S:'$D(summ) summ=$S($D(UL(U,1)):UL(U,1),1:$$PRICEH^IPRICE(U,$$getPRC(),DT)*KSKD*CNT) S summ1=$S('CNT:0,1:summ/CNT) Q summ1
+ I PL="summz" S:'$D(summz) summz=$$ZRP^IUSL(VR,DT,OT,ID) Q summz
+ I PL="bill" S:'$D(bill) bill=$$NOW^IBILL(NI,DT) Q bill
+ I PL="cbill" S:'$D(cbill) cbill=$$NOW^IBILL(NI) Q cbill
+ I PL="pmatt" S:'$D(pmatt) pmatt=$$cvPMATT() Q pmatt
+ I PL="stom" S:'$D(stom) stom=$S($D(zSTOM(OT)):1,1:0) Q stom
+ I PL="vusl" S:'$D(vusl) vusl=$$ISPL^IUSL(VR,DT,OT,ID,"v") Q vusl
+ I PL="kss" S:'$D(kss) kss=+$S($D(KASS):KASS,1:$$GET^IINSC($S($D(CSTC):CSTC,1:$$DOgetpl("CSTC")),"dvid",DT)=3) Q kss
+ I PL="zrp" S:'$D(zrp) zrp=($$GETPL^IUSL(VR,DT,OT,ID,"zrp")>0)!($O(^ZNFE(VR,OT,DT,ID,"zrp",""))'="") Q zrp
+ I PL="cowrk" S:'$D(cowrk) cowrk=$TR($$GETPL^IUSL(VR,DT,OT,ID,"cw"),"|",";") Q cowrk
+ I PL="grn" S:'$G(grn) grn=$$TDSC^IGRNL(NI,$$GETPL^IUSL(VR,DT,OT,ID,"g"))
+ I PL="con" S:'$D(con) con=$P($$GETPL^IUSL(VR,DT,OT,ID,"c"),"|",3) Q con
+ I PL="consum" S:'$D(consum) consum=$P($$GETPL^IUSL(VR,DT,OT,ID,"c"),"|",1)*CNT Q consum
+ I PL="zak" S:'$D(zak) zak=$$GETPL^IUSL(VR,DT,OT,ID,"cu") Q zak
+ I PL="codoms" S:'$D(codoms) codoms=$$GET^IPRICE(U,"oms",$$getPRC(),DT) Q codoms
+ I PL="precode" S:'$D(precode) precode=$$GET^IPRICE(U,"ecode",$$getPRC(),DT) Q precode
+ I PL="nds" S:'$D(nds) nds=$$GET^IPRICE(U,"nds",$$getPRC(),DT) Q nds
+ I PL="ugoods" S:'$D(ugoods) ugoods=$$GET^IPRICE(U,"goods",$$getPRC(),DT) Q ugoods
+ I PL="USLdtm" S:'$D(USLdtm) USLdtm=$$GETDTM^IUSL(VR,DT,OT,ID) Q USLdtm
+ I PL="stzn" S:'$D(stzn) stzn=$$GETPL^IUSL(VR,DT,OT,ID,"zi") Q stzn
+ I PL="nul" Q ""
+ I PL="nn" Q ""
+ Q ""
+IsAclEq(Xs,Xpt) ; совпадение аналитического кода с шаблоном
+ N I,X,Q
+ S Q=1
+ F I=1:1:$L(Xpt,".") S X=$P(Xpt,".",I) I X'="",X'="*",X'=$P(Xs,".",I) S Q=0 Q
+ Q Q
+setCol(I,V) ; Установить значение столбца
+ S ^BUF($J,0,BIDX,I)=$TR(V,"|",";")
+ Q
+getCol(I) ; Получить значение столбца
+ Q $G(^BUF($J,0,BIDX,I))
+getKey() ; Получить значение ключа
+ Q $G(^BUF($J,0,BIDX,"k"))
+getSTC() 
+ Q:$D(CSTC) CSTC
+ S CSTC=$S($D(ISTC):ISTC,1:$$GETTZ^IPAC(NI,TZstc,DT))
+ Q CSTC
+getPRC() 
+ Q:$G(PRC) PRC
+ S CSTC=$S($D(CSTC):CSTC,$D(ISTC):ISTC,1:$$GETTZ^IPAC(NI,TZstc,DT))
+ S PRC=+$$GET^IINSC(CSTC,"price",DT) S:'PRC PRC=DEFPRC
+ Q PRC
+cvSMATT()       ; Сумма материалов
+ N X S X=$$GET^IPRICE(U,"mat",$$getPRC(),DT) Q:X="" 0
+ Q $$CENNALL^IWRHS(X,DT)
+cvPMATT()       ; Продажа материалов
+ N X S X=$$GETPL^IUSL(VR,DT,OT,ID,"mt") Q:X="" 0
+ Q $$CENNALL^IWRHS(X,DT)
+cvNMATT()       ; Продажа материалов
+ N X S X=$$GETPL^IUSL(VR,DT,OT,ID,"mt") Q:X="" 0
+ Q $$NAMESALL^IWRHS(X)
+cvWSMATT() ; Сумма на складе у материалов
+ N X
+ S X=$$GETPLE^IUSL(VR,DT,OT,ID,"mt") Q:X="" 0
+ Q $$KEYSUMM^IWRH(X)
+DOout 
+ N ENDLN,SUBLN,SI,SP,SR,KEY,X,X1,X2,BASE,VV,LE,CE,J,nn
+ ; заголовок
+ S R="",I=0 F  S I=$O(TABLN(I)) Q:I=""  S $P(R,"|",I)=TABLN(I)
+ D W^RWU(tKEYI_"|"_R)
+ 
+ S LE=$O(TABLN(I),-1) ; last
+ S nn=1
+ S RX="" F  S RX=$O(^BUF($J,0,RX)) Q:RX=""  D
+ .S R=$P(RX,"|",2,99),KEY=""
+ .S I="" F  S I=$O(^BUF($J,0,RX,I)) Q:I=""  S:I'="k" $P(R,"|",I)=^(I) S:I="k" KEY=^(I)
+ .S VV=1
+ .S:$P(R,"|",LE)="" $P(R,"|",LE)="" ; full line fix
+ .F I=1:1:LE D
+ ..I '$D(TABLN(I)) S $P(R,"|",I)="ошибка" Q 
+ ..S BASE=$P(R,"|",I)
+ ..S K=$S($D(TABLN(I,9)):BASE,1:$$DOoutfn(BASE,TABLN(I,2),$G(TABLN(I,1))))
+ ..S K=$S($D(TABLN(I,5)):$$DOcrop(K,TABLN(I,5)),1:K),$P(R,"|",I)=K
+ ..S X=$G(TABLN(I,7)) ; result function
+ ..I X'="" S K=X,X=$P(R,"|",I) X "S K="_K S $P(R,"|",I)=K
+ ..S X=$G(TABLN(I,8))
+ ..I X'="" S XE=X,X=K X "S K="_XE I 'K S VV=0
+ .Q:'VV 
+ .F I=1:1:LE D
+ ..S X=+$TR($P(R,"|",I),",",".")
+ ..S:$G(TABLN(I,6)) ENDLN(I)=$G(ENDLN(I))+X
+ ..S SI=$G(TABLN(I,61))
+ ..Q:'SI
+ ..S X1=+$TR($P(R,"|",SI),",","."),SP=$G(SUBLN(I,1)),X2=$G(SUBLN(I,2))
+ ..I SP'="",SP'=X1 S SR="",$P(SR,"|",SI)="Подитог",$P(SR,"|",I)=X2,X2=0 K SUBLN(I,2) D WC^RWU(CR_"|"_SR) ; вывод подитога по колонке
+ ..S:SP'=X1 SUBLN(I,1)=X1 
+ ..S SUBLN(I,2)=X2+X
+ .D WC^RWU(CR_$$TAG^TXTU(KEY_"|"_R))
+ .S nn=nn+1
+ 
+ ; Подитоги (остаток)
+ S (R,I)="" F  S I=$O(SUBLN(I)) Q:I=""  S X2=$G(SUBLN(I,2)) I X2'="" S $P(R,"|",$G(TABLN(I,61)))="Подитог",$P(R,"|",I)=X2
+ D:R'="" WC^RWU(CR_"|"_R)
+ 
+ ; Итоги
+ Q:'$D(ENDLN)
+ S (R,I)="" F  S I=$O(ENDLN(I)) Q:I=""  S $P(R,"|",I)=$G(ENDLN(I))
+ D WC^RWU(CR_"|"_R)
+ Q
+gCol(I) ; for result function
+ ; detect digits
+ Q $S($$isFLdig(TABLN(I,2)):$TR($P(R,"|",I),",","."),1:$P(R,"|",I))
+num(X,DIG) 
+ Q $TR($J(X,"",DIG),".",",")
+DOoutfn(X,FL,AFN) ; Обработчик результата
+ ; AFN - ф-ция агрегации
+ ; EFN - итоговая ф-ция суммы
+ I AFN'="" Q:AFN="UCNT"!(AFN="SUM")!(AFN="CNT")!(AFN="MIN")!(AFN="MAX") $TR(X,".",",")
+ I FL="NI" Q $$FIO^IPAC(X)
+ I FL="DT" Q $$DT2^DTUTL(X)
+ I FL="DIA" Q $$NAME^YMKB10(X)
+ I FL="OT" Q $$GOTD^YISPRAV(X)
+ I FL="VR" Q $$FIO^IKADRY(X)
+ I FL="ms" Q $$FIO^IKADRY(X)
+ I FL="SP" Q $$SPEC^ISPRAV(X)
+ I FL="SPrt" Q $$GET^ISPRAV("specrtp",X)
+ I FL="LPU" Q $$NAME^ICONTR(X)
+ I FL="CSTC" Q $$NAME^IINSC(X)
+ I FL="PRC" Q $$NAME^ISPRAV("tprice",X)
+ I FL="UPRG" Q $$NAME^IMPRP(X) 
+ I FL="pgrp" Q $$NAME^ISPRAV("gprice",X)
+ I FL="U" Q X_" "_$$NAME^IPRICE(X,$$STARTTP^IPRICE(X,DE,,DEFCPRC))
+ I FL="Un" Q $$NAME^IPRICE(X,$$STARTTP^IPRICE(X,DE,,DEFCPRC))
+ I FL="Ud" Q $$NAMEH^IPRICE($P(X,"@",1),$P(X,"@",2),$P(X,"@",3))
+ I FL="dvid" Q $$NAME^ISPRAV("dvid",X)
+ I FL="dgtype" Q $$NAME^ISPRAV("dgtype",X)
+ I FL="con" Q $$NAME^ICONTR(X)
+ I FL="zak" Q $$NAME^ICONTR(X)
+ I FL="NI4phone" Q $S(NoPHN:"",1:$$TELS^IPAC(X))
+ I FL="NI4mphone" Q $S(NoPHN:"",1:$$MPHN^TXTU($P($P($$GET^IPAC(X,"pager"),",",1),"/",1)))
+ I FL="NI4addr" Q $$ADR^YIPACN(X)
+ I FL="NI4datar" Q $$DT^DTUTL(X)
+ I FL="NI4wrk" Q:X="" "" Q $G(^M(5,X))
+ I FL="NI4ush" Q:X="" "" Q $$GUCH^YISPRAV(X)
+ I FL="NI4prg" Q:X="" "" Q $$NAMES^IMPRP($TR(X,";","|"))
+ I FL="NI4rsource" Q $$NAME^ISPRAV("rsource",X)
+ I FL="NI4pol" Q $$NAME^ISPRAV("gender",X)
+ I FL="NI4stcdog" Q X
+ I FL="NI4stcprg" Q X
+ I FL="NI4psumm" Q X
+ I FL="NI4email" Q X
+ I FL="NI4crea" Q $$DT^DTUTL(X)
+ I FL="NI4vagent" Q $$FIO^IKADRY(X)
+ I FL="NI4cagent" Q $$GSTAFF^ICONTR(X)
+ I FL="NI4df" Q $$DT^DTUTL(X)
+ I FL="NI4dt" Q $$DT^DTUTL(X)
+ I FL="ntime" Q $$TM^DTUTL(X)
+ I FL="fnaz" Q $$FIO^IKADRY(X)
+ I FL="fnazs" Q $$SPEC^ISPRAV(X)
+ I FL="cowrk" Q $$FIO^IKADRY(X)
+ I FL="USLdtm" Q $$DTM^DTUTL(X)
+ I FL="USLsdtm" Q $$DTM^DTUTL(X)
+ I FL="upaydt" Q $$DTM^DTUTL(X)
+ I FL="nn" Q nn
+ I $$isFLdig(FL) Q $TR(X,".",",")
+ Q X
+isFLdig(FL) ; Поле является числом
+ Q:FL="cenn" 1
+ Q:FL="cenn1" 1
+ Q:FL="summ1" 1
+ Q:FL="summ" 1
+ Q:FL="summz" 1
+ Q:FL="cnt" 1
+ Q:FL="mat" 1
+ Q:FL="matwrh" 1
+ Q:FL="SKD" 1
+ Q:FL="cntzub" 1
+ Q:FL="rgd" 1
+ Q:FL="sbs" 1
+ Q:FL="uslkc" 1
+ Q:FL="uetv" 1
+ Q:FL="uetms" 1
+ Q:FL="nazdl" 1
+ Q:FL="NI4psumm" 1
+ Q:FL="NI4sumlimit" 1
+ Q 0
+fnFpos() ; Функция, что посещение первое (относительно спец.)
+ S:$G(SP)="" SP=$$SPEC^IKADRY(VR,DT)
+ Q:$G(^BUF($J,"tmp","fpos",NI,SP))=1 0 ; found before
+ N X S X=$G(^(SP))
+ I X'="",X<DT Q 0 ; на дату первичных точно нет
+ S ^(SP)=DT
+ I $$IsFPSP^IUSL(NI,OT,VR,DT,ID) S ^BUF($J,"tmp","fpos",NI,SP)=1 Q 1
+ Q 0
+getPTP(NI,VR,DT,OT,ID) ; Тип платежа по услуге
+ S ID=$$GETPL^IUSL(VR,DT,OT,ID,"p") Q:ID="" 0
+ Q +$P($$NEARPAY^IBILL(NI,ID),"|",2)
+DOcrop(X,MAX) ; Ограничить в ширину
+ I $L(X)<MAX Q X
+ Q $E(X,1,MAX-2)_".."
+LSTFLT(TP) ; Список для фильтра
+ N FL,ID
+ S (A,FL)=""
+ S ID=$S(TP="oper":TP,TP="func":TP,1:"out")
+ S A="=|Значение"
+ S:TP="func" A="|"
+ F  S FL=$O(^SRPTUSLM(ID,FL)) Q:FL=""  S A=$S(A="":"",1:A_CR)_FL_"|"_^(FL)
+ I ID'="out" D MSG^RWU(A) Q 
+ F  S FL=$O(^SRPTUSLM("prm",FL)) Q:FL=""  S A=$S(A="":"",1:A_CR)_FL_"|"_^(FL)
+ D MSG^RWU(A)
+ Q
+EXPORT(ID) ; Экспорт отчета
+ N DATA,X,GL,FLD,FLDNM
+ M DATA=^SRPTUSL(ID)
+ S FLD=$G(^SRPTUSL(ID,"fld"))
+ S FLDNM=$$NAME^ISPRAV("rptuslfld",FLD)
+ S GL(1)="DATA"
+ S GL(2)="FLD"
+ S GL(3)="FLDNM"
+ D S^XGUNET("GL",".bin")
+ Q
+IMPORT ; Импорт отчета
+ N DATA,X,GL,FLD,FLDNM,ID
+ D R^XGUNET("hpar",0) ; no reencode
+ I '$D(DATA) D MSG^RWU("Ошибка при импорте файла") Q
+ L +^SRPTUSL
+ S ID=$O(^SRPTUSL(""),-1)+1 M ^SRPTUSL(ID)=DATA
+ L -^SRPTUSL
+ I $G(FLDNM)'="",$D(FLD) D
+ .S FLD=$$FINDN^ISPRAV("rptuslfld",1,FLDNM,1)
+ .S:FLD="" FLD=$$ADDFN^ISPRAV("rptuslfld",FLDNM)
+ .S ^SRPTUSL(ID,"fld")=FLD
+ D REGL^IEXCH("^SRPTUSL",ID)
+ Q
+INITDB ;
+ K ^SRPTUSLM
+ S ^SRPTUSLM("out","nul")="Пустая колонка"
+ S ^SRPTUSLM("out","nn")="Номер строки"
+ S ^SRPTUSLM("out","NI")="Пациент (ФИО)"
+ S ^SRPTUSLM("out","NIk")="№ И.Б. пациента"
+ S ^SRPTUSLM("out","U")="Услуга"
+ S ^SRPTUSLM("out","Uk")="Код услуги"
+ S ^SRPTUSLM("out","Un")="Наименование услуги"
+ S ^SRPTUSLM("out","Ud")="Наименование услуги на дату"
+ S ^SRPTUSLM("out","DT")="Дата услуги"
+ S ^SRPTUSLM("out","DIA")="Диагноз"
+ S ^SRPTUSLM("out","DIAk")="Код диагноза"
+ S ^SRPTUSLM("out","LPU")="ЛПУ"
+ S ^SRPTUSLM("out","OT")="Отделение"
+ S ^SRPTUSLM("out","OTk")="Код отделения"
+ S ^SRPTUSLM("out","VR")="Врач"
+ S ^SRPTUSLM("out","VRk")="Код врача"
+ S ^SRPTUSLM("out","SP")="Специальность"
+ S ^SRPTUSLM("out","SPrt")="Раздел специальности"
+ S ^SRPTUSLM("out","cenn")="Сумма без скидки"
+ S ^SRPTUSLM("out","cenn1")="Сумма по основн. прейск."
+ S ^SRPTUSLM("out","summ1")="Стоимость 1 услуги"
+ S ^SRPTUSLM("out","summ")="Сумма"
+ S ^SRPTUSLM("out","summz")="Сумма на зарплату"
+ S ^SRPTUSLM("out","cnt")="Количество"
+ S ^SRPTUSLM("out","mat")="Сумма материалов"
+ S ^SRPTUSLM("out","matnm")="Наименования материалов"
+ S ^SRPTUSLM("out","matwrh")="Сумма материалов на складе"
+ S ^SRPTUSLM("out","COMM")="Примечание"
+ S ^SRPTUSLM("out","SKD")="Скидка"
+ S ^SRPTUSLM("out","PRC")="Прейскурант"
+ S ^SRPTUSLM("out","UPRG")="Программа услуги"
+ S ^SRPTUSLM("out","FLGt")="Флаги услуги (текст)"
+ S ^SRPTUSLM("out","pgrp")="Группа прейскуранта"
+ S ^SRPTUSLM("out","CSTC")="Договор"
+ S ^SRPTUSLM("out","dvid")="Вид договора"
+ S ^SRPTUSLM("out","dgtype")="Раздел договора"
+ S ^SRPTUSLM("out","CRNC")="Валюта"
+ S ^SRPTUSLM("out","kv")="Квитанция №"
+ S ^SRPTUSLM("out","fnaz")="Направление от"
+ S ^SRPTUSLM("out","fnazs")="Направление от специалиста"
+ S ^SRPTUSLM("out","nazdl")="Дней до выполн. направления"
+ S ^SRPTUSLM("out","ms")="Медсестра"
+ S ^SRPTUSLM("out","nzub")="№ зубов"
+ S ^SRPTUSLM("out","cntzub")="Число зубов"
+ S ^SRPTUSLM("out","rgd")="Рентг. доза"
+ S ^SRPTUSLM("out","sbs")="Себестоимость"
+ S ^SRPTUSLM("out","uslkc")="Коэфф.контроля"
+ S ^SRPTUSLM("out","ntime")="Норма времени"
+ S ^SRPTUSLM("out","cowrk")="Совместитель"
+ S ^SRPTUSLM("out","grn")="Гарантийное письмо"
+ S ^SRPTUSLM("out","con")="Контрагент"
+ S ^SRPTUSLM("out","zak")="Заказчик"
+ S ^SRPTUSLM("out","nds")="НДС"
+ S ^SRPTUSLM("out","ugoods")="Услуга как товар"
+ S ^SRPTUSLM("out","NI4f")="Фамилия пациента"
+ S ^SRPTUSLM("out","NI4i")="Имя пациента"
+ S ^SRPTUSLM("out","NI4o")="Отчество пациента"
+ S ^SRPTUSLM("out","NI4phone")="Тел. пациента"
+ S ^SRPTUSLM("out","NI4mphone")="Сотовый тел. пациента"
+ S ^SRPTUSLM("out","NI4addr")="Адр. пациента"
+ S ^SRPTUSLM("out","NI4datar")="Дата рожд. пациента"
+ S ^SRPTUSLM("out","NI4age")="Возраст пациента"
+ S ^SRPTUSLM("out","NI4pol")="Пол пациента"
+ S ^SRPTUSLM("out","NI4polis")="Полис пациента"
+ S ^SRPTUSLM("out","NI4df")="Прикрепление с"
+ S ^SRPTUSLM("out","NI4dt")="Прикрепление по"
+ S ^SRPTUSLM("out","NI4stat")="Статус пациента"
+ S ^SRPTUSLM("out","NI4wrk")="Место работы пациента"
+ S ^SRPTUSLM("out","NI4ush")="Врач пациента (участок)"
+ S ^SRPTUSLM("out","NI4prg")="Программа"
+ S ^SRPTUSLM("out","NI4rsource")="Источник рекламы"
+ S ^SRPTUSLM("out","NI4psumm")="Стоимость полиса"
+ S ^SRPTUSLM("out","NI4sumlimit")="Лимит суммы"
+ S ^SRPTUSLM("out","NI4crea")="Дата создания пациента"
+ S ^SRPTUSLM("out","NI4vagent")="Агент пациента (сотрудник)"
+ S ^SRPTUSLM("out","NI4cagent")="Агент пациента (внешний врач)"
+ S ^SRPTUSLM("out","NI4ecagent")="Агент пациента (внешний код)"
+ S ^SRPTUSLM("out","NI4email")="Email пациента"
+ S ^SRPTUSLM("out","USLdtm")="Дата, время ввода"
+ S ^SRPTUSLM("out","USLsdtm")="Дата, время подписи"
+ S ^SRPTUSLM("out","CUspdn")="Пациент, специальность, дата"
+ S ^SRPTUSLM("out","CUvrdn")="Пациент, врач, дата"
+ S ^SRPTUSLM("out","CUspd")="Специальность, дата"
+ S ^SRPTUSLM("out","CUvrd")="Врач, дата"
+ S ^SRPTUSLM("out","CUlvo")="ЛПУ, врач, отделение"
+ S ^SRPTUSLM("out","CUlvr")="ЛПУ, врач"
+ S ^SRPTUSLM("out","CUlvs")="ЛПУ, специальность"
+ S ^SRPTUSLM("out","NUfpos")="Первичное посещение специалиста"
+ S ^SRPTUSLM("out","NI4stcdog")="Страховой договор"
+ S ^SRPTUSLM("out","NI4stcprg")="Страховая программа"
+ S ^SRPTUSLM("out","uetv")="УЕТ врача"
+ S ^SRPTUSLM("out","uetms")="УЕТ медсестры"
+ S ^SRPTUSLM("out","bill")="Баланс на счете пациента"
+ S ^SRPTUSLM("out","cbill")="Баланс на дату на счете пациента"
+ S ^SRPTUSLM("out","codoms")="Код ОМС"
+ S ^SRPTUSLM("out","precode")="Внешний код прейскуранта"
+ S ^SRPTUSLM("out","stzn")="Код заказ-наряда"
+ S ^SRPTUSLM("out","upaydt")="Дата, время кассового платежа"
+ 
+ S ^SRPTUSLM("prm","FLG")="Флаги услуги"
+ S ^SRPTUSLM("prm","stom")="Стоматология"
+ S ^SRPTUSLM("prm","pmatt")="Продажа. материалов"
+ S ^SRPTUSLM("prm","vusl")="Виртуальная услуга"
+ S ^SRPTUSLM("prm","kss")="Касса"
+ S ^SRPTUSLM("prm","STAT")="Статус"
+ S ^SRPTUSLM("prm","sbsc")="Услуга подписана"
+ S ^SRPTUSLM("prm","abon")="Абонемент"
+ S ^SRPTUSLM("prm","fpos")="Абсолютно первичное посещение"
+ S ^SRPTUSLM("prm","fusl")="Первичная услуга"
+ S ^SRPTUSLM("prm","kadry")="Таб.номер пользователя"
+ S ^SRPTUSLM("prm","kspec")="Специальность пользователя"
+ S ^SRPTUSLM("prm","kotd")="Отделение пользователя"
+ S ^SRPTUSLM("prm","quartd")="Квартал по дате"
+ S ^SRPTUSLM("prm","month")="Месяц по дате"
+ S ^SRPTUSLM("prm","upaytp")="Вид кассового платежа"
+ S ^SRPTUSLM("prm","frap")="Процент франшизы на услугу"
+ S ^SRPTUSLM("prm","fras")="Сумма франшизы на услугу"
+ S ^SRPTUSLM("prm","zrp")="Зарплата"
+ S ^SRPTUSLM("prm","naz")="Код назначения"
+ S ^SRPTUSLM("prm","nazid")="Код назначения+строки"
+ 
+ S ^SRPTUSLM("oper","'<")=">="
+ S ^SRPTUSLM("oper","'=")="<>"
+ S ^SRPTUSLM("oper","'>")="<="
+ S ^SRPTUSLM("oper","'[")="Не включает"
+ S ^SRPTUSLM("oper","[")="Включает"
+ S ^SRPTUSLM("oper","<")="<"
+ S ^SRPTUSLM("oper","=")="="
+ S ^SRPTUSLM("oper",">")=">"
+ S ^SRPTUSLM("oper","F")="Включает флаг"
+ S ^SRPTUSLM("oper","FF")="Включает флаги"
+ S ^SRPTUSLM("oper","'F")="Не включает флаг"
+ S ^SRPTUSLM("oper","[]")="В списке"
+ S ^SRPTUSLM("oper","'[]")="Не в списке"
+ S ^SRPTUSLM("oper","!")="Есть данные"
+ S ^SRPTUSLM("func","и")="и"
+ S ^SRPTUSLM("func","или")="или"
+ 
+ S ^MN("root","rptuslfld")="Разделы в отчетах по услугам"
+ 
+ S ^MN("frm","rptusl")="Отчеты по услугам"
+ Q
+REGLCL 
+ K ^LCLI("rptusl")
+ S ^LCLI("rptusl")="Отчеты по услугам"
+ S ^LCLI("rptusl","save")="Сохранение отчета =0 - запрет"
+ S ^LCLI("rptusl","del")="Удаление отчета =0 - запрет"
+ S ^LCLI("rptusl","new")="Создание нового отчета =0 - запрет"
+ S ^LCLI("rptusl","mindate")="Минимальная дата для отчетов (число дней от текущей)"
+ S ^LCLI("rptusl","nophn")="Запретить вывод телефонов пациента"
+ Q

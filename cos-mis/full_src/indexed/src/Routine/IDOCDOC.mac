@@ -1,0 +1,122 @@
+IDOCDOC ; DocDoc API
+EXPORT(DS,DE)
+ N DIR,IO
+ S DIR=$G(^cfg("docdoc","path"))
+ 
+ S IO=$$OW^FIL(DIR_"clinics.xml") Q:IO="" 
+ U IO D CLI C IO
+ 
+ S IO=$$OW^FIL(DIR_"doctors.xml") Q:IO="" 
+ U IO D DOC C IO
+ 
+ S IO=$$OW^FIL(DIR_"slots.xml") Q:IO="" 
+ U IO D DSH(DS,DE) C IO
+ Q
+EXPFTP
+ N DIR,SRV,USR,PWD
+ S DIR=$G(^cfg("docdoc","path")),SRV=$G(^cfg("docdoc","host")),USR=$G(^cfg("docdoc","user")),PWD=$G(^cfg("docdoc","passwd"))
+ D SEND^IFTP(SRV,"",USR,PWD,DIR_"clinics.xml")
+ D SEND^IFTP(SRV,"",USR,PWD,DIR_"doctors.xml")
+ D SEND^IFTP(SRV,"",USR,PWD,DIR_"slots.xml")
+ Q
+CLI ; Филиалы
+ N N,D,X
+ S D=+$H
+ d ws($C(239,187,191))
+ d ws8("<?xml version=""1.0"" encoding=""UTF-8"" standalone=""no""?>")
+ d ws8("<clinics>")
+ S N="",F=0 F  S N=$O(^CGAI("flg","fi",N)) Q:N=""  D:$D(^CGA(N)) 
+ .Q:'$$CHECK^ICONTR(N,D)
+ .d ws8("<clinic>")
+ .d ws8("<id>"_N_"</id>")
+ .d ws8("<name>"_$$TAG^TXTU($$NAME^ICONTR(N))_"</name>")
+ .S X=$$GET^YCONTR(N,"phone",D)
+ .d:X'="" ws8("<phone>"_$$TAG^TXTU(X)_"</phone>")
+ .S X=$$GET^YCONTR(N,"aregion",D)
+ .D:X'="" ws8("<city>"_$$TAG^TXTU($$NMTPLT^YKLADR(X))_"</city>")
+ .d ws8("</clinic>")
+ d ws8("</clinics>")
+ Q
+DOC ; Врачи
+ N N,D,X,LP,UIDX
+ S D=+$H
+ d ws($C(239,187,191))
+ d ws8("<?xml version=""1.0"" encoding=""UTF-8"" standalone=""no""?>")
+ d ws8("<doctors>")
+ S LP=$$^I("ilpu") S:LP="" LP=0
+ S UIDX=$D(^DSHI("vr"))
+ S N="" F  S N=$O(^KDR(N)) Q:N=""  D  
+ .Q:$$GET^IKADRY(N,"ofor",D)=0
+ .Q:$$GET^IKADRY(N,"norsp",D)  
+ .I UIDX,'$D(^DSHI("vr",N)) Q 
+ .Q:$$FLinFL^TXTU($$GET^IKADRY(N,"flg",D),"nwww")
+ .d ws8("<doctor>")
+ .d ws8("<doctorId>"_N_"</doctorId>")
+ .S X=$TR($$GET^IKADRY(N,"lpu",D),"|",",")
+ .S:X="" X=LP
+ .d ws8("<clinicId>"_X_"</clinicId>")
+ .d ws8("<name>"_$$TAG^TXTU($$FIO^IKADRY(N))_"</name>")
+ .d ws8("</doctor>")
+ d ws8("</doctors>")
+ Q
+DSH(DS,DE) ; Расписание
+ N LP,OT,VR,SP,DT,TM,TE,TL,X,L,NOVR,NOWT,I,MOD
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ d ws($C(239,187,191))
+ d ws8("<?xml version=""1.0"" encoding=""UTF-8"" standalone=""no""?>")
+ d ws8("<slots>")
+ S MOD=2 ; Слот на весь день с постоянной длительностью
+ S I=+$G(^MN("raspzt"))
+ I I S X="" F  S X=$O(^MN(I,X)) Q:X=""  S:$P($G(^(X)),"|",3) NOWT(X)=""
+ S LP="" F  S LP=$O(^DSH(LP)) Q:LP=""  D
+ .I $$FLinFL^TXTU($$GET^ICONTR(LP,"flg",DS),"nwww") Q 
+ .S OT="" F  S OT=$O(^DSH(LP,OT)) Q:OT=""  D
+ ..S X=$$GETPL^ISPRAV("otd",OT,"flg")
+ ..I $$FLinFL^TXTU(X,"nwww") Q 
+ ..I $$FLinFL^TXTU(X,"nwebzp") Q 
+ ..S VR="" F  S VR=$O(^DSH(LP,OT,VR)) Q:VR=""  D
+ ...I $D(NOVR(VR)) Q 
+ ...I $$FLinFL^TXTU($$GET^IKADRY(VR,"flg",DS),"nwww") S NOVR(VR)="" Q  
+ ...S SP="" F  S SP=$O(^DSH(LP,OT,VR,SP)) Q:SP=""  D
+ ....S X=$$GETPL^ISPRAV("spec",SP,"flg")
+ ....I $$FLinFL^TXTU(X,"nwww") Q 
+ ....I $$FLinFL^TXTU(X,"nwebzp") Q 
+ ....S TL=""
+ ....S DT=DS-1 F  S DT=$O(^DSH(LP,OT,VR,SP,DT)) Q:DT=""!(DT>DE)  D
+ .....S TM="" F  S TM=$O(^DSH(LP,OT,VR,SP,DT,TM)) Q:TM=""  D
+ ......S X=$G(^(TM)) Q:X'="" 
+ ......S TE=$O(^(TM)) Q:TE="" 
+ ......I $D(^(TM,"t")) S X=^("t"),I=$P(X,"|",1),TE=$P(X,"|",3),TL=TE S:TE TE=TM+TE-1 Q:$D(NOWT(+I)) 
+ ......S:TE>(TM+59) TL=TE-TM
+ ......Q:MOD=2 
+ ......d ws8("<slot>")
+ ......d ws8("<doctorId>"_VR_"</doctorId>")
+ ......d ws8("<clinicId>"_LP_"</clinicId>")
+ ......d ws8("<from>"_$$DTISO^DTUTL(DT)_" "_$$TM^DTUTL(TM)_"</from>")
+ ......d ws8("<to>"_$$DTISO^DTUTL(DT)_" "_$$TM^DTUTL(TE)_"</to>")
+ ......d ws8("</slot>")
+ .....Q:MOD=1
+ .....S TM=$O(^DSH(LP,OT,VR,SP,DT,"")),TE=$O(^DSH(LP,OT,VR,SP,DT,80000),-1)
+ .....Q:TM=TE 
+ .....S TL=+$J(TL/60,"",0)
+ .....d ws8("<slot>")
+ .....d ws8("<doctorId>"_VR_"</doctorId>")
+ .....d ws8("<clinicId>"_LP_"</clinicId>")
+ .....d ws8("<from>"_$$DTISO^DTUTL(DT)_" "_$$TM^DTUTL(TM)_"</from>")
+ .....d ws8("<to>"_$$DTISO^DTUTL(DT)_" "_$$TM^DTUTL(TE)_"</to>")
+ .....d:TL'=30 ws8("<interval>"_TL_"</interval>")
+ .....d ws8("</slot>") 
+ d ws8("</slots>")
+ Q
+ftp(UID,FIL) 
+ S:$G(UID)="" UID="www"
+ S:$G(FIL)="" FIL=$H_"-"_$R(999)_".txt"
+ Q $$ADDSEND^IMSGHUB("ftp",UID,"",FIL,"","",,,1)
+ws8(X) ; Write utf-8 to MSGHUB
+ W $$WU8^TXTU($$DW^TXTU(X))
+ ;D WSEND^IMSGHUB(KEY,$$WU8^TXTU($$DW^TXTU(X)))
+ Q
+ws(X) 
+ W $$DW^TXTU(X)
+ ;D WSEND^IMSGHUB(KEY,$$DW^TXTU(X))
+ Q

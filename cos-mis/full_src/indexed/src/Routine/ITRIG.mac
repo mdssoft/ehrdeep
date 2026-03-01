@@ -1,0 +1,13 @@
+ITRIG ; Triggers [ 02/28/2020  11:24 PM ]
+DO(AREA,ACT) 
+ Q:AREA=""!(ACT="")  N %Pp
+ S %Pp="" F  S %Pp=$O(^TRIGGER(AREA,ACT,%Pp)) Q:%Pp=""  D @(%Pp_"("_^(%Pp)_")")
+ Q
+ADD(AREA,ACT,PROC,PRM) 
+ Q:AREA=""!(ACT="")!(PROC="") 
+ S ^TRIGGER(AREA,ACT,PROC)=PRM
+ Q
+DEL(AREA,ACT,PROC) 
+ Q:AREA=""!(ACT="")!(PROC="") 
+ K ^TRIGGER(AREA,ACT,PROC)
+ Q

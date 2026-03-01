@@ -1,0 +1,409 @@
+WWWCFG ; Конфигурирование YYHTML [ 01/29/2021  5:15 PM ]
+ N CMD,X,C,I,IDX,TP,A,NM,PCNT,ULST,WLST,IP,USR
+ S $ZT="ZT^WWWCFG"
+ W !
+A W !,$C(9),"Конфигуратор WEB сервисов",!
+ W "1. Управление адресами",!
+ W "2. Активировать сервис по адресу",!
+ W "3. Запуск сервисов",!
+ W "4. Останов сервисов",!
+ W "7. Управление пользователями",!
+ W "8. Служебные утилиты",!
+ W "9. Журнал WEB сервисов",!
+ W "0. Выход",!
+ W ">" R CMD
+ G:CMD=1 ADR G:CMD=2 SSTART G:CMD=3 START G:CMD=4 STOP G:CMD=9 LOG
+ G:CMD=7 USERS G:CMD=8 UTL
+ Q:CMD=0  Q:$TR(CMD,"h","H")="H"  
+ G A
+ZT ; Error trap
+ W !,"Exiting.."
+ Q
+START 
+ W !,"Выполняется..."
+ I $D(^$R("WWWSRV")) D START^WWWSRV ; for Cache
+ E  D START^YYHTML
+ W "OK",!
+ G A
+STOP 
+ W !,"Остановить сервисы <Y/N>: " R R S:(R="Y")!(R="y") R=1 S R=+R
+ G:R'=1 A
+ W !,"Выполняется..."
+ K ^AS,^ASJOB,^ASJOBR
+ I $D(^$R("WWWSRV")) D STOP^WWWSRV ; for Cache
+ E  D CLOSE^YYHTML
+ K ^BUFH,^JOB
+ W "OK",!
+ G A
+LIST ; список адресов
+ W !
+ S NM="",I=1 F  S NM=$O(^WWW("host",NM)) Q:NM=""  D
+ .S WLST(I)=NM,PCNT=$G(^WWW("host",NM)),A="  "_I_"."_$J("",3-$L(I))_NM
+ .W A_$J("",33-$L(A))_$S(PCNT>0:"Используется",1:"Не используется"),!
+ .S I=I+1
+ Q
+FLIST ; расширенный список адресов
+ W !
+ S NM="",I=1 F  S NM=$O(^WWW("host",NM)) Q:NM=""  D
+ .S WLST(I)=NM,PCNT=$G(^WWW("host",NM)),A="  "_I_"."_$J("",3-$L(I))_NM
+ .S X=$G(^WWW("host",NM,6))
+ .W A_$J("",33-$L(A))_X_$J("",31-$L(X))_$S(PCNT>0:"Используется",1:"Не используется"),! S I=I+1
+ Q
+SSTART ; запуск одного
+ W !,$C(9),"Активировать сервис по адресу"
+ I $D(^$R("WWWSRV")) W !,"No supported in Cache" G A
+ D LIST
+ W !,"Выберите адрес >" R IDX G:IDX=0!(IDX="") A
+ I '$D(WLST(IDX)) W !,"Ошибочный выбор адреса",! G SSTART
+ W !,"Количество процессов >" R CNT
+ F I=1:1:CNT J INIT^YYHTML(WLST(IDX))
+ W !,"Процессы успешно запущены",!
+ K WLST
+ G A
+ADR ; управление адресами
+ W !,$C(9),"Управление адресами"
+ D FLIST
+ W "1-добавить, 2-удалить, 3-изменить, 4 (0) -выход >" R ACMD
+ G:ACMD=4!(ACMD="")!(ACMD=0) A G:ACMD=1 ADRA
+ADRSEL W !,"Выберите адрес >" R ID G:'$D(WLST(ID)) ADRSEL
+ G:ACMD=2 ADRD G:ACMD=3 ADRC G ADR
+ADRA ; добавить
+ W !," Адрес: " R ADR W !," Порт: " R PRT
+ G:ADR="" SSTART S:PRT="" PRT=80 S HOST=ADR S:PRT'=80 HOST=ADR_":"_PRT
+ S ^WWW("host",HOST,4)=ADR,^WWW("host",HOST,5)=PRT
+ADRA1 
+ W !," Кол-во процессов: " R PRCNT W !," Базовый каталог: " R DIR
+ W !," Стартовая страница: " R PGIDX W !," Уровень лога (0,1,2):" R LLOG
+ W !," Имя хоста: " R HNAME W !," Каталог хранилища: " R PDIRS
+ W !," Только разрешенные пользователи: " R SUSR
+ S ^WWW("host",HOST)=PRCNT,^WWW("host",HOST,0)=DIR,^WWW("host",HOST,1)=PGIDX,^WWW("host",HOST,14)=SUSR
+ S:PDIRS'="" ^WWW("host",HOST,10)=PDIRS
+ S:HNAME'="" ^WWW("host",HOST,6)=HNAME
+ S:LLOG="" LLOG=0 S ^WWW("host",HOST,3)=LLOG
+ G ADR
+ADRD ; удалить
+ W !,"Удалить адрес """_WLST(ID)_""" (1-Да,0-Нет):" R YN
+ K:YN=1 ^WWW("host",WLST(ID)) K YN W !,"Адрес удален",! G ADR
+ADRC ; изменить
+ S HOST=WLST(ID)
+ S PRCNT=$G(^WWW("host",HOST))
+ S DIR=$G(^WWW("host",HOST,0))
+ S PGIDX=$G(^WWW("host",HOST,1))
+ S SUSR=$G(^WWW("host",HOST,14))
+ S PDIRS=$G(^WWW("host",HOST,10))
+ S HNAME=$G(^WWW("host",HOST,6))
+ S LLOG=$G(^WWW("host",HOST,3))
+ G ADRA1
+LOG ; WWWLOG
+ W !,$C(9),"Журнал WEB сервисов",!
+ W "1. Просмотр последних записей",!
+ W "2. Просмотр ошибок",!
+ W "3. Очистка",!
+ W "4. Поиск по процедуре",!
+ W "5. Поиск по адресу",!
+ W "6. Поиск по дате/времени",!
+ W "7. Поиск по коду ответа",!
+ W "8. Поиск по пользователю",!
+ W "9. Ротация журнала",!
+ W "0. Выход",!
+ W ">"
+ R R G:R=1 SWLOG G:R=2 SWERR G:R=3 CLRLOG
+ G:R=4 FNDLOG G:R=5 FNDLOGIP G:R=6 FNDLOGDT
+ G:R=7 FNDLOGST G:R=8 FNDLOGU
+ G:R=9 ROTATLOG Q:$TR(CMD,"h","H")="H" 
+ G A
+SWLOG ; Show log
+ W !,"Количество строк <23>" R CNT S:CNT=0!(CNT="") CNT=23
+ N X,C S X=-1,C=$C(9),I=0 W !
+ F N=$O(^WWWLOG(""),-1):X S M=$G(^WWWLOG(N)) Q:M=""  W $$DTM^DTUTL($P(M,C,1))_" "_$P(M,C,2)_" "_$P(M,C,3)_" "_$P(M,C,5)_" "_$P(M,C,6)_" "_$P(M,C,7)_" "_$P(M,C,8),! S I=I+1 I I#CNT=0 W "Enter - продолжить, 0 - закончить :" R R,! Q:R=0  W !
+ W !
+ G LOG
+SWERR ; Show error
+ W !,"Количество строк <23>" R CNT S:CNT=0!(CNT="") CNT=23
+ W ! S IDX=0
+ F N=$O(^WWWLOG(""),-1):-1 S M=$G(^WWWLOG(N)) Q:M=""  I M["<<err>>" W $$DTM^DTUTL($P(M,$C(9),1))_" "_$P(M,$C(9),3),! S IDX=IDX+1 I IDX#CNT=0 W "Enter - продолжить, 0 - закончить :" R R,! Q:R=0  W !
+ K X,IDX,M,CNT,R,N
+ W !
+ G LOG
+CLRLOG ; Clear log
+ W !,"Сохранить в файл <Y/N>: " R R#1 S:(R="Y")!(R="y") R=1 S R=+R
+ I R=1 W !,"Имя файла: " R FN S FN=$$TRIM^TXTU(FN) G:FN="" LOG I $$CHECK^FIL(FN) W !,"File exists, overwrite ? <N>:" R R S R=$TR(R,"y1","YY") G:$E(R,1)'="Y" LOG D DEL^FIL(FN) W !
+ S DEV=$$OW^FIL(FN) U 0
+ W !,"Производится очистка..."
+ S END=$O(^WWWLOG(""),-1)-1,C9=$C(9),CR=$C(13,10),STRT=$O(^WWWLOG(""))-1
+ W !,"Начальная позиция <"_STRT_">: " R XX S:XX'="" STRT=XX
+ W !,"Конечная позиция <"_END_">: " R XX S:XX'="" END=XX
+ U:R DEV
+ F I=$O(^WWWLOG(STRT-1)):1:END Q:I=""  D
+ .I $G(R)=1 S M=$G(^WWWLOG(I)) W $$DTIME^DTUTL($P(M,C9,1))_C9_$P(M,C9,2,255)_CR
+ .K ^WWWLOG(I)
+ C:$G(R)=1 DEV U 0 W "OK",!
+ G LOG
+FNDLOG ; Find in log
+ W !,"Имя процедуры для поиска: " R STR G:STR="" LOG
+ W !,"Дополнительный параметр поиска: " R STR1
+ S STR=$TR(STR,"^","_")
+ W !,"Количество строк <23>" R CNT S:CNT=0!(CNT="") CNT=23
+ S X=-1,C=$C(9),I=0 W !
+ F N=$O(^WWWLOG(""),-1):X S M=$G(^WWWLOG(N)) Q:M=""  S PRC=$P(M,C,6) I PRC[STR,STR1=""!(PRC[STR1) W $$DTM^DTUTL($P(M,C,1))_" "_$P(M,C,2)_" "_$P(M,C,3)_" "_$P(M,C,5)_" "_PRC_" "_$P(M,C,7)_" "_$P(M,C,8),! S I=I+1 I I#CNT=0 W "Enter - продолжить, 0 - закончить :" R R,! Q:R=0
+ W !
+ K STR,STR1,X,C,I,N,M,PRC,CNT
+ G LOG
+FNDLOGDT ; Find in log by date
+ W !,"Дата, время: " R STR G:STR="" LOG
+ S STR=$$sysdtm(STR),(IP,USR,DE)=""
+ S DT=$P(STR,",",1),TM=$P(STR,",",2),DE=DT,EX=0
+ G:DT="" LOG
+ W !,"Дополнительные параметры <N/Y>: " R R
+ I '$S(R="Y":1,R="y":1,1:0) S R="" G FNDLOGD1
+ W !,"Дата, время окончания: " R STR
+ S STR=$$sysdtm(STR)
+ S DT1=$P(STR,",",1),TM1=$P(STR,",",2)
+ I DT1'="",DT1<DT S X=DT,DT=DT1,DT1=X,X=TM,TM=TM1,TM1=X
+ S:DT1="" DT1=DT S DE=DT1,EX=1
+ W !,"Имя процедуры для поиска: " R R S R=$$TRIM^TXTU(R)
+ W !,"Имя пользователя: " R USR
+ W !,"Адрес клиента: " R IP
+FNDLOGD1 
+ W !,"Количество строк <23>" R CNT S:CNT=0!(CNT="") CNT=23
+ S C=$C(9),(X,I)=0 W !
+ S N=$S(DE:$$logPOS(DE),1:$O(^WWWLOG(""),-1))
+ F N=N:-1 S M=$G(^WWWLOG(N)) Q:M=""  S D=$P(M,C,1) Q:+D<DT  D  Q:X 
+ .I EX Q:+D>DT1  Q:+D=DT&(TM'="")&(TM>$P(D,",",2))  Q:+D=DT1&(TM1'="")&(TM1<$P(D,",",2))  I R'="",$P(M,C,6)'[R Q 
+ .I 'EX Q:+D'=DT  I TM'="",TM'=$P(D,",",2) Q 
+ .S U=$P(M,C,8) I USR'="",USR'=U Q 
+ .I IP'="",$P(M,C,3)'=IP Q 
+ .W $$DTM^DTUTL(D)_" "_$P(M,C,2)_" "_$P(M,C,3)_" "_$P(M,C,5)_" "_$P(M,C,6)_" "_$P(M,C,7)_" "_U_" "_$P(M,C,11)_"s",!
+ .S I=I+1
+ .I I#CNT=0 W "Enter - продолжить, 0 - закончить :" R X,! S X=$S(X=0:1,1:0)
+ W !
+ K STR,DT,TM,X,C,I,N,M,D,CNT,R,DT1,TM1,DE,IP
+ G LOG
+FNDLOGIP ; Find in log by IP
+ W !,"Укажите IP адрес клиента: " R STR G:STR="" LOG
+ W !,"Имя пользователя: " R USR
+ S STR=$TR(STR," ","")
+ W !,"Количество строк <23>" R CNT S:CNT=0!(CNT="") CNT=23
+ S X=-1,I=0,C=$C(9) W !
+ F N=$O(^WWWLOG(""),-1):X S M=$G(^WWWLOG(N)) Q:M=""  S IP=$P(M,$C(9),3) I IP=STR D
+ .S U=$P(M,C,8) I USR'="",USR'=U Q
+ .W $$DTM^DTUTL($P(M,$C(9),1))_" "_$P(M,$C(9),2)_" "_IP_" "_$P(M,$C(9),5)_" "_$TR($P(M,$C(9),6,7),$C(9)," ")_" "_U,!
+ .S I=I+1 I I#CNT=0 W "Enter - продолжить, 0 - закончить :" R R,! Q:R=0
+ W !
+ K X,I,IP,STR,M,CNT
+ G LOG
+FNDLOGST ; Find in log by Return code
+ W !,"Укажите код ответа: " R STR G:STR="" LOG
+ S STR=$TR(STR,"^","_")
+ W !,"Количество строк <23>" R CNT S:CNT=0!(CNT="") CNT=23
+ S X=-1,I=0 W !
+ F N=$O(^WWWLOG(""),-1):X S M=$G(^WWWLOG(N)) Q:M=""  S ST=$P(M,$C(9),7) I ST=STR W $$DTM^DTUTL($P(M,$C(9),1))_" "_$P(M,$C(9),2)_" "_$P(M,$C(9),3)_" "_$TR($P(M,$C(9),5,7),$C(9)," "),! S I=I+1 I I#CNT=0 W "Enter - продолжить, 0 - закончить :" R R,! Q:R=0
+ W !
+ K X,I,ST,STR,M,CNT,R,N
+ G LOG
+FNDLOGU ; Find in log by user (and PROC)
+ S (STR,STR1)=""
+ W !,"Имя пользователя: " R USR
+ W !,"Дополнительные параметры <N/Y>: " R R
+ I '$S(R="Y":1,R="y":1,1:0) S R="" G FNDLOGU1
+ W !,"Имя процедуры для поиска: " R STR
+ W !,"Дополнительный параметр поиска: " R STR1
+ S STR=$TR(STR,"^","_")
+FNDLOGU1 
+ W !,"Количество строк <23>" R CNT S:CNT=0!(CNT="") CNT=23
+ S X=-1,C=$C(9),I=0 W !
+ F N=$O(^WWWLOG(""),-1):X S M=$G(^WWWLOG(N)) Q:M=""  S PRC=$P(M,C,6),U=$P(M,C,8) I U=USR,$S(STR="":1,1:PRC[STR),$S(STR1="":1,1:PRC[STR1) W $$DTM^DTUTL($P(M,C,1))_" "_$P(M,C,2)_" "_$P(M,C,3)_" "_$P(M,C,5)_" "_PRC_" "_$P(M,C,7)_" "_U,! S I=I+1 I I#CNT=0 W "Enter - продолжить, 0 - закончить :" R R,! Q:R=0
+ W !
+ K STR,STR1,X,C,I,N,M,PRC,CNT,USR,U
+ G LOG
+logPOS(DE) ; Быстрое позиционирование на начальную дату
+ N I,C,R,D,K,ST,N
+ S I=$O(^WWWLOG(""),-1),C=$C(9),DE=+DE
+ Q:+$H=DE I
+ S R=^(I),D=+$P(R,C,1)
+ I D=DE Q "" ; from start
+ S ST=D-DE,ST=-$S(ST<10:100,ST<30:500,1:1000)
+ F N=I:ST S R=$G(^WWWLOG(N)) Q:R=""  S D=+$P(R,C,1) Q:D<DE 
+ Q:R="" -1
+ F N=N:1:I S R=$G(^WWWLOG(N)) Q:R=""  S D=+$P(R,C,1) Q:D>DE  ; return before
+ Q N
+ROTATLOG ; Ротация журнала
+ I $G(^cfg("www","logfn"))="" W !,"Не настроен каталог ротации" G LOG
+ W !,"Число последних дней, за которые оставить журнал: " R STR G:STR="" LOG
+ I STR'?1.N G ROTATLOG
+ W !,"Processing..."
+ D ROTATELG(+STR)
+ W !,"OK"
+ G LOG
+USERS ; Пользователи
+ W !,$C(9),"Управление пользователями",!
+ W "1. Добавить",!
+ W "2. Изменить",!
+ W "3. Удалить",!
+ W "9. Список",!
+ W ">" R CMD
+ G:CMD=1 UADD G:CMD=2 UCNG G:CMD=3 UDEL G:CMD=9 ULST
+ Q:$TR(CMD,"h","H")="H" 
+ G A
+ULIST ; Список пользователей
+ K ULST
+ W !,"Перечень пользователей:" 
+ S X="",I=1 F  S X=$O(^LOG(X)) Q:X=""  W !,I_". "_X S ULST(I)=X,I=I+1
+ W !,"Введите номер: "
+ Q
+ULST ; Список пользователей
+ K ULST
+ W !,"Перечень пользователей:",!,"Имя            Пароль      Каталог" 
+ N X,L,A,P
+ S X="",I=1 F  S X=$O(^LOG(X)) Q:X=""  S A=I_". "_X,P=$G(^PAS(X)) W !,A_$J("",15-$L(A))_""""_P_""""_$J("",10-$L(P))_""""_$G(^LOG(X))_"""" S ULST(I)=X,I=I+1
+ G USERS
+UADD 
+ ; N NAME,PASS,PASS,DIR,KADRY,OTD,CFIL,RKKM,SYNC
+ W !,"Имя:" R NAME
+ W !,"Пароль:" R PASS
+ ;W !,"Пароль (повторно):" R PASS1
+ W !,"Каталог пользователя:" R DIR
+ W !,"Табельный номер:" R KADRY
+ W !,"Отделение:" R OTD
+ W !,"Файл конфигурации:" R CFIL
+ W !,"Адрес ККМ:" R RKKM
+ W !,"Синхронизация конфигурации (No/Yes):" R SYNC
+ ;I PASS'=PASS1 W !,"Внимание, пароли несовпадают !" G UADD
+ G:(NAME="")!(PASS="") UADD
+ S ^LOG(NAME)=DIR,^LOG(NAME,1)=DIR S:KADRY'="" ^LOG(NAME,"kadry")=KADRY
+ S:OTD'="" ^LOG(NAME,"otd")=OTD S:CFIL'="" ^LOG(NAME,"FIL")=CFIL
+ S:RKKM'="" ^LOG(NAME,"remotekkm")=RKKM
+ I SYNC'="" S:$$LU^TXTU($E(SYNC,1))="Y" ^LOG(NAME,"SYNC")="user"
+ I $$^I("ilpu")>0 S A=NAME_"@"_$$^I("ilpu") M ^LOGA(A)=^LOG(NAME) D UGL^IEXCH("^LOGA("""_A_"""") K A
+ S ^PAS(NAME)=PASS
+ W !,"Пользователь успешно добавлен",!
+ K NAME,PASS
+ G USERS
+UCNG 
+ D ULIST
+ R ID
+ I $G(ID)="" K ULST G USERS
+ I $D(ULST(ID))=0 K ULST G USERS
+ S NAME=$G(ULST(ID))
+ S DIR=$G(^LOG(NAME)),KADRY=$G(^LOG(NAME,"kadry"))
+ S OTD=$G(^LOG(NAME,"otd")),CFIL=$G(^LOG(NAME,"FIL"))
+ S RKKM=$G(^LOG(NAME,"remotekkm"))
+ S PASS=$G(^PAS(NAME))
+ W !,"Имя <"_NAME_">:" R R S:R'="" NAME=R
+ W !,"Пароль <"_PASS_">:" R R S:R'="" PASS=R
+ ;W !,"Пароль (повторно):" R PASS1
+ W !,"Каталог пользователя <"_DIR_">:" R R S:R'="" DIR=R
+ W !,"Табельный номер <"_KADRY_">:" R R S:R'="" KADRY=R
+ W !,"Отделение <"_OTD_">:" R R S:R'="" OTD=R
+ W !,"Файл конфигурации <"_CFIL_">:" R R S:R'="" CFIL=R
+ W !,"Адрес ККМ <"_RKKM_">:" R R S:R'="" RKKM=R
+ G:(NAME="")!(PASS="") UADD
+ S ^LOG(NAME)=DIR,^LOG(NAME,1)=DIR S:KADRY'="" ^LOG(NAME,"kadry")=KADRY
+ S:OTD'="" ^LOG(NAME,"otd")=OTD S:CFIL'="" ^LOG(NAME,"FIL")=CFIL
+ S:RKKM'="" ^LOG(NAME,"remotekkm")=RKKM
+ S ^PAS(NAME)=PASS
+ G USERS
+UDEL 
+ D ULIST
+ R ID
+ I $G(ID)="" K ULST G USERS
+ I $D(ULST(ID))=0 K ULST G USERS
+ W !,"Удалить пользователя """_$G(ULST(ID))_""" <N>: " R CMD
+ I $TR($E(CMD,1),"y","Y")="Y" K ^LOG($G(ULST(ID))),^PAS($G(ULST(ID)))
+ K ULST G USERS
+NUL 
+ D MSG^RWU("OK")
+ Q
+UTL 
+ W !,$C(9),"Служебные утилиты",!
+ W "1. Чистка ^JOB",!
+ W "2. Чистка синхронизации",!
+ W ">" R CMD
+ D:CMD=1 CLRJOB D:CMD=2 CLRSYN Q:$TR(CMD,"h","H")="H" 
+ G A
+CLRJOB(dDT,WW) 
+ N J,DT,DTN S DTN=+$H,J="",dDT=$G(dDT,7)
+ F  S J=$O(^JOB(J)) Q:J=""  S DT=+$G(^(J,4)) K:DT<(DTN-dDT) ^JOB(J),^BUFH(J)
+ S DT="" F  S DT=$O(^AS(DT)) Q:DT=""  S J="" F  S J=$O(^AS(DT,J)) Q:J=""  K:'$D(^JOB(J)) ^AS(DT,J)
+ S J="" F  S J=$O(^BUFH(J)) Q:J=""  I J'=777777 K:'$D(^JOB(J)) ^BUFH(J)
+ W:$G(WW) !,"OK",!
+ Q
+CLRSYN 
+ N J,X
+ S X="" F  S X=$O(^AS(X)) Q:X=""  S J="" F  S J=$O(^AS(X,J)) Q:J=""  K:$D(^JOB(J))=0 ^AS(X,J)
+ S J="" F  S J=$O(^ASJOB(J)) Q:J=""  K:$D(^JOB(J))=0 ^ASJOB(J)
+ S J="" F  S J=$O(^ASJOBR(J)) Q:J=""  K:$D(^JOB(J))=0 ^ASJOBR(J)
+ W !,"OK",!
+ Q
+ROTATELG(D) ; Rotate log, leave D days
+ N I,H,R,G
+ S G(1)="^WWWLOG",R=$G(^cfg("www","logfn"))
+ Q:R=""
+ S I=$O(^WWWLOG("")),H=$H-D Q:I=""
+ S I=^(I) Q:+$P(I,$C(9),1)>H  ; не прошло дней
+ D SFN^XGU("G",R_$TR($$DT^DTUTL(+$H),".","")_".xgl")
+ S I=""
+ F  S I=$O(^WWWLOG(I)) Q:I=""  S R=^(I) Q:+$P(R,$C(9),1)>H  K ^(I)
+ Q
+flushlog(SZ) ; Выгрузить в каталог по умолчанию в линейном формате
+ S:'$G(SZ) SZ=2000000000
+ N FN,I
+ F I="",1,2,3,4,5,6,7,8,9 S FN=$G(^cfg("www","logfn"))_$TR($$DT^DTUTL(+$H),".","")_$S(I="":"",1:"_")_I_".log" Q:'$$CHECK^FIL(FN) 
+ w !,FN
+ D wlogfn(FN,SZ)
+ Q
+wlogfn(FN,SZ) ; Выгрузить в линейный файл
+ ; FN - имя файла
+ ; SZ - размер файла
+ N DEV,I,L,RL,II,R,CR
+ I $$CHECK^FIL(FN) W !,"File exists" Q 
+ S DEV=$$OW^FIL(FN) Q:DEV=""
+ S I="",L=0,RL=0,CR=$C(13,10),II=""
+ U DEV F  S I=$O(^WWWLOG(I)) Q:I=""  D  Q:L'<SZ 
+ .S R=^(I),R=$S(II:CR,1:"")_I_$C(9)_R
+ .S L=L+$L(R) Q:L'<SZ
+ .W R S II=I,RL=L
+ C DEV U 0
+ W !,"Total: "_RL_" bytes writen."
+ Q:'L 
+ W " Clear log..."
+ S I="" F  S I=$O(^WWWLOG(I)) Q:I=""!(I>II)  K ^(I)
+ W "OK",!
+ Q
+rlogfn(FN) ; Загрузить из линейного файла
+ ; TODO
+ Q
+sysdtm(X) ; 
+ S X=$$TRIM^TXTU(X)
+ I X[",",+$P(X,",",1)=$P(X,",",1),+$P(X,",",2)=$P(X,",",2) Q X
+ S X=$TR(X,","," "),X=$$DBLSP^TXTU(X)
+ Q $$DI^DTUTL($P(X," ",1))_","_$$TI^DTUTL($P(X," ",2))
+LSTUSR(STR,STR1,DAYS) ; Show users for STR in ^WWWLOG
+ N M,X,C,I,UL,U,E
+ S X=-1,C=$C(9),I=0,STR1=$G(STR1),E=$H-DAYS
+ F N=$O(^WWWLOG(""),-1):X S M=$G(^WWWLOG(N)) Q:M=""  Q:+$P(M,C,1)<E  S PRC=$P(M,C,6) I STR=""!(PRC[STR),STR1=""!(PRC[STR1) D 
+ .S U=$P(M,C,8) Q:U=""
+ .S:'$D(UL(U)) UL(U)="" 
+ W:'$D(UL) !,"Not found"
+ S U="" F  S U=$O(UL(U)) Q:U=""  W !,U_" - "_$$FIO^IUSER(U)_" - "_$$GSPEC^YISPRAV($$SPEC^IKADRY($$UKDR^IUSER(U)))
+ Q
+IPSTAT(USR,DAYS) ; Статистика по IP адресам пользователя
+ N M,X,C,I,UL,E,IP
+ S X=-1,C=$C(9),I=0,E=$H-DAYS
+ F N=$O(^WWWLOG(""),-1):X S M=$G(^WWWLOG(N)) Q:M=""  Q:+$P(M,C,1)<E  D:$S(USR="":1,1:$P(M,C,8)=USR) 
+ .Q:M["<<err>>" 
+ .S IP=$P(M,C,3) Q:IP="" 
+ .S:'$D(UL(IP)) UL(IP)="" 
+ W:'$D(UL) !,"Not found"
+ s i=0 S IP="" F  S IP=$O(UL(IP)) Q:IP=""  W !,IP s i=i+1
+ w !,i
+ Q
+LGSTAT(IP,DAYS) ; Статистика по пользователям относительно IP
+ N M,X,C,I,UL,E,USR
+ S X=-1,C=$C(9),I=0,E=$H-DAYS
+ F N=$O(^WWWLOG(""),-1):X S M=$G(^WWWLOG(N)) Q:M=""  Q:+$P(M,C,1)<E  D:$P(M,C,3)=IP 
+ .S USR=$P(M,C,8) Q:USR="" 
+ .S:'$D(UL(USR)) UL(USR)="" 
+ W:'$D(UL) !,"Not found"
+ S USR="" F  S IP=$O(UL(USR)) Q:USR=""  W !,USR
+ Q

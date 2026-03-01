@@ -1,0 +1,46 @@
+NPRNPAT ; Шаблоны печати [ 02/07/2018  12:24 PM ]
+LSTPPAT ; Список шаблонов печати
+ N A,I
+ S (A,I)=""
+ F  S I=$O(^MND("prnpt",I)) Q:I=""  S A=$S(A="":"",1:A_CR)_I_"|"_$P(^(I),"|",1)
+ D MSG^RWU(A)
+ Q
+LPRNPAT(ID) ; Load print pattern
+ N R,FL
+ D OWF^RWU(".xmlb")
+ D W^RWU($G(^PP(0,2))_"<prnfpat><list>")
+ S FL="" F  S FL=$O(^MND("prnpt",ID,"fl",FL)) Q:FL=""  D WC^RWU("<"_FL_">"),WC^RWU($$TAG^TXTU(^MND("prnpt",ID,"fl",FL))),WC^RWU("</"_FL_">")
+ D W^RWU("</list>")
+ S R=^MND("prnpt",ID)
+ D WTAGC^RWU("id",ID)
+ D WTAGC^RWU("uid",$P(R,"|",2))
+ D WTAGC^RWU("uname",$P(R,"|",1))
+ D W^RWU("</prnfpat></nb_console>"),C^RWU
+ Q
+SPRNPAT ; Save print pattern
+ N R,ID,NM
+ D RBUFH^YIXMLRR(1)
+ S ID=$G(XML("list","id"))
+ S:ID="" ID=$O(^MND("prnpt",""),-1)+1
+ S R=$G(XML("list","uname"))
+ S $P(R,"|",2)=$G(XML("list","uid"))
+ 
+ K ^MND("prnpt",ID)
+ S ^MND("prnpt",ID)=R
+ K XML("list","id"),XML("list","uname"),XML("list","uid")
+ M ^MND("prnpt",ID,"fl")=XML("list")
+ D CLOSE^YIXMLRR
+ D REGL^IEXCH("^MND","prnpt",ID)
+ Q
+APRNPAT(NM) ; Добавить шаблон печати
+ N ID
+ S ID=$O(^MND("prnpt",""),-1)+1
+ S ^MND("prnpt",ID)=$$WD^TXTU(NM)
+ D GL^IEXCH("^MND","prnpt",ID)
+ D LSTPPAT
+ Q
+DPRNPAT(ID) ; Удалить шаблон печати
+ K ^MND("prnpt",ID)
+ D KGL^IEXCH("^MND","prnpt",ID)
+ D LSTPPAT
+ Q

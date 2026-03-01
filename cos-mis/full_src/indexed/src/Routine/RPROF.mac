@@ -1,0 +1,135 @@
+RPROF ; Отчеты по профэкспертизе [ 09/17/2016  11:16 PM ]
+LCVRED(DGN,PRG,DS,DE) ; По программам
+ S DS=$$DIH^DTUTL($G(DS)),DE=$$DIH^DTUTL($G(DE))
+ N CN,NI,R,ML,D,F,I,P,V,LST,VLST
+ S DGN=$$WD^TXTU(DGN),PRG=$$WD^TXTU(PRG),CN=$$GET^YMPRP(PRG,"cn",DE)
+ S VLST("1.")="Химические факторы",VLST("1.1.4.")=" В том числе, аэрозоли фиброгенного действия",VLST("2.")="Биологические факторы",VLST("3.")="Физические факторы",VLST("3.5.")=" В том числе шум",VLST("3.4.")=" В том числе вибрация",VLST("4.")="Факторы трудового процесса",VLST("S.")="Сочетанный фактор"
+ D OWF^RWU(".txt")
+ D WC^RWU("По """_$$NAMEH^IMPRP(PRG,DE)_""" за "_$$DT2^DTUTL(DS)_"-"_$$DT2^DTUTL(DE)_"|подлежало осмотру|подлежало осмотру|прошло осмотр|прошло осмотр;"_CR)
+ D WC^RWU("Наименование факторов|всего|в т.ч. женщины|всего|в т.ч. женщины")
+ I DGN=""!(DGN=9999) D WC^RWU(CR_"Выберите договор") G LCVREDE
+ K ^BUF($J,"vrf")
+ S NI="",I=0 F  S NI=$O(^BTI(" s",DGN,NI)) Q:NI=""  D
+ .D GETM^IPAC(NI,"stc","ML")
+ .S D=$O(ML(DS+1),-1)-1,F=1
+ .F  S D=$O(ML(D)) Q:D=""!(D>DE)  I ML(D)=DGN S F=0 Q 
+ .Q:F  
+ .D GETM^IPAC(NI,"prog","ML")
+ .S D=$O(ML(DS),-1)-1,F=1,R="|"_PRG_"|"
+ .F  S D=$O(ML(D)) Q:D=""!(D>DE)  I ("|"_ML(D)_"|")[R S F=0 Q
+ .Q:F  
+ .S D=$O(^PNF(NI,DS-1)) S:D>DE D="" ; todo - провер. соотв. услуг
+ .K ML S ML=$$GET^IPAC(NI,"pol",DE),^BUF($J,"vrf",NI)=ML
+ .S P=$$GET^IPAC(NI,"profid",DE) Q:P="" 
+ .S V="" F  S V=$O(^PROFV("p",P,V)) Q:V=""  D
+ ..Q:V["-"  
+ ..S I="" F  S I=$O(VLST(I)) Q:I=""  Q:$E(V,1,$L(I))=I 
+ ..Q:I=""  
+ ..S LST(I,1)=$G(LST(I,1))+1 S:ML=2 LST(I,2)=$G(LST(I,2))+1
+ ..I D'="" S LST(I,3)=$G(LST(I,3))+1 S:ML=2 LST(I,4)=$G(LST(I,4))+1
+ K ^BUF($J,"vrf")
+ S V="" F  S V=$O(VLST(V)) Q:V=""  D WC^RWU(CR_VLST(V)_"|"_$G(LST(V,1))_"|"_$G(LST(V,2))_"|"_$G(LST(V,3))_"|"_$G(LST(V,4)))
+LCVREDE D C^RWU
+ Q
+CTRLST(DGN,PRG,DS,DE,TP,DET,NAZ)   ; Список осмотренных/не осмотренных
+ S DS=$$DIH^DTUTL($G(DS)),DE=$$DIH^DTUTL($G(DE))
+ S DET=+$G(DET),NAZ=+$G(NAZ)
+ N CN,NI,R,ML,D,F,I,P,V,V1,U,DPRC,PP
+ S DGN=$$WD^TXTU(DGN),PRG=$$WD^TXTU(PRG),CN=$$GET^YMPRP(PRG,"cn",DE)
+ D OWF^RWU(".txt")
+ D WC^RWU("||По """_$$NAMEH^IMPRP(PRG,DE)_""" за период "_$$DT2^DTUTL(DS)_"-"_$$DT2^DTUTL(DE)_"|Кол-во"_$S(TP'=1:"|Расписание|ЭИБ",1:"")_";"_CR)
+ D WC^RWU("П.п.|N И.Б.|Пациент, услуга|услуг")
+ I DGN=""!(DGN=9999) D WC^RWU(CR_"||Выберите конкретный договор") G CTRLSTE
+ S DPRC=+$$GET^YNDOG(DGN,"price",DE) S:DPRC=0 DPRC=1
+ S PP=+$$GET^YNDOG(DGN,"pprice",DE) S:PP=0 PP=1
+ K ^BUF($J,"vrf"),^BUF($J,"vrr"),^BUF($J,"vri")
+ S NI="",I=0 F  S NI=$O(^BTI(" s",DGN,NI)) Q:NI=""  D
+ .D GETM^IPAC(NI,"stc","ML")
+ .S D=$O(ML(DS+1),-1)-1,F=1
+ .F  S D=$O(ML(D)) Q:D=""!(D>DE)  I ML(D)=DGN S F=0 Q 
+ .Q:F  
+ .D GETM^IPAC(NI,"prog","ML")
+ .S D=$O(ML(DS),-1)-1,F=1,R="|"_PRG_"|"
+ .F  S D=$O(ML(D)) Q:D=""!(D>DE)  I ("|"_ML(D)_"|")[R S F=0 Q
+ .Q:F  
+ .S D=$O(^PNF(NI,DS-1)) S:D>DE D="" ; todo - провер. соотв. услуг
+ .K ML S ML=$$GET^IPAC(NI,"pol",DE),^BUF($J,"vrf",NI)=ML
+ .Q:$$MKPROFU() 
+ .S LNRUN="CTRLPROC^RPROF" D DOSC^NPACSC(NI,DS,DE)  
+ .S D=DS-1,I=0 F  S D=$O(^DSHP(NI,D)) Q:D=""!(D>DE)  S V="" F  S V=$O(^DSHP(NI,D,V)) Q:V=""  S I=I+1
+ .S ^BUF($J,"vrr",NI)=I,I=0
+ .S V="" F  S V=$O(^EPR(NI,V)) Q:V=""  S D=+$G(^(V,"dtm")) S:D'<DS&(D'>DE) I=I+1
+ .S ^BUF($J,"vri",NI)=I
+ S NI="",I=0 F  S NI=$O(^BUF($J,"vrf",NI)) Q:NI=""  D
+ .S U="",(V,P)=0
+ .F  S U=$O(^BUF($J,"vrf",NI,U)) Q:U=""  S:^(U)=1 V=V+1 S:$P(^(U),"|",1)=2 P=P+1
+ .Q:TP=0&(P>0)  Q:TP=1&((V'=P)!(P=0))  Q:TP=2&((V=P)!(P=0))  
+ .I TP=3 Q:P=0&(+$G(^BUF($J,"vri",NI))=0) 
+ .S I=I+1
+ .S U=$S(TP'=1:"|"_$G(^BUF($J,"vrr",NI))_"|"_$G(^BUF($J,"vri",NI)),1:"")
+ .D WC^RWU(CR_I_"|"_NI_"|"_$$FIO^IPAC(NI,DE)_"|"_$S(TP=1:P,TP>1:"нет "_V_" есть "_P,1:"нет "_V)_U)
+ .Q:'DET 
+ .S U="" F  S U=$O(^BUF($J,"vrf",NI,U)) Q:U=""  D
+ ..S P=^(U),V=$P(P,"|",1)
+ ..Q:TP=0&(V'=2)  Q:TP=2&(V=2)  Q:TP=1&(V'=2)  Q:TP=3&(V=1) 
+ ..S P=$$NAMEH^IPRICE(U,PP,DE) Q:P="" 
+ ..D WC^RWU(CR_"||"_U_" "_P_"|"_$S(TP=2:$S(V=1:"не выполнено",1:"перевыполнено"),1:1))
+ K ^BUF($J,"vrf"),^BUF($J,"vrr"),^BUF($J,"vri")
+CTRLSTE D C^RWU
+ Q
+MKPROFU() 
+ N R
+ S R=$O(^PROFP(NI,"n",DE+1),-1) G:R'="" MKPROFU1
+ S P=$$GET^IPAC(NI,"profid",DE) Q:P="" 1
+ S V="" F  S V=$O(^PROFV("p",P,V)) Q:V=""  S V1="" F  S V1=$O(^PROFV("p",P,V,V1)) Q:V1=""  S U="" F  S U=$O(^PROFV("p",P,V,V1,U)) Q:U=""  S ^BUF($J,"vrf",NI,U)=1
+ Q:'$D(^BUF($J,"vrf",NI)) 1
+ Q 0
+MKPROFU1 
+ S R=DS-1 F  S R=$O(^PROFP(NI,"n",R)) Q:R=""!(R>DE)  D
+ .S U="" F  S U=$O(^PROFP(NI,"n",R,U)) Q:U=""  D
+ ..I 'NAZ S ^BUF($J,"vrf",NI,U)=1 Q
+ ..S ^BUF($J,"vrf",NI,U)=$S($P($G(^PROFP(NI,"n",R,U)),"|",3,6)="":1,1:2)
+ Q:'$D(^BUF($J,"vrf",NI)) 1
+ Q 0
+CTRLPROC 
+ N K
+ S U="" F  S U=$O(UL(U)) Q:U=""  D
+ .S CNT=$G(UL(U))
+ .S K=$G(^BUF($J,"vrf",NI,U)) Q:K&NAZ 
+ .S ^(U)=$S($G(^BUF($J,"vrf",NI,U))<3:2,1:3)_"|"_DT_"|"_CNT
+ Q
+USLBYPRG(DS,DE,DGN,ISPRG,PRG) 
+ N F,U,SS,A,UU
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S F='+$$FR^I(),LPU=+$$^I("ilpu"),SS=0
+ S:DGN=9999 DGN="" S PRG="|"_PRG_"|"
+ K ^BUF($J)
+ D PRETZR^IPAC
+ D MKAPPRC^IUSLSC(DS,DE,1,"UDPREP^RPROF","UDPROC^RPROF","","",F)
+ D OWF^RWU(".txt")
+ D WC^RWU("Код|Услуга за пкриод "_$$DT2^DTUTL(DS)_"-"_$$DT2^DTUTL(DE)_"|Кол-во|Сумма")
+ S U="" F  S U=$O(^BUF($J,U)) Q:U=""  D
+ .S A=^(U),SS=SS+$P(A,"|",2),UU=$P(U,"|",1)
+ .D WC^RWU(CR_UU_"|"_$$PRICEH^IPRICE(UU,$P(U,"|",2),DE)_"|"_A)
+ D:SS WC^RWU(CR_"||Итого|"_$FN(SS,"",2))
+ D C^RWU
+ K ^BUF($J)
+ Q
+UDPREP 
+ I ISPRG I "|"_$$GET^IPAC(NIB,"prog",DT)_"|"'[PRG S TEST=0 Q 
+ I DGN'="" I $$GET^IPAC(NIB,"stc",DT)'=DGN S TEST=0 Q 
+ S TEST=1
+ Q
+UDPROC 
+ Q:$G(FLG)_"|"'["prf|" 
+ I F N L S L=+$G(LPU) Q:LPU'=L 
+ N C,CC,X
+ S CC=$G(UL(U)),C=$$PRICEH^IPRICE(U,PRC,DT),X=C*KSKD*CC,C=C*CC
+ ; todo - "s" - summ.
+ S ^BUF($J,U_"|"_PRC)=CC_"|"_X
+ Q
+REGIPROC 
+ S ^IPROC("Профмедицина","Численность работников по классам производственных факторов")="LCVRED_RPROF,1,4,te@storage:dog,Договор,te@storage:aprog,Программа,d,Дата начала периода,d,Дата окончания периода"
+ S ^IPROC("Профмедицина","Контроль выполнения МО")="CTRLST_RPROF,1,7,t@storage:dog,Договор,t@storage:aprog,Программа,d,Дата начала периода,d,Дата окончания периода,t@string:1/Прошедших#0/Не прошедших#2/Недопрошедших#3/Всех пришедших,Показывать,t@string:1/Да#0/Нет,Выводить услуги,t@string:0/Нет#1/Да,Выполнено по назначениям"
+ S ^IPROC("Профмедицина","Услуги по договору и программе")="USLBYPRG_RPROF,1,5,d,Дата начала периода,d,Дата окончания периода,te@storage:dog,Договор,t@string:1/Да#0/Нет,Ограничивать по программе,te@storage:aprog,Программа"
+ Q

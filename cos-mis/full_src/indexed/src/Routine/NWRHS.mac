@@ -1,0 +1,556 @@
+NWRHS ; Справочники склада [ 12/05/2019  3:58 PM ]
+ROOTLST ; Каталог справочников
+ N R,I
+ D OWF^RWU(".txt")
+ S I="" F  S I=$O(^WRHM("root",I)) Q:I=""  S R=^(I) D WC^RWU(CR_I_"@"_$TR($P(R,"|",2,9),"|","@")_"|"_$P(R,"|",1))
+ D C^RWU
+ Q
+NAMENM(ID) ; Наименование номенклатуры по коду
+ D MSG^RWU($$NAMENM^IWRHS(ID))
+ Q
+LST(NM,FLT,AIDX,TXT) ; Список по справочнику
+ D OWF^RWU(".txt")
+ D LSTsys(NM,$G(FLT),$G(AIDX),$$WD^TXTU($G(TXT)))
+ D C^RWU
+ Q
+LSTPK(NM,FLT) ; Списки упаковки/фасовки с учетом прав
+ D OWF^RWU(".txt")
+ S FLT=$G(FLT)
+ S:$G(^cfg("wrh","nopackflt")) FLT=""
+ D LSTsys(NM,FLT,3)
+ D C^RWU
+ Q
+LSTsys(NM,FLT,AIDX,TXT) ; List
+ ; FLT - фильтр по второму эл-ту
+ ; AIDX - добавлять в индекс ук-нную позицию из данных
+ ; TXT - фильтр по имени
+ Q:NM=""  
+ N I,R,NN
+ S FLT=$G(FLT),AIDX=$G(AIDX),TXT=$$LU^TXTU($G(TXT))
+ S I="" F  S I=$O(^WRHM(NM,I)) Q:I=""  D
+ .S R=^(I)
+ .I FLT'="",$P(R,"|",2)'=FLT Q 
+ .S NN=$P(R,"|",1)
+ .I TXT'="",$$LU^TXTU(NN)'[TXT Q
+ .D WC^RWU(CR_I_$S(AIDX:"@"_$P(R,"|",AIDX),1:"")_"|"_NN)
+ Q
+LSTFND(NM,TXT) 
+ Q:NM=""
+ N I,R S TXT=$$LU^TXTU($$WD^TXTU(TXT)),I=""
+ D OWF^RWU(".txt")
+ F  S I=$O(^WRHM(NM,I)) Q:I=""  D
+ .S R=^(I) Q:$P(R,"|",7) 
+ .S R=$P(R,"|",1)
+ .I TXT'=""  Q:$$LU^TXTU(R)'[TXT 
+ .D WC^RWU(CR_I_"|"_R)
+ D C^RWU
+ Q
+LSTDEL(NM,ID) ; Delete
+ N A
+ I NM=""!(ID="") D MSG^RWU("Неверный индекс.") Q 
+ ; S A=$$CHKSYS(NM,ID) I A'="" D MSG^RWU(A) Q 
+ D KD^ISSG("^WRHM(""_NM_"","_ID_")")
+ K ^WRHM(NM,ID)
+ D KGL^IEXCH("^WRHM",NM,ID)
+ Q
+LSTAT(NM,ID,STR) ; Add simple text
+ I NM="" Q 
+ S STR=$$WD^TXTU(STR)
+ D ADDT^IWRHS(NM,ID,STR)
+ D LST(NM)
+ Q
+LSTATL(NM,ID,STR) ; Add simple text w. list output
+ I NM="" Q 
+ S STR=$$WD^TXTU(STR)
+ D ADDT^IWRHS(NM,ID,STR)
+ D LST(NM)
+ Q
+GETT(NM,ID) ; Get full item text
+ I NM=""!(ID="") Q 
+ D MSG^RWU($$GETT^IWRHS(NM,ID))
+ Q
+LSTTREE(NM,ALL) ; Загрузка древовидного списка
+ ; ALL - вывод и архивных (всегда)
+ Q:NM=""  
+ N ID,X,K,L,R,C
+ S ALL=$G(ALL)
+ I ALL="",'$$LCL^IUSER("wrh","hideae") S ALL=1
+ S X="" F Y=1:1:32 S X=X_$C(9)
+ D OWF^RWU(".txt")
+ S K="^WRHI(""M"_NM_""","""")",C=""
+ F  S K=$Q(@K) Q:K=""  Q:$QS(K,1)'="Mprof"  D
+ .S L=$QL(K),ID=$QS(K,L),R=^WRHM(NM,ID)
+ .D WC^RWU(C_$E(X,1,L-2)_$P(R,"|",1)_"|"_ID)
+ .S C=CR
+ D C^RWU
+ Q
+PROFSAVE ; Сохранить разделы номенкл.
+ N I,A,%IFN,NN,X,R,P,NL
+ D ORH^RWU
+ S NL=$O(^WRHM("prof",""),-1) 
+ K ^WRHM("prof")
+ S P=""
+ F I=1:1:99999 S A=$$WD^TXTU($$R^RWU()) Q:%IFN["Z"  D
+ .S NN=$P(A,"|",2) S:NN="" NN=NL+1,NL=NL+1
+ .F X=1:1:32 Q:$E(A,X)'=$C(9)
+ .S $P(P,",",X)=NN
+ .S A=$$TRIM^TXTU($P(A,"|",1))
+ .S ^WRHM("prof",NN)=A_"||"_$S(X=1:"",1:$P(P,",",X-1))
+ D CR^RWU
+ D W^ISSG("^WRHM(""prof"")"),REGL^IEXCH("^WRHM","prof")
+ D PROFmki
+ Q
+PROFmki ; создать индекс prof
+ K ^WRHI("Mprof")
+ N N,R,X,PX,Y
+ S N="" F  S N=$O(^WRHM("prof",N)) Q:N=""  D
+ .S X=N,Y=X,PX=X
+ .F  S R=^(X),PX=X,X=$P(R,"|",3)  Q:'X   Q:X=PX  S Y=X_","_Y
+ .Q:Y=""
+ .S Y="^WRHI(""Mprof"","_Y_")" S @Y=""
+ D REGL^IEXCH("^WRHI","Mprof")
+ Q
+PROFDEL(ID) ; Удалить раздел
+ N I,R,F
+ K ^WRHM("prof",ID)
+ S F=0
+ F  D  Q:'F  ; Очистка всех уровней
+ S I="",F=0 F  S I=$O(^WRHM("prof",I)) Q:I=""  S R=$P(^(I),"|",2) I R,'$D(^WRHM("prof",R)) S F=1 K ^(I) D KGL^IEXCH("^WRHM","prof",I)
+ D KGL^IEXCH("^WRHM","prof",ID),K^ISSG("^WRHM(""prof"","_ID_")")
+ D PROFmki
+ Q
+PROFADD(NM) ; Добавить раздел (в конец)
+ N I
+ S NM=$$WD^TXTU(NM)
+ L +^WRHM("prof")
+ S I=$O(^WRHM("prof",""),-1)+1,^(I)=NM_"|0|"_I
+ L -^WRHM("prof")
+ D GL^IEXCH("^WRHM","prof",I),W^ISSG("^WRHM(""prof"","_I_")")
+ D MSG^RWU(I)
+ D PROFmki
+ Q
+NMLST(PR,SRT,TXT) ; Номенклатура по профилю
+ N ID,R,A,I,VU
+ D OWF^RWU(".txt")
+ K ^BUF($J,"WRH")
+ S ID="",SRT=+$G(SRT),TXT=$$LU^TXTU($$WD^TXTU($G(TXT))),I=1
+ S VU=$$LCL^IUSER("wrh","hideae")
+ S:SRT=0 SRT=1
+ I TXT'="",$L(TXT)<128,$D(^WRHEI("nnum",TXT)) S ID="" F  S ID=$O(^WRHEI("nnum",TXT,ID)) Q:ID=""  S R=^WRHE(ID),A=$P(R,"|",1) D NMLSTp
+ I '$D(^BUF($J,"WRH")) F  S ID=$O(^WRHE(ID)) Q:ID=""  S R=^(ID) D:(PR="")!($P(R,"|",3)=PR)
+ .S A=$P(R,"|",1)
+ .I TXT'="",$$LU^TXTU(A)'[TXT Q 
+ .D NMLSTp
+ S I="" F  S I=$O(^BUF($J,"WRH",I)) Q:I=""  D WC^RWU(CR_^(I))
+ D C^RWU
+ K ^BUF($J,"WRH")
+ Q
+NMLSTp 
+ I VU,$P(R,"|",15) Q  ; arch
+ S A=ID_"|"_A_"|"_$$NAME^IWRHS("means",+$P(R,"|",5))
+ S A=A_"|"_$$NAME^IWRHS("pack",+$P(R,"|",6))
+ S A=A_"|"_$$NAME^IWRHS("fpack",+$P(R,"|",7))
+ S A=A_"|"_$$NAME^IWRHS("manuf",+$P(R,"|",9))
+ S A=A_"|"_$$NAME^IWRHS("country",+$P($P(R,"|",10),"@",1))
+ S ^BUF($J,"WRH",$E($P(A,"|",SRT+1),1,128)_"|"_I)=A,I=I+1
+ Q
+NMLSTLT(PR,TXT,MOD,STK) ; Номенклатура по профилю, кратко
+ ; STK - склад, если указан учет остатков
+ ; упаковка по умолч.
+ N ID,R,A,NM,P,M,fP,O,fMN,pMN,C,fFF,X,TAB
+ S MOD=+$G(MOD),fP=0 S:MOD=1 MOD=0 S:MOD=2 fP=1,MOD=1
+ S STK=$G(STK),fMN=0
+ S:STK'="" fMN=$S($G(^cfg("wrh","defmean")):^("defmean"),1:$$LCL^NUSER("wrh","defmean"))
+ D OWF^RWU(".txt"),WC^RWU("|Наименование|Ед.изм."_$S(MOD:"|Упаковка"_$S(STK'="":"|Остаток|Цена",1:"")_"|Производитель|Страна",1:""))
+ S fFF=0
+ I TXT'="",$L(TXT)<128,$D(^WRHEI("nnum",TXT)) S ID="" F  S ID=$O(^WRHEI("nnum",TXT,ID)) Q:ID=""  D
+ .S R=^WRHE(ID)
+ .Q:+$P(R,"|",15)  ; arch
+ .S NM=$P(R,"|",1) 
+ .D NMLSTLTp
+ .S fFF=1
+ S ID="",TXT=$$LU^TXTU($$WD^TXTU(TXT))
+ ; select by number
+ I $E(TXT)="=",$E(TXT,2,99)'="",$D(^WRHE($E(TXT,2,99))) D
+ .S ID=$E(TXT,2,99),fFF=1
+ .S R=^WRHE(ID),NM=$P(R,"|",1)
+ .D NMLSTLTp
+ 
+ I 'fFF F  S ID=$O(^WRHE(ID)) Q:ID=""  S R=$G(^(ID)) D:PR=""!($P(R,"|",3)=PR)
+ .Q:+$P(R,"|",15)  ; arch
+ .S NM=$P(R,"|",1)
+ .I $L(TXT) Q:$$LU^TXTU(NM)'[TXT 
+ .D NMLSTLTp
+ 
+ S ID="" F  S ID=$O(TAB(ID)) Q:ID=""  D WC^RWU(CR_TAB(ID))
+ D C^RWU
+ Q
+NMLSTLTp 
+ S P=+$P(R,"|",6),M=+$P(R,"|",5),pMN=0,C=1
+ I STK'="" S O=$$RESTS^IWRH(STK,ID) Q:O'>0 
+ I fMN S pMN=fMN,C=$S(fMN:$$MEANCNT^IWRHS(ID,fMN),1:0) S:'C C=1,pMN=0
+ S A=ID_$S(fP&P:"@1",1:"")
+ S X=$$PKU^IWRHS(ID)
+ S:X $P(A,"@",4)=X ; есть спец учет
+ S A=A_"|"_NM_"|"_$$NAME^IWRHS("means",M)
+ S:MOD A=A_"|"_$$NAME^IWRHS("pack",P)
+ S:STK'="" A=A_"|"_(O/C)_$S(pMN:" "_$$MEANNM^IWRHS(ID,pMN),1:"")_"|"_$$GET^IWRHS(ID,"cenn") ; TODO - динамическая наценка
+ S:MOD A=A_"|"_$$NAME^IWRHS("manuf",+$P(R,"|",9))
+ S:MOD A=A_"|"_$$NAME^IWRHS("country",+$P($P(R,"|",10),"@",1))
+ S TAB($$UL^TXTU($E(NM,1,10))_"|"_ID)=A
+ Q
+NMLSTCN(PR,TXT,BAR) ; Номенклатура по профилю, кратко, с ценой
+ N ID,R,A,NM,S,TAB
+ S BAR=$G(BAR)
+ D OWF^RWU(".txt"),WC^RWU("|Наименование|Ед.изм.|Цена")
+ S ID="",TXT=$$LU^TXTU($$WD^TXTU(TXT))
+ F  S ID=$O(^WRHE(ID)) Q:ID=""  S R=$G(^(ID)) D:'$L(PR)!($P(R,"|",3)=PR)
+ .Q:'$D(^(ID,"f"))  
+ .S NM=$P(R,"|",1),S=$P(^("f"),"|",1) Q:S="" 
+ .I BAR'="",$P($G(^("a")),"|",1)'=BAR Q 
+ .I TXT'="",$$LU^TXTU(NM)'[TXT Q 
+ .S A=ID_"|"_NM_"|"_$$NAME^IWRHS("means",+$P(R,"|",5))_"|"_S
+ .S TAB($$UL^TXTU($E(NM,1,10))_"|"_ID)=A
+ 
+ S ID="" F  S ID=$O(TAB(ID)) Q:ID=""  D WC^RWU(CR_TAB(ID))
+ D C^RWU
+ Q
+NMDEL(ID) ; Delete
+ D MSG^RWU("ERR")
+ Q:ID=""  Q:'$D(^WRHE(ID)) 
+ N X
+ S X=$$NMCHK^IWRHS(ID) 
+ I X=2 D MSG^RWU("ERR:Номенклатура используется в заявках.") Q
+ I X D MSG^RWU("ERR:Номенклатура используется на складе """_$$NAME^IWRHS("stock",$$CHKNIN^IWRHS(ID))_"""") Q
+ D K^ISSG("^WRHE("_ID_")")
+ D RMIDXNM(ID)
+ K ^WRHE(ID)
+ D KGL^IEXCH("^WRHE",ID)
+ D MSG^RWU("OK")
+ Q
+CHKNMS(STR,IDX) ; Проверить на дублирование имени
+ ; С учетом одинаковых начертаний букв и исключения знаков препинания
+ N ID,Z,Y,R,F
+ S Z=" ,./\;:<>?!@#$%^&*()-_=+[]{}\|'"""
+ S STR=$$RERE^TXTU($TR($$UL^TXTU($$WD^TXTU(STR)),Z,"")),IDX=$G(IDX)
+ S ID="",F=0 F  S ID=$O(^WRHE(ID)) Q:ID=""  D:ID'=IDX  Q:F
+ .S R=$P(^(ID),"|",1) Q:R="" 
+ .S R=$$RERE^TXTU($TR($$UL^TXTU(R),Z,"")) Q:R="" 
+ .S:R=STR F=1
+ Q:ID="" 
+ S R=^WRHE(ID),F=$P(R,"|",1)
+ S:$P(R,"|",8)'="" F=F_" (№ "_$P(R,"|",8)_")"
+ D MSG^RWU(F)
+ Q
+NMS ; Сохранить номенклатуру
+ I $$LCL^IUSER("wrh","nomenclature")=0 D MSG^RWU("Недостаточно прав.") Q
+ N A,R,%J,ID,NBC,RM,RA,RC,RF,I,UH
+ S NBC="nb_console"
+ D ORH^RWU
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D XML^YIXMLRR
+ S ID=$G(XML(NBC,"twrhnm","id"))
+ ; Проверка непустых
+ S R=$$LCL^IUSER("wrh","chknmprof"),A=""
+ I R'="" F I=1:1:$L(R,"|") S %J=$P(R,"|",I) I $G(XML(NBC,"twrhnm",%J))="" S A=$S(A="":"",1:A_CR)_$P(^STRUCT("wrhnm",%J),"|",2)
+ I A'="" D MSG^RWU("Вы должны заполнить следующие поля:"_CR_A) Q 
+ ; a - all, m - med, f - fin
+ S R="",UH=$$USRH^IUSER()
+ S:$L(ID) R=$G(^WRHE(ID)),RA=$G(^(ID,"a")),RM=$G(^("m")),RF=$G(^("f"))
+ S $P(R,"|",1)=$G(XML(NBC,"twrhnm","nm"))
+ S $P(R,"|",3)=$G(XML(NBC,"twrhnm","prof"))
+ S $P(R,"|",5)=$G(XML(NBC,"twrhnm","mean"))
+ S $P(R,"|",6)=$G(XML(NBC,"twrhnm","pack"))
+ S $P(R,"|",7)=$G(XML(NBC,"twrhnm","fas"))
+ S $P(R,"|",8)=$G(XML(NBC,"twrhnm","nnum"))
+ S $P(R,"|",9)=$G(XML(NBC,"twrhnm","maker"))
+ S $P(R,"|",10)=$G(XML(NBC,"twrhnm","country"))_"@"
+ S $P(R,"|",11)=$$NNUM^TXTU($G(XML(NBC,"twrhnm","todt"))) ; срок годности, дней
+ S $P(R,"|",12)=$$NNUM^TXTU($G(XML(NBC,"twrhnm","inpack"))) ; в упаковке
+ S $P(R,"|",13)=$$NNUM^TXTU($G(XML(NBC,"twrhnm","infas"))) ; в фасовке
+ S $P(R,"|",14)=$G(XML(NBC,"twrhnm","pku")) ; 1-pku/2-ser/3-serial
+ S $P(R,"|",15)=$G(XML(NBC,"twrhnm","arch"))
+ S $P(R,"|",16)=$$NNUM^TXTU($G(XML(NBC,"twrhnm","indoze"))) ; в дозе
+ 
+ S $P(RA,"|",1)=$G(XML(NBC,"twrhnm","bar"))
+ S $P(RM,"|",1)=$G(XML(NBC,"twrhnm","nreg"))
+ S $P(RM,"|",2)=$$DI^DTUTL($G(XML(NBC,"twrhnm","dreg")))
+ S $P(RM,"|",3)=$G(XML(NBC,"twrhnm","rt"))
+ S $P(RF,"|",1)=$$NNUM^TXTU($G(XML(NBC,"twrhnm","cenn")))
+ S $P(RF,"|",2)=$$NNUM^TXTU($G(XML(NBC,"twrhnm","nds")))
+ I ID="" L +^WRHE S ID=$O(^WRHE(""),-1)+1,^(ID)=R L -^WRHE
+ E  S ^WRHE(ID)=R
+ S ^(ID,"a")=RA,^("m")=RM
+ I RF'="" S R=$G(^("f")),^("f")=RF I R'="",R'=RF,'$D(^("f",$H)) S $P(R,"|",3,4)=UH,^($H)=R
+ S R=$G(XML(NBC,"twrhnm","comm"))
+ K:R="" ^WRHE(ID,"c") S:R'="" ^WRHE(ID,"c")=R
+ S R=$G(XML(NBC,"twrhnm","tc"))
+ K:R="" ^WRHE(ID,"tc") S:R'="" ^WRHE(ID,"tc")=R
+ D ew(ID)
+ D CR^RWU,CLOSE^YIXMLRR
+ 
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<twrhnm>")
+ D WTAG^RWU("id",ID)
+ D W^RWU("</twrhnm></nb_console>"),C^RWU 
+ Q
+ew(ID) ; End write
+ S ^WRHE(ID,"log")=$$USRH^IUSER()
+ D REGL^IEXCH("^WRHE",ID)
+ D MKIDXNM(ID)
+ Q
+NMCLST(ID) ; Перечень изменений цены номенклатуры
+ N HH,R,A
+ Q:ID="" 
+ S A="",HH="" F  S HH=$O(^WRHE(ID,"f",HH)) Q:HH=""  D
+ .S R=^(HH)
+ .S A=$S(A="":"",1:A_CR)_HH_"|"_$$DTM^DTUTL(HH)_" Цена:"_(+$P(R,"|",1))_" НДС:"_(+$P(R,"|",2))_" Оператор:"_$P(R,"|",3)
+ D MSG^RWU(A)
+ Q
+CNTAB ; Получить таблицу цен
+ N HH,R,A
+ Q:ID="" 
+ D OWF^RWU(".txt")
+ D WC^RWU("Действует до|Время|Цена|НДС|Оператор")
+ S A="",HH="" F  S HH=$O(^WRHE(ID,"f",HH)) Q:HH=""  D
+ .S R=^(HH)
+ .D WC^RWU(CR_HH_"|"_$$DT^DTUTL(HH)_"|"_$$TM^DTUTL(HH)_"|"_"")
+ .S A=$S(A="":"",1:A_CR)_HH_"|"_$$DTM^DTUTL(HH)_" Цена:"_(+$P(R,"|",1))_" НДС:"_(+$P(R,"|",2))_" Оператор:"_$P(R,"|",2)
+ S R=$G(^WRHE(ID,"f"))
+ D:R'="" WC^RWU
+ D MSG^RWU(A)
+ Q
+CNSET(KEY,VAL,COL) ; Изменить розничную цену
+ ; KEY - ключ. "" - новая запись
+ Q
+TCTAB(FRM,ID) ; Загрузить вид наценки
+ Q:ID="" 
+ N DS,R,A,I
+ D OWF^RWU(".txt")
+ D WC^RWU("|Дата начала|Цена от|Наценка %|Тип округления|Наценка руб.")
+ S DS="" F  S DS=$O(^WRHM("tcn",ID,DS)) Q:DS=""  D
+ .S I="" F  S I=$O(^WRHM("tcn",ID,DS,I)) Q:I=""  D
+ ..S R=^(I)
+ ..S A=$P(R,"|",1)_"|"_$$ROUNDTP^IWRHS($P(R,"|",2))_"|"_$P(R,"|",3)
+ ..D WC^RWU(CR_DS_"@"_I_"|"_$$DT^DTUTL(DS)_"|"_I_"|"_A)
+ D C^RWU
+ Q
+TCDTA(ID,DT) ; Добавить дату в наценку
+ Q:ID="" 
+ S DT=$$DIH^DTUTL(DT)
+ S ^WRHM("tcn",ID,DT,0)="||||"_$$USRH^IUSER()
+ D GL^IEXCH("^WRHM","tcn",ID,DT,0)
+ Q
+TCDTD(ID,KEY) ; Удалить дату из наценки
+ Q:ID="" 
+ N DT S DT=$P(KEY,"@",1) Q:DT="" 
+ Q:'$D(^WRHM("tcn",ID,DT))
+ K ^WRHM("tcn",ID,DT)
+ D KGL^IEXCH("^WRHM","tcn",ID,DT)
+ Q
+TCCNA(ID,KEY,CN) ; Добавить наценку на основании оптовой цены
+ Q:ID="" 
+ N DT S DT=$P(KEY,"@",1),CN=+$$NNUM^TXTU(CN) Q:DT="" 
+ Q:$D(^WRHM("tcn",ID,DT,CN)) 
+ S ^WRHM("tcn",ID,DT,CN)="||||"_$$USRH^IUSER()
+ D GL^IEXCH("^WRHM","tcn",ID,DT,CN)
+ Q
+TCCND(ID,KEY) ; Удалить наценку на основании цены
+ Q:ID="" 
+ N DT,CN
+ S DT=$P(KEY,"@",1),CN=$P(KEY,"@",2) Q:DT="" 
+ Q:'$D(^WRHM("tcn",ID,DT,CN)) 
+ K ^WRHM("tcn",ID,DT,CN)
+ D KGL^IEXCH("^WRHM","tcn",ID,DT,CN)
+ Q
+TCSET(ID,KEY,COL,VAL) ; Изменить параметр наценки
+ Q:ID=""  Q:KEY=""  Q:COL<2  Q:COL>4  
+ N DT,CN,R
+ S DT=$P(KEY,"@",1),CN=$P(KEY,"@",2)
+ I COL=2 S VAL=$$NNUM^TXTU(VAL) S:VAL<0 VAL=0 S:VAL>999 VAL=999
+ I COL=3 S VAL=+VAL S:"012345678"'[VAL VAL=0
+ I COL=4 S VAL=$$NNUM^TXTU(VAL)
+ S R=^WRHM("tcn",ID,DT,CN)
+ S $P(R,"|",COL-1)=VAL,$P(R,"|",5,6)=$$USRH^IUSER()
+ S ^WRHM("tcn",ID,DT,CN)=R
+ D GL^IEXCH("^WRHM","tcn",ID,DT,CN)
+ Q
+MKIDXNM(ID) ; Создать индексы
+ ; TODO - индексы, по профилю
+ N R,X,A
+ S R=^WRHE(ID),A=$G(^(ID,"a"))
+ S X=$P(R,"|",8)
+ I X'="",'$D(^WRHEI("nnum",X,ID)) S ^WRHEI("nnum",X,ID)="" D GL^IEXCH("^WRHEI","nnum",X,ID)
+ S X=$P(A,"|",1)
+ I X'="",'$D(^WRHEI("bar",X)) S ^WRHEI("bar",X)=ID D GL^IEXCH("^WRHEI","bar",X)
+ S X=$P(A,"|",2)
+ I X'="",'$D(^WRHEI("enum",X,ID)) S ^WRHEI("enum",X,ID)="" D GL^IEXCH("^WRHEI","enum",X,ID)
+ Q
+RMIDXNM(ID) ; Удалить индексы
+ N R,X,A
+ S R=^WRHE(ID),A=$G(^(ID,"a"))
+ S X=$P(R,"|",8)
+ I X'="",$D(^WRHEI("nnum",X,ID)) K ^WRHEI("nnum",X,ID) D KGL^IEXCH("^WRHEI","nnum",X,ID)
+ S X=$P(A,"|",1)
+ I X'="",$D(^WRHEI("bar",X)) K ^WRHEI("bar",X) D KGL^IEXCH("^WRHEI","bar",X)
+ S X=$P(A,"|",2)
+ I X'="",$D(^WRHEI("enum",X,ID)) K ^WRHEI("enum",X,ID) D KGL^IEXCH("^WRHEI","enum",X,ID)
+ Q
+REIDXMN 
+ N ID
+ K ^WRHEI
+ S ID="" F  S ID=$O(^WRHE(ID)) Q:ID=""  D MKIDXNM(ID)
+ D GL^IEXCH("^WRHEI")
+ Q
+NML(ID) ; Загрузить позицию номенклатуры
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<twrhnm>")
+ S ID=$P(ID,"@",1)
+ G:ID="" NMLe
+ N R,PL,L,K M L=^WRHE(ID)
+ S R=$G(L)
+ D WTAGDC^RWU("nm",$P(R,"|",1))
+ S K=$P(R,"|",3) D WTAGDC2("prof",$$NAME^IWRHS("prof",K),K)
+ S K=$P(R,"|",5) D WTAGDC2("mean",$$NAME^IWRHS("means",K),K)
+ S K=$P(R,"|",6) D WTAGDC2("pack",$$NAME^IWRHS("pack",K),K)
+ S K=$P(R,"|",7) D WTAGDC2("fas",$$NAME^IWRHS("fpack",K),K)
+ D WTAGDC^RWU("nnum",$P(R,"|",8))
+ D WTAGDC^RWU("inpack",$P(R,"|",12))
+ D WTAGDC^RWU("infas",$P(R,"|",13))
+ D WTAGDC^RWU("indoze",$P(R,"|",16))
+ S K=$P(R,"|",9)
+ D WTAGDC2("maker",$$NAME^IWRHS("manuf",K),K)
+ S K=$P($P(R,"|",10),"@",1)
+ D WTAGDC2("country",$$NAME^IWRHS("country",K),K)
+ D WTAGDC^RWU("todt",$P(R,"|",11))
+ D WTAGDC^RWU("pku",+$P(R,"|",14))
+ D WTAGDC^RWU("arch",+$P(R,"|",15))
+ D WTAGDC^RWU("bar",$P($G(L("a")),"|",1))
+ D WTAGDC^RWU("comm",$G(L("c")))
+ D WTAGDC^RWU("tc",$G(L("tc")))
+ S R=$G(L("m"))
+ D WTAGDC^RWU("nreg",$P(R,"|",1))
+ D WTAGDC^RWU("dreg",$$DT^DTUTL($P(R,"|",2)))
+ D WTAGDC^RWU("rt",$P(R,"|",3))
+ S R=$G(L("f"))
+ D WTAGDC^RWU("cenn",$P(R,"|",1))
+ D WTAGDC^RWU("nds",$P(R,"|",2))
+NMLe D W^RWU("</twrhnm></nb_console>"),C^RWU
+ Q
+WTAGDC2(PL,D,UD) 
+ S:D["""" D=$$TKAV^TXTU(D)
+ S:UD["""" UD=$$TKAV^TXTU(UD)
+ D WC^RWU("<"_PL_" data="""_UD_""" title="""_D_"""/>")
+ Q
+TABSER(IDN) ; Список серий
+ ; IDN - код номенклатуры
+ N A,I,R
+ S A="|Наименование серии|Номер|Дата|Годен до"
+ S (A,I)="" F  S I=$O(^WRHE(IDN,"ser",I)) Q:I=""  D
+ .S R=^(I)
+ .S A=A_CR_I_"|"
+ .S A=A_$P(R,"|",1)_"|"_$P(R,"|",2)_"|"_$$DT^DTUTL($P(R,"|",3))_"|"_$$DT^DTUTL($P(R,"|",4))
+ D MSG^RWU(A)
+ Q
+LSTSER(IDN,NADD) ; Простой список серий
+ ; NADD - запрет добавления серии
+ S IDN=$$LSTSERs(IDN)
+ I '$G(NADD),$G(^cfg("wrh","dynser")) S IDN="+|Добавить серию"_$S(IDN="":"",1:CR_IDN)
+ D MSG^RWU(IDN)
+ Q
+LSTSERs(IDN) ; Простой системный список серий
+ N A,I
+ S (A,I)="" F  S I=$O(^WRHE(IDN,"ser",I)) Q:I=""  S A=$S(A="":"",1:A_CR)_I_"|"_$P(^(I),"|",1)
+ Q A
+ADDSER(IDN,NM,IDR) ; Добавить серию
+ ; IDR - возврат кода серии
+ N ID
+ L +^WRHE(IDN)
+ S ID=$O(^WRHE(IDN,"ser",""),-1)+1
+ S ^WRHE(IDN,"ser",ID)=$$WD^TXTU(NM)
+ L -^WRHE(IDN)
+ D GL^IEXCH("^WRHE",IDN,"ser",ID)
+ I $G(IDR) D MSG^RWU(ID) Q 
+ D TABSER(IDN)
+ Q
+DELSER(IDN,ID) ; Удалить серию
+ K ^WRHE(IDN,"ser",ID)
+ D KGL^IEXCH("^WRHE",IDN,"ser",ID)
+ Q
+SETSER(IDN,ID,N,VAL) ; Изменить серию
+ S VAL=$$WD^TXTU(VAL)
+ S:N=3 VAL=$$DI^DTUTL(VAL)
+ S $P(^WRHE(IDN,"ser",ID),"|",N)=VAL
+ D GL^IEXCH("^WRHE",IDN,"ser",ID)
+ Q
+NMSEL(X,CPos,wMN) ; Имена по кодам (с кол-вом)
+ ; CPos - позиция количества в списке
+ ; wMN - с единицами измерения
+ N I,R,F,Z,C,A,SL
+ S A="",X=$$WD^TXTU(X),F=+$G(^cfg("wrh","show-cenn"))
+ S CPos=+$G(CPos),wMN=+$G(wMN)
+ F I=1:1:64 S R=$P(X,"|",I) Q:R=""  D
+ .S C=$P(R,"@",2),SL=$P(R,"@",3),R=$P(R,"@",1)
+ .I F S Z=$$GET^IWRHS(R,"cenn") S:Z'="" Z=" ("_Z_" руб.)"
+ .S A=A_$S(I=1:"",1:CR)_R_$S(CPos=1&C:"@"_C,1:"")_"|"_$$NAMENM^IWRHS(R)_$S(wMN:", "_$$MEANNM^IWRHS(R),1:"")_$S(F:Z,1:"")_$S(SL:"|1",CPos'=2:"",C=0:"|",1:"|"_C)
+ D MSG^RWU(A)
+ Q
+MEANTPL(ID) ; Список возможных единиц по номенклатуре
+ I ID="" Q 
+ N A,R,X
+ S R=^WRHE(ID),A=""
+ S X=$P(R,"|",5) S:X A="0|"_$$NAME^IWRHS("means",X)
+ S X=$P(R,"|",6) S:X A=$S(A="":"",1:A_CR)_"1|"_$$NAME^IWRHS("pack",X)
+ S X=$P(R,"|",7) S:X A=$S(A="":"",1:A_CR)_"2|"_$$NAME^IWRHS("fpack",X)
+ S:$P(R,"|",16) A=$S(A="":"",1:A_CR)_"3|Доза"
+ D MSG^RWU(A)
+ Q
+STKLST ; Список складов в соответствии с правами
+ D OWF^RWU(".txt")
+ D STKLSTs(0)
+ D C^RWU
+ Q
+STKLSTA ; Список складов в соответствии с правами + "Все" - для отчетов
+ D OWF^RWU(".txt")
+ D STKLSTs(0)
+ D WC^RWU(CR_"|Все")
+ D C^RWU
+ Q
+STKLSTs(SORT) ; Список складов в соответствии с правами (system)
+ ; SORT - сортировка по имени
+ N C,I,K,R,V,PV,PA,Pr,LL
+ S (A,C,I)=""
+ S SORT=+$G(SORT)
+ S PV=$$LCL^NUSER("wrh","priv-stock")
+ S PA=$$LCL^NUSER("wrh","all-priv-stock")
+ S K=$$KDR^IUSER() S:K'="" K=","_K_","
+ F  S I=$O(^WRHM("stock",I)) Q:I=""  D
+ .S R=^(I),Pr=$P(R,"|",6)
+ .Q:$P(R,"|",7)  ; arch
+ .I PV,PV<3,PA,'Pr Q  ; не личный склад
+ .I PV,PV<3,Pr,'PA S V=","_$P($P(R,"|",3),"@",2)_"," Q:V'[K
+ .I PV=2,'Pr Q
+ .I PV=3,$P(R,"|",4)'="",$$^I("ilpu")'=$P(R,"|",4) Q
+ .I SORT S LL($P(R,"|",1)_"|"_I)="" Q 
+ .S A=A_C_I_"|"_$P(R,"|",1),C=CR
+ I SORT S R="" F  S R=$O(LL(R)) Q:R=""  S A=A_C_$P(R,"|",2)_"|"_$P(R,"|",1),C=CR
+ D WC^RWU(A)
+ Q
+REGsys ; register system info
+ S ^STRUCT("wrhnm")="Номенклатура склада"
+ S ^STRUCT("wrhnm","nm")="|Наименование"
+ S ^STRUCT("wrhnm","prof")="|Профиль"
+ S ^STRUCT("wrhnm","mean")="|Единица мер"
+ S ^STRUCT("wrhnm","pack")="|Упаковка"
+ S ^STRUCT("wrhnm","fas")="|Фасовка"
+ S ^STRUCT("wrhnm","nnum")="|Номенклатурный номер"
+ S ^STRUCT("wrhnm","maker")="|Производитель"
+ S ^STRUCT("wrhnm","country")="|Страна"
+ S ^STRUCT("wrhnm","todt")="|Годен до"
+ S ^STRUCT("wrhnm","inpack")="|Единиц в упаковке"
+ S ^STRUCT("wrhnm","infas")="|Единиц в фасовке"
+ S ^STRUCT("wrhnm","pku")="|Вид учета (ПКУ,Серии,Сер.номера)"
+ S ^STRUCT("wrhnm","bar")="|Штрих-код"
+ S ^STRUCT("wrhnm","nreg")="|Регистрационный номер"
+ S ^STRUCT("wrhnm","dreg")="|Дата регистрации"
+ S ^STRUCT("wrhnm","rt")="|Рейтинг"
+ S ^STRUCT("wrhnm","cenn")="|Цена"
+ S ^STRUCT("wrhnm","nds")="|НДС"
+ Q

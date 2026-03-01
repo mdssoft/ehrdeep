@@ -1,0 +1,87 @@
+RLPUPG ; Отчеты по группам прайса [ 09/04/2013  2:53 AM ]
+PGRP(DS,DE,OTX,MOD,LPUX) 
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),LPUX=$G(LPUX)
+ S:OTX=999 OTX=""
+ N GRPL,G,A,B,RESULT,LP,I,GR0,GR1,VR,VV,OT,DV
+ D MKLST^NPRICEG("GRPL")
+ S FF=+$$FR^I()
+ K ^BUF($J,"pp"),^("p")
+ D MKAPPRC^IUSLSC(DS,DE,1,"PGRPpre^RLPUPG","PGRPprc^RLPUPG","","",'FF)
+ K ^BUF($J,"pp"),^("p")
+ D PGRPsum
+ S A="||"_$S(MOD:"",1:"|")_"Средн.чек|Средн.чек|Посещений|Посещений|Число пац.|Число пац.|Число пац.|Выручка|Выручка|Выручка"
+ S B="Группа прейскуранта|Подраздел"_$S(MOD:"",1:"|Врач")_"|Касса+Факт СК|Предопл. СК|Касса+Факт СК|Предопл. СК|кассе|факт СК|предопл. СК|Касса+Факт СК|Предопл. СК|полностью"
+ D OWF^RWU(".txt")
+ D WC^RWU($$TXTP^DTUTL(DS,DE)_A_";"_CR_B)
+ S LP="" F  S LP=$O(RESULT(LP)) Q:LP=""  D
+ .I FF D WC^RWU(CR_$S(LP="-":"Итого",1:$$NAME^ICONTR(LP)))
+ .S GR0="" F  S GR0=$O(RESULT(LP,GR0)) Q:GR0=""  D
+ ..I GR0="-" D WC^RWU(CR_$$NAME^ICONTR(LP)_" всего"_$S(MOD:"||",1:"|||")_$TR(RESULT(LP,GR0),".",",")) Q
+ ..S A=$$NAME^NPRICEG(GR0) S:A="" A="Нет"
+ ..S GR1="" F  S GR1=$O(RESULT(LP,GR0,GR1)) Q:GR1=""  D
+ ...I GR1="-" D WC^RWU(CR_A_$S(MOD:"|Итого|",1:"||Итого|")_$TR(RESULT(LP,GR0,GR1),".",",")) Q 
+ ...; Q:MOD 
+ ...S B=$$NAME^NPRICEG(GR1) S:B="" B="Нет"
+ ...S VR="" F  S VR=$O(RESULT(LP,GR0,GR1,VR)) Q:VR=""  D
+ ....I VR="-" D WC^RWU(CR_$S(MOD:A,1:"")_"|"_B_$S(MOD:"|",1:"|Всего|")_$TR(RESULT(LP,GR0,GR1,VR),".",",")) Q 
+ ....Q:MOD 
+ ....D WC^RWU(CR_A_"|"_B_"|"_$$FIOSH^YIKADRY(VR)_"|"_$TR(RESULT(LP,GR0,GR1,VR),".",","))
+ D C^RWU
+ Q
+PGRPsum 
+ S LP="" F  S LP=$O(RESULT(LP)) Q:LP=""  S OT="" F  S OT=$O(RESULT(LP,OT)) Q:OT=""  D:OT'="-"
+ .S GR="" F  S GR=$O(RESULT(LP,OT,GR)) Q:GR=""  D:GR'="-"
+ ..S VR="",VV=0 F  S VR=$O(RESULT(LP,OT,GR,VR)) Q:VR=""  S VV=VV+1
+ ..S VR="" F  S VR=$O(RESULT(LP,OT,GR,VR)) Q:VR=""  D:VR'="-"
+ ...S A=RESULT(LP,OT,GR,VR)
+ ...S B=$P(A,"|",3) S:B $P(A,"|",1)=+$J($P(A,"|",8)/B,"",2)
+ ...S B=$P(A,"|",4) S:B $P(A,"|",2)=+$J($P(A,"|",9)/B,"",2)
+ ...S RESULT(LP,OT,GR,VR)=A ; ср. чек
+ ...S B=$G(RESULT(LP,OT,"-"))
+ ...F I=1:1:10 S:$P(A,"|",I) $P(B,"|",I)=$P(B,"|",I)+$P(A,"|",I)
+ ...S RESULT(LP,OT,"-")=B
+ ...S B=$G(RESULT(LP,"-"))
+ ...F I=1:1:10 S:$P(A,"|",I) $P(B,"|",I)=$P(B,"|",I)+$P(A,"|",I)
+ ...S RESULT(LP,"-")=B
+ ...;S B=$G(RESULT("-")) TODO - by LPU
+ ...;F I=1:1:10 S:$P(A,"|",I) $P(B,"|",I)=$P(B,"|",I)+$P(A,"|",I)
+ ...;S RESULT("-")=B
+ ...Q:VV<2  ; если 1 группа
+ ...S B=$G(RESULT(LP,OT,GR,"-"))
+ ...F I=1:1:10 S:$P(A,"|",I) $P(B,"|",I)=$P(B,"|",I)+$P(A,"|",I)
+ ...S RESULT(LP,OT,GR,"-")=B
+ Q
+PGRPpre ; prefilter
+ I OTX'="",OTX'=OTD S TEST=0 Q 
+ S TEST=1
+ Q
+PGRPprc 
+ S VV=$S(MOD:0,1:VR),LPU=+LPU
+ S DV=$$GET^IINSC(CSTC,"dvid",DT)
+ S B=$G(GRPL(+$$GET^IPRICE(U,"grp",PRC,DT)))
+ S GR0=+$P(B,"~",1) ; main grp
+ S GR1=+$P(B,"~",2) S:GR1=GR0 GR1=0 ; second grp
+ S A=$G(RESULT(LPU,GR0,GR1,VR))
+ S SUMM=$S($L(SUMM):SUMM,1:$$PRICEH^IPRICE(U,PRC,DT)*KSKD)*$G(UL(U))
+ ; Приемы
+ S B=OTD_"|"_VR_"|"_DT_"|"_NI
+ I '$D(^BUF($J,"pp",B)) S ^(B)="" D
+ .S:DV=0!(DV=3)!(STAT=2) $P(A,"|",3)=$P(A,"|",3)+1
+ .S:DV=1 $P(A,"|",4)=$P(A,"|",4)+1
+ ; Люди
+ S B=OTD_"|"_VR_"|"_NI
+ I '$D(^BUF($J,"p",B)) S ^(B)="" D
+ .S:DV=3!(STAT=2) $P(A,"|",5)=$P(A,"|",5)+1
+ .S:DV=0 $P(A,"|",6)=$P(A,"|",6)+1
+ .S:DV=1 $P(A,"|",7)=$P(A,"|",7)+1
+ ; Суммы
+ S:DV=0!(DV=3)!(STAT=2) $P(A,"|",8)=$P(A,"|",8)+SUMM
+ S:DV=1 $P(A,"|",9)=$P(A,"|",9)+SUMM
+ S $P(A,"|",10)=$P(A,"|",10)+SUMM
+ S RESULT(LPU,GR0,GR1,VR)=A
+ Q
+REGIPROC ; Register report
+ N FF
+ S FF=+$$FR^I()
+ S ^IPROC("Отчеты ЛПУ","Отчет по группам прейскуранта")="PGRP_RLPUPG,1,"_$S(FF:5,1:4)_",d,Период услуг с,d,Период услуг по,te@storage:otd@1,Отделение,t@string:0/Да#1/Нет,Подробно по сотрудникам"_$S(FF:",t@storage:lpu,Филиал",1:"")_",l,8,1"
+ Q

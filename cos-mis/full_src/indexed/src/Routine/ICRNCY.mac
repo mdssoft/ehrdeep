@@ -1,0 +1,48 @@
+ICRNCY ; Справочник валют [ 03/10/2022  1:18 AM ]
+LOAD ; Загрузить с сервера ЦБ РФ
+ N SRV,URL,%SID,I,A,cI,cK,cN,cB,cV
+ S SRV="www.cbr.ru",URL="/scripts/XML_daily.asp?date_req="
+ S %SID=$$OPEN^WWWCLI(SRV,80)
+ I %SID="" Q 
+ D SETCONN^WWWCLI(%SID,0)
+ S OK=$$GET^WWWCLI(%SID,URL_$TR($$DT^DTUTL(+$H),".","/"))
+ D:OK=200
+ .D OBUF^WWWCLI(%SID)
+ .D OEV^XMLR("TAGS^ICRNCY","TAGD^ICRNCY","TAGE^ICRNCY")
+ .K XML,XMLR
+ .S I=$$BUFCNT^WWWCLI(%SID),cI=0
+ .F %J=1:1:I S A=$$RBUF^WWWCLI(%SID) D REV^XMLR(A)
+ .D CEV^XMLR
+ D CLOSE^WWWCLI(%SID)
+ Q
+TAGS 
+ Q:%XM(2)="xml"
+ I %XM(2)="Valute" S cI=1,(cK,cN,cB,cV)="" Q 
+ Q
+TAGD 
+ Q:'cI 
+ I %XM(2)="CharCode" S cK=cK_%XD Q 
+ I %XM(2)="Name" S cN=cN_%XD Q 
+ I %XM(2)="Nominal" S cB=cB_%XD Q 
+ I %XM(2)="Value" S cV=cV_%XD Q 
+ Q
+TAGE 
+ I cI,%XM(2)="Value" D  Q 
+ .S cV=+$TR(cV,",","."),cB=+$TR(cB,",",".")
+ .Q:'cV 
+ .S:'cB cB=1
+ .N K,R,Idx
+ .S (K,Idx)="" F  S K=$$NEXT^ISPRAV("crncy",K) Q:K=""  I $P($$GET^ISPRAV("crncy",K),"|",2)=cK S Idx=K Q 
+ .S:Idx="" Idx=$$NEWNUM^ISPRAV("crncy")
+ .D SET^ISPRAV("crncy",Idx,cN_"|"_cK)
+ .D SETH^ISPRAV("crncy",Idx,"",+$H,cV/cB)
+ S:%XM(2)="Valute" cI=0
+ Q
+SET(TP,H,VAL) ; Установить новое значение валюты
+ N I,X
+ S I=$$IDX^ISPRAV("crncy") Q:I="" 
+ S X="" F  S X=$O(^MN(I,X)) Q:X=""  I $P($G(^MN(I,X)),"|",2)=TP Q 
+ Q:X="" 
+ S ^MN(I,X,+H)=VAL
+ D UPD^IEXCH("YISPRAV","crncy")
+ Q

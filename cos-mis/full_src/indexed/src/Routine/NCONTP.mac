@@ -1,0 +1,67 @@
+NCONTP ; Контакты с пациентами [ 06/12/2020  1:27 PM ]
+LTSMS(NI,ID) ; Простая отсылка по шаблону СМС
+ N TXT,LL,PHN
+ S PHN=$$phn(NI)
+ I PHN="" D MSG^RWU("Не указан контактный телефон.") Q
+ D fill(NI)
+ S TXT=$P($$GET^ISPRAV("smstxt",ID),"|",2)
+ S TXT=$$AST^ITEMPLT(TXT,"LL")
+ S F=$$ADDSEND^IMSGHUB("sms","patient","",PHN,TXT,"")
+ Q
+fill(NI) ; Заполнить LL
+ D FREQ^ITEMPLT("LL")
+ Q:NI="" 
+ N F
+ F F="fiof","fioi","fioo","datar","pol","stc","dog_from","dog_to","polis","snils","ofor","dofor","pasp","pasp_dan" S LL(F)=$$GETE^IPAC(NI,F)
+ S F=$$FIO^IPAC(NI)
+ S LL("nib")=NI,LL("fio")=F,LL("io")=$$TRIM^TXTU($P(F," ",2,3))
+ Q
+phn(NI,TXT) ; Преобразованный телефон от пациента или из текста
+ N PNH
+ S PHN=$$MPHN^TXTU($$GET^IPAC(NI,"pager"))
+ S:PHN="" PHN=$$MPHN^TXTU($$GET^IPAC(NI,"tel1"))
+ S:PHN="" PHN=$$MPHN^TXTU($G(TXT))
+ Q PHN
+ftxt(TXT) ; Получить ID шаблона по имени
+ N ID
+ S TXT=$$UL^TXTU(TXT)
+ S ID="" F  S ID=$$NEXT^ISPRAV("smstxt",ID) Q:ID=""  I $$UL^TXTU($$GETN^ISPRAV("smstxt",ID,1))=TXT Q  
+ Q ID
+RLST(DS,DE,PHN) ; Список отосланных номеров
+ N DT,ID,I,R,P
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),PHN=$$LU^TXTU($G(PHN))
+ D OWF^RWU(".txt")
+ D WC^RWU("Телефон|Отправлено|Доставлено")
+ S ID="" F  S ID=$O(^MSGSLOG("sms",ID)) Q:ID=""  D
+ .S DT=DS-1 F  S DT=$O(^MSGSLOG("sms",ID,DT)) Q:DT=""!(DT>DE)  D
+ ..S I="" F  S I=$O(^MSGSLOG("sms",ID,DT,I)) Q:I=""  D
+ ...S R=^(I),P=$P(R,"|",2)
+ ...I PHN'="",P'[PHN Q 
+ ...D WC^RWU(CR_P_"|"_$$DTM^DTUTL($P(R,"|",4))_"|"_$$DTM^DTUTL($P(R,"|",5)))
+ D C^RWU
+ Q
+emllst(ARR,DS,DE) ; Список отосланных email по разделу сообщений
+ N DT,ID,I,R,NI
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D OWF^RWU(".txt")
+ D WC^RWU("Пациент|Адрес|Отправлено|Доставлено")
+ S ID="" F  S ID=$O(^MSGSLOG(ARR,ID)) Q:ID=""  D
+ .S DT=DS-1 F  S DT=$O(^MSGSLOG(ARR,ID,DT)) Q:DT=""!(DT>DE)  D
+ ..S I="" F  S I=$O(^MSGSLOG(ARR,ID,DT,I)) Q:I=""  D
+ ...S R=^(I)
+ ...S NI=$P(R,"|",3)
+ ...D WC^RWU(CR_NI_" "_$$FIO^IPAC(NI)_"|"_$P(R,"|",2)_"|"_$$DTM^DTUTL($P(R,"|",4))_"|"_$$DTM^DTUTL($P(R,"|",5)))
+ D C^RWU
+ Q
+REGIPROC 
+ S ^IPROC("Центр обработки вызовов","Журнал отправки SMS")="RLST_NCONTP,1,2,d,Период с,d,Период по"
+ S ^IPROC("Центр обработки вызовов","Журнал отправки email")="RLST_NCONTP,1,2,d,Период с,d,Период по"
+ Q
+INITDB 
+ S ^MN("root","smstxt")="Шаблоны SMS сообщений"
+ S ^MN("root","smstxt","fname")="Наименование|Текст"
+ S ^MN("root","smstxt","ftype")="S|S"
+ S ^MN("root","smstxt","fcode")="name|text"
+ S ^MN("root","emailtxt")="Шаблоны email сообщений"
+ S ^MN("root","acalltxt")="Справочник голосового обзвона"
+ Q

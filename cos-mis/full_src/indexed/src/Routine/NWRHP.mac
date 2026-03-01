@@ -1,0 +1,211 @@
+NWRHP ; Печатные документы склада [ 09/04/2018  0:21 AM ]
+PSK(ID) ; Постеллажные карточки
+ N I,J,R,A,X,V,Z,D,F,T,SS,PM,PC,NN,ST,FR,DT,STN,DOC,FRD,UN,fRD
+ S fRD=$$LCL^IUSER("wrh","round")
+ S X=$O(^WRHI("n",ID,""))
+ S DOC=$G(^WRHD(ID))
+ S Z=$P(X,"|",1),ST=$P(X,"|",3),D=$P(Z,",",1),A=""
+ S NN=$P(DOC,"|",3) S:NN="" NN=$P(ID,".",1)
+ I X'="" S A=$G(^WRH($P(X,"|",3),$P(X,"|",2),Z))
+ S DT=$$DT^DTUTL(D)
+ S FR=$$TAG^TXTU($$CTRNM^IWRHS($P(A,"|",7)_$P(A,"|",8),D,1))
+ S STN=$$TAG^TXTU($$CTRNM^IWRHS($P(A,"|",9)_$P(A,"|",10),D,1))
+ S FR=FR_", по "
+ S T=$P(DOC,"|",8)
+ S:T FR=FR_$S(T=1:"договору",T=2:"счету",T=3:"счету-фактуре",T=4:"акту",T=5:"накладной",T=6:"чеку",1:"документу")
+ S T=$P(DOC,"|",9)
+ S:T'="" FR=FR_" №"_T
+ S FRD=$$DT2^DTUTL($P(DOC,"|",11)) ; дата внешн док
+ S:FRD'="" FR=FR_" от "_FRD
+ S FRD=$P(DOC,"|",2) S:FRD="" FRD=+Z
+ S FRD=$$DT2^DTUTL(FRD) ; дата док
+ S FR=$$TAG^TXTU(FR)
+ S COMM=$$TAG^TXTU($G(^WRHD(ID,"c")))
+ 
+ D OWF^RWU(".xml")
+ D OPEN^ISTREP("Постеллажные карточки")
+ D FONT^ISTREP(1,"Times New Roman",10)
+ D FONT^ISTREP(2,"Times New Roman",12)
+ D FONT^ISTREP(3,"Times New Roman",12,"b")
+ D CSTART^ISTREP("p")
+ 
+ S (ST,R)="",J=0
+ F  D  S X=$O(^WRHI("n",ID,X)) Q:X=""  S ST=$P(X,"|",3),A=$G(^WRH(ST,$P(X,"|",2),$P(X,"|",1)))
+ .S V=$P(X,"|",2),PM=$P(A,"|",19),PC=1,UN=$P(A,"|",12),SS=$P(A,"|",14)
+ .S:PM PC=$$MEANCNT^IWRHS(V,PM)
+ .S:PC="" PM=0,PC=1
+ .D:J#2=0 W^RWU(CR_"<l>")
+ .S Z="<d w=""95"" b=""tblr"">"
+ .S Z=Z_"<l h=""f""><d>"_STN_"</d></l><l w=""95"" h=""0.5"" b=""tb""/>"
+ .S R=$$TAG^TXTU($$NAMENM^IWRHS(V))
+ .S Z=Z_"<l h=""18""><d w=""3""/><d f=""3"" w=""90"" h=""20"" v=""c"">"_R_"</d></l>"
+ .S R=$$TAG^TXTU($$MEANNM^IWRHS(V,PM))
+ .S Z=Z_"<l h=""6""><d w=""1""/><d f=""3"" w=""47"">"_(+$J($P(A,"|",3)/PC,"",3))_" "_R_"</d>"
+ .S Z=Z_"<d f=""3"">"_$S(SS:$S(fRD:+$J(SS,"",2),1:SS)_" руб.",1:"")_"</d></l>"
+ .S R=$$TAG^TXTU($$GET^IWRHS(V,"nnum"))
+ .S Z=Z_"<l h=""6""><d w=""1""/><d f=""2"" w=""47"">"_$S(R="":"",1:"Номенкл. № "_R)_"</d>"
+ .S Z=Z_"<d f=""2"">"_$S(UN="":"",1:"Учетный № "_UN)_"</d></l>"
+ .S Z=Z_"<l><d w=""95"" h=""9"" b=""t"">Поставщик: "_FR_"</d></l>"
+ .
+ .S Z=Z_"<l><d w=""95"" h=""f"">"_COMM_"</d></l>"
+ .S Z=Z_"<l w=""95"" h=""0.5"" b=""tb""/>"
+ .S Z=Z_"<l b=""b"" f=""2"" h=""6""><d w=""21"" b=""r"" a=""c"">№ док-та</d><d w=""21"" b=""r"" a=""c"">Дата</d><d w=""31"" b=""r"" a=""c"">Серия</d><d w=""22"" a=""c"">Годен до</d></l>"
+ .S Z=Z_"<l b=""b"" f=""2"" h=""9""><d w=""21"" b=""r"" a=""c"" v=""c"">"_$P(DOC,"|",3)_"</d><d w=""21"" b=""r"" a=""c"" v=""c"">"_FRD_"</d><d w=""31"" b=""r""></d><d w=""21""></d></l>"
+ .S Z=Z_"</d>"
+ .S:J#2=0 Z=Z_"<d w=""2""/>"
+ .D WC^RWU(Z)
+ .D:J#2=1 W^RWU(CR_"</l>"),H^ISTREP(2)
+ .S J=J+1
+ D:(Z'="")&(J#2=1) W^RWU(CR_"</l>") ; закрыть для нечетн
+ 
+ D CEND^ISTREP,CLOSE^ISTREP,C^RWU
+ Q
+RETINV(ID) ; Розничная накладная
+ N R,A,X,Z,V,D,F,T,CNT,SS,PM,PC,NN,ST,FR,DT,STN,DOC,UN,JJ,SSR,IDS,SE,PC,Np,K,Nss,sRP,fUP,NM,X1,X2,X3,WN,fRD
+ S fRD=$$LCL^IUSER("wrh","round")
+ S X=$O(^WRHI("n",ID,""))
+ S DOC=$G(^WRHD(ID))
+ S Z=$P(X,"|",1),ST=$P(X,"|",3),D=$P(Z,",",1),A=""
+ S NN=$P(DOC,"|",3) S:NN="" NN=$P(ID,".",1)
+ I X'="" S A=$G(^WRH($P(X,"|",3),$P(X,"|",2),Z))
+ S DT=$$DT^DTUTL(D)
+ S FR=$$TAG^TXTU($$CTRNM^IWRHS($P(A,"|",7)_$P(A,"|",8),D,1))
+ S STN=$$TAG^TXTU($$CTRNM^IWRHS($P(A,"|",9)_$P(A,"|",10),D,1))
+ S FR=$$TAG^TXTU(FR)
+ S COMM=$$TAG^TXTU($G(^WRHD(ID,"c")))
+ 
+ S Nss=$$LCL^IUSER("wrh","noswsum")
+ S sRP=$G(^cfg("wrh","retinv-orp")) ; only retail price
+ S fUP=$G(^cfg("wrh","ri-unitprc"))
+ 
+ D OWF^RWU(".xml")
+ D OPEN^ISTREP("Накладная на перемещение с розничными ценами")
+ D FONT^ISTREP(1,"Times New Roman",10)
+ D FONT^ISTREP(2,"Times New Roman",10,"b")
+ D FONT^ISTREP(3,"Times New Roman",12,"b")
+ D FONT^ISTREP(4,"Times New Roman",8)
+ D FONT^ISTREP(5,"Times New Roman",8,"b")
+ D CSTART^ISTREP("l")
+ 
+ D WC^RWU("<l a=""c"" f=""3""><d>Накладная №"_NN_" от "_DT_"</d></l>")
+ D H^ISTREP(2)
+ D WC^RWU("<l><d f=""2"" w=""25"">Отправитель: </d><d>"_FR_"</d></l>")
+ D WC^RWU("<l><d f=""2"" w=""25"">Получатель: </d><d>"_STN_"</d></l>")
+ D H^ISTREP(2)
+ S WN=$S(fUP:174,1:191) S:sRP WN=WN+34
+ D WC^RWU(CR_"<l f=""5""><d w=""10"" b=""tblr"" a=""c"">№</d><d w="""_WN_""" b=""tblr""> Наименование товара</d><d w=""12"" b=""tblr"" a=""c"">Кол-во</d><d w=""20"" b=""tblr""> Ед.</d><d w=""17"" b=""tblr"" a=""c"">Сумма</d>"_$S(fUP:"<d w=""20"" b=""tblr"" a=""c"">За ед.</d>",1:"")_$S(sRP:"",1:"<d w=""17"" b=""tblr"" a=""c"">Наценка</d><d w=""17"" b=""tblr"" a=""c"">Розница</d>")_"</l>")
+ S JJ=0,(SS,SSR)=0
+ S (ST,X)="" F  S X=$O(^WRHI("n",ID,X)) Q:X=""  D
+ .S JJ=JJ+1
+ .S ST=$P(X,"|",3),V=$P(X,"|",2),IDS=$P(X,"|",1)
+ .S A=$G(^WRH(ST,V,IDS))
+ .S PM=$P(A,"|",19),SE=$P(A,"|",12),PC=1,R=""
+ .S:PM PC=$$MEANCNT^IWRHS(V,PM)
+ .S Np=$$PKU^IWRHS(V)
+ .S:PC="" PM=0,PC=1
+ .S K=V_"@"_$S(PM:PM,1:"")_"@"_IDS
+ .S:SE'="" $P(K,"@",4)=SE
+ .S $P(K,"@",5)=ST,$P(K,"@",6)=Np
+ .S NM=$$NAMENM^IWRHS(V)
+ .S SE=$P(A,"|",12)
+ .I SE'="" S SE=$$GETSN^IWRH(SE,V,Np) S:SE'="" NM=NM_", №"_SE
+ .S NM=$$TAG^TXTU(NM)
+ .S R="<l f=""4"" b=""tblr""><d w=""10"" a=""c"">"_JJ_"</d>"
+ .S R=R_"<d w="""_WN_"""> "_NM_"</d>"
+ .S CNT=+$J($P(A,"|",3)/PC,"",2)
+ .S R=R_"<d w=""12"" a=""c"">"_CNT_"</d>"
+ .S R=R_"<d w=""20""> "_$$MEANNM^IWRHS(V,PM)_"</d>"
+ .S X1=$P(A,"|",14),X3=$P(A,"|",22)
+ .S:X3="" X3=$$CCENN^IWRHS("",V,D,X1,CNT)
+ .S X2=$S(X3:X3-X1,1:0)
+ .S:sRP X1=X3 ; только розничные цены
+ .S R=R_"<d w=""17"" a=""c"">"_$S(Nss:"***",1:$$fnx(X1))_"</d>"
+ .S:fUP R=R_"<d w=""17"" a=""c"">"_$S(Nss:"***",1:+$J(X1/CNT,"",2))_"</d>"
+ .S:'sRP R=R_"<d w=""17"" a=""c"">"_$S(Nss:"***",1:$$fnx(X2))_"</d>"
+ .S:'sRP R=R_"<d w=""17"" a=""c"">"_$$fnx(X3)_"</d>"
+ .S R=R_"</l>"
+ .D WC^RWU(CR_R)
+ .S SS=SS+X1,SSR=SSR+X3
+ 
+ D H^ISTREP(5)
+ D WC^RWU("<l><d>Всего наименований: "_JJ_" на сумму "_$$fnx(SSR)_" руб. (розница)</d></l>")
+ S X1=$P(SSR,".",1),X2=$TR($J($P(SSR,".",2),2)," ",0)
+ D WC^RWU("<l><d f=""2"">"_$$NTEXT^TXTU(X1)_" руб. "_X2_" коп.</d></l>")
+ D H^ISTREP(5)
+ D WC^RWU("<l><d>Принял </d><d h=""f"" b=""b"" w=""40""/><d w=""10""/><d>Отпустил </d><d h=""f"" b=""b"" w=""40""/></l>")
+ 
+ D CEND^ISTREP,CLOSE^ISTREP,C^RWU
+ Q
+AKTO(ID) ; Общий акт списания
+ N R,A,X,Z,V,D,F,T,CNT,SS,PM,PC,NN,ST,FR,DT,STN,DOC,UN,JJ,SSR,IDS,SE,PC,Np,K,Nss,fUP,NM,X1,X2,X3,WN
+ S X=$O(^WRHI("n",ID,""))
+ S DOC=$G(^WRHD(ID))
+ S Z=$P(X,"|",1),ST=$P(X,"|",3),D=$P(Z,",",1),A=""
+ S NN=$P(DOC,"|",3) S:NN="" NN=$P(ID,".",1)
+ I X'="" S A=$G(^WRH($P(X,"|",3),$P(X,"|",2),Z))
+ S DT=$$DT^DTUTL(D)
+ S FR=$$TAG^TXTU($$CTRNM^IWRHS($P(A,"|",7)_$P(A,"|",8),D,1))
+ S STN=$$TAG^TXTU($$CTRNM^IWRHS($P(A,"|",9)_$P(A,"|",10),D,1))
+ S FR=$$TAG^TXTU(FR)
+ S COMM=$$TAG^TXTU($G(^WRHD(ID,"c")))
+ 
+ S Nss=$$LCL^IUSER("wrh","noswsum")
+ S fUP=$G(^cfg("wrh","ri-unitprc"))
+ 
+ D OWF^RWU(".xml")
+ D OPEN^ISTREP("Акт списания")
+ D FONT^ISTREP(1,"Times New Roman",10)
+ D FONT^ISTREP(2,"Times New Roman",10,"b")
+ D FONT^ISTREP(3,"Times New Roman",12,"b")
+ D FONT^ISTREP(4,"Times New Roman",8)
+ D FONT^ISTREP(5,"Times New Roman",8,"b")
+ D CSTART^ISTREP("l")
+ 
+ D WC^RWU("<l a=""c"" f=""3""><d>Акт №"_NN_" от "_DT_"</d></l>")
+ D H^ISTREP(2)
+ D WC^RWU("<l><d f=""2"" w=""25"">Склад: </d><d>"_FR_"</d></l>")
+ D H^ISTREP(2)
+ S WN=$S(fUP:194,1:211)
+ D WC^RWU(CR_"<l f=""5""><d w=""10"" b=""tblr"" a=""c"">№</d><d w="""_WN_""" b=""tblr""> Наименование товара</d><d w=""12"" b=""tblr"" a=""c"">Кол-во</d><d w=""20"" b=""tblr""> Ед.</d><d w=""17"" b=""tblr"" a=""c"">Сумма</d>"_$S(fUP:"<d w=""17"" b=""tblr"" a=""c"">За единицу</d>",1:"")_"<d w=""17"" b=""tblr"" a=""c"">Розница</d></l>")
+ S JJ=0,(SS,SSR)=0
+ S (ST,X)="" F  S X=$O(^WRHI("n",ID,X)) Q:X=""  D
+ .S JJ=JJ+1
+ .S ST=$P(X,"|",3),V=$P(X,"|",2),IDS=$P(X,"|",1)
+ .S A=$G(^WRH(ST,V,IDS))
+ .S PM=$P(A,"|",19),SE=$P(A,"|",12),PC=1,R=""
+ .S:PM PC=$$MEANCNT^IWRHS(V,PM)
+ .S Np=$$PKU^IWRHS(V)
+ .S:PC="" PM=0,PC=1
+ .S K=V_"@"_$S(PM:PM,1:"")_"@"_IDS
+ .S:SE'="" $P(K,"@",4)=SE
+ .S $P(K,"@",5)=ST,$P(K,"@",6)=Np
+ .S NM=$$NAMENM^IWRHS(V)
+ .S SE=$P(A,"|",12)
+ .I SE'="" S SE=$$GETSN^IWRH(SE,V,Np) S:SE'="" NM=NM_", №"_SE
+ .S NM=$$TAG^TXTU(NM)
+ .S R="<l f=""4"" b=""tblr""><d w=""10"" a=""c"">"_JJ_"</d>"
+ .S R=R_"<d w="""_WN_"""> "_NM_"</d>"
+ .S CNT=+$J($P(A,"|",3)/PC,"",2)
+ .S R=R_"<d w=""12"" a=""c"">"_CNT_"</d>"
+ .S R=R_"<d w=""20""> "_$$MEANNM^IWRHS(V,PM)_"</d>"
+ .S X1=$P(A,"|",14),X3=$P(A,"|",22)
+ .S:X3="" X3=X3=$$CCENN^IWRHS("",V,D,X1,PC)
+ .S X1=$J(X1,"",2),X3=+$J(X3,"",2)
+ .S X2=$S(X3:X3-X1,1:0)
+ .S R=R_"<d w=""17"" a=""c"">"_$S(Nss:"***",1:+X1)_"</d>"
+ .S:fUP R=R_"<d w=""17"" a=""c"">"_$S(Nss:"***",1:+$J(X1/CNT,"",2))_"</d>"
+ .S R=R_"<d w=""17"" a=""c"">"_(+X3)_"</d></l>"
+ .D WC^RWU(CR_R)
+ .S SS=SS+X1,SSR=SSR+X3
+ 
+ D H^ISTREP(5)
+ D WC^RWU("<l><d>Всего наименований: "_JJ_"</d></l>")
+ S X1=$P(SSR,".",1),X2=$TR($J($P(SSR,".",2),2)," ",0)
+ D H^ISTREP(5)
+ D WC^RWU("<l><d>Материально ответственное лицо </d><d h=""f"" b=""b"" w=""40""/><d w=""10""/></l>")
+ 
+ D CEND^ISTREP,CLOSE^ISTREP,C^RWU
+ Q
+fnx(X) ; Округление в зависимости от настроек
+ Q:fRD +$J(X,"",2)
+ Q +$J(X,"",4)

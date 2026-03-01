@@ -1,0 +1,87 @@
+NTSSH ; Температурный лист [ 10/01/2018  4:18 PM ]
+LST(NI,DS,DE) 
+ N TP,ID,DT,C
+ Q:NI="" 
+ S DS=$$DI^DTUTL($G(DS)),DE=$$DI^DTUTL($G(DE))
+ S TP=$$FNDUID^YIMHS("hosp/templist")
+ S:TP="" TP=$$mkdoc()
+ S ID=$$FNDUID^IEPR(NI,"hosp/templist")
+ Q:ID="" 
+ D OWF^RWU(".txt")
+ S DT=DS-1,C=""
+ F  S DT=$O(^EPRD(NI,ID,DT)) Q:DT=""!$S(DE="":0,1:+DT>DE)  D
+ .D WC^RWU(C_NI_"@"_ID_"@"_DT_"|"_$$DTM^DTUTL(DT))
+ D C^RWU
+ Q
+L(KEY) 
+ N NI,ID,DT,R
+ S NI=$P(KEY,"@",1),ID=$P(KEY,"@",2),DT=$P(KEY,"@",3)
+ Q
+W 
+ Q
+sbs 
+ N HH,TP,BID
+ S HH=$G(^EPRD(NI,ID,"dtm"))
+ S:HH="" HH=$H,^EPRD(NI,ID,"dtm")=HH
+ S TP=$$FNDUID^YIMHS("hosp/templist")
+ S:TP="" TP=$$mkdoc()
+ S NID=$$FNDUID^IEPR(NI,"hosp/templist")
+ S:NID="" NID=$$MKDOC^IEPR(NI,TP,"Температурный лист",1,+$H)
+ S ^EPRD(NI,NID,HH,"id")=ID
+ Q
+epr 
+ N IT,IT0,ITC,II,R,LL,I2,J,A
+ S IT="<item>",IT0="</item>",ITC=IT0_IT
+ 
+ ; TODO - сортировка утро/вечер
+ 
+ S J=+$P(^EPR(N,ID,"dt"),"|",1)
+ S II="" F  S II=$O(^EPRD(N,ID,II)) Q:II=""  D
+ .S I2=$G(^EPRD(N,ID,II,"id")) Q:I2="" 
+ .S LL(I2)=(J-II+1)_"|"_II_"|"_$P(II,",",2) ; ID|DTM|TM
+ 
+ S (A,II)="" F  S II=$O(LL(II)) Q:II=""  S A=A_ITC_$P($$DT^DTUTL($P(LL(II),"|",2)),".",1,2)
+ D WC^RWU("<titles>"_IT_"Дата"_A_IT0_"</titles>")
+ 
+ S (A,II)="" F  S II=$O(LL(II)) Q:II=""  S A=A_ITC_$P(LL(II),"|",1)
+ D WC^RWU("<titles>"_IT_"День в стац."_A_IT0_"</titles>")
+ 
+ S (A,II)="" F  S II=$O(LL(II)) Q:II=""  S A=A_ITC_$$TM^DTUTL($P(LL(II),"|",3))
+ D WC^RWU("<titles>"_IT_"Время"_A_IT0_"</titles>")
+ 
+ 
+ S (A,II)="" F  S II=$O(LL(II)) Q:II=""  S A=A_ITC_$G(^EPRD(N,II,"temp"))
+ D WC^RWU("<row>"_IT_"Температура"_A_IT0_"</row>")
+ 
+ S (A,II)="" F  S II=$O(LL(II)) Q:II=""  S A=A_ITC_$G(^EPRD(N,II,"syst"))_"/"_$G(^EPRD(N,II,"diast"))
+ D WC^RWU("<row>"_IT_"А.Д."_A_IT0_"</row>")
+ 
+ S (A,II)="" F  S II=$O(LL(II)) Q:II=""  S A=A_ITC_$G(^EPRD(N,II,"breath"))
+ D WC^RWU("<row>"_IT_"Дыхание"_A_IT0_"</row>")
+ 
+ S (A,II)="" F  S II=$O(LL(II)) Q:II=""  S A=A_ITC_$G(^EPRD(N,II,"weight"))
+ D WC^RWU("<row>"_IT_"Вес"_A_IT0_"</row>")
+ 
+ S (A,II)="" F  S II=$O(LL(II)) Q:II=""  S A=A_ITC_$$TAG^TXTU($G(^EPRD(N,II,"water")))
+ D WC^RWU("<row>"_IT_"Выпито жидк."_A_IT0_"</row>")
+ 
+ S (A,II)="" F  S II=$O(LL(II)) Q:II=""  S A=A_ITC_$$TAG^TXTU($G(^EPRD(N,II,"urv")))
+ D WC^RWU("<row>"_IT_"Сут. кол-во мочи"_A_IT0_"</row>")
+ 
+ S (A,II)="" F  S II=$O(LL(II)) Q:II=""  S A=A_ITC_$$TAG^TXTU($G(^EPRD(N,II,"faces")))
+ D WC^RWU("<row>"_IT_"Стул"_A_IT0_"</row>")
+ 
+ S (A,II)="" F  S II=$O(LL(II)) Q:II=""  S A=A_ITC_$$TAG^TXTU($G(^EPRD(N,II,"bath")))
+ D WC^RWU("<row>"_IT_"Ванная"_A_IT0_"</row>")
+ Q
+mkdoc() 
+ N ID
+ S ID=$$ADDT^YIMHS("Температурный лист",$$ADDF^YIMHS("Стационар"),"tab","hosp/templist")
+ D SET^YIMHS(ID,"pfile","labs.css")
+ D SET^YIMHS(ID,"rproc","epr^NTSSH")
+ D SET^YIMHS(ID,"rights","rrr")
+ D SET^YIMHS(ID,"bdoc",1)
+ D SET^YIMHS(ID,"use",1)
+ D SET^YIMHS(ID,"hidden",1)
+ D MKIDX^IMHS(ID)
+ Q ID

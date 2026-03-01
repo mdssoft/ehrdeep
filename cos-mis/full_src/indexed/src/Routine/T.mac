@@ -1,0 +1,23 @@
+T(X,R) ; Текстовые сообщения [ 02/27/2019  10:08 PM ]
+ ; R - область, X - ID сообщения
+ Q:$G(X)="" ""
+ S:$G(R)="" R="*" 
+ N LNG S LNG="ru"
+ I $D(%LOG),$D(^LOG(%LOG,"lang")) S LNG=^("lang")
+ I '$D(^TEXT(R,X)) S:$G(^cfg("lang","collect")) ^TEXT("new",R,X)="" Q X
+ Q:$D(^(X,LNG)) ^(LNG) Q $G(^("ru"))
+ADD(R,X,L,TXT) ; Добавить сообщение для языка
+ ; R - область, X - ID сообщения, L - язык
+ S ^TEXT(R,X,L)=TXT
+ Q
+REG     ; Регистрация текстовых сообщений
+ N P,X S P=""
+ F  S P=$O(^$R(P)) Q:P=""  X "S X=$T(REGTEXT^"_P_")" D:X'="" @("REGTEXT^"_P)
+ Q
+ ; <Description>
+ ; Формат глобала ^TEXT(ID области,ID сообщения,язык)=сообщение
+ ; Кодирование языков:
+ ; ru - русский
+ ; en - английский
+ ; de - немецкий
+ ;

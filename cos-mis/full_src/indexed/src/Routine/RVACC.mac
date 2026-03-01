@@ -1,0 +1,54 @@
+RVACC ; Отчеты - вакцинопрофилактика [ 09/04/2013  2:45 AM ]
+CNT(DS,DE) 
+ D OWF^RWU(".txt")
+ D WC^RWU("Наименование прививки|Лиц|из них Муж.|из них Жен.")
+ D C^RWU
+ Q
+PSVD(DS,DE) 
+ D OWF^RWU(".txt")
+ D WC^RWU("Возраст|Наименование прививки|Всего|Привито|%")
+ D C^RWU
+ Q
+PSVV(DS,DE) 
+ D OWF^RWU(".txt")
+ D WC^RWU("Возраст|Наименование прививки|Всего|Привито|%")
+ D C^RWU
+ Q
+PLAN(DS,DE,UCH,WRK) 
+ D OWF^RWU(".txt")
+ D WC^RWU("П.п.|N И.Б.|Ф.И.О.|Дата рожд.|Возраст|Прививка|Дата прив.|Телефон|Адрес")
+ D C^RWU
+ Q
+BYVR(DS,DE) 
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ K ^BUF($J,"rmt")
+ N ID,LST,R,MT,M,K,cPRC
+ D MKAPPRC^IUSLSC(DS,DE,1,"VRPRC^RVACC","","","",'+$$FR^I())
+ D OWF^RWU(".txt"),WC^RWU("Врач за период "_$$DT2^DTUTL(DS)_"-"_$$DT2^DTUTL(DE)_"|Препарат|Вакцина|Расход")
+ S ID="" F  S ID=$O(^BUF($J,"rmt",ID)) Q:ID=""  D
+ .D WC^RWU(CR_$$FIODT^YIKADRY(ID,DE))
+ .S MT="" F  S MT=$O(^BUF($J,"rmt",ID,MT)) Q:MT=""  D
+ ..S R=^(MT),K=$$GET^ISPRAV("vacprp",MT)
+ ..D WC^RWU(CR_"|"_$P(K,"|",1)_"|"_$$NAME^ISPRAV("vaccin",$P(K,"|",3))_"|"_$TR(+$FN(R,"",2),".",","))
+ D C^RWU
+ K ^BUF($J,"rmt")
+ Q
+VRPRC 
+ S TEST=0,cPRC=0
+ S LPU=$G(^ZNF(VR,OTD,DT,ID,"l"))
+ I +$G(XLPU)>0 Q:CLPU'=LPU
+ S STAT=$$GETSTAT^IUSL(VR,DT,OTD,ID)
+ Q:STAT="d"!(STAT="w")
+ S R=$$GETPL^IUSL(VR,DT,OTD,ID,"vp") Q:R="" 
+ S M=$P(R,"|",1)
+ S ^(M)=$G(^BUF($J,"rmt",VR,M))+1
+ Q:STAT="d"!(STAT="w") 
+ Q
+REGIPROC 
+ N D S D="Вакцинопрофилактика"
+ S ^IPROC(D,"Численность привитых")="CNT_RVACC,1,2,d,Начальная дата,d,Конечная дата"
+ S ^IPROC(D,"О полноте и своевременности охвата детей")="PSVD_RVACC,1,2,d,Начальная дата,d,Конечная дата"
+ S ^IPROC(D,"О полноте и своевременности охвата взрослых")="PSVV_RVACC,1,2,d,Начальная дата,d,Конечная дата"
+ S ^IPROC(D,"План прививок")="PLAN_RVACC,1,4,d,Начальная дата,d,Конечная дата,t@storage:uchastok,Участок,te@storage:mectorab@1,Место работы"
+ S ^IPROC(D,"Число вакцинаций по врачу")="BYVR_RVACC,1,2,d,Начальная дата,d,Конечная дата"
+ Q

@@ -1,0 +1,7 @@
+NFTASK ; TaskFlow [ 07/09/2014  0:00 AM ]
+DOLST(ID) ; Список действий по ID задачи
+ N I,A
+ S (A,I)="" 
+ I ID'="" F  S I=$O(^TSTS(ID,"s",I)) Q:I=""  I I'="ok",I'="cancel" S R=$P(^(I),"|",3) S:R'="" A=$S(A="":"",1:A_CR)_I_"|"_R
+ D MSG^RWU(A)
+ Q

@@ -1,0 +1,157 @@
+A ; РАСПИСАНИЕ ДЛЯ КИОСКА [ 07/30/2024  6:16 PM ]
+TIME(SP,DT,VR)        ; Время и занятость по дате спец. и врачу (врачам)
+ N LPU,SPP,OT,KX,TM,TML,VRX,K,X
+ S LPU=+$$^I("ilpu")
+ S DT=$$DI^DTUTL(DT),VR=+VR S:VR=999 VR=0
+ S KX="" F  S KX=$O(^DSHI("sp",LPU,SP,KX)) Q:KX=""  D
+ .S VRX=$P(KX,"|",2),OT=$P(KX,"|",1) I VR>0 Q:VR'=VRX 
+ .S SPP=^(KX) Q:$D(^DSH(LPU,OT,VRX,SPP,DT))=0 
+ .S K=$P($G(^(DT)),"|",2)
+ .S TM="" F  S TM=$O(^DSH(LPU,OT,VRX,SPP,DT,TM)) Q:TM=""  D
+ ..S X=^(TM) Q:X="*"  S TML(TM_"|"_VRX_"|"_OT)=K_"|"_$S(X="":0,1:1)
+ D OWF^RWU(".txt")
+ S KX="",K="" F  S KX=$O(TML(KX)) Q:KX=""  D WC^RWU(K_$$TM^DTUTL($P(KX,"|",1))_"|"_$P(TML(KX),"|",2)_"|"_$P(KX,"|",2,3)_"|"_$P(TML(KX),"|",1)) S K=CR
+ D C^RWU
+ Q
+ZAP(OT,TN,SP,DT,TIM,NI) ; Запись к врачу
+ S DTT=$$DIH^DTUTL(DT),TIM=$$TI^DTUTL(TIM)
+ D SET^IRASP2(OT,TN,SP,DTT,TIM,NI,0,+$$^I("ilpu"))
+ D MSG^RWU($G(REZ)) K REZ
+ Q
+VRLST(SP,DT) ; перечень врачей по специальности из расписания
+ N LTIM,LCAB,LFIO,LPU,OT,VR,SPP,TS,TE,X
+ S DT=$$DI^DTUTL(DT),(LTIM,LCAB,LFIO)=""
+ S LPU=+$$^I("ilpu")
+ S KX="" F  S KX=$O(^DSHI("sp",LPU,SP,KX)) Q:KX=""  D
+ .S OT=$P(KX,"|",1),VR=$P(KX,"|",2),SPP=^(KX)
+ .Q:'$D(^DSH(LPU,OT,VR,SPP,DT))  S X=$G(^(DT))
+ .S TS=$O(^(DT,"")) Q:TS=""
+ .S TE=$O(^(""),-1)
+ .S:LTIM'="" LTIM=LTIM_CR,LCAB=LCAB_CR,LFIO=LFIO_CR
+ .S LTIM=LTIM_$$TM^DTUTL(TS)_"-"_$$TM^DTUTL(TE)
+ .S LCAB=LCAB_"к. "_$P(X,"|",2)
+ .S LFIO=LFIO_$$VFIOSH^IRASP2(VR)
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<frasp>")
+ D WTAGDC^RWU("timecolumn",LTIM)
+ D WTAGDC^RWU("cabcolumn",LCAB)
+ D WTAGDC^RWU("fiocolumn",LFIO)
+ D W^RWU("</frasp></nb_console>"),C^RWU
+ Q
+VRLSTT(SP,DT) ; перечень врачей по специальности из расписания в txt на дату
+ N LPU,OT,VR,SPP,KX
+ S DT=$$DI^DTUTL(DT),A="",LPU=+$$^I("ilpu")
+ D OWF^RWU(".txt")
+ S KX="" F  S KX=$O(^DSHI("sp",LPU,SP,KX)) Q:KX=""  D
+ .S OT=$P(KX,"|",1),VR=$P(KX,"|",2) Q:'$$VCHK^IRASP2(VR,DT)
+ .S SPP=$G(^DSHI("sp",LPU,SP,KX)) Q:SPP="" 
+ .Q:'$D(^DSH(LPU,OT,VR,SPP,DT)) 
+ .D WC^RWU(A_VR_"|"_$$VFIOSH^IRASP2(VR)) S A=CR
+ D C^RWU
+ Q
+VRLSTD(SP,DT) ; перечень врачей по спец. из расписания в txt от даты и выше 
+ N LPU,OT,VR,SPP,KX
+ S DT=$$DI^DTUTL(DT)-1,A="",LPU=+$$^I("ilpu")
+ D OWF^RWU(".txt")
+ S KX="" F  S KX=$O(^DSHI("sp",LPU,SP,KX)) Q:KX=""  D
+ .S OT=$P(KX,"|",1),VR=$P(KX,"|",2) Q:'$$VCHK^IRASP2(VR,DT)
+ .S SPP=$G(^DSHI("sp",LPU,SP,KX)) Q:SPP="" 
+ .Q:$O(^DSH(LPU,OT,VR,SPP,DT))="" 
+ .D WC^RWU(A_VR_"|"_$$VFIOSH^IRASP2(VR)) S A=CR
+ D C^RWU
+ Q
+OTLSTT ; перечень отделений из расписания в файл
+ N OT,LPU
+ S LPU=+$$^I("ilpu")
+ D OWF^RWU(".txt")
+ S A="",OT="" F  S OT=$O(^DSH(LPU,OT)) Q:OT=""  D WC^RWU(A_OT_"|"_$$GOTD^YISPRAV(OT)) S A=CR
+ D C^RWU
+ Q
+SPLSTT ; перечень специальностей из расписания в файл
+ D OWF^RWU(".txt")
+ D SPLSTi("")
+ D C^RWU
+ Q
+SPLSTi(CC) 
+ N LPU,SP,SPL,NM,KX
+ S LPU=+$$^I("ilpu")
+ S SP="" F  S SP=$O(^DSHI("sp",LPU,SP)) Q:SP=""  S KX="" F  S KX=$O(^DSHI("sp",LPU,SP,KX)) Q:KX=""  I $$VCHK^IRASP2($P(KX,"|",2),+$H)  S NM=$$GSPEC^YISPRAV(SP) I NM'="" S SPL(NM)=SP
+ S A=CC,NM=""
+ F  S NM=$O(SPL(NM)) Q:NM=""  D WC^RWU(A_SPL(NM)_"|"_NM) S A=CR
+ Q
+PACS(NI,DT,CCR,FDT,MODE) ; Маршрут пациента
+ D OWF^RWU(".txt")
+ D PACSys(NI,DT,CCR,FDT,MODE)
+ D C^RWU
+ Q
+PACSys(NI,DT,CCR,FDT,MODE,DIR,HDR,WPROC) ; Маршрут пациента (системно)
+ ; FDT - все с даты
+ ; MODE =1 - +статус и длительность приема
+ ; DIR - направление
+ ; HDR - заголовок таблицы
+ ; DIR - "1" или "" -с начала, "-1" - с конца
+ ; WPROC - процедура записи
+ N LPU,OT,VR,SP,X,DTT,TM,K,LP,DE,A,TP,TL,wlp
+ S:'$D(CCR) CCR=1
+ S DT=$$DI^DTUTL(DT),LPU=+$$^I("ilpu"),wlp=$$MB^I()
+ S MODE=+$G(MODE),FDT=+$G(FDT),DIR=$G(DIR),WPROC=$G(WPROC)
+ S:DIR="" DIR=1
+ S DE=$S(DT=""!FDT:99999,1:DT),DTT=$S(DIR=-1:DE,1:DT-1)
+ D:'$G(HDR) WC^RWU($S(MODE:"|",1:"")_"Дата|Время"_$S(MODE:"|Прием",1:"")_"|Врач|Специальность|Кабинет"_$S(wlp:"|Филиал",1:"")_$S(MODE:"|Статус",1:"")_$S(CCR:CR_"||",1:""))
+ 
+ I '$$EXIST^IPAC(NI) D C^RWU Q 
+ 
+ F  S DTT=$O(^DSHP(NI,DTT),DIR) Q:DTT=""!$S(DIR=1:DTT>DE,FDT:DTT<DT,1:0)   S TM="" F  S TM=$O(^DSHP(NI,DTT,TM)) Q:TM=""  S VR="" F  S VR=$O(^DSHP(NI,DTT,TM,VR)) Q:VR=""  D
+ .S X=^(VR) Q:X=""  
+ .S LP=$P(X,"|",1),OT=$P(X,"|",2),SP=$TR($P(X,"|",3),"@","|")
+ .S K=$G(^DSH(LP,OT,VR,SP,DTT))
+ .S:MODE TL=$O(^DSH(LP,OT,VR,SP,DTT,TM)),TP=$S($P($G(^(TM,"c")),"|",3)'="":"Завершено",$L($G(^("c"))):"Приход",$D(^("b")):"Уточнено",1:"")
+ .S A=$S(MODE:LP_"~"_OT_"~"_VR_"~"_SP_"~"_DTT_"~"_TM_"|",1:"")
+ .S A=A_$$DT2^DTUTL(DTT)_"|"_$$TIME^IRASP2(TM)_"|"
+ .S:MODE A=A_$S(TM>89999:"-",1:$$TiMIN^NRASP($S(TL="":1800,1:TL-TM)))_"|"
+ .S A=A_$$VFIOSH^IRASP2(VR)_"|"_$P($$GSPEC^YISPRAV(SP),"|",1)
+ .S A=A_"|"_$P(K,"|",2)_$S(wlp:"|"_$$NAME^ICONTR(LP),1:"")
+ .S:MODE A=A_"|"_TP
+ .I WPROC'="" D @WPROC Q 
+ .D WC^RWU(CR_A)
+ ; todo - all specs, not only first
+ Q
+PACPRN(NI,DT,FDT) ; for print
+ N LPU,OT,VR,SP,X,DTT,TM,K,LP,DE,A,TP,W,WF,BUF,I,wlp
+ S:NI="" NI=0
+ S DT=$$DI^DTUTL(DT),LPU=+$$^I("ilpu"),MODE=+$G(MODE),FDT=+$G(FDT)
+ S DE=$S(DT=""!FDT:99999,1:DT),DTT=DT-1
+ S wlp=$$MB^I()
+ D OWF^RWU(".xml")
+ D OPEN^ISTREP("Расписание пациента")
+ D FONT^ISTREP(1,"Times New Roman",10)
+ D FONT^ISTREP(2,"Times New Roman",12)
+ D FONT^ISTREP(3,"Times New Roman",14,"b")
+ D FONT^ISTREP(4,"Times New Roman",10,"b,i")
+ D CSTART^ISTREP("p")
+ D LD^ISTREP($$^I("iname"),4,"r")
+ D:'wlp LD^ISTREP($$^I("iaddr"),4,"r")
+ D:'wlp LD^ISTREP($$^I("itel"),4,"r")
+ D H^ISTREP(3)
+ D LD^ISTREP("Персональное расписание",3,"c")
+ D LD^ISTREP($$GET^PADEJ($$FIO^IPAC(NI),$$GET^IPAC(NI,"pol"))_" и.б.№"_NI,2,"c")
+ D H^ISTREP(1)
+ S W="20|16|70|72|20",WF="c|c|l|l|c",I=1
+ F  S DTT=$O(^DSHP(NI,DTT)) Q:DTT=""!(DTT>DE)  S TM="" F  S TM=$O(^DSHP(NI,DTT,TM)) Q:TM=""  S VR="" F  S VR=$O(^DSHP(NI,DTT,TM,VR)) Q:VR=""  D
+ .S X=^(VR) Q:X=""  
+ .S LP=+$P(X,"|",1),OT=$P(X,"|",2),SP=$TR($P(X,"|",3),"@","|")
+ .S K=$G(^DSH(LP,OT,VR,SP,DTT))
+ .S A=$$DT^DTUTL(DTT)_"|"_$$TIMET^IRASP2(TM)_"|"_$$VFIO^IRASP2(VR)
+ .S A=A_"|"_$P($$GSPEC^YISPRAV(SP),"|",1)_"|"_$P(K,"|",2)
+ .S BUF(LP,I)=A,I=I+1
+ S LP="" F  S LP=$O(BUF(LP)) Q:LP=""  D
+ .S X=$$GET^ICONTR(LP,"addr",+$H)
+ .S:$L(X) X=", "_X
+ .S A=$$GET^ICONTR(LP,"phone",+$H)
+ .S:A'="" A=", тел."_A
+ .D:wlp LD^ISTREP($$NAME^ICONTR(LP)_A_X)
+ .D TAB^ISTREP("Дата|Время|Врач|Специальность|Кабинет",W,"f","","#EEEEEE")
+ .S I=""
+ .F  S I=$O(BUF(LP,I)) Q:I=""  D TLN^ISTREP(BUF(LP,I),W,"","","",WF)
+ D HLINE^ISTREP(3),LD^ISTREP($$DT^DTUTL(+$H)_" г. ",1,"r")
+ D CEND^ISTREP,CLOSE^ISTREP,C^RWU
+ Q

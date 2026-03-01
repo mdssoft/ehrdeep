@@ -1,0 +1,94 @@
+IMEDARH ; Взаимодействие с medarhiv.ru [ 10/26/2013  6:14 PM ]
+MKXML(NI,ID,KEY,DIR) ; Создание XML файла
+ N IO,I,X,R,K,FN,CR,TP,NM,PNM,PPM,EML
+ S EML=$$GET^IPAC(NI,"email") Q:EML="" 
+ S FN=DIR_"/"_NI_"_"_$P($H,",",1)_"_"_$P($H,",",2)_"_"_$R(100)_".xml"
+ S CR=$C(13,10)
+ S TP=$G(^EPR(NI,ID,"t")),NM=$G(^("n"))
+ S:NM=""&(TP'="") NM=$G(^DTYPE(TP,"tname"))
+ S IO=$$OW^FIL(FN) Q:IO="" 
+ U IO
+ W "<?xml version=""1.0"" encoding=""windows-1251""?>"
+ W CR_"<Inform>"
+ W CR_"<SourceID>MEDSOFT</SourceID>"
+ W CR_"<Patient>"
+ W CR_"<Fio>"_$$DW^TXTU($$TAG^TXTU($$FIO^IPAC(NI)))_"</Fio>"
+ W CR_"<Email>"_EML_"</Email>"
+ W CR_"<BirthDate>"_$$GETE^IPAC(NI,"datar")_"</BirthDate>"
+ W CR_"<Events>"
+ W CR_"<Event>"
+ W CR_"<EventLocID>"_NI_","_ID_","_KEY_"</EventLocID>"
+ W CR_"<Name>"_$$DW^TXTU($$TAG^TXTU(NM))_"</Name>"
+ W CR_"<CategoryID>5</CategoryID>"
+ W CR_"<DoctorName>mHealth</DoctorName>"
+ W CR_"<ExecDate>"_$$DTM^DTUTL(KEY)_"</ExecDate>"
+ W CR_"<Lab_params>"
+ 
+ S X=$G(^EPRD(NI,ID,$P(KEY,",",1),$P(KEY,",",2)))
+ F I=1:1:$L(X,"|") S R=$P(X,"|",I) D:R'=""
+ .S K=$$PRM(TP,I),PNM=$P(K,"|",1),PPM=$P(K,"|",2)
+ .W CR_"<param>"
+ .W CR_"<Name>"_$$DW^TXTU($$TAG^TXTU(PNM))_"</Name>"
+ .W CR_"<Units>"_$$DW^TXTU($$TAG^TXTU(PPM))_"</Units>"
+ .W CR_"<Value>"_R_"</Value> "
+ .W CR_"</param> "
+ 
+ W CR_"</Lab_params>"
+ W CR_"</Event>"
+ W CR_"</Events>"_CR_"</Patient>"_CR_"</Inform>"
+ D C^FIL(IO)
+ Q FN
+PRM(TP,POS) 
+ N UID
+ S UID=$G(^DTYPE(TP,"uid"))
+ I UID="med_mon/bpp" Q $P("Давление систолическое|Давление диастолическое|Пульс","|",POS)_"|"_$P("мм рт.ст|мм рт.ст|уд. в мин.","|",POS)
+ I UID="med_mon/diabet" Q $P("Хлебные ед.|Глюкоза в крови|Инсулин","|",POS)_"|"_$P("ХЕ|ммоль/л.|ед","|",POS)
+ I UID="med_mon/bread" Q $P("||Хлебные ед.|Калории|Белки|Углеводы|Жиры","|",POS)_"|"_$P("||ХЕ|ед","|",POS)
+ I UID="med_mon/weight" Q $P("Вес","|",POS)_"|"_$P("кг","|",POS)
+ Q ""
+THREAD 
+ N I
+ S I=0,^SYNCJ("THREAD^IMEDARH-R")=1
+ F  Q:$D(^SYNCJ("THREAD^IMEDARH"))  H 1 S I=I+1 I I>60 S I=0 D DOSEND(1)
+ K ^SYNCJ("THREAD^IMEDARH")
+ Q
+DOSEND(IID) 
+ Q:'$D(^MSGOUT("medarhiv")) 
+ N DIR,I,NI,ID,KEY,FILL,FN,SRV,USR,PWD,PRT,IDX,R
+ S DIR="C:\TEMP"
+ S:$$UL^TXTU($ZV)["unix" DIR="/tmp/medarhiv.ru"
+ S SRV=$G(^MSGHUB("medarhiv",IID,"server")) S:SRV="" SRV="medarhiv.ru"
+ S PRT=$G(^MSGHUB("medarhiv",IID,"port")) S:PRT="" PRT=990
+ S USR=$G(^MSGHUB("medarhiv",IID,"user")) Q:USR="" 
+ S PWD=$G(^MSGHUB("medarhiv",IID,"passwod")) Q:PWD="" 
+ S IDX="" F  S IDX=$O(^MSGOUT("medarhiv",IID,IDX)) Q:IDX=""  D
+ .S R=^(IDX),TO=$P(R,"|",2) ; Q:TO="" 
+ .Q:$G(^(IDX,"chkfn"))'="" 
+ .S KEY=$G(^("sub"))
+ .S NI=$P(KEY,"|",1),ID=$P(KEY,"|",2),KEY=$P(KEY,"|",3)
+ .S FN=$$MKXML(NI,ID,KEY,DIR)
+ .S:FN'="" FILL(FN)=""
+ .K ^MSGOUT("medarhiv",IID,IDX)
+ 
+ I $D(FILL),$L($T(^IFTP)) D
+ .H 1
+ .S FN="" F  S FN=$O(FILL(FN)) Q:FN=""  D
+ ..X "d $zf(-1,""zip -q -m ""_FN_"".zip ""_FN)"
+ ..D:PRT'=990 SEND^IFTP(SRV,PRT,USR,PWD,FN_".zip")
+ ..D:PRT=990 SEND^IFTPS(SRV,PRT,USR,PWD,FN_".zip")
+ .H 1
+ Q
+DORECV(ID) 
+ Q
+START 
+ K ^SYNCJ("THREAD^IMEDARH")
+ J THREAD^IKDLOUT
+ Q
+STOP 
+ S ^SYNCJ("THREAD^IMEDARH")=1
+ N I F I=1:1:16 H 1 Q:'$D(^SYNCJ("THREAD^IMEDARH"))
+ K ^SYNCJ("THREAD^IMEDARH-R")
+ Q
+INITDB 
+ S ^MSGHUB("medarhiv")="IMEDARH"
+ Q

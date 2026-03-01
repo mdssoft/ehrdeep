@@ -1,0 +1,62 @@
+RRASPL ; Отчеты расписания (списки) [ 06/08/2023  1:45 PM ]
+ZAP(DS,DE,MOD,FC,USRX,LPU) ; Запись пациентов
+ ; MOD - вид отчета
+ ; FC - пришедшие/не пришедшие
+ N SP,OT,TM,DT,K,LN,VR,O,A,IF,EI
+ S LPU=$S(+$$FR^I():$G(LPU),1:+$$^I("ilpu"))
+ S:LPU="" LPU=+$$^I("ilpu")
+ S USRX=$$UL^TXTU(USRX)
+ S DS=$$DIH^DTUTL($G(DS)),DE=$$DIH^DTUTL($G(DE)),MOD=+$G(MOD)
+ D OWF^RWU(".txt"),WC^RWU("Дата|Время|Пациент|№ И.Б.|Врач"_$S(MOD:"",1:"|Примечание|Записано|Оператор"))
+ S OT="" F  S OT=$O(^DSH(LPU,OT)) Q:OT=""  S VR="" F  S VR=$O(^DSH(LPU,OT,VR)) Q:VR=""  D
+ .S SP="" F  S SP=$O(^DSH(LPU,OT,VR,SP)) Q:SP=""  S DT=DS-1 F  S DT=$O(^DSH(LPU,OT,VR,SP,DT)) Q:DT=""!(DT>DE)  D
+ ..S TM="" F  S TM=$O(^DSH(LPU,OT,VR,SP,DT,TM)) Q:TM=""  D
+ ...S K=$G(^(TM)) Q:K=""  Q:K="*" 
+ ...S NI=$P(K,"|",1),LN=CR_$$DT^DTUTL(DT)_"|"_$$TM^DTUTL(TM)_"|"
+ ...S IF=$G(^(TM,"i")),EI=$G(^("l"))
+ ...I FC,$S(FC=1:'$D(^("c")),FC=2:$D(^("c")),1:0) Q   
+ ...S O=$P($G(^DSHW($P(K,"|",4),LPU,OT,VR,SP,DT,TM)),"|",2)
+ ...S:O="" O=$P(IF,"|",10)
+ ...S:$L(NI)&(O="") O=$P($G(^DSHP(NI,DT,TM,VR)),"|",4)
+ ...I USRX'="",USRX'=$$UL^TXTU($P(O,"@",1)) Q 
+ ...S O=$$FIOSH^NUSER(O,1)
+ ...S A=$$FIOSH^IKADRY(VR)_$S(MOD:"",1:"|"_$P(K,"|",2)_"|"_$$DTM^DTUTL($P(K,"|",4))_"|"_O)
+ ...S:EI'="" A=A_", внешн.:"_EI
+ ...I '$$EXIST^IPAC(NI) D WC^RWU(LN_NI_"|-|"_A) Q 
+ ...D WC^RWU(LN_$$FIO^IPAC(NI)_"|"_NI_"|"_A)
+ D C^RWU
+ Q
+ZAPOHR(DS,DE,NN) ; Запись пациентов для охраны (+сорт. по дате-времени)
+ N SP,OT,TM,DT,LPU,K,LN,VR,O,I,FIO
+ S LPU=+$$^I("ilpu"),I=1
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),NN=$G(NN)
+ S:NN="" NN=30
+ K ^BUF($J,"RRASP")
+ S OT="" F  S OT=$O(^DSH(LPU,OT)) Q:OT=""  S VR="" F  S VR=$O(^DSH(LPU,OT,VR)) Q:VR=""  D
+ .S SP="" F  S SP=$O(^DSH(LPU,OT,VR,SP)) Q:SP=""  S DT=DS-1 F  S DT=$O(^DSH(LPU,OT,VR,SP,DT)) Q:DT=""!(DT>DE)  D
+ ..S TM="" F  S TM=$O(^DSH(LPU,OT,VR,SP,DT,TM)) Q:TM=""  D
+ ...S K=$G(^(TM)) Q:K=""  Q:K="*" 
+ ...S NI=$P(K,"|",1),LN=$$DT^DTUTL(DT)_"|"_$$TM^DTUTL(TM)_"|"
+ ...S FIO=$S($$EXIST^IPAC(NI):$$FIO^IPAC(NI)_" ("_NI_")",1:NI)
+ ...S K=DT_"|"_FIO_"|"_I,I=I+1
+ ...S ^BUF($J,"RRASP",K)=LN_FIO_"|"_$$FIOSH^IKADRY(VR)
+ 
+ D OWF^RWU(".txt"),WC^RWU("Дата|Время|Пациент|Врач")
+ S I="" F  S I=$O(^BUF($J,"RRASP",I)) Q:I=""  D WC^RWU(CR_^(I))
+ S K="" F I=1:1:NN S K=K_CR
+ D WC^RWU(K)
+ K ^BUF($J,"RRASP")
+ D C^RWU
+ Q
+MYDSH(DS,DE,LPU) ; Личное расписание
+ S:DS="" DS=$$DT^DTUTL(+$H)
+ S:DE="" DE=$$DT^DTUTL(+$H)
+ D RVR^NRASP($$KDR^IUSER(),DS,DE,1,LPU,"mhist:env:pac")
+ Q
+REGIPROC 
+ N D,FF
+ S D="Расписание приемов",FF=+$$FR^I()
+ S ^IPROC(D,"Списки","Записанные пациенты")="ZAP_RRASPL,1,"_$S(FF:6,1:5)_",d@4,Дата с,d@4,Дата по,t@string:0/Полный#1/Сокращенный (пациент-врач),Вид отчета,t@string:0/Всех#1/Пришедших#2/Не пришедших,Показывать пациентов,s,Пользователь"_$S(FF:",t@storage:lpu,Филиал",1:"")
+ S ^IPROC(D,"Списки","Запись пациентов для охраны")="ZAPOHR_RRASPL,1,3,d,Дата с,d,Дата по,s,Строк дополнительно (30),p,12,1"
+ S:$$^I("ilpu") ^IPROC(D,"Личное расписание")="MYDSH_RRASPL,100,3,d@4,Дата с,d@4,Дата по,t@storage:lpu,Филиал"
+ Q

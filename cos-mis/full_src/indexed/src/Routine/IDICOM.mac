@@ -1,0 +1,51 @@
+IDICOM ; DICOM tools [ 04/07/2012  4:35 PM ]
+MOD(X,EN) ; Typical Modality names
+ S EN=$G(EN)
+ I X="EPS" Q:'EN "Электрофизиология сердца" Q "Cardiac Electrophysiology"
+ I X="CR" Q:'EN "Компьютерная рентгенография" Q "Computed Radiography"
+ I X="CT" Q:'EN "Компьютерная томография" Q "Computed Tomography"
+ I X="DX" Q:'EN "Цифровая рентгенография" Q "Digital Radiography"
+ I X="ECG" Q:'EN "Электрокардиография" Q "Electrocardiography"
+ I X="ES" Q:'EN "Эндоскопия" Q "Endoscopy"
+ I X="XC" Q:'EN "Наружная фотография" Q "External-camera Photography"
+ I X="GM" Q:'EN "Микроскопия общего назначеия" Q "General Microscopy"
+ I X="HD" Q:'EN "Кривые кровотока" Q "Hemodynamic Waveform"
+ I X="IO" Q:'EN "Рентгенография ротовой полости" Q "Intra-oral Radiography"
+ I X="IVUS" Q:'EN "Внутрисосудистый ультразвук" Q "Intravascular Ultrasound"
+ I X="MR" Q:'EN "Магнитно-резонансная томография" Q "Magnetic Resonance"
+ I X="MG" Q:'EN "Маммография" Q "Mammography"
+ I X="NM" Q:'EN "Ядерная медицина" Q "Nuclear Medicine"
+ I X="OP" Q:'EN "Офтальмологическая фотография" Q "Ophthalmic Photography"
+ I X="PX" Q:'EN "Панорамный рентгенография" Q "Panoramic X-Ray"
+ I X="PT" Q:'EN "Позитронно-эмиссионная томография" Q "Positron emission tomography"
+ I X="RF" Q:'EN "Рентгенофлюороскопия" Q "Radiofluoroscopy"
+ I X="RG" Q:'EN "Рентгенография" Q "Radiographic imaging"
+ I X="SM" Q:'EN "Слайд-микроскопия" Q "Slide Microscopy"
+ I X="US" Q:'EN "Ультразвуковая диагностика" Q "Ultrasound"
+ I X="XA" Q:'EN "Рентгеновская ангиография" Q "X-Ray Angiography"
+ I X="BI" Q:'EN "Биомагнитные изображения" Q "Biomagnetic imaging"
+ I X="CD" Q:'EN "Цветное доплеровское картирование" Q "Color flow Doppler"
+ I X="DD" Q:'EN "Двойное допплеровское картирование" Q "Duplex Doppler"
+ I X="DG" Q:'EN "Диафанография" Q "Diaphanography"
+ I X="LS" Q:'EN "Поверхностное лазерное сканирование" Q "Laser surface scan"
+ I X="ST" Q:'EN "Однофотонная позитронно-эмиссионная комьютерная томография" Q "Single-photon emission computed tomography (SPECT)"
+ I X="TG" Q:'EN "Термография" Q "Thermography"
+ I X="HC" Q:'EN "Твердая копия" Q "Hard Copy"
+ I X="AU" Q:'EN "Аудиозаписи" Q "Audio"
+ I X="SR" Q:'EN "Документ структурированного отчета" Q "SR Document"
+ I X="SMR" Q:'EN "Стереометрическое взаимодействие (Stereometric Relationship"
+ I X="SC" Q:'EN "Вторичный захват" Q "Secondary Capture"
+ Q ""
+NM(MOD) ; Имя модальности
+ N R
+ S R=$G(^DCMCFG(MOD)) Q:R'="" R
+ Q $$MOD(MOD,0)
+MKEPR(NI,DTM,NAM,Mod,File) ; Создать документ в ЭИБ
+ N TPD,DOC
+ s TPD=$$FNDUID^YIMHS("dicom/dcm") Q:TPD="" 
+ S DOC=$$MKDOC^IEPR(NI,TPD,NAM,1)
+ D SETDT^YIMH(NI,DOC,DTM)
+ D SET^IEPR(NI,DOC,"dcm",Mod)
+ S ^EPRD(NI,DOC)=File
+ D UPD^YIMH(NI,DOC)
+ Q

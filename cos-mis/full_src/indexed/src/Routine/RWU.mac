@@ -1,0 +1,138 @@
+A ; Взаимодействие с web сервером [ 03/29/2020  12:46 PM ]
+OWU ; OPEN CHUNK
+ S FN=$$UL^TXTU(FN),EXT=$P(FN,".",2)
+ S TENCODE="chunked",EXT=$G(^EXT(EXT)),CONNK=0
+ S:EXT="" EXT="text/plain"
+ S RT="HTTP/1.1 "_ERRNUM_" OK"_CR
+ S:CATP'=""&(ATP<2) RT=RT_"WWW-Authenticate: Basic realm="""_SRVNM_""""_CR
+ S RT=RT_"Server: "_SRVNM_CR_"Cache-Control: no-cache"_CR_"Transfer-Encoding: chunked"_CR_"Content-Type: "_EXT_CR
+ S RT=RT_"Connection: close"_CR  U DEV W RT_CR,! K RT
+ Q
+OWC(FN) ; OPEN CHUNK w.o. close connection
+ S FN=$$UL^TXTU(FN),EXT=$P(FN,".",2)
+ S TENCODE="chunked",EXT=$G(^EXT(EXT)),CONNK=0
+ S:EXT="" EXT="text/plain"
+ S RT="HTTP/1.1 "_ERRNUM_" OK"_CR
+ S:CATP'=""&(ATP<2) RT=RT_"WWW-Authenticate: Basic realm="""_SRVNM_""""_CR
+ S RT=RT_"Server: "_SRVNM_CR_"Cache-Control: no-cache"_CR_"Transfer-Encoding: chunked"_CR_"Content-Type: "_EXT_CR
+ U DEV W RT_CR,! K RT
+ Q
+WU(%1) ; Write chunk
+ S %2=$L(%1),%2=$ZH(%2),%2=$$UL^TXTU(%2) U DEV W %2_CR_%1_CR,!
+ Q
+WUC(%1) ; Write encoded chunk
+ S:%W %1=$$DW^TXTU(%1)
+ S:$G(%W)=2 %1=$ZCVT(%1,"O","UTF8")
+ S %2=$L(%1),%2=$ZH(%2),%2=$$UL^TXTU(%2) U DEV W %2_CR_%1_CR,!
+ Q
+CU ; last chunk
+ U DEV W "0"_CR_CR
+ Q
+UFLUSH ; Flush buffers
+ W *-3
+ Q
+NEWVAR() ; ; Call OW^RWU inside other OW or ORH
+ Q "%iFN,%LFN,%IFN,%B,%L"
+OWF(FIL) S %wFN=FIL G OW
+OWBUF S %wFN="buf.txt"
+OW S:'$D(%JOB) %JOB=777777
+ S %wFN=$$UL^TXTU(%wFN)
+ K ^BUFH(%JOB,%wFN) S (UV,%LFN,%IFN)=0
+ Q
+ORF(FNM) S FN=FNM G OR
+ORH S FN="hpar" G OR
+ORBUF S FN="buf.txt"
+OR S:'$D(%JOB) %JOB=777777
+ S FN=$$UL^TXTU(FN)
+ S UV="00",%IFN=0,%ST="" Q
+CR K ^BUFH(%JOB,FN)
+ Q
+C I '$D(%L),UV=0 S ^BUFH(%JOB,%wFN)=%LFN
+ S %B=%wFN
+ Q
+R13() ;
+ N X,L S X=%ST
+RC13 I %IFN="" S %IFN="ZZZZZZZ" Q ""
+ S %IFN=$O(^BUFH(%JOB,FN,%IFN)) 
+ I %IFN="" Q:X'="" X S %IFN="ZZZZZZZ" Q ""
+ S X=X_$G(^(%IFN)),L=$L(X)
+ I $C(13,10)=$E(X,L-1,L) S X=$E(X,1,L-1),%ST="" Q X
+ S %ST=X G RC13
+QR13 Q X
+R() N CR S CR=$C(13,10)
+RC I %IFN="" S %IFN="ZZZZZZZ",%ST="" Q ""
+RCC I %ST[CR N X S X=$P(%ST,CR,1),%ST=$P(%ST,CR,2,999) Q X
+ S %IFN=$O(^BUFH(%JOB,FN,%IFN))
+ I %IFN="" Q:%ST'="" %ST S %IFN="ZZZZZZZ" Q ""
+ S %ST=%ST_^(%IFN)
+ G RCC
+RA() ; read all data
+ S %IFN=$O(^BUFH(%JOB,FN,%IFN)) I %IFN="" S %IFN="ZZZZZZZ" Q ""
+ Q ^(%IFN)
+EOF() ; End of file
+ Q:%IFN="ZZZZZZZ" 1 Q 0
+ORGET(FN)       ; Get string from BUFH
+ S:$G(FN)="" FN="hpar"
+ N R,I
+ S (R,I)="" F  S I=$O(^BUFH(%JOB,FN,I)) Q:I=""  S R=R_^(I)
+ Q R
+W(%1) ;
+W22 N L,I S L=$L(%1),%LFN=%LFN+L Q:L=0  ; w. length cut
+ I %LFN>499000000 H 5 Q ; if very BIG buffer
+ F I=1:8128:L S %IFN=%IFN+1,^BUFH(%JOB,%wFN,%IFN)=$E(%1,I,I+8128-1)
+ K %1 Q
+WC(%1)
+ S:$G(%W) %1=$$DW^TXTU(%1)
+ S:$G(%W)=2 %1=$ZCVT(%1,"O","UTF8")
+ G W22
+ Q
+WC13(%1) 
+ S:$G(%W) %1=$$DW^TXTU(%1)
+ S:$G(%W)=2 %1=$ZCVT(%1,"O","UTF8")
+ S %1=%1_$C(13,10)
+ G W22
+ Q
+WTAG(%1,%2)	; WTAG(tag,data)
+ D W("<"_%1_">"_$$TAG^TXTU(%2)_"</"_%1_">") Q
+WTAGC(%1,%2)
+ D WC("<"_%1_">"_$$TAG^TXTU(%2)_"</"_%1_">") Q
+WTAGD(%1,%2)
+ S:$F(%2,"""")!$F(%2,"%") %2=$$TKAV^TXTU(%2)
+ D W("<"_%1_" data="""_%2_"""/>") Q
+WTAGU(%1,%2)
+ S:$F(%2,"""")!$F(%2,"%") %2=$$TKAV^TXTU(%2)
+ D W("<"_%1_" userdata="""_%2_"""/>") Q
+WTAGUC(%1,%2)
+ S:$F(%2,"""")!$F(%2,"%") %2=$$TKAV^TXTU(%2)
+ D WC("<"_%1_" userdata="""_%2_"""/>") Q
+WTAGDC(%1,%2)
+ S:$F(%2,"""")!$F(%2,"%") %2=$$TKAV^TXTU(%2)
+ D WC("<"_%1_" data="""_%2_"""/>") Q
+WTAGDU(%1,%2,%3)        ; data and userdata
+ S:$F(%2,"""")!$F(%2,"%") %2=$$TKAV^TXTU(%2)
+ S:$F(%3,"""")!$F(%3,"%") %3=$$TKAV^TXTU(%3)
+ D W("<"_%1_" data="""_%2_""" userdata="""_%3_"""/>")
+ Q
+WTAGDCU(%1,%2,%3)       ; data and userdata
+ S:$F(%2,"""")!$F(%2,"%") %2=$$TKAV^TXTU(%2)
+ S:$F(%3,"""")!$F(%3,"%") %3=$$TKAV^TXTU(%3)
+ D WC("<"_%1_" data="""_%2_""" userdata="""_%3_"""/>")
+ Q
+MSG(TXT,EXT,NOENC) ; Текстовый вывод
+ ; EXT - расширение (формат)
+ ; NOENC - не перекодировать
+ S:'$G(NOENC) %L=$$DW^TXTU(TXT)
+ S:$G(NOENC) %L=TXT
+ S %B=$G(EXT) S:%B="" %B=".txt"
+ Q
+IsMSG() ; Есть сообщение
+ Q $D(%L)
+CLRMSG()        ; Очистить сообщение
+ K %L
+ Q
+GETMSG()
+ Q $G(%L)
+MXMLB(TXT)      ; Сообщение в xmlb
+ S %L=^PP(0,2)_$$DW^TXTU(TXT)_"</nb_console>"
+ S %B=".xmlb"
+ Q

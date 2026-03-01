@@ -1,0 +1,358 @@
+RVRSTAT ; Отчеты по сотрудникам [ 07/21/2021  3:48 PM ]
+SVOTD(DS,DE,SOTD,VRAS,UFROM,SLPU) 
+ N %Detail S %Detail=1 G SVOT1
+SVOT(DS,DE,SOTD,VRAS,UFROM,SLPU) ; Общая сводка по отделению
+ N %Detail S %Detail=0
+SVOT1 I '$D(SLPU) S SLPU=+$$^I("ilpu")
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ K ^BUF($J)
+ N LP,VR,NI,CU,K,LVL,Z,FF,LPU
+ S FF=+$$FR^I(),LPU=+$$^I("ilpu")
+ S:SOTD=999 SOTD=""
+ D PRETZR^IPAC
+ D MKAPPRC^IUSLSC(DS,DE,1,"SVOPREP^RVRSTAT","SVOPROC^RVRSTAT","","",'FF)
+ S LP="" 
+ F  S LP=$O(^BUF($J,"l",LP)) Q:LP=""  I FF!(LP=LPU) S VR="" F  S VR=$O(^BUF($J,"l",LP,VR)) Q:VR=""  S K=0 D  K ^BUF($J,"l",LP,VR) S LVL(LP,VR,1)=K 
+ .S NI="" F  S NI=$O(^BUF($J,"l",LP,VR,NI)) Q:NI=""  S K=K+1
+ S LP=""
+ F  S LP=$O(^BUF($J,"p",LP)) Q:LP=""  I FF!(LP=LPU) S VR="" F  S VR=$O(^BUF($J,"p",LP,VR)) Q:VR=""  S K=0 D  K ^BUF($J,"p",LP,VR) S LVL(LP,VR,2)=K 
+ .S NI="" F  S NI=$O(^BUF($J,"p",LP,VR,NI)) Q:NI=""  S K=K+1
+ K ^BUF($J,"l"),^BUF($J,"p")
+ D:VRAS=0 SVOBILL(DS,DE,SOTD)
+ D:VRAS=1 SVOBIL2(DS,DE,SOTD)
+ N STAT
+ D ZVRI^RRASP(DS,DE,,0,1,1)
+ S LP="" F  S LP=$O(STAT(LP)) Q:LP=""  D:FF!(LP=LPU)
+ .S OT="" F  S OT=$O(STAT(LP,OT)) Q:OT=""  D:SOTD=""!(SOTD=OT)
+ ..S VR="" F  S VR=$O(STAT(LP,OT,VR)) Q:VR=""  S LVL(LP,VR,0)=$G(LVL(LP,VR,0))+$G(STAT(LP,OT,VR,1))
+ D OWF^RWU(".txt")
+ D WC^RWU($S(FF:"Филиал з",1:"З")_"а период "_$$DT^DTUTL(DS)_"-"_$$DT^DTUTL(DE)_"||||Число|Услуг|Услуг|Услуг|Зачтено|Зачтено по|Зачтено по|Сумма по"_$S(UFROM:"|Сумма",1:"")_";"_CR)
+ D WC^RWU(" По "_$S(SOTD="":"всем сотрудникам",1:"отделению - "_$$GOTD^YISPRAV(SOTD))_"|Часов|Лиц|Посещений|услуг|без скидки|на сумму|по кассе|наличными|факт. договорам|пр. договорам|рекламациям"_$S(UFROM:"|назначенных",1:""))
+ S LP="" F  S LP=$O(LVL(LP)) Q:LP=""  D:FF!(LP=LPU)
+ .D WC^RWU(CR_$$NAME^ICONTR(LP)) S VR="" K CU
+ .F  S VR=$O(LVL(LP,VR)) Q:VR=""  D
+ ..S K=$G(^BUF($J,"u",LP,VR)),$P(K,"|",9)=""
+ ..S LVL(LP,VR,0)=$J($G(LVL(LP,VR,0))/3600,0,1)
+ ..S CU(0)=$G(CU(0))+LVL(LP,VR,0)
+ ..S CU(1)=$G(CU(1))+$G(LVL(LP,VR,1)),CU(2)=$G(CU(2))+$G(LVL(LP,VR,2))
+ ..S CU(7)=$G(CU(7))+$G(LVL(LP,VR,3)),CU(3)=$G(CU(3))+$P(K,"|",1)
+ ..S CU(4)=$G(CU(4))+$P(K,"|",2),CU(5)=$G(CU(5))+$P(K,"|",3)
+ ..S CU(6)=$G(CU(6))+$P(K,"|",8)
+ ..S CU(8)=$G(CU(8))+$P(K,"|",4)
+ ..S CU(9)=$G(CU(9))+$P(K,"|",6)
+ ..S CU(10)=$G(CU(10))+$P(K,"|",5)
+ ..S Z=$$FFN($G(LVL(LP,VR,0)))_"|"_$$FFN($G(LVL(LP,VR,1)))_"|"_$$FFN($G(LVL(LP,VR,2)))
+ ..S Z=Z_"|"_$$FFN($P(K,"|",1))_"|"_$$FFN($P(K,"|",2))
+ ..S Z=Z_"|"_$$FFN($P(K,"|",3))_"|"_$$FFN($P(K,"|",8))_"|"
+ ..S Z=Z_$$FFN($G(LVL(LP,VR,3)))_"|"_$$FFN($P(K,"|",4))_"|"_$$FFN($P(K,"|",6))_"|"_$$FFN($P(K,"|",5))
+ ..I UFROM S Z=Z_"|"_$$FFN($P(K,"|",7))
+ ..S K=$$SPEC^IKADRY(VR)
+ ..S Z=$$FIOSH^YIKADRY(VR)_", "_$$GSPEC^YISPRAV(K)_"|"_Z
+ ..D WC^RWU(CR_" "_Z) Q:'%Detail 
+ ..S NI="" F  S NI=$O(^BUF($J,"n",LP,VR,NI)) Q:NI=""  D
+ ...S K=$G(^(NI)),$P(K,"|",9)=""
+ ...S Z="||||"_$$FFN($P(K,"|",1))_"|"_$$FFN($P(K,"|",2))_"|"
+ ...S Z=Z_$$FFN($P(K,"|",3))_"|"_$$FFN($P(K,"|",8))_"|"_$G(^(NI,1))_"|"
+ ...S Z=Z_$$FFN($P(K,"|",4))_"|"_$$FFN($P(K,"|",6))_"|"_$$FFN($P(K,"|",5))
+ ...D WC^RWU(CR_"  - "_NI_" "_$$FIOSH^YIPACN(NI)_Z)
+ .S K="" F NI=0:1:10 S K=K_"|"_$$FFN($G(CU(NI)))
+ .D WC^RWU(CR_" Всего"_K)
+ D C^RWU
+ K ^BUF($J,"n"),^BUF($J,"u")
+ ; K ^BUF($J)
+ Q
+SVOPREP ; Pre check proc
+ I UFROM N V S V=$G(^ZNF(VR,OTD,DT,ID,"f")) I V'="",($$OTD^IKADRY(V)=SOTD)!(SOTD="") S TEST=1 Q 
+ I SOTD'="",OTD'=SOTD S TEST=0 Q
+ S TEST=1
+ Q
+SVOPROC ; for callback IUSLSC, by DGN
+ N L S L=+$G(LPU)
+ I SOTD'="",+SLPU,SLPU'=L Q 
+ N X,CC,Z,C,R,T
+ S CC=$G(UL(U)),C=$$PRICEH^IPRICE(U,PRC,DT),X=$S(SUMM="":C*KSKD,1:SUMM)*CC,C=C*CC,R=0,T=0
+ ; todo: second stc
+ S:"|"_$G(FLG)_"|"["|rkl|" R=$$GET^IINSC(+CSTC,"price",DT),R=$$PRICEH^IPRICE(U,R,DT)*KSKD*CC
+ S:STAT'=2 T=$$GET^IINSC(+CSTC,"dvid",DT)
+ 
+ ; назначенные: 
+ I UFROM S Z=$G(^ZNF(VR,OTD,DT,ID,"f")) I Z'="",($$OTD^IKADRY(Z)=SOTD)!(SOTD="") N V S V=$G(^BUF($J,"u",L,Z)),$P(V,"|",7)=$P(V,"|",7)+X,^(Z)=V Q:OTD'=SOTD 
+ 
+ S:'$D(^BUF($J,"l",L,VR,NI)) ^(NI)=1 ; Лиц
+ S Z=DT_","_NI S:'$D(^BUF($J,"p",L,VR,Z)) ^(Z)=1 ; Посещений
+ S Z=$G(^BUF($J,"u",L,VR))
+ S ^(VR)=($P(Z,"|",1)+CC)_"|"_($P(Z,"|",2)+C)_"|"_($P(Z,"|",3)+X)_"|"_($P(Z,"|",4)+$S(STAT=2:0,T'=0:0,1:X))_"|"_($P(Z,"|",5)+$S(R=0:0,1:R))_"|"_($P(Z,"|",6)+$S(STAT=2:0,T=0!(T=3):0,1:X))_"|"_$P(Z,"|",7)_"|"_($P(Z,"|",8)+$S(STAT=2!(T=3):X,1:0))
+ Q:$G(%Detail)=""
+ S Z=$G(^BUF($J,"n",L,VR,NI))
+ S ^(NI)=($P(Z,"|",1)+CC)_"|"_($P(Z,"|",2)+C)_"|"_($P(Z,"|",3)+X)_"|"_($P(Z,"|",4)+$S(STAT=2:0,T'=0:0,1:X))_"|"_($P(Z,"|",5)+$S(R=0:0,1:R))_"|"_($P(Z,"|",6)+$S(STAT=2:0,T=0!(T=3):0,1:X))_"||"_($P(Z,"|",8)+$S(STAT=2!(T=3):X,1:0))
+ ; кол-во|без скид|со скид|факт/рекл/прч.дог.//касса
+ Q
+SVOBILL(DS,DE,OTX) ; -> LVL(LPU,OTD,3)
+ N NI,LP,DT,TI,PSUM,L,SUM,OPE,VR,R,IDK,DL,RSUM,SS,I,OTD,X
+ S NI="" F  S NI=$O(^BILL(NI)) Q:NI=""!(NI="00")  D
+ .S DT="",PSUM=0,RSUM=0
+ .F  S DT=$O(^BILL(NI,DT)) Q:DT=""!(DT>DE)!(DT="00")  S TI="" F  S TI=$O(^BILL(NI,DT,TI)) Q:TI=""  D
+ ..S L=$G(^(TI)),SUM=+$P(L,"|",2),OPE=$P(L,"|",1)
+ ..I OPE'="+",OPE'="-",OPE'="" Q 
+ ..Q:SUM=0 
+ ..S IDK=DT_"|"_TI,LP=+$P($P(L,"|",5),"@",2)
+ ..I OPE'="" S PSUM=PSUM+SUM
+ ..I OPE="",$E(SUM,1)="+" D
+ ...S PSUM=PSUM+SUM ; возврат
+ ...S R=$P(L,"|",6),X=$P($P(R,"/",1),":",1)
+ ...I X'="ZNF",X'="ZND" Q 
+ ...S R=$P(R,"/",1)
+ ...S VR=+$P(R,":",2),OTD=+$P(R,":",3),LP=+$P($P(L,"|",5),"@",2)
+ ...S:OTX=""!(OTD=OTX) LVL(LP,VR,3)=$G(LVL(LP,VR,3))-SUM,^(1)=$G(^BUF($J,"n",LP,VR,NI,1))-SUM
+ ..F  Q:'$D(^BUF($J,NI))  S K=$O(^(NI,0)) Q:K=""  S I=$G(^(K)) Q:PSUM<(-I)  D
+ ...S PSUM=PSUM+I ; Списано после
+ ...S R=$G(^(K,1)) K ^BUF($J,NI,K)
+ ...S LP=$P(R,"|",1),OTD=$P(R,"|",2),VR=$P(R,"|",3)
+ ...Q:DT<DS!(DT>DE)  
+ ...S:OTX=""!(OTD=OTX) LVL(LP,VR,3)=$G(LVL(LP,VR,3))-I,^(1)=$G(^BUF($J,"n",LP,VR,NI,1))-I
+ ..Q:OPE'=""  Q:$E(SUM,1)'="-"  ; только списание
+ ..S R=$P(L,"|",6),X=$P($P(R,"/",1),":",1)
+ ..I X'="ZNF",X'="ZND" Q 
+ ..S R=$P(R,"/",1),LP=+$P($P(L,"|",5),"@",2),OTD=+$P(R,":",3)
+ ..Q:$D(^BUF($J,NI))'=0  ; если есть не оприходованные
+ ..S VR=+$P(R,":",2)
+ ..I (PSUM+SUM)<0 D  Q  ; Придержано
+ ...S ^BUF($J,NI,IDK)=SUM,^BUF($J,NI,IDK,1)=LP_"|"_OTD_"|"_VR
+ ..S PSUM=PSUM+SUM
+ ..Q:DT<DS!(DT>DE)  
+ ..S:OTX=""!(OTX=OTD) LVL(LP,VR,3)=$G(LVL(LP,VR,3))-SUM,^(1)=$G(^BUF($J,"n",LP,VR,NI,1))-SUM
+ Q
+SVOBIL2(DS,DE,OTX) ; -> LVL(LPU,OTD,3)
+ N NI,LP,DT,TI,L,SUM,OPE,VR,R,IDK,DL,SS,I,OTD,X
+ S NI="" F  S NI=$O(^BILL(NI)) Q:NI=""!(NI="00")  D
+ .S DT=DS-1
+ .F  S DT=$O(^BILL(NI,DT)) Q:DT=""!(DT>DE)!(DT'=+DT)  S TI="" F  S TI=$O(^BILL(NI,DT,TI)) Q:TI=""  D
+ ..S L=$G(^(TI)),SUM=+$P(L,"|",2),OPE=$P(L,"|",1) 
+ ..Q:OPE'=""  Q:SUM=0 
+ ..S R=$P(L,"|",6),X=$P($P(R,"/",1),":",1)
+ ..Q:X'="ZNF"&(X'="ZND")
+ ..S VR=+$P(R,":",2),OTD=+$P(R,":",3),LP=+$P($P(L,"|",5),"@",2)
+ ..I OTX'="" Q:OTD'=OTX 
+ ..S LVL(LP,VR,3)=$G(LVL(LP,VR,3))-SUM,^(1)=$G(^BUF($J,"n",LP,VR,NI,1))-SUM
+ Q
+SVNAZ(DS,DE,NOOW,VMOD,DVID,LPU) ; Сводка по направляемости
+ ; NOOW - не учитывать направления к себе
+ ; VMOD - поликлиника/стоматология/стационар
+ ; DVID - вид договора
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),LPU=$G(LPU)
+ N VR,OT,ID,DT,R,F,FF,LP,RESULT,DTPL,DTP,CSTC,SCOTD,STOTD
+ S FF=+$$FR^I(),NOOW=$G(NOOW)
+ S:'FF LPU=$$^I("ilpu")
+ D MKSCOTD^IEDE
+ D CNTVRs^RNAZ(DS,DE,"",LPU,1,VMOD,DVID)
+ K ^BUF($J)
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  I 'LPU!$D(^ZNFI("l",LPU,VR)) D
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D
+ ..S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ...I LPU,'$D(^ZNFI("l",LPU,VR,DT)) Q
+ ...S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ....S LP=$G(^(ID,"l"))
+ ....I LPU,LPU'=LP Q
+ ....S R=$P($G(^("e")),"~",1) Q:R="d"!(R="w")!(R=5)  
+ ....I VMOD,'$$SMOD^IEDE(VMOD,OT) Q  
+ ....S F=$$GETPL^IUSL(VR,DT,OT,ID,"f") Q:F="" 
+ ....I NOOW,$P($G(^NAZ(F,"i")),"|",3)=VR Q 
+ ....I DVID'="" D  Q:DVID'=DTP 
+ .....S CSTC=$$GETDGN^IUSL(VR,DT,OT,ID)
+ .....I '$D(DTPL(CSTC,DT)) S DTP=+$$GET^IINSC(CSTC,"dvid",DT),DTPL(CSTC,DT)=DTP
+ .....E  S DTP=DTPL(CSTC,DT)
+ ....I '$D(^BUF($J,VR,F)) S ^(F)="",RESULT(+LP,OT,VR,9)=$G(RESULT(+LP,OT,VR,9))+1
+ D OWF^RWU(".txt")
+ D WC^RWU("Сотрудник "_$$TXTP^DTUTL(DS,DE)_"|Выполнено|Создано|Закрыто")
+ S LP="" F  S LP=$O(RESULT(LP)) Q:LP=""  D
+ .D WC^RWU(CR_$$NAME^ICONTR(LP))
+ .S OT="" F  S OT=$O(RESULT(LP,OT)) Q:OT=""  D
+ ..D WC^RWU(CR_$$GOTD^YISPRAV(OT))
+ ..S VR="" F  S VR=$O(RESULT(LP,OT,VR)) Q:VR=""  D WC^RWU(CR_" - "_$$FIO^IKADRY(VR)_"|"_$G(RESULT(LP,OT,VR,9))_"|"_$G(RESULT(LP,OT,VR))_"|"_$G(RESULT(LP,OT,VR,1)))
+ D C^RWU
+ Q
+PPSTAT(DS,DE,VMOD,XLPU) ; Статистика по посещениям пациентов
+ N VR,OT,R,X1,X2,A,ID,KX,DT,STAT,NI,TAB,ST,KSS,K,PP,I,TP,ID,LP,FF,STOTD,SCOTD
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),XLPU=$G(XLPU),VMOD=+$G(VMOD)
+ S:'$$FR^I() XLPU=$$^I("ilpu")
+ D MKSCOTD^IEDE
+ K ^BUF($J)
+ S DT=DS-1 F  S DT=$O(^EPRI("dt",DT)) Q:DT=""!(DT>DE)  D
+ .S NI="" F  S NI=$O(^EPRI("dt",DT,NI)) Q:NI=""  D
+ ..S ID="" F  S ID=$O(^EPRI("dt",DT,NI,ID)) Q:ID=""  D
+ ...S VR=$P($G(^EPRI("nd",NI,DT,ID)),"|",2) Q:VR="" 
+ ...S LP=$P($G(^EPR(NI,ID,"o")),"|",3)
+ ...I XLPU'="",LP'=XLPU Q 
+ ...I VMOD S OT=+$$OTD^IKADRY(VR,DT) Q:'$$SMOD^IEDE(VMOD,OT) 
+ ...S ^BUF($J,"p",NI,DT,VR)=LP
+ 
+ S DT=DS-1 F  S DT=$O(^ZNFI("dn",DT)) Q:DT=""!(DT>DE)  D  
+ .S NI="" F  S NI=$O(^ZNFI("dn",DT,NI)) Q:NI=""  D 
+ ..S KX="" F  S KX=$O(^PNF(NI,DT,KX)) Q:KX=""  D
+ ...S OT=$P(KX,"|",2) 
+ ...I VMOD Q:'$$SMOD^IEDE(VMOD,OT) 
+ ...S VR=$P(KX,"|",1),ID=$P(KX,"|",3)
+ ...Q:'$D(^ZNF(VR,OT,DT,ID))
+ ...S R=^(ID,"e"),ST=$P(R,"~",1) Q:"wd"[ST 
+ ...I XLPU'="",$G(^("l"))'=XLPU Q  
+ ...S ^BUF($J,"p",NI,DT,VR)=""
+ 
+ S NI="" F  S NI=$O(^BUF($J,"p",NI)) Q:NI=""  D  
+ .S DT="" F  S DT=$O(^BUF($J,"p",NI,DT)) Q:DT=""  D
+ ..S TP=$$GET^IINSC($$GET^IPAC(NI,"stc",DT),"dvid",DT)
+ ..S VR="" F  S VR=$O(^BUF($J,"p",NI,DT,VR)) Q:VR=""  D
+ ...S X1=$D(^BUF($J,"t",NI)),K=$G(^(NI)),(FF,PP,KSS)=0
+ ...I '$D(^BUF($J,"t",NI,VR)) S ^(VR)=DT,TAB(VR,7)=$G(TAB(VR,7))+1 S:TP=3 TAB(VR,9)=$G(TAB(VR,9))+1
+ ...I '$D(^BUF($J,"t",NI,VR,DT)) S ^(DT)="",TAB(VR,8)=$G(TAB(VR,8))+1 S:TP=3!KSS TAB(VR,10)=$G(TAB(VR,10))+1
+ ...I 'X1,K="" S PP=$$IsPRP^IUSL(NI,DT,"","") I PP S TAB(VR,1)=$G(TAB(VR,1))+1,^BUF($J,"t",NI)=1,FF=1 S:TP=3 TAB(VR,2)=$G(TAB(VR,2))+1
+ ...I XLPU,$$IsPRP^IUSL(NI,DT,XLPU,"") S TAB(VR,3)=$G(TAB(VR,3))+1,K=1 S:TP=3 TAB(VR,4)=$G(TAB(VR,4))+1
+ ...I 'KSS,TP'=3 Q 
+ ...I $G(^BUF($J,"t",NI)),'$D(^(NI,VR,1)) S ^(1)="" I $$PPSanyp(NI,DT) S TAB(VR,5)=$G(TAB(VR,5))+1
+ ...I $G(^BUF($J,"t",NI,VR))'=DT,$G(^(VR))'=2 S ^(VR)=2,TAB(VR,6)=$G(TAB(VR,6))+1
+ 
+ D OWF^RWU(".txt")
+ D WC^RWU("Сотрудник|Первичных|Первичных|Первичных|Первичных|Нестраховых|Нестраховых|Число|Число|Число|Число|Часы|Процент;")
+ D WC^RWU(CR_$$TXTP^DTUTL(DS,DE)_"|по сети|ФЛ по сети|по клинике|ФЛ по клинике|вернулось в сеть|вернулось к врачу|пациентов|приемов|платных пац.|платных приемов|работы|загрузки")
+ D ZVRI^RRASP(DS,DE,XLPU,0,1,1,$S(VMOD=1:2,VMOD=2:1,1:0))
+ 
+ S LP="" F  S LP=$O(STAT(LP)) Q:LP=""  I LP=XLPU!(XLPU="") S OT="" F  S OT=$O(STAT(LP,OT)) Q:OT=""  D
+ .I VMOD,$S(VMOD=1:'$D(STOM(OT)),VMOD=3:'$D(STAC(OT)),$D(STOM(OT)):1,1:$D(STAC(OT))) K STAT(LP,OT) Q  
+ .S VR="" F  S VR=$O(STAT(LP,OT,VR)) Q:VR=""  D
+ ..S X1=+$G(STAT(LP,OT,VR,1)),X2=+$G(STAT(LP,OT,VR,3))
+ ..S TAB(VR,11)=$$TM^DTUTL(X1)
+ ..S TAB(VR,12)=$S('X1:0,1:$FN((100*X2)/X1,"",2))
+ 
+ S VR="" F  S VR=$O(TAB(VR)) Q:VR=""  D
+ .S A=$$FIO^IKADRY(VR)
+ .F I=1:1:12 S A=A_"|"_$G(TAB(VR,I))
+ .D WC^RWU(CR_A)
+ 
+ D C^RWU
+ K ^BUF($J)
+ Q
+PPSanyp(NI,DT) ; Есть приемы на другие даты
+ I $O(^BUF($J,"p",NI,DT))'="" Q 1
+ I $O(^BUF($J,"p",NI,DT),-1)'="" Q 1
+ Q 0
+PPSTATL(DS,DE,VMOD,MOD,XLPU) ; Статистика по посещениям пациентов (Спис.)
+ ; VMOD - тип подразделения (по-ка/стом)
+ ; MOD - вид отчета
+ N VR,OT,R,X1,X2,A,ID,KX,DT,STAT,NI,TAB,ST,KSS,K,PP,I,TP,ID,LP,FF,STOTD,SCOTD
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),MOD=+$G(MOD),XLPU=$G(XLPU)
+ S:'$$FR^I() XLPU=$$^I("ilpu")
+ D MKSCOTD^IEDE
+ K ^BUF($J)
+ S DT=DS-1 F  S DT=$O(^EPRI("dt",DT)) Q:DT=""!(DT>DE)  D
+ .S NI="" F  S NI=$O(^EPRI("dt",DT,NI)) Q:NI=""  D
+ ..S ID="" F  S ID=$O(^EPRI("dt",DT,NI,ID)) Q:ID=""  D
+ ...S VR=$P($G(^EPRI("nd",NI,DT,ID)),"|",2) Q:VR="" 
+ ...S LP=$P($G(^EPR(NI,ID,"o")),"|",3)
+ ...I XLPU'="",LP'=XLPU Q 
+ ...I VMOD S OT=+$$OTD^IKADRY(VR,DT) Q:'$$SMOD^IEDE(VMOD,OT) 
+ ...S ^BUF($J,"p",NI,DT,VR)=LP
+ 
+ S DT=DS-1 F  S DT=$O(^ZNFI("dn",DT)) Q:DT=""!(DT>DE)  D 
+ .S NI="" F  S NI=$O(^ZNFI("dn",DT,NI)) Q:NI=""  D
+ ..S KX="" F  S KX=$O(^PNF(NI,DT,KX)) Q:KX=""  D
+ ...S OT=$P(KX,"|",2) 
+ ...I VMOD Q:'$$SMOD^IEDE(VMOD,OT) 
+ ...S VR=$P(KX,"|",1),ID=$P(KX,"|",3)
+ ...S R=^ZNF(VR,OT,DT,ID,"e"),ST=$P(R,"~",1) Q:"wd"[ST 
+ ...I XLPU'="",$G(^("l"))'=XLPU Q  
+ ...S ^BUF($J,"p",NI,DT,VR)=""
+ 
+ S NI="" F  S NI=$O(^BUF($J,"p",NI)) Q:NI=""  D   
+ .S DT="" F  S DT=$O(^BUF($J,"p",NI,DT)) Q:DT=""  D
+ ..S TP=$$GET^IINSC($$GET^IPAC(NI,"stc",DT),"dvid",DT)
+ ..S VR="" F  S VR=$O(^BUF($J,"p",NI,DT,VR)) Q:VR=""  D
+ ...S X1=$D(^BUF($J,"t",NI)),K=$G(^(NI)),(FF,PP,KSS)=0
+ ...I '$D(^BUF($J,"t",NI,VR)) S ^(VR)=DT ;,TAB(VR,7)=$G(TAB(VR,7))+1 S:TP=3 TAB(VR,9)=$G(TAB(VR,9))+1
+ ...I '$D(^BUF($J,"t",NI,VR,DT)) S ^(DT)="" ;TAB(VR,8)=$G(TAB(VR,8))+1 S:TP=3!KSS TAB(VR,10)=$G(TAB(VR,10))+1
+ ...I 'X1,K="" S PP=$$IsPRP^IUSL(NI,DT,"","") I PP S:MOD=1 ^BUF($J,"r",VR,NI)="" S ^BUF($J,"t",NI)=1,FF=1 S:TP=3&(MOD=2) ^BUF($J,"r",VR,NI)=""
+ ...Q:MOD<3 
+ ...I XLPU,$$IsPRP^IUSL(NI,DT,XLPU,"") S:MOD=3 ^BUF($J,"r",VR,NI)="" S K=1 S:TP=3&(MOD=4) ^BUF($J,"r",VR,NI)=""
+ ...Q:MOD<5 
+ ...I 'KSS,TP'=3 Q 
+ ...I $G(^BUF($J,"t",NI)),'$D(^(NI,VR,1)) S ^(1)="" I $$PPSanyp(NI,DT) S:MOD=5 ^BUF($J,"r",VR,NI)=""
+ ...I $G(^BUF($J,"t",NI,VR))'=DT,$G(^(VR))'=2 S ^(VR)=2 S:MOD=6 ^BUF($J,"r",VR,NI)=""
+ 
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|№ И.б.|Ф.И.О. пациента|Договор|Посл.посещение|Контакты")
+ S VR="" F  S VR=$O(^BUF($J,"r",VR)) Q:VR=""  D
+ .D WC^RWU(CR_"||"_$$FIO^IKADRY(VR))
+ .S NI="" F  S NI=$O(^BUF($J,"r",VR,NI)) Q:NI=""  D
+ ..S R=NI_"|"_NI_"|"_$$FIO^IPAC(NI)_"|"_$$GETE^IPAC(NI,"stc")
+ ..S DT=$O(^PNF(NI,""),-1)
+ ..S R=R_"|"_$$DT2^DTUTL(DT)_"|"_$$TELS^IPAC(NI)
+ ..D WC^RWU(CR_R)
+ D C^RWU
+ K ^BUF($J)
+ Q
+FROMVR(DS,DE,VR,ACF,LPU) ; Последующие посещения
+ ; ACF - аналитические коды
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N FF,OT,DT,ID,NI,LP,R,ACFN,ACU,TX,X1,X2,AF1,AF2,AFT,xAFL,NIC,KX,@$$NEWVAR^IUSL,TEST
+ S ACF=$TR(ACF,";/\' ",";;;"""),ACFN=$S(ACF="":0,1:$L(ACF,";"))
+ S FF=+$$FR^I()
+ S:'FF LPU=$$^I("ilpu")
+ K ^BUF($J)
+ I VR'="" D FROMVRv
+ I VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  I 'LPU!$D(^ZNFI("l",LPU,VR)) D FROMVRv
+ S VR="" F  S VR=$O(^BUF($J,VR)) Q:VR=""  D
+ .S NI="" F  S NI=$O(^BUF($J,VR,NI)) Q:NI=""  D  ;Q:^BUF($J,VR,NI)
+ ..S DT=DS-1 F  S DT=$O(^PNF(NI,DT)) Q:DT=""!(DT>DE)  D
+ ...S KX="" F  S KX=$O(^PNF(NI,DT,KX)) Q:KX=""  D FROMVRu($P(KX,"|",1),VR)
+ D OWF^RWU(".txt")
+ 
+ D WC^RWU("xpatient:patient|Врач|Пациентов|Пациентов по коду")
+ S VR="" F  S VR=$O(^BUF($J,VR)) Q:VR=""  D
+ .S (X1,X2)=0,NI=""
+ .F  S NI=$O(^BUF($J,VR,NI)) Q:NI=""  S X1=X1+1  S:^(NI) X2=X2+1
+ .Q:'X2 
+ .D WC^RWU(CR_"|"_$$FIO^IKADRY(VR)_"|"_X1_"|"_X2)
+ .S NI="" F  S NI=$O(^BUF($J,VR,NI)) Q:NI=""  D:^(NI) WC^RWU(CR_NI_"|||"_$$FIO^IPAC(NI))
+ D C^RWU
+ Q
+FROMVRv 
+ S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D
+ .S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ..I LPU,'$D(^ZNFI("l",LPU,VR,DT)) Q
+ ..S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ...S LP=$G(^(ID,"l"))
+ ...I LPU,LPU'=LP Q
+ ...S X1=$G(^("e")),R=$P(X1,"~",1) Q:R="d"!(R="w")!(R=5)  
+ ...S NI=$P(X1,"~",2) Q:NI=""
+ ...S:'$D(^BUF($J,VR,NI)) ^(NI)=""
+ Q
+FROMVRu(VR,VRX) 
+ N NI
+ S OT=$P(KX,"|",2),ID=$P(KX,"|",3)
+ D GET^IUSL(VR,DT,OT,ID,1) ; +NOER
+ Q:STAT="d"!(STAT="w")!(STAT=5)
+ S U="" F  S U=$O(UL(U)) Q:U=""  D
+ .S ACU=$$GET^IPRICE(U,"acu",PRC,DT)
+ .S TEST=1
+ .F TX=1:1:ACFN S X1=$P(ACF,";",TX),AF1=$P(X1,":",1),AF2=$P(X1,":",2),AFT=$P(X1,":",3),xAFL=$P(X1,":",4) S:AFT="" AFT=AF1 S X2=$P(ACU,".",AF1,AFT) D:$S(AF1="U":1,AF1="FN":1,X2=AF2:1,1:'$L(X2)&$L(xAFL))
+ ..I AF1="U",AF2'=U Q
+ ..I AF1="FN" S AF2=$P(X1,":",2,99),X=ACU X "S X="_AF2 Q:'X
+ ..S TEST=0
+ .Q:TEST
+ .S ^BUF($J,VRX,NI)=1
+ Q
+FFC(X) 
+ Q $TR($J(X,"",2),".",",")
+FFN(X) 
+ Q $TR(+X,".",",")
+REGIPROC 
+ N A,B,D,X,F,PS
+ S D=+$$FR^I(),A="Отчеты ЛПУ",B="По сотрудникам"
+ S F=$S(D:",t@storage:lpu,Филиал",1:"")
+ S PS="t@string:0/Всем подразделениям#2/Поликлинике#1/Стоматологии#3/Стационару,Расчет по"
+ S ^IPROC(A,B,"Выработка сотрудников по отделению")="SVOT_RVRSTAT,1,"_$S(D:6,1:5)_",d,Начальная дата,d,Конечная дата,te@storage:otd@1,Отделение,t@string:1/Фактически#0/С полным покрытием,Расчет,t@string:0/Нет#1/Да,Расчет назначенных услуг"_F
+ S ^IPROC(A,B,"Детальная выработка по сотрудникам")="SVOTD_RVRSTAT,1,"_$S(D:6,1:5)_",d,Начальная дата,d,Конечная дата,te@storage:otd@1,Отделение,t@string:1/Фактически#0/С полным покрытием,Расчет,t@string:0/Нет#1/Да,Расчет назначенных услуг"_F
+ S ^IPROC(A,B,"Сводка по направляемости")="SVNAZ_RVRSTAT,1,"_$S(D:6,1:5)_",d,Начальная дата,d,Конечная дата,t@string:0/Нет#1/Да,Не учитывая направления 'к себе',"_PS_",t@net:NMLST_NSPRAV(""dvid"")@1,Вид договора"_F
+ S ^IPROC(A,B,"Статистика по посещениям пациентов")="PPSTAT_RVRSTAT,1,"_$S(D:4,1:3)_",d,Начальная дата,d,Конечная дата,"_PS_F
+ S X="1/Первичных по сети#2/Первичных ФЛ по сети#3/Первичных по клинике#4/Первичных ФЛ по клинике#5/Нестраховых вернулось в сеть#6/Нестраховых вернулось к врачу"
+ S ^IPROC(A,B,"Статистика по посещениям пациентов (список)")="PPSTATL_RVRSTAT,100,"_$S(D:5,1:4)_",d,Начальная дата,d,Конечная дата,"_PS_",t@string:"_X_",Вид списка"_F
+ S ^IPROC(A,B,"Последующие посещения")="FROMVR_RVRSTAT,100,"_$S(D:5,1:4)_",d,Период услуг с,d,Период услуг по,te@net:FLST_NVFIND(""""),Врач,s,Аналитические коды"_F
+ Q

@@ -1,0 +1,42 @@
+RSSMCEM3 ; Расписание [ 08/08/2012  0:31 AM ]
+mkgz ; Глубина записи
+ N SPIDX,LP,OT,SP,VR,DT,D,Z,FFK,FFP,TM,PT,TTS,TTP,TTK,L,T,K,DP,DK
+ N SPIX
+ S SPIDX(47)=4,SPIDX(50)=5,SPIDX(1)=6,SPIDX(28)=7,SPIDX(31)=8
+ S SPIDX(13)=9,SPIDX(12)=10,SPIDX(9)=11,SPIDX(33)=12,SPIDX(15)=13
+ S SPIDX(84)=14
+ S SPIDX(101)=15,SPIDX(102)=15,SPIDX(103)=15,SPIDX(104)=15
+ S SPIDX(105)=15,SPIDX(106)=15
+ S SPIDX(37)=16,SPIDX(5)=17
+ S LP="" F  S LP=$O(^DSH(LP)) Q:LP=""  I LPUX=""!(LPUX=LP) S OT="" F  S OT=$O(^DSH(LP,OT)) Q:OT=""  D
+ .S VR="" F  S VR=$O(^DSH(LP,OT,VR)) Q:VR=""  S SP="" F  S SP=$O(^DSH(LP,OT,VR,SP)) Q:SP=""  D
+ ..S SPIX=$G(SPIDX(SP)) Q:'SPIX 
+ ..D calc(LP,OT,VR,SP,DE)
+ ..;I FFP S L=$G(^BUF($J,"gsp",SPIX,0,1)) S:L<FFP ^(1)=FFP
+ ..I FFK S L=$G(^BUF($J,"gsp",SPIX,0,0)) S:L<FFK ^(2)=FFK
+ 
+ ;..S Z="" F  S Z=$O(DWKLR(Z)) Q:Z=""  D
+ ;...S DT=DWKLR(Z)
+ ;...D calc(LP,OT,VR,SP,DT) 
+ ;...I FFP S L=$G(^BUF($J,"gsp",SPIX,Z,1)) S:L<FFP ^(1)=FFP
+ ;...I FFK S L=$G(^BUF($J,"gsp",SPIX,Z,2)) S:L<FFK ^(2)=FFK
+ Q
+calc(LP,OT,VR,SP,DT) ; На дату
+ S D=DT-1,FFK=0,FFP=0
+ F  S D=$O(^DSH(LP,OT,VR,SP,D)) Q:D=""  D  Q:FFK&FFP
+ .S (TM,PT)=86400,(TTS,TTP,TTK)=0
+ .F  S PT=TM,TM=$O(^DSH(LP,OT,VR,SP,D,TM),-1) Q:TM=""  D
+ ..S L=$G(^(TM)) Q:L="*"  Q:PT=""
+ ..S TTS=TTS+(PT-TM)
+ ..Q:L=""
+ ..S NI=$P(L,"|",1)
+ ..;I $$EXIST^IPAC(NI),$$GET^YNDOG($$GET^IPAC(NI,"stc",D),"dvid",D)=1 S TTP=TTP+(PT-TM) Q 
+ ..S TTK=TTK+(PT-TM)
+ .;S K=$S('TTS:0,1:TTP/TTS)
+ .;I 'FFP S FFP=$S(K<0.6:1,1:0),DP=D  ; 0.9
+ .S K=$S('TTS:0,1:TTK/TTS)
+ .I 'FFK S FFK=$S(K<0.6:1,1:0),DK=D  ; 0.9
+ 
+ S:FFK FFK=DK-DT-1
+ S:FFP FFP=DP-DT-1
+ Q

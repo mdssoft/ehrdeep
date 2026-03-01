@@ -1,0 +1,793 @@
+NMLABW ; Рабочие списки [ 04/20/2015  0:16 AM ]
+INIT 
+ N X
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<wlab>")
+ S X=$$LCL^IUSER("lab","def-wlabt")
+ D:X'="" W^RWU("<vid default="""_X_"""/>")
+ D W^RWU("</wlab></nb_console>"),C^RWU
+ Q
+DEVS ; Список методик
+ N I,C,R
+ D OWF^RWU(".txt")
+ S (I,C)=""
+ F  S I=$O(^LABT("DEV",I)) Q:I=""  S R=$G(^(I)) I $G(^(I,"use"))'=0 D WC^RWU(C_I_"|"_R) S C=CR
+ D C^RWU
+ Q
+BIODEV(DEV) ; Список материалов применительно к рабсписку
+ D MSG^RWU($$BIOLSTs^NMLABS()) ; TODO
+ Q
+WLTDEV(DEV) ; Тип и ID по умолчанию для списка
+ N WT,TP
+ S DEV=$$WD^TXTU(DEV)
+ S WT=$G(^LABT("DEV",DEV,"wlt"))
+ S TP=$G(^LABT("DEV",DEV,"wlbase"))
+ S TP=$S(TP:0,1:"")
+ ; TODO - брать из профиля %LOG
+ D MSG^RWU(TP_"|"_WT)
+ Q
+WLS ; Перечень активных рабочих списков
+ N M,I,R,A,LST,OD,IDX
+ S OD=+$G(^cfg("lab","wlst-old"))
+ S:OD OD=$H-OD
+ S M="" F  S M=$O(^MLABW(M)) Q:M=""  D
+ .S IDX=0
+ .S I="" F  S I=$O(^MLABW(M,I),-1) Q:I=""  I I D  Q:IDX>300  I OD,+$P(R,"|",1)<OD Q  ; обратный порядок
+ ..S R=^(I) Q:$P(R,"|",2)
+ ..S LST($J(I,5)_"@"_M)=I_"|"_$$DTM2^DTUTL($P(R,"|",1),1)_$S($P(R,"|",3)="":"",1:" "_$P(R,"|",3))_" ("_^LABT("DEV",M)_")"
+ ..S IDX=IDX+1
+ S (A,I)="" F  S I=$O(LST(I),-1) Q:I=""  S A=$S(A="":"",1:A_CR)_LST(I)
+ S A=$S(A="":"",1:A_CR)_"0|Основной"
+ D MSG^RWU(A)
+ Q
+WLSA(DS,DE,DEV,TXT) ; Поиск по всем спискам
+ N I,R,A,D,T
+ S DEV=$$WD^TXTU(DEV),TXT=$$UL^TXTU($$WD^TXTU(TXT))
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D OWF^RWU(".txt")
+ D WC^RWU("|Дата, время|Архив|Описание")
+ S I=0 F  S I=$O(^MLABW(DEV,I)) Q:I=""  D
+ .S R=^(I),D=$P(R,"|",1)
+ .Q:+D>DE  Q:+D<DS 
+ .S T=$P(R,"|",3)
+ .I TXT'="",$$UL^TXTU(T)'[TXT Q 
+ .D WC^RWU(CR_I_"|"_$$DTM^DTUTL(D)_"|"_$S($P(R,"|",2):"да",1:"")_"|"_T)
+ D C^RWU
+ Q
+DEAWL(DEV,WL) ; Изъять список из архива
+ Q:'WL 
+ S DEV=$$WD^TXTU(DEV)
+ S $P(^MLABW(DEV,WL),"|",2)=""
+ Q
+CMWL(DEV,WL,TXT) ; Присвоить примечание списку
+ Q:'WL
+ S DEV=$$WD^TXTU(DEV),TXT=$$WD^TXTU($G(TXT))
+ S $P(^MLABW(DEV,WL),"|",3)=TXT
+ Q
+ADDWL(DEVS,TXT) ; Добавить рабочий список
+ S DEVS=$$WD^TXTU(DEVS),TXT=$$WD^TXTU($G(TXT))
+ D MSG^RWU($$ADDWLs(DEVS,TXT))
+ Q
+ADDWLs(DEVS,TXT) ; Добавить рабочий список (системно)
+ N I,M,WL,A
+ S WL=$$GET^IINKR("kdl-wl"),A=$H 
+ S:TXT'="" $P(A,"|",3)=TXT
+ F I=1:1:$L(DEVS,"|") S M=$P(DEVS,"|",I) S:M'="" ^MLABW(M,WL)=A
+ Q WL
+CHKWL(DEVS,WL) ; Проверить наличие списка у методик
+ N I,F,M
+ I 'WL D MSG^RWU(1) Q 
+ S DEVS=$$WD^TXTU(DEVS)
+ S F=1 F I=1:1:$L(DEVS,"|") S M=$P(DEVS,"|",I) I M'="",$G(^MLABW(M,WL))="" S F=0 Q
+ I 'F D MSG^RWU(0) Q 
+ D MSG^RWU(1)
+ Q
+DELWL(DEVS,WL) ; Удалить рабочий список
+ Q:'WL
+ D RESET(DEVS,WL)
+ N I,M
+ S DEVS=$$WD^TXTU(DEVS)
+ F I=1:1:$L(DEVS,"|") S M=$P(DEVS,"|",I) K:M'="" ^MLABW(M,WL),^MLABWE(M,WL)
+ Q
+ARHWL(DEVS,WL) ; Рабочий список в архив
+ S DEVS=$$WD^TXTU(DEVS)
+ Q:'WL
+ N I,M
+ F I=1:1:$L(DEVS,"|") S M=$P(DEVS,"|",I) S:M'="" $P(^MLABW(M,WL),"|",2)=1
+ Q
+SELWL(DEVS,WL) ; Выбрать список
+ S DEVS=$$WD^TXTU(DEVS)
+ Q:'WL
+ N I,M
+ F I=1:1:$L(DEVS,"|") S M=$P(DEVS,"|",I) D:M'=""
+ .K ^MLABW(M,0),^MLABWE(M,0)
+ .M ^MLABW(M,0)=^MLABW(M,WL),^MLABWE(M,0)=^MLABWE(M,WL)
+ .S ^MLABW(M,0)=$H
+ Q
+PRMSI(ID,BAR,DEVS) ; Перечень параметров по заявке и методике
+ N I,J,M,PRM,P,PP,A
+ S ID=$E(ID,1,64),BAR=$E(BAR,1,64)
+ S:BAR'="" ID=$P($$BARID^IMLAB(BAR),"|",1)
+ Q:ID=""  Q:'$D(^MLABI("c",ID)) 
+ S NI=^(ID),PRM=$G(^MLAB(NI,ID,"pr")) Q:PRM="" 
+ S A=""
+ F J=1:1:$L(DEVS,"|") S M=$P(DEVS,"|",J) D:M'=""
+ .F I=1:1:$L(PRM,"|") S PP=$P(PRM,"|",I),P=$P(PP,"@",1) I $G(^LABT("T",P,"use"))'=0,$D(^("dev",M)) S A=$S(A="":"",1:A_CR)_P_"|"_$$NAMEPM^IMLABS(P)
+ D MSG^RWU(A)
+ Q
+ADDB(ID,BAR,DEVS,WL,BIOL,PRMS) ; Добавить в раб. список по ID или BAR
+ N IDX,NI,X,C
+ S ID=$E(ID,1,64),BAR=$E(BAR,1,64),BIOL=$$WD^TXTU($G(BIOL))
+ S PRMS=$$WD^TXTU($G(PRMS))
+ S:BAR'="" ID=$P($$BARID^IMLAB(BAR),"|",1)
+ I ID'="",'$D(^MLABI("c",ID)) S ID=""
+ I ID="" D MSG^RWU("-") Q 
+ D ADDI(ID,DEVS,WL,$S(PRMS="":0,1:1),BIOL,PRMS)
+ S IDX=$G(%L),NI=^MLABI("c",ID)
+ K %L,%B
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<addwlab><tests>")
+ S X=$$UNAMES^IMLAB(NI,ID),C=$L(X,CR) S:X="" C=""
+ D WC^RWU($$TAG^TXTU(X))
+ D W^RWU("</tests>")
+ S X=$$CNTI^IMLABW(DEVS,WL)
+ I IDX'="",IDX'="-",IDX'="+" S IDX="Пробирка № "_$E(IDX,$L(IDX)-2,$L(IDX)) S:X'="" IDX=IDX_" (в списке "_X_")"
+ D WTAGC^RWU("rez",IDX)
+ D WTAGC^RWU("inft",C)
+ S X=$G(^JOB(%JOB,"wlab-p","add-id"))
+ D WTAGDC^RWU("idx",X)
+ D W^RWU("</addwlab></nb_console>")
+ D C^RWU
+ Q 
+ADDI(ID,DEVS,WL,ALL,BIOL,PRMS) ; Добавить заявку в рабочий список устройств
+ ; WL - рабочий список
+ ; ALL - добавление заявок с результатами
+ ; BIOL - список доступных биоматериалов
+ S DEVS=$$WD^TXTU(DEVS),ALL=+$G(ALL),BIOL=$G(BIOL),REE=+$G(REE)
+ N I,J,M,NI,PRM,PRMP,P,PP,sID,SID,SIDL,MX,B,IJ,IJJ,F,FA
+ K ^JOB(%JOB,"wlab-p","add-id")
+ Q:ID="" 
+ Q:'$D(^MLABI("c",ID))
+ S NI=^(ID),PRM=$G(^MLAB(NI,ID,"pr")) Q:PRM=""
+ S PRMP=$$LNKPRMS^IMLAB(PRM)
+ s:BIOL'="" BIOL="|"_BIOL_"|"
+ S:PRMS'="" PRMS="|"_PRMS_"|"
+ I '$$IsSTATE^IMLAB("",ID,2),$G(^cfg("lab","wlstsbs")) S I=$$SBS^IMLAB(ID)
+ S IJJ="",FA=0
+ F J=1:1:$L(DEVS,"|") S M=$P(DEVS,"|",J) D:M'=""
+ .S SID=""
+ .S sID=$G(^LABT("DEV",M,"sid"))
+ .S MX=$G(^LABT("DEV",M,"wl")),MX=$P(MX,"|",1)*$P(MX,"|",2)
+ .I MX,$$CNTI^IMLABW(M,WL)'<MX Q  ; превышение кол-ва
+ .F I=1:1:$L(PRM,"|") S PP=$P(PRM,"|",I),P=$P(PP,"@",1) I $G(^LABT("T",P,"use"))'=0,$D(^("dev",M)) D
+ ..S B=""
+ ..I BIOL'="" S B=$P(PP,"@",2)
+ ..I BIOL'="",BIOL'[("|"_B_"|") Q  ; конкретн. биоматериалы
+ ..I PRMS'="",PRMS'[("|"_P_"|") Q  ; тесты
+ ..S PP=$P(PRMP,"|",I)
+ ..I 'ALL,$P($G(^MLAB(NI,ID,"d",PP)),"|",1)'="" Q  ; есть данные
+ ..S IJ="",F=0 F  S IJ=$O(^MLABWE(M,WL,"i",ID,IJ)) Q:IJ=""  I $D(^MLABW(M,WL,IJ,PP)) S F=1,FA=1 Q 
+ ..Q:F 
+ ..I IJJ="" D  ; что делать если нужно еще добавить тесты в запись ?
+ ...S IJJ=$O(^MLABW(M,WL,""),-1)+1
+ ...I sID S SID=$$NNUMD^IMLAB(NI,ID,M,"",B) S:SID'="" SIDL(SID)=""
+ ...S:'$D(^MLABW(M,WL,IJJ)) ^(IJJ)="0|0|"_ID,^MLABWE(M,WL,"i",ID,IJJ)=B,^JOB(%JOB,"wlab-p","add-id")=IJJ
+ ..S ^MLABW(M,WL,IJJ,PP)=0
+ .S:'$P($G(^MLAB(NI,ID,"s3")),"|",1) $P(^MLAB(NI,ID,"s3"),"|",1)=1
+ ; список ID в методике
+ S (I,P)="" F  S I=$O(SIDL(I)) Q:I=""  S P=$S(P="":"",1:P_",")_I
+ S:P=""&FA P="+"
+ S:'sID P=$$CNTI^IMLABW(DEVS,WL) ; где нет внутр. последовательности
+ D MSG^RWU(P)
+ Q
+ADDIL(DEV,WL,LST) ; Добавить несколько заявок
+ ; LST - список заявок
+ N J,K
+ S LST=$TR(LST," ","")
+ F J=1:1:$L(LST,",") S K=$P(LST,",",J) D:K'="" ADDI(K,DEV,WL)
+ Q
+DELI(IJ,DEVS,WL) ; Удалить запись из списка
+ N J,M
+ S DEVS=$$WD^TXTU(DEVS)
+ Q:DEVS="" 
+ F J=1:1:$L(DEVS,"|") D DEL^IMLABW($P(DEVS,"|",J),WL,IJ)
+ Q
+DELP(IJ,DEVS,WL,PRM) ; Удалить парметр из списка
+ N J,M
+ S DEVS=$$WD^TXTU(DEVS),PRM=$$WD^TXTU(PRM)
+ Q:DEVS="" 
+ F J=1:1:$L(DEVS,"|") D DELP^IMLABW($P(DEVS,"|",J),WL,IJ,PRM)
+ Q
+SHOW(ST,MOD,NOK,DT,ZF,ZT,IW,PG) ; Вывод рабочего списка
+ ; MOD - вид списка
+ ; PG - страница списка
+ N K,I,J,T,ID,IJ,DEV,P,F,C,X,NI,PSUM,DE,D,LDIR
+ K ^BUF($J)
+ K ^JOB(%JOB,"wlab-p"),^("wlab-pf") ; позиции ID
+ S DE=$$DI^DTUTL($P(DT,"-",2)),DT=$$DI^DTUTL($P(DT,"-"))
+ S MOD=+$G(MOD),NOK=+$G(NOK),ZF=$G(ZF),ZT=$G(ZT)
+ S IW=$G(IW) S:IW="" IW=0
+ S PG=$G(PG) S:'PG PG=1
+ K ^JOB(%JOB,"wlab-mxp")
+ S ^JOB(%JOB,"wlab-wl")=IW
+ S ^JOB(%JOB,"wlab-dev")=ST
+ G:MOD=1 SHOW1 G:MOD=2!(MOD=3)!(MOD=4) SHOW2
+ G:MOD=7 SHOW7 G:MOD=8 SHOW8
+ I MOD=9 S LDIR=0 G SHOW9
+ S K="" F I=1:1:$L(ST,"|") S DEV=$P(ST,"|",I) D:DEV'=""
+ .Q:'$D(^LABT("DEV",DEV)) 
+ .S K=$S(K="":"",1:K_"|")_^(DEV)
+ .S ID=$S(ZF'="":$O(^MLABWE(DEV,IW,"i",ZF),-1),1:""),J=1,PSUM=0
+ .F  S ID=$O(^MLABWE(DEV,IW,"i",ID)) Q:ID=""  Q:ZT'=""&(ID>ZT)  D
+ ..I DT!DE S NI=^MLABI("c",ID) S D=+$P($G(^MLAB(NI,ID,"s1")),"|",2) Q:$S(DE="":D<DT,DT="":D>DE,D<DT:1,1:D>DE) 
+ ..S IJ="" F  S IJ=$O(^MLABWE(DEV,IW,"i",ID,IJ)) Q:IJ=""  D
+ ...I NOK S F=$G(^MLABW(DEV,IW,IJ)) Q:NOK=1&F  Q:NOK=2&('F) 
+ ...S F=0,PSUM=PSUM+1
+ ...S P="" F  S P=$O(^MLABW(DEV,IW,IJ,P)) Q:P=""  I ^(P)'=0 S F=1 Q  ; TODO -NOK
+ ...S ^BUF($J,J,I)=ID_"|"_F
+ ...S ^JOB(%JOB,"wlab-p",I-1,J)=ID_"||"_IJ
+ ...S J=J+1
+ .S ^BUF($J,999,I)=PSUM
+ g SHOWo
+SHOW1 
+ S K="" F I=1:1:$L(ST) S DEV=$P(ST,"|",I) D:DEV'=""
+ .S K=$S(K="":"",1:K_"|")_^LABT("DEV",DEV)
+ .S ID=$S(ZF'="":$O(^MLABWE(DEV,IW,"i",ZF),-1),1:""),J=1
+ .F  S ID=$O(^MLABWE(DEV,IW,"i",ID)) Q:ID=""  Q:ZT'=""&(ID>ZT)  D
+ ..S IJ="" F  S IJ=$O(^MLABWE(DEV,IW,"i",ID,IJ)) Q:IJ=""  D
+ ...I NOK S F=$G(^MLABW(DEV,IW,IJ)) Q:NOK=1&F  Q:NOK=2&('F)
+ ...S P="" F  S P=$O(^MLABW(DEV,IW,IJ,P)) Q:P=""  D
+ ....S F=0 I ^(P)'=0 S F=1 
+ ....I NOK S F=$$IsPRM^IMLABW(ID,P) Q:NOK=1&(F=0)  Q:NOK=2&F
+ ....S ^BUF($J,J,I)=ID_" "_$$NAMEPMS^IMLABS(P)_"|"_F
+ ....S ^JOB(%JOB,"wlab-p",I-1,J)=ID_"||"_IJ
+ ....S J=J+1
+ g SHOWo
+SHOW2p 
+ S:'$D(^BUF($J,ID)) ^(ID)=IJ
+ S K=$G(PLL(P))
+ I K="" S K=$$NAMEPMS^IMLABS(P)_"|"_($P($O(PL(""),-1),"|",2)+1),PL(K)=P,PLL(P)=K
+ ;I K="" S K=$O(PL(""),-1)+1,PL(K)=P,PLL(P)=K
+ S C=$G(PSUM(K))
+ S:'$D(^BUF($J,ID,K)) C=C+1,PSUM(K)=C
+ S ^BUF($J,ID,K)=$S(MOD=3:ID,MOD=4:"",1:"+")_"|"_F
+ Q:MOD=3
+ S:'$D(^BUF($J,ID,"0|")) ^("0|")=ID ; 1-я колонка
+ Q
+SHOW2 
+ N PL,PLL,PI
+ D LOOP^IMLABW(ST,IW,NOK,ZF,ZT,DT,DE,"SHOW2p^NMLABW")
+ F I=1:1:$L(ST) S DEV=$P(ST,"|",I) D:DEV'=""
+ .S ID="Z99999999" S:MOD=2 ^BUF($J,ID,"0|")="Z"
+ .S K="" F  S K=$O(PSUM(K)) Q:K=""  S ^BUF($J,ID,K)=PSUM(K)
+ S (F,I)="",K="Заявка"
+ F I=$S(MOD=2!(MOD=4):2,1:1):1 S F=$O(PL(F)) Q:F=""  S P=PL(F),$P(K,"|",I)=$$NAMEPMS^IMLABS(P),PI(F)=I
+ S:MOD=2!(MOD=4) PI("0|")=1
+ ; Заполнение индексов ячеек
+ S ID="",J=1 F  S ID=$O(^BUF($J,ID)) Q:ID=""  Q:$E(ID)="Z"  D
+ .S IJ=^(ID)
+ .S I=$S(MOD=3:0,1:1),F=""
+ .F  S F=$O(PL(F)) Q:F=""  S:$D(^BUF($J,ID,F)) ^JOB(%JOB,"wlab-p",I,J)=ID_"||"_IJ S I=I+1
+ .S J=J+1
+SHOWo D OWF^RWU(".txt")
+ D WC^RWU(K)
+ N i,j
+ S J="",i=1 F  S J=$O(^BUF($J,J)) Q:J=""  D
+ .S (K,I)=""
+ .F  S I=$O(^BUF($J,J,I)) Q:I=""  D
+ ..S P=^(I),X=$P(P,"|",1),F=$S(I["|":PI(I),1:I)
+ ..S P=$S(J="Z99999999":X,(MOD=4)&(F=1):X_" "_i,MOD=4:i,1:X)
+ ..S P=P_$S($P(P,"|",2):"*",1:"")
+ ..S $P(K,"|",F)=P
+ .D WC^RWU(CR_K)
+ .s i=i+1
+ D C^RWU
+ K ^BUF($J)
+ Q
+SHOW7p 
+ S:'$D(TAB(DEV,IJ)) TAB(DEV,IJ)=ID_"|"_sID_"|"_BIO
+ S TAB(DEV,IJ,PP)=""
+ q:$G(^LABT("T",PP,"ts"))=""
+ I IDP'=IJ,IDP'="" S PRMSL(PRMS,IDP)="",PRMS=""
+ S PRMS=$S(PRMS="":"",1:PRMS_"|")_PP
+ S IDP=IJ
+ Q
+SHOW7 ; ПЦР список
+ N PL,IL,LI,ITS,TS,sID,IDV,PRMSL,TAB,PRMS,TSL,MXP,MXI,BAR,K,IDP,TSLP
+ 
+ S (MXP,IDP,PRMS)=""
+ F I=1:1:$L(ST) S DEV=$P(ST,"|",I) D:DEV'=""
+ .S sID=$G(^LABT("DEV",DEV,"sid"))
+ .S MXP=$G(^LABT("DEV",DEV,"wl")) ; ограничение страниц
+ .S MXP=($P(MXP,"|",1)*$P(MXP,"|",2))_"|"_$P(MXP,"|",1)
+ .D LOOP^IMLABW(DEV,IW,NOK,ZF,ZT,DT,DE,"SHOW7p^NMLABW")
+ I IDP'="",PRMS'="" S PRMSL(PRMS,IDP)=""
+ ; для каждого набора - свой TSL
+ S P="" F  S P=$O(PRMSL(P)) Q:P=""  D
+ .D GETTS^IMLABS(P,"TSL("""_P_""")")
+ .S K="" F  S K=$O(PRMSL(P,K)) Q:K=""  S TSLP(K)=P
+ K PRMSL
+ 
+ S MXI=0
+ S DEV="" F  S DEV=$O(TAB(DEV)) Q:DEV=""  D
+ .S IJ="" F  S IJ=$O(TAB(DEV,IJ)) Q:IJ=""  D
+ ..S IDP=$G(TSLP(IJ)),K=TAB(DEV,IJ),ID=$P(K,"|",1),B=$P(K,"|",3)
+ ..S P="" F  S P=$O(TAB(DEV,IJ,P)) Q:P=""  D
+ ...S TS=$S(IDP="":"",1:$G(TSL(IDP,P)))
+ ...S K=$G(^LABT("T",P,"ow"))
+ ...S I=$P($G(^("ts")),"|",1) ; фиктивный ID для множеств. 
+ ...S PL=K_"@"_I_"@"_$$NAMEPMS^IMLABS(P)_"@"_P ; "@"_TS_"@"
+ ...S K=$S(sID:$$NUMD^IMLAB("",ID,DEV,B),1:"")
+ ...S IL(IJ)=K
+ ...S LI(IJ)=IJ_"|"_ID_"|"_TS ; последовательность вывода + ID
+ ...S:TS'="" ITS(TS,IJ)=""
+ ...Q:$D(^BUF($J,PL,IJ)) 
+ ...S ^BUF($J,PL,IJ)=1
+ ...S MXI=MXI+1
+ S ^JOB(%JOB,"wlab-mxp")=MXI_"|"_MXP ; эл-тов|максимум.|на странице
+ 
+ D OWF^RWU(".txt")
+ S (IDV,P,K)="",I=0,J=2
+ F  S IDV=$O(LI(IDV)) Q:IDV=""  D
+ .S I=I+1,X=LI(IDV),IJ=$P(X,"|",1),ID=$P(X,"|",2)
+ .I PG,MXP'="",$S(($P(MXP,"|",2)*PG)<I:1,($P(MXP,"|",2)*(PG-1)+1)>I:1,1:0) Q  ; страницы
+ .S X=IL(IJ)
+ .S:X="" BAR=$$GETBAR^IMLAB("",ID),BAR=$S(BAR="":ID,1:BAR)
+ .S P=P_"|"_$S(X="":BAR,1:X),K=K_"|"_I
+ 
+ D WC^RWU("Тест|"_K_CR_"|"_P)
+ S PL="" F  S PL=$O(^BUF($J,PL)) Q:PL=""  D
+ .S K="",TS=$P(PL,"@",2),P=$P(PL,"@",4)
+ .S IDV="",I=0,MXI=0 F  S IDV=$O(LI(IDV)) Q:IDV=""  D  
+ ..S MXI=MXI+1
+ ..I PG,MXP'="",$S(($P(MXP,"|",2)*PG)<MXI:1,($P(MXP,"|",2)*(PG-1)+1)>MXI:1,1:0) Q 
+ ..S I=I+1,X=LI(IDV),IJ=$P(X,"|",1),ID=$P(X,"|",2)
+ ..I $D(^BUF($J,PL,IJ)) S $P(K,"|",I)="*",^JOB(%JOB,"wlab-p",I+1,J)=ID_"|"_P_"|"_IJ Q
+ ..I TS'="",$D(ITS(TS,IJ)) S $P(K,"|",I)=$S(TS["|":$TR(TS,"|",","),1:"+") Q
+ .D WC^RWU(CR_$$NAMEPM^IMLABS(P)_"|"_$P(PL,"@",3)_"|"_K)
+ .S J=J+1
+ D C^RWU
+ K ^BUF($J)
+ Q
+SHOW8 ; ПЦР протокол
+ N PL,IL,LI,ITS,TS,JJ,II,sID,IDV,TSL,TLSP,PRMS,PRMSL,T,TAB,TSL1,RX,IDP,PP,BIO
+ 
+ K ^BUF($J,"p"),^BUF($J,"w")
+ S (IDP,PRMS)=""
+ F I=1:1:$L(ST) S DEV=$P(ST,"|",I) D:DEV'=""
+ .S sID=$G(^LABT("DEV",DEV,"sid"))
+ .S ID=$S(ZF'="":$O(^MLABWE(DEV,IW,"i",ZF),-1),1:""),J=1
+ .F  S ID=$O(^MLABWE(DEV,IW,"i",ID)) Q:ID=""  Q:ZT'=""&(ID>ZT)  D
+ ..S IJ="" F  S IJ=$O(^MLABWE(DEV,IW,"i",ID,IJ)) Q:IJ=""  D
+ ...S BIO=^(IJ)
+ ...I NOK S F=$P($G(^MLABW(DEV,IW,IJ)),"|",1) Q:NOK=1&F  Q:NOK=2&('F)
+ ...S P="" F  S P=$O(^MLABW(DEV,IW,IJ,P)) Q:P=""  D
+ ....S F=0 I ^(P)'=0 S F=1
+ ....I NOK S F=$$IsPRM^IMLABW(ID,P) Q:NOK=1&(F=0)  Q:NOK=2&F
+ ....S PP=$P(P,"@",1)
+ ....S:'$D(TAB(DEV,IJ)) TAB(DEV,IJ)=ID_"|"_sID_"|"_BIO
+ ....S TAB(DEV,IJ,PP)=""
+ ....q:$G(^LABT("T",PP,"ts"))=""
+ ....I IDP'=IJ,IDP'="" S PRMSL(PRMS,IDP)="",PRMS=""
+ ....S PRMS=$S(PRMS="":"",1:PRMS_"|")_PP
+ ....S IDP=IJ
+ I IDP'="",PRMS'="" S PRMSL(PRMS,IDP)=""
+ ; для каждого набора - свой TSL
+ S P="" F  S P=$O(PRMSL(P)) Q:P=""  D
+ .D GETTS^IMLABS(P,"TSL("""_P_""")","TSL1("""_P_""")")
+ .S K="" F  S K=$O(PRMSL(P,K)) Q:K=""  S TSLP(K)=P
+ K PRMSL
+ 
+ S DEV="" F  S DEV=$O(TAB(DEV)) Q:DEV=""  D
+ .S IJ="" F  S IJ=$O(TAB(DEV,IJ)) Q:IJ=""  D
+ ..S IDP=$G(TSLP(IJ)),X=TAB(DEV,IJ),ID=$P(X,"|",1),BIO=$P(X,"|",3)
+ ..S P="" F  S P=$O(TAB(DEV,IJ,P)) Q:P=""  D
+ ...S TS=$S(IDP="":"",1:$G(TSL1(IDP,P))) ; TSL1
+ ...F I=1:1:$L(TS,"|") S T=$P(TS,"|",I) D
+ ....S PL=$S('T:$G(^LABT("T",P,"ow")),1:$J(T,3))_"@"_T_"@"_$S('T:$$NAMEPMS^IMLABS(P)_"@"_P,1:"")
+ ....S RX=$S(sID:$$NUMD^IMLAB("",ID,DEV,BIO),1:"")
+ ....S IL(IJ)=RX
+ ....S LI(IJ)=IJ_"|"_ID
+ ....S RX=$G(^BUF($J,"p",PL,IJ))
+ ....S ^(IJ)=$S(RX="":"",1:RX_"~")_P
+ 
+ S II=1,JJ=1,I=1
+ S PL="" F  S PL=$O(^BUF($J,"p",PL)) Q:PL=""  D
+ .S K="",TS=$P(PL,"@",2),I=1,IDV=""
+ .F  S IDV=$O(LI(IDV)) Q:IDV=""  S ID=LI(IDV),IJ=$P(ID,"|",1) D:$D(^BUF($J,"p",PL,IJ)) 
+ ..S P=^(IJ)
+ ..S ^BUF($J,"w",II,JJ)=$P(ID,"|",1)_"|"_P_"|"_TS_"|"_$P(ID,"|",2)
+ ..S JJ=JJ+1
+ ..I JJ=25 S JJ=1,II=II+1
+ .S ^BUF($J,"w",II,JJ)="K|"_$P(PL,"@",2)_"|"_$P(PL,"@",4) ; контроль (тестсист+тест)
+ .S JJ=JJ+1
+ .I JJ=25 S JJ=1,II=II+1
+ 
+ D OWF^RWU(".txt")
+ S K="" F I=1:1:24 S $P(K,"|",I)=I
+ D WC^RWU(K)
+ S J=2
+ S II="" F  S II=$O(^BUF($J,"w",II)) Q:II=""  D
+ .S C="" F I=1:1:24 S $P(C,"|",I)=""
+ .S (F,JJ)="" F  S JJ=$O(^BUF($J,"w",II,JJ)) Q:JJ=""  D
+ ..S X=^(JJ),IJ=$P(X,"|",1),ID=$P(X,"|",4),P=$P(X,"|",2)
+ ..S $P(F,"|",JJ)=$S(IJ="K":"K",IL(IJ)'="":IL(IJ),1:ID)
+ ..S RX=$S(IJ="K":"||"_$P(X,"|",2,3),1:ID_"|"_P_"|"_IJ)
+ ..S ^JOB(%JOB,"wlab-p",JJ-1,J)=RX
+ ..S ^JOB(%JOB,"wlab-p",JJ-1,J-1)=$S(IJ="K":"||"_$P(X,"|",2,3),1:ID) ; все результ.
+ ..Q:ID="K"
+ ..S $P(C,"|",JJ)=$E($$GET^IMLAB("",ID,$P(P,"~",1)))
+ .D:II>1 WC^RWU(CR_K)
+ .D WC^RWU(CR_F_CR_C)
+ .S J=J+3
+ D C^RWU
+ S ^JOB(%JOB,"wlab-pf")=1
+ K ^BUF($J)
+ Q
+SHOW9p 
+ S LST($$NAMEPMS^IMLABS(P)_"|"_ID_"|"_P)=ID_" "_$$NAMEPMS^IMLABS(P)_"|"_F_"|"_IJ
+ Q
+SHOW9 ; DT96
+ Q:ST=""  Q:IW="" 
+ N MI,MJ,N,LST,NN,LN,UDT,Q,QT,QI,DP
+ S UDT=$G(^LABT("DEV",ST,"ud"))
+ I $P(UDT,";",2)=1 S LDIR=1
+ S Q=$P(UDT,";",5) S:'Q Q=1
+ S K="" F I=1:1:12 S K=$S(K="":"",1:K_"|")_I
+ D LOOP^IMLABW(ST,IW,NOK,ZF,ZT,DT,DE,"SHOW9p^NMLABW")
+ 
+ ; Дубли
+ S ID="" F  S ID=$O(LST(ID)) Q:ID=""  D:$P(ID,"|",4)="" 
+ .S P=$P(ID,"|",3),DP=$G(^LABT("T",$P(P,"@",1),"dev",ST))
+ .S QT=$P($G(^LABT("DEV",ST,"t",DP,"wl")),"|",1)
+ .S:QT QI=QT+1
+ .S:QT="" QT=Q Q:QT<2 
+ .F QI=1:1:QT-1 S LST(ID_"|"_QI)=LST(ID)
+ 
+ ; Контроли	
+ S T=$P(UDT,";",4),ID="" F  S ID=$O(LST(ID)) Q:ID=""  D
+ .S P=ID Q:$P(P,"|",2)="K"  Q:$P(P,"|",4)'="" 
+ .S DP=$G(^LABT("T",$P($P(P,"|",3),"@",1),"dev",ST))
+ .S QT=$P($G(^LABT("DEV",ST,"t",DP,"wl")),"|",3)
+ .S:QT="" QT=T Q:'QT 
+ .F I=1:1:QT S $P(P,"|",2)="K"_I S:'$D(LST(P)) LST(P)="K"
+ 
+ ; убираем вылезающие тесты
+ S ID="",NN=0,P="" F  S ID=$O(LST(ID)) Q:ID=""  D
+ .S Q=0
+ .S T=$P(ID,"|",3)
+ .S DP=$G(^LABT("T",$P(T,"@",1),"dev",ST))
+ .S:LST(ID)'="K" Q=$P($G(^LABT("DEV",ST,"t",DP,"wl")),"|",2)
+ .S NN=NN+1+Q
+ .I NN>96,P="" S P=T
+ .I NN>96 K LST(ID)
+ I P'="" S ID="" F  S ID=$O(LST(ID)) Q:ID=""  I $P(ID,"|",3)=P K LST(ID)
+ S LN=""
+ S NN="",I=1,J=1 F  S NN=$O(LST(NN)) Q:NN=""  D
+ .S ID=$P(NN,"|",2),P=LST(NN),IJ=$P(P,"|",3)
+ .S ^JOB(%JOB,"wlab-p",I-1,J)=ID_"||"_IJ
+ .S T=$S(P="K":"K",1:$P(NN,"|",3))
+ .S LN=$S(LN="":"",1:LN_"|")_(I-1)_":"_(J-1)_":"_$S(P="K":P,1:ID)_":"_$P(NN,"|",3)
+ .S Q=1
+ .S:T'="K" Q=Q+$P($G(^LABT("DEV",ST,"t",T,"wl")),"|",2)
+ .F T=1:1:Q D
+ ..S ^BUF($J,J,I)=$S(T=1:$P(P,"|",1,2),1:"")
+ ..I LDIR=0 S J=J+1 S:J>8 J=1,I=I+1
+ ..I LDIR=1 S I=I+1 S:I>12 I=1,J=J+1
+ S ^MLABWE(ST,IW,"tp")=9
+ S ^MLABWE(ST,IW,"ln")=LN
+ g SHOWo
+GETID(X,Y) ; Получить ID заявки из рабочего списка
+ N ID,R,P,I,K,IJ
+ S R=$G(^JOB(%JOB,"wlab-p",X,Y)) Q:R=""
+ S ID=$P(R,"|",1),P=$P(R,"|",2),IJ=$P(R,"|",3)
+ I ID'="",'$D(^MLABI("c",ID)) S ID=""
+ I ID="",P="",$P(R,"|",3,4)'="" D  D:R'="" MSG^RWU("msg|Контроль по "_R) Q
+ .S P=$P(R,"|",3)
+ .I P'="" Q:'$D(^LABT("TS",P))  S R=^LABT("TS",P) Q ; тест-система
+ .S P=$P(R,"|",4) S R=$$NAMEPM^IMLABS(P) Q ; тест
+ .S R=""
+ S I=$G(^JOB(%JOB,"wlab-pf")) ; fill parameters
+ S R=ID_$S(P="":"",I:"|"_P,1:"")
+ S:'I $P(R,"|",5)=P
+ I I F I=1:1:$L(P,"~") S K=$P(P,"~",I) I K'="",$L($D(^LABT("T",K,"t")))=2 S $P(R,"|",3)=1 ; список параметров
+ S:IJ'="" $P(R,"|",4)=IJ
+ D MSG^RWU(R)
+ Q
+GETINFO(X,Y) ; Информация по позиции списка
+ N ID,NI,R,P,DEV,DEVS,I,A
+ S R=$G(^JOB(%JOB,"wlab-p",X,Y)) Q:R="" 
+ S ID=$P(R,"|",1),P=$P(R,"|",2)
+ I ID'="",'$D(^MLABI("c",ID)) S ID=""
+ S NI=^MLABI("c",ID)
+ S DEVS=^JOB(%JOB,"wlab-dev")
+ S A="Код заявки: "_ID
+ S R=$G(^MLAB(NI,ID,"bar"))
+ S:R'="" A=A_CR_"Штрихкод: "_R
+ S R="" F I=1:1:$L(DEVS,"|") S DEV=$P(DEVS,"|",I) I DEV'="",$D(^MLABE(NI,ID,"dev",DEV)) S R=$S(R="":"",1:R_",")_^(DEV)
+ S:R'="" A=A_CR_"Код в методике: "_R
+ S:P'="" A=A_CR_"Тест: "_$$NAMEPM^IMLABS(P)
+ S A=A_CR_"Пациент: "_$$FIO^IPAC(NI)
+ D MSG^RWU(A)
+ Q
+PRMLST(PNM) ; Перечень параметров
+ D PRMLST^NMLABR(PNM,1)
+ Q
+SETPRM(ID,PRMS,STR) ; Установить параметры
+ N I,R,P,L
+ I STR'["~" F I=1:1:$L(PRMS,"|") S P=$P(PRMS,"|",I) D:P'="" SETPRM^NMLABR(ID,P,STR,1)
+ Q:STR'["~" 
+ F I=1:1:$L(STR,"|") D
+ .S R=$P(STR,"|",I),P=$P(R,"~",1),R=$P(R,"~",2,9)
+ .I '$D(L(P)) S L(P)=R Q
+ .I $P($G(^LABT("T",$P(P,"@",1),"t")),"|",4) S L(P)=L(P)_","_R Q
+ .S L(P)=R
+ S P="" F  S P=$O(L(P)) Q:P=""  D SETPRM^NMLABR(ID,P,L(P),1)
+ Q
+SBSWL(DEVS,WL) ; Подписать результаты по заявкам списка
+ N I,M,ID
+ S DEVS=$$WD^TXTU(DEVS)
+ F I=1:1:$L(DEVS,"|") S M=$P(DEVS,"|",I) D:M'=""
+ .S ID="" F  S ID=$O(^MLABWE(M,WL,"i",ID)) Q:ID=""  D SBREZ^NMLABR(ID,1)
+ ; TODO - только по этому списку
+ Q
+RESET(ST,IW) ; Обнулить рабочий список
+ N I,DEV,ID,R,IJ,M
+ S IW=$G(IW) S:IW="" IW=0
+ Q:ST="" 
+ S ST=$$WD^TXTU(ST)
+ F I=1:1:$L(ST) S DEV=$P(ST,"|",I) D:DEV'="" 
+ .S IJ="" F  S IJ=$O(^MLABW(DEV,IW,IJ)) Q:IJ=""  D
+ ..S ID=$P($G(^(IJ)),"|",3) Q:ID=""  
+ ..S M=$G(^MLABWE(DEV,IW,"i",ID,IJ))
+ ..D DNUMD^IMLAB("",ID,DEV,M)
+ .I 'IW K ^MLABW(DEV,IW),^MLABWE(DEV,IW) Q
+ .S R=$G(^MLABW(DEV,IW))
+ .K ^MLABW(DEV,IW),^MLABWE(DEV,IW)
+ .S ^MLABW(DEV,IW)=R
+ D:'IW DO^IKDLOUT(ST,16)
+ Q
+SEND(ST,IW,MOD) ; Отправить раб. список в устройство
+ N I,DEV,X
+ S IW=$G(IW),MOD=+$G(MOD) S:IW="" IW=0
+ F I=1:1:$L(ST) S DEV=$P(ST,"|",I) D:DEV'=""
+ .Q:$O(^MLABW(DEV,IW,""))="" 
+ .S $P(^MLABW(DEV,IW),"|",3)=1
+ Q
+INITTWL(DEV) 
+ N P,RP,O,LST
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<wlabt><bio>")
+ D WC^RWU($$TAG^TXTU($$BIOLSTs^NMLABS())_"</bio><prms>")
+ S P="" F  S P=$O(^LABT("DEV",DEV,"t",P)) Q:P=""  D
+ .S RP=^(P),O=$G(^LABT("T",RP,"ow"))
+ .S LST(O_$C(9)_RP)=$G(^LABT("T",RP))
+ S (O,P)="" F  S P=$O(LST(P)) Q:P=""  D WC^RWU(O_$P(P,$C(9),2)_"|"_LST(P)) S O=CR
+ D W^RWU("</prms></wlabt></nb_console>")
+ D C^RWU
+ Q
+LSTTWL(DEV) 
+ N ID,C
+ D OWF^RWU(".txt")
+ S (C,ID)="" F  S ID=$O(^MLABWT(DEV,ID)) Q:ID=""  D WC^RWU(C_ID_"|"_$$DT^DTUTL(+ID)_", "_$P(ID,",",2)) S C=CR
+ D C^RWU
+ Q
+ADDTWL(DEV) ; Добавить временный список
+ N D,I
+ S D=$H,I=$O(^MLABWT(DEV,(+D)_",9"),-1)
+ S I=$S(+D=+I:(+I)_","_($P(I,",",2)+1),1:(+D)_",1")
+ S ^MLABWT(DEV,I)=$H
+ D LSTTWL(DEV)
+ Q
+DELTWL(DEV,ID) 
+ K ^MLABWT(DEV,ID)
+ D LSTTWL(DEV)
+ Q
+ADDITW(DEV,WL,BAR,BIO,PRMS) ; Добавить во временный список
+ N I,P
+ S DEV=$$WD^TXTU(DEV),PRMS=$$WD^TXTU(PRMS)
+ S:$G(^MLABWT(DEV,WL,BAR))="" ^MLABWT(DEV,WL,BAR)=$$GET^IINKR("wlab-"_DEV)
+ F I=1:1:$L(PRMS,"|") S P=$P(PRMS,"|",I) I P'="" S ^MLABWT(DEV,WL,BAR,P)=BIO
+ S I=0,P="" F  S P=$O(^MLABWT(DEV,WL,P)) Q:P=""  S I=I+1
+ D MSG^RWU(^MLABWT(DEV,WL,BAR)_"|"_I)
+ Q
+TWTOWL(DEV,WL) ; Предварительный в рабочий список
+ N NWL,BAR,P,LST,SID,ID,NI,J,PRMS,IJ
+ S J=0
+ S NWL=$$ADDWLs(DEV,"("_$$DT^DTUTL(+WL)_", "_$P(WL,",",2)_")")
+ S BAR="" F  S BAR=$O(^MLABWT(DEV,WL,BAR)) Q:BAR=""  S LST(^(BAR))=BAR
+ S SID="" F  S SID=$O(LST(SID)) Q:SID=""  D
+ .S BAR=LST(SID)
+ .S ID=$P($$BARID^IMLAB(BAR),"|",1) Q:ID=""
+ .S NI=^MLABI("c",ID) 
+ .S P=$$NNUMD^IMLAB(NI,ID,DEV,SID)
+ .S PRMS=$G(^MLAB(NI,ID,"pr")) Q:PRMS="" 
+ .S PRMS="|"_PRMS_"|"
+ .S P="" F  S P=$O(^MLABWT(DEV,WL,BAR,P)) Q:P=""  D
+ ..Q:PRMS'[("|"_P_"|")  ; TODO - biomat
+ ..S IJ="" F  S IJ=$O(^MLABWE(DEV,NWL,"i",ID,IJ)) Q:IJ=""  S ^MLABW(DEV,NWL,IJ,P)=0
+ .S:'$P($G(^MLAB(NI,ID,"s3")),"|",1) $P(^MLAB(NI,ID,"s3"),"|",1)=1
+ .S J=J+1
+ D MSG^RWU(J)
+ Q
+EXPTWL(DEV,WL) ; Экспорт списка
+ N BAR,P,R,PP,LST,ID,X,I,C,XP,LSTP,O,RP,PRMS,TSL
+ ; Позиция строки парметра + список парамеров
+ S PRMS=""
+ S P="" F  S P=$O(^LABT("DEV",DEV,"t",P)) Q:P=""  D
+ .S RP=^(P),O=$G(^LABT("T",RP,"ow"))
+ .S LST(O_$C(9)_RP)=RP
+ S P="",I=0 F  S P=$O(LST(P)) Q:P=""  S LSTP(LST(P))=I,I=I+1
+ 
+ K LST
+ S BAR="" F  S BAR=$O(^MLABWT(DEV,WL,BAR)) Q:BAR=""  D
+ .S LST(^(BAR))=BAR
+ .S P="" F  S P=$O(^MLABWT(DEV,WL,BAR,P)) Q:P=""  S PP(P)=""
+ 
+ ; Тест системы
+ S P="" F  S P=$O(PP(P)) Q:P=""  S PRMS=$S(PRMS="":"",1:PRMS_"|")_P
+ K PP
+ D GETTS^IMLABS(PRMS,"TSL")
+ 
+ D OWF^RWU(".txt")
+ S PP="протокол"
+ D WC^RWU(PP_":E:1:"_$$DT^DTUTL(+WL)_", "_$P(WL,",",2))
+ 
+ S C=$A("D"),I=0
+ S ID="" F  S ID=$O(LST(ID)) Q:ID=""  D
+ .S BAR=LST(ID),X=$E(BAR,$L(BAR)-4,$L(BAR))
+ .S XP=$C(C+I)
+ .D WC^RWU(CR_PP_":"_XP_":6:"_X)
+ .D WC^RWU(CR_PP_":"_XP_":7:"_ID)
+ .S I=I+1
+ .S P="" F  S P=$O(^MLABWT(DEV,WL,BAR,P)) Q:P=""  D
+ ..S RP=$S($G(TSL(P))["|":$TR(TSL(P),"|",","),1:"*")
+ ..D WC^RWU(CR_PP_":"_XP_":"_(8+LSTP(P))_":"_RP)
+ 
+ D C^RWU
+ Q
+EXPTFIL(ST) ; Имя файла экспорта
+ N I,DEV,X
+ F I=1:1:$L(ST,"|") S DEV=$P(ST,"|",I) I DEV'="" S X=$P($G(^LABT("DEV",DEV,"ud")),";",1) I X'="" D MSG^RWU(X) Q 
+ Q
+EXPTW7(ST,WL,PG) ; Экспорт списка, тип 7
+ ; ST - методика 
+ ; WL - ID списка
+ ; PG - страница списка
+ N K,I,J,ID,IDV,DEV,P,RP,F,C,X,NI,PSUM,DE,D,KX,MXP,MXI,IJ,BIO,PP,PL
+ K ^BUF($J)
+ N IL,LI,ITS,TS,sID,PRMSL,TAB,PRMS,TSL,PP,CC,XP,BAR,LSTN,IDP,TSLP,wT,WT
+ S wT=+$G(^cfg("lab","wexp-title"))
+ 
+ S (PRMS,IDP)=""
+ F I=1:1:$L(ST,"|") S DEV=$P(ST,"|",I) D:DEV'=""
+ .S sID=$G(^LABT("DEV",DEV,"sid"))
+ .S MXP=$G(^LABT("DEV",DEV,"wl")) ; ограничение страниц
+ .S MXP=($P(MXP,"|",1)*$P(MXP,"|",2))_"|"_$P(MXP,"|",1)
+ .S ID="",J=1
+ .F  S ID=$O(^MLABWE(DEV,WL,"i",ID)) Q:ID=""  D
+ ..S IJ="" F  S IJ=$O(^MLABWE(DEV,WL,"i",ID,IJ)) Q:IJ=""  D
+ ...S BIO=^(IJ)
+ ...S P="" F  S P=$O(^MLABW(DEV,WL,IJ,P)) Q:P=""  D
+ ....S F=0 I ^(P)'=0 S F=1
+ ....S PP=$P(P,"@",1)
+ ....S:'$D(TAB(DEV,IJ)) TAB(DEV,IJ)=ID_"|"_sID_"|"_BIO
+ ....S TAB(DEV,IJ,PP)=""
+ ....q:$G(^LABT("T",PP,"ts"))=""
+ ....I IDP'=IJ,IDP'="" S PRMSL(PRMS,IDP)="",PRMS=""
+ ....S PRMS=$S(PRMS="":"",1:PRMS_"|")_PP
+ ....S IDP=IJ
+ I IDP'="",PRMS'="" S PRMSL(PRMS,IDP)=""
+ ; для каждого набора - свой TSL
+ S P="" F  S P=$O(PRMSL(P)) Q:P=""  D
+ .D GETTS^IMLABS(P,"TSL("""_P_""")")
+ .S K="" F  S K=$O(PRMSL(P,K)) Q:K=""  S TSLP(K)=P
+ K PRMSL
+ 
+ ; пустые параметры
+ S DEV="" F  S DEV=$O(TAB(DEV)) Q:DEV=""  D
+ .S P="" F  S P=$O(^LABT("DEV",DEV,"t",P)) Q:P=""  D
+ ..S RP=^(P),O=$G(^LABT("T",RP,"ow")) Q:RP="" 
+ ..S LSTN(RP)=O_"@"_RP
+ 
+ S DEV="" F  S DEV=$O(TAB(DEV)) Q:DEV=""  D
+ .S IJ="" F  S IJ=$O(TAB(DEV,IJ)) Q:IJ=""  D
+ ..S IDP=$G(TSLP(IJ)),K=TAB(DEV,IJ),ID=$P(K,"|",1),BIO=$P(K,"|",3)
+ ..S P="" F  S P=$O(TAB(DEV,IJ,P)) Q:P=""  D
+ ...S TS=$S(IDP="":"",1:$G(TSL(IDP,P)))
+ ...S PL=$G(^LABT("T",P,"ow"))_"@"_P
+ ...S K=$S(sID:$$NUMD^IMLAB("",ID,DEV,BIO),1:"")
+ ...S IL(IJ)=K
+ ...S LI(IJ)=IJ_"|"_ID
+ ...S:TS'="" ITS(TS,IJ)=""
+ ...S ^BUF($J,PL,IJ)=$G(^LABT("T",P,"ow"))_"@"_TS_"@"_$$NAMEPMS^IMLABS(P)_"@"_P
+ ...K LSTN(P)
+ 
+ S P="" F  S P=$O(LSTN(P)) Q:P=""  S ^BUF($J,LSTN(P))="" ; вставка допстрок
+ 
+ D OWF^RWU(".txt")
+ 
+ S PP="протокол"
+ S X=$P($G(^MLABW(ST,WL)),"|",1)
+ S X=$S(X="":"Основной",1:$$DT2^DTUTL(X)_","_$$TM^DTUTL(X)_$S(PG:" - "_PG,1:""))
+ D WC^RWU(PP_":E:1:"_X)
+ 
+ S (IDV,P,K)="",I=0,MXI=0,J=2,CC=$A("D")
+ F  S IDV=$O(LI(IDV)) Q:IDV=""  D
+ .S MXI=MXI+1
+ .I PG,MXP'="",$S(($P(MXP,"|",2)*PG)<MXI:1,($P(MXP,"|",2)*(PG-1)+1)>MXI:1,1:0) Q
+ .S X=LI(IDV),IJ=$P(X,"|",1),ID=$P(X,"|",2)
+ .S X=IL(IJ),X=$S(X="":ID,1:X)
+ .S BAR=$$GETBAR^IMLAB("",ID,"") ; TODO - разные биоматериалы
+ .S XP=$C(CC+I)
+ .S BAR=$E(BAR,$L(BAR)-3,$L(BAR))
+ .D WC^RWU(CR_PP_":"_XP_":6:"_BAR)
+ .D WC^RWU(CR_PP_":"_XP_":7:"_$E(X,$L(X)-2,$L(X)))
+ .S I=I+1
+  
+ S J=0,IDP=""
+ S PL="" F  S PL=$O(^BUF($J,PL)) Q:PL=""  D
+ .S K="",I=0,MXI=0
+ .S IDV="" F  S IDV=$O(LI(IDV)) Q:IDV=""  D  
+ ..S MXI=MXI+1
+ ..I PG,MXP'="",$S(($P(MXP,"|",2)*PG)<MXI:1,($P(MXP,"|",2)*(PG-1)+1)>MXI:1,1:0) Q
+ ..S X=LI(IDV),IJ=$P(X,"|",1),ID=$P(X,"|",2)
+ ..S XP=$C(CC+I),I=I+1
+ ..S KX=$G(^BUF($J,PL,IJ)) Q:KX="" 
+ ..S IDP=J ; last line
+ ..S TS=$P(KX,"@",2),P=$P(KX,"@",4),X="*"
+ ..I TS'="" S X=$G(^LABT("TS",TS,"nm")) S:X="" X="*"
+ ..I wT,TS="",'$D(WT(J)) S WT(J)="" D WC^RWU(CR_PP_":B:"_(8+J)_":"_$$NAMEPM^IMLABS(P,1))
+ ..I TS'["|" D WC^RWU(CR_PP_":"_XP_":"_(8+J)_":"_X) Q
+ ..I TS'="",$D(ITS(TS,IJ)) S X=$S(TS["|":$TR(TS,"|",","),1:"") D:X'="" WC^RWU(CR_PP_":"_XP_":"_(8+J)_":"_X) Q
+ .S J=J+1
+ 
+ ; end line fill
+ I IDP S IDP=IDP+1 S:IDP<10 IDP=10 F I=1:1:40 S XP=$C(CC+I-1) D WC^RWU(CR_PP_":"_XP_":"_(8+IDP)_":"_I)
+ 
+ D C^RWU
+ K ^BUF($J)
+ Q
+NXPG(PG) ; Следующая страница
+ N X,P1,P2,Y
+ S X=$G(^JOB(%JOB,"wlab-mxp"))
+ I X="" D MSG^RWU(1) Q 
+ S Y=$P(X,"|",3)
+ I 'Y D MSG^RWU(1) Q
+ S P1=$P(X,"|",1)/Y+1
+ S P2=$P(X,"|",2)/Y ; max
+ I (PG+1)>P1 D MSG^RWU(PG) Q
+ I (PG+1)>P2 D MSG^RWU(PG) Q
+ D MSG^RWU(PG+1)
+ Q
+PRPG(PG) ; Предыдущая страница
+ N X
+ S X=$G(^JOB(%JOB,"wlab-mxp"))
+ I X="" D MSG^RWU(1) Q 
+ I PG=1 D MSG^RWU(1) Q
+ D MSG^RWU(PG-1)
+ Q
+FILLD(ST,IW) ; Заполнить "по умолчанию" рабочий список
+ ; ST - методики
+ ; IW - список
+ N I,DEV,ID,IJ,P,PP
+ S IW=$G(IW) S:IW="" IW=0
+ Q:ST="" 
+ S ST=$$WD^TXTU(ST)
+ F I=1:1:$L(ST) S DEV=$P(ST,"|",I) D
+ .S IJ="" F  S IJ=$O(^MLABW(DEV,IW,IJ)) Q:IJ=""  D
+ ..S ID=$P(^(IJ),"|",3) Q:ID=""
+ ..S (P,PP)=""
+ ..F  S P=$O(^MLABW(DEV,IW,IJ,P)) Q:P=""  S PP=$S(PP="":"",1:PP_"~")_P
+ ..D REZFIL^NMLABR(ID,"",PP,1)
+ Q
+GETNN(DEV) ; Получить следующий № исследования по методике
+ S DEV=$P($$WD^TXTU(DEV),"|",1) Q:DEV="" 
+ S DEV=$$VAL^IINKR("wlab-"_DEV)+1
+ D MSG^RWU($E(DEV,$L(DEV)-2,$L(DEV)))
+ Q
+SETNN(DEV,VAL) ; Изменить следующий № исследования по методике
+ N X
+ S DEV=$P($$WD^TXTU(DEV),"|",1) Q:DEV="" 
+ S X=$$VAL^IINKR("wlab-"_DEV),VAL=VAL-1
+ s VAL=$TR($J(VAL,3)," ",0)
+ S $E(X,$L(X)-2,$L(X))=VAL
+ D SET^IINKR("wlab-"_DEV,X)
+ Q

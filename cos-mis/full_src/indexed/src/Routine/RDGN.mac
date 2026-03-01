@@ -1,0 +1,29 @@
+RDGN ; Отчеты по договорам [ 10/10/2024  10:57 PM ]
+LST(DT,TPX,ALL) ; Список по типу
+ N X,R,N,A,U,DV
+ S DT=$$DIH^DTUTL(DT)
+ D OWF^RWU(".txt")
+ D WC^RWU("Код|Наименование|Полное наименование|Вид|Действует|Прейскурант|Кассовый|Стоматологии|Педиатрии|Профмедицины|Скидка|Кассовая|Франшиза|Программы|Доп.программы")
+ S N="" F  S N=$O(^DGN(N)) Q:N=""  D
+ .S U=$$GET^IINSC(N,"use",DT)
+ .I 'ALL,U=0 Q 
+ .S DV=$$GET^IINSC(N,"dvid",DT) 
+ .I TPX'="",TPX'=DV Q 
+ .S A=N_"|"_$$NAME^IINSC(N,DT)_"|"_$$NAMEF^IINSC(N,DT)
+ .S A=A_"|"_$$NAME^ISPRAV("dvid",DV)_"|"_$S(U=0:"Нет",1:"Да")
+ .S A=A_"|"_$$NAME^ISPRAV("tprice",$$GET^IINSC(N,"price",DT))
+ .S A=A_"|"_$$NAME^ISPRAV("tprice",$$GET^IINSC(N,"cprice",DT))
+ .S A=A_"|"_$$NAME^ISPRAV("tprice",$$GET^IINSC(N,"sprice",DT))
+ .S A=A_"|"_$$NAME^ISPRAV("tprice",$$GET^IINSC(N,"dprice",DT))
+ .S A=A_"|"_$$NAME^ISPRAV("tprice",$$GET^IINSC(N,"pprice",DT))
+ .S A=A_"|"_$$NAME^IDSCN($$GET^IINSC(N,"skd",DT))
+ .S A=A_"|"_$$NAME^IDSCN($$GET^IINSC(N,"cskd",DT))
+ .S A=A_"|"_$$GET^IINSC(N,"frap",DT)
+ .S A=A_"|"_$$NAMES^IMPRP($$GET^IINSC(N,"progs",DT),DT)
+ .S A=A_"|"_$$NAMES^IMPRP($$GET^IINSC(N,"progsa",DT),DT)
+ .D WC^RWU(CR_A)
+ D C^RWU
+ Q
+REGIPROC 
+ S ^IPROC("Система","Реестр параметров договоров")="LST_RDGN,1,3,d,Дата отчета,t@net:NMLCR_NSPRAV(""dvid""),Вид договора,t@string:0/Действующие#1/Все,Показывать договора"
+ Q

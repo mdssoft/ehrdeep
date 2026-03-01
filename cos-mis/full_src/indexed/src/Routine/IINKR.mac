@@ -1,0 +1,31 @@
+IINKR ; Инкрементальные счетчики [ 02/27/2016  1:29 AM ]
+GET(ID,IDX) ; Получить значение счетчика + инкремент
+ Q:ID="" 0
+ N X,E
+ S E=$G(^INKR(ID,"X")),IDX=$G(IDX)
+ L +^INKR(ID)
+ S X=$S(IDX="":$G(^INKR(ID)),1:$G(^INKR(ID,IDX)))
+ I E'="" X E L -^INKR(ID) Q $S(IDX="":^INKR(ID),1:^INKR(ID,IDX))
+ S X=X+1
+ S:IDX'="" ^(IDX)=X
+ S:IDX="" ^(ID)=X
+ L -^INKR(ID)
+ Q X
+VAL(ID,IDX) ; Получить последнее значение
+ I $G(IDX)'="" Q $G(^INKR(ID,IDX))
+ Q $G(^INKR(ID))
+EXIST(ID,IDX) ; Проверить наличие счетчика
+ I $G(IDX)'="" Q:$D(^INKR(ID,IDX)) 1 Q 0
+ Q:$D(^INKR(ID)) 1 Q 0
+RESET(ID,IDX) ; Обнулить значение счетчика
+ I $G(IDX)'="" S ^INKR(ID,IDX)=0 Q 
+ S ^INKR(ID)=0 K ^INKR(ID,"data")
+ Q
+SET(ID,VAL,IDX) ; Установить значение счетчика
+ I $G(IDX)'="" S ^INKR(ID,IDX)=VAL Q 
+ S ^INKR(ID)=VAL
+ Q
+SETPRC(ID,EXEC) ; Установить исполняемый код
+ S ^INKR(ID,"X")=EXEC
+ D GL^IEXCH("^INKR",ID,"X")
+ Q

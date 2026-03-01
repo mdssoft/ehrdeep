@@ -1,0 +1,11 @@
+SYSinst ;
+A
+	ZN "USER"
+	D $System.License.DeferUserIdentification(0)
+	D $SYSTEM.License.Login($S($D(^WWW("test")):"127.0.0.1",1:"webusr1"))
+	X "ZN ""USER"" ZLOAD iSTART ZN ""%SYS"" ZS %ZSTART"
+	X "ZN ""USER"" ZLOAD iSTOP ZN ""%SYS"" ZS %ZSTOP"
+	S ^WWWSRV=1
+	ZN "USER"
+	D:$D(^$R("SYSinit")) ^SYSinit
+	Q

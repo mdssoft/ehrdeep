@@ -1,0 +1,75 @@
+IPACIN ; Системный импорт контингента [ 04/05/2012  2:22 AM ]
+INXML2(FN,RTAG,PBUF)       ; Импорт из InterchangeEnvelope XML
+ ; RTAG - базовый тэг содержания
+ ; PBUF - имя глобали, куда писать
+ N IO,R,TG,FLG,TMP,ID,RTD
+ S IO=$$OR^FIL(FN) Q:IO=""
+ D OEV^XMLR("INXML2s^IPACIN","INXML2d^IPACIN","INXML2e^IPACIN")
+ S FLG=0,IDX=0
+ U IO
+ F  U IO R R#1 Q:$$ST^FIL()=0  I R'="" D REV^XMLR(R)
+ D CEV^XMLR
+ C IO
+ Q
+INXML2s 
+ I 'FLG I %XM(2)=RTAG S FLG=1 u 0 w "." Q
+ Q:'FLG 
+ S RTD=""
+ Q
+INXML2d 
+ Q:'FLG
+ s TG=%XM(2)
+ Q:TG=RTAG  
+ S RTD=RTD_%XD
+ Q
+INXML2e 
+ Q:'FLG
+ s TG=%XM(2)
+ I TG=RTAG S FLG=0 I $D(ID) M @PBUF@(ID)=TMP K TMP,ID Q 
+ I TG="уникальный_код" S ID=RTD Q 
+ I TG="фамилия" S TMP("fiof")=RTD Q 
+ I TG="имя" S TMP("fioi")=RTD Q
+ I TG="отчество" S TMP("fioo")=RTD Q
+ I TG="дата_рождения" S TMP("datar")=$$DIISO^DTUTL(RTD) Q
+ I TG="фамилия_аис" S TMP("fiof-alt")=RTD Q 
+ I TG="имя_аис" S TMP("fioi-alt")=RTD Q
+ I TG="отчество_аис" S TMP("fioo-alt")=RTD Q
+ I TG="дата_рождения_аис" S TMP("datar-alt")=$$DIISO^DTUTL(RTD) Q
+ I TG="пол" S TMP("pol")=$S(RTD="Ж":2,1:1) Q
+ I TG="адрес" S TMP("street")=RTD Q
+ I TG="степень_родства" S TMP("familyr")=RTD Q
+ I TG="дата_постановки_на_учет" S TMP("dog_from")=RTD Q
+ I TG="дата_снятия_с_учета" S TMP("dog_to")=RTD Q
+ I TG="номер_полиса" S TMP("polis")=RTD Q
+ I TG="статус" S TMP("status")=RTD Q
+ I TG="подразделение" S TMP("work")=RTD Q
+ I TG="должность" S TMP("jobtitle")=RTD Q
+ Q
+INTXT(FN) 
+ N A,R,J,IO,NI,DT,SDT,T
+ S SDT=$$DI^DTUTL("01.01.12"),T=$C(9)
+ S IO=$$ORT^FIL(FN) Q:IO=""
+ F J=1:1  U IO R R Q:$$ST^FIL()=0  D:R'=""
+ .S NI=$P(R,T,1) Q:NI="" 
+ .S DT=$$DI^DTUTL($P(R,T,7)) S:DT="" DT=SDT
+ .u 0 w "." U IO 
+ .S A=$TR($P(R,T,2),""" ","") D:A'="" SET^IPAC(NI,"fiof",DT,A)
+ .S A=$P(R,T,3) D:A'="" SET^IPAC(NI,"fioi",DT,A)
+ .S A=$P(R,T,4) D:A'="" SET^IPAC(NI,"fioo",DT,A)
+ .S A=$P(R,T,5) D:A'="" SET^IPAC(NI,"pol",DT,A)
+ .S A=$$DI^DTUTL($P(R,T,6)) D:A'="" SET^IPAC(NI,"datar",DT,A)
+ .S A=$$DI^DTUTL($P(R,T,7)) D:A'="" SET^IPAC(NI,"dog_from",DT,A)
+ .S A=$$DI^DTUTL($P(R,T,8)) D:A'="" SET^IPAC(NI,"dog_to",DT,A)
+ .S A=$P(R,T,9) D:A'="" SET^IPAC(NI,"polis",DT,A)
+ .S A=$P(R,T,10) D:A'="" SET^IPAC(NI,"stc",DT,A)
+ .S A=$P(R,T,11) D:A'="" SET^IPAC(NI,"street",DT,A)
+ .S A=$P(R,T,12) D:A'="" SET^IPAC(NI,"dom",DT,A)
+ .S A=$P(R,T,13) D:A'="" SET^IPAC(NI,"korp",DT,A)
+ .;S A=$P(R,T,14) D:A'="" SET^IPAC(NI,"floor",DT,A)
+ .;S A=$P(R,T,15) D:A'="" SET^IPAC(NI,"entr",DT,A)
+ .S A=$P(R,T,16) D:A'="" SET^IPAC(NI,"domkod",DT,A)
+ .S A=$P(R,T,19) D:A'="" SET^IPAC(NI,"tel1",DT,A)
+ .S A=$P(R,T,20) D:A'="" SET^IPAC(NI,"pager",DT,A)
+ .S A=$P(R,T,21) D:A'="" SET^IPAC(NI,"text",DT,A)
+ C IO
+ Q

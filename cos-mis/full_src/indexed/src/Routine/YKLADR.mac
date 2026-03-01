@@ -1,0 +1,292 @@
+YKLADR ; Классификатор адресов [ 01/30/2020  3:44 PM ]
+LOAD ; Format: ^KLADR(CODE)=Use(0/1)|Name|Socr.|OKATD|Index
+ W !,"Load database: KLADR",!
+ K ^DBF("KLADR")
+ S FN="KLADR.DBF" D A+2^YLDBF
+ S ST=$O(^DBF("KLADR","")),EN=$O(^(""),-1),C9=$C(9)
+ D:EN'="" 
+ .F I=ST:1:EN W:I#100=0 "." D
+ .S IDX=$TR($G(^DBF("KLADR",I,3)),C9,"")
+ .Q:IDX="" 
+ .S ^KLADR(IDX)="0|"_$$TRIM($G(^DBF("KLADR",I,1)))_"|"_$$TRIM($G(^DBF("KLADR",I,2)))_"|"_$TR($G(^DBF("KLADR",I,7)),C9,"")_"|"_$$TRIM($G(^DBF("KLADR",I,4)))
+ K ^DBF("KLADR")
+ 
+ W !,"Load database: SOCRBASE",!
+ K ^DBF("SOCRBASE")
+ S FN="SOCRBASE.DBF" D A+2^YLDBF
+ S ST=$O(^DBF("SOCRBASE","")),EN=$O(^(""),-1)
+ D:EN'="" 
+ .F I=ST:1:EN D
+ ..S LVL=$$TRIM($G(^DBF("SOCRBASE",I,1)))
+ ..S SCN=$$TRIM($G(^DBF("SOCRBASE",I,2)))
+ ..S ^KLADR("SCN",LVL,SCN)=$$TRIM($G(^DBF("SOCRBASE",I,3)))
+ K ^DBF("SOCRBASE")
+ D MKIDXA
+ 
+ W !,"Load database: STREET",!
+ K ^DBF("STREET")
+ S FN="STREET.DBF" D A+2^YLDBF
+ S ST=$O(^DBF("STREET","")),EN=$O(^(""),-1)
+ D:EN'="" 
+ .F I=ST:1:EN D
+ ..S KLC=$$TRIM($G(^DBF("STREET",I,3)))
+ ..S NM=$$TRIM($G(^DBF("STREET",I,1)))
+ ..S ^KLADRS(KLC)=NM_"|"_$$TRIM($G(^DBF("STREET",I,2)))_"||"_$$TRIM($G(^DBF("STREET",I,4)))_"|"_KLC
+ .K ^DBF("STREET")
+ .D REIDXS
+ 
+ Q
+LCLR ; Clear after load
+ K ^KLADR("I","B"),^KLADR("U")
+ Q
+TRIM(A) F  S C=$E(A,1,1) Q:C'=" "&(C'=$C(9))  S A=$E(A,2,$L(A))
+ F  S C=$E(A,$L(A),$L(A)) Q:C'=" "&(C'=$C(9))  S A=$E(A,1,$L(A)-1)
+ Q A
+FNAME(STR) ; Поиск по имени
+ S STR=$$LU^TXTU($$WD^TXTU(STR)),N=""
+ D OWF^RWU(".txt"),WC^RWU("Код|Наименование|Тип")
+ F  S N=$O(^KLADR(N)) Q:$L(N)<13  S R=^KLADR(N),NM=$P(R,"|",2),NMU=$$LU^TXTU(NM) I NMU[STR S TP=$$ADRTP($P(R,"|",3)) D WC^RWU(CR_N_"|"_NM_"|"_TP)
+ D C^RWU
+ Q
+FCODE(CD) ; Поиск по коду или Код|Тип
+ S (N,CTP)="" S:CD["|" CTP=$$WD^TXTU($P(CD,"|",2)),CD=$P(CD,"|",1)
+ D OWF^RWU(".txt"),WC^RWU("Код|Наименование|Тип")
+ F  S N=$O(^KLADR(N)) Q:$L(N)<13  S R=^KLADR(N) I N[CD S TP=$$ADRTP($P(R,"|",3)) D:CTP=""!(TP[CTP) WC^RWU(CR_N_"|"_$P(R,"|",2)_"|"_TP)
+ D C^RWU
+ Q
+FIND(NM) ; find from used
+ N X,R S NM=$$LU^TXTU(NM)
+ S X="" F  S X=$O(^KLADR("U",X)) Q:X=""  S R=$$LU^TXTU($P($G(^KLADR(X)),"|",2)) Q:NM=R 
+ Q X
+FPLACEID(STR) ; Поиск первого подх. населенного пункта, вывод ID
+ Q:STR="" ""
+ N ST,X,ID,R,S,K,TP,RT,FR
+ S STR=$$DBLSP^TXTU($TR(STR,",;","  ")),FR=9999
+ S TP=$$UL^TXTU($P(STR," ",2)),STR=$P(STR," ",1)
+ S ST=$$LU^TXTU(STR),X=$E(ST,1,3),K=""
+ S ID="" F  S ID=$O(^KLADR("I","N",X,ID)) Q:ID=""  D  
+ .S R=^KLADR(ID),S=$P(R,"|",2)
+ .Q:$$LU^TXTU(S)'=ST 
+ .I TP'="",$E($P(R,"|",3))'=TP Q 
+ .S RT=$G(^KLADR("I","B",$E(ID,1,2)_"00000000000")) ; rating
+ .S:RT="" RT=999
+ .S:RT<FR K=ID,FR=RT
+ Q K
+ADRTP(TP) 
+ I $D(^KLADR("SCNI")) Q ^("SCNI",TP)
+ S A=""
+ F I=1:1:5 S:$D(^KLADR("SCN",I,TP))'=0 A=^(TP) Q:A'=""
+ Q A
+RGETRT(CD) ; Получить рейтинг территории
+ D MSG^RWU($G(^KLADR("I","B",$E(CD,1,2)_"00000000000")))
+ Q
+REGRT(CD,RT) ; Установить рейтинг территории
+ N ID
+ S ID=$E(CD,1,2)_"00000000000"
+ S ^KLADR("I","B",ID)=+RT
+ D GL^IEXCH("^KLADR","I","B",ID)
+ Q
+REGADD(CD) ; Добавить в используемые 
+ S:$D(^KLADR(CD)) ^KLADR("U")=$H,^("U",CD)="",$P(^KLADR(CD),"|",1)=1
+ D GL^IEXCH("^KLADR","U",CD)
+ G SELADR
+REGDEL(CD) ; Удалить из используемых
+ I $D(^KLADR(CD)) K ^KLADR("U",CD) S $P(^KLADR(CD),"|",1)=0,^KLADR("U")=$H
+ D KGL^IEXCH("^KLADR","U",CD)
+ G SELADR
+SELADR D OWF^RWU(".txt"),WC^RWU("Код|Наименование|Тип") S N=""
+ F  S N=$O(^KLADR("U",N)) Q:N=""  S R=$G(^KLADR(N)),TP=$$ADRTP($P(R,"|",3)) D WC^RWU(CR_N_"|"_$P(R,"|",2)_"|"_TP)
+ D C^RWU
+ Q
+SELADRL ; Для YCHIFR.region
+ N CA,N,R S N=""
+ F  S N=$O(^KLADR("U",N)) Q:N=""  S R=$G(^KLADR(N)) S:$D(CA)=1 CA=CR S:$D(CA)=0 CA="" D WC^RWU(CA_N_"|"_$P(R,"|",2)_" "_$P(R,"|",3))
+ Q
+NAME(ID) ; Name
+ Q:ID="" ""
+ Q $P($G(^KLADR(ID)),"|",2)
+RGN(ID) ; Region name
+ Q $P($G(^KLADR($E(ID,1,2)_"00000000000")),"|",2)
+RGNTP(ID) ; Region name + type
+ N R S R=^KLADR($E(ID,1,2)_"00000000000")
+ Q $P(R,"|",2)_", "_$$ADRTP($P(R,"|",3))
+RGNID(ID) ; Region ID
+ Q $E(ID,1,2)_"00000000000"
+NMTPLT(ID) ; Name+type, lite version
+ S ID=$G(^KLADR(ID)) Q:ID="" ""
+ Q $S($L($P(ID,"|",3)):$P(ID,"|",3)_" ",1:"")_$P(ID,"|",2)
+STREET(CD) ; Вывод таблицы улиц по коду региона
+ N X,ID,R
+ D OWF^RWU(".txt")
+ S X="" F  S X=$O(^KLADR("I","SN",CD,X)) Q:X=""  S ID="" F  S ID=$O(^KLADR("I","SN",CD,X,ID)) Q:ID=""  D
+ .S R=$G(^KLADRS(ID)) Q:R=""
+ .D WC^RWU(CR_ID_"|"_$P(R,"|",1)_" "_$P(R,"|",2))
+ D C^RWU
+ Q
+MKIDX ; Create indexes
+ N I,ID,R,LST
+ K ^KLADR("I")
+ F ID=1000000000000:100000000000:9900000000000 S ^KLADR("I","B",ID)=5 ; mid rating
+ S ID="" F  S ID=$O(^KLADR("U",ID)) Q:ID=""  S LST($E(ID,1,2))=""
+ S I="" F  S I=$O(LST(I)) Q:I=""  D
+ .S ID=I_"00000000000",ID=$O(^KLADR(ID),-1) F  S ID=$O(^KLADR(ID)) Q:ID=""!($E(ID,1,2)'=I)  D
+ ..S ^KLADR("I","N",$$LU^TXTU($E($P(^KLADR(ID),"|",2),1,3)),ID)=""
+ Q
+MKIDXA ; Create indexes for all places
+ N I,ID,R
+ K ^KLADR("I")
+ F ID=1000000000000:100000000000:9900000000000 S ^KLADR("I","B",ID)=5
+ S ID="" F  S ID=$O(^KLADR(ID)) Q:ID=""!(ID'?1.N)  D
+ .S ^KLADR("I","N",$$LU^TXTU($E($P(^KLADR(ID),"|",2),1,3)),ID)=""
+ Q
+saddRGN ; Добавить все регионы в список действующих
+ N ID
+ K ^KLADR("U")
+ S ID="" F  S ID=$O(^KLADR(ID)) Q:ID=""!(ID'?1.N)  D
+ .I $E(ID,3,13)="00000000000" S ^KLADR("U",ID)="",$P(^KLADR(ID),"|",1)=1
+ .E  S:$P(^KLADR(ID),"|",1) $P(^KLADR(ID),"|",1)=0 ; not sel
+ S ^KLADR("U")=$H
+ D REGL^IEXCH("^KLADR","U")
+ Q
+FPLACE(STR,MOD) ; Поиск населенного пункта
+ ; MOD=1 - в сокращенном виде (список)
+ N ST,X,ID,R,S,K,RT,LST,HM
+ S STR=$$WD^TXTU(STR),ST=$$LU^TXTU(STR),MOD=+$G(MOD),X=$E(ST,1,3)
+ Q:X=""  
+ S HM=$G(^KLADR("I","B"))
+ D OWF^RWU(".txt")
+ D:'MOD WC^RWU("|Наименование|Тип|Регион")
+ S ID="" F  S ID=$O(^KLADR("I","N",X,ID)) Q:ID=""  D
+ .Q:$E(ID,12,13)'="00"  ; не действующие
+ .S R=^KLADR(ID),S=$P(R,"|",2)
+ .Q:$$LU^TXTU(S)'[ST
+ .S RT=$G(^KLADR("I","B",$E(ID,1,2)_"00000000000")) ; rating
+ .I HM,$E(ID,1,2)=HM S RT=0
+ .S:RT="" RT="z"
+ .S LST(RT_"|"_ID)=S_$S(MOD:", ",1:"|")_$$ADRTP($P(R,"|",3))
+ S R="" F  S R=$O(LST(R)) Q:R=""  D
+ .S ID=$P(R,"|",2),K=$$RGNTP(ID)
+ .D WC^RWU(CR_ID_"@"_$$RGNID(ID)_"|"_LST(R)_$S(MOD:"",1:"|"_K))
+ D C^RWU
+ Q
+STRLST(RGN,STR) 
+ N ST,X,ID,R,S
+ S STR=$$WD^TXTU(STR),ST=$$LU^TXTU(STR),X=$E(ST,1,3) Q:X=""  
+ D OWF^RWU(".txt"),WC^RWU("|Наименование|Тип|Регион")
+ S ID="" F  S ID=$O(^KLADR("I","SN",RGN,X,ID)) Q:ID=""  D
+ .S R=^KLADRS(ID),S=$P(R,"|",1)
+ .Q:$$LU^TXTU(S)'[ST 
+ .D WC^RWU(CR_ID_"|"_S)
+ D C^RWU
+ Q
+STRLLT(RGN,PLC,STR) ; Упрощенный список улиц
+ N ST,X,ID,R,S,SN,I,A,N
+ S A="",STR=$$WD^TXTU(STR),ST=$$LU^TXTU(STR),X=$E(ST,1,3)
+ I RGN="" S RGN=$G(^KLADR("I","B")) S:RGN'="" RGN=RGN_"00000000000"
+ Q:X=""  Q:RGN="" 
+ S R=X
+ I $L(X)<3,'$D(^KLADR("I","SN",RGN,X)) S X=$O(^(X)) S:$E(X,1,$L(R))'=R X=""
+ Q:X="" 
+ S ID="",I=0 F  S ID=$O(^KLADR("I","SN",RGN,X,ID)) Q:ID=""  D  Q:I>16
+ .S R=^KLADRS(ID),S=$P(R,"|",1),SN=$P(R,"|",2),N=$P(R,"|",6)
+ .S:SN'="" S=S_" "_SN
+ .I N'="",$$LU^TXTU(N)'[ST Q 
+ .I N="",$$LU^TXTU(S)'[ST Q
+ .S A=$S(A="":"",1:A_CR)_S,I=I+1
+ D MSG^RWU(A)
+ Q
+REIDXS ; Реиндексация улиц
+ K ^KLADR("I","SN")
+ N I,R,RG,DEF,NII
+ S DEF=$G(^KLADR("I","B"))
+ S:DEF'="" DEF=DEF_"00000000000"
+ S I="" F  S I=$O(^KLADRS(I)) Q:I=""  D  
+ .S R=^(I),RG=$P(R,"|",5),NII=$P(R,"|",6),R1=R
+ .S:NII="" NII=$P(R,"|",1)
+ .S R=$E(NII,1,3),RG=$E(RG,1,11)_"00"
+ .S:RG="" RG=DEF
+ .Q:RG=""  Q:R="" 
+ .S ^KLADR("I","SN",RG,$$LU^TXTU(R),I)=""
+ Q
+FNMS(STR,NUM) ; Поиск среди общих наименований улиц
+ N N,C,I,L
+ S STR=$$UL^TXTU($$WD^TXTU(STR)),C="",NUM=+$G(NUM)
+ S:'NUM NUM=50
+ D OWF^RWU(".txt")
+ I $D(^ISLIB("streets",STR)) D WC^RWU(STR) S C=CR
+ S N=STR,L=$L(STR)
+ F  S N=$O(^ISLIB("streets",N)) Q:N=""  Q:$E(N,1,L)'=STR  D
+ .D WC^RWU(C_N) S C=CR
+ D C^RWU
+ Q
+SETHOME(ID) ; Установить домашний регион
+ N L,I
+ F I=$L(ID):-1:3 Q:$E(ID,I)'=0  S $E(ID,I)=""
+ S ^KLADR("I","B")=ID
+ D GLZ^IEXCH("^KLADR","I","B")
+ Q
+IsHOME(ID) ; Принадлежит к домашнему региону
+ Q:ID="" 0
+ N R
+ S R=$G(^KLADR("I","B")) Q:R="" 0
+ Q $E(ID,1,$L(R))=R
+GETHR() ; Получить базовый домашний регион (область)
+ N R
+ S R=$G(^KLADR("I","B")) Q:R="" "7700000000000"
+ Q:$E(R)="A" $E(R,1,4)_"000000000"
+ Q $E(R,1,2)_"00000000000"
+ADD(CODE,NM,TYPE,RT) ; Добавить новую запись
+ ; CODE - код.С A - пользовательск.,AXXX - XXX код страны ISO
+ ; RT - рейтинг
+ S CODE=$E("A000000000000",1,13-$L(CODE))_CODE
+ S ^KLADR(CODE)="1|"_NM_"|"_TYPE
+ S:'$D(^KLADR("SCNI",TYPE)) ^(TYPE)=TYPE
+ Q
+SET(CODE,NM,VAL) ; Присвоить пользовательское поле
+ Q:CODE=""  Q:NM=""
+ I VAL="" K ^KLADR(CODE,NM) D KGL^IEXCH("^KLADR",CODE,NM) Q
+ S ^KLADR(CODE,NM)=VAL
+ D GL^IEXCH("^KLADR",CODE,NM)
+ Q
+GET(CODE,NM) 
+ Q:CODE="" "" Q:NM="" ""
+ Q $G(^KLADR(CODE,NM))
+INITDB 
+ Q:$D(^KLADR("SCNI")) 
+ d redb
+ Q
+LOADSTR(FN) ; Загрузить линейный список улиц
+ N ID,IO
+ S IO=$$ORT^FIL(FN) Q:IO=""
+ U IO F J=1:1  R R Q:$$ST^FIL()=0  D:R'=""
+ .S ID=$O(^KLADRS(""),-1)+1
+ .S ^KLADRS(ID)=$$TRIM^TXTU($$DBLSP^TXTU(R))
+ C IO U 0
+ D REIDXS
+ Q
+redb 
+ N N,I,R
+ K ^KLADR("SCNI") ; индекс видов наименований
+ s N="" F  S N=$O(^KLADR("SCN",N)) Q:N=""  S I="" F  S I=$O(^KLADR("SCN",N,I)) Q:I=""  S R=^(I),^KLADR("SCNI",I)=R
+ D MKIDX
+ 
+ Q
+ioksm(FN) ; Импорт ОКСМ
+ ; "SHORTNAME";"global_id";"FULLNAME";"CODE";"ALFA2";"ALFA3";
+ N IO,LN,J,F,R
+ S IO=$$ORT^FIL(FN) Q:IO=""
+ 
+ S F=0
+ F J=1:1  U IO R R Q:$$ST^FIL()=0  D:R'=""  Q:F
+ .D DECL^ICSV(R,";")
+ .I J=1,$G(LN(1))'="SHORTNAME" S F=1 Q 
+ .I J=1 Q 
+ .S ID=LN(4) Q:ID="" 
+ .S ^KLADR("OKSM",ID)=LN(1)_"|"_LN(6)_"|"_LN(5)_"|"_LN(3)_"|"_LN(2)
+ 
+ D C^FIL(IO)
+ Q
+COUNTRY(X,SH) 
+ ; SH - short name
+ Q:X="" ""
+ Q $P($G(^KLADR("OKSM",X)),"|",$S($G(SH):2,1:1))

@@ -1,0 +1,287 @@
+NFTASKU ; TaskFlow - настройки [ 04/07/2016  2:21 AM ]
+CHIFR 
+ N ID,C
+ D W^RWU("<trightu "_ITE_" date="""_(+$H)_""">")
+ S ID="",C=""
+ F  S ID=$O(^MFL("flgd",ID)) Q:ID=""  D WC^RWU(C_ID_"|"_^(ID)) S C=CR
+ D W^RWU("</trightu><trightg "_ITE_" date="""_(+$H)_""">")
+ S ID="",C=""
+ F  S ID=$O(^MFL("flgg",ID)) Q:ID=""  D WC^RWU(C_ID_"|"_^(ID)) S C=CR
+ D W^RWU("</trightg>")
+ Q
+LST(NM) ; Вывод простых справочников
+ Q:NM=""  I '$D(^MFL(NM)) Q 
+ N ID,C S ID="",C=""
+ D OWF^RWU(".txt")
+ F  S ID=$O(^MFL(NM,ID)) Q:ID=""  D WC^RWU(C_ID_"|"_^(ID)) S C=CR
+ D C^RWU
+ Q
+ADDSS(TXT) ; состояния
+ D MFLADD^IFTASK("shs",$$WD^TXTU(TXT),"")
+ D LSTSS
+ Q
+DELSS(TXT) 
+ D MFLDEL^IFTASK("shs",$$WD^TXTU(TXT))
+ D LSTSS
+ Q
+ADDSD(TXT) ; действия
+ D MFLADD^IFTASK("shd",$$WD^TXTU(TXT),"")
+ D LSTSD
+ Q
+DELSD(TXT) 
+ D MFLDEL^IFTASK("shd",$$WD^TXTU(TXT))
+ D LSTSD
+ Q
+LSTSS ; Вывод состояний
+ N ID,C S C=""
+ D OWF^RWU(".txt")
+ S ID="" F  S ID=$O(^MFL("shs",ID)) Q:ID=""  D WC^RWU(C_ID) S C=CR
+ D C^RWU
+ Q
+LSTSD ; Вывод действий
+ N ID,C S C=""
+ D OWF^RWU(".txt")
+ S ID="" F  S ID=$O(^MFL("shd",ID)) Q:ID=""  D WC^RWU(C_ID) S C=CR
+ D C^RWU
+ Q
+GFLD ; Получить разделы
+ N ID,X,Y,L
+ S X="" F Y=1:1:32 S X=X_$C(9)
+ S ID="" F  S ID=$O(^MFL("fld",ID)) Q:ID=""  S Y=^(ID),L($P(Y,"|",3)_"|"_$E(X,1,$P(Y,"|",2)))=ID
+ D OWF^RWU(".txt")
+ S (Y,X)=""
+ F  S Y=$O(L(Y)) Q:Y=""  D WC^RWU(X_$P(Y,"|",2)_$P(^MFL("fld",L(Y)),"|",1)_"|"_L(Y)) S X=CR
+ D C^RWU
+ Q
+SFLD ; Сохранить разделы
+ N I,A,%IFN,NN,X
+ D ORH^RWU
+ K ^MFL("fld")
+ F I=1:1:99999 S A=$$WD^TXTU($$R^RWU()) Q:%IFN["Z"  D
+ .S NN=$P(A,"|",2) S:NN="" NN=$O(^MFL("fld",""),-1)+1 ; todo - LPU
+ .F X=1:1:32 Q:$E(A,X)'=$C(9) 
+ .S ^MFL("fld",NN)=$$TRIM^TXTU($P(A,"|",1))_"|"_(X-1)_"|"_I
+ D CR^RWU
+ D W^ISSG("^MFL(""fld"")"),REGL^IEXCH("^MFL","fld")
+ Q
+UTAB(STR,LPU) ; User List
+ K ^BUF($J,"u")
+ N ID,R,P,LP,TN,TNE,DT,FF
+ S STR=$$LU^TXTU($$WD^TXTU(STR)),DT=+$H,FF=+$G(^cfg("sl-kadry"))
+ S:'FF FF=$$LCL^NUSER("kadry","clpu")
+ S:LPU=999 LPU=""
+ S TN=$P(STR,"-",1),TNE=$P(STR,"-",2,99)
+ I +TN=TN S TNE=$S(STR["-"&(TNE?1.N):TNE,1:TN),TN=$O(^KDR(TN),-1),STR=""
+ E  S TN="",TNE=9998
+ F  S TN=$O(^KDR(TN)) Q:TN=""!(TN>TNE)  D
+ .I FF,LPU'="" Q:$$GET^IKADRY(TN,"lpu",DT)'=LPU 
+ .S R=$$FIOSH^IKADRY(TN)
+ .I STR'="",R'="" Q:$$LU^TXTU(R)'[STR 
+ .S ^BUF($J,"u",R_"|"_TN)=""
+ D OWF^RWU(".txt")
+ ; для сортировки по фамилии
+ S R="" F  S R=$O(^BUF($J,"u",R)) Q:R=""  S TN=$P(R,"|",2) D WC^RWU(CR_TN_"|"_$P(R,"|",1)_"|"_$$GOTD^YISPRAV($$GET^IKADRY(TN,"otd",DT)))
+ D C^RWU
+ K ^BUF($J,"u")
+ Q
+ULOAD(ID) ; User Load
+ N DT,R,I,K S ID=+ID,DT=+$H
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<stask>")
+ D WTAGD^RWU("uid",ID)
+ D WTAGDC^RWU("uf",$$GET^IKADRY(ID,"f",DT))
+ D WTAGDC^RWU("ui",$$GET^IKADRY(ID,"i",DT))
+ D WTAGDC^RWU("uo",$$GET^IKADRY(ID,"o",DT))
+ D WTAGDC^RWU("uotd",$$GET^IKADRY(ID,"otd",DT))
+ D WTAGDC^RWU("udoljn",$$GET^IKADRY(ID,"doljn",DT))
+ D WTAGDC^RWU("ulpu",$$GET^IKADRY(ID,"lpu",DT))
+ S R=$$GET^IKADRY(ID,"grp",DT)
+ D WTAGDCU^RWU("ugrp",$$GRPNM^IFTASK(R),R)
+ D WTAGDC^RWU("utel",$$GET^IKADRY(ID,"tel",DT))
+ D WTAGDC^RWU("utel_int",$$GET^IKADRY(ID,"tel_int",DT))
+ D WTAGDC^RWU("umphone",$$GET^IKADRY(ID,"mphone",DT))
+ D WTAGDC^RWU("uemail",$$GET^IKADRY(ID,"email",DT))
+ D WC^RWU("<utrights state="""_$$GET^IKADRY(ID,"trights",DT)_"""/>")
+ S R=$$GET^IKADRY(ID,"cname",DT)
+ D W^RWU("<ucname>")
+ F I=1:1:99 S K=$P(R,"|",I) Q:K=""  D WC^RWU($S(I>1:CR,1:"")_K_"|"_$$FIOSH^IKADRY(K))
+ D W^RWU("</ucname>")
+ D W^RWU("</stask></nb_console>"),C^RWU
+ Q
+UDEL(TN) ; User check and delete
+ ; todo - check TASK data prev.
+ G NDELI^YIKADRY
+USAVE ; User save
+ N %J,ID,PL,P,A,G K XML,XMLR
+ D ORH^RWU
+ F %J=1:1 S A=$$RA^RWU Q:%IFN["Z"  D XML^YIXMLRR
+ D CR^RWU
+ S ID=$G(XML("nb_console","stask","uid"))
+ S G=$G(XML("nb_console","stask","ugrp"))
+ I G'="" I ID'="" I $$GET^IKADRY(ID,"grp",+$H)'=G K ^TGRP(G,"u",ID) D UGL^IEXCH("-^TGRP("_ID_",""u"","_ID_")")
+ S P=$G(XML("nb_console","stask","ucname")),A=""
+ F %J=1:1:999 S PL=$P(P,CR,%J) Q:PL=""  S A=A_$S(A="":"",1:"|")_$P(PL,"|",1)
+ S %J="nb_console"
+ K XML(%J,"stask","ucname")
+ S XML(%J,"kadry","cname")=A,XML(%J,"kadry","tsk")=1
+ S PL="" F  S PL=$O(XML(%J,"stask",PL)) Q:PL=""  D
+ .S P=$E(PL,2,99) M XML(%J,"kadry",P)=XML(%J,"stask",PL)
+ K XML(%J,"stask")
+ D WINT^YIKADRY
+ I G'="",'$D(^TGRP(G,"u",ID)) S ^(ID)="" D UGL^IEXCH("^TGRP("_ID)
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<stask>")
+ D WTAGD^RWU("uid",ID)
+ D W^RWU("</stask></nb_console>"),C^RWU
+ Q
+GRPLST ; Линейный список групп
+ N TXT G GRPTAB1
+GRPTAB(TXT) ; Линейный список групп для таблицы
+GRPTAB1 I $D(TXT) S TXT=$$LU^TXTU($$WD^TXTU(TXT))
+ N I,C,L
+ S I="" F  S I=$O(^TGRP(I)) Q:I=""  D
+ .S C=$P(^(I),"|",1)
+ .I $D(TXT) I TXT'="" Q:$$LU^TXTU(C)'[TXT
+ .S L(C_"|"_I)=""
+ D OWF^RWU(".txt")
+ S C=$S($D(TXT):CR,1:"")
+ S I="" F  S I=$O(L(I)) Q:I=""  D WC^RWU(C_$P(I,"|",2)_"|"_$P(I,"|",1)) S C=CR
+ D C^RWU
+ Q
+GLOAD(ID) ; Load user group
+ I ID="" Q 
+ N R,C
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<stask>")
+ D WTAGD^RWU("gid",ID)
+ S R=$G(^TGRP(ID))
+ D WTAGDC^RWU("gname",$P(R,"|",1))
+ D WTAGDC^RWU("gdescr",$G(^TGRP(ID,"d")))
+ S R=$P(R,"|",2)
+ D WTAGDCU^RWU("gfolder",$$FLDNM^IFTASK(R),R)
+ D WC^RWU("<grights state="""_$G(^TGRP(ID,"r"))_"""/><gusers>")
+ S R="",C="" F  S R=$O(^TGRP(ID,"u",R)) Q:R=""  D WC^RWU(C_R_"|"_$$FIOSH^IKADRY(R)) S C=CR
+ D W^RWU("</gusers></stask></nb_console>"),C^RWU
+ Q
+GSAVE ; Save user group
+ N %J,ID,NM,FL,A K XML,XMLR
+ D ORH^RWU
+ F %J=1:1 S A=$$WD^TXTU($$RA^RWU) Q:%IFN["Z"  D XML^YIXMLRR
+ D CR^RWU
+ S ID=$G(XML("nb_console","stask","gid"))
+ S NM=$G(XML("nb_console","stask","gname"))
+ S FL=$G(XML("nb_console","stask","gfolder"))
+ I ID="" L +^TGRP S ID=$O(^TGRP(""),-1)+1,^TGRP(ID)=NM_"|"_FL L -^TGRP
+ E  S ^TGRP(ID)=NM_"|"_FL
+ S ^TGRP(ID,"r")=$G(XML("nb_console","stask","grights"))
+ S ^TGRP(ID,"d")=$G(XML("nb_console","stask","gdescr"))
+ S NM=$G(XML("nb_console","stask","gusers")),FL=""
+ K ^TGRP(ID,"u")
+ F %J=1:1:999 S A=$P(NM,CR,%J) Q:A=""  D
+ .S FL=$P(A,"|",1),^TGRP(ID,"u",FL)=""
+ .D:$$GET^IKADRY(FL,"grp",+$H)'=ID SET^IKADRY(FL,"grp",+$H,ID,1)
+ D W^ISSG("^TGRP("_ID_")"),REGL^IEXCH("^TGRP",ID)
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<stask>")
+ D WTAGD^RWU("gid",ID)
+ D W^RWU("</stask></nb_console>"),C^RWU
+ Q
+GDEL(ID,TXT) ; Delete user group
+ I ID="" D MSG^RWU("Ошибка") Q 
+ I $D(^TGRP(ID,"u"))=11 D MSG^RWU("В данной группе состоят пользователи.") Q 
+ K ^TGRP(ID)
+ D K^ISSG("^TGRP("_ID_")"),KGL^IEXCH("^TGRP",ID)
+ Q
+TTASK ; Table for task
+ D OWF^RWU(".txt")
+ N ID S ID=""
+ F  S ID=$O(^TSTS(ID)) Q:ID=""  D WC^RWU(CR_ID_"|"_$P(^(ID),"|",1))
+ D C^RWU
+ Q
+LTASK(ID) ; Load task pattern
+ Q:ID="" 
+ N R,I,A,S,SS
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<stask>")
+ S R=$G(^TSTS(ID))
+ D WTAGD^RWU("tid",ID)
+ D WTAGDC^RWU("tname",$P(R,"|",1))
+ D WTAGDC^RWU("tuid",$P(R,"|",3))
+ D WTAGC^RWU("tdesc",$G(^TSTS(ID,"d")))
+ S R=$P(R,"|",2)
+ D WC^RWU("<tfolder title="""_$$TKAV^TXTU($$FLDNM^IFTASK(R))_""" userdata="""_R_"""/>")
+ S R=$E($G(^TSTS(ID,"e")),2,99)
+ D WC^RWU("<tgrp title="""_$$TKAV^TXTU($$GRPNM^IFTASK(R))_""" userdata="""_R_"""/>")
+ D W^RWU("<tsost>")
+ S I="" F  S I=$O(^TSTS(ID,"s",I)) Q:I=""  D
+ .S R=$G(^(I)),A=I_"@"_$P(R,"|",2)_"@"_$P(R,"|",4)_"@"_$P(R,"|",5),SS=0
+ .I $D(^(I,"s")) S SS=1,A=A_"@"_(+^("s")),S="" F  S S=$O(^TSTS(ID,"s",I,"s",S)) Q:S=""  S A=A_","_S
+ .S S=$P(R,"|",2),S=$S(S="":S,1:$P($G(^TSTS(ID,"s",S)),"|",1))
+ .S A=A_"|"_$P(R,"|",1)_"|"_S_"|"_$P(R,"|",3)_"|"_$G(^MFL("st",$P(R,"|",4)))_"|"_$S(SS:"+",1:"")_"|"_$S(+$P(R,"|",5):"+",1:"")
+ .D WC^RWU(CR_A_"|"_$S(+$P(R,"|",7):"+",1:""))
+ D W^RWU("</tsost></stask></nb_console>"),C^RWU
+ Q
+STASK ; Save task pattern
+ N %J,R,A,I,F,X,ID
+ K ^BUF($J,"sts")
+ D ORH^RWU,OEV^XMLR("TGSS^NFTASKU","TGSD^NFTASKU","")
+ F %J=1:1 S A=$$RA^RWU Q:%IFN["Z"  D REV^XMLR(A)
+ D CEV^XMLR,CR^RWU
+ D WTASK
+ K ^BUF($J,"sts")
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<stask>")
+ D WTAGD^RWU("tid",ID)
+ D W^RWU("<ttable>")
+ S ID=""
+ F  S ID=$O(^TSTS(ID)) Q:ID=""  D WC^RWU(CR_ID_"|"_$P(^(ID),"|",1))
+ D W^RWU("</ttable></stask></nb_console>"),C^RWU
+ Q
+WTASK 
+ S ID=$G(^BUF($J,"sts","tid"))
+ I ID="" L +^TSTS S ID=$O(^TSTS(""),-1)+1,^(ID)="" L -^TSTS
+ S A=$G(^BUF($J,"sts","tname"))
+ S R=$G(^("tfolder")) S:R'="" $P(A,"|",2)=R
+ S R=$G(^("tuid")) S:R'="" $P(A,"|",3)=R
+ I $G(^TSTS(ID))'=A D WD^ISSG("^TSTS("_ID_")") S ^TSTS(ID)=A
+ S A=$G(^BUF($J,"sts","tdesc"))
+ I $G(^TSTS(ID,"d"))'=A D WD^ISSG("^TSTS("_ID_",""d"")") S ^TSTS(ID,"d")=A
+ S A="" S:$G(^BUF($J,"sts","tgrp"))'="" A="G|"_^("tgrp")
+ I $G(^TSTS(ID,"e"))'=A D WD^ISSG("^TSTS("_ID_",""e"")") S ^TSTS(ID,"e")=A
+ ; Line format: ID@prevID@status@IsFile@subscr.@sub tasks|...
+ ; .. name|prev name|action name|status|IsSubscr|IsFile|IsSubTask
+ F %J=1:1:999 Q:'$D(^BUF($J,"sts","tsost",%J))  D
+ .S A=^(%J),F=$P(A,"|",1),I=$P(F,"@",1) Q:I="" 
+ .S R=$P(A,"|",2)_"|"_$P(F,"@",2)_"|"_$P(A,"|",4)_"|"_$P(F,"@",3)_"|"
+ .S R=R_$P(F,"@",4)_"|"_$S($P(F,"@",5)="":0,1:1)
+ .S ^TSTS(ID,"s",I)=R_"|"_$S($P(F,"@",6)="":0,1:1)
+ .S X=$P(F,"@",5) D:X'=""  ; subscribe
+ ..K ^TSTS(ID,"s",I,"s") S ^TSTS(ID,"s",I,"s")=$P(X,",",1)
+ ..F A=2:1:99 S R=$P(X,",",A) Q:R=""  S ^TSTS(ID,"s",I,"s",R)=""
+ .S X=$P(F,"@",6) Q:X="" 
+ .K ^TSTS(ID,"s",I,"t")
+ .F A=2:1:99 S R=$P(X,",",A) Q:R=""  S ^TSTS(ID,"s",I,"t",R)=""
+ D W^ISSG("^TSTS("_ID_")"),REGL^IEXCH("^TSTS",ID)
+ Q
+TGSS 
+ S A=%XM(2)
+ Q:A="xml"!(A="nb_console")!(A="stask")
+ S ^BUF($J,"sts",A)=""
+ Q
+TGSD 
+ S A=%XM(2)
+ Q:A="xml"!(A="nb_console")!(A="stask")
+ I A'="tsost" S ^(A)=^BUF($J,"sts",A)_%XD  Q 
+ S I=+$O(^BUF($J,"sts",A,""),-1)
+ F  S F=%XD[CR,N=$P(%XD,CR,1),%XD=$P(%XD,CR,2,9999) S:$L(N) ^(I)=$G(^BUF($J,"sts",A,I))_N,I=I+F Q:'$L(%XD) 
+ Q
+DTASK(ID) ; Delete task pattern
+ ; todo - check tasks
+ I ID="" Q 
+ K ^TSTS(ID)
+ D K^ISSG("^TSTS("_ID_")"),KGL^IEXCH("^TSTS",ID)
+ Q
+DELTSO(ID,SID) ; Удалить состояние SID из задачи ID
+ Q
+NEWTSO(ID) ; Новый код состояния для задачи ID
+ Q
+DECSBS(X) ; Расшифровать строку подписей
+ Q:X=""  N I,K,Z
+ D OWF^RWU(".txt")
+ F I=2:1:99 S K=$P(X,",",I) Q:K=""  S Z=$E(K,1) D WC^RWU($S(I>2:CR,1:"")_K_"|"_$S(Z="G":$P($G(^TGRP($E(K,2,99))),"|",1),Z="D":$$FIOSH^IKADRY($E(K,2,99)),1:$$GDOLJN^YISPRAV($E(K,2,99)))_"|"_$G(^MFL("sbstp",Z)))
+ D C^RWU
+ Q

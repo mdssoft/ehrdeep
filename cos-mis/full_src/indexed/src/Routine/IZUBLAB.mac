@@ -1,0 +1,435 @@
+IZUBLAB ; Зуботехническая лаборатория [ 04/01/2024  2:48 PM ]
+VRLST ; Список сотрудников зуботех.лаборатории
+ N N,SPL,LP,LST
+ M SPL=^cfg("stom-lab-spec")
+ S LP=+$$^I("ilpu")
+ ; todo  - зубопротезн. отделение 
+ ; С сортировкой
+ S N="" F  S N=$O(^KDR(N)) Q:N=""  I $D(SPL(+$$SPEC^IKADRY(N))),$$USEInLPU^IKADRY(N,LP) S LST($$FIOSH^IKADRY(N)_"|"_N)=""
+ F  S N=$O(LST(N)) Q:N=""  D WC^RWU(CR_$P(N,"|",2)_"|"_$P(N,"|",1))
+ Q
+SET(ID,PL,VAL) ; Установить поле
+ S ^STZN(ID,PL)=VAL
+ D GL^IEXCH("^STZN",ID,PL)
+ Q
+SBS(ID,UID,DT) ; Подписать
+ ; UID - отдельная услуга (индекс)
+ ; DT - дата подписи (может быть не указана)
+ N NIB,VR,OT,N,U,P,S,C,R,V,I,LST,LPU
+ S UID=$G(UID),DT=+$G(DT)
+ S R=^STZN(ID)
+ S NIB=$P(R,"|",1),LPU=$P(R,"|",4),VR=$P(R,"|",6)
+ S:'DT DT=+$P(R,"|",8)
+ S:'DT DT=+$P(R,"|",5) S:'DT DT=+$H
+ S P=$$GET^IINSC($$GET^IPAC(NIB,"stc",DT),"price",DT)
+ S P=$$CORCP^IPRICET(P)
+ S N="" F  S N=$O(^STZN(ID,"u",N)) Q:N=""  D:UID=""!(UID=$P(N,"|",1)) 
+ .S R=^(N) Q:$P(R,"|",7)'=""  ; есть услуги
+ .S U=$P(N,"|",2),S=$P(R,"|",2),C=$P(R,"|",3),V=$P(R,"|",5)
+ .S:V="" V=VR S:C="" C=1 Q:V="" 
+ .S OT=$$OTD^IKADRY(V)
+ .S:C'=1 U=U_"*"_C
+ .S I=$$ADD^IUSL(V,DT,OT,NIB,U,"","","",P,"","")
+ .S:LPU'="" C=$$SETPL^IUSL(V,DT,OT,I,"cu",LPU)
+ .S C=$$SETPL^IUSL(V,DT,OT,I,"zi",ID)
+ .S C=$$SETSTAT^IUSL(V,DT,OT,I,"w")
+ .S LST(V)=OT
+ .S $P(R,"|",7)=OT_"@"_V_"@"_DT_"@"_I,^STZN(ID,"u",N)=R
+ ; подпись
+ S V="",R=$$DT^DTUTL(DT)
+ F  S V=$O(LST(V)) Q:V=""  D SBSYS^YNED(NIB,V,LST(V),R,1)
+ D GL^IEXCH("^STZN",ID,"u")
+ Q
+UNSBS(ID,UID) ; Убрать подпись
+ N N,R,KEY,NIB,%B,%L,F
+ S F="",NIB=$P(^STZN(ID),"|",1)
+ S N="" F  S N=$O(^STZN(ID,"u",N)) Q:N=""  D:UID=""!(UID=$P(N,"|",1))
+ .S R=^(N)
+ .S KEY=$P(R,"|",7) Q:KEY="" 
+ .S KEY=$P(KEY,"@",2)_"@"_$P(KEY,"@",3)_"@"_$P(KEY,"@",1)_"@"_$P(KEY,"@",4)
+ .D UDEL^NPACADM(NIB,KEY,1,1)
+ .S F=$$WD^TXTU($G(%L))
+ .Q:F'=""
+ .S $P(^STZN(ID,"u",N),"|",7)=""
+ .D GL^IEXCH("^STZN",ID,"u",N)
+ Q F
+SETST(ID,UID) ; Установить статус услуги
+ N N
+ S N="" F  S N=$O(^STZN(ID,"u",N)) Q:N=""  D:UID=""!(UID=$P(N,"|",1))
+ .S $P(^(N),"|",1)=2
+ .D GL^IEXCH("^STZN",ID,"u",N)
+ Q
+SETUOK(ID,UID,VR) ; Услуга(работа) одобрена
+ N N
+ S N="" F  S N=$O(^STZN(ID,"u",N)) Q:N=""  D:UID=""!(UID=$P(N,"|",1))
+ .S $P(^(N),"|",9)=$S(VR="":"",1:VR_"@"_$H)
+ .D GL^IEXCH("^STZN",ID,"u",N)
+ Q
+IsSBS(ID,UID,KEY) ; Услуга подписана
+ ; UID - ID услуги
+ ; KEY - ключ услуги (альтернативно)
+ S KEY=$G(KEY)
+ I KEY="" N N S N="" F  S N=$O(^STZN(ID,"u",N)) Q:N=""  I $P(N,"|",1)=UID S KEY=$P(^(N),"|",7) Q 
+ Q:KEY="" 0
+ S KEY=$$GETSTAT^IUSL($P(KEY,"@",2),$P(KEY,"@",3),$P(KEY,"@",1),$P(KEY,"@",4))
+ Q:KEY="" 0  Q:"wd"[KEY 0
+ Q 1
+CNGUDT(ID,UID,DT) ; Изменить дату подписи услуг
+ ; UID - идентификатор услуги
+ N N,KEY,NIB,K
+ S DT=$$DT^DTUTL(DT)
+ S NIB=$P(^STZN(ID),"|",1)
+ S N="" F  S N=$O(^STZN(ID,"u",N)) Q:N=""  D:UID=""!(UID=$P(N,"|",1))
+ .S KEY=$P(^(N),"|",7)
+ .Q:KEY="" 
+ .S KEY=$P(KEY,"@",2)_"@"_$P(KEY,"@",3)_"@"_$P(KEY,"@",1)_"@"_$P(KEY,"@",4)
+ .S K=$$USDT^NPACADM(NIB,KEY,DT,2)
+ .Q:$$IsMSG^RWU()
+ .S K=$P(K,"@",3)_"@"_$P(K,"@",1)_"@"_$P(K,"@",2)_"@"_$P(K,"@",4)
+ .S $P(^STZN(ID,"u",N),"|",7)=K
+ .D GL^IEXCH("^STZN",ID,"u",N)
+ Q
+IsMIN(ID) ; Есть минусовые услуги (кол-во)
+ N I,F
+ S F=0,I=""
+ F  S I=$O(^STZN(ID,"u",I)) Q:I=""  I $P(^(I),"|",3)<0 S F=1 Q
+ Q F
+PRC(NI,ID,DT) ; Получить прейскурант по пациенту
+ N P
+ S ID=$G(ID) S:$G(DT)="" DT=+$H
+ S P=$$GET^IPAC(NI,"stc",DT)
+ S:P="" P=$G(^cfg("def-stc"))
+ S P=+$$GET^IINSC(P,"price",DT)
+ S P=$$CORCP^IPRICET(P)
+ Q P
+UPRC(LN,PRC) ; Получить прейскурант по строке (услуги)
+ ; LN - строка данных по услуге
+ ; PRC - прейскурант по умолчанию
+ N P
+ S P=$P(LN,"|",7)
+ S P=$$GETPRC^IUSL($P(P,"@",2),$P(P,"@",3),$P(P,"@",1),$P(P,"@",4))
+ S:P="" P=PRC
+ Q P
+SUM(KEY,LN,DT,PRC,TPS)      ; Получить сумму по строке услуги
+ ; LN - строка
+ ; PRC - прайс по умолчанию
+ ; TPS - сумма/внешняя сумма
+ N K,C
+ S K=$P(LN,"|",7),C=$P(LN,"|",3)
+ S:C="" C=1
+ I K="" Q ($$PRICEH^IPRICE($P(KEY,"|",2),PRC,DT)*C)
+ S TPS=$G(TPS)
+ Q:TPS $P($$GETPL^IUSL($P(K,"@",2),$P(K,"@",3),$P(K,"@",1),$P(K,"@",4),"c"),"|",1)
+ Q $$GETSUM^IUSL($P(K,"@",2),$P(K,"@",3),$P(K,"@",1),$P(K,"@",4))
+SUMZ(ID,VR,DT,OT,IDU) ; Получить сумму в наряде по ключу услуги
+ N R,I,K
+ S K=OT_"@"_VR_"@"_DT_"@"_IDU
+ S I="" F  S I=$O(^STZN(ID,"u",I)) Q:I=""  S R=^(I) I $P(R,"|",7)=K Q 
+ Q:I="" 0
+ Q $P(R,"|",2)
+DTC(ID) ; Дата создания наряда
+ Q:ID="" ""
+ Q $P($G(^STZN(ID)),"|",5)
+DTE(ID) ; Дата завершения
+ Q:ID="" ""
+ Q $P($G(^STZN(ID)),"|",8)
+DS(ID) ; Самая ранняя дата наряда
+ N R,X,DT
+ S R=$G(^STZN(ID)),DT=+$P(R,"|",5)
+ S X=+$P(R,"|",7) S:X&(X<DT) DT=X
+ S X=+$P(R,"|",8) S:X&(X<DT) DT=X
+ Q DT
+NEW(VAL) ; Получить новый номер
+ ; VAL - значение данных
+ N ID,I,GID
+ S GID=$RE($$^I("ilpu"))
+ L +^STZN S I=$P($O(^STZN(""),-1)+1,".",1)
+ F ID=I:1 I '$D(^STZN(ID_"."_GID)) S ID=ID_"."_GID Q 
+ S ^(ID)=VAL
+ L -^STZN
+ Q ID
+GETLN(ID,USL,ZN) ; Получить строку данных по услуге и зубу
+ ; ID - код наряда
+ ; USL - код услуги
+ ; ZN - номер зуба
+ N R,I
+ S (R,I)="" F  S I=$O(^STZN(ID,"u",I)) Q:I=""  I $P(I,"|",2)=USL,$P(I,"|",3)=ZN S R=^(I) Q 
+ Q R
+GETLNZ(ID,KEY) ; Получить номер зуба по услуге
+ ; ID - код наряда
+ ; KEY - ключ услуги
+ Q:ID="" ""
+ N R,I
+ S (R,I)="" F  S I=$O(^STZN(ID,"u",I)) Q:I=""  I $P(^(I),"|",7)=KEY S R=$P(I,"|",3) Q 
+ Q R
+NETIMP ; Сетевой импорт
+ N %SID,SRV,PORT,USR,PAS,R,I,X,LP,LST,LI,LX,H,EID
+ S LP=$$^I("ilpu")
+ S SRV=$G(^cfg("zlab","server")),PORT=$G(^("port"))
+ S USR=$G(^("user")),PAS=$G(^("passwd"))
+ Q:SRV=""
+ ;S H=+$G(^cfg("zlab","exdays")) S:'H H=3
+ ;S H=+$H-H
+ S:PORT="" PORT=8080
+ S %SID=$$OPEN^WWWCLI(SRV,PORT)
+ D SETAUTH^WWWCLI(%SID,1,USR,PAS)
+ D SETCONN^WWWCLI(%SID,0)
+ S R=$$GET^WWWCLI(%SID,"/AUTH/zZLAB/READY_NECST?P1="_LP)
+ I R'=200 D CLOSE^WWWCLI(%SID) S ^ISLOG("IZUBLAB",$H)="READY REZ="_R Q 
+ D OBUF^WWWCLI(%SID)
+ S I=$$BUFCNT^WWWCLI(%SID),LST=""
+ F X=1:1:I S LST=LST_$$RBUF^WWWCLI(%SID)
+ D CBUF^WWWCLI(%SID)
+ D CLOSE^WWWCLI(%SID)
+ U 0
+ Q:LST="" 
+ F LI=1:1:$L(LST,CR) S LX=$P(LST,CR,LI) D:LX'=""
+ .S %SID=$$OPEN^WWWCLI(SRV,PORT)
+ .D SETAUTH^WWWCLI(%SID,1,USR,PAS)
+ .D SETCONN^WWWCLI(%SID,0)
+ .S R=$$GET^WWWCLI(%SID,"/AUTH/zZLAB/EXP_NZUBLAB?P1="_LX)
+ .I R'=200 D CLOSE^WWWCLI(%SID) Q 
+ .D BUF2H^WWWCLI(%SID)
+ .D CLOSE^WWWCLI(%SID)
+ .S EID=$$IMP() Q:EID="" 
+ .S %SID=$$OPEN^WWWCLI(SRV,PORT)
+ .D SETAUTH^WWWCLI(%SID,1,USR,PAS)
+ .D SETCONN^WWWCLI(%SID,0)
+ .S R=$$GET^WWWCLI(%SID,"/AUTH/zZLAB/EXP_NZUBLAB?P1="_LX_"&P2=1&P3="_EID) ; set OK
+ .I R'=200 D CLOSE^WWWCLI(%SID) Q 
+ .D BUF2H^WWWCLI(%SID)
+ .D CLOSE^WWWCLI(%SID)
+ 
+ Q
+IMP() ; Импорт из XML файла
+ N IJ,ID,IDX,NI,DT,LPU,VR,FF,FI,FO,BD,R,I,X,A,Z,U,DOC,FR,LU,CL,CM
+ D ORH^RWU
+ S IJ=$$OS^XMLU("^BUF("_$J_")","exchange","id")
+ D CR^RWU
+ S NI=$$flIMP("pac"),VR=$$flIMP("vr")+500
+ S DT=$$DIH^DTUTL($$flIMP("dt")),LPU=$$flIMP("lpu")
+ S FR=$$flIMP("from")
+ S:FR'="" FR=$$FNDFL^IINSC("ecode",FR,+$H)
+ S DOC=$$flIMP("doc")
+ S FF=$$flIMP("pacfio")
+ ; либо отсутствует, либо не тот пациент
+ D:$S('$$EXIST^IPAC(NI):1,$$UL^TXTU($$FIO^IPAC(NI))'=$$UL^TXTU(FF):1,1:0)
+ .S BD=$$DI^DTUTL($$flIMP("pborn"))
+ .Q:FF="" 
+ .S FI=$P(FF," ",2),FO=$P(FF," ",3),FF=$P(FF," ",1)
+ .S X=$$GETNIB^IPACFND(FF,FI,FO,BD,"",1)
+ .I X'="",X'=-1 Q:X=-1  S NI=X Q 
+ .S NI=$$ADD^IPAC(FF,FI,FO,BD,"",+$G(^cfg("def-stc")),"",NI)
+ .D SET^IPAC(NI,"pol",DT,$$flIMP("psex"))
+ .D SET^IPAC(NI,"stc",DT,$S(FR="":$$flIMP("stc"),1:FR))
+ .D SET^IPAC(NI,"tel1",DT,$$flIMP("ptel"),1)
+ D:'$$EXIST^IKADRY(VR)
+ .D SET^IKADRY(VR,"spec",DT,$$flIMP("vspec"))
+ .D SET^IKADRY(VR,"otd",DT,$$flIMP("votd"))
+ .D SET^IKADRY(VR,"lpu",DT,LPU)
+ D:VR'=""
+ .S FF=$$flIMP("vrfio")
+ .D SET^IKADRY(VR,"f",DT,$P(FF," ",1))
+ .D SET^IKADRY(VR,"i",DT,$P(FF," ",2))
+ .D SET^IKADRY(VR,"o",DT,$P(FF," ",3))
+ 
+ 
+ S ID=$G(^STZNI("dref",DOC))
+ S A=$S(ID="":"",1:^STZN(ID))
+ S $P(A,"|",1)=NI
+ S:$P(A,"|",9)="" $P(A,"|",9)="sys"
+ S $P(A,"|",3)=VR,$P(A,"|",4)=LPU,$P(A,"|",5)=$H
+ S:$$flIMP("pay") $P(A,"|",10)=1
+ 
+ D:ID=""
+ .L +^STZN
+ .S:ID="" ID=$O(^STZN(""),-1)+1
+ .S ^STZN(ID,"dref")=DOC
+ .L -^STZN
+ 
+ S ^STZN(ID)=A,^STZNI("dref",DOC)=ID
+ S R=$$flIMP("comm")
+ S:R'="" ^STZN(ID,"cz")=R
+ S R=$$flIMP("commh")
+ S:R'="" ^STZN(ID,"czh")=R
+ S R=$$flIMP("sfoto")
+ S:R'="" $P(^STZN(ID,"im"),"|",1)=R
+ S R=$$flIMP("el") ; ext code
+ S:R'="" ^STZN(ID,"el")=R
+ 
+ ; Услуги грузим только если не было
+ S R=$$flIMP("usls"),IDX=1
+ I '$D(^STZN(ID,"u")) F I=1:1:$L(R,CR) S X=$P(R,CR,I) D:X'=""
+ .S U=I_"|"_$P(X,"|",2)_"|"_$P(X,"|",5)
+ .S A=$G(^STZN(ID,"u",U))
+ .S:$P(A,"|",1)="" $P(A,"|",1)=0
+ .S $P(A,"|",2)=$P(X,"|",3)/$P(X,"|",4) ; summ (one)
+ .S $P(A,"|",3)=$P(X,"|",4) ; count
+ .S $P(A,"|",4)=$P(X,"|",6) ; color
+ .S $P(A,"|",6)=$P(X,"|",7) ; comm
+ .S ^STZN(ID,"u",U)=A
+ 
+ S R=$$flIMP("stage")
+ F I=1:1:$L(R,CR) S X=$P(R,CR,I) D:X'=""
+ .S A=$P(X,"|",1) Q:'A 
+ .S $P(^STZN(ID,"w",A),"|",1)=$P(X,"|",2)
+ 
+ S ^STZN(ID,"in",$H)=""
+ S ^STZNW($H,ID)=""
+ 
+ K ^BUF($J)
+ Q ID
+EXP(DOC,OK,EID) ; Экспорт в XML из общих документов
+ ; OK - сбрасывать флаг готовности 
+ ; EID - внешний код заказ-наряда
+ N NI,VR,DT,OT,IDU,DG,LP,X,U,C,PRC,A,RR,ZUB,ZI,ZIU,LN
+ I $G(OK) D SET^YDOCS(DOC,"ready",0) S X=$$GET^YDOCS(DOC,"stzn") I $G(EID)'="",X'="",$D(^STZN(X)) D SET(X,"el",EID) Q 
+ S NI=$$GET^YDOCS(DOC,"pac"),VR=$$GET^YDOCS(DOC,"vr")
+ S DT=$$GET^YDOCS(DOC,"dt"),DG=$$GET^YDOCS(DOC,"dog")
+ S LP=$$GET^YDOCS(DOC,"lpu")
+ S ^BUF($J,"vr")=VR,^BUF($J,"vrfio")=$$FIO^IKADRY(VR),^BUF($J,"vspec")=$$SPEC^YIKADRY(VR),^BUF($J,"votd")=$$OTD^YIKADRY(VR)
+ S ^BUF($J,"pac")=NI,^BUF($J,"pacfio")=$$FIO^IPAC(NI),^BUF($J,"pborn")=$$GETE^IPAC(NI,"datar")
+ S ^BUF($J,"ptel")=$$GETE^IPAC(NI,"tel1")
+ S ^BUF($J,"stc")=DG
+ S ^BUF($J,"lpu")=LP
+ S ^BUF($J,"doc")=DOC
+ S ^BUF($J,"dt")=$$DT^DTUTL(DT)
+ S ^BUF($J,"from")=$$GET^ICONTR(+$$^I("ilpu"),"ecode")
+ S:$$GET^YDOCS(DOC,"pay")'="" ^BUF($J,"pay")=1
+ D ORSTR^YDOCS
+ S RR="",ZI=$$GET^YDOCS(DOC,"stzn")
+ F  S X=$$RSTR^YDOCS(DOC) Q:FYDOCS=""  D
+ .S DT=$P(X,"|",1),NI=$P(X,"|",5),U=$P(X,"|",6)
+ .S C=$P(X,"|",7),PRC=$P(X,"|",10),S=$P(X,"|",7)*$P(X,"|",8)
+ .S VR=$P(X,"|",2),OT=$P(X,"|",3),IDU=$P(X,"|",4)
+ .S ZUB=$$GETPL^IUSL(VR,DT,OT,IDU,"nz")
+ .S ZIU=$$GETPL^IUSL(VR,DT,OT,IDU,"zi")
+ .S:ZI="" ZI=ZIU
+ .S:ZUB="" ZUB=$$GETLNZ(ZIU,OT_"@"_VR_"@"_DT_"@"_IDU)
+ .S RR=$S(RR="":"",1:RR_CR)_$$DT^DTUTL(DT)_"|"_U_"|"_S_"|"_C_"|"_ZUB
+ .Q:ZIU="" 
+ .S LN=$$GETLN(ZIU,U,ZUB)
+ .S RR=RR_"|"_$P(LN,"|",4)_"|"_$P(LN,"|",6) ; tooth + color
+ S ^BUF($J,"usls")=RR
+ I ZI'="" D  
+ .D:$$GET^YDOCS(DOC,"stzn")'=ZI SET^YDOCS(DOC,"stzn",ZI)
+ .S C=$G(^STZN(ZI,"cz")) S:C'="" ^BUF($J,"comm")=C,^BUF($J,"commh")=$G(^STZN(ZI,"czh"))
+ .S ^BUF($J,"sfoto")=$P($G(^STZN(ZI,"im")),"|",1)
+ .S (C,RR)="" F  S C=$O(^STZN(ZI,"w",C)) Q:C=""  S RR=$S(RR="":"",1:RR_CR)_C_"|"_$P(^(C),"|",1)
+ .S ^BUF($J,"stage")=RR
+ .S ^BUF($J,"el")=ZI
+ D OWF^RWU(".xml")
+ D W^RWU($G(^PP(0,1))_"<nb_console><exchange>"_CR)
+ D L^XMLU("^BUF",$J)
+ D W^RWU(CR_"</exchange></nb_console>")
+ K ^BUF($J)
+ D C^RWU
+ Q
+UPDST ; Перечень обновления состояния (лаб.)
+ N %SID,SRV,PORT,USR,PAS,R,I,X,LP,LST,LI,LX,H,EID
+ S LP=$$^I("ilpu")
+ S SRV=$G(^cfg("zlab","server")),PORT=$G(^("port"))
+ S USR=$G(^("user")),PAS=$G(^("passwd"))
+ Q:SRV=""
+ ;S H=+$G(^cfg("zlab","exdays")) S:'H H=3
+ ;S H=+$H-H
+ S:PORT="" PORT=8080
+ S %SID=$$OPEN^WWWCLI(SRV,PORT)
+ D SETAUTH^WWWCLI(%SID,1,USR,PAS)
+ D SETCONN^WWWCLI(%SID,0)
+ ; TODO - send
+ S R=$$GET^WWWCLI(%SID,"/AUTH/zZLAB/UPDLST_IZUBLAB?P1="_LP)
+ I R'=200 D CLOSE^WWWCLI(%SID) S ^ISLOG("IZUBLAB",$H)="UPDLST REZ="_R Q 
+ D OBUF^WWWCLI(%SID)
+ S I=$$BUFCNT^WWWCLI(%SID),LST=""
+ F X=1:1:I S LST=LST_$$RBUF^WWWCLI(%SID)
+ D CBUF^WWWCLI(%SID)
+ D CLOSE^WWWCLI(%SID)
+ U 0
+ Q:LST="" 
+ F LI=1:1:$L(LST,CR) S LX=$P(LST,CR,LI) D:LX'=""
+ .S %SID=$$OPEN^WWWCLI(SRV,PORT)
+ .D SETAUTH^WWWCLI(%SID,1,USR,PAS)
+ .D SETCONN^WWWCLI(%SID,0)
+ .S R=$$GET^WWWCLI(%SID,"/AUTH/zZLAB/GUPD_IZUBLAB?P1="_LX)
+ .I R'=200 D CLOSE^WWWCLI(%SID) Q 
+ .D BUF2H^WWWCLI(%SID)
+ .D CLOSE^WWWCLI(%SID)
+ .S EID=$$impupd() Q:EID="" 
+ .S %SID=$$OPEN^WWWCLI(SRV,PORT)
+ .D SETAUTH^WWWCLI(%SID,1,USR,PAS)
+ .D SETCONN^WWWCLI(%SID,0)
+ .S R=$$GET^WWWCLI(%SID,"/AUTH/zZLAB/GUPD_IZUBLAB?P1="_LX_"&P2=1") ; set OK
+ .I R'=200 D CLOSE^WWWCLI(%SID) Q 
+ .D BUF2H^WWWCLI(%SID)
+ .D CLOSE^WWWCLI(%SID)
+ Q
+UPDLST ; Отправить перечень ID для обновления (клиника)
+ N A,ID
+ S ID="" F  S ID=$O(^STZNI("ex",ID)) Q:ID=""  D
+ .S A=$S(A="":"",1:A_CR)_ID
+ D MSG^RWU(A)
+ Q
+GUPD(ID,OK) ; Получить данные обновления (из клиники)
+ Q:ID=""  Q:'$D(^STZN(ID))
+ I $G(OK) K ^STZNI("ex",ID) D KGL^IEXCH("^STZNI","ex",ID) Q 
+ N DATA,GL
+ M DATA(ID,"cz")=^STZN(ID,"cz")
+ M DATA(ID,"el")=^STZN(ID,"el")
+ S GL("DATA")="DATA"
+ D S^XGUNET("GL","exp.nb-data")
+ Q
+impupd() ; Импортировать из клиники в лаб.
+ N ID,DATA,CID,RET
+ D R^XGUNET("hpar")
+ S (RET,ID)="" F  S ID=$O(DATA(ID)) Q:ID=""  D
+ .S CID=$G(DATA(ID,"el")) Q:CID="" 
+ .M ^STZN(CID,"cz")=DATA(ID,"cz")
+ .S RET=ID
+ Q RET
+UPDPRICE 
+ N %SID,SRV,PORT,USR,PAS,R,I,X,A,J,JL,CLS,PRC,i
+ S LP=$$^I("ilpu")
+ S SRV=$G(^cfg("zlab","server")),PORT=$G(^("port"))
+ S USR=$G(^("user")),PAS=$G(^("passwd")),CLS=$G(^("clsprc"))
+ Q:SRV=""
+ S:PORT="" PORT=8080
+ S %SID=$$OPEN^WWWCLI(SRV,PORT)
+ D SETAUTH^WWWCLI(%SID,1,USR,PAS)
+ D SETCONN^WWWCLI(%SID,0)
+ S R=$$GET^WWWCLI(%SID,"/AUTH/zZLAB/CONEXP_RPRICE?P1="_$$DT^DTUTL(+$H)_"&P2="_LP)
+ I R'=200 D CLOSE^WWWCLI(%SID) S ^ISLOG("IZUBLAB",$H)="PRICE REZ="_R Q 
+ D OBUF^WWWCLI(%SID)
+ S PRC=$$CORCP^IPRICET(1)
+ S I=$$BUFCNT^WWWCLI(%SID),A="",i=0
+ F X=1:1:I S R=$$WD^TXTU($$RBUF^WWWCLI(%SID)) D
+ .S A=A_R
+ .Q:A'[CR 
+ .S JL=$L(A,CR)
+ .F J=1:1:JL S R=$P(A,CR,J) D:J<JL uprc(R) S:J=JL A=R
+ D:A'="" uprc(A)
+ D CBUF^WWWCLI(%SID)
+ D CLOSE^WWWCLI(%SID)
+ Q
+uprc(LN) 
+ s i=i+1
+ Q:i=1  ; first string
+ N X,U,NM,CN
+ S U=$P(LN,"|",1),NM=$P(LN,"|",2),CN=$P(LN,"|",3)
+ S X=$$ADD^IPRICE(U,PRC,+$H,NM,CN,"","",CLS)
+ Q
+flIMP(FL) 
+ Q $G(^BUF($J,1,FL,$c(3)_"data"))
+WLOG(ID) ; сохранить изменившего пользователя
+ N H S H=$H
+ S ^STZNL(ID,"log",H)=$$USR^IUSER()_"|"_$$KDR^IUSER()
+ S ^STZNW(H,ID)=""
+ Q
+UPD(ID) ; Обновить по сети с индексами
+ N X
+ S X=$G(^STZN(ID,"dref"))
+ I X'="" D GL^IEXCH("^STZNI","dref",X)
+ S X=$P(^STZN(ID),"|",1)
+ D GL^IEXCH("^STZNI","n",X,ID)
+ D GL^IEXCH("^STZN",ID)
+ Q

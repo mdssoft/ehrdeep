@@ -1,0 +1,28 @@
+IKDLLD ; Line Driver Format [ 04/20/2015  10:17 AM ]
+IN(DEV,FN) 
+ ; ln1:DEV, ln2:ISO date, ln3:sample ID
+ ; other lines: prm|value|means
+ N FILL,FL,IO,R,F,LN,OP,NN,ID,DT,P,PP,VAR,ME,dbg
+ D DIR^FIL(FN_"*.uri","FILL")
+ Q:'$D(FILL)
+ S dbg=+$G(^cfg("lab","debugdev"))
+ ; load
+ S FL="" F  S FL=$O(FILL(FL)) Q:FL=""  D:FILL(FL)=0
+ .S IO=$$ORT^FIL(FN_FL),F=0 Q:IO=""
+ .S ID=""
+ .U IO F J=1:1  R R Q:$$ST^FIL()=0  D:R'=""
+ ..I J=3 S ID=+$TR(R," -_","") I ID'="",'$D(^MLABI("c",ID)) S ID=""
+ ..I J=2 S DT=$$IISO^DTUTL(R) Q 
+ ..I J=1 S:R'="" DEV=R Q 
+ ..Q:ID=""  
+ ..S:DT="" DT=$H
+ ..Q:R'["|" 
+ ..S PP=$P(R,"|",1),VAR=$P(R,"|",2),ME=$P(R,"|",3) ; 3-means
+ ..Q:PP="" 
+ ..S P=$G(^LABT("DEV",DEV,"t",PP)) Q:P="" 
+ ..Q:P=""
+ ..D SET^IMLAB(ID,P,VAR,DEV) S F=1
+ ..D OKPRM^IMLABW(DEV,ID,P)
+ .C IO
+ .D:$S(dbg:F,1:1) DEL^FIL(FN_FL)
+ Q

@@ -1,0 +1,194 @@
+IPROFVR ; Профвредность [ 04/19/2021  9:46 AM ]
+LPROF 
+ N A,%J,R,I
+ D ORH^RWU
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  D:%J>1
+ .S A=$$TRIM^TXTU($P(A,"|",1)) Q:A="" 
+ .S A=$$WD^TXTU(A)
+ .S I=$$FPROF(A) Q:I'=""  ; todo - reload list
+ .S:I="" I=$O(^PROFF(""),-1)+1 S ^PROFF(I)=A_"|1"
+ D CR^RWU
+ Q
+LVRED 
+ N A,%J,I83,I90,T83,T90,SP,U,R,I,J
+ ;K ^PROFV
+ D ORH^RWU
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  D:%J>1
+ .S A=$$TRIM^TXTU(A) Q:A=""
+ .S A=$TR(A,CR,"  ")
+ .F  S J=$F(A,"  ") Q:J=0  S $E(A,J-2,J-2)=""
+ .S A=$$DBLSP^TXTU(A),A=$$WD^TXTU(A),A=$TR(A,"<>","{}")
+ .S R=$P(A,"|",1)
+ .I R'="" S I=$$FPROF(R) S:I="" I=$O(^PROFF(""),-1)+1,^PROFF(I)=R_"|1"
+ .S R=$P(A,"|",2) I R'="" S I83=$$TRIM^TXTU(R),T83="",I90="-",T90=""
+ .S R=$$TRIM^TXTU($P(A,"|",3))
+ .I R'="" S T83=R,^PROFV("v83",I83)=T83
+ .S R=$P(A,"|",4) I R'="" S I90=$$TRIM^TXTU(R)
+ .S R=$$TRIM^TXTU($P(A,"|",5))
+ .I R'="" S T90=R,^PROFV("v90",I90)=T90,^PROFV("83-90",I83,I90)=""
+ .S SP=$$TRIM^TXTU($P(A,"|",6)),U=$$TRIM^TXTU($P(A,"|",7))
+ .Q:SP=""
+ .S ^PROFV("v90",I90,SP)=U,^PROFV("v83",I83,SP)=U,^PROFV("i",SP)=U_"|"
+ .S:U'="" ^PROFV("p",I,I83,I90,U)=1_"|"_SP
+ D CR^RWU
+ Q
+LV302 ; Загрузить 302-й приказ (вредные факторы)
+ N %J,A,ID,NM,LEN,UN,UU,X,LU
+ S A="" F  S A=$O(^PROFV("i302",A)) Q:A=""  S LU($$UL^TXTU(A))=^PROFV("i302",A)
+ D ORH^RWU
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D:%J>1
+ .S X=$P(A,"|",1)
+ .S:X'="" ID=$$TRIM^TXTU($TR(X,",","."))
+ .S:$E(ID,$L(ID))="." ID=$E(ID,1,$L(ID)-1)
+ .S X=$P(A,"|",2)
+ .S:X'="" NM=$$TRIM^TXTU($$DBLSP^TXTU(X))
+ .S X=$P(A,"|",3)
+ .S:X'="" LEN=$S(X="1 раз в год":365,X="1 раз в 2 года":730,1:X)
+ .I $P(A,"|",1)'="" S ^PROFV("v302",ID)=LEN_"|"_NM
+ .S UN=$$DBLSP^TXTU($P(A,"|",4)),UU=$P(A,"|",5)
+ .Q:UN="" 
+ .I UU="" S UU=$G(LU($$UL^TXTU(UN)))
+ .S ^PROFV("v302",ID,UN)=$TR(UU,", ","|")
+ D CR^RWU
+ D REGL^IEXCH("^PROFV","w302")
+ Q
+LV302W ; Загрузить 302-й приказ (работы)
+ N %J,A,ID,NM,LEN,UN,UU,X,LU
+ S A="" F  S A=$O(^PROFV("i302",A)) Q:A=""  S LU($$UL^TXTU(A))=^PROFV("i302",A)
+ D ORH^RWU
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D:%J>1
+ .S X=$P(A,"|",1)
+ .S:X'="" ID=$$TRIM^TXTU($TR(X,",","."))
+ .S:$E(ID,$L(ID))="." ID=$E(ID,1,$L(ID)-1)
+ .S X=$P(A,"|",2)
+ .S:X'="" NM=$$TRIM^TXTU($$DBLSP^TXTU(X))
+ .S X=$P(A,"|",3)
+ .S:X'="" LEN=$S(X="1 раз в год":365,X="1 раз в 2 года":730,1:X)
+ .I $P(A,"|",1)'="" S ^PROFV("v302",ID)=LEN_"|"_NM
+ .S UN=$$TRIM^TXTU($$DBLSP^TXTU($P(A,"|",4))),UU=$P(A,"|",5)
+ .Q:UN="" 
+ .I UU="" S UU=$G(LU($$UL^TXTU(UN)))
+ .S ^PROFV("w302",ID,UN)=$TR(UU,", ","|")
+ D CR^RWU
+ D REGL^IEXCH("^PROFV","w302")
+ Q
+LV302U 
+ N %J,A,UN,UU
+ D ORH^RWU
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D:%J>1
+ .S UN=$$TRIM^TXTU($$DBLSP^TXTU($P(A,"|",1))),UU=$P(A,"|",2)
+ .Q:UN=""  Q:UU="" 
+ .S ^PROFV("i302",UN)=$TR(UU,", ","|")
+ D CR^RWU
+ D REGL^IEXCH("^PROFV","i302")
+ Q
+GET302(LST) ; Получить строку услуг по кодам вредности (разделитель - ,)
+ N I,J,R,PP,IX,U,LL,TP
+ F I=1:1:$L(LST,",") D
+ .S PP=$P(LST,",",I)
+ .S TP=$S($P(PP,".",3)="":"w302",1:"v302")
+ .S IX="" F  S IX=$O(^PROFV("v302",PP,IX)) Q:IX=""  D
+ ..S R=^(IX) Q:R=""  
+ ..F J=1:1:$L(R,"|") S U=$P(R,"|",J) S:U'="" LL(U)=""
+ S (R,U)="" F  S U=$O(LL(U)) Q:U=""  S R=R_$S(R="":"",1:"|")_U
+ Q R
+REVF(V) ; Перекодировать профвредности
+ N R1,R2,RR,X,L,I,P1,P2
+ I V[";",V'[" " Q V
+ S V=$$UL^TXTU(V)
+ I V'["п" S V=$TR(V,";",",")
+ S V=$$TRT^TXTU(V,"пр",",пр"),V=$$TRT^TXTU(V,"п.",",п.")
+ S (R1,R2,RR)="",L=$L(V,",")
+ I V'["п" D  Q RR ; только числовой вариант
+ .S RR=""
+ .F I=1:1:L S X=$P(V,",",I),X=$TR(X,$TR(X,"1234567890./\|-",""),""),X=$TR(X,"/\|-","....") S:X'="" RR=$S(RR="":"",1:RR_";")_X
+ 
+ S P1="пр",P2="п" ; идентификаторы приложение/пункт приказа
+ S:V["прил" P1="прил"
+ F I=1:1:L S X=$P(V,",",I) D:X'=""
+ .I X[P1 S R1=$TR(X,$TR(X,1234567890,""),"") S:+R1=0 R1=""
+ .I X[P2,X'[P1,R2="" S R2=$TR(X,$TR(X,"1234567890.",""),"") S:$E(R2)="." $E(R2)="" S:$E(R2,$L(R2))="." $E(R2,$L(R2))=""
+ .I R1'="",R2'="" S RR=$S(RR="":"",1:RR_";")_R1_"."_R2,R2=""
+ Q RR
+VFNAME(ID,N29) ; Полное имя профвредности по коду
+ N X
+ S X=$S($G(N29):$G(^PROFV("v29",ID)),1:$G(^PROFV("v302",ID)))
+ Q $P(X,"|",3)_" "_$P(X,"|",2)
+VFSNAME(ID) ; Краткое наименование профвредности
+ Q $P($S($G(N29):$G(^PROFV("v29",ID)),1:$G(^PROFV("v302",ID))),"|",3)
+PROF(ID) ; Профессия по коду
+ Q:ID="" ""
+ Q $P($G(^PROFF(ID)),"|",1)
+FPROF(NM) ; Найти профессию
+ N I S NM=$$LU^TXTU(NM)
+ S I="" F  S I=$O(^PROFF(I)) Q:I=""  Q:$$LU^TXTU($P(^(I),"|",1))=NM 
+ Q I
+LPAT ; Load prof. pattern
+ N A,%J,P,NM,U,I
+ D ORH^RWU
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D:%J>1
+ .S NM=$P(A,"|",1),P=$P(A,"|",2),U=$P(A,"|",3) Q:U="" 
+ .S I=$$FNDPAT(NM) I I="" S I=$O(^PROFM("pat",""),-1)+1
+ .S ^PROFM("pat",I)=NM_"|"_P,^(I,U)="1|0"
+ .D UGL^IEXCH("^PROFM(""pat"","_I)
+ Q
+FNDPAT(R) 
+ S R=$$DBLSP^TXTU($$LU^TXTU(R))
+ N P,X S P="" F  S P=$O(^PROFM("pat",P)) Q:P=""  S X=$$DBLSP^TXTU($$LU^TXTU($P(^(P),"|",1))) Q:X=R
+ Q P
+DEL(NI,DT) ; Удаление карты или обследований
+ ; DT - дата обследований, если не указано - уд.всех
+ Q:'$D(^PROFP(NI)) 
+ N FL
+ I $G(DT)="" D K^ISSG("^PROFP("_NI_")") K ^PROFP(NI) D KGL^IEXCH("^PROFP",NI) Q
+ S FL="" F  S FL=$O(^PROFP(NI,FL)) Q:FL=""  I $D(^(FL,DT)) K ^(DT) 
+ D REGL^IEXCH("^PROFP",NI)
+ Q
+MKI302 ; Переиндексация i302
+ N I,VF,U,R,TP
+ S VF="" F  S VF=$O(^PROFV("v302",VF)) Q:VF=""  D
+ .S I="" F  S I=$O(^PROFV("v302",VF,I)) Q:I=""  D
+ ..S R=$G(^(I)) Q:R="" 
+ ..S TP=$G(^(I,"tp"))
+ ..Q:$D(^PROFV("i302",I)) 
+ ..S ^PROFV("i302",I)=$P(R,"|",1)
+ ..S:TP'="" ^PROFV("i302",I,"tp")=TP
+ S I="" F  S I=$O(^PROFV("i302",I)) Q:I=""  D
+ .S U=^(I),^PROFV("u302",U)=I
+ .M ^PROFV("u302",U,"c")=^PROFV("i302",I,"cab")
+ Q
+MOVDT(NI,FDT,TDT) ; Перенести с одной на другую дату
+ N FL
+ S FL="" F  S FL=$O(^PROFP(NI,FL)) Q:FL=""  D
+ .Q:'$D(^PROFP(NI,FL,FDT))
+ .M ^PROFP(NI,FL,TDT)=^PROFP(NI,FL,FDT)
+ .K ^PROFP(NI,FL,FDT)
+ .D REGL^IEXCH("^PROFP",NI,FL)
+ Q
+UPDUSL 
+ N NI,D,U
+ S NI="" F  S NI=$O(^PROFP(NI)) Q:NI=""  D
+ .S D="" F  S D=$O(^PROFP(NI,"n",D)) Q:D=""  D
+ ..S U="" F  S U=$O(^PROFP(NI,"n",D,U)) Q:U=""  D
+ ...D:$P($G(^(U)),"|",3)'="" UGL^IEXCH("^PROFP("_NI_",""n"","_D_","_U_")")
+ Q
+TXTTP(NI,DT) ; Текстовый тип профосмотра
+ N T
+ S T=""
+ I $D(^PROFP(NI,"vf",DT)) S T="П.О."
+ I $D(^PROFP(NI,"lmk",DT)) S T=$S(T="":"",1:T_", ")_"ЛМК"
+ I 1234[(+$G(^PROFP(NI,"pat",DT))) S T=$S(T="":"",1:T_", ")_"ФМС" ; TODO
+ I T="",$D(^PROFP(NI,"n",DT)) S T="диспансеризация"
+ Q T
+VFLST(NI,DT) ; Перечень кодов вредных факторов
+ N I,R
+ S (I,R)="" F  S I=$O(^PROFP(NI,"vf",DT,I)) Q:I=""  D
+ .S R=$S(R="":"",1:R_"; ")_$$VFSNAME(I)
+ Q R
+INITDB 
+ S ^MN("root","profvrres")="Результат профосмотра по врачу"
+ S ^MN("root","profres")="Результат профосмотра"
+ S ^MN("root","lmk")="Перечень категорий ЛМК"
+ S ^MN("root","lmktype")="Типы ЛМК"
+ S ^MN("frm","proflst")="Журнал профосмотров"
+ Q

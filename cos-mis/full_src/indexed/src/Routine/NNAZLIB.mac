@@ -1,0 +1,136 @@
+NNAZLIB ; Библиотека назначений [ 06/07/2020  10:37 PM ]
+INIT ; Инициализация формы
+ N R,I
+ S I=$$LCL^IUSER("nazlib","libtype"),A=""
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<nazlib><libt>")
+ S:I=""!(I["c") A="c|Общий"
+ S:I=""!(I["s") A=$S(A="":"",1:A_CR)_"s|По специальности"
+ S:I=""!(I["o") A=$S(A="":"",1:A_CR)_"o|По отделению"
+ S:I=""!(I["p") A=$S(A="":"",1:A_CR)_"p|Личный"
+ D WC^RWU(A)
+ D W^RWU("</libt></nazlib></nb_console>"),C^RWU
+ Q
+TREE(TP,VR,OT,SP) ; Вывод разделов
+ N A,L,LL,C,X,ID,R,K,AR,ORD,KX
+ D OWF^RWU(".txt")
+ S KX=$S(TP="s":SP,TP="o":OT,TP="p":VR,1:0)
+ S ID="" F  S ID=$O(^NAZLIB(TP,KX,ID)) Q:ID=""  D
+ .S R=^(ID),K=$P(R,"|",1),AR=$P(R,"|",5)
+ .Q:AR  ; arch
+ .S ORD=$P(R,"|",3),A=$$ord(ORD,3)_$$ord(ID,4)
+ .F  S X=$P(R,"|",2) Q:X=""  S R=$G(^NAZLIB(TP,KX,X)),ORD=$P(R,"|",3),A=$$ord(ORD,3)_$$ord(X,4)_"~"_A
+ .S L(A)=ID_"|"_K
+ 
+ M LL=L K L
+ S K="" F  S K=$O(LL(K)) Q:K=""  S L("~"_K)=LL(K)
+ S (X,K)="" F  S X=$O(L(X)) Q:X=""  D
+ .S ID=$E(X,5,99)
+ .S A=$TR(ID,"~1234567890|",$C(9))
+ .D WC^RWU(K_A_L(X)) S K=CR
+ 
+ D C^RWU
+ Q
+ord(X,L)        ; for order
+ Q $TR($J(X,L,0)," ",0)
+L(NIB,ID,TP,VR,OT,SP,DGN,KSS) ; load
+ N U,PRC,A,X,H
+ S X=$S(TP="s":SP,TP="o":OT,TP="p":VR,1:0)
+ S DGN=$G(DGN),KSS=+$G(KSS),H=+$H
+ S DGN=$S(DGN="":$$GET^IPAC(NIB,"stc",H),1:DGN)
+ S PRC=$$GET^YNDOG(DGN,$S(KSS:"c",1:"")_"price",H)
+ S:PRC=""&KSS PRC=$$GET^YNDOG(DGN,"price",H)
+ S PRC=$$CORCP^IPRICET(PRC)
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<nazlib><usl>")
+ S U="" F  S U=$O(^NAZLIB(TP,X,ID,"u",U)) Q:U=""  D
+ .S A=^(U)
+ .D WC^RWU(CR_$P(A,"|",2)_"|"_U_"|"_$$TAG^TXTU($$NAMEH^IPRICE(U,PRC,H))_"|"_$P(A,"|",1)_"|"_$$GSPEC^YISPRAV($P(A,"|",2)))
+ D W^RWU("</usl><txt>")
+ D WC^RWU($$TAG^TXTU($G(^NAZLIB(TP,X,ID,"c"))))
+ D W^RWU("</txt></nazlib></nb_console>"),C^RWU
+ Q
+ATREE(NM,TOP,TP,VR,OT,SP) ; Добавить раздел
+ ; NM - наименование
+ ; TOP - корневой раздел
+ I $$LCL^NUSER("nazlib","save")=0 D TREE(TP,VR,OT,SP) Q 
+ S NM=$$WD^TXTU(NM)
+ N ID,X
+ S X=$S(TP="s":SP,TP="o":OT,TP="p":VR,1:0)
+ S ID=$$new(TP,X),^NAZLIB(TP,X,ID)=NM_"|"_TOP
+ D GL^IEXCH("^NAZLIB",TP,X,ID)
+ D TREE(TP,VR,OT,SP)
+ Q
+STREE(ID,NM,TP,VR,OT,SP) ; Изменить наименование раздела
+ I $$LCL^NUSER("nazlib","save")=0 Q 
+ Q:ID="" 
+ N X
+ S X=$S(TP="s":SP,TP="o":OT,TP="p":VR,1:0)
+ Q:'$D(^NAZLIB(TP,X,ID))
+ S $P(^NAZLIB(TP,X,ID),"|",1)=$$WD^TXTU(NM)
+ D GL^IEXCH("^NAZLIB",TP,X,ID)
+ Q
+DTREE(ID,TP,VR,OT,SP) ; Удалить раздел
+ Q:ID="" 
+ I $$LCL^NUSER("nazlib","del")=0 Q 
+ S X=$S(TP="s":SP,TP="o":OT,TP="p":VR,1:0)
+ K ^NAZLIB(TP,X,ID)
+ D KGL^IEXCH("^NAZLIB",TP,X,ID)
+ Q
+SUSL ; Сохранить услуги
+ I $$LCL^NUSER("nazlib","save")=0 Q 
+ N J,A,ID,C,G,X,TP,VR,OT,SP,U
+ S (C,ID)=""
+ D ORH^RWU
+ F J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D
+ .I J=1 S TP=$P(A,"|",1),VR=$P(A,"|",2),OT=$P(A,"|",3),SP=$P(A,"|",4),X=$S(TP="s":SP,TP="o":OT,TP="p":VR,1:0) Q 
+ .I J=2 S ID=A K:ID'="" ^NAZLIB(TP,X,ID,"u") Q 
+ .Q:ID=""  Q:J<4 
+ .S U=$P(A,"|",2) Q:U="" 
+ .S ^NAZLIB(TP,X,ID,"u",U)=$P(A,"|",4)_"|"_$P(A,"|",1)
+ D:ID'="" REGL^IEXCH("^NAZLIB",TP,X,ID,"u")
+ D CR^RWU
+ Q
+STXT ; Сохранить текст
+ I $$LCL^NUSER("nazlib","save")=0 Q 
+ N J,A,P,C,X,TP,VR,OT,SP,IX,ID
+ S (C,ID)=""
+ D ORH^RWU
+ F J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D
+ .I J=1 S TP=$P(A,"|",1),VR=$P(A,"|",2),OT=$P(A,"|",3),SP=$P(A,"|",4),X=$S(TP="s":SP,TP="o":OT,TP="p":VR,1:0) Q
+ .I J=2 S ID=A Q 
+ .S:C'="" C=C_CR S C=C_A
+ I ID'="" S ^NAZLIB(TP,X,ID,"c")=C D GL^IEXCH("^NAZLIB",TP,X,ID,"c") 
+ D CR^RWU
+ Q
+ASTXT(KEY,NM) ; Добавить шаблон текстового описания
+ Q
+DSTXT(KEY,ID) ; Удалить шаблон текстового описания
+ Q
+LSTSTXT(KEY) ; Перечень шаблонов текстовых описаний
+ Q
+new(TP,VAL) 
+ S:$G(VAL)="" VAL=0 Q:TP="" ""
+ Q ($P($O(^NAZLIB(TP,VAL,""),-1),".",1)+1)_"."_$$GID^I()
+convert 
+ N F,P,TP,X,aa,A,L,LL,I,E,IDX,ID
+ M ^NAZLIb=^NAZLIB K ^NAZLIB
+ s P="^NAZLIB(0)" F  S P=$Q(@P) Q:P=""  D
+ .S TP=$QS(P,1),X=$S(TP="c":0,1:$QS(P,2)),L=$QL(P)
+ .S aa=2+$S(TP="c":0,1:1)
+ .S A=$QS(P,L)
+ .S E=0,IDX="" F I=aa:1:L I $QS(P,I)'?1.N S E=I-1 Q 
+ .Q:E 
+ .S:'E E=L
+ .S IDX=TP_X F I=aa:1:E S IDX=IDX_"|"_$QS(P,I)
+ .w !,P_"  aa="_aa_",E="_E_", IDX="_IDX
+ .S ID=$G(LL(IDX)) S:ID="" ID=$$new(TP,X),LL(IDX)=ID
+ .S F=999999 F  S F=$O(@P@(F)) Q:F=""  M ^NAZLIB(TP,X,ID,F)=@P@(F)
+ .S ^NAZLIB(TP,X,ID)=$P($G(@P),"|",1)_"|"_$G(LL($P(IDX,"|",1,$L(IDX,"|")-1)))
+ D REGL^IEXCH("^NAZLIB")
+ Q
+REGLCL    ; Register description of available rights
+ K ^LCLI("nazlib")
+ S ^LCLI("nazlib")="Библиотека назначений"
+ S ^LCLI("nazlib","save")="Сохранение"
+ S ^LCLI("nazlib","del")="Удаление"
+ S ^LCLI("nazlib","libtype")="Доступные разделы библиотеки c/s/o/p"
+ Q

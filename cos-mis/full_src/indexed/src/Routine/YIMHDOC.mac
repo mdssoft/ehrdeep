@@ -1,0 +1,55 @@
+YIMHDOC ; Системные документы ЭИБ [ 11/09/2019  4:22 PM ]
+FNDTIT() ; Найти титульный документ ЭИБ
+ N ID,NM
+ S ID=$$FNDUID^YIMHS("base/title")
+ Q:ID'="" ID
+ S NM="Сводная информация"
+ S ID=$$ADDT^YIMHS(NM,$$ADDF^YIMHS("Долговременная информация о больном"),"txt","base/title")
+ D SET^YIMHS(ID,"rproc","TIT^YIMHDOC")
+ D SET^YIMHS(ID,"rights","rrr")
+ D SET^YIMHS(ID,"ext","txt")
+ D SET^YIMHS(ID,"bdoc",1)
+ D MKIDX^IMHS(ID)
+ Q ID
+TIT ; Титульный документ ЭИБ
+ N R,C,D,DE,DI,KX,LST,ID,I
+ S C=""
+ ; D WC^RWU(CR_"Аллергическая непереносимость:")
+ S R=$$GETE^IPAC(N,"lekall")
+ D:R'="" WC^RWU("Лекарственная непереносимость: "_R_CR)
+ S C=CR
+ S R=$O(^PNF(N,+$H+1),-1)
+ I R'="" D WC^RWU(C_"Дата последнего посещения: "_$$DT^DTUTL(R)_CR) S C=CR
+ I $$STATE^NNETR(N,+$H) D WC^RWU(C_"Открыт лист нетрудоспособности"_C) S C=CR
+ S R=$$ALLDAYS^INETR(N,$H-365,+$H)
+ I R D WC^RWU(C_"Дней нетрудоспособности: "_R_" (всего, с "_$$DT^DTUTL($H-365)_")"_C) S C=CR
+ D:$$GET^IPAC(N,"bloodrh") WC^RWU(C_"Группа крови и Rh: "_$$GETE^IPAC(N,"bloodrh")_C)
+ D WC^RWU(C_"Диспансерное наблюдение: "_C)
+ ; Диагнозы
+ S DE=+$H-365,D="",R=0 F  S D=$O(^PNF(N,D),-1) Q:D=""!(D<DE)  D
+ .S KX="" F  S KX=$O(^PNF(N,D,KX)) Q:KX=""  D
+ ..S DI=$$GETDI^IUSL($P(KX,"|",1),D,$P(KX,"|",2),$P(KX,"|",3)) Q:DI="" 
+ ..S LST(DI)=""
+ D:$D(LST) WC^RWU(C_"Перечень диагнозов: ")
+ S DI="" F  S DI=$O(LST(DI)) Q:DI=""  D WC^RWU(C_$$NAME^YMKB10(DI,100))
+ D:$G(^cfg("epr","summr-lab")) 
+ .S I=0
+ .S ID="" F  S ID=$O(^MLAB(N,ID),-1) Q:ID=""  D  Q:I>2
+ ..S R=$G(^(ID)) Q:R=""  
+ ..D:'I WC^RWU(CR_"-----------------------------"_CR_"Лабораторные заявки:")
+ ..S D=$G(^MLAB(N,ID,"s9"))
+ ..D WC^RWU(CR_"От "_$$DT^DTUTL(R)_$S($P(D,"|",1):" - выполнена "_$$DTM^DTUTL($P(D,"|",2)),1:""))
+ ..S I=I+1
+ Q
+FNDVAC() ; Найти календарь прививок ЭИБ
+ N ID,NM
+ S ID=$$FNDUID^YIMHS("base/vaccal")
+ Q:ID'="" ID
+ S NM="Календарь прививок"
+ S ID=$$ADDT^YIMHS(NM,$$ADDF^YIMHS("Долговременная информация о больном"),"tab","base/vaccal")
+ D SET^YIMHS(ID,"rproc","MHCAL^NVACC")
+ D SET^YIMHS(ID,"rights","rrr")
+ D SET^YIMHS(ID,"ext","tab")
+ D SET^YIMHS(ID,"bdoc",1)
+ D MKIDX^IMHS(ID)
+ Q ID

@@ -1,0 +1,119 @@
+IPACEX ; Patient databse exchange [ 08/22/2014  0:45 AM ]
+EXP(NI) ; Export -> EDATA()
+ K EDATA
+ N TZBTN,PL,PLT,DT
+ M TZBTN=^BTN($C(9)_"r")
+ S PL=""
+ F  S PL=$O(^BTN(NI,PL)) Q:PL=""  D
+ .S PLT=TZBTN(PL),DT=""
+ .S:$D(^(PL))#2=1 EDATA(NI,PLT)=^(PL)
+ .F  S DT=$O(^BTN(NI,PL,DT)) Q:DT=""  S EDATA(NI,PLT,DT)=$G(^(DT))
+ Q
+IMP(NI) ; Import -> EDATA()
+ D PRETZR^IPAC
+ D RMIDX^YIPACN
+ K ^BTN(NI)
+ N DT,P,PL,LN,PR,R,DE
+ S LN="^BTN("""_$C(9),DE=""
+ S PL="" F  S PL=$O(EDATA(NI,PL)) Q:PL=""  D
+ .S P=$G(TZRBTN(PL))
+ .I P="" S TZLN=LN_"t""",TZRLN=LN_"r""",P=$$GTZ^XMLU(PL,TZLN,TZRLN),TZRBTN(PL)=P
+ .I $D(EDATA(NI,PL))#2=1 S ^BTN(NI,P)=EDATA(NI,PL)
+ .S DT="" F  S DT=$O(EDATA(NI,PL,DT)) Q:DT=""  D
+ ..S PR=$G(^BTN(NI,P,DT)),R=EDATA(NI,PL,DT)
+ ..I $L(PR),R'=PR D WD^ISSG("^BTN("""_NI_""","_P_","_DT_")")
+ ..S ^BTN(NI,P,DT)=R
+ ..S:DT>DE DE=DT
+ D NORM(NI)
+ D MKIDX^YIPACN(DE)
+ Q
+NORM(NI) ; Normalize and compact data structure
+ N PL,DT,DTP,R,PR
+ S PL="" F  S PL=$O(^BTN(NI,PL)) Q:PL=""  S (DT,PR,DTP)="" F  S DT=$O(^BTN(NI,PL,DT)) Q:DT=""  D
+ .S R=^(DT)
+ .I DTP'="" K:R=PR ^BTN(NI,PL,DT)
+ .S DTP=DT,PR=R
+ Q
+RXCH ; Read - exchange
+ N NI,EDATA
+ D R^XGUNET("hpar")
+ S NI="" F  S NI=$O(EDATA(NI)) Q:NI=""  D IMP(NI)
+ Q
+WXCH(NI) ; Write - exchange
+ D EXP(NI)
+ N GL S GL("EDATA")="EDATA"
+ S:'$D(^BTN(NI)) GL("Z")="-^BTN("""_NI_""")" ; If not exist
+ D S^XGUNET("GL","exp.nb-data")
+ K EDATA
+ Q
+TBUF(DT,XX) ; Save to ^BUF , DT - last update date
+ K ^BUF(XX)
+ S NNI=-1,IDX=0
+ F  S NNI=$$NEXT^IPAC(NNI) Q:NNI=""  D
+ .S IDX=IDX+1 D EXP(NNI) M ^BUF(XX)=EDATA
+ W !,"Count="_IDX_" ...OK",!
+ Q
+FBUF(XX) 
+ N NK S NK=""
+ F  S NK=$O(^BUF(XX,NK)) Q:NK=""  D
+ .K EDATA M EDATA(NK)=^BUF(XX,NK)
+ .D IMP(NK)
+ Q
+SE(NI,IP,PORT) ; Simple export 
+ N @$$NEWVAR^RWU() ; Call OW^RWU inside network func.
+ K ^BUF($J)
+ S ^BUF($J,"srcnib")=NI
+ S ^BUF($J,"pacfio")=$$FIO^IPAC(NI)
+ S ^BUF($J,"pol")=$$GET^IPAC(NI,"pol")
+ S ^BUF($J,"pborn")=$$GETE^IPAC(NI,"datar")
+ S ^BUF($J,"dog_from")=$$GET^IPAC(NI,"dog_from")
+ S ^BUF($J,"dog_to")=$$GET^IPAC(NI,"dog_to")
+ S ^BUF($J,"tel1")=$$GET^IPAC(NI,"tel1")
+ S ^BUF($J,"tel2")=$$GET^IPAC(NI,"tel2")
+ S ^BUF($J,"pager")=$$GET^IPAC(NI,"pager")
+ S ^BUF($J,"street")=$$GET^IPAC(NI,"street")
+ S ^BUF($J,"dom")=$$GET^IPAC(NI,"dom")
+ S ^BUF($J,"korp")=$$GET^IPAC(NI,"korp")
+ S ^BUF($J,"stroen")=$$GET^IPAC(NI,"stroen")
+ S ^BUF($J,"kvart")=$$GET^IPAC(NI,"kvart")
+ S ^BUF($J,"domkod")=$$GET^IPAC(NI,"domkod")
+ S ^BUF($J,"email")=$$GET^IPAC(NI,"email")
+ S ^BUF($J,"text")=$$GET^IPAC(NI,"text")
+ D OWF^RWU("exp.xml")
+ D W^RWU($G(^PP(0,1))_"<exchange><patient>"_CR)
+ D L^XMLU("^BUF",$J)
+ D W^RWU(CR_"</patient></exchange>")
+ K ^BUF($J)
+ D C^RWU
+ Q:$G(IP)=""
+ N OK,SID
+ S SID=$$OPEN^WWWCLI(IP,PORT)
+ D BUFH2B^WWWCLI(SID,"exp.xml")
+ D SETAUTH^WWWCLI(SID,1,"sys","sys")
+ S OK=$$POST^WWWCLI(SID,"/AUTH/zPAC/SI_IPACEX?")
+ D CLOSE^WWWCLI(SID)
+ Q
+SI ; Simple import
+ N IJ,FF,FI,FO,BD,X,FL,DT,NI,SNI,DTS
+ K ^BUF($J)
+ D ORH^RWU
+ S IJ=$$OS^XMLU("^BUF("_$J_")","patient","id")
+ D CR^RWU
+ S FF=$$flIMP("pacfio")
+ S BD=$$DI^DTUTL($$flIMP("pborn"))
+ Q:FF=""
+ S FI=$P(FF," ",2),FO=$P(FF," ",3),FF=$P(FF," ",1)
+ S NI=$$GETNIB^IPACFND(FF,FI,FO,BD,"",1)
+ S:NI=-1 NI=""
+ S SNI=$$flIMP("srcnib") S:SNI'="" SNI="I"_SNI
+ S DT=+$H
+ I NI="" S NI=$$ADD^IPAC(FF,FI,FO,BD,"",+$G(^cfg("def-stc")),SNI) D SET^IPAC(NI,"ofor",DT,1)
+ K ^BUF($J,1,"pacfio"),^BUF($J,1,"pborn"),^BUF($J,1,"srcnib")
+ S FL="" F  S FL=$O(^BUF($J,1,FL)) Q:FL=""  D
+ .D SET^IPAC(NI,FL,DT,$$flIMP(FL))
+ D MKIDX^YIPACN(DT)
+ K ^BUF($J)
+ Q
+flIMP(FL) 
+ Q $G(^BUF($J,1,FL,$c(3)_"data"))
+ Q

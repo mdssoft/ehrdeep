@@ -1,0 +1,164 @@
+IMSGHUB ; Message HUB [ 03/07/2018  0:32 AM ]
+TEST 
+ S ^MSGHUB("faxmail",1)="Получение факсов по почте"
+ S ^(1,"server")="192.168.1.1",^("login")="fax@server.int"
+ S ^("passwd")="11",^("area")="fax"
+ Q
+DO ; do exchange
+ D DOSEND,DORECV
+ Q
+DOSEND ; do output exchange
+ N TP,FN,FNX,X,I,CPROC,TEST,FNI
+ S TP="" F  S TP=$O(^MSGOUT(TP)) Q:TP=""  D
+ .S FN=$G(^MSGHUB(TP))
+ .S I="" F  S I=$O(^MSGOUT(TP,I)) Q:I=""  D  ; проверка/генерация данных
+ ..S FNI=$G(^MSGHUB(TP,I)),IMSGHUBt=TP,IMSGHUBi=I
+ ..S FNI=$S(FNI="":FN,1:FNI) Q:FNI="" 
+ ..Q:$G(^(I,"nosend")) 
+ ..S X="S X=$T(DOSEND^"_FNI_")"
+ ..X X Q:'$L(X)  ; проверка на наличие метки
+ ..S CPROC=$G(^MSGHUB(TP,I,"chkfn")),TEST=1
+ ..I CPROC'="" S X="S X="_CPROC X X Q:'X 
+ ..Q:'TEST 
+ ..S J="" F  S J=$O(^MSGOUT(TP,I,J)) Q:J=""  D  ; проверка/генерация step 2
+ ...S CPROC=$G(^(J,"chkfn"))
+ ...Q:CPROC="" 
+ ...Q:$$timeout(TP,I,J) 
+ ...S X="S X="_CPROC X X
+ ...K:X ^MSGOUT(TP,I,J,"chkfn")
+ ..S FNX="D DOSEND^"_FNI_"("_I_")"
+ ..D dsx^IMSGHUBE
+ Q
+timeout(TP,I,IDX) ; Проверить таймаут и очистить сообщение
+ N TM,X
+ S TM=$G(^MSGHUB(TP,I,"timeout")) Q:TM="" 0
+ S X=$$BTW^DTUTL($H,$P($G(^MSGOUT(TP,I,IDX)),"|",4))
+ Q:$$CMPDTM^DTUTL(X,TM)'=1 0
+ K ^MSGOUT(TP,I,IDX)
+ Q 1
+endsend(TP,ID,IDX) ; Ф-ция завершения отсылки
+ N R,D
+ S R=$G(^MSGOUT(TP,ID,IDX,"endprc"))
+ D:R'="" @R
+ I $G(^MSGHUB(TP,ID,"slog")) S D=$H,R=$O(^MSGSLOG(TP,ID,+D,""),-1)+1,^MSGSLOG(TP,ID,+D,R)=$P($G(^MSGOUT(TP,ID,IDX)),"|",1,4)_"|"_D
+ K ^MSGOUT(TP,ID,IDX)
+ Q
+DORECV ; do input exchange
+ N TP,I,FN,FNX,X,PPROC,PP
+ S TP="" F  S TP=$O(^MSGHUB(TP)) Q:TP=""  D
+ .S FN=$G(^(TP)) Q:FN="" 
+ .S X="S X=$T(DORECV^"_FN_")"
+ .X X Q:'$L(X)
+ .S I="" F  S I=$O(^MSGHUB(TP,I)) Q:I=""  D
+ ..S IMSGHUBt=TP,IMSGHUBi=I
+ ..S FNX=$G(^(I))
+ ..S:FNX="" FNX=FN
+ ..Q:$G(^(I,"norecv")) 
+ ..S FNX="D DORECV^"_FNX_"("_I_")"
+ ..D dsx^IMSGHUBE
+ Q
+IsByID(Area,ID) ; есть с таким идентификатором
+ Q:ID="" ""
+ Q $O(^MSGSTORI(Area,"uid",ID,""))
+ODOC 
+ N X,FYDOCS,R,DT,ID,A,D,I,IDX,F,L,FI,AR
+ Q:'$$CHECK^YDOCS(ND)  
+ D WC^RWU("|Дата, время|От|Файлов|Размер|Обработано")
+ S DT=$P(ND,",",1),ID=$P(ND,",",2) Q:DT=""!(ID)=""
+ S IDX="" F  S IDX=$O(^CDOC(DT,ID,"data",IDX)) Q:IDX=""  D
+ .S X=^(IDX),AR=$P(X,"|",1),I=$P(X,"|",2),D=$P(I,",",1),I=$P(I,",",2)
+ .S R=$G(^MSGSTOR(AR,D,I,"uh"))
+ .S A=$$DTM^DTUTL($P(R,"|",2))_"|"_$P(R,"|",3),F="",(FI,L)=0
+ .F  S F=$O(^MSGSTOR(AR,D,I,"data",F)) Q:F=""  S L=L+^(F),FI=FI+1
+ .S A=$S(FI:"file:FIL_IMSGHUB("""_AR_""","""_D_""","""_I_"""):tif",1:"")_"|"_$$TGA^TXTU(A)
+ .D WC^RWU(CR_A_"|"_FI_"|"_L_"|"_$S($D(^MSGSTOR(AR,D,I,"ud","use")):"да",1:"нет"))
+ D ORSTR^YDOCS
+ Q
+FIL(AR,D,I) 
+ Q:AR=""  Q:D=""  Q:I="" 
+ N X,F
+ D OWF^RWU(".tiff")
+ S F=$O(^MSGSTOR(AR,D,I,"data","")),X=""
+ F  S X=$O(^MSGSTOR(AR,D,I,"data",F,X)) Q:X=""  D W^RWU(^(X))
+ D C^RWU
+ Q
+CHKSEND(TP,DATA) ; Проверить данные и вернуть UID, -1-неподошло
+ Q:'$D(^MSGHUB(TP)) -1
+ N ID,UID,FN,TEST
+ S ID="",UID=-1 F  S ID=$O(^MSGHUB(TP,ID)) Q:ID=""  D  Q:UID'=-1
+ .S FN=$G(^(ID,"prechkfn"))
+ .I FN="" S UID=$G(^("uid")) Q ; OK
+ .S X="S X="_FN X X
+ .Q:'X 
+ .S UID=$G(^MSGHUB(TP,ID,"uid"))
+ Q UID
+ADDSEND(TP,UID,FROM,TO,MSG,NM,SUB,CPROC,WAIT) ; Добавить для отправки
+ ; UID - идентификатор отсылки в типе
+ ; MSG - текст сообщения
+ ; NM - заголовок сообщения или заголовок|субтекст
+ ; SUB - системные данные
+ ; CPROC - ф-ция проверки готовности/генерации данных
+ ; WAIT - не обрабатывать до ENDSEND
+ N I,ID,A
+ s NM=$G(NM),ID=$$FNDUID(TP,$G(UID))
+ S:ID="" ID=$O(^MSGHUB(TP,""))
+ Q:ID="" ""
+ S I=""
+ S:NM["|" I=$P(NM,"|",2,99),NM=$P(NM,"|",1)
+ S A=FROM_"|"_TO_"|"_NM_"|"_$H
+ S:I'="" A=A_"|"_I
+ L +^MSGOUT(TP,ID)
+ S I=$O(^MSGOUT(TP,ID,""),-1)+1,^(I)=A
+ L -^MSGOUT(TP,ID) 
+ S:$G(WAIT) ^MSGOUT(TP,ID,I,"wait")=1
+ S:$D(SUB) ^MSGOUT(TP,ID,I,"sub")=SUB
+ S:$D(CPROC) ^MSGOUT(TP,ID,I,"chkfn")=CPROC
+ S:MSG'="" ^MSGOUT(TP,ID,I,"data",1)=MSG
+ Q TP_","_ID_","_I
+SENDEPRC(KEY,PROC) ; Присвоить процедуру вызова по окончании
+ S ^MSGOUT($P(KEY,",",1),$P(KEY,",",2),$P(KEY,",",3),"endprc")=PROC
+ Q
+WSEND(KEY,DATA) ; Записать данные для отправки
+ N TP,ID,I,X
+ S TP=$P(KEY,",",1),ID=$P(KEY,",",2),I=$P(KEY,",",3)
+ S ^($O(^MSGOUT(TP,ID,I,"data",""),-1)+1)=DATA
+ Q
+ENDSEND(KEY) ; Факт окончания заполнения
+ K ^MSGOUT($P(KEY,",",1),$P(KEY,",",2),$P(KEY,",",3),"wait")
+ Q
+FNDUID(TP,UID) ; Поиск UID
+ Q:UID="" ""
+ N I
+ S I="" F  S I=$O(^MSGHUB(TP,I)) Q:I=""  I $G(^(I,"uid"))=UID Q 
+ Q I
+THREAD 
+ D:$D(^$R("WWWSRV")) USRCONN^WWWSRV ; for Cache
+ N I,CR,%LOG,RTM
+THREAD1 
+ S I=1,CR=$C(13,10),%LOG="sys",RTM=$G(^cfg("msghub","recvtm"))
+ S (IMSGHUBi,IMSGHUBt)=""
+ S $ZT="ZT^IMSGHUB"
+ S:'RTM RTM=1000
+ F  Q:$D(^SYNCJ("THREAD^IMSGHUB"))  H 1 S I=I+1 D:I#5=0
+ .D:$D(^MSGOUT) DOSEND
+ .I I>RTM S I=0 D DORECV
+ K ^SYNCJ("THREAD^IMSGHUB")
+ Q
+ZT 
+ S:$G(TP)="" TP=$G(IMSGHUBt)
+ I TP'="",$G(IMSGHUBi)'="",$D(^MSGHUB(TP,IMSGHUBi,"nZE")),$ZE[^("nZE") Q 
+ S ^ERLOG("IMSGHUB",+$H,$P($H,",",2))=$ZE_"|"_$G(TP)
+ G THREAD1
+START 
+ S ^SYNCJ("THREAD^IMSGHUB")=1
+ D:$$IsRUN() STOP
+ K ^SYNCJ("THREAD^IMSGHUB")
+ J THREAD^IMSGHUB
+ Q
+STOP 
+ S ^SYNCJ("THREAD^IMSGHUB")=1
+ N I F I=1:1:16 H 1 Q:'$$IsRUN() 
+ Q
+IsRUN() 
+ I $ZV["Cache" Q ($$COUNTNM^IJOBUTL("IMSGHUB")>0)
+ Q $D(^SYNCJ("THREAD^IMSGHUB"))

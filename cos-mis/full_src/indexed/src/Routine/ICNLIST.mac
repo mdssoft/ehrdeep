@@ -1,0 +1,26 @@
+ICNLIST ; Списки услуг [ 10/01/2018  11:44 AM ]
+IsLST(ID,USL) ; Услуга есть в списке
+ Q:$D(^CNLST(ID,"l",USL)) 1
+ Q 0
+GETUF(ID,USL,FL) ; Получить поле услуги
+ Q $G(^CNLST(ID,"l",USL,FL))
+GET(ID,FL) ; Получить поле списка
+ Q $G(^CNLST(ID,"f",FL))
+NEXT(ID,X,IDX) ; Итератор
+ S IDX=$S($G(IDX)="":"l",IDX="usl":"l",1:"f")
+ Q $O(^CNLST(ID,IDX,X))
+FILLU(ID,VAR,VAL) ; Заполнить переменную списком услуг с кодом 
+ ; VAR - имя массива
+ ; VAL - код
+ N U
+ S U="" F  S U=$O(^CNLST(ID,"l",U)) Q:U=""  S @VAR@(U)=VAL
+ Q
+FNDBYFL(FL,X) ; Поиск по совпадению поля
+ N ID
+ S ID="" F  S ID=$O(^CNLST(ID)) Q:ID=""  I $D(^(ID,"f",FL)),^(FL)=X Q
+ Q ID
+ADD(FL,X) ; Добавить список с присвоением поля
+ N ID
+ S ID=$O(^CNLST(""),-1)+1,^CNLST(ID,"f",FL)=X
+ D GL^IEXCH("^CNLST",ID)
+ Q ID

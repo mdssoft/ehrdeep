@@ -1,0 +1,248 @@
+YMKB10 ; Диагнозы по МКБ-10 [ 08/18/2023  4:37 PM ]
+CHECK(DIA) ; Проверка
+ Q:DIA="" 0
+ N K,D,I,F
+ S DIA=$$LU^TXTU(DIA),DIA=$TR(DIA,"УКЕНХВАРОСМТ*+","YKEHXBAPOCMT")
+ S F=1 F I=1:1:$L(DIA,",") I '$$check($P(DIA,",",I)) S F=0 Q
+ Q F
+check(S) 
+ S:S["." D=$P(S,".",1),K=$P(S,".",2) S:S'["." D=$E(S,1,3),K=$E(S,4,99)
+ Q:D="" 0 Q:$L(K)>2 0 S:$L(D)=2 D=$E(D,1)_"0"_$E(D,2)
+ I K="" Q:$D(^D(D,"r"))=1 1 Q 0
+ Q:$D(^D(D,"z",K)) 1 Q 0
+NAME(S,LIM) ; Имя по коду
+ ; LIM - максимальное число символов в имени диагноза
+ Q:S="" ""
+ N Z,I,R,K,D
+ S S=$$LU^TXTU(S),S=$TR(S,"УКЕНХВАРОСМТ*+","YKEHXBAPOCMT"),LIM=$G(LIM)
+ S Z=S,R="" F I=1:1:$L(Z,",") D 
+ .S S=$P(Z,",",I)
+ .S:S["." D=$P(S,".",1),K=$P(S,".",2) S:S'["." D=$E(S,1,3),K=$E(S,4,99)
+ .Q:D=""  Q:$L(K)>2
+ .S:$L(D)=2 D=$E(D,1)_"0"_$E(D,2)
+ .I K="" S R=$S(R="":"",1:R_", ")_$$OWF^TXTU($P($G(^D(D,"r")),"/",2),LIM) Q 
+ .S R=$S(R="":"",1:R_", ")_$$OWF^TXTU($P($G(^D(D,"z",K)),"/",2),LIM)
+ Q R
+NAMET(TXT,LIM) ; Имя по коду или текст
+ ; TXT - код диагноза или просто текст
+ ; LIM - максимальное число символов в имени диагноза
+ Q:TXT="" ""
+ N R
+ S R=$$NAME(TXT,$G(LIM))
+ Q:R="" TXT Q R
+RECODE(S) ; Привести к "правильному" виду
+ N K,D S S=$$LU^TXTU(S),S=$TR(S,"УКЕНХВАРОСМТ *+/\;","YKEHXBAPOCMT")
+ S:S["." D=$P(S,".",1),K=$P(S,".",2) S:S'["." D=$E(S,1,3),K=$E(S,4)
+ Q:D="" "" S:$L(D)=2 D=$E(D,1)_"0"_$E(D,2)
+ I K="" Q:$D(^D(D,"r"))=1 D Q ""
+ I $D(^D(D,"z",K)) Q D_"."_K
+ Q ""
+NEXT(D) ; Получить след. код диагноза
+ N K
+ S K=$P(D,".",2),D=$P(D,".",1)
+ S K=$O(^D(D,"z",K)) Q:K'="" D_"."_K
+ S D=$O(^D(D))
+ Q:$D(^D(D,"r")) D Q D_"."_$O(^D(D,"z","")) 
+LASTS(D) ; Последний субкод по диагнозу
+ N K
+ S K=$O(^D($P(D,".",1),"z",""),-1)
+ Q:K="" D
+ Q D_"."_K
+TMK(D) ; For terminal
+ N A,X
+ I $D(^D(D,"r")) S A=$P(^("r"),"/",2) W A_"|"_$P(A," ",1)_"|"_$S($D(^D(D,"z")):1,1:2),!
+ S X="" F  S X=$O(^D(D,"z",X)) Q:X=""  S A=$P(^(X),"/",2) W $C(9)_A_"|"_$P(A," ",1)_"|2",!
+ Q
+cLIST(DIS,DIE,VAL) ; Получить список диагнозов из периода
+ N D,P
+ K @VAL
+ S D=$O(^D($P(DIS,".",1)),-1),DIE=$P(DIE,".",1)
+ F  S D=$O(^D(D)) Q:D=""!(D]]DIE)  D
+ .S @VAL@(D)=""
+ .S P="" F  S P=$O(^D(D,"z",P)) Q:P=""  S @VAL@(D_"."_P)=""
+ Q
+FND(STR) ; Поиск диагноза по наименованию
+ N Z,L,R,R1
+ S STR=$$WD^TXTU(STR)
+ D OWF^RWU(".txt")
+ D WC^RWU("Код|Наименование")
+ S Z="^D("""")"
+ F  S Z=$Q(@Z) Q:Z=""  S L=$P($TR(@Z,R,R1),"/",2,255) D:L[STR WC^RWU(CR_$P(L," ",1)_"|"_$P(L," ",2,255))
+ D C^RWU
+ Q
+LOADICD ; Load from ICD.XLS
+ N I,A,K,KN,R,RN,D,DN,L,DK,DI,DS,DE,KK
+ S (KK,DS)=""
+ K ^BUF($J)
+ D ORH^RWU
+ F I=1:1 S A=$$R^RWU Q:%IFN["Z"  D:I>1
+ .S A=$$WD^TXTU(A)
+ .S K=$P(A,"|",1),KN=$P(A,"|",2),R=$P(A,"|",3),RN=$P(A,"|",4)
+ .S D=$P(A,"|",5),DN=$P(A,"|",6)
+ .Q:K="" 
+ .S DK=$P(D,".",1),DI=$P(D,".",2)
+ .S L=$S(DI="":$G(^D(DK,"r")),1:$G(^D(DK,"z",DI)))
+ .S:'$D(^BUF($J,K)) ^(K)=KN
+ .S:'$D(^BUF($J,K,R)) ^(R)=RN
+ .S:'$D(^BUF($J,K,R,D)) ^(D)=""
+ .I $L($P(L,"/",2))>$L(D_" "_DN) Q 
+ .S:DI="" ^D(DK,"r")="/"_D_" "_DN
+ .S:DI'="" ^D(DK,"z",DI)="/"_D_" "_DN
+ S L="" F  S L=$O(^BUF($J,L)) Q:L=""  D
+ .S DN=$O(^BUF($J,L,"")),DN=$P(DN,"-",1)
+ .S DE=$O(^BUF($J,L,""),-1) S DE=$S(DE["-":$P(DE,"|",2),1:DE)
+ .S:DE="" DE=$E(DN,1)_99
+ .M ^DD(DN_"-"_DE)=^BUF($J,L)
+ D CR^RWU
+ Q
+LOADFTZ ; Load flat, w.o. groups. If not exists
+ N I,K,K1,K2,NM,A
+ D ORH^RWU
+ F I=1:1 S A=$$R^RWU Q:%IFN["Z"  D:I>1
+ .S K=$$TRIM^TXTU($P(A,"|",1)),K1=$P(K,".",1),K2=$P(K,".",2)
+ .Q:K1="" 
+ .I K2="",$D(^D(K1,"r")) Q 
+ .I K2'="",$D(^D(K1,"z",K2)) Q  
+ .S NM=$$TRIM^TXTU($$DBLSP^TXTU($P(A,"|",2)))
+ .S NM="/"_K1_$S(K2="":"",1:"."_K2)_" "_NM
+ .I K2="" S ^D(K1,"r")=NM
+ .I K2'="" S ^D(K1,"z",K2)=NM
+ D CR^RWU
+ Q
+LFMKBS 
+ S IO=$$OR^TXTU("mkb10-c.txt")
+ U IO
+ S (R1,R2,RZD)="",iJ=0
+ F %J=1:1 U 51 R A  Q:$ZC  D  ; U 0 W A,! 
+ .S A=$$WD^TXTU(A)
+ .F LVL=1:1:9 I $E(A,LVL)'=$C(9) S LVL=LVL-1 Q 
+ .I LVL=3,iJ=1 D  Q 
+ ..S iJ=0,DN=$$TRIM^TXTU(A)
+ ..S:DI="" ^D(DK,"r")="/"_COD_" "_DN
+ ..S:DI'="" ^D(DK,"z",DI)="/"_COD_" "_DN
+ ..I R1'="",R2'="" S ^DD(R1,R2,COD)=""
+ ..S ^DDS(COD)="" ; стоматологические
+ .I LVL=3,iJ=0 D  Q
+ ..S iJ=1,COD=$TR($$TRIM^TXTU(A),"x","+")
+ ..S DK=$P(COD,".",1),DI=$P(COD,".",2)
+ .I LVL=1 D  Q 
+ ..S iJ=0
+ ..S RZD=$P($P(A,"(",2),")",1),NM=$$TRIM^TXTU($P(A,"-",2))
+ ..S R1=$O(^DD($P(RZD,"-",1)_"-Z999"),-1)
+ ..S R2=$O(^DD(R1,$P(RZD,"-",1)_"-Z999"),-1)
+ ..I R1'="",R2'="",'$D(^DD(R1,R2))  S ^(R2)=NM
+ C IO
+ Q
+WTREE ; Write tree
+ S IO=$$OW^FIL("mkb10.txt")
+ U IO
+ S K="",C=0 F  S K=$O(^DD(K)) Q:K=""  D
+ .W:C ! S C=1
+ .S KI=K I $P(KI,"-",2)="" S R=$P($O(^DD(K)),"-",1) S:R'="" R=$O(^D(R),-1),KI=$P(KI,"-",1)_"-"_R
+ .W KI_" "_$$DW^TXTU($$LU^TXTU($G(^DD(K))_"|"_KI_"|1"))
+ .S R="" F  S R=$O(^DD(K,R)) Q:R=""  D
+ ..W !,$C(9)_R_" "_$$DW^TXTU($$LU^TXTU(^(R)_"|"_R_"|1"))
+ ..S D="" F  S D=$O(^DD(K,R,D)) Q:D=""  D
+ ...S DK=$P(D,".",1),DI=$P(D,".",2)
+ ...S A=$P($S(DI="":^D(DK,"r"),1:^D(DK,"z",DI)),"/",2)
+ ...W:DI="" !,$C(9,9)_$$DW^TXTU(A_"|"_D_"|3")
+ ...W:DI'="" !,$C(9,9,9)_$$DW^TXTU(A_"|"_D_"|2")
+ C IO
+ Q
+WTREES ; Write tree MKB-S
+ O 51:("mkb10s.txt":"W")
+ K ^DDST
+ S K="" F  S K=$O(^DD(K)) Q:K=""  S X="" F  S X=$O(^DD(K,X)) Q:X=""  S D="" F  S D=$O(^DD(K,X,D)) Q:D=""  D:$D(^DDS(D))
+ .S ^DDST(K)=^DD(K)
+ .S ^DDST(K,X)=^DD(K,X)
+ .S ^DDST(K,X,D)=""
+ U 51
+ S K="",C=0 F  S K=$O(^DDST(K)) Q:K=""  D
+ .W:C ! S C=1
+ .S KI=K I $P(KI,"-",2)="" S R=$P($O(^DDST(K)),"-",1) S:R'="" R=$O(^D(R),-1),KI=$P(KI,"-",1)_"-"_R
+ .W KI_" "_$$DW^TXTU($$LU^TXTU(^DDST(K)_"|"_KI_"|1"))
+ .S R="" F  S R=$O(^DDST(K,R)) Q:R=""  D
+ ..W !,$C(9)_R_" "_$$DW^TXTU($$LU^TXTU(^(R)_"|"_R_"|1"))
+ ..S D="" F  S D=$O(^DDST(K,R,D)) Q:D=""  D
+ ...S DK=$P(D,".",1),DI=$P(D,".",2)
+ ...S A=$P($S(DI="":^D(DK,"r"),1:^D(DK,"z",DI)),"/",2)
+ ...W:DI="" !,$C(9,9)_$$DW^TXTU(A_"|"_D_"|3")
+ ...W:DI'="" !,$C(9,9,9)_$$DW^TXTU(A_"|"_D_"|2")
+ C 51
+ K ^DDST
+ Q
+EXP 
+ O 51:("mkb10.csv":"W")
+ U 51
+ S K="",C=0 F  S K=$O(^DD(K)) Q:K=""  D
+ .W:C ! S C=1
+ .;W K_" "_$$DW^TXTU($$LU^TXTU(^DD(K)_"|"_K_"|1"))
+ .S R="" F  S R=$O(^DD(K,R)) Q:R=""  D
+ ..;W !,R;$$DW^TXTU($$LU^TXTU(^(R)))
+ ..S D="" F  S D=$O(^DD(K,R,D)) Q:D=""  D
+ ...S DK=$P(D,".",1),DI=$P(D,".",2)
+ ...S A=$P($S(DI="":^D(DK,"r"),1:^D(DK,"z",DI)),"/",2)
+ ...W !,D_";"_$$DW^TXTU(A)
+ C 51
+ Q
+INNCI(FN) ; Загрузить файл в формате НСИ МЗ РФ
+ ; UID - 1.2.643.5.1.13.13.11.1005_2.5
+ N IO,A,R,I,X,TG,NM,COD,SYM,SYS,PAR,ID,IT,R1,R2,DD1,DD2
+ S:$G(FN)="" FN="1.2.643.5.1.13.13.11.1005_2.5.xml"
+ S IO=$$OR^FIL(FN) Q:IO=""
+ S IT=0,(DD1,DD2)=""
+ K ^BUF("dd"),^BUF("di"),^D,^DD
+ D OEV^XMLR("NCIts^YMKB10","NCItd^YMKB10","NCIte^YMKB10")
+ U IO F  R R#512 Q:$$ST^FIL()=0  D:R'="" REV^XMLR(R)
+ C IO U 0
+ ; update ^DD 2-level
+ S ID="" F  S ID=$O(^BUF("dd",ID)) Q:ID=""  D
+ .I $G(^(ID))="" w !,ID Q 
+ .S R=^(ID) Q:'$P(R,"|",3) 
+ .S COD=$P(R,"|",1),PAR=$P(R,"|",3)
+ .S R1=$P($G(^BUF("dd",PAR)),"|",1) Q:R1="" 
+ .S ^DD(R1,COD)=$P(R,"|",2),$P(^BUF("dd",ID),"|",4)=R1
+ ; find the correct parent groups
+ S ID="" F  S ID=$O(^BUF("di",ID)) Q:ID=""  D
+ .S R=^(ID),COD=$P(R,"|",2),I=$P(R,"|",1)
+ .I '$D(^BUF("dd",I)) F  S I=$P(^BUF("di",I),"|",1) Q:'$D(^BUF("di",I)) 
+ .I '$D(^BUF("dd",I)) w "." Q 
+ .S R1=^BUF("dd",I),R2=$P(R1,"|",1),R1=$P(R1,"|",4)
+ .I R1=""!(R2="") W " !"_I Q
+ .S ^DD(R1,R2,COD)=""
+ K ^BUF("dd"),^BUF("di")
+ Q
+NCIts ; tag start
+ Q:IT  Q:%XM(2)'="entry"  
+ S IT=1,(COD,NM,SYM,SYS,PAC,PAR,ID)=""
+ Q
+NCItd ; tag data
+ Q:'IT 
+ I %XM(2)="MKB_CODE" S COD=COD_%XD Q
+ I %XM(2)="MKB_NAME" S NM=NM_%XD Q
+ I %XM(2)="ADDL_CODE" S SYM=SYM_%XD Q
+ I %XM(2)="REC_CODE" S SYS=SYS_%XD Q
+ I %XM(2)="ID" S ID=ID_%XD Q
+ I %XM(2)="ID_PARENT" S PAR=PAR_%XD Q
+ Q
+NCIte ; tag end
+ Q:'IT  Q:%XM(2)'="entry"
+ S IT=0
+ I COD="",NM="" Q 
+ I COD="",NM'="" D  Q  
+ .I $E(NM,$L(NM))'=")" S NM="" Q 
+ .S I=$$FB^TXTU(NM,"(") I I="" S NM="" Q 
+ .S COD=$E(NM,I+1,$L(NM)-1),NM=$$TRIM^TXTU($E(NM,1,I-1))
+ .S:PAR="" ^BUF("dd",ID)=COD_"|"_NM,^DD(COD)=NM
+ .S:PAR'="" ^BUF("dd",ID)=COD_"|"_NM_"|"_PAR
+ 
+ S R1=$P(COD,".",1),R2=$P(COD,".",2)
+ S NM=$$DBLSP^TXTU(NM)
+ S SYM=$S(SYM=1:"+",SYM=2:"*",1:"")
+ S A="/"_COD_SYM_" "_NM
+ S:SYM'="" $P(A,"/",3)=SYM
+ S:SYS'="" $P(A,"/",4)=SYS
+ S:R2="" ^D(R1,"r")=A
+ S:R2'="" ^D(R1,"z",R2)=A
+ S:PAR'="" ^BUF("di",ID)=PAR_"|"_COD 
+ Q

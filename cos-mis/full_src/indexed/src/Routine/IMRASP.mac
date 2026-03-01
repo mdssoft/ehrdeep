@@ -1,0 +1,132 @@
+IMRASP ; Make shedule internal [ 12/19/2022  5:51 PM ]
+CHKANY(DS,DE,LP) ; Проверить на наличие любого расписания в периоде
+ N DT,OT,VR,SP,F
+ S OT="",F=0
+ F  S OT=$O(^DSH(LP,OT)) Q:OT=""!F  S VR="" F  S VR=$O(^DSH(LP,OT,VR)) Q:VR=""!F  S SP="" F  S SP=$O(^DSH(LP,OT,VR,SP)) Q:SP=""!F  S DT=$O(^DSH(LP,OT,VR,SP,DE+1),-1) I DT'<DS S F=1 Q
+ Q F
+DOlock(LPU,OT,VR,SP,DS,DE,MOD) ; Блокировка расписания
+ ; MOD = 0-разблок/1-заблок
+ N LP,O,V,S,D,R
+ S:MOD=0 MOD=""
+ S L="" F  S L=$O(^DSH(L)) Q:L=""  D:LPU=""!(LPU=L)
+ .S O="" F  S O=$O(^DSH(L,O)) Q:O=""  D:OT=""!(OT=O)
+ ..S V="" F  S V=$O(^DSH(L,O,V)) Q:V=""  D:VR=""!(VR=V)
+ ...S S="" F  S S=$O(^DSH(L,O,V,S)) Q:S=""  D:SP=""!(SP=S)
+ ....S D=DS-1 F  S D=$O(^DSH(L,O,V,S,D)) Q:D=""!(D>DE)  D
+ .....Q:$P(^(D),"|",5)=MOD 
+ .....S $P(^(D),"|",5)=MOD
+ .....D GLZ^IEXCH("^DSH",L,O,V,S,D)
+ .....D WLOG(L,O,V,S,D,$S(MOD:"L",1:"U"))
+ Q
+GENTML(LN,GL) ; Make time list from string
+ Q:LN=""!(GL="") 0
+ N I,X,TM,TP,E
+ S LN=$$TRIM^TXTU($TR(LN,";/| ",",,,")),TP=0,E=0
+ S:$E(LN,$L(LN))'="*" LN=LN_"*"
+ K @GL
+ F I=1:1:$L(LN,",") D  Q:E
+ .S X=$P(LN,",",I),TM=$$TI^DTUTL($P(X,"*",1)) Q:TM<0  Q:TM="" 
+ .I TM<TP S E=1 Q 
+ .I TM<86400 S TP=TM,@GL@(TM)=$S(X["*":"*",1:"")
+ I E K @GL Q 0
+ Q 1
+MKTML(TM,GL) ; Make time list from registers
+ K @GL
+ I $D(^M(141,TM,"t")) M @GL=^M(141,TM,"t") Q 
+ S TM=$$GENTML($P($G(^M(141,TM)),"|",2),GL)
+ Q
+MKTMF(TM,GL) ; Make from free time list
+ K @GL
+ N X,A,R S TM=$G(^DSHI("tim",TM))
+ F X=1:1 S A=$P(TM,"|",X) Q:A=""  S R=$S(A["*":"*",1:""),A=$P(A,"*",1)*60,@GL@(A)=R
+ Q
+CREATM(LPU,OT,VR,SP,DT,TS,TE,TL) ; Создать времена в дне
+ ; TE - последнее начало приема
+ N T,E
+ S E=TE+TL F T=TS:TL:E D
+ .Q:$G(^DSH(LPU,OT,VR,SP,DT,T))'="" 
+ .S ^DSH(LPU,OT,VR,SP,DT,T)=$S(T=E:"*",1:"")
+ S ^DSH(LPU,OT,VR,SP,DT,TE+TL)="*" ; TODO
+ Q
+MKI(LPU,DTU,DS,DE,NCSP) ; Make index
+ ; DTU - максимальная дата обновления
+ ; DS,DE - период пересоздания индекса
+ ; NCSP - не очищать индекс по специальности
+ S LPU=+LPU
+ S:$G(DS)="" DS=DTU S:$G(DE)="" DE=DTU
+ N OT,VR,SP,SPP,DT,I,X,DOT,DEE
+ K:'$G(NCSP) ^DSHI("sp",LPU)
+ D clri
+ S OT="" F  S OT=$O(^DSH(LPU,OT)) Q:OT=""  D
+ .S DOT=0
+ .S VR="" F  S VR=$O(^DSH(LPU,OT,VR)) Q:VR=""  S SP="" F  S SP=$O(^DSH(LPU,OT,VR,SP)) Q:SP=""  D
+ ..F I=1:1:9 S X=$P(SP,"|",I) Q:X=""  S ^DSHI("sp",LPU,X,OT_"|"_VR)=SP
+ ..S DEE=$O(^DSH(LPU,OT,VR,SP,""),-1) S:DEE>DOT DOT=DEE
+ ..D MKIDT(LPU,OT,VR,SP,DS,DE)
+ .S:DOT ^DSH(LPU,OT)=DOT
+ I $G(DTU)'="",+$G(^DSH(LPU))<DTU S ^DSH(LPU)=DTU
+ Q
+MKIDT(LPU,OT,VR,SP,DS,DE) ; Пересоздать индекс по датам
+ N R,X,J,K,DT,KX
+ S DT=DS-1
+ F  S DT=$O(^DSH(LPU,OT,VR,SP,DT)) Q:DT=""!(DT>DE)  D
+ .S R=$G(^(DT)),X=$P(R,"|",2)
+ .I X'="" S ^DSHI("cab",LPU,X,DT,OT_"@"_VR_"@"_SP)=$O(^(DT,""),-1) D GL^IEXCH("^DSHI","cab",LPU,X,DT,OT_"@"_VR_"@"_SP)
+ .I '$D(^DSHI("vr",VR,DT,LPU)) S ^(LPU)="" D GL^IEXCH("^DSHI","vr",VR,DT,LPU)
+ .S R=$P(R,"|",9) Q:R="" 
+ .S KX=OT_"|"_VR
+ .F J=1:1:9 S K=$P(R,"@",J) Q:K=""  I K'=SP,'$D(^DSHI("sp",LPU,K,KX,SP)) S ^DSHI("sp",LPU,K,KX)="",^(KX,SP)="" D GL^IEXCH("^DSHI","sp",LPU,K,OT_"|"_VR)
+ I '$D(^DSHI("sp",LPU,SP,OT_"|"_VR)) S ^(OT_"|"_VR)=SP D GL^IEXCH("^DSHI","sp",LPU,SP,OT_"|"_VR)
+ Q
+RMIDT(LPU,OT,VR,SP,DS,DE) ; Удалить индекс по датам
+ N X,K,DT
+ S K=OT_"@"_VR_"@"_SP
+ S X="" F  S X=$O(^DSHI("cab",LPU,X)) Q:X=""  D
+ .S DT=DS-1 F  S DT=$O(^DSHI("cab",LPU,X,DT)) Q:DT=""!(DT>DE)  I $D(^(DT,K)) K ^(K) D KGL^IEXCH("^DSHI","cab",LPU,X,DT,K)
+ ; TODO - VR - all VR in LPU
+ Q
+clri ; Очистить индекс зависимый от даты
+ N DT,X
+ S X="" F  S X=$O(^DSHI("cab",LPU,X)) Q:X=""  D
+ .S DT=DS-1 F  S DT=$O(^DSHI("cab",LPU,X,DT)) Q:DT=""!(DT>DE)  K ^(DT)
+ S X="" F  S X=$O(^DSHI("vr",X)) Q:X=""  D
+ .S DT=DS-1 F  S DT=$O(^DSHI("vr",X,DT)) Q:DT=""!(DT>DE)  K:$D(^DSHI("vr",X,DT,LPU)) ^DSHI("vr",X,DT,LPU)
+ Q
+isCAB(CAB,LPU,OT,VR,SP,DS,DE) 
+ N D,F
+ S D=DS-1,F=0 F  S D=$O(^DSH(LPU,OT,VR,SP,D)) Q:D=""!(D>DE)  I $P($G(^(D)),"|",2)=CAB S F=1 Q
+ Q F
+CHKTML ; Проверить права на мин/макс время в TML
+ N R
+ S R=$$C^I("mkrasp","mintm")
+ I R'="",$D(TML),$O(TML(""))<R D MSG^RWU("Время начала графика раньше допустимого") Q
+ S R=$$C^I("mkrasp","maxtm")
+ I R'="",$D(TML),$O(TML(""),-1)>R D MSG^RWU("Время окончания графика позже допустимого") Q
+ Q
+WLOG(LPU,OT,VR,SP,DT,TP) ; Write log
+ N H S H=$H
+ S ^DSHWC(LPU,OT,VR,SP,DT,H)=$$USR^IUSER()_"|"_TP
+ d GL^IEXCH("^DSHWC",LPU,OT,VR,SP,DT,H)
+ Q
+UPDA(LPU,DS,DE) ; Update all
+ N L,O,V,D
+ S L="" F  S L=$O(^DSH(L)) Q:L=""  D:LPU=""!(LPU=L)
+ .S O="" F  S O=$O(^DSH(L,O)) Q:O=""  D
+ ..S V="" F  S V=$O(^DSH(L,O,V)) Q:V=""  D
+ ...S S="" F  S S=$O(^DSH(L,O,V,S)) Q:S=""  D
+ ....S D=DS-1 F  S D=$O(^DSH(L,O,V,S,D)) Q:D=""!(D>DE)  D REGL^IEXCH("^DSH",L,O,V,S,D)
+ Q
+REGLCL   ; Register description of available rights
+ K ^LCLI("mkrasp")
+ S ^LCLI("mkrasp")="Создание расписания"
+ S ^LCLI("mkrasp","byotd")="Ограничение по отделению для просмотра/изменения"
+ S ^LCLI("mkrasp","nbyotd")="Не показывать отделение для просмотра/изменения"
+ S ^LCLI("mkrasp","delvr")="Удаление сотрудника"
+ S ^LCLI("mkrasp","make")="Создание нового расписания"
+ S ^LCLI("mkrasp","save")="Сохранение расписание"
+ S ^LCLI("mkrasp","aotimer")="Запрет изменения предыдущих дат"
+ S ^LCLI("mkrasp","mk-once")="Если в месяце что-то есть - повторное создание запрещено"
+ S ^LCLI("mkrasp","move")="Перемещение между врачами/специальностями"
+ S ^LCLI("mkrasp","addovr")="Добавлять врача с отделением по умолчанию"
+ S ^LCLI("mkrasp","master")="Запрет использования мастера расписания (=0)"
+ Q

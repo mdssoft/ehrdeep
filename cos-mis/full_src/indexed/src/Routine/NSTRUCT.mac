@@ -1,0 +1,8 @@
+NSTRUCT ; Общие процедуры для структуры полей [ 02/23/2015  4:39 PM ]
+PRMLST(AREA) ; Список полей по области
+ Q:AREA="" 
+ N A,FL
+ S (A,FL)="" F  S FL=$O(^STRUCT(AREA,FL)) Q:FL=""  D
+ .S A=$S(A="":"",1:A_CR)_FL_"|"_$P(^(FL),"|",2)
+ D MSG^RWU(A)
+ Q

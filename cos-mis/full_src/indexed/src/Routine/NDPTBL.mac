@@ -1,0 +1,41 @@
+NDPTBL ; Отчет о продаже абонементов [ 06/30/2009  2:49 AM ]
+TAB(DT) ; Вывод таблицы
+ S DT=$$DIH^DTUTL(DT)
+ N TP,DTT,ID,A
+ S TP=$$FNDTP^YDOCTP("Отчет агента") Q:TP="" 
+ S ID=DT_",1"
+ D OWF^RWU(".txt"),WC^RWU("|Код полиса")
+ F  S ID=$O(^CDOCI("type",TP,ID)) Q:ID=""  Q:$P(ID,",",1)'=DT  D
+ .S A=$$GET^YDOCS(ID,"agent")
+ .S A=$S($$CHECK^YIKADRY(A):$$FIOSH^YIKADRY(A),1:A)
+ .D WC^RWU(CR_ID_"|"_$$GET^YDOCS(ID,"polis")_"||"_A)
+ D C^RWU
+ Q
+S ; Save
+SN ; Create and save
+ D ORH^RWU
+ K XML,XMLR
+ F %J=1:1 S A=$$R13^RWU Q:%IFN["Z"  D XML^YIXMLRR
+ D W
+ S %L="",%B="1.txt",FN=%B K XML,XMLR
+ Q
+W ; Write data
+ N DID,PT,PLS,PL S PT="regpga"
+ S DID=$G(XML(PT,"docid")),PLS=$G(XML(PT,"polis"))
+ K XML(PT,"docid")
+ S:DID="" DID=$$MKDOCNM^YDOCS("Отчет агента по "_PLS,"Отчет агента","Продажа абонементов")
+ S PL="" F  S PL=$O(XML(PT,PL)) Q:PL=""  D SET^YDOCS(DID,PL,XML(PT,PL))
+ D SETDEF^YDOCS(DID)
+ Q
+LT(ID) ; Load data
+ I $$CHECK^YDOCS(ID)=0 S %B=".xmlb",FN=%B,%L="" Q
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<regpga>")
+ D WTAGDC^RWU("polis",$$GET^YDOCS(ID,"polis"))
+ D WTAGDC^RWU("df",$$GET^YDOCS(ID,"df"))
+ D WTAGDC^RWU("dofor",$$GET^YDOCS(ID,"dofor"))
+ D WTAGDC^RWU("price",$$GET^YDOCS(ID,"price"))
+ D WTAGDC^RWU("agent",$$GET^YDOCS(ID,"agent"))
+ D WTAGDC^RWU("fioo",$$GET^YDOCS(ID,"fioo"))
+ D W^RWU("</regpga></nb_console>"),C^RWU
+ Q
+ 

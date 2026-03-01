@@ -1,0 +1,60 @@
+RMHS ; Системные отчеты истории болезни [ 09/04/2013  2:49 AM ]
+DTPVR(DS,DE) 
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ K ^BUF($J)
+ N NI,ID,R,V,DT
+ S DT=DS-1 F  S DT=$O(^EPRI("dt",DT)) Q:DT=""!(DT>DE)  S NI="" F  S NI=$O(^EPRI("dt",DT,NI)) Q:NI=""  D
+ .S ID="" F  S ID=$O(^EPRI("dt",DT,NI,ID)) Q:ID=""  D
+ ..S R=+$G(^EPR(NI,ID,"dt")) Q:R<DS!(R>DE) 
+ ..S R=$G(^("t")),V=+$P($G(^("o")),"|",2) Q:R=""
+ ..S ^BUF($J,R)=$G(^BUF($J,R))+1
+ ..S:'$D(^BUF($J,R,"v",V)) ^(V)="",^BUF($J,R,"v")=$G(^BUF($J,R,"v"))+1
+ D OWF^RWU(".txt")
+ D WC^RWU("Документ|Кол-во|Врачей")
+ S V="" F  S V=$O(^BUF($J,V)) Q:V=""  D
+ .D WC^RWU(CR_$G(^DTYPE(V,"tname"))_"|"_$G(^BUF($J,V))_"|"_$G(^BUF($J,V,"v")))
+ D C^RWU
+ K ^BUF($J) 
+ Q
+NSBS(DS,DE) ; Неподписанные документы
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D OWF^RWU(".txt")
+ D WC^RWU("Дата|№ И.Б.|Пациент|Врач|Документ")
+ N NI,ID,R,V,DT,L,N,LPU,FR
+ S DT=DS-1,LPU=$$^I("ilpu"),FR=+$$FR^I()
+ F  S DT=$O(^EPRI("dt",DT)) Q:DT=""!(DT>DE)  S NI="" F  S NI=$O(^EPRI("dt",DT,NI)) Q:NI=""  D
+ .S ID="" F  S ID=$O(^EPRI("dt",DT,NI,ID)) Q:ID=""  D
+ ..S R=+$G(^EPR(NI,ID,"dt")) Q:R<DS!(R>DE) 
+ ..Q:+$P($G(^("s")),"|",1)'=0 
+ ..S R=$G(^("o")),V=+$P(R,"|",2),L=+$P(R,"|",3)
+ ..I 'FR,L Q:L'=LPU 
+ ..S N=$G(^("n"))
+ ..D WC^RWU(CR_$$DT^DTUTL(DT)_"|"_NI_"|"_$$FIO^IPAC(NI)_"|"_$$FIO^YIKADRY(V)_"|"_N)
+ D C^RWU
+ Q
+NSBSys(DS,DE) ; Неподписанные документы -> STATE
+ N NI,ID,R,V,DT,L,N,LPU,FR
+ S DT=DS-1,LPU=$$^I("ilpu"),FR=+$$FR^I()
+ F  S DT=$O(^EPRI("dt",DT)) Q:DT=""!(DT>DE)  S NI="" F  S NI=$O(^EPRI("dt",DT,NI)) Q:NI=""  D
+ .S ID="" F  S ID=$O(^EPRI("dt",DT,NI,ID)) Q:ID=""  D
+ ..S R=+$G(^EPR(NI,ID,"dt")) Q:R<DS!(R>DE) 
+ ..Q:+$P($G(^("s")),"|",1)'=0 
+ ..S R=$G(^("o")),V=+$P(R,"|",2),L=+$P(R,"|",3)
+ ..I 'FR,L Q:L'=LPU 
+ ..S STATE(V)=$G(STATE(V))+1
+ Q
+FNDFDOC(NI,DT,VR) ; Найти первый документ, сделанный врачем у пац.
+ Q:NI=""!(DT="")!(VR="") ""
+ N ID,R,Q
+ S ID="",Q=0 F  S ID=$O(^EPRI("dt",DT,NI,ID)) Q:ID=""  D  Q:Q 
+ .S R=+$G(^EPR(NI,ID,"dt")) Q:R'=DT 
+ .S R=$G(^("o"))
+ .S:$P(R,"|",1,2)=("D|"_VR) Q=1
+ Q ID
+TPFSTAT(TP,LEN) ; статистика значений по полям (по типу)
+ Q
+REGIPROC 
+ N D S D="Система"
+ S ^IPROC(D,"ЭМК","Используемые документы ЭИБ")="DTPVR_RMHS,1,2,d,Начальная дата,d,Конечная дата"
+ S ^IPROC(D,"ЭМК","Неподписанные документы ЭИБ")="NSBS_RMHS,1,2,d,Начальная дата,d,Конечная дата"
+ Q

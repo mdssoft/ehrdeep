@@ -1,0 +1,234 @@
+IMFORM12 ; Форма-12 [ 02/09/2018  4:08 AM ]
+MK(DS,DE) 
+ K ^BUF($J,"f12"),^("ni"),^("tab"),^("prc")
+ 
+ D MKTMP
+ S B="Ввод данных"
+ D MKKONT
+ N VR,OT,DT,ID,@$$NEWVAR^IUSL,STL,F,U,R,AG,SX,VVD,FF,K
+ N Tpos,Ypos,Cpos,Opos,Zpos,Ipos
+ S FF=+$G(^cfg("stat","pos"))
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D
+ ..S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ...S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ....S DIA=$$GETDI^IUSL(VR,DT,OT,ID) Q:DIA="" 
+ ....S DIA=$TR(DIA,"+*","")
+ ....Q:'$D(^BUF($J,"f12",0,DIA))
+ ....D GETLT^IUSL(VR,DT,OT,ID)
+ ....Q:$D(ERR)  Q:STAT="w"  
+ ....S FLG="|"_$G(FLG)_"|"
+ ....Q:FLG["|0|"  ; неут.
+ ....S F=FF
+ ....I FF S U=$O(UL("")) Q:U=""  D MKPRC^IUSL(1)
+ ....I FF Q:$D(^BUF($J,"prc",U,PRC))  S F=0,R="|"_$$GET^IPRICE(U,"cls",PRC,DE+11)_"|" I R'["|cns|",R'["|pos|" S ^BUF($J,"prc",U,PRC)="" Q 
+ ....Q:F  ; только посещения
+ ....I FLG'["|1|",'$D(^BUF($J,"ni",NI,DIA)) S ^(DIA)="" Q
+ ....I FLG["|1|",'$G(^BUF($J,"ni",NI,DIA)) S ^(DIA)=1 Q  ; выявл. вперв
+ 
+ D MKTAB
+ D WTAB
+ 
+ K ^BUF($J,"f12"),^("ni"),^("tab"),^("prc")
+ Q
+MKKONT ; Население
+ N NI,ST,A,D,S
+ S D=DE
+ S NI="" F  S NI=$$NEXT^IPAC(NI) Q:NI=""  D:$$CHECK^IPAC(NI,D)
+ .S A=$$AGE^IPAC(NI,DE) Q:'A 
+ .I A<15 S ST(1)=$G(ST(1))+1 Q 
+ .I A>17 S ST(4)=$G(ST(4))+1 Q
+ .S ST(2)=$G(ST(2))+1
+ .I $$GET^IPAC(NI,"pol")=1 S ST(3)=$G(ST(3))+1
+  
+ S A=CR_B_":F:5:"_(+$G(ST(1)))
+ S A=A_CR_B_":F:6:"_(+$G(ST(2)))
+ S A=A_CR_B_":F:7:"_(+$G(ST(3)))
+ S A=A_CR_B_":F:8:"_(+$G(ST(4)))
+ D WC^RWU(A)
+ Q
+MKTAB ; Создать таблицы
+ N NCNT,UCNT,DVVA
+ K ^BUF($J,"tab")
+ ; Ipos - индекс диагноза
+ ; Tpos - позиция таблицы
+ ; Opos - позиция доп таблицы
+ ; Zpos - позиция Z таблицы
+ ; NCNT - был Z диагноз 
+ ; UCNT - был значащий диагноз
+ ; DVVA - всегда вперв. уст. диагнозы
+ F R="A80","I24","J00","J01","J02","J03","J04","J05","J06","J10","J11","J20","J21","J22" S DVVA(R)=""
+ S NI="" F  S NI=$O(^BUF($J,"ni",NI)) Q:NI=""  D
+ .S AG=$$AGE^IPAC(NI,DE)
+ .S:'AG AG=50 ; не определен - взрослые
+ .S SX=$$GET^IPAC(NI,"pol",DE)
+ .S Ipos=$S(AG>17:3,AG<15:1,1:2)
+ .S Tpos=$S(AG>17:418,AG<15:10,1:210) ; поз. таблицы
+ .S Zpos=$S(AG>17:624,AG<15:202,1:410)
+ .S Opos=$S(SX=1&(AG>59):632,SX=2&(AG>54):632,1:0) ; с 55 лет у женщин и с 60-ти лет у мужчин
+ .S VVD=0,NCNT=0,UCNT=0
+ .S DIA="" F  S DIA=$O(^BUF($J,"ni",NI,DIA)) Q:DIA=""  D
+ ..S R=^(DIA)
+ ..I $D(DVVA($P(DIA,".",1)))!$$dvva(DIA) S R=1
+ ..S STL=$G(^BUF($J,"f12",Ipos,DIA)) Q:STL="" 
+ ..F ID=1:1:$L(STL,"|") S Ypos=$P(STL,"|",ID) D
+ ...I Ypos>500 S NCNT=1,^("F")=$G(^BUF($J,"tab",Zpos+Ypos-501,"F"))+1 S:Opos ^("F")=$G(^BUF($J,"tab",Opos+Ypos-299,"F"))+1 Q  ; Opos+202+Ypos-501
+ ...S U=$S(Tpos=210:"H",1:"G"),UCNT=1
+ ...I Ipos>1,Ypos=128 S R=0 ; не может в.в. (excel tab)
+ ...I Ipos=1,Ypos=118 S R=0 ; то же
+ ...S:R VVD=1 ; диагноз впервые выявлен
+ ...S K=Tpos+Ypos
+ ...S ^("F")=$G(^BUF($J,"tab",Tpos+Ypos,"F"))+1
+ ...S:R ^(U)=$G(^(U))+1 ; в т.ч. ввп
+ ...I Opos S ^("F")=$G(^BUF($J,"tab",Opos+Ypos,"F"))+1 S:R ^(U)=$G(^(U))+1
+ .Q:'UCNT  ; не считаем лиц только с Z диагнозами
+ .S Tpos=$S(AG>17:613,AG<15:192,1:401),U="E" ; поз. таблицы лиц
+ .S ^(U)=$G(^BUF($J,"tab",Tpos,U))+1
+ .S:VVD ^(U)=$G(^BUF($J,"tab",Tpos+1,U))+1
+ .I Opos S ^(U)=$G(^BUF($J,"tab",824,U))+1 S:VVD ^(U)=$G(^BUF($J,"tab",825,U))+1
+ Q
+dvva(DIA) ; всегда вперв. уст. диагнозы (часть 2)
+ I $E(DIA)="H" Q:DIA="H65.0"!(DIA="H65.1")!(DIA="H66.0") 1
+ Q 0
+WTAB 
+ S (A,ID)="" F  S ID=$O(^BUF($J,"tab",ID)) Q:ID=""  D
+ .S R="" F  S R=$O(^BUF($J,"tab",ID,R)) Q:R=""  D
+ ..S U=^(R)
+ ..S A=A_CR_B_":"_R_":"_ID_":"_U
+ .I $L(A)>4096 D WC^RWU(A) S A=""
+ D:$L(A) WC^RWU(A)
+ Q
+MKTMP ; Сгенерить каталог диагнозов
+ N K,I,D,R,J,X,RR,D1,D2,De
+ K ^BUF($J,"f12")
+ S K="" F  S K=$O(^MFORM(12,K)) Q:K=""  D
+ .S I="" F  S I=$O(^MFORM(12,K,I)) Q:I=""  D
+ ..S R=^(I)
+ ..Q:I=1 ; сумма считается в excel-е
+ ..F J=1:1:99 S X=$P(R,",",J) Q:X=""  D
+ ...S D1=$P(X,"-",1),D2=$P(X,"-",2)
+ ...I D2="",D1'["." S D2=$$LASTS^YMKB10(D1) ; все подмножество
+ ...S:D1=D2 D2=""
+ ...I D2="" S X=$TR($$RECODE^YMKB10(X),"*+","") Q:X=""  S RR=$G(^BUF($J,"f12",K,X)),^(X)=$S(RR="":"",1:RR_"|")_I,^BUF($J,"f12",0,X)="" Q 
+ ...S D1=$$RECODE^YMKB10(D1),D2=$$RECODE^YMKB10(D2)
+ ...S:D2'["." D2=$$LASTS^YMKB10(D2)
+ ...;I D1=""!(D2="") W "! "_D1_"-"_D2_"("_K_","_I_")" Q  ; TEST
+ ...S D=D1 F  D  Q:D=D2  S D=$$NEXT^YMKB10(D) Q:D=""  
+ ....S De=$TR(D,"*+","")
+ ....S RR=$G(^BUF($J,"f12",K,De)),^(De)=$S(RR="":"",1:RR_"|")_I
+ ....S ^BUF($J,"f12",0,De)="" 
+ Q
+LOAD(FN,IDX) 
+ K ^MFORM(12,IDX)
+ S F=$$ORT^FIL(FN),I=1
+ F  U F R R Q:$$ST^FIL()=0  D
+ .S R=$$WD^TXTU(R)
+ .S R=$TR(R,"УКЕНХВАРОСМТ*+","YKEHXBAPOCMT")
+ .S ^MFORM(12,IDX,I)=$TR(R," ",""),I=I+1
+ C F
+ Q
+ADDgl 
+ F i=1,2,3 D
+ .s ^MFORM(12,i,501)="Z00-Z13"
+ .s ^MFORM(12,i,502)="Z20-Z29"
+ .s ^MFORM(12,i,503)="Z30-Z39"
+ .s ^MFORM(12,i,504)="Z40-Z54"
+ .s ^MFORM(12,i,505)="Z55-Z65"
+ .s ^MFORM(12,i,506)="Z70-Z76"
+ .s ^MFORM(12,i,507)="Z80-Z99"
+ Q
+LOADV1T ; Текстовая загрузка
+ N %J,A,TAB,NM,ID,DIA,D,X,I,R,D1,D2,D1B,J,II,IT
+ k ^MFORM("12v1")
+ D ORH^RWU
+ S II="",IT=""
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  D:%J>1
+ .S A=$$WD^TXTU(A)
+ .S TAB=$P(A,"|",1),NM=$P(A,"|",2),ID=$P(A,"|",3),R=$P(A,"|",4)
+ .Q:ID="" 
+ .S R=$TR(R,"; ",","),R=$TR(R,"УКЕНХВАРОСМТ*+","YKEHXBAPOCMT")
+ .I IT'=TAB S IT=TAB,II=0
+ .S ^MFORM("12v1",TAB,ID)=II_"|"_$P(A,"|",2,4)
+ .S II=II+1
+ .F I=1:1:$L(R,",") D
+ ..S D=$P(R,",",I)
+ ..S D1=$P(D,"-",1),D2=$P(D,"-",2)
+ ..S D1=$$RECODE^YMKB10(D1) Q:D1="" 
+ ..I D2="" S ^MFORM("12v1",TAB,ID,D1)=""
+ ..I $L(D2)=1 S D1B=$P(D1,".",1) F J=$P(D1,".",1):1:D2 I $D(^D(D1B,"z",J)) S ^MFORM("12v1",TAB,ID,D1B_"."_J)=""
+ ..I $L(D2)>1 S ^MFORM("12v1",TAB,ID,D1)="",^(D2)="",J=D1 F  S J=$O(^D(J)) Q:J=""!(J=D2)!(J]D2)  S ^MFORM("12v1",TAB,ID,J)=""
+ D CR^RWU
+ Q
+MKV1 ; Создать справочник
+ N TAB,ID,D
+ K ^BUF("f12s")
+ S TAB="" F  S TAB=$O(^MFORM("12v1",TAB)) Q:TAB=""  D
+ .S ID="" F  S ID=$O(^MFORM("12v1",TAB,ID)) Q:ID=""  D
+ ..S D="" F  S D=$O(^MFORM("12v1",TAB,ID,D)) Q:D=""  S ^BUF("f12s",TAB,D,ID)=""
+ Q
+fntab(NI,DT) ; Получить таблицу и колонку (порядковый номер)
+ N AGE,K1,K2,G
+ S AGE=$$AGE^IPAC(NI,DT),G=$$GET^IPAC(NI,"pol",DT)
+ I AGE<1 Q "t1500|"_$S(+$$BTW^DTUTL(DT,$$GET^IPAC(NI,"datar",DT))<31:2,1:"")
+ I AGE<15 Q "t1000|"_$S(AGE<5:2,AGE<10:3,1:"")
+ I AGE<18 Q "t2000|"_$S(G=1:2,1:"")
+ I AGE>54,G=2 Q "t4000"
+ I AGE>59,G=1 Q "t4000"
+ Q "t3000"
+CALC(DS,DE) 
+ N VR,OT,DT,ID,@$$NEWVAR^IUSL,STL,F,U,R,AG,SX,VVD,FF,K,TAB,LN,II,DIA,PP
+ N Tpos,Ypos,Cpos,Opos,Zpos,Ipos
+ D MKV1
+ S FF=+$G(^cfg("stat","pos"))
+ K ^BUF($J,"f12"),^MFORM12T,^BUF($J,"f12p")
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D
+ ..S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ...S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ....S DIA=$$GETDI^IUSL(VR,DT,OT,ID) Q:DIA="" 
+ ....S DIA=$TR(DIA,"+*","")
+ ....;Q:'$D(^BUF($J,"f12",0,DIA))
+ ....D GETLT^IUSL(VR,DT,OT,ID)
+ ....Q:$D(ERR)  Q:STAT="w"  
+ ....S FLG="|"_$G(FLG)_"|"
+ ....Q:FLG["|0|"  ; неут.
+ ....S R=$$fntab(NI,DT),TAB=$P(R,"|",1),LN=$P(R,"|",2)
+ ....S FF=0
+ ....D cp(DIA)
+ ....D cp($P(DIA,".",1)) 
+ ....Q:'FF   
+ ....Q:$D(^BUF($J,"f12p",NI)) 
+ ....S ^(NI)=""
+ ....I TAB="t1000" S ^BUF($J,"f12","fl","t1001_p1")=$G(^BUF($J,"f12","fl","t1001_p1"))+1
+ ....I FLG["|0|",TAB="t1000" S ^BUF($J,"f12","fl","t1001_p2")=$G(^BUF($J,"f12","fl","t1001_p2"))+1
+ ....I TAB="t2000" S ^BUF($J,"f12","fl","t2001_p1")=$G(^BUF($J,"f12","fl","t2001_p1"))+1
+ ....I FLG["|0|",TAB="t2000" S ^BUF($J,"f12","fl","t2001_p2")=$G(^BUF($J,"f12","fl","t2001_p2"))+1
+ ....I TAB="t3000" S ^BUF($J,"f12","fl","t3002_p1")=$G(^BUF($J,"f12","fl","t3002_p1"))+1
+ ....I FLG["|0|",TAB="t3000" S ^BUF($J,"f12","fl","t3002_p2")=$G(^BUF($J,"f12","fl","t3002_p2"))+1
+ ....I TAB="t4000" S ^BUF($J,"f12","fl","t4001_p1")=$G(^BUF($J,"f12","fl","t4001_p1"))+1
+ ....I FLG["|0|",TAB="t4000" S ^BUF($J,"f12","fl","t4001_p2")=$G(^BUF($J,"f12","fl","t4001_p2"))+1
+ 
+ K ^BUF($J,"f12p")
+ Q
+cp(DIA) 
+ S II="" F  S II=$O(^BUF("f12s",TAB,DIA,II)) Q:II=""  D
+ .S R=$G(^BUF($J,"f12",TAB,II))
+ .S $P(R,"|",1)=$P(R,"|",1)+1
+ .S:LN'="" $P(R,"|",LN)=$P(R,"|",LN)+1
+ .S ^BUF($J,"f12",TAB,II)=R
+ .S FF=1
+ Q
+MKTABT 
+ N TAB,II,ID,R
+ K ^MFORM12T
+ S TAB="" F  S TAB=$O(^MFORM("12v1",TAB)) Q:TAB=""  D
+ .S ID="" F  S ID=$O(^MFORM("12v1",TAB,ID)) Q:ID=""  D
+ ..S R=^MFORM("12v1",TAB,ID)
+ ..S II=$P(R,"|",1)
+ ..S ^MFORM12T(TAB,II)=$P(R,"|",2,4)_"|"_$G(^BUF($J,"f12",TAB,ID))
+ ..S II=II+1
+ 
+ S ID="" F  S ID=$O(^BUF($J,"f12","fl",ID)) Q:ID=""  D
+ .S ^MFORM12T(ID)=^BUF($J,"f12","fl",ID)
+ 
+ Q

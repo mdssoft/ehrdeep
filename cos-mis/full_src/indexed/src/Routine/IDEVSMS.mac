@@ -1,0 +1,241 @@
+IDEVSMS ; Devino SMS service [ 04/27/2015  3:09 PM ]
+DO 
+ S I="" F  S I=$O(^CMM("start",I)) Q:I=""  I $G(^(I,"exe"))["DEVSMS" Q 
+ Q:I="" 
+ S T=$G(^CMM("start",I,"data"))
+ Q:T="" 
+CRED(ID) ; Fill credentials
+ S:'$G(ID) ID=1
+ S USR=$G(^MSGHUB("sms",ID,"login"))
+ S:USR="" USR=$G(^cfg("devino","login"))
+ S PAS=$G(^MSGHUB("sms",ID,"passwd"))
+ S:PAS="" PAS=$G(^cfg("devino","passwd"))
+ S FROM=$G(^MSGHUB("sms",ID,"from"))
+ S:FROM="" FROM=$G(^cfg("devino","from"))
+ Q
+DO1 
+ Q:$G(^MSGHUB("sms",1,"passwd"))="" 
+ N DW,NI,DBG,SF,USR,PAS,FROM
+ K ^BUF("sms")
+ S DBG=$G(^MSGHUB("sms",1,"debug"))
+ S SF=$G(^MSGHUB("sms",1,"safemod"))
+ D CRED(1)
+ S DW=$$DWEEK^DTUTL(+$H)
+ Q:DW>5  ; не в выходн.
+ D MKSSMS^RRASP($H+1)
+ D:DW=5 MKSSMS^RRASP($H+3) ; weekend
+ Q:'$D(^BUF("sms")) 
+ D:'SF OPEN(USR,PAS,"","")
+ S NI="" F  S NI=$O(^BUF("sms",NI)) Q:NI=""  D
+ .;Q:'$D(^CMSI("type",I,"P",NI)) 
+ .S PH=$$GET^IPAC(NI,"pager",+$H) Q:PH="" 
+ .S P="",R=T F  S P=$O(^BUF("sms",NI,P)) Q:P=""  D
+ ..F  S J=$F(R,"*"_P_"*") Q:'J  S $E(R,J-$L(P)-2,J-1)=^(P)
+ .;W !,PH,!,R
+ .D:SF OPEN(USR,PAS,"","")
+ .S:DBG ^ISLOG("IDEVSMS")=$H_"|"_PH_"|"_R 
+ .D SMS(PH,R,FROM)
+ .S:DBG ^ISLOG("IDEVSMS")=$H_"|"_PH_"|"_R_"|OK"
+ .D:SF CLOSE
+ D:'SF CLOSE
+ Q
+ERR 
+ G DO1
+T2T 
+ D CRED(1)
+ D OPEN(USR,PAS,"","")
+ D SMS("79161433929","Ку-ка-ре-ку!",FROM)
+ D CLOSE
+ Q
+T 
+ D CRED(1)
+ D OPEN(USR,PAS,"","")
+ D SMS("79161433929","Приветъ Ё-моётЪ",FROM)
+ D CLOSE
+ Q
+DOSEND(ID) ; Из каталога отправки сообщений
+ N SRV,USR,PAS,I,R,FR,TO,F,FROM,SF,DEBUG
+ S SRV=$G(^MSGHUB("sms",ID,"server")) ; first
+ D CRED(ID)
+ Q:SRV=""  Q:USR=""  Q:PAS="" 
+ S SF=$G(^MSGHUB("sms",ID,"safemod"))
+ S DEBUG=$G(^MSGHUB("sms",ID,"debug"))
+ S F=0
+ S IDX="" F  S IDX=$O(^MSGOUT("sms",ID,IDX)) Q:IDX=""  D
+ .S R=^(IDX),FR=$P(R,"|",1),TO=$P(R,"|",2),R=""
+ .Q:TO="" 
+ .Q:$G(^(IDX,"chkfn"))'=""  Q:$G(^("wait")) 
+ .Q:$$timeout^IMSGHUB("sms",ID,IDX) 
+ .S I="" F  S I=$O(^MSGOUT("sms",ID,IDX,"data",I)) Q:I=""  S R=R_^(I)
+ .Q:R=""
+ .I 'SF,'F D OPEN3(USR,PAS,"",SRV) S F=1
+ .D:SF OPEN3(USR,PAS,"",SRV)
+ .S TO=$TR(TO,",","|") ; multi phones
+ .S:DEBUG ^ISLOG("IDEVSMS")=$H_"|"_TO_"|"_R_"|"_FR
+ .S:FR="" FR=FROM
+ .D SMS3(TO,R,FR)
+ .D endsend^IMSGHUB("sms",ID,IDX)
+ .D:SF CLOSE
+ D:F CLOSE
+ Q
+DORECV(ID) 
+ Q
+OPEN(USR,PAS,ADR,SRV) 
+ K %IDEVSMS
+ S:$G(ADR)="" ADR="/WebService.asmx"
+ S:$G(SRV)="" SRV="gw1.devinosms.com"
+ S %IDEVSMS("u")=USR,%IDEVSMS("p")=PAS
+ S %IDEVSMS("a")=ADR,%IDEVSMS("s")=SRV
+ S %SID=$$OPEN^WWWCLI(SRV,80)
+ Q
+CLOSE 
+ D CLOSE^WWWCLI(%SID)
+ K %IDEVSMS
+ Q
+BAL() 
+ N X
+ Q X
+SMS(DST,TXT,SRC) 
+ S DST=$TR($$MPHN^TXTU(DST),"+","") Q:DST="" 
+ Q:TXT=""
+ N R
+ D SETCONN^WWWCLI(%SID,2)
+ D SETHDR^WWWCLI(%SID,"Content-Type","text/xml; charset=utf-8")
+ D SETHDR^WWWCLI(%SID,"SOAPAction","http://"_%IDEVSMS("s")_%IDEVSMS("a")_"/SendTextMessage")
+ D OWBUF^WWWCLI(%SID)
+ D WBUF^WWWCLI(%SID,"<?xml version=""1.0"" encoding=""utf-8""?>")
+ D WBUF^WWWCLI(%SID,"<soap:Envelope xmlns:xsi=""http://www.w3.org/2001/XMLSchema-instance"" xmlns:xsd=""http://www.w3.org/2001/XMLSchema"" xmlns:soap=""http://schemas.xmlsoap.org/soap/envelope/"">")
+ D WBUF^WWWCLI(%SID,"<soap:Body>")
+ D WBUF^WWWCLI(%SID,"<SendTextMessage xmlns=""http://"_%IDEVSMS("s")_%IDEVSMS("a")_""">")
+ D WBUF^WWWCLI(%SID,"<smsUser>"_%IDEVSMS("u")_"</smsUser>")
+ D WBUF^WWWCLI(%SID,"<password>"_%IDEVSMS("p")_"</password>")
+ D WBUF^WWWCLI(%SID,"<destinationAddress>"_DST_"</destinationAddress>")
+ S TXT=$$WU8^TXTU($$DW^TXTU(TXT))
+ D WBUF^WWWCLI(%SID,"<messageData>"_TXT_"</messageData>")
+ S R=$E($TR($G(SRC)," /()+",""),1,11)
+ D:R'="" WBUF^WWWCLI(%SID,"<sourceAddress>"_R_"</sourceAddress>")
+ D WBUF^WWWCLI(%SID,"<deliveryReport>false</deliveryReport>")
+ D WBUF^WWWCLI(%SID,"<flashMessage>false</flashMessage>")
+ D WBUF^WWWCLI(%SID,"<validityPeriod>180</validityPeriod>") ; 360 6ч.
+ D WBUF^WWWCLI(%SID,"</SendTextMessage>")
+ D WBUF^WWWCLI(%SID,"</soap:Body>")
+ D WBUF^WWWCLI(%SID,"</soap:Envelope>")
+ D CBUF^WWWCLI(%SID)
+ S OK=$$POST^WWWCLI(%SID,%IDEVSMS("a"))
+ Q 
+ U 0 W !,"POST OK="_OK
+ D OBUF^WWWCLI(%SID)
+ S I=$$BUFCNT^WWWCLI(%SID) F X=1:1:I W $$RBUF^WWWCLI(%SID)
+ D CBUF^WWWCLI(%SID)
+ Q
+SMS2(DST,TXT,SRC) ; Protocol v.2
+ ; DST - номер или несколько номеров через |
+ S DST=$TR(DST," /-()+","")
+ Q:DST=""  Q:TXT="" 
+ S:$E(DST,1)=8 $E(DST,1)=7
+ I $L(DST)=10,$E(DST,1)=9 S DST=7_DST
+ N R,SSID,I,X
+ D SETCONN^WWWCLI(%SID,1)
+ D SETHDR^WWWCLI(%SID,"Content-Type","text/xml; charset=utf-8")
+ D SETHDR^WWWCLI(%SID,"SOAPAction","http://"_%IDEVSMS("s")_"/GetSessionID")
+ D OWBUF^WWWCLI(%SID)
+ D WBUF^WWWCLI(%SID,"<?xml version=""1.0"" encoding=""utf-8""?>")
+ D WBUF^WWWCLI(%SID,"<soap:Envelope xmlns:xsi=""http://www.w3.org/2001/XMLSchema-instance"" xmlns:xsd=""http://www.w3.org/2001/XMLSchema"" xmlns:soap=""http://schemas.xmlsoap.org/soap/envelope/"">")
+ D WBUF^WWWCLI(%SID,"<soap:Body>")
+ D WBUF^WWWCLI(%SID,"<GetSessionID xmlns=""http://"_%IDEVSMS("s")_""">")
+ D WBUF^WWWCLI(%SID,"<login>"_%IDEVSMS("u")_"</login>")
+ D WBUF^WWWCLI(%SID,"<password>"_%IDEVSMS("p")_"</password>")
+ D WBUF^WWWCLI(%SID,"</GetSessionID>")
+ D WBUF^WWWCLI(%SID,"</soap:Body>")
+ D WBUF^WWWCLI(%SID,"</soap:Envelope>")
+ D CBUF^WWWCLI(%SID)
+ S OK=$$POST^WWWCLI(%SID,"/SmsService.asmx")
+ Q:OK'=200 
+ D OBUF^WWWCLI(%SID)
+ 
+ S I=$$BUFCNT^WWWCLI(%SID),R="" F X=1:1:I S R=R_$$RBUF^WWWCLI(%SID)
+ D CBUF^WWWCLI(%SID)
+ S SSID=$P($P(R,"<GetSessionIDResult>",2),"</GetSessionIDResult>",1)
+ Q:SSID="" 
+ 
+ D SETCONN^WWWCLI(%SID,2)
+ D SETHDR^WWWCLI(%SID,"Content-Type","text/xml; charset=utf-8")
+ D SETHDR^WWWCLI(%SID,"SOAPAction","http://"_%IDEVSMS("s")_"/SendMessage")
+ D OWBUF^WWWCLI(%SID)
+ D WBUF^WWWCLI(%SID,"<?xml version=""1.0"" encoding=""utf-8""?>")
+ D WBUF^WWWCLI(%SID,"<soap:Envelope xmlns:xsi=""http://www.w3.org/2001/XMLSchema-instance"" xmlns:xsd=""http://www.w3.org/2001/XMLSchema"" xmlns:soap=""http://schemas.xmlsoap.org/soap/envelope/"">")
+ D WBUF^WWWCLI(%SID,"<soap:Body>")
+ D WBUF^WWWCLI(%SID,"<SendMessage xmlns=""http://"_%IDEVSMS("s")_""">")
+ D WBUF^WWWCLI(%SID,"<sessionID>"_SSID_"</sessionID>")
+ D WBUF^WWWCLI(%SID,"<message>")
+ S TXT=$$WU8^TXTU($$DW^TXTU(TXT))
+ D WBUF^WWWCLI(%SID,"<Data>"_TXT_"</Data>")
+ D WBUF^WWWCLI(%SID,"<DestinationAddresses>")
+ F I=1:1:$L(DST,"|") D WBUF^WWWCLI(%SID,"<string>"_$P(DST,"|",I)_"</string>")
+ D WBUF^WWWCLI(%SID,"</DestinationAddresses>")
+ S R=$E($TR($G(SRC)," /()+",""),1,11)
+ D:R'="" WBUF^WWWCLI(%SID,"<SourceAddress>"_R_"</SourceAddress>")
+ D WBUF^WWWCLI(%SID,"<ReceiptRequested>false</ReceiptRequested>")
+ D WBUF^WWWCLI(%SID,"<message>")
+ D WBUF^WWWCLI(%SID,"</SendMessage>")
+ D WBUF^WWWCLI(%SID,"</soap:Body>")
+ D WBUF^WWWCLI(%SID,"</soap:Envelope>")
+ D CBUF^WWWCLI(%SID)
+ S OK=$$POST^WWWCLI(%SID,"/SmsService.asmx")
+ Q 
+ U 0 W !,"POST OK="_OK
+ D OBUF^WWWCLI(%SID)
+ S I=$$BUFCNT^WWWCLI(%SID) F X=1:1:I W $$RBUF^WWWCLI(%SID)
+ D CBUF^WWWCLI(%SID)
+ Q
+INITDB 
+ Q:$D(^MSGHUB("sms")) 
+ S ^MSGHUB("sms")="IDEVSMS"
+ Q
+OPEN3(USR,PAS,ADR,SRV) 
+ K %IDEVSMS
+ S:$G(ADR)="" ADR="/SmsServicev2.asmx"
+ S:$G(SRV)="" SRV="ws.devinotele.com"
+ S %IDEVSMS("u")=USR,%IDEVSMS("p")=PAS
+ S %IDEVSMS("a")=ADR,%IDEVSMS("s")=SRV
+ S %SID=$$OPEN^WWWCLI(SRV,80)
+ Q
+SMS3(DST,TXT,SRC) 
+ S DST=$TR(DST," /-()+","")
+ Q:DST=""  Q:TXT="" 
+ S:$E(DST,1)=8 $E(DST,1)=7
+ I $L(DST)=10,$E(DST,1)=9 S DST=7_DST
+ N R
+ D SETCONN^WWWCLI(%SID,2)
+ S ^WCLSI(%SID,"oh","Content-Type")="application/soap+xml; charset=utf-8"
+ ;S ^WCLSI(%SID,"oh","SOAPAction")="http://"_%IDEVSMS("s")_%IDEVSMS("a")_"/SendTextMessage"
+ D OWBUF^WWWCLI(%SID)
+ D WBUF^WWWCLI(%SID,"<?xml version=""1.0"" encoding=""utf-8""?>")
+ D WBUF^WWWCLI(%SID,"<soap12:Envelope xmlns:xsi=""http://www.w3.org/2001/XMLSchema-instance"" xmlns:xsd=""http://www.w3.org/2001/XMLSchema"" xmlns:soap12=""http://www.w3.org/2003/05/soap-envelope"">")
+ D WBUF^WWWCLI(%SID,"<soap12:Body>")
+ D WBUF^WWWCLI(%SID,"<SendMessage xmlns=""http://ws.devinosms.com"">")
+ D WBUF^WWWCLI(%SID,"<login>"_%IDEVSMS("u")_"</login>")
+ D WBUF^WWWCLI(%SID,"<password>"_%IDEVSMS("p")_"</password>")
+ D WBUF^WWWCLI(%SID,"<message>")
+ D WBUF^WWWCLI(%SID,"<DestinationAddresses><string>"_DST_"</string></DestinationAddresses>")
+ S TXT=$$WU8^TXTU($$DW^TXTU(TXT))
+ D WBUF^WWWCLI(%SID,"<Data>"_TXT_"</Data>")
+ S R=$E($TR($G(SRC)," /()+",""),1,11)
+ D:R'="" WBUF^WWWCLI(%SID,"<SourceAddress>"_R_"</SourceAddress>")
+ D WBUF^WWWCLI(%SID,"<ReceiptRequested>false</ReceiptRequested>")
+ D WBUF^WWWCLI(%SID,"<Validity>180</Validity>") ; 360 6ч.
+ D WBUF^WWWCLI(%SID,"</message>")
+ D WBUF^WWWCLI(%SID,"</SendMessage>")
+ D WBUF^WWWCLI(%SID,"</soap12:Body>")
+ D WBUF^WWWCLI(%SID,"</soap12:Envelope>")
+ D CBUF^WWWCLI(%SID)
+ ;S I=$$BUFCNT^WWWCLI(%SID) F X=1:1:I W $$RBUF^WWWCLI(%SID)
+ ;q
+ S OK=$$POST^WWWCLI(%SID,%IDEVSMS("a"))
+ ;Q 
+ ;U 0 W !,"POST OK="_OK
+ D OBUF^WWWCLI(%SID)
+ S I=$$BUFCNT^WWWCLI(%SID) F X=1:1:I W $$RBUF^WWWCLI(%SID)
+ D CBUF^WWWCLI(%SID)
+ H 0.1 ; max - 10 per second
+ Q

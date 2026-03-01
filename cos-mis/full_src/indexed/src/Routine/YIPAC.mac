@@ -1,0 +1,169 @@
+A ;ВЫГРУЗКА ПАЦИЕНТА [ 03/12/2006  9:49 PM ]
+ ;
+L(N) ;
+ S EN("street")="",EN("stroen")="",EN("tel1")="",EN("tel2")="",EN("text")="",EN("korp")="",EN("kvart")="",EN("domkod")="",EN("dom")="",EN("email")="",EN("pager")=""
+ S N=+N
+ I '$D(^BTN(+N)) S N="",FIO="",FN="1.XMLB" D OW^YITEL S A=$G(^PP(0,1)) ZZW A ZZW "<patients><hist>" S A=N_"</hist><fio>"_FIO_"</fio>" ZZW A S R=N,POLE="hist_old" D POLE G CCC
+ S TG=^TG,RZ=$C(9)
+ S FN="1.XMLB" D OW^YITEL
+ S A=$G(^PP(0,1)) ZZW A
+ ZZW "<patients><hist>" S A=N_"</hist>" ZZW A
+ S R=N,POLE="hist_old" D POLE
+ ;S C2=+N
+ ;I $G(^PP)["LDC" D RAZF^XWKONE
+ ;I %LOG'=102&(%LOG'=(+C(16))) S N="",FIO="",FN="1.XMLB" D OW^YITEL S A=$G(^PP(0,1)) ZZW A ZZW "<patients><hist>" S A=N_"</hist><fio>"_FIO_"</fio>" ZZW A S R=N,POLE="hist_old" D POLE D  G CCC
+ ;.F J=2:1:30 S C(J)=""
+ S POLE=-1 F  S POLE=$N(^BTN(N,POLE)) Q:POLE=-1  D
+ .S ENB="" S:%LOG'=102&('$D(EN(POLE))) ENB=" enabled=""no"" "
+ .S R=$G(^BTN(N,POLE)),R=$TR(R,"""","'") S A="<"_POLE_ENB_" data="""_R_"""/>" S:POLE="status" A="<"_POLE_ENB_">"_R_"</"_POLE_">" ZZW A Q
+ S POLE="tprog",PR1=$G(^BTN(N,"pr1")),A="<"_POLE_">1|"_$G(^M(70,PR1))_"</"_POLE_">" ZZW A
+CCC ZZW "</patients>"
+ S %B=FN D C^YITEL
+ Q
+LP(N) ;
+ S N=+N,TG=^TG
+ S %A=+N X ^PP(1,22) S FIO=%A
+ I '$D(^BT(+N)) S N="" D
+ .F J=2:1:30 S C(J)=""
+ S FN="1.XMLB" D OW^YITEL
+ S A=$G(^PP(0,2)) ZZW A
+ ZZW "<priem><nib>" S A=N_"</nib><fiov>"_FIO_"</fiov>" ZZW A
+ S C2=+N
+ I $G(^PP)["LDC" D RAZF^XWKONE
+ I $G(^PP)["220" D ^YIPAC220
+ S R=C(8),POLE="ofor",R=$S(R=1:" ",R=3:"Умер",1:"Снят") D POLE1
+ S R=+C(16),R=R_" "_$G(^DOG(R,2))_$G(^DOG(R,TG,3)),POLE="dog" D POLE1
+ S R=C(18),POLE="dogf" D POLED
+ S R=C(19),POLE="dogto" D POLED
+ S R=C(10),POLE="datar" D POLED2
+ ZZW "</priem></nb_console>"
+ S %B=FN D C^YITEL
+ Q
+YY(N) ;
+ ;I N'?1N.N S N=""
+ S:%W N=$TR(N,%WD,%DW) S STR=N
+ S PPS=$G(^PP)["LDC"
+ S FN="1.XMLB" D OW^YITEL
+ S A=$G(^PP(0,2)) ZZW A
+ ZZW "<priem><table2>"
+ D POI^YIFIND
+ ;S A="ПАЦИЕНТ|ДОГОВОР|СРОК" ZZW A,!
+ ;S %A=N X ^PP(1,26) S NI=N_" "_%A ZZW NI,!
+ S A="</table2></priem></nb_console>" ZZW A
+ S %B=FN D C^YITEL
+ Q
+CHIFR ;ЗАГУЗКА ШИФРАТОРОВ
+ D ^YCHIFR Q
+ Q
+NNIB(N) ;НОВЫЙ НОМЕР
+ S %B="1.NB-DATA"
+ Q
+ZP ;ЗАМЕНА ПРОГРАММ
+ S NI=0 F  S NI=$N(^BT(NI)) Q:NI=-1  D
+ .S L=$G(^BT(NI,"K")) Q:L=""
+ .S L=$E(L,1,55)_$TR($E(L,56,62),"123456789ПС0","ЭЯСАБВ123450")_$E(L,63,999),^BT(NI,"K")=L
+ Q
+OLD ;
+ S R=C(2),POLE="fiof" D POLE1
+ S R=C(3),POLE="fioi" D POLE1
+ S R=C(4),POLE="fioo" D POLE1
+ S R=C(5),POLE="pol" D POLE1
+ S R=C(6),POLE="is_work" D POLE1
+ S R=C(10),POLE="datar" D POLED2
+ S R=C(9),POLE="dofor" D POLED
+ S R=+C(13),POLE="whop" D POLE1
+ S R=+C(14),POLE="status" D POLE1
+ S R=C(8),POLE="ofor" D POLE1
+ S R=+C(7),POLE="ush" D POLE1
+ S R=+C(16),POLE="ndog" D POLE1
+ S R=+C(16),POLE="stc" D POLE1
+ S R=C(18),POLE="dog_from" D POLED
+ S R=C(19),POLE="dog_to" D POLED
+ S R=C(17),POLE="polis" D POLE1
+ S R=+C(28),POLE="pdog" D POLE1
+ S R=+C(28),POLE="pstc" D POLE1
+ ;S R=C(18),POLE="pdog_from" D POLED
+ S R=C(29),POLE="pdog_to" D POLED
+ S R=C(30),POLE="ppolis" D POLE1
+ S R=C(11),POLE="tel1" D POLE
+ S R=C(12),POLE="tel2" D POLE
+ S R=+C(15),POLE="work" D POLE1
+ S R=C(20),POLE="pr1" D POLE1
+ S R=C(21),POLE="pr2" D POLE1
+ S R=C(22),POLE="pr3" D POLE1
+ S R=C(23),POLE="pr4" D POLE1
+ S R=C(24),POLE="pr5" D POLE1
+ S R=C(25),POLE="pr6" D POLE1
+ S R=C(26),POLE="pr7" D POLE1
+ ;S R=$G(^M(53,C(7))),POLE="lvr" D POLE
+ S R=C(27),POLE="text" D POLE
+ S POLE="adres" D POLEW
+ S POLE="menj" D POLEW
+ S POLE="email" D POLEW
+ S POLE="pager" D POLEW
+ S POLE="pasp" D POLEW
+ S POLE="pasp_dan" D POLEW
+ S POLE="tel1" D POLEW
+ S POLE="tel2" D POLEW
+ S POLE="lplace" D POLEW
+ S POLE="jobtitle" D POLEW
+NNN S POLE="dom" D POLEW
+ S POLE="domkod" D POLEW
+ S POLE="korp" D POLEW
+ S POLE="kvart" D POLEW
+ S POLE="place" D POLEW
+ S POLE="region" D POLEW
+ S POLE="street" D POLEW
+ S POLE="stroen" D POLEW
+ S POLE="nextdoc" D POLEW
+ S POLE="stc" D POLEW
+ S POLE="stc1" D POLEW
+ S POLE="typedoc" D POLEW
+ S POLE="poms" D POLEW
+ S POLE="pomsd" D POLEW
+ S POLE="lnkhist" D POLEW
+ S POLE="status" D POLEW
+ S POLE="tprog" D POLEW
+NNNN S POLE="dog_to1" D POLEW
+ S POLE="arch" S R=$G(^BTNEW(N,POLE)) S:R="" R=0 S A="<"_POLE_" data="""_R_"""/>" ZZW A
+ S POLE="pin" S R=$G(^BTNEW(N,POLE)),R=R_" "_$P($G(^P(R,"V")),"/",2) I R'="" S A="<"_POLE_" data="""_R_"""/>" ZZW A
+ Q
+POLE S A="<"_POLE_">"_R_"</"_POLE_">" ZZW A Q
+POLE1 S A="<"_POLE_" data="""_R_"""/>" ZZW A Q
+POLED S:R="000000"!(R="") R="101010" S:$E(R,1,2)="00"!($E(R,3,4)="00") R="0107"_$E(R,5,6) S R=$S($E(R,5,6)>50:$E(R,1,4)_"19"_$E(R,5,6),1:$E(R,1,4)_"20"_$E(R,5,6)) S A="<"_POLE_">"_$E(R,1,2)_"."_$E(R,3,4)_"."_$E(R,5,8)_"</"_POLE_">" ZZW A Q
+POLED2 S:R="000000"!(R="") R="101010" S:$E(R,1,2)="00"!($E(R,3,4)="00") R="0107"_$E(R,5,6) S R=$S($E(R,5,6)>5:$E(R,1,4)_"19"_$E(R,5,6),1:$E(R,1,4)_"20"_$E(R,5,6)) S A="<"_POLE_">"_$E(R,1,2)_"."_$E(R,3,4)_"."_$E(R,5,8)_"</"_POLE_">" ZZW A Q
+POLEW S R=$G(^BTNEW(N,POLE)) D  I R'="" S A="<"_POLE_" data="""_R_"""/>" ZZW A Q
+ .Q:R'[""""
+ .S R1="" F JR=1:1:$L(R) S RR=$E(R,JR) S:RR="""" RR="'" S R1=R1_RR ;RR="%22" S R1=R1_RR
+ .S R=R1
+ Q
+LIST(NAM) ;списоки отделений, программ и пр.
+ S FN="1.XML" D OW^YITEL
+ I NAM="mectorab" S N=5 D MML
+ I NAM="status1" S N=1 D MML
+ I NAM="status2" S N=2 D MML
+ I NAM="lprog" S N=70 D MML
+ I NAM="ush" S N=53 D MML
+ I NAM="otd" S N=131 D MMLA
+ I NAM="otdv" S N=131,SN="6,8,18,23,24,26,27,29,34,36,37,38,40,41,45,50,51,92,93" D MMLB
+ I NAM="spec" S N=123 D MML
+ S %B=FN D C^YITEL
+ Q
+MML
+ Q
+MMLA 
+ Q
+MMLB X "F ND="_SN_" D:$D(^M(N,ND)) MMLBB"
+ Q
+FIO(NI) ; Полная фамилия
+ Q:$D(^BTN(NI))=0 ""
+ Q $G(^BTN(NI,"fiof"))_" "_$G(^("fioi"))_" "_$G(^("fioo"))
+FIOIO(NI) ; Имя Отчество
+ Q:$D(^BTN(NI))=0 ""
+ Q $G(^BTN(NI,"fioi"))_" "_$G(^("fioo"))
+FIOSH(NI) ; Сокращенная фамилия
+ Q:$D(^BTN(NI))=0 ""
+ S A=$G(^BTN(NI,"fiof")) I $G(^("fioi"))'="" S A=A_" "_$E($G(^("fioi")),1,1)_"." S:$G(^("fioo"))'="" A=A_" "_$E($G(^("fioo")),1,1)_"."
+ Q A
+ 
+ 

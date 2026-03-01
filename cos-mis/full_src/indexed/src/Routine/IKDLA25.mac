@@ -1,0 +1,103 @@
+IKDLA25 ; A25 driver [ 02/09/2015  9:37 PM ]
+ ; use labwatch.exe
+DO(DEV,CMD) ; Обработчик драйвера
+ ; CMD = I/E/C - Import/Export/Clear
+ N DIR,FN,R
+ S R=^LABT("DEV",DEV,"i"),CMD=$G(CMD)
+ I CMD="C" Q 
+ G:$P(R,"|",3)="IPDIR" DOnet
+ ; файловый обмен
+ S DIR=$P(R,"|",4)
+ D:$D(^MLABW(DEV,0)) out(DEV,DIR_"Import\import.txt",DIR)
+ H 1
+ D in(DEV,DIR_"Export\",DIR_"Import\import.txt")
+ Q
+DOnet ; сетевой файловый обмен
+ I CMD="I" D inNET(DEV) Q  ; пришли данные
+ ; экспорт раб. списка
+ I CMD="E"!(CMD="") D outNET(DEV,1) Q 
+ Q
+in(DEV,FN,FO) 
+ N FILL,FL,IO,R,ID,PM,PRM,VAL,MAT,IJ
+ D DIR^FIL(FN_"*.txt","FILL")
+ G:'$D(FILL) inE
+ S FL="" F  S FL=$O(FILL(FL)) Q:FL=""  D:FILL(FL)=0
+ .S IO=$$ORT^FIL(FN_FL) Q:IO="" 
+ .U IO F  R R Q:$$ST^FIL()=0  D:R'="" 
+ ..S ID=$P(R,$C(9),1),PM=$P(R,$C(9),2)
+ ..Q:ID=""  Q:'$D(^MLABI("c",ID))   ; не тот ID
+ ..S MAT=$P(R,$C(9),3),VAL=$TR($P(R,$C(9),4),", ",".")
+ ..Q:'$D(^LABT("DEV",DEV,"t",PM))  ; TODO - отпр. в ошибки
+ ..S PRM=$P(^LABT("DEV",DEV,"t",PM),"|",1)
+ ..D SET^IMLAB(ID,PRM,VAL,DEV)
+ ..D OKPRM^IMLABW(DEV,ID,PRM)
+ .C IO
+ .D DEL^FIL(FN_FL)
+inE 
+ D chkCLR(DEV,FO)
+ Q
+inNET(DEV) 
+ N J,R,ID,PM,PRM,VAL,MAT,IJ
+ D ORH^RWU
+ S ID=""
+ F J=1:1 S R=$$R^RWU Q:%IFN["Z"  D:R'=""
+ .S ID=$P(R,$C(9),1),PM=$P(R,$C(9),2)
+ .Q:ID=""  Q:'$D(^MLABI("c",ID))   ; не тот ID
+ .S MAT=$P(R,$C(9),3),VAL=$TR($P(R,$C(9),4),", ",".")
+ .Q:'$D(^LABT("DEV",DEV,"t",PM))  ; TODO - отпр. в ошибки
+ .S PRM=$P(^LABT("DEV",DEV,"t",PM),"|",1)
+ .D SET^IMLAB(ID,PRM,VAL,DEV)
+ .D OKPRM^IMLABW(DEV,ID,PRM)
+ D CR^RWU
+ Q
+out(DEV,FN,DIR) ; Create output file
+ ; TODO - cito
+ Q:'$P($G(^MLABW(DEV,0)),"|",3) 
+ Q:$$CHECK^FIL(FN)  ; еще есть файл
+ N ID,P,NI,MAT,PRB,PRM,FIL,R,C,CR,FF,PP
+ D DIR^FIL(DIR_"*.*","R") Q:'$D(R)  K R
+ S (FIL,C)="",CR=$C(13,10),FF=0
+ S ID="" F  S II=$O(^MLABW(DEV,0,ID)) Q:ID=""  D  Q:FF<0 
+ .S P="" F  S P=$O(^MLABW(DEV,0,ID,P))  Q:P=""  D  Q:FF<0 
+ ..S PP=$P(P,"@",1)
+ ..S PRM=^LABT("T",$P(PP,"@",1),"dev",DEV)
+ ..S MAT=$O(^LABT("T",PP,"dev",DEV,"")) Q:MAT=""  ; TODO - неск
+ ..S R=^(MAT),MAT=$P(R,"|",1),PRB=$P(R,"|",2) ; TODO - выб. проб.
+ ..I FIL="" S FIL=$$OW^FIL(FN),FF=$S(FIL="":-1,1:1) Q:FF<0  ; созд. когда нужно
+ ..S:PRB="" PRB="T15"
+ ..S R=C_"N"_$C(9)_MAT_$C(9)_ID_$C(9)_PRM_$C(9)_PRB,C=CR
+ ..U FIL W R
+ ..S ^MLABW(DEV,0,ID,P)=1 ; stage 1
+ C:FIL'="" FIL
+ S:FIL'="" $P(^MLABW(DEV,0),"|",3)="" 
+ Q
+outNET(DEV,CLR) ; Create network output file
+ ; TODO - cito
+ Q:DEV=""
+ Q:'$P($G(^MLABW(DEV,0)),"|",3) 
+ Q:$O(^MLABW(DEV,0,""))="" 
+ N IO,ID,P,NI,MAT,PRB,PRM,R,C,CR,FF,PP
+ S IO=$$PREPOST^IKDLOUT(DEV,"import.txt",CLR)
+ Q:IO="" 
+ D OWF^RWU(".txt")
+ S C="",CR=$C(13,10),FF=0
+ S ID="" F  S ID=$O(^MLABW(DEV,0,ID)) Q:ID=""  D   
+ .S P="" F  S P=$O(^MLABW(DEV,0,ID,P))  Q:P=""  D   
+ ..S PP=$P(P,"@",1)
+ ..S PRM=$G(^LABT("T",PP,"dev",DEV)) Q:PRM="" 
+ ..S MAT=$O(^LABT("T",PP,"dev",DEV,"")) Q:MAT=""  ; TODO - неск
+ ..S R=^(MAT),MAT=$P(R,"|",1),PRB=$P(R,"|",2) ; TODO - выб. проб.
+ ..S:PRB="" PRB="T15"
+ ..D W^RWU(C_"N"_$C(9)_MAT_$C(9)_ID_$C(9)_PRM_$C(9)_PRB) S C=CR
+ ..S ^MLABW(DEV,0,ID,P)=1 ; stage 1
+ D C^RWU
+ S $P(^MLABW(DEV,0),"|",3)=""
+ D ENDPOST^IKDLOUT(DEV,IO,"import.txt")
+ Q
+chkCLR(DEV,FN) ; Clear output file
+ N IJ,P,F
+ S IJ="",F=0 F  S ID=$O(^MLABW(DEV,0,IJ)) Q:IJ=""  D  Q:F 
+ .S P="" F  S P=$O(^MLABW(DEV,0,IJ,P))  Q:P=""  I ^(P)'=0 S F=1 Q 
+ Q:F  ; еще есть необраб.
+ D DEL^FIL(FN)
+ Q

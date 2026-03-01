@@ -1,0 +1,163 @@
+NIPROC ; Отчеты и импорт [ 04/04/2018  3:32 AM ]
+INIT ; Init
+ N X
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<spisokt>")
+ S X=$$LCL^IUSER("lproc","mindate")
+ D:X WTAG^RWU("mindate",$H-X)
+ D W^RWU("</spisokt></nb_console>"),C^RWU
+ Q
+LST(PROC) 
+ N ID,R,A
+ S (A,ID)=""
+ F  S ID=$O(^IPROCU(PROC,ID)) Q:ID=""  S A=$S(A="":"",1:A_CR)_ID_"|"_^(ID)
+ D MSG^RWU(A)
+ Q
+LP(PROC,ID) ; Load fields
+ N PL,R
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<spisokt>")
+ S PL="" F  S PL=$O(^IPROCU(PROC,ID,PL)) Q:PL=""  D WTAGD^RWU(PL,^(PL))
+ D W^RWU("</spisokt></nb_console>"),C^RWU
+ Q
+DP(PROC,ID) ; Delete pattern
+ K ^IPROCU(PROC,ID)
+ D KGL^IEXCH("^IPROCU",PROC,ID)
+ Q
+SP 
+ N X,PROC,ID,NM
+ D RBUFH^YIXMLRR(0)
+ S PROC=$G(XML("nb_console","spisokt","prc"))
+ S NM=$$WD^TXTU($G(XML("nb_console","spisokt","prm")))
+ S ID=$P(NM,"|",1),NM=$P(NM,"|",2)
+ K XML("nb_console","spisokt","prc")
+ K XML("nb_console","spisokt","prm")
+ L +^IPROCU(PROC)
+ S:ID'="" NM=$G(^IPROCU(PROC,ID))
+ S:ID="" ID=$O(^IPROCU(PROC,""),-1)+1
+ K ^IPROCU(PROC,ID)
+ M ^IPROCU(PROC,ID)=XML("nb_console","spisokt")
+ S ^IPROCU(PROC,ID)=NM
+ L -^IPROCU(PROC)
+ D GL^IEXCH("^IPROCU",PROC,ID)
+ D MSG^RWU(ID)
+ Q
+LSTT ; Список отчетов
+ D OWF^RWU(".txt")
+ D LST^IPROC(1)
+ D C^RWU
+ Q
+LSTTF(STR) ; Список отчетов с поиском
+ D OWF^RWU(".txt")
+ D LST^IPROC(1,$$WD^TXTU($G(STR)))
+ D C^RWU
+ Q
+LSTDIR(MOD) ; Показать основной перечень разделов
+ N ID,I,A
+ S (A,ID)="" F  S ID=$O(^IPROC(ID)) Q:ID=""  D
+ .S A=$S(A="":"",1:A_CR)_^(ID)_"|"_ID
+ D MSG^RWU(A)
+ Q
+LSTSDIR(ID) ; Показать отчеты в разделе
+ Q:ID="" 
+ N RO,I,L,X,K,A
+ S RO=^IPROCI("dir",ID),A=""
+ S I="^IPROC("""_RO_""")" F  S I=$Q(@I) Q:I=""  D  q:$QS(I,1)'=RO 
+ .S L=$QL(I),X=$G(@I),K=$P(X,",",1)
+ .I X?1.N Q
+ .S A=$S(A="":"",1:A_CR)_K_"|"_$QS(I,L)
+ D MSG^RWU(A)
+ Q
+GETFRM(PROC) ; Получить форму
+ Q:PROC="" 
+ N TXT,I,C,TP,T,T1,R,NM,TIT
+ S I="^IPROC" F  S I=$Q(@I) Q:I=""  S TXT=$G(@I) Q:$P(TXT,",",1)=PROC
+ S TIT=$QS(I,$QL(I))
+ S TP=$P(TXT,",",2),C=$P(TXT,",",3)
+ D OWF^RWU(".txt")
+ D WC^RWU(TP_"|"_TIT)
+ F I=1:1:C D
+ .S R=$P(TXT,",",((I-1)*2)+4),NM=$P(TXT,",",((I-1)*2)+5)
+ .S T=$P(R,"@",1) ; type
+ .S T=$S(T="d":"d",T="t":"l",T="te":"l",1:"t")
+ .D WC^RWU(CR_T_NM)
+ .Q:T'="l"  ; not list
+ .S T1=$P(R,"@",2) ; data
+ .I $P(T1,":",1)="string" S T1=$TR($P(T1,":",2),"/","|") D WC^RWU(CR_$$TRT^TXTU(T1,"#",CR)_CR_"^^^") Q 
+ .I $P(R,"@",3) D W^RWU(CR_"|")
+ .I $P(T1,":",1)="storage" D WC^RWU(CR),STORsys^ICHIFR($P(T1,":",2)),W^RWU(CR_"^^^") Q 
+ .D W^RWU(CR_"|"_CR_"^^^")
+ D C^RWU
+ Q
+ADDT(KEY) ; Добавить отчет
+ s ^IPROCU("-",%LOG,KEY)=$H
+ D GL^IEXCH("^IPROCU","-",%LOG,KEY)
+ D OWF^RWU(".txt")
+ D LST^IPROC(0)
+ D C^RWU
+ Q
+DELT(KEY) ; Удалить отчет
+ D:'$D(^IPROCU("-",%LOG)) ADDa
+ k ^IPROCU("-",%LOG,KEY)
+ D KGL^IEXCH("^IPROCU","-",%LOG,KEY)
+ D OWF^RWU(".txt")
+ D LST^IPROC(0)
+ D C^RWU
+ Q
+ADDa ; Добавить все отчеты в список избранных
+ N I,K
+ S I="^IPROC"
+ F  S I=$Q(@I) Q:I=""  S K=$P($G(@I),",",1) S:K'="" ^IPROCU("-",%LOG,K)=$H
+ Q
+LRPT(PROC) ; Зашрузить информацию по отчету
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<spisokt>")
+ D WTAGC^RWU("dsc",$G(^IPROCR(PROC,"title")))
+ D WTAGC^RWU("prnpt",$G(^IPROCR(PROC,"prnfn")))
+ D W^RWU("</spisokt></nb_console>"),C^RWU
+ Q 
+PRINT(PROC) ; Получить доп.информацию/шаблон печати
+ D OWF^RWU(".txt")
+ D WC^RWU("title="_$G(^JOB(%JOB,"IPROC","title")))
+ D WC^RWU(CR_"pattern=") ; TODO
+ D C^RWU
+ Q
+INITI ; Init import
+ N X,A
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<imdata>")
+ S (A,X)="" F  S X=$O(^IMPROC(X)) Q:X=""  D
+ .S A=$S(A="":"",1:A_CR)_^(X)_"|"_X
+ D WTAGC^RWU("proc",A)
+ D W^RWU("</imdata></nb_console>"),C^RWU
+ Q
+REE ; Реестр отчетов
+ N I,R
+ D OWF^RWU(".txt")
+ D WC^RWU("Процедура|Наименование отчета")
+ S I="" F  S I=$O(^IPROCI("lst",I)) Q:I=""  D WC^RWU(CR_I_"|"_^(I))
+ D C^RWU
+ Q
+RPTLST ; Иерархический перечень отчетов по разделам прав
+ N LCL,R,C,LN
+ D OWF^RWU(".txt")
+ S LN="" F C=1:1:64 S LN=LN_"-"
+ S (C,LCL)="" F  S LCL=$O(^LCL("lproc",LCL)) Q:LCL=""  D
+ .S R=$G(^(LCL))
+ .D WC^RWU(C_R_":"_CR_LN)
+ .D RPTLSTp(LCL)
+ D C^RWU
+ Q
+RPTLSTp(LCL) ; int proc
+ N TTB,I,X,L,PI,K,F,TBB,LA
+ S TBB=$C(9),PI="^IPROC("""")"
+ S:$L(LCL) LA=$S($D(^LCL("lproc",LCL,"a")):1,1:0)
+ F I=1:1:9 S TBB=TBB_$C(9)
+ S I="^IPROC" F  S I=$Q(@I) Q:I=""  D
+ .S L=$QL(I),X=$G(@I),F=0,K=$P(X,",",1)
+ .I X?1.N Q  ; numeric index
+ .I $L(K),$L(LCL) Q:$S(LA:'$D(^LCL("lproc",LCL,"a",K)),1:$D(^LCL("lproc",LCL,"d",K))) 
+ .F K=1:1:L-1 S:$QS(PI,K)'=$QS(I,K) F=1 D:F=1 WC^RWU(CR_$E(TBB,1,K-1)_$QS(I,K))
+ .D WC^RWU(CR_$E(TBB,1,L-1)_$QS(I,L))
+ .S PI=I
+ Q
+REGIPROC 
+ S ^IPROC("Система","Каталог отчетов")="RPTLST_NIPROC,2,0"
+ S ^IPROC("Система","Реестр отчетов")="REE_NIPROC,1,0"
+ Q

@@ -1,0 +1,293 @@
+NMRASP ; Make Doctor's shedule [ 04/01/2022  0:10 AM ]
+INIT ; init tabrasp.frm
+ D OWF^RWU(".xmlb")
+ D W^RWU(^PP(0,2)_"<tabrasp>")
+ D:$$LCL^IUSER("mkrasp","make")=0 W^RWU("<btn_newrasp visible=""no""/>")
+ D:$$LCL^IUSER("mkrasp","save")=0 W^RWU("<btn_save visible=""no""/>")
+ D:$$LCL^IUSER("mkrasp","master")=0 W^RWU("<bt_mkrasp visible=""no""/>")
+ D W^RWU("</tabrasp></nb_console>")
+ D C^RWU
+ Q
+L(MM,YY,OTD) ; Load
+ N DS,DE,LPU,OT,VR,SP,DT,FF,A,R,B,X,SPT,OTC,NOTC,sOTD,OTX,CC,FLT
+ S OTD=$G(OTD)
+ S (OTC,NOTC)="",sOTD=+$P(OTD,"|",2),FLT=$P(OTD,"|",1)
+ I $L($G(%LOG)),$D(^LOG(%LOG,"lcl","mkrasp")) S R=^("mkrasp"),OTC=$G(^LCL("mkrasp",R,"byotd")),NOTC=$G(^LCL("mkrasp",R,"nbyotd"))
+ S DS=$$DI^DTUTL("01."_MM_"."_YY)
+ S MM=MM+1 S:MM=13 MM=1,YY=YY+1 S DE=$$DI^DTUTL("01."_MM_"."_YY)-1
+ S LPU=+$$^I("ilpu"),R=""
+ F X=DS:1:DE S R=R_"|"_$$DWKNML^DTUTL($$DWEEK^DTUTL(X))
+ D OWF^RWU(".txt")
+ D WC^RWU("|"_CR_"|Каб.|Специальность|Сотрудник|Телефон"_R)
+ S OTX=$S(OTC'="":OTC,sOTD=1:FLT,1:""),OT=""
+ F  S OT=$O(^DSH(LPU,OT)) Q:OT=""  I OTX=""!(OTX=OT),NOTC=""!(NOTC'=OT) S VR="",FF=0 F  S VR=$O(^DSH(LPU,OT,VR)) Q:VR=""  S SP="" F  S SP=$O(^DSH(LPU,OT,VR,SP)) Q:SP=""  D
+ .I sOTD=2,FLT'="",'$$FLinFL^TXTU(SP,FLT) Q 
+ .I sOTD=3,FLT'="",FLT'=VR Q 
+ .I sOTD=4,FLT'="",'$$isCAB^IMRASP(FLT,LPU,OT,VR,SP,DS,DE) Q  ; за весь период CAB
+ .S DT=DS-1,(A,B)=""
+ .S SPT="" F I=1:1:9 S X=$P(SP,"|",I) Q:X=""  S:$L(SPT) SPT=SPT_", " S SPT=SPT_$$GSPEC^YISPRAV(X)
+ .F  S DT=$O(^DSH(LPU,OT,VR,SP,DT)) Q:DT=""!(DT>DE)  D
+ ..S R=$G(^(DT)),X=$P($P(R,"|",1),"@",1),$P(B,"|",DT-DS+1)=$S(X="":"*",1:X)
+ ..S:A="" CC=$P(R,"|",2),A=OT_"@"_VR_"@"_SP_"|"_CC_"|"_SPT_"|"_$$VFIOSHD^IRASP2(VR,DE)_"|"_$P(R,"|",3)_"|"
+ ..I $E(CC)'="*",CC'=$P(R,"|",2) S CC="*"_CC,$P(A,"|",2)=CC ; неск.каб
+ .Q:B="" 
+ .I FF=0 S FF=1,R=$$GOTD^YISPRAV(OT) D WC^RWU(CR_"||"_$P(R," ",1)_"|"_$P(R," ",2,9))
+ .D WC^RWU(CR_A_B)
+ D C^RWU
+ Q
+S ; Save
+ N I,X,R,K,V,T,E,Z,MM,YY,DS,DE,DT,LPU,H,OT,VR,SP,TM,TML,EXL,F,HTT,DEL,Wo
+ N C,MX,H1,OTC,NOTC,ST,DTU,fC
+ ; Запрет изменения пред. дней
+ S LPU=+$$^I("ilpu"),HTT=$H,Wo=+$$C1^I("rasp-mk-aotimer")
+ S R=$$LCL^NUSER("mkrasp","aotimer") S:$L(R) Wo=R
+ K ^BUF($J,"erl")
+ D ORH^RWU
+ S X='($$LCL^NUSER("mkrasp","save")=0),DTU=""
+ I X F I=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D
+ .I I=1 D  Q
+ ..S R=$P(A,"|",1),MM=$P(R,"@",1),YY=$P(R,"@",2)
+ ..S DS=$$DI^DTUTL("01."_MM_"."_YY)
+ ..S MM=MM+1 S:MM=13 MM=1,YY=YY+1
+ ..S DE=$$DI^DTUTL("01."_MM_"."_YY)-1
+ .Q:I=2 
+ .S R=$P(A,"|",1) Q:R="" 
+ .S OT=$P(R,"@",1),VR=$P(R,"@",2),SP=$P(R,"@",3)
+ .S:SP="" SP=0
+ .Q:'$$CHECK^ISPRAV("otd",OT) 
+ .S C=$P(A,"|",2),R=$P(A,"|",5),fC=0
+ .I C="" S C=$S($$GET^IKADRY(VR,"otd2")=OT&($$GET^IKADRY(VR,"otd2")=OT):"2",1:""),C=$$GET^IKADRY(VR,"cab"_C) S:C'="" R=$P($G(^PLPU(LPU,0,"cab",C)),"|",3)
+ .S:$E(C)="*" C="",fC=1
+ .S H1=C_"|"_R,H="|"_H1
+ .S:+$$C1^I("bk-shedule") ^DSHBK(HTT,"i",I)=DS_"%"_DE_"%"_A
+ .F DT=$S(Wo=1&(+$H>DS):+$H,1:DS):1:DE S TM=$P(A,"|",DT-DS+6) D
+ ..S F=$G(^DSH(LPU,OT,VR,SP,DT)),R=$P(F,"|",1),ST=$P(F,"|",8)
+ ..S:DT>DTU DTU=DT
+ ..S MX=""
+ ..I Wo=2,F'="",$P(F,"|",2,3)'=H1,+$H<DS d sCAB ; Только кабинет
+ ..I Wo=2,+$H<DS Q 
+ ..I TM="*" Q:$P(F,"|",2,3)=H1  d sCAB Q  ; Только кабинет на произвольное время
+ ..I TM'="",'$D(^M(141,TM)) S TM="" Q:$P(F,"|",2,3)=H1  d sCAB Q  ; Неправильное время, только кабинет
+ ..S V=+$S(TM="":0,1:$G(^M(141,TM,"v")))
+ ..S MX=+$S(TM="":0,1:$G(^("mxp")))
+ ..d sMX
+ ..S ST=$S(TM="":0,1:$G(^M(141,TM,"stat")))
+ ..I F'="",TM'="",$P(R,"@",1)=TM,$P(R,"@",2)=V D  Q  ; время не менялось
+ ...S R=TM_"@"_V_H
+ ...S:fC&($P(F,"|",2)'="") $P(R,"|",2)=$P(F,"|",2) ; ост. каб.
+ ...Q:$P(F,"|",1,3)=R 
+ ...S:$P(R,"|",6)'=MX $P(R,"|",6)=MX
+ ...S:$P(R,"|",8)'=ST $P(R,"|",8)=ST
+ ...S $P(F,"|",1,3)=R,^DSH(LPU,OT,VR,SP,DT)=F
+ ...D GL^IEXCH("^DSH",LPU,OT,VR,SP,DT)
+ ..K DEL D:TM'="" MKTML^IMRASP(TM,"TML")
+ ..I +$$C1^I("bk-shedule") S ^DSHBK(HTT)=LPU_","_OT_","_VR_","_SP_","_DT M ^DSHBK(HTT,LPU,OT,VR,SP,DT)=^DSH(LPU,OT,VR,SP,DT)
+ ..S R="",Z=1 F  S R=$O(^DSH(LPU,OT,VR,SP,DT,R)) Q:R=""  D
+ ...S YY=$G(^(R))
+ ...I $D(^(R,"t")) M TML(R)=^DSH(LPU,OT,VR,SP,DT,R) Q 
+ ...I YY=""!(YY="*") K ^DSH(LPU,OT,VR,SP,DT,R) S DEL(LPU_","_OT_","""_VR_""","""_SP_""","_DT_","_R)="" Q 
+ ...I YY'="*" S ^BUF($J,"erl",OT_"|"_VR_"|"_SP_"|"_DT_"|"_R)="",Z=0 K TML(R)
+ ...S T=$P(YY,"|",5) ; для нестанд. длительности
+ ...I T<0,(R+T)=0 S T=""
+ ...Q:T=""  Q:R>89999 
+ ...S E=R+T,TML(E)=$S($O(TML(E))="":"*",1:"")
+ ...S T=R-1 F  S T=$O(TML(T)) Q:T=""!(T'<E)  K TML(T)
+ ..I Z,$D(^DSH(LPU,OT,VR,SP,DT)) K ^(DT),DEL D KGL^IEXCH("^DSH",LPU,OT,VR,SP,DT) ; no subnodes
+ ..; если удалили целиком - по каждому времени не удаляем
+ ..S R="" F  S R=$O(DEL(R)) Q:R=""  D UGL^IEXCH("-^DSH("_R_")")
+ ..Q:TM="" 
+ ..S R=TM_"@"_V_H
+ ..S:fC&($P(F,"|",2)'="") $P(R,"|",2)=$P(F,"|",2) ; ост. каб.
+ ..S:$P(R,"|",6)'=MX $P(R,"|",6)=MX
+ ..S:$P(R,"|",8)'=ST $P(R,"|",8)=ST
+ ..S ^DSH(LPU,OT,VR,SP,DT)=R ; заголовок
+ ..M ^DSH(LPU,OT,VR,SP,DT)=TML ; времена
+ ..S EXL(OT,1)=DS,EXL(OT,2)=DE
+ S I="" F  S I=$O(EXL(I)) Q:I=""  D UPD^IEXCH("NMRASP",LPU_","_I_","_EXL(I,1)_","_EXL(I,2))
+ D CR^RWU
+ I $D(^BUF($J,"erl")) D
+ .D OWF^RWU(".txt")
+ .D WC^RWU("Дата|Отделение|Врач|Специальность|Время")
+ .S R="" F  S R=$O(^BUF($J,"erl",R)) Q:R=""  D WC^RWU(CR_$$DT^DTUTL($P(R,"|",4))_"|"_$$GOTD^YISPRAV($P(R,"|",1))_"|"_$$VFIOSH^IRASP2($P(R,"|",2))_"|"_$$GSPEC^YISPRAV($P(R,"|",3))_"|"_$$TM^DTUTL($P(R,"|",5)))
+ .D C^RWU
+ K ^BUF($J,"erl")
+ D MKI^IMRASP(LPU,DTU,DS,DE)
+ Q
+sCAB 
+ I 'fC,$P(F,"|",2)'=$P(H1,"|",1) S $P(F,"|",2)=$P(H1,"|",1)
+ S $P(F,"|",3)=$P(H1,"|",2)
+ d sMX
+ S:MX'="" $P(F,"|",6)=MX
+ S ^DSH(LPU,OT,VR,SP,DT)=F
+ D GL^IEXCH("^DSH",LPU,OT,VR,SP,DT) ; Только кабинет
+ Q
+sMX ; Изменить макс. число записей на время
+ Q:C=""  Q:MX 
+ S:$$C^I("mkrasp","sdentc") MX=$P($$CABFL^IPLPU(LPU,C,"p"),"|",2)
+ S:MX=1 MX=""
+ Q
+NDL(KEY,DS,DE) ; Delete
+ N OT,VR,SP,DT,LPU,R,YY,R,F,E,T,Z,Wo
+ S DS=$$DIH^DTUTL($G(DS)),DE=$$DIH^DTUTL($G(DE))
+ S LPU=+$$^I("ilpu"),OT=$P(KEY,"@",1),VR=$P(KEY,"@",2),SP=$P(KEY,"@",3)
+ G:$$LCL^NUSER("mkrasp","delvr")=0 NDLe
+ S Wo=+$$C1^I("rasp-mk-aotimer")
+ S R=$$LCL^NUSER("mkrasp","aotimer") S:$L(R) Wo=R
+ K ^BUF($J,"erl")
+ S Z=LPU_","_OT_","""_VR_""","""_SP_""","
+ F DT=$S(Wo=1&(+$H>DS):+$H,1:DS):1:DE D
+ .S R="",F=1 F  S R=$O(^DSH(LPU,OT,VR,SP,DT,R)) Q:R=""  S YY=$G(^(R)) D
+ ..I YY=""!(YY="*") K ^(R) S DEL(Z_DT_","_R)="" Q 
+ ..I $L(YY),YY'="*" S ^BUF($J,"erl",OT_"|"_VR_"|"_SP_"|"_DT_"|"_R)="",F=0 K TML(R)
+ .I F,$D(^DSH(LPU,OT,VR,SP,DT)) K ^(DT),DEL D UGL^IEXCH("-^DSH("_Z_DT_")") ; no subnodes
+ .; если удалили целиком - по каждому времени не удаляем
+ .S R="" F  S R=$O(DEL(R)) Q:R=""  D UGL^IEXCH("-^DSH("_R_")")
+ I $D(^BUF($J,"erl")) D
+ .D OWF^RWU(".txt")
+ .D WC^RWU("Дата|Отделение|Врач|Специальность|Время")
+ .S R="" F  S R=$O(^BUF($J,"erl",R)) Q:R=""  D WC^RWU(CR_$$DT^DTUTL($P(R,"|",4))_"|"_$$GOTD^YISPRAV($P(R,"|",1))_"|"_$$VFIOSH^IRASP2($P(R,"|",2))_"|"_$$GSPEC^YISPRAV($P(R,"|",3))_"|"_$$TM^DTUTL($P(R,"|",5)))
+ .D C^RWU
+ K ^BUF($J,"erl")
+NDLe D MKI^IMRASP(LPU,"",DS,DE)
+ Q
+MMyty(Y1,Y2) ; Создать новое расписание с года на год
+ N MM
+ F MM=1:1:12 D MMsys(MM,Y2,"",$$DI^DTUTL("01."_MM_"."_Y1))
+ Q
+MMsys(MM,YY,OTD,DPRX) ; Make month (sys call)
+ N DS,DE,DEE,LPU,OT,VR,SP,DT,FF,A,B,F,R,T,X,Z,V,HTT,DC,TM,TML,EXL,DPR
+ N TMLW,Wo,DEL,bkSH,MXP,CW,CWW,OTC,NOTC,DTU,sOTD,FLT,OTX
+ S DS=$$DI^DTUTL("01."_MM_"."_YY),HTT=$H,DE=DS
+ S sOTD=+$P(OTD,"|",2),FLT=$P(OTD,"|",1)
+ S A=MM-1,B=YY S:A=0 A=12,B=B-1 S DPR=$$DI^DTUTL("01."_A_"."_B)
+ S A=MM+1,B=YY S:A=13 A=1,B=B+1 S DEE=$$DI^DTUTL("01."_A_"."_B)-1
+ S OTC=$$LCL^NUSER("mkrasp","byotd")
+ S NOTC=$$LCL^NUSER("mkrasp","nbyotd")
+ S OTX=$S(OTC'="":OTC,sOTD=1:FLT,1:"")
+ S FF=+$$C1^I("rasp-mk-weekcpy")
+ S bkSH=+$$C1^I("bk-shedule")
+ S Z=$$C1^I("rasp-mk-aotimer")
+ S X=$$LCL^NUSER("mkrasp","aotimer") S:$L(X) Z=X
+ I Z,DS<+$H S DS=+$H+1
+ S LPU=+$$^I("ilpu"),DTU=""
+ I $$LCL^NUSER("mkrasp","mk-once"),$$CHKANY^IMRASP(DS,DEE,LPU) Q  ; расписание уже было создано
+ S:FF DE=DEE
+ S TM=$O(^M(141,"")) G:TM="" MME
+ S TM=TM_"@"_$G(^M(141,TM,"v")),DT=DS-180,A=0 ; полгода
+ S MXP=$G(^("mxp")) 
+ I $G(DPRX)'="" S DT=DPRX,A=1 G mmdp
+ ; если пред. месяц пуст - ищем месяц с данными (не более полгода)
+ S OT="" F  S OT=$O(^DSH(LPU,OT)) Q:OT=""  I OTX=""!(OTX=OT),NOTC=""!(NOTC'=OT) S VR="" F  S VR=$O(^DSH(LPU,OT,VR)) Q:VR=""  S SP="" F  S SP=$O(^DSH(LPU,OT,VR,SP)) Q:SP=""  S R=$O(^DSH(LPU,OT,VR,SP,DS),-1) S:R>DT DT=R,A=1
+mmdp S:A DPR=$$DI^DTUTL("01."_$P($$DT^DTUTL(DT),".",2,3))
+ ; main loop
+ S OT="" F  S OT=$O(^DSH(LPU,OT)) Q:OT=""  I OTX=""!(OTX=OT),NOTC=""!(NOTC'=OT) S VR="" F  S VR=$O(^DSH(LPU,OT,VR)) Q:VR=""  S SP="" F  S SP=$O(^DSH(LPU,OT,VR,SP)) Q:SP=""  D
+ .I sOTD=2,FLT'="",'$$FLinFL^TXTU(SP,FLT) Q
+ .I sOTD=3,FLT'="",FLT'=VR Q 
+ .I sOTD=4,FLT'="",'$$isCAB^IMRASP(FLT,LPU,OT,VR,SP,DS,DE) Q 
+ .I $E(VR,1,2)'="X.",'$$USEInLPU^IKADRY(VR,LPU,DS) Q 
+ .S DT=$O(^DSH(LPU,OT,VR,SP,DS),-1),A="" Q:DT=""!(DT<DPR) 
+ .S R=$G(^(DT))
+ .S EXL(OT,1)=DS,EXL(OT,2)=DE
+ .I 90[FF,bkSH S ^DSHBK(HTT)=LPU_","_OT_","_VR_","_SP_","_DT M ^DSHBK(HTT,LPU,OT,VR,SP,DT)=^DSH(LPU,OT,VR,SP,DT)
+ .I 90[FF D  Q  ; без копирования недели
+ ..K DEL,TML
+ ..S A=$P(R,"|",1) S:A="" A=TM,$P(R,"|",1)=TM S:MXP $P(A,"|",6)=MXP
+ ..S I=$S(FF:DEE,1:DS) ; первый или последний день
+ ..D MKTML^IMRASP($P(A,"@",1),"TML")
+ ..S T="",F=1,Z=LPU_","_OT_","""_VR_""","""_SP_""","
+ ..F  S T=$O(^DSH(LPU,OT,VR,SP,I,T)) Q:T=""  S YY=$G(^(T)) D
+ ...I YY=""!(YY="*") K ^(T) S DEL(Z_I_","_T)="" Q 
+ ...I $L(YY),YY'="*" K TML(T) S F=0
+ ..I F D KGL^IEXCH("^DSH",LPU,OT,VR,SP,I) K ^DSH(LPU,OT,VR,SP,I)
+ ..I 'F S T="" F  S T=$O(DEL(T)) Q:T=""  D UGL^IEXCH("-^DSH("_T_")")
+ ..S ^DSH(LPU,OT,VR,SP,I)=R
+ ..M ^DSH(LPU,OT,VR,SP,I)=TML
+ ..S:DTU<I DTU=I
+ .D MKWK
+ .S (CW,CWW)=0
+ .S:DTU<DE DTU=DE
+ .F I=DS:1:DE D
+ ..I bkSH S ^DSHBK(HTT)=LPU_","_OT_","_VR_","_SP_","_DT M ^DSHBK(HTT,LPU,OT,VR,SP,I)=^DSH(LPU,OT,VR,SP,I)
+ ..S CW=CW+1 S:CW=7 CW=0,CWW=CWW+1 ; N недели
+ ..S T=$S(FF'=2:0,1:CWW#2*7)+$$DWEEK^DTUTL(I)
+ ..K TML,DEL M TML=TMLW(T)
+ ..S T="",F=1,Z=LPU_","_OT_","""_VR_""","""_SP_""","_I
+ ..F  S T=$O(^DSH(LPU,OT,VR,SP,I,T)) Q:T=""  S YY=$G(^(T)) D
+ ...I YY=""!(YY="*") K ^(T) S DEL(Z_","_T)="" Q 
+ ...I $L(YY),YY'="*" K TML(T) S F=0
+ ..I F D KGL^IEXCH("^DSH",LPU,OT,VR,SP,I) K ^DSH(LPU,OT,VR,SP,I)
+ ..I 'F S T="" F  S T=$O(DEL(T)) Q:T=""  D UGL^IEXCH("-^DSH("_T_")")
+ ..M ^DSH(LPU,OT,VR,SP,I)=TML
+ ..D:$D(^DSH(LPU,OT,VR,SP,DT)) WLOG^IMRASP(LPU,OT,VR,SP,DT,"W")
+ ..D:'$D(^DSH(LPU,OT,VR,SP,DT)) WLOG^IMRASP(LPU,OT,VR,SP,DT,"K")
+ S I="" F  S I=$O(EXL(I)) Q:I=""  D UPD^IEXCH("NMRASP",LPU_","_I_","_EXL(I,1)_","_EXL(I,2))
+MME D MKI^IMRASP(LPU,DTU,DS,DE)
+ Q
+MM(MM,YY,OTC) ; Make month
+ D:$$LCL^NUSER("mkrasp","make")'=0 MMsys(MM,YY,OTC)
+ D L(MM,YY,$G(OTC))
+ Q
+MKWK ; Make week pattern
+ K TMLW
+ N DT,I,W,R,TML,TM,X
+ S DT=$O(^DSH(LPU,OT,VR,SP,DS),-1)+1
+ F I=1:1:$S(FF=2:14,1:7) D
+ .S R=$P($G(^DSH(LPU,OT,VR,SP,DT-I)),"|",1,3) Q:R="" 
+ .S TM=$P($P(R,"|",1),"@",1)
+ .D:TM'="*" MKTML^IMRASP(TM,"TML")
+ .D:TM="*" MKTMF^IMRASP($P($P(R,"|",1),"@",2),"TML")
+ .S X=$S(FF=2&(I<8):7,1:0)+$$DWEEK^DTUTL(DT-I)
+ .M TMLW(X)=TML
+ .S TMLW(X)=R
+ Q
+CLRFREE(LP,DS,DE) ; Очистить врачей, у которых в периоде нет пациентов
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N OT,VR,SP,DT,TM,F,X
+ S OT="",X=0
+ F  S OT=$O(^DSH(LP,OT)) Q:OT=""  S VR="" F  S VR=$O(^DSH(LP,OT,VR)) Q:VR=""  S SP="" F  S SP=$O(^DSH(LP,OT,VR,SP)) Q:SP=""  D
+ .S DT=DS-1,F=0 F  S DT=$O(^DSH(LP,OT,VR,SP,DT)) Q:DT=""!(DT>DE)  D  Q:F
+ ..S TM="" F  S TM=$O(^DSH(LP,OT,VR,SP,DT,TM)) Q:TM=""  S R=$G(^(TM)) I $L(R),R'="*" S F=1 Q
+ .Q:F 
+ .S DT=DS-1 F  S DT=$O(^DSH(LP,OT,VR,SP,DT)) Q:DT=""!(DT>DE)  K ^(DT) D KGL^IEXCH("^DSH",LP,OT,VR,SP,DT)
+ .S X=1
+ D:X MKI^IMRASP(LP,"",DS,DE)
+ Q
+INITADD ; init tabradd.frm
+ N CF,FO,FS,SVV
+ S CF=+$$C1^I("rasp-mk-alllpu") ; TODO =LPU!
+ S FO=+$$C1^I("rasp-mk-defotd"),FS=+$$C1^I("rasp-mk-defspec")
+ ; можно выбрать только врача, остальное в соответствии с кадрами
+ S SVV=$S($$LCL^IUSER("mkrasp","addovr"):1,1:$$C^I("mkrasp","addovr"))
+ D OWF^RWU(".xmlb")
+ D W^RWU(^PP(0,2)_"<tabradd>")
+ D WTAG^RWU("amode",SVV)
+ D W^RWU("<otd userdata="""_FO_""">")
+ D OTDLSRT^NSPRAV("","",1)
+ D W^RWU("</otd><spec userdata="""_FS_""">")
+ D SPLSRT^NSPRAV("","",1)
+ D W^RWU("</spec><vr>")
+ D FLST^NVFIND("","","",1,CF,1)
+ D W^RWU("</vr><lpall visible="""_$S(CF:"yes",1:"no")_"""/><cabs>")
+ D WC^RWU($$LSTLTs^NPLPU())
+ D W^RWU("</cabs></tabradd></nb_console>"),C^RWU
+ Q
+RXCH ; Network exchange - read
+ N LPU,DS,DE
+ D R^XGUNET("hpar")
+ Q:'$D(LPU) 
+ D MKI^IMRASP(LPU,"",DS,DE)
+ Q
+WXCH(ID) ; Network exchange - write
+ N LPU,OT,VR,SP,DS,DE,DT,GL,I,R
+ S LPU=$P(ID,",",1),OT=$P(ID,",",2),DS=$P(ID,",",3),DE=$P(ID,",",4)
+ Q:LPU=""!(OT="") 
+ S I=1,VR=""
+ F  S VR=$O(^DSH(LPU,OT,VR)) Q:VR=""  S SP="" F  S SP=$O(^DSH(LPU,OT,VR,SP)) Q:SP=""  S DT=DS-1 F  S DT=$O(^DSH(LPU,OT,VR,SP,DT)) Q:DT=""  Q:DT>DE  D
+ .S R="^DSH("_LPU_","_OT_","""_VR_""","""_SP_""","_DT
+ .S GL("-DSH"_I)="-"_R_")",GL("DSH"_I)=R,I=I+1
+ S GL("LPU")="LPU"
+ S GL("LPI")="^DSH("_LPU_")" ; one node (DTU)
+ S GL("DS")="DS"
+ S GL("DE")="DE"
+ D S^XGUNET("GL","exp.nb-data")
+ Q

@@ -1,0 +1,720 @@
+YMPRP ; Медицинские программы [ 01/17/2023  2:13 PM ]
+INIT ; Initial form routine
+ N R,V S R=0,V=" visible=""no""/>"
+ S:$D(^LOG(%LOG,"lcl","mprog")) R=+^("mprog")
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<mprog>")
+ D:$G(^LCL("mprog",R,"new"))=0 W^RWU("<create_btn"_V)
+ D:$G(^LCL("mprog",R,"save"))=0 W^RWU("<save_btn"_V)
+ D:$G(^LCL("mprog",R,"otd"))=0 W^RWU("<pg_otd"_V)
+ D:$G(^LCL("mprog",R,"spec"))=0 W^RWU("<pg_spec"_V)
+ D:$G(^LCL("mprog",R,"exusl"))=0 W^RWU("<pg_dusl"_V)
+ D:$G(^LCL("mprog",R,"dtime"))=0 W^RWU("<pg_dtime"_V)
+ D:$G(^LCL("mprog",R,"diag"))=0 W^RWU("<pg_diag"_V)
+ D:$G(^LCL("mprog",R,"usldiag"))=0 W^RWU("<pg_udiag"_V)
+ D:$G(^LCL("mprog",R,"visual"))=0 W^RWU("<pg_visusl"_V)
+ D:$G(^LCL("mprog",R,"sogl"))=0 W^RWU("<pg_sogl"_V)
+ D:$G(^LCL("mprog",R,"descr"))=0 W^RWU("<pg_descr"_V)
+ D W^RWU("<fld>|"_CR)
+ D LSTs^NSPRAV("mprpfld")
+ D W^RWU("</fld><lpu>")
+ D LSTFILTs^YCONTR
+ D W^RWU("</lpu></mprog></nb_console>"),C^RWU
+ Q
+LST(DT) ; Список
+ S DT=$$DIH^DTUTL($G(DT))
+ D OWF^RWU(".txt"),W^RWU("|"_CR)
+ D LSTsys(DT)
+ D C^RWU
+ Q
+LSTsys(DT,USE,TAG) ; Простой список
+ N N,C,R
+ S (C,N)="",USE=+$G(USE),TAG=+$G(TAG)
+ F  S N=$O(^MPRP(N)) Q:N=""  D
+ .I USE,'$$CHECK^IMPRP(N,DT) Q 
+ .S R=$G(^(+$O(^MPRP(N,"pname",DT+1),-1)))
+ .S:TAG R=$$TAG^TXTU(R)
+ .D WC^RWU(C_N_"|"_R)
+ .S C=CR
+ Q
+LSTS(DT) ; Простой список с сортировкой
+ S DT=$$DIH^DTUTL($G(DT))
+ D OWF^RWU(".txt")
+ D LSTSsys(DT)
+ D C^RWU
+ Q
+LSTSsys(DT,USE,TAG) ; Простой список с сортировкой
+ N N,C,LST,R
+ S N="",USE=+$G(USE),TAG=+$G(TAG)
+ F  S N=$O(^MPRP(N)) Q:N=""  D
+ .I USE,'$$CHECK^IMPRP(N,DT) Q 
+ .S LST($E($G(^(+$O(^MPRP(N,"pname",DT+1),-1))),1,200)_"|"_N)=""
+ S (C,N)="" F  S N=$O(LST(N)) Q:N=""  D
+ .S R=$P(N,"|",1)
+ .S:TAG R=$$TAG^TXTU(R) 
+ .D WC^RWU(C_$P(N,"|",2)_"|"_R) S C=CR
+ Q
+RLST(DT,USE,SRT) ; Список с разделами
+ S DT=$$DIH^DTUTL($G(DT)),USE=+$G(USE),SRT=+$G(SRT)
+ D OWF^RWU(".txt")
+ D RLSTsys(DT,USE,SRT)
+ D C^RWU
+ Q
+RLSTsys(DT,USE,SRT) ; Список с разделами
+ S SRT=+$G(SRT)
+ N N,LST,F,R S N="" F  S N=$O(^MPRP(N)) Q:N=""  D
+ .S R=$G(^(+$O(^(N,"pname",DT+1),-1)))
+ .I USE,'$$CHECK^IMPRP(N,DT) Q
+ .S F=+$$GET(N,"fld",DT)
+ .S:'SRT LST(F,N)=R
+ .S:SRT LST(F,R_"|"_N)=""
+ S (R,F)=""
+ F  S F=$O(LST(F)) Q:F=""  D
+ .I F D WC^RWU(R_"|"_$$GET^ISPRAV("mprpfld",F)_"||1") S R=CR
+ .S N="" F  S N=$O(LST(F,N)) Q:N=""  D
+ ..D:'SRT WC^RWU(R_N_"|"_LST(F,N))
+ ..D:SRT WC^RWU(R_$P(N,"|",2)_"|"_$P(N,"|",1))
+ ..S R=CR
+ Q
+TREE(DT,SRT,TXT) ; Древовидный список
+ S DT=$$DIH^DTUTL($G(DT))+1,SRT=+$G(SRT)
+ S TXT=$$LU^TXTU($$WD^TXTU($G(TXT)))
+ D OWF^RWU(".txt")
+ N N,LST,F,R,D
+ 
+ I TXT'="",$L(TXT)<32,$D(^MPRP(TXT)) S N=TXT D TREEprc(0) ; по коду
+ S N="" F  S N=$O(^MPRP(N)) Q:N=""  D TREEprc(1)
+ 
+ S (R,F)=""
+ F  S F=$O(LST(F)) Q:F=""  D
+ .I F D WC^RWU(R_$$GET^ISPRAV("mprpfld",F)) S R=CR
+ .S N="" F  S N=$O(LST(F,N)) Q:N=""  D
+ ..D:'SRT WC^RWU(R_$S(F:$C(9),1:"")_LST(F,N)_"|"_N)
+ ..D:SRT WC^RWU(R_$S(F:$C(9),1:"")_N)
+ ..S R=CR
+ D C^RWU
+ Q
+TREEprc(FND) 
+ ; FND - поиск по тексту
+ S D=$O(^(N,"pname",DT),-1)
+ I D="",$O(^MPRP(N,"log",DT),-1)=""  Q  ; еще не действ.
+ S R=$S(D="":"",1:^MPRP(N,"pname",D))
+ I FND,TXT'="",$$LU^TXTU(R)'[TXT Q 
+ S F=+$$GET(N,"fld",DT-1)
+ S:'SRT LST(F,N)=R
+ S:SRT LST(F,R_"|"_N)=""
+ Q
+L(N,DT) ; Загрузить
+ N PRICE,PL,D,R,NN,X,I,K,CDT
+ S CDT=$$DIH^DTUTL($G(DT)),DT=CDT+1,N=$$WD^TXTU(N)
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<mprog>")
+ S PRICE=$$CORCP^IPRICET($$GET(N,"price",CDT))
+ S PL="",D="" F  S PL=$O(^MPRP(N,PL)) Q:PL=""  D
+ .I $L(PL)>1 S D=$O(^(PL,DT),-1) Q:D="" 
+ .I PL="o" S I2="a" D LOTD S I2="d" D LOTD Q 
+ .I PL="s" S I2="a" D LSPEC S I2="d" D LSPEC Q 
+ .I PL="d" D LDIAG Q 
+ .I PL="ds" D LDIAGS Q
+ .I PL="u" S I2="a" D LUSLA S I2="d" D LUSLD S I2="s" D LUSLDK S I2="v" D LUSLD S I2="i" D LUSLI Q  
+ .I PL="e" D LDAU Q 
+ .I PL="dow" D LDOW Q
+ .I PL="dsc" D LTXT(PL) Q 
+ .D WTAGDC^RWU(PL,$G(^MPRP(N,PL,D)))
+ D W^RWU("</mprog></nb_console>"),C^RWU
+ Q
+LOTD Q:'$D(^MPRP(N,PL,I2))  S D=$O(^(I2,DT),-1) Q:D="" 
+ D W^RWU("<otd"_I2_">") K CCR
+ S NN="" F  S NN=$O(^MPRP(N,PL,I2,D,NN)) Q:NN=""  D WC^RWU($G(CCR)_NN_"|"_$$GOTD^YISPRAV(NN)) S:'$D(CCR) CCR=CR
+ D W^RWU("</otd"_I2_">") K CCR
+ Q
+LSPEC Q:'$D(^MPRP(N,PL,I2))  S D=$O(^(I2,DT),-1) Q:D="" 
+ D W^RWU("<spec"_I2_">") K CCR
+ S NN="" F  S NN=$O(^MPRP(N,PL,I2,D,NN)) Q:NN=""  D WC^RWU($G(CCR)_NN_"|"_$$GSPEC^YISPRAV(NN)) S:'$D(CCR) CCR=CR
+ D W^RWU("</spec"_I2_">") K CCR
+ Q
+LDIAG Q:'$D(^MPRP(N,PL))  S D=$O(^(PL,DT),-1) Q:D="" 
+ D W^RWU("<diaga>") K CCR
+ S NN="" F  S NN=$O(^MPRP(N,PL,D,NN)) Q:NN=""  D WC^RWU($G(CCR)_NN_"|"_$$NAME^YMKB10(NN)) S:'$D(CCR) CCR=CR
+ D W^RWU("</diaga>") K CCR
+ Q
+LDIAGS Q:'$D(^MPRP(N,PL))  S D=$O(^(PL,DT),-1) Q:D="" 
+ D W^RWU("<diags>") K CCR
+ S NN="" F  S NN=$O(^MPRP(N,PL,D,NN)) Q:NN=""  D WC^RWU($G(CCR)_NN_"|"_$$NAME^YMKB10(NN)) S:'$D(CCR) CCR=CR
+ D W^RWU("</diags>") K CCR
+ Q
+LUSLD Q:'$D(^MPRP(N,PL,I2))  S D=$O(^(I2,DT),-1) Q:D="" 
+ D W^RWU("<usl"_I2_">")
+ S NN="" F  S NN=$O(^MPRP(N,PL,I2,D,NN)) Q:NN=""  D WC^RWU(CR_$$TAG^TXTU(NN_"|"_$$NAMEH^IPRICE(NN,PRICE,CDT)))
+ D W^RWU("</usl"_I2_">")
+ Q
+LUSLDK Q:'$D(^MPRP(N,PL,I2))  S D=$O(^(I2,DT),-1) Q:D="" 
+ N K
+ S K=$TR($P($G(^(D)),"|",1,99),"|","-")
+ D W^RWU("<usl"_I2_">")
+ S NN="" F  S NN=$O(^MPRP(N,PL,I2,D,NN)) Q:NN=""  S K=$P($G(^(NN)),"|",2,99) D WC^RWU(CR_$$TAG^TXTU(NN_"|"_$$NAMEH^IPRICE(NN,PRICE,DT-1)_"|"_K))
+ D W^RWU("</usl"_I2_">")
+ Q
+LTXT(PL) 
+ D W^RWU("<"_PL_">")
+ D WC^RWU($$TAG^TXTU($G(^MPRP(N,PL,D))))
+ S NN="" F  S NN=$O(^MPRP(N,PL,D,NN)) Q:NN=""  D WC^RWU($$TAG^TXTU($G(^(NN))))
+ D W^RWU("</"_PL_">")
+ Q
+BUSLD ; В буфер
+ Q:'$D(^MPRP(N,PL,I2))
+ N D,I S D=$O(^(I2,DT+1),-1) Q:D="" 
+ S NN="",I=1 F  S NN=$O(^MPRP(N,PL,I2,D,NN)) Q:NN=""  S R=^(NN),^BUF($J,"prp",FIELD,I)=NN,I=I+1
+ Q
+LUSLA Q:'$D(^MPRP(N,PL,I2))  S D=$O(^(I2,DT),-1) Q:D=""
+ D W^RWU("<usla>")
+ S NN="" F  S NN=$O(^MPRP(N,PL,I2,D,NN)) Q:NN=""  S R=^(NN),K=$P(R,"|",7) D WC^RWU(CR_$$TAG^TXTU(NN_"|"_$$NAMEH^IPRICE(NN,PRICE,CDT)_"|"_$P(R,"|",1,2)_$S(K:":"_K,1:"")_"|"_$P(R,"|",4,6)))
+ D W^RWU("</usla>")
+ Q
+BUSLA 
+ Q:'$D(^MPRP(N,PL,I2))
+ N D,I S D=$O(^(I2,DT+1),-1) Q:D="" 
+ S NN="",I=1 F  S NN=$O(^MPRP(N,PL,I2,D,NN)) Q:NN=""  S R=^(NN),^BUF($J,"prp",FIELD,I)=NN_"||"_$P(R,"|",1,2)_"|"_$P(R,"|",4,6),I=I+1
+ Q
+LUSLI Q:'$D(^MPRP(N,PL,I2))  S D=$O(^(I2,DT),-1) Q:D=""
+ D W^RWU("<usli>")
+ S NN="" F  S NN=$O(^MPRP(N,PL,I2,D,NN)) Q:NN=""  S R=^(NN) D WC^RWU(CR_$$TAG^TXTU(NN_"|"_$$NAMEH^IPRICE(NN,PRICE,CDT)_"|"_$P(R,"|",1,2)_"|"_$P(R,"|",4,6)))
+ D W^RWU("</usli>")
+ Q
+BUSLI 
+ Q:'$D(^MPRP(N,PL,I2))  
+ N D,I S D=$O(^(I2,DT+1),-1) Q:D="" 
+ S NN="",I=1 F  S NN=$O(^MPRP(N,PL,I2,D,NN)) Q:NN=""  S R=^(NN),^BUF($J,"prp",FIELD,I)=NN_"||"_$P(R,"|",1,2)_"|"_$P(R,"|",4,6),I=I+1
+ Q
+LDOW 
+ D W^RWU("<daytime>")
+ S R=$G(^MPRP(N,PL,D))
+ F I=1:1:7 D
+ .S X=$P(R,"|",I)
+ .S I2=$$DWKNM^DTUTL(I)
+ .D WC^RWU(CR_$S($P(X,"@",1)="a":"*|",$P(X,"@",1)="d":"|*",1:"|")_"|"_I2_"|"_$$TM^DTUTL($P(X,"@",2))_"|"_$$TM^DTUTL($P(X,"@",3)))
+ D W^RWU("</daytime>")
+ Q
+LDAU ; Услуги по диагнозам
+ D W^RWU("<udia>")
+ S D=$O(^MPRP(N,PL,DT),-1),NN="",PL="e"
+ I D'="" F  S NN=$O(^MPRP(N,PL,D,NN)) Q:NN=""  D
+ .S I2="" F  S I2=$O(^MPRP(N,PL,D,NN,I2)) Q:I2=""  D
+ ..S X=^(I2)
+ ..D WC^RWU(CR_$$TAG^TXTU(NN_"|"_I2_"|"_$$NAMEH^IPRICE(I2,PRICE,CDT)_"|"_$P(X,"|",1,2)_"|"_$S($P(X,"|",3)=1:"",1:"+")))
+ D W^RWU("</udia>")
+ Q
+S ; Сохранить
+ N %J,N,A,I,F,MxS
+ K ^BUF($J,"prp"),^("prpd")
+ S MxS=$S($ZV["MSM":7000,1:16384)
+ D ORH^RWU,OEV^XMLR("TAGS^YMPRP","TAGD^YMPRP","")
+ F %J=1:1 S A=$$RA^RWU Q:%IFN["Z"  D REV^XMLR(A)
+ D CEV^XMLR
+ D WW
+ K ^BUF($J,"prp"),^("prpd") D CR^RWU
+ D MSG^RWU(^PP(0,2)_"<mprog><kod>"_$G(N)_"</kod></mprog></nb_console>",".xmlb")
+ Q
+WW 
+ N I1,I2,X1,X2,DTPV,PR,R,TP,K,UO,X,Y,Z
+ S N=$$WD^TXTU($G(^BUF($J,"prp","kod"))) K ^BUF($J,"prp","kod")
+ S DT=$G(^("date")),TP=$G(^("tp"))+1 K ^("date")
+ S DTT=$$DIH^DTUTL(DT),UO=""
+ S:N="" N=$$NEW^IMPRP(DTT)
+ 
+ S PL="" F  S PL=$O(^BUF($J,"prp",PL)) Q:PL=""  D
+ .I $E(PL,1,3)="usl" S I1="u",I2=$E(PL,4) D:I2="a" SETua D:I2="i" SETui D:I2'="a"&(I2'="i") SETln  Q 
+ .I $E(PL,1,3)="otd" S I1="o",I2=$E(PL,4) D SETln Q 
+ .I $E(PL,1,4)="spec" S I1="s",I2=$E(PL,5) D SETln Q 
+ .I PL="diaga"!(PL="diags") D SETd Q 
+ .I PL="udia" D SETud Q 
+ .I PL="dsc" K ^MPRP(N,PL,DTT) M ^MPRP(N,PL,DTT)=^BUF($J,"prp",PL) D REGL^IEXCH("^MPRP",N,PL,DTT) Q 
+ .S R=^(PL) D SET(N,PL,DTT,R)
+ D SET2P(N,"u","a",DTT,+$G(^BUF($J,"prp","uaonly")))
+ D POSTGEN^IMPRP(N,DTT)
+ S R=$$USRH^IUSER()
+ S ^MPRP(N,"log",DTT)=R,^MPRP(N,"log",DTT,$H)=R
+ D GL^IEXCH("^MPRP",N,"log",DTT)
+ Q
+TAGS ; Tag start
+ S A=%XM(2)
+ Q:A="xml"!(A="nb_console")!(A="mprog") 
+ S ^BUF($J,"prp",A)=""
+ Q
+TAGD ; Tag data
+ S A=%XM(2)
+ Q:A="xml"!(A="nb_console")!(A="mprog") 
+ I A="dsc" D  Q 
+ .S I=+$O(^BUF($J,"prp",A,""),-1)
+ .I 'I,'$D(^(I)) S F=$G(^BUF($J,"prp",A)),N=$L(F),^(A)=F_$E(%XD,1,MxS-N),%XD=$E(%XD,MxS-N+1,99999)
+ .F  Q:'$L(%XD)  S I=+$O(^BUF($J,"prp",A,""),-1),F=$G(^(I)) S:'I I=1 S:$L(F)=MxS I=I+1,F="" S N=$L(F),^(I)=F_$E(%XD,1,MxS-N),%XD=$E(%XD,MxS-N+1,99999)
+ I $E(A,1,3)'="usl",A'="diaga",A'="diags",A'="udia",$E(A,1,3)'="otd",$E(A,1,4)'="spec" S ^(A)=$E(^BUF($J,"prp",A)_$E(%XD,1,MxS),1,MxS)  Q   ; max field len 7/32k
+ S I=+$O(^BUF($J,"prp",A,""),-1)
+ F  S F=%XD[CR,N=$P(%XD,CR,1),%XD=$P(%XD,CR,2,9999) S:$L(N) ^(I)=$G(^BUF($J,"prp",A,I))_N,I=I+F Q:'$L(%XD) 
+ Q
+SETln 
+ N X1 
+ S DTPV=$O(^MPRP(N,I1,I2,DTT+1),-1),(X1,X2)=0
+ K ^BUF($J,"prpd") S I=$S(I1="u":0,1:""),K=$S(I2="d":-TP,1:TP)
+ F  S I=$O(^BUF($J,"prp",PL,I)) Q:I=""  D
+ .S R=^(I),X1=$P(R,"|",3),R=$P(R,"|",1)
+ .I R'="",$L(R)<128 S R=$$LU^TXTU(R),^BUF($J,"prpd",R)=K_$S(X1'="":"|"_X1,1:"") I DTPV'="",'X1 S:'$D(^MPRP(N,I1,I2,DTPV,R)) X1=1
+ D SCMPBUF
+ Q
+SETd 
+ S I1=$S(PL="diags":"ds",1:"d")
+ S DTPV=$O(^MPRP(N,I1,DTT+1),-1),(X1,X2)=0
+ S K=$S(I1="ds":"",$G(^BUF($J,"prp","diagt"))=2:-TP,1:TP)
+ K ^BUF($J,"prpd") S I=""
+ F  S I=$O(^BUF($J,"prp",PL,I)) Q:I=""  S R=$P(^(I),"|",1) I R'="" S ^BUF($J,"prpd",R)=K I DTPV'="",'X1 S:'$D(^MPRP(N,I1,DTPV,R)) X1=1
+ S I=""
+ F  S I=$O(^MPRP(N,I1,DTPV,I)) Q:I=""  S PR=$G(^(I)),R=$D(^BUF($J,"prpd",I)) S:'R X2=1 Q:X2  I $G(^(I))'=PR S X2=1 Q 
+ I DTPV'="" Q:X1=0&(X2=0) 
+ K ^MPRP(N,I1,DTT) M ^MPRP(N,I1,DTT)=^BUF($J,"prpd")
+ S ^MPRP(N,I1,DTT)=K K ^BUF($J,"prpd")
+ D REGL^IEXCH("^MPRP",N,I1,DTT)
+ Q
+SETud 
+ S I1="e",DTPV=$O(^MPRP(N,I1,DTT+1),-1),(X1,X2)=0
+ K ^BUF($J,"prpd") S I=0
+ F  S I=$O(^BUF($J,"prp",PL,I)) Q:I=""  S PR=^(I),R=$P(PR,"|",1),I2=$P(PR,"|",2) I R'="",I2'="" D
+ .S R=$$LU^TXTU(R)
+ .S K=$P(PR,"|",4,5)_"|"_$S($P(PR,"|",6)="+":-TP,1:TP),^BUF($J,"prpd",R,I2)=K
+ .I DTPV'="",'X1 S X=$D(^MPRP(N,I1,DTPV,R,I2)) S:'X X1=1 I 'X1 S:$G(^(I2))'=K X1=1
+ S I="" F  S I=$O(^MPRP(N,I1,DTPV,I)) Q:I=""  D
+ .S I2="" F  S I2=$O(^MPRP(N,I1,DTPV,I,I2)) Q:I=""  S PR=$G(^(I2)),R=$D(^BUF($J,"prpd",I,I2)) S:'R X2=1 Q:X2  I $G(^(I))'=PR S X2=1 Q 
+ I DTPV'="",X1=0,X2=0 Q
+ K ^MPRP(N,I1,DTT) M ^MPRP(N,I1,DTT)=^BUF($J,"prpd")
+ S:'$D(^BUF($J,"prpd")) ^MPRP(N,I1,DTT)="" K ^BUF($J,"prpd")
+ D REGL^IEXCH("^MPRP",N,I1,DTT)
+ Q
+SETua ; Разрешенные услуги
+ S DTPV=$O(^MPRP(N,I1,I2,DTT+1),-1),(X1,X2)=0
+ K ^BUF($J,"prpd") S I=0
+ F  S I=$O(^BUF($J,"prp",PL,I)) Q:I=""  S PR=^(I),R=$P(PR,"|",1) D:R'=""
+ .S R=$$LU^TXTU(R),Z=""
+ .S:$P(PR,"|",4)[":" Z=$P(PR,"|",4),$P(PR,"|",4)=$P(Z,":",1),Z=$P(Z,":",2) ; стат. после двоеточия
+ .S K=$P(PR,"|",3,4)_"|"_TP,X=$P(PR,"|",5),Y=$P(PR,"|",6)
+ .S:$L(X) $P(K,"|",4)=X S:Y $P(K,"|",5)=Y ; group
+ .S Y=$P(PR,"|",7) S:Y $P(K,"|",6)=Y ; group res.
+ .S:Z $P(K,"|",7)=Z ; not date
+ .S ^BUF($J,"prpd",R)=K
+ .Q:DTPV="" 
+ .I 'X1 S X=$D(^MPRP(N,I1,I2,DTPV,R)) S:'X X1=1 I 'X1,$G(^(R))'=K S X1=1
+ S K=+$G(^BUF($J,"prp","uaonly"))
+ S ^BUF($J,"prpd")=K
+ S:+$G(^MPRP(N,I1,I2,DTPV))'=K X1=1 ; changed only root type
+ D SCMPBUF
+ Q
+SETui ; Разрешенные услуги в приеме
+ S DTPV=$O(^MPRP(N,I1,I2,DTT+1),-1),(X1,X2)=0
+ K ^BUF($J,"prpd") S I=0
+ F  S I=$O(^BUF($J,"prp",PL,I)) Q:I=""  S PR=^(I),R=$P(PR,"|",1) D:R'=""
+ .S R=$$LU^TXTU(R)
+ .S K=$P(PR,"|",3,5)_"|"_TP,^BUF($J,"prpd",R)=K
+ .I DTPV'="",'X1 S X=$D(^MPRP(N,I1,I2,DTPV,R)) S:'X X1=1 I 'X1,$G(^(R))'=K S X1=1
+ D SCMPBUF
+ Q
+SCMPBUF ; Сравнить существующий списк с сохраняемым
+ S I=""
+ F  S I=$O(^MPRP(N,I1,I2,DTPV,I)) Q:I=""  S PR=$G(^(I)),R=$D(^BUF($J,"prpd",I)) S:'R X2=1 Q:X2  I $G(^(I))'=PR S X2=1 Q 
+ I DTPV'="",'X1,'X2 Q 
+ K ^MPRP(N,I1,I2,DTT)
+ M ^MPRP(N,I1,I2,DTT)=^BUF($J,"prpd")
+ S:'$D(^BUF($J,"prpd")) ^MPRP(N,I1,I2,DTT)=""
+ D REGL^IEXCH("^MPRP",N,I1,I2,DTT)
+ K ^BUF($J,"prpd")
+ Q
+DEL(ID) ; Удалить программу
+ Q:ID=""
+ I '$$LCL^NUSER("mprog","del") D MSG^RWU("Недостаточно прав для удаления программы") Q
+ ; TODO - check 
+ D K^ISSG("^MPRP("_ID_")")
+ K ^MPRP(ID)
+ D KGL^IEXCH("^MPRP",ID)
+ Q
+GET(N,PL,DT) ; Получить значение
+ S DT=$O(^MPRP(N,PL,DT+1),-1) Q:DT="" "" Q $G(^(DT))
+GETD(N,PL,DT) ; Получить значение
+ S DT=$$DI^DTUTL($G(DT))+1
+ S DT=$O(^MPRP(N,PL,DT),-1) Q:DT="" "" Q $G(^(DT))
+GETLN(N,PL,DT,IDX) ; Получить часть значения в длинном поле
+ S DT=$O(^MPRP(N,PL,DT+1),-1) Q:DT="" "" Q:IDX="" $G(^(DT))
+ Q $G(^(DT,IDX))
+SETD(N,PL,DT,R) ; Сохранить значение
+ S DT=$$DIH^DTUTL(DT) G SET+1
+SET(N,PL,DT,R,NOPL) ; Сохранить значение
+ N I1,I2,X1,DTPV,PR,J,K,X,XL,LST,FLG,UP
+ S I1="",I2=""
+ S:PL["usl" I1="u",R=$P(R,CR,2,512)
+ S:PL["otd" I1="o"
+ S:PL["spec" I1="s"
+ S:PL["diaga" I1="d"
+ S:PL["diags" I1="ds"
+ S I2=$E(PL,$L(PL),$L(PL)) G:PL="usla" SETUA G:PL="usli" SETUI G:I1'="" SETI
+ D:PL="daytime" SDOW
+ S DTPV=$O(^MPRP(N,PL,DT+1),-1)
+ I R="" Q:DTPV="" 
+ S PR=$G(^(+DTPV)),UP=0 S:R'=PR ^(DT)=R,UP=1
+ S DTPV=$O(^(DT))
+ I DTPV'="",^(DTPV)=R K ^(DTPV) D KGL^IEXCH("^MPRP",N,PL,DTPV)
+ D:UP REGL^IEXCH("^MPRP",N,PL,DT)
+ S ^MPRP=$H
+ Q
+SET2P(N,I1,I2,DT,R) ; Сохранить значение в двойном поле
+ N DTPV,PR,UP
+ S DTPV=$O(^MPRP(N,I1,I2,DT+1),-1),PR="",UP=0
+ S:DTPV'="" PR=$G(^(DTPV))
+ I $D(^(DT))'[0 S:^(DT)'=R ^(DT)=R,UP=1
+ I R'=PR S ^(DT)=R,UP=1
+ ;S DTPV=$O(^(DT)) I DTPV'="" K:R=^(DTPV) ^(DTPV)
+ D:UP GL^IEXCH("^MPRP",N,I1,I2,DT)
+ S ^MPRP=$H
+ Q
+ADDI(N,PL,DT,IDX,RR,FLOW) ; Добавить значение к существующим
+ ; RR - значение поля
+ ; FLOW - потоковое добавление, без апдейтов и справочников
+ K ^BUF($J,"prp")
+ N NN,I,I1,I2,FIELD,DTT,NN,R,X,Y,K,X1,X2,DTPV,TP,PR
+ S DTT=DT,FIELD=PL
+ S TP=$$GET(N,"tp",DT)+1,I2=""
+ S:$E(PL,1,3)="usl" I2=$E(PL,4),PL="u",I1=PL
+ Q:I2="" 
+ D:I2="a" BUSLA D:I2="i" BUSLI D:I2'="a"&(I2'="i") BUSLD
+ S PL=FIELD,$P(IDX,"|",3)=RR,$P(IDX,"|",5)=""
+ S I=$O(^BUF($J,"prp",PL,""),-1)+1,^(I)=IDX
+ 
+Iend D:I2="a" SETua D:I2="i" SETui D:I2'="a"&(I2'="i") SETln
+ K ^BUF($J,"prp")
+ Q:$G(FLOW) 
+ D:I1="u"&((I2="a")!(I2="i")) POSTGEN^IMPRP(N,DT)
+ Q
+DELI(N,PL,DT,IDX,FLOW) ; Удалить значение из массивов
+ ; FLOW - потоковое добавление, без апдейтов и справочников
+ K ^BUF($J,"prp")
+ N NN,I,I1,I2,FIELD,DTT,NN,R,X,Y,K,X1,X2,DTPV,TP,PR
+ S DTT=DT,FIELD=PL
+ S TP=$$GET(N,"tp",DT)+1,I2=""
+ S:$E(PL,1,3)="usl" I2=$E(PL,4),PL="u",I1=PL
+ Q:I2="" 
+ D:I2="a" BUSLA D:I2="i" BUSLI D:I2'="a"&(I2'="i") BUSLD
+ S PL=FIELD
+ S I="" F  S I=$O(^BUF($J,"prp",PL,I)) Q:I=""  I $P(^(I),"|",1)=IDX K ^(I) Q
+ Q:I=""  ; not found
+ G Iend
+IS(N,PL,DT) ; Exists field
+ S DT=$O(^MPRP(N,PL,DT+1),-1) Q:DT="" 0
+ Q 1
+ISL2(N,I1,I2,DT,R) ; Проверить значение в двойном поле
+ S DT=$O(^MPRP(N,I1,I2,DT+1),-1) Q:DT="" 0
+ Q:$D(^(DT,R)) 1
+ Q 0
+IsLN(N,PL,DT) ; Проверить значение в "длинном" поле
+ S DT=$O(^MPRP(N,PL,DT+1),-1) Q:DT="" 0
+ Q:$L(^(DT)) 1 Q 0
+SETI K LST F J=1:1 S K=$P(R,CR,J) Q:K=""  S X=$P(K,"|",1) S:I1="d" X=$$RECODE^YMKB10(X) S:X'="" LST(X)=""
+SETIL S DTPV=$O(^MPRP(N,I1,I2,DT+1),-1),FLG=1 S:DTPV="" FLG=0
+ I DTPV'="" S (X,XL)="" F  S X=$O(^MPRP(N,I1,I2,DTPV,X)),X1=$O(^(X)),XL=$O(LST(XL)) S:X'=XL FLG=0 Q:X=""  S:X1'=$O(LST(XL)) FLG=0 Q:FLG=0  
+ I FLG=0 K ^MPRP(N,I1,I2,DT) M ^MPRP(N,I1,I2,DT)=LST D REGL^IEXCH("^MPRP",N,I1,I2,DT)
+ S DTPV=$O(^MPRP(N,I1,I2,DT)),FLG=1
+ I DTPV'="" S (X,XL)="" F  S X=$O(^MPRP(N,I1,I2,DTPV,X)),X1=$O(^(X)),XL=$O(LST(XL)) S:X'=XL FLG=0 Q:X=""  S:X1'=$O(LST(XL)) FLG=0 Q:FLG=0  
+ I FLG=1 K ^MPRP(N,I1,I2,DTPV) D KGL^IEXCH("^MPRP",N,I1,I2,DTPV)
+ K LST,X,K S ^MPRP=$H
+ Q
+SETUA K LST
+ F J=1:1 S K=$P(R,CR,J) Q:K=""  S X=$P(K,"|",1) S:X'="" LST(X)=$P(K,"|",3,4)
+SETUAL S DTPV=$O(^MPRP(N,I1,I2,DT+1),-1),FLG=1 S:DTPV="" FLG=0
+ I DTPV'="" S (X,XL)="" F  S X=$O(^MPRP(N,I1,I2,DTPV,X)),X1=$O(^(X)) I X1'="" S XD=$G(^(X)),XL=$O(LST(XL)) S:X'=XL FLG=0 Q:X=""  S:(X1'=$O(LST(XL)))!($G(LST(XL))'=XD) FLG=0 Q:FLG=0 
+ I FLG=0 K ^MPRP(N,I1,I2,DT) M ^MPRP(N,I1,I2,DT)=LST D REGL^IEXCH("^MPRP",N,I1,I2,DT)
+ S DTPV=$O(^MPRP(N,I1,I2,DT)),FLG=1 S:DTPV="" FLG=0
+ I DTPV'="" S (X,XL)="" F  S X=$O(^MPRP(N,I1,I2,DTPV,X)),X1=$O(^(X)) I X1'="" S XD=$G(^(X)),XL=$O(LST(XL)) S:X'=XL FLG=0 Q:X=""  S:(X1'=$O(LST(XL)))!($G(LST(XL))'=XD) FLG=0 Q:FLG=0 
+ I FLG=1 K ^MPRP(N,I1,I2,DTPV) D KGL^IEXCH("^MPRP",N,I1,I2,DTPV)
+ K LST,X,XL,XD,FLG,K
+ S ^MPRP=$H
+ Q
+SETUI K LST F J=1:1 S K=$P(R,CR,J) Q:K=""  S X=$P(K,"|",1) S:X'="" LST(X)=$P(K,"|",3,4)
+SETUIL S DTPV=$O(^MPRP(N,I1,I2,DT+1),-1),FLG=1 S:DTPV="" FLG=0
+ I DTPV'="" S (X,XL)="" F  S X=$O(^MPRP(N,I1,I2,DTPV,X)),X1=$O(^(X)) I X1'="" S XD=$G(^(X)),XL=$O(LST(XL)) S:X'=XL FLG=0 Q:X=-1  S:(X1'=$O(LST(XL)))!($G(LST(XL))'=XD) FLG=0 Q:FLG=0 
+ I FLG=0 K ^MPRP(N,I1,I2,DT) M ^MPRP(N,I1,I2,DT)=LST D REGL^IEXCH("^MPRP",N,I1,I2,DT)
+ S DTPV=$O(^MPRP(N,I1,I2,DT)),FLG=1 S:DTPV="" FLG=0
+ I DTPV'="" S (X,XL)="" F  S X=$O(^MPRP(N,I1,I2,DTPV,X)),X1=$O(^(X)) I X1'="" S XD=$G(^(X)),XL=$O(LST(XL)) S:X'=XL FLG=0 Q:X=-1  S:(X1'=$O(LST(XL)))!($G(LST(XL))'=XD) FLG=0 Q:FLG=0 
+ I FLG=1 K ^MPRP(N,I1,I2,DTPV) D KGL^IEXCH("^MPRP",N,I1,I2,DTPV)
+ K LST,X,XL,XD,FLG,K S ^MPRP=$H
+ Q
+SDOW 
+ S X=""
+ F J=2:1:8 S X1=$P(R,CR,J),I1=$S($P(X1,"|",1)="*":"a",$P(X1,"|",2)="*":"d",1:"") S:I1'="" X=X_I1_"@"_$$TI^DTUTL($P(X1,"|",4))_"@"_$$TI^DTUTL($P(X1,"|",5)) S:J<8 X=X_"|"
+ S R=X,PL="dow"
+ Q
+CHKU(N,DT,USL,DIA) ; Проверить код услуги
+ N D,F S F="",DT=DT+1
+ S D=$O(^MPRP(N,"u","a",DT),-1) 
+ I $L(D),$L($D(^(D)))>1 S F=D,D=$G(^(D)),F=$P($G(^(F,USL)),"|",3) G:F'="" CHKUD S F=0 I D S F=-1 G CHKUD ; G:F'="" CHKUD S F=-1 G:D CHKUD
+ S D=$O(^MPRP(N,"u","d",DT),-1)
+ I $L(D),$L($D(^(D)))>1 S F=$G(^(D,USL))
+CHKUD I $L($G(DIA)) S D=$O(^MPRP(N,"e",DT),-1) I $L(D),$D(^(D,DIA)) S:$D(^(DIA,USL)) F=$P(^(USL),"|",3)
+ Q +F
+CHKUV(N,DT,USL) ; Видимый/не видимый код услуги
+ S DT=$O(^MPRP(N,"u","v",DT+1),-1) Q:DT="" 1
+ Q:$D(^(DT,USL)) 0 Q 1
+CHKUS(N,DT,USL) ; Согласование кода услуги
+ S DT=$O(^MPRP(N,"u","s",DT+1),-1) Q:DT="" 0
+ Q:'$D(^(DT,USL)) 0
+ S DT=$P(^(USL),"|",2) S:DT="" DT=1 Q DT
+CHKVM(N,DT) ; Правила вывода запрещенных услуг
+ S DT=$O(^MPRP(N,"swusv",DT+1),-1) Q:DT="" 0 Q ^(DT) ; TODO - приоритет 
+CHKD(N,DT,DIA) ; Диагноз
+ S DT=$O(^MPRP(N,"d",DT+1),-1) Q:DT="" 0 Q:$D(^(DT))=1 0 ; нейтральный результат - no data
+ S N=^(DT),DIA=$G(^(DT,DIA)) Q:DIA="" -N Q DIA
+CHKS(N,DT,SP) ; Специальность
+ N D S DT=DT+1,D=$O(^MPRP(N,"s","a",DT),-1)
+ I $L(D) Q:$D(^(D,SP)) ^(SP)
+ S D=$O(^MPRP(N,"s","d",DT),-1)
+ I $L(D) Q:$D(^(D,SP)) ^(SP)
+ Q 0
+CHKO(N,DT,OT) ; Отделение
+ N D S DT=DT+1,D=$O(^MPRP(N,"o","a",DT),-1)
+ I $L(D) Q:$D(^(D,OT)) ^(OT)
+ S D=$O(^MPRP(N,"o","d",DT),-1)
+ I $L(D) Q:$D(^(D,OT)) ^(OT)
+ Q 0
+CHKDW(N,DT,TM) ; День-время
+ N I S I=$$DWEEK^DTUTL(DT)
+ S DT=$O(^MPRP(N,"dow",+DT+1),-1) Q:DT="" 1 
+ S DT=$P($G(^(DT)),"|",I) Q:DT="" 1
+ S I=$P(DT,"@",1) Q:$P(DT,"@",2)>TM!($P(DT,"@",3)<TM) $S(I="a":0,1:1)
+ Q $S(I="d":0,1:1)
+CHKUA(N,DT,USL,DIA)  ; Проверить код услуги ко множеству программ
+ Q:N="" 1
+ N X,I,K
+ S K=0 S:'$D(DIA) DIA=""
+ F I=1:1 S X=$P(N,"|",I) Q:X=""  S K=K+$$CHKU(X,DT,USL,DIA) 
+ Q K
+CHKUVA(N,DT,USL)  ; Проверить услугу ко множеству программ на видимость
+ Q:N="" 1 N X,I,F S F=1
+ F I=1:1:99 S X=$P(N,"|",I) Q:X=""  I '$$CHKUV(X,DT,USL) S F=0 Q 
+ Q F
+CHKUSA(N,DT,USL)  ; Проверить услугу к программам на согласование
+ Q:N="" 0
+ N X,I,F,U S F=0
+ F I=1:1:99 S X=$P(N,"|",I) Q:X=""  S U=$$CHKUS(X,DT,USL) I U>F S F=U Q 
+ Q F
+CNTUA(N,DT,USL,UGRP) ; Проверить код услуги на кол-во ко множеству программ
+ ; По максимальному кол-ву
+ ; UGRP - массив, куда копируются коды по группе
+ ; return: 
+ Q:N="" 999 N X,I,F,Y,D,P S (F,P)=""
+ F I=1:1:99 S X=$P(N,"|",I) Q:X=""  D  ;Q:F'="" 
+ .S D=$O(^MPRP(X,"u","a",DT+1),-1) Q:D=""  
+ .S D=$G(^(D,USL)) Q:D="" 
+ .I $P(D,"|",1)="" S F=D,I=999,P=X Q  ; no limit
+ .I D["+" S Y=$P(F,"|",1),F=D,$P(F,"|",1)=$TR($P(D,"|",1),"+","")+Y Q  ; TODO - не первая
+ .S:$P(D,"|",1)>$P(F,"|",1) F=D,P=X
+ I P'="",$L($G(UGRP)) S D=$O(^MPRP(P,"u","g",DT+1),-1) M:D'="" @UGRP=^(D,USL)
+ Q F
+IsCNTUA(N,DT,USL) ; Есть контроль кол-ва
+ Q:N="" 0 N X,I,D
+ F I=1:1:99 S X=$P(N,"|",I) Q:X=""  D   
+ .S D=$O(^MPRP(X,"u","a",DT+1),-1) Q:D=""  
+ .S D=$G(^(D,USL)) Q:D="" 
+ .S:$L($P(D,"|",1)) I=999 ; is limit
+ Q:X="" 0 Q 1
+CHKDA(N,DT,DIA)  ; Диагноз
+ Q:N="" 1 N X,I,F S F=0
+ F I=1:1:99 S X=$P(N,"|",I) Q:X=""  S F=F+$$CHKD(X,DT,DIA)
+ Q F
+CHKVMA(N,DT)  ; Правила вывода запрещенных услуг
+ Q:N="" 1 N X,I,F S F=0
+ F I=1:1:99 S X=$P(N,"|",I) Q:X=""  I $$CHKVM(X,DT) S F=1 Q  ;S F=F+$$CHKVM(X,DT)
+ Q F
+CHKSA(N,DT,SP)   ; Специальность
+ Q:N="" 1
+ N X,I,F S F=0
+ G:SP["|" CHKSAm
+ F I=1:1:99 S X=$P(N,"|",I) Q:X=""  S F=F+$$CHKS(X,DT,SP)
+ Q F
+CHKSAm ; Множество специальностей
+ Q
+CHKOA(N,DT,OT)   ; Отделение
+ Q:N="" 1
+ N X,I,F S F=0
+ G:OT["|" CHKOAm
+ F I=1:1:99 S X=$P(N,"|",I) Q:X=""  S Y=$$CHKO(X,DT,OT) S:Y<0 F=Y I Y>0 S F=1 Q ; S F=F+$$CHKO(X,DT,OT) TODO
+ Q F
+CHKOAm ; Множество отделений
+ N J,O
+ F J=1:1:$L(OT,"|") Q:F=1  S O=$P(OT,"|",J) F I=1:1:99 S X=$P(N,"|",I) Q:X=""  S Y=$$CHKO(X,DT,O) S:Y<0 F=Y I Y>0 S F=1 Q
+ Q F
+CHKDWA(N,DT,TM)   ; День-время
+ Q:N="" 1 N X,I,F,T
+ S F=0
+ F I=1:1:99 S X=$P(N,"|",I) Q:X=""  S T=$$GET(X,"tp",DT),F=F+$S($$CHKDW(X,DT,TM):T,1:-T)
+ Q F
+CNTZA(N,DT) ; Ограничение числа зубов всего|за прием
+ Q:N="" ""
+ N X,I,R,TP,Z1,Z2
+ S TP=-1,(Z1,Z2)=""
+ F I=1:1:99 S X=$P(N,"|",I) Q:X=""  S R=$$GET(X,"tp",DT) I R>TP S TP=R,R=$$GET(X,"zncnt",DT) S:R'="" Z1=R S R=$$GET(X,"zzp",DT) S:R'="" Z2=R
+ Q Z1_$S(Z2="":"",1:"|"_Z2)
+DECOD(A) 
+ N I K MPX F I=1:1:99 S X=$P(A,"|",I) Q:X=""  S MPX(X)=1
+ Q
+IsUSL(USL,PRC,DT) ; Проверка использования услуги в программах
+ N ID,I1,I2,X,F
+ S PRC=+$G(PRC),F=0
+ S:$G(DT)="" DT=+$H
+ S ID="" F  S ID=$O(^MPRP(ID)) Q:ID=""  D  q:F
+ .I PRC S X=$$GET(ID,"price",DT) I X'="",X'=PRC Q 
+ .I $$ISL2(ID,"u","a",DT,USL) S F=1 Q  ; разр.
+ .I $$ISL2(ID,"u","d",DT,USL) S F=1 Q  ; запрет
+ .I $$ISL2(ID,"u","s",DT,USL) S F=1 Q  ; соглас.
+ .I $$ISL2(ID,"u","v",DT,USL) S F=1 Q  ; видимые
+ .I $$ISL2(ID,"u","i",DT,USL) S F=1 Q  ; в приеме
+ .I $$ISL2(ID,"u","t",DT,USL) S F=1 Q  ; стоматология ?
+ Q ID
+PRDT(COD,DT) ; prev date
+ N P,PD,CD,I1,F
+ S DT=$$DIH^DTUTL($G(DT)),COD=$$WD^TXTU(COD),P="",PD=0
+ F  S P=$O(^MPRP(COD,P)) Q:P=""  D
+ .S F=$S($L(P)>1:1,"osu"[P:0,1:1)
+ .I F S CD=$O(^(P,DT),-1) I $L(CD),CD>PD S PD=CD
+ .Q:F 
+ .S I1="" F  S I1=$O(^MPRP(COD,P,I1)) Q:I1=""  S CD=$O(^(I1,DT),-1) I $L(CD),CD>PD S PD=CD
+ S:+PD=0 PD=DT
+ D MSG^RWU($$DT^DTUTL(PD))
+ Q
+NXDT(COD,DT) ; next date
+ N P,PD,CD,I1,F
+ S DT=$$DIH^DTUTL($G(DT)),COD=$$WD^TXTU(COD),P="",PD=99999
+ F  S P=$O(^MPRP(COD,P)) Q:P=""  D
+ .S F=$S($L(P)>1:1,"osu"[P:0,1:1)
+ .I F S CD=$O(^(P,DT)) I $L(CD),CD<PD S PD=CD
+ .Q:F 
+ .S I1="" F  S I1=$O(^MPRP(COD,P,I1)) Q:I1=""  S CD=$O(^(I1,DT)) I $L(CD),CD<PD S PD=CD
+ S:PD=99999 PD=DT S:+PD=0 PD=DT
+ D MSG^RWU($$DT^DTUTL(PD))
+ Q
+COLIST(MPR,SP,ALLOW,GRP) ; Разрешенные/запрешенные услуги по программ-е/ам
+ N WP,FF,DN,VI,SPF,COD,SPC,NM,OT,Q,UC,UG,LST,G
+ S SP=$S(SP="A":"",SP=999:"",SP=0:"",1:SP),DT=+$H,GRP=+$G(GRP)
+ S VI=+$$GET($P(MPR,"|",1),"price",DT),VI=$$CORCP^IPRICET(VI)
+ S ALLOW=+$G(ALLOW)
+ D OWF^RWU(".txt"),WC^RWU("Код|Наименование услуги|Условие")
+ S SPF="|"_SP_"|",FF=1
+ S COD="" F  S COD=$O(^CN(COD)) Q:COD=""  D:$D(^(COD,VI))
+ .I SP'="" S SPC=$$GET^IPRICE(COD,"spec",VI,DT) I $L(SPC),SPC'[SPF Q 
+ .S WP=""
+ .I $$CHKUVA(MPR,DT,COD)=0 Q:ALLOW  S WP="не оказывается"
+ .I 'ALLOW,WP="" D  Q:WP="" 
+ ..I $$CHKUA(MPR,DT,COD)<0 S WP="платно" Q 
+ ..I $$CHKUSA(MPR,DT,COD) S WP="по согласованию" Q 
+ ..S NM=$$CNTUA(MPR,DT,COD)
+ ..I $L(NM) S UC=$P(NM,"|",1),UG=$P(NM,"|",5),WP=$S(UC:"не более "_UC_" шт.",1:""),Q=0 S:UG WP=$S(WP="":UG_" шт. по группе",1:UC_" шт. ("_UG_" по группе)")
+ .I ALLOW S Q=1 D  Q:Q 
+ ..I $$CHKUSA(MPR,DT,COD) S Q=0,WP="по согласованию" Q 
+ ..S NM=$$CNTUA(MPR,DT,COD)
+ ..I $L(NM) S UC=$P(NM,"|",1),UG=$P(NM,"|",5),WP=$S(UC:"не более "_UC_" шт.",1:""),Q=0 S:UG WP=$S(WP="":UG_" шт. по группе",1:UC_" шт. ("_UG_" по группе)") Q 
+ ..I $$CHKUA(MPR,DT,COD)'<0 S Q=0,WP="разрешено" Q 
+ .S G=+$S(GRP:$$GET^IPRICE(COD,"grp",VI,DT),1:0)
+ .S LST(G,COD)=WP,FF=0
+ 
+ S G="" F  S G=$O(LST(G)) Q:G=""  D
+ .D:G WC^RWU(CR_"|"_$E($$NAME^NPRICEG(G),1,80))
+ .S COD="" F  S COD=$O(LST(G,COD)) Q:COD=""  D
+ ..S WP=LST(G,COD)
+ ..S NM=$$OWF^TXTU($$NAMEH^IPRICE(COD,VI,DT),80)
+ ..D WC^RWU(CR_COD_"|"_NM_"|"_WP)
+ D:'ALLOW&FF WC^RWU(CR_"|ограничений нет")
+ D:ALLOW&FF WC^RWU(CR_"|разрешенных нет")
+ D C^RWU
+ Q
+LLPROG ; Список действующих программ для справочников
+ D OWF^RWU(".txt")
+ N N S N=+$G(^cfg("chifr","lprog","sort"))
+ D:'N LSTsys^YMPRP(+$H,1,1)
+ D:N LSTSsys^YMPRP(+$H,1,1)
+ D C^RWU
+ Q
+LAPROG ; Список всех программ для справочников
+ D OWF^RWU(".txt")
+ N N S N=+$G(^cfg("chifr","lprog","sort"))
+ D:'N LSTsys^YMPRP(+$H)
+ D:N LSTSsys^YMPRP(+$H)
+ D C^RWU
+ Q
+PRCTAB(USL,PRC) ; Табл. для добавления услуги в программы
+ N ID,I1,I2,H,X
+ S USL=$$WD^TXTU(USL),H=+$H
+ D OWF^RWU(".txt")
+ D WC^RWU(USL_"|Программа|Разрешено|Запрещено|К-во в приеме|По согл.|Скрытые")
+ S ID="" F  S ID=$O(^MPRP(ID)) Q:ID=""  D
+ .S X=$$GET(ID,"price",H) I X'="",X'=PRC Q 
+ .Q:'$$CHECK^IMPRP(ID,H) 
+ .Q:$$ISL2(ID,"u","a",H,USL)  ; разр.
+ .Q:$$ISL2(ID,"u","d",H,USL)  ; запрет
+ .Q:$$ISL2(ID,"u","s",H,USL)  ; соглас.
+ .Q:$$ISL2(ID,"u","v",H,USL)  ; видимые
+ .Q:$$ISL2(ID,"u","i",H,USL)  ; в приеме
+ .D WC^RWU(CR_ID_"|"_$$NAME^IMPRP(ID))
+ D C^RWU
+ Q
+PRCTABS ; Добавить услуги из табл. в программы
+ N A,%J,ID,USL,R,H
+ D ORH^RWU
+ S H=+$H
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D
+ .I %J=1 S USL=$P(A,"|",1) Q
+ .Q:USL="" 
+ .S ID=$P(A,"|",1)
+ .S R=$P(A,"|",4) I R'="" D ADDI(ID,"usld",H,USL,"") Q
+ .S R=$P(A,"|",3) D:R'="" ADDI(ID,"usla",H,USL,$S(R["+":"",1:R))
+ .S R=$P(A,"|",6) D:R'="" ADDI(ID,"usls",H,USL,"")
+ .S R=$P(A,"|",7) D:R'="" ADDI(ID,"uslv",H,USL,"")
+ .S R=$P(A,"|",5) D:R'="" ADDI(ID,"usli",H,USL,$S(R["+":"",1:R))
+ D CR^RWU
+ Q
+DENYUL ; Загрузка запретов
+ ; услуга|дата|тип запрета|прайс
+ N A,%J,ID,USL,R,H,DT,IX,PRC,X
+ D ORH^RWU
+ S H=+$H
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D
+ .S USL=$P(A,"|",1) Q:USL=""  Q:'$D(^CN(USL)) 
+ .S DT=$$DI^DTUTL($P(A,"|",2)) Q:DT="" 
+ .S IX=$P(A,"|",3),PRC=$P(A,"|",4)
+ .S ID="" F  S ID=$O(^MPRP(ID)) Q:ID=""  I IX=""!(IX=ID),$$CHECK^IMPRP(ID,DT) D
+ ..I PRC'="" S X=$$GET(ID,"price",DT) I X'="",X'=PRC Q 
+ ..D ADDI(ID,"usld",DT,USL,"")
+ D CR^RWU
+ Q
+RMUALL(USL,FIELD,DT) ; Удалить услугу из всех программ
+ N ID
+ S DT=$$DIH^DTUTL($G(DT))
+ S ID="" F  S ID=$O(^MPRP(ID)) Q:ID=""  D DELI(ID,FIELD,DT,USL)
+ Q
+RMUFALL(USL,DT,PRC) ; Удалить услугу из всех программ и полей
+ N ID,FIELD
+ S DT=$$DIH^DTUTL($G(DT)),PRC=$G(PRC)
+ F FIELD="usld","usla","usls","uslv","usli" S ID="" F  S ID=$O(^MPRP(ID)) Q:ID=""  I ((PRC'="")&($$GET^IMPRP(ID,"price",DT)=PRC))!(PRC="") D DELI(ID,FIELD,DT,USL)
+ Q
+MOVUSL(FUSL,TUSL,DT) ; Изменить код услуги в программах
+ Q:FUSL=TUSL
+ Q:FUSL=""
+ Q:TUSL=""
+ S FUSL=$$WD^TXTU(FUSL),TUSL=$$WD^TXTU(TUSL)
+ D MOVUSL^IMPRP(FUSL,TUSL,$$DIH^DTUTL(DT))
+ Q
+REGLCL ; Register description of available rights
+ K ^LCLI("mprog")
+ S ^LCLI("mprog")="Программы обслуживания"
+ S ^LCLI("mprog","new")="Создание новой программы"
+ S ^LCLI("mprog","save")="Сохранение программы"
+ S ^LCLI("mprog","del")="Удаление программы"
+ S ^LCLI("mprog","otd")="Отделения"
+ S ^LCLI("mprog","spec")="Специальности"
+ S ^LCLI("mprog","exusl")="Исключения услуг"
+ S ^LCLI("mprog","dtime")="Дата и время"
+ S ^LCLI("mprog","diag")="Диагнозы"
+ S ^LCLI("mprog","usldiag")="Услуги по диагнозам"
+ S ^LCLI("mprog","visual")="Видимость услуг"
+ S ^LCLI("mprog","sogl")="Услуги по согласованию"
+ S ^LCLI("mprog","descr")="Описание программы"
+ Q

@@ -1,0 +1,14 @@
+ISTRUCT ; Структура полей [ 04/11/2020  8:29 PM ]
+MStFL(AREA,FL,NN) ; Создать описание поля streport
+ ; NN - not null
+ N AA,R,T,RR
+ S AA=AREA
+ S:AA="pac" AA="patients"
+ S R=$G(^STRUCT(AA,FL)) Q:R="" ""
+ S T=$P(R,"|",1)
+ S RR="<field tp="""_$S(T="D":"dt",T="M":"m",T="CH":"chk",1:"s")_""""
+ S RR=RR_" nm="""_AREA_"."_FL_""""
+ S:$G(NN) RR=RR_" nn=""1"""
+ S RR=RR_" tit="""_$$TKAV^TXTU($P(R,"|",2))_"""/>"
+ ; TODO - not null
+ Q RR

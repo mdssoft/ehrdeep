@@ -1,0 +1,197 @@
+IKDLEXP ; Экспорт результатов КДЛ [ 02/27/2016  1:32 AM ]
+ADD(NI,ID) ; Добавить на автоэкспорт
+ Q:'$D(^LABT("OUT")) 
+ S:NI="" NI=^MLABI("c",ID)
+ L +^MLABTM("out",ID)
+ S ^MLABTM("out",ID)=NI
+ D SETRT^IMLAB(NI,ID,"sys",1)
+ L -^MLABTM("out",ID)
+ S:'$D(^MSGOUT("kdlexp")) ^MSGOUT("kdlexp",1)=1
+ Q
+DOSEND(ID) 
+ Q:'$$IsDATA()
+ D PROCESS
+ Q
+DORECV(ID) 
+ Q
+IsDATA() ; Проверка на наличие данных для экспорта
+ Q $D(^MLABTM("out"))
+PROCESS ; Экспорт из временного буфера 
+ N NI,ID,I,R,X,K,LST,ELST,TP,TPI,FN,KEY,FIL,END,CHK
+ ; построение сист. списка
+ S ID="" F  S ID=$O(^LABT("OUT",ID)) Q:ID=""  I $G(^(ID,"sys")),$G(^("use"))'=0,$G(^("tp"))'="",$D(^MSGHUB(^("tp"))) S ELST(ID)=""
+ S ID="" F  S ID=$O(^MLABTM("out",ID)) Q:ID=""  D
+ .L +^MLABTM("out",ID)
+ .S NI=^(ID)
+ .S R=$G(^MLAB(NI,ID,"rt"))
+ .S END=$$IsSTATE^IMLAB(NI,ID,9)
+ .S:END FN=$$TCNT^IMLAB(NI,ID),END=($P(FN,"|",1)=$P(FN,"|",2))
+ .F I=1:1:$L(R,"|") S X=$P(R,"|",I),K=$P(X,":",1) I X'="",K'=0,K'=1,'$P(X,":",2) S LST(K-1)=""
+ .S I="" F  S I=$O(ELST(I)) Q:I=""  S:$$IsEQ(NI,ID,I) LST(I)=""
+ .S I="" F  S I=$O(LST(I)) Q:I=""  D:$D(^LABT("OUT",I))
+ ..S TP=^LABT("OUT",I,"tp"),TPI=$G(^("tpi")),FIL=$G(^("fname")),KEY=""
+ ..I 'END,$G(^("end")) Q  ; только по завершении
+ ..S CHK=$G(^("chkfn"))
+ ..I CHK'="" S FN="S X="_CHK X FN Q:'X
+ ..S:FIL'="" FIL=$$mkFNAME(FIL,NI,ID,TPI)
+ ..I TP="sms" S KEY=$$sms(NI,ID,TPI) Q:KEY="" 
+ ..I TP="mail" S KEY=$$mail(NI,ID,TPI) Q:KEY=""
+ ..I TP="ftp" S KEY=$$ftp(NI,ID,TPI,FIL) Q:KEY=""
+ ..I TP="fax" S KEY=$$fax(NI,ID,TPI) Q:KEY=""
+ ..I TP="file" S KEY=$$file(NI,ID,TPI,FIL) Q:KEY=""
+ ..I TP="netfile" S KEY=$$netfile(NI,ID,TPI,FIL) Q:KEY=""
+ ..I TP="www" S KEY=$$www(NI,ID,TPI) Q:KEY="" 
+ ..Q:KEY="" 
+ ..S FN=$G(^LABT("OUT",I,"fn")) S:FN=""&(TP["file") FN="FM1R"
+ ..I FN'="" S FN="D "_FN_"("""_NI_""","""_ID_""")" X FN
+ ..D ENDSEND^IMSGHUB(KEY)
+ .K ^MLABTM("out",ID)
+ .L -^MLABTM("out",ID)
+ K:'$D(^MLABTM("out")) ^MSGOUT("kdlexp")
+ Q
+IsEQ(NI,ID,TP) ; Соответствие заявки виду вывода
+ N R,I,X,F
+ S R=$G(^LABT("OUT",TP,"stc"))
+ I R'="",R'=$$STC^IMLAB(NI,ID,"") Q 0
+ S R=$G(^LABT("OUT",TP,"zi"))
+ I R'="" S X=$G(^MLAB(NI,ID,"zi")),F=0 Q:X="" 0 D  Q:F 0
+ .F I=1:1:4 I $P(R,"|",I)'="",$P(R,"|",I)'=$P(X,"|",I) S F=1 Q
+ Q 1
+mail(NI,ID,UID) 
+ N X
+ S X=$$GET^IPAC(NI,"email") Q:X="" ""
+ S:$G(UID)="" UID="kdl"
+ Q $$ADDSEND^IMSGHUB("mail",UID,"",X,"","Результаты лабораторной диагностики",,,1)
+ftp(NI,ID,UID,FIL) 
+ S:$G(UID)="" UID="kdl"
+ S:$G(FIL)="" FIL=NI_"-"_ID_"-"_$R(99)_".txt"
+ Q $$ADDSEND^IMSGHUB("ftp",UID,"",FIL,"","",,,1)
+sms(NI,ID,UID) 
+ N PHN,H
+ S PHN=$$GET^IPAC(NI,"pager") Q:PHN="" ""
+ S:$G(UID)="" UID="kdl"
+ S X="Выполнено лабораторное исследование от "_$$DT^DTUTL(+$$DTMS^IMLAB(NI,ID,1))
+ Q $$ADDSEND^IMSGHUB("sms",UID,"",PHN,X,"",,,1)
+fax(NI,ID,UID) 
+ Q
+www(NI,ID,UID) 
+ S:$G(UID)="" UID="kdl"
+ Q $$ADDSEND^IMSGHUB("www",UID,"","","","",,,1)
+file(NI,ID,UID,FIL) 
+ S:$G(UID)="" UID="kdl"
+ S:$G(FIL)="" FIL=NI_"-"_ID_"-"_$R(99)_".txt"
+ Q $$ADDSEND^IMSGHUB("file",UID,"",FIL,"","",,,1)
+netfile(NI,ID,UID,FIL) 
+ S:$G(UID)="" UID="kdl"
+ S:$G(FIL)="" FIL=NI_"-"_ID_"-"_$R(99)_".txt"
+ Q $$ADDSEND^IMSGHUB("netfile",UID,"",FIL,"","",,,1)
+ Q
+mkFNAME(FN,NI,ID,UID) ; Сформировать имя файла
+ Q:FN="" NI_"-"_ID_".dat"
+ N I
+ S:FN["*NI*" FN=$$TRT^TXTU(FN,"*NI*",NI)
+ S:FN["*ID*" FN=$$TRT^TXTU(FN,"*ID*",ID)
+ S:FN["*ID3*" FN=$$TRT^TXTU(FN,"*ID3*",$E(ID,$L(ID)-2,$L(ID)))
+ S:FN["*ID4*" FN=$$TRT^TXTU(FN,"*ID4*",$E(ID,$L(ID)-3,$L(ID)))
+ S:FN["*ID5*" FN=$$TRT^TXTU(FN,"*ID5*",$E(ID,$L(ID)-4,$L(ID)))
+ S:FN["*RND*" FN=$$TRT^TXTU(FN,"*RND*",$R(999))
+ S:FN["*RND8*" FN=$$TRT^TXTU(FN,"*RND8*",$R(99999999))
+ S:FN["*BAR*" FN=$$TRT^TXTU(FN,"*BAR*",$$GETBAR^IMLAB(NI,ID))
+ S:FN["*DH*" FN=$$TRT^TXTU(FN,"*DH*",+$H)
+ S:FN["*TH*" FN=$$TRT^TXTU(FN,"*TH*",$P($H,",",2))
+ Q FN
+FM1R(NI,ID) ; Формат 1
+ G FM2R+1 ; stub!
+ Q
+FM2R(NI,ID) ; Формат 2 (Across/Диалаб)
+ ; Кодировка: utf-8
+ N A,R,I,J,X,P,U,PR
+ D ws($C(239,187,191)_$$WU8^TXTU("<?xml version=""1.0"" encoding=""utf-8"" ?>"))
+ D ws8("<ResultMessage>"_CR_"<Patient Id="""_NI_""" BirthDate="""_$$GETE^IPAC(NI,"datar")_""" Gender="""_$$GET^IPAC(NI,"pol")_""" LastName="""_$$GET^IPAC(NI,"fiof")_""" FirstName="""_$$GET^IPAC(NI,"fioi")_""" Patronomic="""_$$GET^IPAC(NI,"fioo")_""" />")
+ D ws8(CR_"<Request Id="""_ID_""" DateMaterial="""_$$DT^DTUTL($$DTMS^IMLAB(NI,ID,3))_""" DateRealize="""_$$DT^DTUTL($$DTMS^IMLAB(NI,ID,9))_""" State=""6""/>")
+ S R=$$HTML^TXTU($$^I("iname"))
+ D ws8(CR_"<Result BarCode="""_$$GETBAR^IMLAB(NI,ID)_""" OrgName="""_R_""" OrgNameFull="""_R_"""/>")
+ D ws8("<Orders>")
+ S P=$$PRC^IMLAB(NI,ID)
+ S R=$G(^MLAB(NI,ID,"ul"))
+ F I=1:1:$L(R,"|") S U=$P($P(R,"|",I),":",1) D:U'="" 
+ .D ws8(CR_"<Order Code="""_U_""" Name="""_$$HTML^TXTU($$NAME^IPRICE(U,P))_""" State=""6"">")
+ .D ws8("<Results>")
+ .S P="" F  S P=$O(^MLAB(NI,ID,"d",P)) Q:P=""  D:$D(^LABTI("CT",U,$P(P,"@",1)))
+ ..S R=^MLAB(NI,ID,"d",P)
+ ..Q:'$P($G(^(P,"s")),"|",1) 
+ ..S A="<Result Code="""_P_""" Name="""_$$HTML^TXTU($$NAMEPM^IMLABS(P))
+ ..S A=A_""" Value="""_$$HTML^TXTU($P(R,"|",1))_""""
+ ..S A=A_" NormComment="""_$$HTML^TXTU($$TXTNORM^IMLAB(NI,P,R))_""""
+ ..S A=A_" UnitName="""_$$HTML^TXTU($$MEANPM^IMLABS(P))_""""
+ ..D ws8(CR_A_" Comment="""_$$HTML^TXTU($P(R,"|",6))_"""/>")
+ .D ws8("</Results>")
+ .D ws8("</Order>")
+ D ws8("</Orders>")
+ D ws8("</ResultMessage>")
+ Q
+ws8(X) ; Write utf-8 to MSGHUB
+ D WSEND^IMSGHUB(KEY,$$WU8^TXTU($$DW^TXTU(X)))
+ Q
+ws(X) 
+ D WSEND^IMSGHUB(KEY,$$DW^TXTU(X))
+ Q
+redt(X) ; Переформатировать дату в ГГГГММДД
+ Q:X="" "19000101"
+ S X=$$DT^DTUTL(X)
+ Q $P(X,".",3)_$P(X,".",2)_$P(X,".",1)
+jl(X,N) ; Left jystify (spaces)
+ I $L(X)<N S X=X_$J(" ",N-$L(X))
+ Q $E(X,1,N)
+FM3R(NI,ID) ; as ILIMS devices
+ N PRM,R,RR,X,V,DT,M,PA,RS
+ S DT=+$$DTMS^IMLAB(NI,ID,1)
+ S PRM="" F  S PRM=$O(^MLAB(NI,ID,"d",PRM)) Q:PRM=""  D
+ .S R=^(PRM),RS=$G(^(PRM,"s"))
+ .Q:'$P(RS,"|",1) 
+ .S M=$$GETBIO^IMLAB(NI,ID,PRM)
+ .S PA=$$GETHC^IMLABS(PRM,M)
+ .Q:PA="" 
+ .S V=$TR($P(R,"|",1),CR," ")
+ .S $P(RR,"@",1)="1  "
+ .S $P(RR,"@",2)=$$redt(DT)
+ .S X=$$GETBAR^IMLAB(NI,ID,M) Q:X=""  ; нет кода пробирки
+ .S:$L(X)<9 X=$J(X,9)
+ .S $P(RR,"@",3)=$E(X,1,13)
+ .S $P(RR,"@",4)=$$jl(NI,15)
+ .S $P(RR,"@",5)=$$jl($$GET^IPAC(NI,"fiof",DT),20)
+ .S $P(RR,"@",6)=$$jl($$GET^IPAC(NI,"fioi",DT)_" "_$$GET^IPAC(NI,"fioo",DT),20)
+ .S $P(RR,"@",7)=$$redt($$GET^IPAC(NI,"datar",DT))
+ .S $P(RR,"@",8)=$S($$GET^IPAC(NI,"pol",DT)=2:"М",1:"Ж")
+ .S X=+$P(RS,"|",7)
+ .S $P(RR,"@",9)=$$jl(X,5)
+ .S $P(RR,"@",10)=$$jl($$OTD^IKADRY(X),5)
+ .S X=+$P(RS,"|",5)
+ .S $P(RR,"@",11)=$$jl(X,3)
+ .S $P(RR,"@",12)=$P($G(^MLAB(NI,ID,"nt")),"|",1) ; diag
+ .S $P(RR,"@",13)=$$jl($P(R,"|",6),120)
+ .S $P(RR,"@",16)=PA
+ .S X=$TR($J($E(+$P(RS,"|",9),1,2),2)," ",0) ; dev.
+ .S $P(RR,"@",17)=X
+ .S $P(RR,"@",18)=$E($S(+V=V:"",1:V),1,500) ; text
+ .S $P(RR,"@",19)=$$jl($S(+V=V:V,1:""),10) ; digits
+ .S $P(RR,"@",21)=""
+ .S V=$P(RS,"|",5) ; ввел
+ .S:V'="" $P(RR,"@",22)=$$FIO^IKADRY(V),$P(RR,"@",23)=V
+ .D ws("S@"_RR_CR)
+ S ^TMPKDLO($H,ID)=NI
+ Q
+FTTAB(NI,ID) ; Экспорт тектовой таблицы
+ N I,R,X
+ S I=$G(^MLAB(NI,ID,"epr")) Q:I=""
+ S NI=$P(I,",",1),I=$P(I,",",2) 
+ S X=$$FIO^IPAC(NI)_"|"_$$GETE^IPAC(NI,"datar")_"|"_$$GET^IPAC(NI,"pol")
+ S X=X_"|"_$G(^EPR(NI,I,"n"))
+ S X=X_"|"_$$DTM^DTUTL($P($G(^MLAB(NI,ID,"s2")),"|",2))
+ D WSEND^IMSGHUB(KEY,$$DW^TXTU(X)_CR) ; fio|born|sex|name|$H - ident.
+ D EXPTAB^NMLAB(NI,I,KEY)
+ Q
+INITDB 
+ S ^MSGHUB("kdlexp")="IKDLEXP"
+ S ^MSGHUB("kdlexp",1)=""
+ Q

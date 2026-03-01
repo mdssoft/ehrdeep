@@ -1,0 +1,73 @@
+NSPRAVJ ; JSON export for references [ 05/31/2020  5:02 PM ]
+OTD(MOD,FLGS) ; Отделения
+ ; FLGS - флаги отделения, если предваряет !-запрет
+ S MOD=+$G(MOD),FLGS=$TR($G(FLGS),",;/","|||")
+ N X,I,N,F,FLG,AFL,DFL
+ S I=+$G(^MN("otd"))
+ I FLGS'="" F N=1:1:$L(FLGS,"|") S X=$P(FLGS,"|",N),F=$E(X) S:F="!" DFL=$$STFLG^TXTU($G(DFL),$E(X,2,99)) S:F'="!" AFL=$$STFLG^TXTU($G(AFL),X)
+ D OWF^RWU(".txt"),W^RWU("[")
+ S N="",F=0 F  S N=$O(^MN(I,N)) Q:N=""  D
+ .Q:$G(^(N,"use"))=0
+ .S FLG=$G(^MN(I,N,"flg"))
+ .I MOD=1 Q:$$FLinFL^TXTU(FLG,"nwww")  Q:'$G(^MN(I,N,"med")) 
+ .I $D(AFL),'$$FLinFL^TXTU(AFL,FLG) Q
+ .I $D(DFL),$$FLinFL^TXTU(DFL,FLG) Q 
+ .D B^IJSON()
+ .D W^IJSON("id",N)
+ .S X=$G(^MN(I,N,"fname"))
+ .D:X'="" W^IJSON("name",X)
+ .S X=$G(^MN(I,N,"sname"))
+ .D:X'="" W^IJSON("shortname",X)
+ .S X=$G(^MN(I,N,"phones"))
+ .D:X'="" W^IJSON("phone",X)
+ .S X=$G(^MN(I,N,"head"))
+ .D:X W^IJSON("head",X)
+ .I MOD'=1 S X=$G(^MN(I,N,"med")) D:X WBL^IJSON("is_med",X)
+ .I MOD'=1 D WBL^IJSON("is_show",$$FLinFL^TXTU(FLG,"www"))
+ .D WBL^IJSON("is_dsh",$$FLinFL^TXTU(FLG,"nwebzp"))
+ .I MOD=2 D W^IJSON("lpu","["_$TR($G(^MN(I,N,"lpu")),"|",",")_"]")
+ .D WC^RWU($S(F:",",1:"")_$$E^IJSON())
+ .S F=1
+ D W^RWU("]"),C^RWU
+ Q
+SPEC(MOD,FLGS) ; Специальности
+ ; FLGS - флаги специальностей, если предваряет !-запрет
+ S MOD=+$G(MOD),FLGS=$TR($G(FLGS),",;/","|||")
+ N X,I,N,F,FLG,AFL,DFL,TPF
+ S I=+$G(^MN("spec"))
+ I FLGS'="" F N=1:1:$L(FLGS,"|") S X=$P(FLGS,"|",N),F=$E(X) S:F="!" DFL=$$STFLG^TXTU($G(DFL),$E(X,2,99)) S:F'="!" AFL=$$STFLG^TXTU($G(AFL),X)
+ D OWF^RWU(".txt"),W^RWU("[")
+ S N="",F=0 F  S N=$O(^MN(I,N)) Q:N=""  D
+ .Q:$G(^(N,"use"))=0
+ .S FLG=$G(^MN(I,N,"flg"))
+ .I MOD=1 Q:$$FLinFL^TXTU(FLG,"nwww")
+ .S TPF=$G(^MN(I,N,"tp")),TPF=$S(TPF=1:"med",TPF=2:"pnd",TPF=3:"prof",TPF=4:"stom",1:"")
+ .I $D(AFL),'$$FLinFL^TXTU(AFL,FLG_"|"_TPF) Q
+ .I $D(DFL),$$FLinFL^TXTU(DFL,FLG_"|"_TPF) Q 
+ .D B^IJSON()
+ .D W^IJSON("id",N)
+ .S X=$G(^MN(I,N,"fname"))
+ .D:X'="" W^IJSON("name",X)
+ .S X=$G(^MN(I,N,"sname"))
+ .D:X'="" W^IJSON("shortname",X)
+ .D WBL^IJSON("is_show",$$FLinFL^TXTU(FLG,"www"))
+ .D WBL^IJSON("is_dsh",$$FLinFL^TXTU(FLG,"nwebzp"))
+ .I MOD=2 D W^IJSON("lpu","["_$TR($G(^MN(I,N,"lpu")),"|",",")_"]")
+ .D WC^RWU($S(F:",",1:"")_$$E^IJSON())
+ .S F=1
+ D W^RWU("]"),C^RWU
+ Q
+POSIT ; Должности
+ N X,I,N,F
+ S I=+$G(^MN("doljn"))
+ D OWF^RWU(".txt"),W^RWU("[")
+ S N="",F=0 F  S N=$O(^MN(I,N)) Q:N=""  D
+ .Q:$G(^(N,"use"))=0
+ .S X=$G(^MN(I,N)) Q:X=""
+ .D B^IJSON()
+ .D W^IJSON("id",N)
+ .D W^IJSON("name",X)
+ .D WC^RWU($S(F:",",1:"")_$$E^IJSON())
+ .S F=1
+ D W^RWU("]"),C^RWU
+ Q

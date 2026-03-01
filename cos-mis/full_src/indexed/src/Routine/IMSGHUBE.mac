@@ -1,0 +1,10 @@
+IMSGHUBE ; Доп утилиты для IMSGHUB
+dsx ; вызов ф-ции с обработкой ошибок
+ TRY {
+	X FNX 
+ } 
+ CATCH {
+	S:$G(TP)="" TP=$G(IMSGHUBt) 
+	S ^ERLOG("IMSGHUB",+$H,$P($H,",",2))=$ZE_"|"_TP
+ }
+ q

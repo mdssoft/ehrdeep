@@ -1,0 +1,161 @@
+NMEDTSK ; TaskFlow по мед. задачам [ 12/12/2023  1:24 PM ]
+LSTTP ; Список возможных типов
+ N I,X,A,IL
+ S (I,A)="",IL=$$LCL^IUSER("tasks","idlist")
+ S:IL'="" IL="|"_IL_"|"
+ F  S I=$O(^TSTS(I)) Q:I=""  I IL=""!(IL[("|"_I_"|")) S X=^(I) I $P($P(X,"|",3),"/",1)="med" S A=$S(A="":"",1:A_CR)_I_"|"_$P(X,"|",1)
+ D MSG^RWU(A)
+ Q
+TAB(DS,DE,TP,OK) ; Таблица по задачам
+ ; OK - выполненные 0/1/2 = все/незаверш./заверш. 
+ N LP,ID,R,DT,NI,DGN,FR,LPU,ST,A,TXT,MYO,VR
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S FR=+$$FR^I(),LPU=+$$^I("ilpu")
+ S R=$$LCL^NUSER("tasks","myotd"),MYO=""
+ S:R MYO=$$OTD^IKADRY($$KDR^IUSER())
+ D OWF^RWU(".txt")
+ 
+ D WC^RWU("|Дата, время|Врач|Пациент|"_$S(FR:"Филиал|",1:"")_$S(OK=2:"",1:"Статус|")_"Примечание|Договор пациента")
+ S DT=DS-1 F  S DT=$O(^TSKI("df",DT)) Q:DT>DE!(DT="")  D
+ .S LP="" F  S LP=$O(^TSKI("df",DT,LP)) Q:LP=""  D:FR!(LP=LPU) 
+ ..S ID="" F  S ID=$O(^TSKI("df",DT,LP,ID)) Q:ID=""  D:^(ID)=TP
+ ...S R=$G(^TSK(LP,ID)) Q:R=""
+ ...S ST=$P(R,"|",1)
+ ...I OK=2,ST'=9 Q 
+ ...I OK=1,ST=9 Q 
+ ...S VR=$P(R,"|",7)
+ ...I MYO,'$$IsOTD^IKADRY(VR,MYO,DT) Q 
+ ...S NI=$$GETUD^IFTASK(LP,ID,"nib"),TXT=$$GET^IFTASK(LP,ID,"d")
+ ...S TXT=$$OWF^TXTU($TR(TXT,CR," "),128)
+ ...S A=$$DTM^DTUTL($P(R,"|",6))_"|"_$$FIO^IKADRY(VR)_"|"
+ ...S A=A_$$FIO^IPAC(NI)_"|"_$S(FR:$$NAME^ICONTR(LP)_"|",1:"")
+ ...S A=A_$S(OK=2:"",1:$$STATNM^IFTASK(ST)_"|")_TXT
+ ...D WC^RWU(CR_LP_","_ID_"|"_A_"|"_$$GETE^IPAC(NI,"stc",+DT))
+ D C^RWU
+ Q
+DOLST(KEY) ; Список допустимых действий
+ S KEY=$P($G(^TSK($P(KEY,",",1),$P(KEY,",",2))),"|",2)
+ Q:KEY=""  
+ D DOLST^NFTASK(KEY)
+ Q
+DOACT(KEY,DS,DE,TP,OK,IDS) ; Выполнить действие
+ I KEY="" D TAB(DS,DE,TP,OK) Q 
+ N LP,ID,T,TT,R,ST,NI,X,SYBT,SYS
+ S LP=$P(KEY,",",1),ID=$P(KEY,",",2)
+ S R=$G(^TSK(LP,ID)),T=$P(R,"|",2),TT=$$TPUID^IFTASK(T)
+ S ST=$G(^TSTS(T,"s",IDS))
+ S SUBT=$P(ST,"|",8),ST=$P(ST,"|",4)
+ S SYS=$$GETUD^IFTASK(LP,ID,"sys"),NI=$$GETUD^IFTASK(LP,ID,"nib")
+ S X=$G(^TSTS(T,"s",IDS,"exe"))
+ I X'="" D @X
+ 
+ D:X="" action(TT,SUBT,SYS,KEY)
+ Q:$$IsMSG^RWU() 
+ 
+ S:ST'="" T=$$SETSTAT^IFTASK(LP,ID,9)
+ D TAB(DS,DE,TP,OK)
+ Q
+DO(KEY,DS,DE,TP,OK,ReDo) ; Выполнить
+ I KEY="" D TAB(DS,DE,TP,OK) Q 
+ N LP,ID,T,TT,R,SYS,NI,SUBT
+ S LP=$P(KEY,",",1),ID=$P(KEY,",",2)
+ S R=$G(^TSK(LP,ID)),T=$P(R,"|",2),TT=$$TPUID^IFTASK(T)
+ S SYS=$$GETUD^IFTASK(LP,ID,"sys"),NI=$$GETUD^IFTASK(LP,ID,"nib")
+ 
+ S X=$G(^TSTS(T,"s","ok","exe"))
+ I X'="" D @X
+ D:X="" action(TT,$G(^TSTS(T,"s","ok","uid")),SYS,KEY)
+ Q:$$IsMSG^RWU() 
+ 
+ S T=$$SETSTAT^IFTASK(LP,ID,9) ; выполнено
+ D TAB(DS,DE,TP,OK)
+ Q
+action(TT,SUBT,SYS,KEY) 
+ N X,Z
+ I TT="med/usl-allow" D  Q:$$IsMSG^RWU()   
+ .N VR,DT,OT,ID
+ .S VR=$P(SYS,",",1),DT=$P(SYS,",",2),OT=$P(SYS,",",3),ID=$P(SYS,",",4)
+ .S X=$TR(SYS,",","@")
+ .S Z=$$SETPL^IUSL(VR,DT,OT,ID,"tsk",KEY)
+ .I SUBT="allow" D ADDFLG^IUSL(VR,DT,OT,ID,"npg"),UNKSS^NPACADM(NI,X,1),UDOSBS^NPACADM(NI,X,1) Q  ; флаги правильно !
+ .I SUBT="kss" D UKSS^NPACADM(NI,$TR(KEY,",","@"),1) Q
+ .I SUBT="del" D UANN^NPACADM(NI,$TR(SYS,",","@"),"",1) Q 
+ .I SUBT="grn" D UGRN^NPACADM(NI,$TR(SYS,",","@"),"",1) Q
+ .I SUBT="mkgrn" D MK^IGRNL(NI,"","",DT,DT,1) Q 
+ 
+ I TT'="med/usl-allow",$E(TT,1,8)="med/usl-" D  Q:$$IsMSG^RWU()   
+ .N VR,DT,OT,ID
+ .S VR=$P(SYS,",",1),DT=$P(SYS,",",2),OT=$P(SYS,",",3),ID=$P(SYS,",",4)
+ .S X=$TR(SYS,",","@")
+ .D SETPL^IUSL(VR,DT,OT,ID,"tsk",KEY)
+ .I $E(SUBT,1,2)="f:" D ADDFLG^IUSL(VR,DT,OT,ID,$E(SUBT,3,99)) Q 
+ .I $E(SUBT,1,3)="nf:" D EXFLG^IUSL(VR,DT,OT,ID,$E(SUBT,4,99)) Q 
+ 
+ I TT="med/epr-del" D  Q:$$IsMSG^RWU() 
+ .D EDEL^NPACADM(NI,SYS,1)
+ .D SET^IEPR(NI,SYS,"tsk",KEY)
+ 
+ I TT="med/epr-cng" D  Q:$$IsMSG^RWU() 
+ .D EUNSB^NPACADM(NI,SYS,1)
+ .D SET^IEPR(NI,SYS,"tsk",KEY)
+ 
+ I TT="med/usl-del" D  Q:$$IsMSG^RWU()  
+ .D UANN^NPACADM(NI,$TR(SYS,",","@"),"",1)
+ .Q:$$IsMSG^RWU()  
+ .S Z=$$SETPL^IUSL($P(SYS,",",1),$P(SYS,",",2),$P(SYS,",",3),$P(SYS,",",4),"tsk",KEY)
+ 
+ Q
+DEL(KEY,DS,DE,TP,OK) ; Удалить
+ I $$LCL^IUSER("tasks","del")=0 S KEY=""
+ I KEY="" D TAB(DS,DE,TP,OK) Q 
+ N LP,ID
+ S LP=$P(KEY,",",1),ID=$P(KEY,",",2)
+ D DEL^IFTASK(LP,ID)
+ D TAB(DS,DE,TP,OK)
+ Q
+CANCEL(KEY,DS,DE,TP,OK) ; Отменить
+ I $$LCL^IUSER("tasks","cancel")=0 S KEY=""
+ I KEY="" D TAB(DS,DE,TP,OK) Q 
+ N LP,ID,X,R,T,SYS,NI
+ S LP=$P(KEY,",",1),ID=$P(KEY,",",2)
+ S R=$G(^TSK(LP,ID)),T=$P(R,"|",2)
+ I $$LCL^IUSER("tasks","ncancel"),$P(R,"|",1)'=9 D TAB(DS,DE,TP,OK) Q  
+ S SYS=$$GETUD^IFTASK(LP,ID,"sys"),NI=$$GETUD^IFTASK(LP,ID,"nib")
+ S X=$G(^TSTS(T,"s","cancel","exe"))
+ I X'="" D @X
+ Q:$$IsMSG^RWU() 
+ S X=$$SETSTAT^IFTASK(LP,ID,5)
+ D TAB(DS,DE,TP,OK)
+ Q
+GETNIB(KEY) ; Получить № истории из записи
+ Q:KEY="" 
+ D MSG^RWU($$GETUD^IFTASK($P(KEY,",",1),$P(KEY,",",2),"nib"))
+ Q
+DETAIL(KEY) ; Подробные данные
+ N LP,ID,T,TT,R,NI,X,EXE
+ S LP=$P(KEY,",",1),ID=$P(KEY,",",2)
+ S R=$G(^TSK(LP,ID)),TT=$P(R,"|",2),T=$$TPUID^IFTASK(TT)
+ S X=$$GETUD^IFTASK(LP,ID,"sys"),NI=$$GETUD^IFTASK(LP,ID,"nib")
+ I T="med/epr-del"!(T="med/epr-cng") D VIEWDOC^YIMHH(NI,X) Q
+ I T="med/usl-del"!(T="med/usl-allow")!($E(T,1,8)="med/usl-") D VHTML^YNEDU($P(X,",",1),$P(X,",",2),$P(X,",",3),$P(X,",",4)) Q 
+ S EXE=$G(^TSTS(TT,"fl","exe-detail")) Q:EXE="" 
+ D @EXE
+ Q
+MK(NIB,DC,DE,TPuid,DSC,SYS) ; Создать задачу
+ ; TPuid - текстовый UID типа, SYS - системные данные 
+ ; DSC - описание
+ S DC=$$DIH^DTUTL(DC),DE=$$DI^DTUTL(DE)
+ S:DE="" DE=DC+$S($D(^cfg("mtask","maxdays")):^("maxdays"),1:30)
+ S DSC=$$WD^TXTU(DSC)
+ N A,LP,ID,TP
+ S TP=$$FNDTUID^IFTASK(TPuid)
+ S A=$$ADD^IFTASK(0,TP,$$FIOSH^YIPACN(NIB),"",DC,DE)
+ S LP=$P(A,",",1),ID=$P(A,",",2)
+ D:DSC'="" SET^IFTASK(LP,ID,"d",DSC)
+ D:NIB'="" SETUD^IFTASK(LP,ID,"nib",NIB)
+ D:SYS'="" SETUD^IFTASK(LP,ID,"sys",SYS)
+ D:TPuid="med/usl-allow"
+ .S ^JOB(%JOB,"epr-u","exe","D SETUD^IFTASK("_LP_","_ID_",""sys"",$TR(KX,""~"","",""))")=""
+ .;S A=$$EXFLG^TXTU($G(^JOB(%JOB,"epr-u","FLG")),"kss")
+ .;S ^JOB(%JOB,"epr-u","FLG")=$$STFLG^TXTU(A,"nop") ; TODO - при удалении услуги
+ Q

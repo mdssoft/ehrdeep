@@ -1,0 +1,68 @@
+I(X) ; ^i wrapper [ 10/19/2020  12:35 PM ]
+ Q:X="" ""
+ I $G(%LOG)'="",$D(^LOG(%LOG,"lcl","i")) Q $G(^LCL("i",^("i"),X))
+ I $G(%IIDLCL) Q $G(^LCL("i",%IIDLCL,X))
+ Q $G(^i(X))
+get(X) 
+ G I+1
+PHONES() 
+ N R,L
+ S R="",L=$$get("itel") S:L'="" R="Тел. "_L
+ S L=$$get("ifax") S:L'="" R=$S(R="":"",1:R_", ")_"Факс "_L
+ Q R
+MERGE(VAR) ; Merge all data to ext. variable
+ M @VAR=^i
+ I $G(%LOG)'="",$G(^LOG(%LOG,"lcl","i"))'="" M @VAR=^LCL("i",^("i"))
+ I $G(%IIDLCL) M @VAR=^LCL("i",%IIDLCL)
+ Q
+clrenv() ; Вызывается для очистки сессии
+ K %FLLRPT,%MLTBRN
+ Q
+FR() ; filial report (отчетность)
+ N X
+ I $D(%FLLRPT) Q +%FLLRPT
+ I $G(%LOG)'="",$G(^LOG(%LOG,"lcl","i"))'="" S X=$$get("filial-report") Q:X'="" X
+ I $G(%IIDLCL) S X=$$get("filial-report") Q:X'="" X
+ S X=$$^I("filial-report") Q:X'="" X
+ Q +$G(^cfg("filial-report"))
+GID(LPU) ; Global server ID
+ S:$G(LPU)="" LPU=$$get("ilpu")
+ Q:LPU="" ""
+ N L
+ S L=$G(^cfg("gid")) S:L="" L=LPU 
+ Q $E("00",1,3-$L(L))_L
+MB() ; Multi branch
+ N X
+ I $D(%MLTBRN) Q +%MLTBRN
+ I $G(%LOG)'="",$G(^LOG(%LOG,"lcl","i"))'="" S X=$$get("multi-branch") Q:X'="" X
+ I $G(%IIDLCL) S X=$$get("multi-branch") Q:X'="" X
+ S X=$$^I("multi-branch") Q:X'="" X
+ Q +$G(^cfg("multi-branch"))
+EHRID() ; Electronic Health Record archive ID
+ N I
+ S I=$$get("ehrdbid")
+ S:I="" I=$$get("ilpu")
+ Q $TR($J(I,14)," ",0)
+RGID(LPU) ; Global server ID (reverse)
+ S:$G(LPU)="" LPU=$$get("ilpu")
+ Q:LPU="" ""
+ N L
+ S L=$G(^cfg("gid")) S:L="" L=LPU 
+ Q $RE(L)
+C(k1,k2) ; Get config w. two keys
+ I $G(%IIDLCL),$D(^LCL("i",%IIDLCL,"^cfg")),$D(^("^cfg",k1,k2)) Q ^(k2)
+ Q $G(^cfg(k1,k2))
+C1(k1) ; Get config w. one key
+ I $G(%IIDLCL),$D(^LCL("i",%IIDLCL,"^cfg")),$D(^("^cfg",k1)) Q ^(k1)
+ Q $G(^cfg(k1))
+C1M(k1,v1) ; Merge to var
+ M @v1=^cfg(k1)
+ Q
+REGLCL ;
+ K ^LCLI("i")
+ S ^LCLI("i")="Профиль ЛПУ"
+ S ^LCLI("i","ilpu")="Код филиала"
+ S ^LCLI("i","filial-report")="Ограничить выбранным ЛПУ"
+ S ^LCLI("i","multi-branch")="Мультифилиальная организация на сервере"
+ S ^LCLI("i","kkmid")="Опциональный идентификатор "
+ Q

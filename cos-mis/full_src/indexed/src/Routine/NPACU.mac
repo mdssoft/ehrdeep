@@ -1,0 +1,266 @@
+NPACU ; Дополнительные ф-ции контингента [ 09/03/2024  0:47 AM ]
+PRNLST(NI,DTT) ; Список документов для печати
+ N I,X,TP,ID,A,M,DL,FN,LP,F,DT,LST
+ S I=$G(^MN("xpacprn")) Q:'I 
+ S DT=$S($G(DTT)'="":$$DIH^DTUTL(DTT),1:+$H)
+ D regPRN
+ S DL=$TR($$LCL^IUSER("patients"," prnlst"),"; ",",,")
+ S LP=$$^I("ilpu")
+ S:DL'="" DL=","_DL_","
+ S TP=^cfg("pac","prn-event"),M=$G(^cfg("pac","prn-swev")),(A,ID)=""
+ F  S ID=$O(^MN(I,ID)) Q:ID=""  D
+ .I DL'="",DL'[(","_ID_",") Q 
+ .S X=^(ID),FN=$P(X,"|",4)
+ .Q:$P(X,"|",3)  ; arch.
+ .I LP,FN,'$$FLinFL^TXTU($TR(FN,",;~","|||"),LP) Q 
+ .S FN=$P(X,"|",5),F=1
+ .I FN'="" S F=0 I @FN S F=1
+ .Q:'F 
+ .S A=$P(X,"|",1,2)
+ .D:M
+ ..S X=$$FIND^ICCME("","",NI,TP,ID) Q:X="" 
+ ..S A=A_" ("
+ ..S:M>1 X=$$USERDTM^ICCME(X)
+ ..S A=A_$S(M=1:$$DT2^DTUTL(+$$DTM^ICCME(X)),M=2:$$NMLPU^NUSER($P(X,"|",1)),1:$$DT2^DTUTL(+$P(X,"|",2))_", "_$$NMLPU^NUSER($P(X,"|",1)))
+ ..S A=A_")"
+ .s LST($J($P(X,"|",5),2,0)_"|"_ID)=A
+ 
+ k ^KKK m ^KKK=LST
+ 
+ S (A,ID)="" F  S ID=$O(LST(ID)) Q:ID=""  S A=$S(A="":"",1:A_CR)_LST(ID)
+ D MSG^RWU(A)
+ Q
+PRNCHK(NI,KEYS) ; Отметка, что докум. напечатан
+ N I,ID,X,R,TP,A
+ D SSTATE^IRPAC(NI,"prn") ; common style
+ S I=$G(^MN("xpacprn")) Q:'I 
+ S A=""
+ S KEYS="|"_$$WD^TXTU(KEYS)_"|",TP=^cfg("pac","prn-event")
+ S ID="" F  S ID=$O(^MN(I,ID)) Q:ID=""  D
+ .S R="|"_$P(^(ID),"|",1)_"|"
+ .Q:KEYS'[R 
+ .S R=$$ADDLT^ICCME(NI,TP,"",ID)
+ .S R=$P(^MN(I,ID),"|",7) Q:R="" 
+ .S A=R
+ D MSG^RWU($$TRT^TXTU($TR(A,"@","|"),"#",CR))
+ Q
+PRNOK(NI,KEYS,EV) 
+ Q:EV="" 
+ N I,ID,R
+ S I=$G(^MN("xpacprn")) Q:'I
+ S KEYS="|"_$$WD^TXTU(KEYS)_"|"
+ S ID="" F  S ID=$O(^MN(I,ID)) Q:ID=""  D
+ .S R="|"_$P(^(ID),"|",1)_"|"
+ .Q:KEYS'[R 
+ .S R=$$ADDLT^ICCME(NI,EV,"",ID)
+ Q
+PRNLOG(NI) ; Список напечатанных документов
+ N I,X,K,TP,ID,A,LST,NM,U
+ S I=$G(^MN("xpacprn")) Q:'I 
+ S TP=^cfg("pac","prn-event") Q:TP=""
+ S (A,ID)=""
+ F  S ID=$O(^MN(I,ID)) Q:ID=""  D
+ .S NM=$P(^(ID),"|",2)
+ .K LST
+ .Q:'$$FINDLST^ICCME("","",NI,TP,ID,"LST")  
+ .S X="" F  S X=$O(LST(X)) Q:X=""  D
+ ..S K=$$USERDTM^ICCME(X),U=$P(K,"|",1),K=$P(K,"|",2)
+ ..S A=$S(A="":"",1:A_CR)_"|"_NM_", "_$$DTM^DTUTL(K)_", "_$$FIOSH^NUSER(U)
+ D MSG^RWU(A)
+ Q
+IsPRN(NI) ; Есть печатные документы у пациента
+ N I,X,TP,ID,A,F
+ S I=$G(^MN("xpacprn")) Q:'I 0
+ 
+ S TP=^cfg("pac","prn-event"),(A,ID)="",F=0
+ F  S ID=$O(^MN(I,ID)) Q:ID=""  D  Q:F
+ .S X=$$FIND^ICCME("","",NI,TP,ID) Q:X="" 
+ .S F=1
+ Q F
+IsPRNID(NI,ID) ; Есть напечатанный конкретный документ
+ N TP
+ S TP=$G(^cfg("pac","prn-event")) Q:TP="" 0
+ Q:$$FIND^ICCME("","",NI,TP,ID)'="" 1
+ Q 0
+regPRN ; Регистрация событий печати
+ N ID
+ S ID=$G(^cfg("pac","prn-event")) Q:ID 
+ S ID=$$FNDATP^ICCME("Печать документа пациента|sys")
+ s ^cfg("pac","prn-event")=ID
+ Q
+PRNTPL(NI,DT,TPL) ; Создать документ печати
+ Q:NI="" 
+ S DT=$$DIH^DTUTL($G(DT))
+ I $ZV["MSM" D  Q 
+ .N I
+ .K ^BUF($J,"ok")
+ .J PRNTPLj(NI,DT,TPL,%LOG,%JOB,$J)
+ .F I=1:1:10 H 1 Q:$G(^BUF($J,"ok"))
+ .S %B=$G(^BUF($J,"%B")) 
+ N ARR
+ D PRNTPLm(NI,DT)
+ Q
+PRNTPLm(NI,DT) 
+ D mkarr
+ 
+ D MAKE^IDOCGEN(TPL,"ARR")
+ Q
+UNPPRN(NI,TPL,SUMM) 
+ N ARR,DT,I,A,X1,X2
+ S DT=+$H
+ D mkarr
+ S ARR("pac")=NI,ARR("summ")=$G(SUMM)
+ S I=0 F  S I=$O(^BTNS(NI,"unprice",I)) Q:I=""  D:I>0 
+ .S A=^BTNS(NI,"unprice",I),X1=$P(A,"|",3),X2=$P(A,"|",4)
+ .S ARR("tab",I)=$P(A,"|",1)_"|"_$P($P(A,"|",2)," ",2,99)_"|"_X2_"|"_(X1*X2)
+ 
+ D MAKE^IDOCGEN(TPL,"ARR")
+ Q
+mkarr 
+ N PL,PLN,R,TN,NI1,LPU,DG
+ S PL="" F  S PL=$O(^BTN(NI,PL)) Q:PL=""  D
+ .S PLN=$G(^BTN($C(9)_"r",PL)) Q:PLN=""  
+ .S R=$$GET^IPAC(NI,PLN,DT) Q:R="" 
+ .S ARR(PLN_"_src")=R
+ .S R=$TR($$GETE^IPAC(NI,PLN,DT),"_"," ")
+ .S:R'="" ARR(PLN)=R
+ S ARR("nib")=NI
+ S R=$$DT^DTUTL(DT)
+ S ARR("dt")=R
+ S ARR("year")=$P(R,".",3)
+ S ARR("month")=$P(R,".",2)
+ S ARR("month_txt")=$$MNNM^DTUTL(+ARR("month"))
+ S ARR("day")=$P(R,".",1)
+ S ARR("textdate")=$$DTEXT^DTUTL(DT,1)
+ S ARR("now")=$$DT^DTUTL(+$H)
+ S ARR("textdatenow")=$$DTEXT^DTUTL(+$H,1)
+ S ARR("fiosh")=$TR($$FIOSH^IPAC(NI),"_"," ")
+ S ARR("age")=$$AGE^IPAC(NI)
+ S ARR("address")=$$ADR^YIPACN(NI,DT)
+ 
+ S R=$$GET^IPAC(NI,"datar",DT)
+ S X=$$DAY^DTUTL(R)
+ S:$L(X)=1 X="0"_X
+ S ARR("datar_dd")=X
+ S X=$$MONTH^DTUTL(R)
+ S:$L(X)=1 X="0"_X
+ S ARR("datar_mm")=X
+ S ARR("datar_yy")=$$YEAR^DTUTL(R)
+ 
+ ; Представитель пациента или сам пациент
+ S NI1=$$GET^IPAC(NI,"lnkhist",DT)
+ S:NI1="" NI1=NI
+ F PL="fiof","fioi","fioo","datar","pol","pasp","pasp_dan","tel1","tel2","pager" s ARR(PL_"_z")=$$GETE^IPAC(NI1,PL,DT) s:NI1'=NI ARR(PL_"_n")=ARR(PL_"_z")
+ ; пациент когда есть заказчик
+ I NI1'=NI S ARR("fiosh_zp")=$$FIOSH^IPAC(NI) F PL="fiof","fioi","fioo","pasp","pasp_dan" s ARR(PL_"_zp")=$$GETE^IPAC(NI,PL,DT)
+ S ARR("islnk")=(NI1=NI)
+ S ARR("nib_z")=NI1
+ S ARR("fiosh_z")=$$FIOSH^IPAC(NI1)
+ S ARR("address_z")=$$ADR^YIPACN(NI1,DT)
+ 
+ S PL=NI1
+ S NI1="" F  S NI1=$O(^BTI("lnkhist",PL,NI1)) Q:NI1=""  I NI1'=NI,$$GET^IPAC(NI1,"lnkhist",DT)'="" Q 
+ I NI1'="" S ARR("fiosh_n1")=$$FIOSH^IPAC(NI1) F PL="fiof","fioi","fioo","datar","pol","pasp","pasp_dan","tel1","tel2","pager" s ARR(PL_"_n1")=$$GETE^IPAC(NI1,PL,DT)
+ 
+ S DG=$$GET^IPAC(NI,"stc",DT)
+ F PL="oname","yaddr","addr","inn","kpp","kodes","okpo","okato","rsch","kors","bank","gbank","bik","phone","email","fior" s ARR("s1_"_PL)=$$GET^IINSC(DG,PL,DT)
+ 
+ S LPU=$$^I("ilpu")
+ 
+ S ARR("iname")=$$^I("iname")
+ S ARR("ifname")=$$^I("ifname")
+ S ARR("iphones")=$$PHONES^I()
+ S ARR("iaddr")=$$^I("iaddr")
+ S ARR("iglvr")=$$^I("iglvr")
+ S ARR("iglbh")=$$^I("iglbh")
+ ; TODO - i & OTD
+ S ARR("orgmname")=$$GET^ICONTR(+LPU,"mname",DT)
+ S ARR("orglicense")=$$GET^ICONTR(+LPU,"license",DT)
+ S TN=$$KDR^IUSER(),R=$$FIO^IKADRY(TN)
+ S ARR("kadry_name")=R
+ S ARR("kadry_name_rod")=$$GET^PADEJ(R,$$GET^IKADRY(TN,"pol"))
+ S ARR("kadry_license")=$$GET^IKADRY(TN,"license")
+ 
+ Q
+PRNTPLj(NI,DT,TPL,%LOG,%JOB,JJ) 
+ N ARR
+ D PRNTPLm(NI,DT)
+ S ^BUF(JJ,"ok")=1,^BUF(JJ,"%B")=%B
+ Q
+PRNSTD(NI,DT) ; data для streport
+ N ARR,FL
+ S DT=$$DIH^DTUTL($G(DT)) 
+ D OWF^RWU(".xml")
+ D W^RWU(^PP(0,1)_"<streport><data>")
+ D mkarr
+ S FL="" F  S FL=$O(ARR(FL)) Q:FL=""  D WTAGC^RWU(FL,ARR(FL))
+ D W^RWU("</data></streport>")
+ D C^RWU
+ Q
+SSTORE ; Доп поля-хранилища на пациента
+ N %J,A,NI,FL,I
+ D ORH^RWU
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  D
+ .I %J=1 S NI=$P(A,",",1),FL=$P(A,",",2) K ^BTNS(NI,FL) Q 
+ .Q:NI=""  Q:FL="" 
+ .S ^BTNS(NI,FL,%J-2)=A
+ Q
+GSTORE(NI,FL) 
+ Q:NI=""  Q:FL="" 
+ I $O(^BTNS(NI,FL,""))="" D MSG^RWU($G(^BTNS(NI,FL))) Q  
+ N I,A
+ S (A,I)="" F  S I=$O(^BTNS(NI,FL,I)) Q:I=""  S A=$S(A="":"",1:A_CR)_^BTNS(NI,FL,I)
+ D MSG^RWU(A)
+ Q
+LFIELD ; Импорт полей контингента (системный)
+ ; Код|поле|дата|значение
+ N %J,A,DT,NI,PL
+ D ORH^RWU
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  D
+ .Q:%J=1
+ .S NI=$$TRIM^TXTU($P(A,"|",1)),PL=$P(A,"|",2) Q:NI=""  Q:PL=""
+ .S DT=$$DIH^DTUTL($P(A,"|",3)),V=$P(A,"|",4)
+ .Q:'$D(^BTN(NI))
+ .D SET^IPAC(NI,PL,DT,V,1)
+ D CR^RWU
+ Q
+reMPHN ; Перекодировать мобильные телефоны
+ N N,R,R1,RV,P,H
+ S H=+$H
+ D MKLU^TXTU 
+ S N="" F  S N=$$NEXT^IPAC(N) Q:N=""  D
+ .S R=$$GET^IPAC(N,"pager",H) Q:R=""  Q:$L(R)<4 
+ .Q:$TR(R,%cLL_%cLU,"")'=R  ; есть текст
+ .I R[",",$L(R)>15 D REPHN^TXTU(R,"RV") S (R1,P)="" F  S P=$O(RV(P)) Q:P=""  S R1=$S(R1="":"",1:R1_", ")_P
+ .I R'[",",$L(R)<16 S R1=$$MPHN^TXTU(R)
+ .Q:R1=R 
+ .D SET^IPAC(N,"pager",H,R1,1)
+ Q
+CHKNI(ONIB) 
+ S ONIB=+$$NNUM^TXTU(ONIB)
+ I ONIB=0 D MSG^RWU("Ошибочный номер") Q 
+ I $D(^MOVNIB(ONIB)),'$G(^MOVNIB(ONIB,"ok")) D MSG^RWU("Новый № "_^MOVNIB(ONIB)) Q 
+ D MSG^RWU("Изменение не требуется ("_ONIB_")")
+ Q
+CHKNIR(ONIB) 
+ S ONIB=+$$NNUM^TXTU(ONIB)
+ s ^MOVNIB(ONIB,"ok")=$H
+ Q
+INMAIL ; Импорт адресов почты
+ ; Колонки: 
+ ; № и.б. | адрес почты
+ N ec S ec=0
+lf1 
+ N %J,A,NI,EMAIL,POLE
+ D ORH^RWU
+ S POLE="email"
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  D
+ .Q:%J=1
+ .S NI=$E($P(A,"|",1),1,64),EMAIL=$P(A,"|",2) Q:NI=""  Q:EMAIL=""
+ .D SET^IPAC(NI,POLE,$H,EMAIL,)
+ D CR^RWU
+ K ECL
+ Q
+REGIPROC 
+ S ^IMPROC("Управление","Импорт email пациентов")="INMAIL_NPACU()"
+ Q

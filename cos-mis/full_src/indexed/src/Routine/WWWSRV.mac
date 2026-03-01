@@ -1,0 +1,623 @@
+A	; WEB server routine [ 16/09/2021 ]
+	Q
+JSRV ; for job
+	S OUT=0
+	S PORT=+$G(^WWW("host","default",5))
+	S:PORT=0 PORT=8001
+	D JSRVL
+	G SRV1
+SRV ; start for command line
+	S OUT=1,PORT=8001
+SRV1
+	K ^SJOB("WWWSRV")
+	S $ZT="ERLOOP^WWWSRV"
+	S io="|TCP|1" 
+	O io:(:PORT:"MA"):200 
+	If ('$TEST) { W:OUT !,"Cannot open server port" Q }
+ 	Else  { W:OUT !,"Server port opened" }
+ 	N SUSR,SLTR,TST
+ 	S:'$D(^WWW("mxc")) ^("mxc")=$System.License.MaxConnections()
+ 	S SUSR="",SLTR=$S($ZVERSION["Windows":0,1:1),TST=+$G(^WWW("test"))
+LOOP ; main server loop
+	U io R X:2 G:$D(^SJOB("WWWSRV")) CLOSE D:$T   G:$D(^SJOB("WWWSRV")) CLOSE ; Read for accept 
+	.S IP=$$IPADDR($ZU(111,0))
+	.D:TST LOG("Server new connection IP="_IP)
+	.I OUT U 0 W !,"Accepted connection from "_IP 
+	.D CHKCONN Q:SUSR=-1 
+    .J THREAD(IP,PORT,SUSR,SLTR):(:5:io:io) ;Concurrent server bit is on 
+    .S SUSR="" I $ZCHILD=0 D LOG("Server can't create new JOB!")
+    .Q:$D(^SJOB("WWWSRV")) 
+    G:$D(^SJOB("WWWSRV")) CLOSE
+	G LOOP
+CLOSE ; Close connection
+	C io
+	H 4
+	S ^SJOB("WWWSRV")=2
+	Q
+THREAD(IP,SOCN,SUSR,SLTR) ; client thread: SUSR - User, SLTR - Slash translate
+	S $ZT="ER^WWWSRV"
+	S:'$D(TZONE) TZONE=3 ;timezone
+	S:'$D(%W) %W=1 ;1 - CP866
+	S:'$D(LGG) LGG=0 ;logging off
+	S %zb="^||%zb",%zh="^||%zh" ; pointer to temporary buffer
+	S %SL=8192 ; temporary buffer string size
+	S X=$ZU(68,1,1) ; allow null subscr - todo: allow NULL subscr in $G() func
+	D:SUSR'="" $System.License.DeferUserIdentification(1),$System.License.Login(SUSR) 
+	S DEBUG=+$G(^WWW("debug"))
+	S DEV=$P,(RIDX,ID)=0,CL="",DEV1=$P(IP,":",1)
+	S RZ=$C(13,10),RZ1=$C(10),RZ2=$C(13),TAB=$C(9),CR=RZ
+	S SRVNM="Cache"
+	S JB=$J,%JOB=777777,JOB=%JOB,(%PAS,%LOG)=""
+	D MKLU^TXTU
+JOB	R R#1:60 
+	I R="" S RIDX=RIDX+1 G:RIDX>360 EXIT G:$D(^SJOB("WWWSRV"))>0 EXIT
+	I $P($H,",",2)#3=0 G:$D(^SJOB("WWWSRV"))>0 EXIT ; в процессе
+	S %WT=0 G:($L(CL)+$L(R))>16384 EXIT 
+	S CL=CL_R I CL'[RZ1 G JOB
+	S:ID=0 (CLEN,CTYPE,CENCODE,TENCODE,CLOCATE,UAG,URANG,UHOST,CLEN,%PASS,%VUSER,UACCPT,UENC,PROC,PPROC,CATP,EXT,COOK)="",ATP=0,NBSRV=0,SPNUM=200
+PRM S PREX=0,R=$TR($P(CL,RZ1,1),RZ2,""),CL=$P(CL,RZ1,2,1000)
+	I ID=0 K HTTPH D 
+	.S COM=$P(R," ",1),PROC=$P(R," ",2) S:PROC["../.."!(PROC[".../") SPNUM=403
+	.S PPROC=PROC,HTTP=$P(R," ",3) S:HTTP="" HTTP="HTTP/1.0"
+	.S CONNK=$S(PORT>57772:1,1:$E(HTTP,8)),PROC=$P(PROC,"/",2,254) S:PROC["%"&(PROC'["?") PROC=$$CODH^YYBPAS(PROC)
+	.S:$$LU^TXTU($E(PROC,1,5))="AUTH/" CATP=$P(PROC,"/",2),X=$F(PROC,"/"_CATP),PROC=$E(PROC,X+1,$L(PROC))
+	E  D
+	.S R1=$$LU^TXTU($P(R,": ",1)),R2=$P(R,": ",2)
+	.S:R1'="" HTTPH($E(R1,1,128))=$E(R2,1,512)
+	.S:R1="CONTENT-LENGTH" CLEN=R2
+	.S:R1="CONTENT-TYPE" CTYPE=R2
+	.S:R1="CONTENT-ENCODING" CENCODE=R2
+	.S:R1="TRANSFER-ENCODING" TENCODE=R2
+	.S:R1="CONTENT-LOCATION" CLOCATE=R2
+	.S:R1="USER-AGENT" UAG=R2
+	.;wap S:R1["COOKIE"&(R2["AUTH=") %PSCU=$P($P(R2,"AUTH=",2),";",1)
+	.I PORT<57773,R1="CONNECTION" S R2=$$LU^TXTU(R2) S:R2["CLOSE" CONNK=0 S:R2["KEEP-ALIVE" CONNK=1
+	.S:R1="HOST" UHOST=R2
+	.S:R1="RANGE" URANG=R2
+	.S:R1="ACCEPT" UACCPT=R2
+	.S:R1="ACCEPT-CHARSET" UENC=R2,%W=$S(R2="utf-8":2,1:%W)
+	.S:R1="AUTHORIZATION" %PASS=$P(R," ",3)
+	.S:R1="REFERER" CATP1=$P($P($P(R," ",2),"//",2),"/",2)
+	.S:R1="FROM"&($E(R2,1,3)="ip@") DEV1=$P(R2,"@",2)
+	.S:R1="X-FROM-IP" DEV1=R2,NBSRV=1
+	.S:R1="X-FROM-USER" %VUSER=$$FURL^TXTU(R2),HTTPH(R1)=%VUSER ; Virtual user
+	.S:R1="COOKIE" COOK=R2
+	.I R="" S (ID,RIDX)=0,PREX=1,SNUM=200 D 
+	..I $G(UHOST)="" S UHOST="default" S:SOCN'=80&(UHOST'[":") UHOST=UHOST_":"_SOCN
+	..D SETHOST,SETUA
+	..I CATP="mq",$$SETJOBLT() S %JOB="mq"_$J D EXECCMD Q 
+	..I CATP'="",$D(%PASS),%PASS'="" D SETJOB
+	..I CATP'="",$D(^JOB(CATP))=0!($D(^JOB(CATP))&($G(^JOB(CATP))'=%PASS)) S SNUM=401 D SYS Q
+	..I $E($$LU^TXTU(PROC),1,5)="LOGIN" S:$L(PROC)>6 PROC=$E(PROC,7,$L(PROC)) S:$L(PROC)<7 PROC="" D AUTO Q
+	..I SPNUM'=200 S SNUM=SPNUM,ST="" D SYS Q
+	..D EXECCMD
+	G:ID!(PREX'=1) PRMe
+	I LGG=2,PROC'["YISYNC",CATP'="mq" D LGW(DEV1_TAB_$G(CLEN)_"/"_$G(LF)_TAB_COM_TAB_PPROC_TAB_$G(SNUM)_TAB_$G(%LOG))
+	;I LGG=2 D LGW(DEV1_TAB_$G(CLEN)_"/"_$G(LF)_TAB_COM_TAB_PPROC_TAB_$G(SNUM)_TAB_$G(%LOG))
+	S CL="" K:JOB'=777777&$D(^WWW("host",UHOST,12)) ^BUFH(JOB)
+	S (PREX,LF)=0 G:CONNK=1 JOB G:CONNK=0 EXIT 
+PRMe	
+	S ID=1 G:CL'[RZ1 JOB G PRM
+	Q
+EXECCMD
+	D:LGG>2 LOG("Exec CMD="_COM_"("_PROC_")")
+	K R1,R2 N ID,PREX,R,RIDX
+	I COM["GET" D GET Q
+	I COM["HEAD" D HEAD Q
+	I COM["POST" D POST Q
+	I COM["PUT" D PUT Q
+	I COM["OPTIONS" D OPTION Q
+	S SNUM=500 D SYS
+	Q
+EXIT
+	Q:$G(DEV)="" 
+	C DEV
+	Q
+AUTO 
+	S EXT=$$UL^TXTU($S(PROC'[".":"",1:$P(PROC,".",$L(PROC,"."))))
+	S EXT=$E(EXT,1,254),EXT2=EXT,EXT=$S(EXT="":"",1:$G(^EXT(EXT)))
+	S:EXT="" EXT="text/html"
+	S (JOB,%PAS,%LOG,%PASS)="" D CJOB
+	I ATP=1 D
+	.S RT="HTTP/1.1 301 Refused"_CR_"Cache-Control: no-cache"_CR_"Location: http://"_UHOST_"/AUTH/"_JOB_"/"_PROC_CR 
+	.S RT=RT_"Server: "_SRVNM_CR_"Content-type: "_EXT_CR_"Content-length: 0"_CR,LF=1
+	.S:CAUTH RT=RT_"Pragma: need-auth-id"_CR
+	.S:CONNK RT=RT_"Connection: keep-alive"_CR S:CONNK=0&(HTTP["1.1") RT=RT_"Connection: close"_CR U DEV W RT_CR,! K RT Q
+	I ATP=2 D
+	.S RT="HTTP/1.1 200 OK"_CR_"Cache-Control: no-cache"_CR
+	.S %L="<HTML><META HTTP-EQUIV=""Refresh"" CONTENT=""1; URL=http://"_UHOST_"/AUTH/"_JOB_"/"_PROC_"""><BODY>Please wait...</BODY></HTML>"
+	.S LF=$L(%L),RT=RT_"Server: "_SRVNM_CR_"Content-type: "_EXT_CR_"Content-length: "_LF_CR
+	.S:CONNK RT=RT_"Connection: keep-alive"_CR S:CONNK=0&(HTTP["1.1") RT=RT_"Connection: close"_CR U DEV W RT_CR W %L,! K RT Q
+	I CONNK=0 S DIR=DEFDIR Q 
+	Q
+CJOB ; Generate free %JOB number
+	S JOB1="" 
+	F  Q:$S(JOB1="":0,1:'$D(^JOB(JOB1)))  S JOB1="",JOB=$R(9999999999) F JJ=1:1 S LJ=$E(JOB,JJ*2-1,JJ*2) Q:LJ=""  S LJ=LJ#25+65,JOB1=JOB1_$C(LJ)
+	S JOB=JOB1
+	K JJ,JB,LJ,JOB1
+	Q
+TSTFIL(FIL) ; test, if file exists
+	N FN,L
+	S FN=$$SLTR(DIR_PROC),L=$ZUTIL(140,4,FN) Q:L=0 FN
+	S:$D(%PATH) FN=$$SLTR(%PATH_PROC),L=$ZUTIL(140,4,FN) Q:L=0 FN 
+	I $G(%LOG)'="" S:$D(^LOG(%LOG,1)) FN=$G(^(1))_PROC
+	S:FN'[":" FN=UROOT_FN S FN=$$SLTR(FN),L=$ZUTIL(140,4,FN) Q:L=0 FN
+	Q ""
+FNDFIL ; find files in dirs
+	S FN=$$TSTFIL(PROC) Q:FN'=""
+	S SNUM=404,ST=CR_FN D SYS S FN="" Q
+GET ; HTTP GET command
+	I '$L(PROC),$D(^WWW("host",UHOST,1)) S PROC=^(1)
+	I PROC="" S I=-1 F  S X=$G(^WWW("index",I)),PROC=$$TSTFIL(X)'="" Q:PROC'=""  S I=$O(^WWW("index",I)) Q:I="" 
+	I PROC="" S SNUM=404,ST=CR_"Index file not found." D SYS Q
+	S:PROC="LOGOUT^YYHTML" PROC="LOGOUT^YYHTML?"
+	S EXT=$P(PROC,"?",1)
+	S EXT=$$UL^TXTU($S(EXT'[".":"",1:$P(EXT,".",$L(EXT,"."))))
+	S EXT=$E(EXT,1,254),EXT2=EXT,EXT=$S(EXT="":"",1:$G(^EXT(EXT)))
+	S:EXT="" EXT="text/plain"
+	G:PROC["?" GPOST
+	S PROC=$$UL^TXTU($$FURL^TXTU(PROC))
+	I $P(PROC,"/",1)="csp" G:EXT2="csp" GPOST S I=$F(PROC,"csp"),PROC=$E(PROC,I,8192)
+	I $P(PROC,"/",1)="disk" S FN=$$FNDIR^YYBPAS($P(PROC,"/",2,999)) D seldisk G:L=0 GNF S SNUM=404,ST=CR_FN D SYS Q 
+	I $P(PROC,"/",1)="dicom" S FN=$P(PROC,"/",2,999),FN=$$SLTR(%DICOM_FN),L=$ZUTIL(140,4,FN) G:L=0 GNF S SNUM=404,ST=CR_FN D SYS Q
+	I $P(PROC,"/",1)="dbdir" D  G:SNUM'=404 POSTA1 Q
+	.K %L
+    .S FN="/DBDIR/"_$$WD^TXTU($$UL^TXTU($P(PROC,"/",2,99))),ERRNUM=200
+    .I $$EXIST^NFILES(FN) D GET^NFILES(FN) Q
+    .S SNUM=404,ST=CR_FN D SYS
+	S PROC=$$UL^TXTU(PROC)
+	I PROC="null" S SNUM=200,ST="" D SYS Q
+	I $D(^BUFH(%JOB,PROC)) S FN=PROC,(UV,IHT)=0,LF=^(PROC) G CGETB
+	D FNDFIL Q:FN="" 
+GNF S LF=$ZUTIL(140,1,FN),UV=51 S:LF<0 LF=0
+CGETB G:EXT["vnd.wap.wml" FENC S RT=HTTP_" 200 OK"_CR
+	S:CATP'=""&(ATP<2) RT=RT_"WWW-Authenticate: Basic realm="""_SRVNM_""""_CR_"X-SRV-TKN: "_$$RSH^IHASH(%PASS)_CR ; "Date: "_$$GMT^DTUTL($H,TZONE)_CR
+	S:EXT["/nb-" RT=RT_"Cache-Control: private"_CR
+	S RT=RT_"Server: "_SRVNM_CR_"Content-type: "_EXT_CR_"Content-length: "_LF_CR_"Date: "_$$RFCDateTime($H)_CR
+	S:CONNK RT=RT_"Connection: keep-alive"_CR S:CONNK=0&(HTTP["1.1") RT=RT_"Connection: close"_CR
+	U DEV W RT_CR,! K RT
+	G:UV=0 CWB
+	D:LGG>0&DEBUG LGW("<<sys>> open file CGETB="_FN)
+	O FN:("RSU"::"") S ICLEN=LF\8192,OCLEN=LF#8192
+	F IJ=1:1:ICLEN U FN R LA#8192 U DEV W LA,!
+	I OCLEN>0 U FN R LA#OCLEN U DEV W LA,!
+	K:$E(%JOB,1)="z" ^JOB(%JOB),^BUFH(%JOB),%PATH
+	K LA,PARAMS,HTTPH C FN U DEV I CONNK=0 S DIR=DEFDIR Q
+	Q
+CWB F  D RLA Q:IHT=-1  U DEV W LA,!
+	Q
+FENC D OW("ret") O FN:("RSU"::"") S PWI=+$G(%WI),%WI=1,ICLEN=LF\1024,OCLEN=LF#1024 F IJ=1:1:ICLEN U FN R LA#1024 D WW(LA)
+	I OCLEN>0 U FN R LA#OCLEN D WW(LA)
+	S %WI=PWI,ERRNUM=200 K PWI,LA C FN D CW G POSTC
+GPOST
+	S R=PROC,ID=R["?",PROC=$P(R,"?",1),R=$P(R,"?",2)
+	S PROC=$$LU^TXTU(PROC)
+	S:$D(^WSPROC(PROC)) PROC=^(PROC)
+	I EXT2'="csp",ID S:PROC["_" PROC=$P(PROC,"_",1)_"^"_$P(PROC,"_",2,256) S:PROC["^"=0&($E(PROC,1)'="$") PROC="^"_PROC
+	S FLG=0,LPR="" S:R["%" FLG=1
+	F ID=1:1:99 S TMP=$P(R,"&",ID) Q:TMP=""  S LPRR=$P(TMP,"=",2,255) S:$E(LPRR,1)="""" $E(LPRR,1)="" S:$E(LPRR,$L(LPRR))="""" $E(LPRR,$L(LPRR))="" S:FLG LPRR=$$CODH^YYBPAS(LPRR) S TMP=$P(TMP,"=",1),PARAMS(TMP)=$$IENC(LPRR),LPR=LPR_$S(LPR="":"",1:",")_"PARAMS("""_TMP_""")"
+	; Run csp, if need
+	I EXT2="csp" K FLG,TMP,LPRR,ID,LPR S PROC=$$UL^TXTU($P($P(PROC,"/",2,9),".",1)),ERRNUM=200 G CSPget
+ 
+	S:LPR'="" PROC=PROC_"("_LPR_")"
+	K FLG,TMP,LPRR,ID,LPR
+POSTA 
+	K %L S %B=0,FN=""
+	S ERRNUM=200 K HEADER
+	I $E(PROC,1)="$" S PROC=$E(PROC,2,$L(PROC)),CONNK=0,LF=-1,EXT="text/html" G POSTB ;for command line-style procs
+	S R=$P(PROC,"(",1)
+	I R'="" X "S R=$L($T("_R_"))" I 'R S SNUM=501,ST=":"_PROC D SYSLOG Q
+	S ztlPROC=$P($ZTIMESTAMP,",",2)
+	I %VUSER="" D @(PROC)
+	D:%VUSER'=""
+	.N %LOG
+	.S %LOG=%VUSER
+	.D @(PROC)
+	S ztlPROC=$P($ZTIMESTAMP,",",2)-ztlPROC
+	G:TENCODE="chunked" POSTE
+POSTA1	S LF=1 I $D(%L) S:%W=2 %L=$ZCVT(%L,"O","UTF8") S LF=$L(%L)
+	S EXT=$$UL^TXTU($S(%B'[".":"",1:$P(%B,".",$L(%B,"."))))
+	S EXT=$E(EXT,1,254),EXT2=EXT,EXT=$S(EXT="":"",1:$G(^EXT(EXT)))
+	I '$L(EXT) S EXT="text/html"
+	I '$D(%L),%B=0 S %L="",LF=0
+POSTC I '$D(%L) S LF=+$G(^BUFH(%JOB,%B)),(IHT,UV)=0,FN=%B
+POSTB S RT="HTTP/1.1 "_ERRNUM_" OK"_CR
+	S:CATP'=""&(ATP<2) RT=RT_"WWW-Authenticate: Basic realm="""_SRVNM_""""_CR_"X-SRV-TKN: "_$$RSH^IHASH(%PASS)_CR
+	S:$D(HEADER) RT=RT_HEADER_CR
+	S RT=RT_"Server: "_SRVNM_CR_"Cache-Control: private"_CR_"Content-type: "_EXT
+	I UENC'="",EXT["xml"!(EXT["text") S RT=RT_"; charset="_$S(%W=2:"utf-8",1:"windows-1251")
+	S RT=RT_CR_"Date: "_$$RFCDateTime($H)_CR
+	S:LF>-1 RT=RT_"Content-length: "_LF_CR
+	S:PROC="EXIT^YYUSER"!(PROC="LOGOUT") CONNK=$S(PORT>57772:1,1:0)
+	S:CONNK RT=RT_"Connection: keep-alive"_CR S:'CONNK&(HTTP["1.1") RT=RT_"Connection: close"_CR  U DEV W RT_CR,! K RT
+	I LF=-1 U DEV:(::"/PAD=1":) W "<html><body><pre>" D @(PROC) W "<pre></body></html>",! C DEV S ID=0 K PARAMS Q
+	I $D(%L) W %L,! G POSTE
+	S RT="" F  D RLA Q:IHT=""  S RT=RT_LA I $L(RT)>16384 U DEV W RT,! S RT=""
+	I $L(RT) U DEV W RT,!
+	K RT 
+	K:FN'="" ^BUFH(%JOB,FN)
+POSTE 
+	K:$E(%JOB,1)="z" ^JOB(%JOB),^BUFH(%JOB),%PATH
+	K LA,PARAMS,HTTPH S ID=0 S DIR=DEFDIR Q
+	Q
+POST ; HTTP POST command
+	;I TENCODE["chunked" S IHT=0 G CHUNK Q
+	S EXT=$$UL^TXTU($S(PROC'[".":"",1:$P(PROC,".",$L(PROC,"."))))
+	S EXT=$E(EXT,1,254),EXT2=EXT,EXT=$S(EXT="":"",1:$G(^EXT(EXT)))
+	S:EXT="" EXT="text/html"
+	S FN="7:hpar"
+	D OLA
+	I UV="" S SNUM=404,ST=CR_"Cannot write file." D SYS Q 
+	S LA=CL,LBUF=CLEN,CLEN=CLEN-$L(LA),CL=""
+	I LA'="" D WLA
+	S:PROC'["?" PROC=PROC_"?" G:CLEN=0 GPOST
+	S ICLEN=CLEN\8192,OCLEN=CLEN#8192 F IJ=1:1:ICLEN U DEV R LA#8192 D WLA
+	I OCLEN>0 U DEV R LA#OCLEN D WLA
+	K LA D CLA
+	G GPOST
+RLA S IHT=$O(^BUFH(%JOB,FN,IHT)),LA="" Q:IHT=""  S LA=^(IHT) Q 
+OLA I $P(FN,":",1)=7 S FN=$P(FN,"7:",2,256),(UV,IHT)=0 K ^BUFH(%JOB,FN) Q
+	O FN:("WFEN"::""):180 S UV=$S($TEST:FN,1:"") Q
+CLA I UV=0 S ^BUFH(%JOB,FN)=LBUF Q
+	C UV K LA,IHT Q
+WLA I UV=0 D WBUFH Q
+ 	U UV W LA
+	Q
+CHUNK ;
+	S PROC=$P(PROC,"?",1)
+	S PROC=$$LU^TXTU(PROC) S:$D(^WSPROC(PROC)) PROC=^(PROC)
+	S:PROC["_" PROC=$P(PROC,"_",1)_"^"_$P(PROC,"_",2,256)
+	S:PROC["^"=0&($E(PROC,1)'="$") PROC="^"_PROC
+	S:PROC="^" PROC="WWWCH"
+	S LA=CL,R="",CL=0,CLEN=-1,RID1=0 ;CL,CLEN - chunk length
+ACHUNK I CL=0 G:CLEN=0 BCHUNK D ZAGCH G ACHUNK ;zagolovok
+	D DANCH
+	G ACHUNK
+	Q
+ZAGCH ; read chunk
+	S RID1=0 F  Q:LA[RZ2  U DEV R R:60 G:$ZC EXIT S RID1=RID1+1,LA=LA_R G:RID1>360 EXIT // ??
+	S R=$P(LA,RZ2,1),LA=$P(LA,RZ2,2,8000)
+	S CLEN=$$FHEX^CONU(R),LL=$L(LA) D:CLEN>0 @(PROC_"(CLEN,0)")
+	I LL>(CLEN+1) S R=$E(LA,1,CLEN) D:R'="" @(PROC_"(R,1)") S CL=0,LA=$E(LA,CLEN+3,8000) Q
+	I LL=CLEN!(LL=(CLEN+1)) S R=$E(LA,1,CLEN) D:R'="" @(PROC_"(R,1)") S CL=2-(LL-CLEN)
+	U DEV R R:60 G:$ZC EXIT S LA=$E(R,CL+1,$L(R)),CL=0,R="" Q
+	I LL<CLEN D:LA'="" @(PROC_"(LA,1)") S LA="",CL=CLEN-LL
+	Q
+DANCH U DEV R R:60 G:$ZC EXIT D ;dannie, ostat. v zagol.
+	S R=LA_R,LL=$L(R)
+	I CL>LL D:R'="" @(PROC_"(R,1)") S CL=CL-LL,LA="",R="" Q ;half chunk
+	S LA=$E(R,1,CL) D:LA'="" @(PROC_"(LA,1)")
+	I (LL-CL)>1 S LA=$E(R,CL+3,LL),CL=0 Q ;chunk w. end
+	S LL=2-(LL-CL) U DEV R R:60 G:$ZC EXIT S LA=$E(R,LL+1,$L(R)),CL=0,R="" Q ;chunk w/o end
+	Q
+BCHUNK ;End chunked
+	D @(PROC_"(0,""Z"")")
+	S RT="HTTP/1.1 200 OK"_CR_"Server: M-Web 2.0 on Intersystems Cache"_CR_"Content-length: 0"_CR_CR 
+	U DEV W RT,! K RT S (ID,LF)=0
+	S CL="",R=""
+	Q
+WWWCH(LAAA,TYP) ;
+	I TYP=0 S IHT=0,IHTB=$O(^BBB(""),-1)+1 Q
+	S IHT=IHT+1,^BBB(IHTB,IHT)=LAAA
+	Q
+WBUFH ;
+	I $L(LA)<(%SL+1) S IHT=IHT+1,^BUFH(%JOB,FN,IHT)=LA Q
+	S LA1=$E(LA,1,%SL),LA=$E(LA,%SL+1,9999999),IHT=IHT+1,^BUFH(%JOB,FN,IHT)=LA1 K LA1 G WBUFH
+	Q 
+HEAD ; HTTP HEAD command
+	S LF=0 S:$L(PROC)=0&$D(^WWW("host",UHOST,1)) PROC=$G(^(1))
+	I PROC="" S I=-1 F  S X=$G(^WWW("index",I)),PROC=$$TSTFIL(X)'="" Q:PROC'=""  S I=$O(^WWW("index",I)) Q:I="" 
+	I PROC="" S SNUM=404,ST=CR_"Index file not found." D SYS Q
+	S EXT=$$UL^TXTU($S(PROC'[".":"",1:$P(PROC,".",$L(PROC,"."))))
+	S EXT=$E(EXT,1,254),EXT2=EXT,EXT=$S(EXT="":"",1:$G(^EXT(EXT)))
+	S:EXT="" EXT="text/plain" G:PROC["?" HDB
+	I $P(PROC,"/",1)="disk" S PROC=$$FNDIR^YYBPAS($P(PROC,"/",2,999)),FN=%DISK_FN,L=$ZUTIL(140,4,FN) G:L=0 HDF S SNUM=404,ST=CR_FN D SYS Q
+	I $P(PROC,"/",1)="dicom" S PROC=$P(PROC,"/",2,999),FN=%DICOM_FN,L=$ZUTIL(140,4,FN) G:L=0 HDF S SNUM=404,ST=CR_FN D SYS Q
+	S PROC=$$UL^TXTU(PROC)
+	I $D(^BUFH(%JOB,PROC)) S FN=PROC,IHT=0,LF=^(PROC),UV=0 G HDB
+	D FNDFIL Q:FN="" 
+HDF S LF=$ZUTIL(140,1,FN),UV=51 S:LF<0 LF=0
+HDB S RT=HTTP_" 200 OK"_CR S:CATP'=""&(ATP<2) RT=RT_"WWW-Authenticate: Basic realm="""_SRVNM_""""_CR_"X-SRV-TKN: "_$$RSH^IHASH(%PASS)_CR
+	S:EXT["/nb-" RT=RT_"Cache-Control: private"_CR
+	S RT=RT_"Server: "_SRVNM_CR_"Content-type: "_EXT_CR_"Content-length: "_LF_CR_"Date: "_$$RFCDateTime($H)_CR
+	S:CONNK RT=RT_"Connection: keep-alive"_CR S:CONNK=0&(HTTP["1.1") RT=RT_"Connection: close"_CR U DEV W RT_CR,! K RT
+	S ID=0
+	K:$E(%JOB,1)="z" ^JOB(%JOB),^BUFH(%JOB),%PATH
+	Q
+OPTION ; HTTP OPTION command
+	S RT="HTTP/1.1 200 OK"_CR_"Server: M-Web 2.0 on Intersystems Cache"_CR_"Allow: GET, POST, HEAD, OPTIONS"_CR_"Content-length: 0"_CR_CR
+	U DEV W RT,! K RT
+	S (ID,LF)=0
+	K:$E(%JOB,1)="z" ^JOB(%JOB),^BUFH(%JOB),%PATH
+	Q 
+PUT ; HTTP PUT command
+	S R=PROC,PROC=$P(R,"?",1),R=$P(R,"?",2)
+	S PROC=$$UL^TXTU(PROC)
+	I $P(PROC,"/",1)="disk" S FN=$P(PROC,"/",2,999),FN=$$FNDIR^YYBPAS(FN),FN=%DISK_FN G PUTIN
+	I $P(PROC,"/",1)="dicom" S FN=$P(PROC,"/",2,999),FN=%DICOM_FN G PUTIN
+	G:$P(PROC,"/",1)="dbdir" PUTDB
+	S DIRR=$P(PROC,"/",1),FN=DIR_PROC
+	S:DIRR=".b." FN=DISK_$P(PROC,"/",2,256) S:DIRR="%07%07%07" FN="7:"_$P(PROC,"/",2,256) S:PROC["NB-DATA" FN="7:"_PROC
+PUTIN	
+	S FN=$$SLTR(FN)
+	D OLA
+	I UV="" S SNUM=404,ST=CR_"Cannot write file." D SYS Q 
+	S LA=CL,LBUF=CLEN,CLEN=CLEN-$L(LA),CL=""
+	I LA'="" D WLA
+	G:CLEN=0 CPUT
+	S ICLEN=CLEN\8192,OCLEN=CLEN#8192 F IJ=1:1:ICLEN U DEV R LA#8192 D WLA
+	I OCLEN>0 U DEV R LA#OCLEN D WLA
+	K LA
+CPUT
+	D CLA
+CPUTE
+	K LA,LBUF,CLEN
+	S RT=HTTP_" 200 OK"_CR
+	S:CATP'=""&(ATP<2) RT=RT_"WWW-Authenticate: Basic realm="""_SRVNM_""""_CR_"X-SRV-TKN: "_$$RSH^IHASH(%PASS)_CR
+	S RT=RT_"Server: "_SRVNM_CR_"Content-type: text/plain"_CR_"Content-length: 0"_CR_"Date: "_$$RFCDateTime($H)_CR
+	S:CONNK RT=RT_"Connection: keep-alive"_CR S:'CONNK&(HTTP["1.1") RT=RT_"Connection: close"_CR U DEV W RT_CR,! K RT
+	K:$E(%JOB,1)="z" ^JOB(%JOB),^BUFH(%JOB),%PATH
+	Q
+PUTDB
+	S LA=CL,LBUF=CLEN,CLEN=CLEN-$L(LA),OCLEN=0,CL=""
+	S FN="/DBDIR/"_$$WD^TXTU($$UL^TXTU($P(PROC,"/",2,99)))
+	D OW^NFILES(FN)
+	D:LA'="" W^NFILES(LA)
+	I CLEN>0 S ICLEN=CLEN\8192,OCLEN=CLEN#8192 F IJ=1:1:ICLEN U DEV R LA#8192 D W^NFILES(LA)
+	I OCLEN>0 U DEV R LA#OCLEN D W^NFILES(LA)
+	D CW^NFILES
+	G CPUTE
+OW(FN) S %FN=$$UL^TXTU(FN) K ^BUFH(%JOB,%FN) S UV=0,%LFN=0,%IFN=0 Q 
+WW(X) Q:X=""  S %L=X D ENC S %IFN=%IFN+1,%LFN=%LFN+$L(%L),^BUFH(%JOB,%FN,%IFN)=%L Q
+CW S FN=%FN,%B=FN K %L S:UV=0 ^BUFH(%JOB,%FN)=%LFN Q
+SYSLOG
+	D LGWS("<NOPGM>"_$G(ST))
+SYS ; Send system message to client
+	S:'$D(SNUM) SNUM=200 S:'$D(ST) ST=0 S:ST="" ST=0
+	S ST=$G(^WWW("errors",+SNUM))_ST,SSNUM=SNUM
+	S EXT="text/plain" 
+	S:$D(^WWW("errors",+SNUM,1)) EXT=$G(^(1)) 
+	S UACCPT=$G(UACCPT)
+	S:'$D(TAB) TAB=$C(9)
+	S $ZT="SYS2^WWWSRV" S:SNUM=404 ST=""
+	I $F(UACCPT,"html")=0,UACCPT["vnd.wap.wml" D
+	.S EXT="text/vnd.wap.wml",ST="<?xml version=""1.0""?><!DOCTYPE wml PUBLIC ""-//WAPFORUM//DTD WML 1.1//EN"" ""http://www.wapforum.org/DTD/wml_1.1.xml""><wml><card id=""err"" title=""Err"_SNUM_"""><p>"_$$RHTML(ST)_"</p></card></wml>" 
+	.S %L=ST,WO=+$G(%W),%W=2 D ENC S ST=%L,%W=WO,SNUM=200
+	D:LGG=2 LGW($G(DEV1)_TAB_$G(CLEN)_"/"_$G(LF)_TAB_$G(COM)_TAB_$G(PPROC)_TAB_$G(SSNUM)_TAB_$G(%LOG))
+	S:SNUM'=200&(SNUM'=404) CONNK=$S(PORT>57772:1,1:0)
+	S RT=HTTP_" "_SNUM_" OK"_CR_"Server: "_SRVNM_CR_"Content-type: "_EXT_CR_"Date: "_$$RFCDateTime($H)_CR
+	S:$G(CONNK) RT=RT_"Connection: keep-alive"_CR S:'CONNK&(HTTP["1.1") RT=RT_"Connection: close"_CR
+	S:$G(CATP)'=""&((ATP<2)!(SNUM=401)) RT=RT_"WWW-Authenticate: Basic realm="""_SRVNM_""""_CR_"X-SRV-TKN: "_$$RSH^IHASH(%PASS)_CR
+	S LF=$L(ST),RT=RT_"Content-length: "_LF_CR_CR U DEV W RT W:LF ST W ! K RT
+	S $ZT="ER^WWWSRV",ID=0,ST="" K SSNUM,PARAMS
+	K:$E(%JOB,1)="z" ^JOB(%JOB),^BUFH(%JOB),%PATH
+	I CONNK=0 C DEV
+	Q
+SYS2 S $ZT="ER^WWWSRV",ID=0,ST="",CONNK=$S(PORT>57772:1,1:0),LF=0 C:$G(DEV)'="" DEV K SSNUM Q
+ERLOOP
+	S %L2="Break Monitor Loop "_$ZE D LGWS($ZE)
+	G JSRV
+ER ; error trap
+	S %L2="Break Monitor Loop "_$ZE D LGWS($ZE)
+	I $F($ZE,"<NOPEN") C DEV S $ZT="ER^WWWSRV" G EXIT
+	I $F($ZE,"<INRPT") C DEV S $ZT="ER^WWWSRV" G EXIT
+	I $F($ZE,"<NOPGM") S SNUM=501,ST="NO PROGRAM ("_$G(PROC)_")" D SYS S $ZT="ER^WWWSRV" G EXIT
+	I $F($ZE,"<DPARM") S SNUM=500,ST="BAD PARAM ("_$G(PROC)_")" D SYS S $ZT="ER^WWWSRV" G EXIT
+	I $F($ZE,"<DSCON") S SNUM=503,ST=%L2 S $ZT="ER^WWWSRV" G EXIT
+	I $F($ZE,"<SYNTX") S SNUM=504,ST=%L2_" ("_$G(PROC)_")" S $ZT="ER^WWWSRV" G EXIT
+	S SNUM=503,ST=%L2_" ("_$G(PROC)_")" D SYS S $ZT="ER^WWWSRV" G EXIT
+	ZQ
+SETJOBLT() ; simple sheck passwd
+	S %LOG=$$DPAS^YYBPAS(%PASS),%PAS=$P(%LOG,":",2),%LOG=$P(%LOG,":",1)
+	I '$D(^PAS(%LOG)) S %PASS="" Q 0
+	I %PAS'=$G(^PAS(%LOG)) S %PASS="" Q 0
+	Q 1
+SETJOB ; set job params
+	Q:$G(%PASS)=""
+	S JOB=CATP,%JOB=JOB
+	S %LOG=$$DPAS^YYBPAS(%PASS),%PAS=$P(%LOG,":",2),%LOG=$P(%LOG,":",1)
+	I '$D(^PAS(%LOG)) S %PASS="" Q
+	I %PAS'=$G(^PAS(%LOG)) S %PASS="" Q
+	
+	; check auth-id
+	I CAUTH!$G(^LOG(%LOG,"cauth")) Q:COOK=""  S X=$P(COOK,";",1) Q:$P(X,"=",1)'="AUTHID"  S X=$G(^CARD($P(X,"=",2))) Q:X=""  Q:$P(X,"|",1)'="D"  Q:$G(^LOG(%LOG,"kadry"))'=$P(X,"|",2) 
+	
+	; check user and host ip
+	I $L($G(DEV1)),$D(^LOG(%LOG,"IP")),'$$CHKIP(^("IP"),DEV1) S %PASS="" Q
+	I $D(^LOG(%LOG,"host"))!(ARSRV=2),'$$CHKHOST() S %PASS="" Q 
+	I $G(^LOG(%LOG,"deny")) S %PASS="" Q  ; deny flag
+	I $$CHKJCNT() S %PASS="" Q 
+	S %PATH=$G(^LOG(%LOG)) S:%PATH'[":" %PATH=UROOT_%PATH
+	;D:%LOG'=77777 $System.License.DeferUserIdentification(1),$System.License.Login(%LOG) ; apply user name
+	X:$D(^LOG(%LOG,"X")) $G(^("X"))
+	I %PASS="" Q
+	I $D(^JOB(CATP)) S DIR=$G(^(CATP,1)),%LOG=$G(^(2)),%JOB=CATP S:'$D(^(5,$J)) ^($J)="" S:DIR="" DIR=DEFDIR Q
+	S ^JOB(JOB)=%PASS,^(JOB,1)=%PATH,^(2)=%LOG,^(4)=$H,^(6)=DEV1,^(8)=UAG,^(9)=$J,^(5,$J)="",DIR=%PATH,%JOB=JOB 
+	S:DIR="" DIR=DEFDIR
+	K ^BUFH(JOB) ; D:LGG'=0 LGW(DEV1_" 0 LOGIN "_%LOG)
+	Q
+SETUA ; set user agent params
+	S X="" F  S X=$O(^UAG(X)) Q:UAG[X!(X="")
+	Q:X="" 
+	S:$D(^UAG(X,0)) %WI=^(0) S:$D(^(1)) %W=^(1),UACEPT=%W S:$D(^(3)) ATP=^(3)
+	Q
+SETHOST ; set current host params
+	S:'$D(UHOST) UHOST="default" S:'$L(UHOST) UHOST="default"
+	S UPORT=80 S:UHOST[":" UPORT=$P(UHOST,":",2),UHOST=$P(UHOST,":",1)
+	S:$E(UHOST,$L(UHOST))="." UHOST=$E(UHOST,1,$L(UHOST)-1) ; bugfix IE6
+	S:UPORT'=80 UHOST=UHOST_":"_UPORT
+	S:'$D(^WWW("host",UHOST)) UHOST="default"
+	S DIR=$G(^WWW("host",UHOST,0)),DEFDIR=DIR
+	S IDXFIL="" S:$D(^(1)) IDXFIL=^(1)
+	S ATP=1 S:$D(^(2)) ATP=^(2)
+	S LGG=0 S:$D(^(3)) LGG=^(3)
+	S SRVNM="Cache" S:$D(^(6)) SRVNM=^(6)
+	S %W=$S(UENC="utf-8":2,1:0),%WI=$S(UENC="utf-8":2,1:0)
+	S:$D(^(7)) %WI=^(7) S:$D(^(8)) %W=^(8)
+	S UROOT="" S:$D(^(9)) UROOT=^(9) 
+	S %DISK="\WORK\DISK" S:$D(^(10)) %DISK=^(10)
+	S %DISK2=$S($D(^(11)):^(11),1:"")
+	S CAUTH=+$G(^(13)) ; need-auth-id (Send in login)
+	S ARSRV=+$G(^(14)) ; access rights for server =2 (disable w.o. user enabled)
+	S %DICOM="" S:$D(^(15)) %DICOM=^(15) ; DICOM dir
+	S:%DICOM="" %DICOM=%DISK
+	S %IIDLCL=$G(^(16)) ; ^LCL("i",%IIDLCL
+	
+	I %PASS'="",'CAUTH S X=$P($$DPAS^YYBPAS(%PASS),":",1) S:X'="" CAUTH=$G(^LOG(X,"cauth"))
+	Q
+CHKIP(STR,IP)   ; Проверить IP адрес на валидность
+	Q:STR="" 1
+	N F,I,X,I1,I2,I3,I4,J1,J2,J3,J4
+	S I1=$P(IP,".",1),I2=$P(IP,".",2),I3=$P(IP,".",3),I4=$P(IP,".",4),F=0
+	F I=1:1:$L(STR,";") S X=$P(STR,";",I),J1=$P(X,".",1),J2=$P(X,".",2),J3=$P(X,".",3),J4=$P(X,".",4) I X'="",J1="*"!(I1=J1),J2="*"!(I2=J2),J3="*"!(I3=J3),J4="*"!(I4=J4) S F=1 Q
+	Q F
+CHKHOST() ; Проверить IP сервера на разрешение
+	Q:$G(^LOG(%LOG,"host",UHOST)) 1
+	Q:ARSRV=2 0
+	Q:$G(^(UHOST))=0 0
+	; проверка разрешения на другие - тогда этот нельзя
+	N F,I
+	S I="",F=1 F  S I=$O(^LOG(%LOG,"host",I)) Q:I=""  I ^(I),$G(^WWW("host",I,14))'=2 S F=0 Q
+	Q F
+seldisk()
+	N F
+	S F=$$SLTR(%DISK_FN),L=$ZUTIL(140,4,F) I 'L S FN=F Q 
+	S F=$$SLTR(%DISK2_FN),L=$ZUTIL(140,4,F) I 'L S FN=F Q 
+	S L=1
+	Q
+CSPdget ; Emulate CSP gateway, method GET (subproc)
+	N %request,%response,I,P,V,C
+	S %response=##class(%CSP.Response).%New()
+	S %request=##class(%CSP.Request).%New()
+	;S %request.Method="GET"
+	S P="" F  S P=$O(PARAMS(P)) Q:P=""  D %request.Set(P,PARAMS(P))
+	O 2:($J) U 2 ; SPOOL device
+	D @("##class(csp."_PROC_").OnPage()")
+	C 2 ; U 0
+	//X "S CTYPE=##class(csp."_PROC_").CONTENTTYPE"
+	S EXT="text/html",CONNK=0,UENC=%response.CharSet
+	S:UENC="" UENC="windows-1251"
+	K %request
+	K %response
+	S LF=0,C=$P($G(^SPOOL($J,2147483647)),"{",3)-1
+	F I=1:1:C S LF=LF+$L(^SPOOL($J,I))
+	S RT="HTTP/1.1 "_ERRNUM_" OK"_CR
+	S:CATP'=""&(ATP<2) RT=RT_"WWW-Authenticate: Basic realm="""_SRVNM_""""_CR_"X-SRV-TKN: "_$$RSH^IHASH(%PASS)_CR
+	S:$D(HEADER) RT=RT_HEADER
+	S RT=RT_"Server: "_SRVNM_CR_"Cache-Control: private"_CR_"Content-type: "_EXT_CR S:LF>-1 RT=RT_"Content-length: "_LF_CR
+	S:PROC="EXIT^YYUSER"!(PROC="LOGOUT") CONNK=0
+	S:CONNK RT=RT_"Connection: keep-alive"_CR S:'CONNK&(HTTP["1.1") RT=RT_"Connection: close"_CR
+	U DEV W RT_CR,! S RT=""
+	F I=1:1:C S RT=RT_^SPOOL($J,I) I $L(RT)>16384 S:UENC="utf-8" RT=$ZCVT(RT,"O","UTF8") W RT,! S RT=""
+	I RT'="" S:UENC="utf-8" RT=$ZCVT(RT,"O","UTF8") W RT,!
+	Q
+CSPget ; Emulate CSP gateway, method GET
+	D CSPdget
+	K ^SPOOL($J),RT
+	G POST
+CSPpost ; Emulate CSP gateway, method 
+	Q
+IPADDR(%A)
+	Q $A(%A,1)_"."_$A(%A,2)_"."_$A(%A,3)_"."_$A(%A,4)_":"_($A(%A,5)*256+$A(%A,6))
+IENC(X) Q $S(%WI=2:$$U8W^TXTU(X),1:X) ;Q X S E2=+$G(%IENC),E3=+$G(%WI) Q $S(E2=0&(E3=0):$$WD^TXTU(X),(E3=1!(E3=2))&(E2=1):$$DW^TXTU(X),1:X) 
+ENC S E2=+$G(%W),E3=+$G(%WI),%L=$S(E2=0&(E3=1):$$WD^TXTU(%L),(E2=1!(E2=2))&(E3=0):$$DW^TXTU(%L),1:%L)
+	G:E2=2 UTF8 Q
+SLTR(FN) ; Slash translate
+	N J
+	I SLTR S FN=$TR(FN,"\","/") S J=0 F  S J=$F(FN,"//",J) Q:J=0  S J=J-2,$E(FN,J)=""
+	I 'SLTR S FN=$TR(FN,"/","\") S J=0 F  S J=$F(FN,"\\",J) Q:J=0  S J=J-2,$E(FN,J)=""
+	Q FN
+UTF8 ; to UTF8
+	S E4="" F JB=1:1:$L(%L) D
+	.I $A(%L,JB)<192 S E4=E4_$E(%L,JB) Q
+	.S E6=$TR($E(%L,JB),^PP(0,4),^PP(0,5)) S E4=E4_"&#x04"_$$HEX^CONU($A(E6))_";"
+	S %L=E4 K E2,E3,E4 Q
+RHTML(X) ;right html
+	Q $$HTML^TXTU(X)
+KAV(A)
+	N R S R=A I A'=+A  N D,I,K,L S K="""",L="""""",I=1,D=1
+	F  S I=$F(R,K,I) Q:'I  S R=$E(R,1,I-2)_L_$E(R,I,9999),I=I+D
+	S R=""""_R_""""	Q R
+LOGOUT ; client logout
+	I %LOG="" S %L="",%B=".txt",CONNK=$S(PORT>57772:1,1:0) Q
+	I $F(UACCPT,"html")=0,UACCPT["vnd.wap.wml" D
+	.S EXT="text/vnd.wap.wml",%L="<?xml version=""1.0""?><!DOCTYPE wml PUBLIC ""-//WAPFORUM//DTD WML 1.1//EN"" ""http://www.wapforum.org/DTD/wml_1.1.xml""><wml><card id=""exit"" title=""Logout""><p>Bye</p><do type=""option"" label=""Login""><go href="""_UHOST_"/LOGIN""/></do></card></wml>",%B="ret.wml"
+	E  S %L="<html><META HTTP-EQUIV=""Refresh"" CONTENT=""8; URL=http://"_$D(UHOST)_":"_SOCN_"/""><BODY>Bye...</BODY></html>",%B="ret.htm"
+	D LOGOUT^YYUSER
+	D LOGOUT^YISYNC
+	K ^JOB(JOB),^BUFH(JOB),%PATH
+	S %LOG="",CONNK=$S(PORT>57772:1,1:0)
+	Q
+LOG(S) ; Write to system log
+	S ^($O(^SYSLOG(""),-1)+1)=S
+	Q
+GMT(X,T) ;($H,timezone)
+	Q $$GMT^DTUTL(X,T)
+LGW(TXT) I TXT'="/null" S ^($O(^WWWLOG(""),-1)+1)=$H_TAB_UHOST_TAB_TXT_TAB_$G(UAG)_TAB_$J_TAB_$G(ztlPROC) Q
+LGWS(TXT) S ^($O(^WWWLOG(""),-1)+1)=$H_$C(9)_"<<err>>"_$C(9)_TXT_$C(9)_$J Q 
+CHKJCNT()
+	N F,J,LL,C,CE
+	S CE=$G(^cfg("sys","llimit")) Q:'CE 0
+	S J="",F=$J F  S J=$O(^JOB(J)) Q:J=""  I $D(^(J,5,F)) K ^(F)
+	S J="",C=0 F  S J=$O(^$JOB(J)) Q:J=""  I $ZU(67,5,J)="WWWSRV" S C=C+1
+	S C=C-1
+	Q:C>CE 1
+	Q 0
+CHKCONN ; check license limit for new connection
+	Q:$D(^WWW("test")) 
+	I $D(^WWW("small")) Q:$SYSTEM.License.ConnectionCount("Admin@127.0.0.1")>22  S SUSR="Admin" Q 
+	I $SYSTEM.License.LUAvailable()=0 S SUSR=-1 Q 
+	N I,C,K,N,MX,UADD
+	S C=$SYSTEM.License.KeyLicenseUnits()-1,SUSR=-1,I=1
+	S UADD=$S($SYSTEM.Version.GetMajor()<2010:"",1:"@127.0.0.1")
+	s MX=$G(^WWW("mxc")) S:MX="" MX=$SYSTEM.License.MaxConnections()-1
+	F I=1:1:C S N=$SYSTEM.License.ConnectionCount("webusr"_I_UADD) I N<$S(I=1:MX-4,1:MX) S SUSR="webusr"_I Q
+	; must return SUSR w.o. UADD
+	I SUSR=-1 D LGWS("License limit") H 5 
+	Q
+USRCONN ; Set user ID for connection
+	N SUSR
+	S SUSR=-1
+	D CHKCONN
+	Q:SUSR=-1 
+	D $System.License.DeferUserIdentification(1),$System.License.Login(SUSR) 
+	Q
+RFCDateTime(horolog) ; Convert $horolog value to seconds and modify to UT
+	Set horolog=$piece(horolog,",")*86400+$piece(horolog,",",2)+($piece($ztimestamp,",")*86400)+($piece($ztimestamp,",",2)\1)-($piece($horolog,",")*86400+$piece($horolog,",",2))
+	Set horolog=horolog\86400_","_(horolog#86400)
+	Quit $ZDate(horolog,11)_", "_$ZDatetime(horolog,2)_" GMT"
+JSRVL ; For server process
+	I $D(^WWW("small")) D $System.License.DeferUserIdentification(1),$SYSTEM.License.Login("Admin") Q 
+	D:'$D(^WWW("test")) $System.License.DeferUserIdentification(1),$SYSTEM.License.Login("webusr1")
+	Q
+ZSTU ; for %ZSTART
+	N A
+	ZN "%SYS"
+	S A=+$G(^WWWSRV)
+	ZN "USER"
+	Q:A=0 
+	Q:+$G(^SJOB("WWWSRV"))>0 
+	H 30
+START ; Command line start server thread
+	I '$D(^EXT("nb-cmd")) S ^EXT("nb-cmd")="application/nb-cmd"
+	I '$D(^EXT("nb-xml")) S ^EXT("nb-xml")="application/nb-xml"
+	J JSRV^WWWSRV
+	Q
+ZSTO ; for %ZSTOP
+	S ^SJOB("WWWSRV")=1
+	F I=1:1:6 H 1
+	K ^BUFH,^JOB,^ASJOB,^ASJOBR
+	Q
+STOPALL ; Command line: stop all server and client threads
+	N ALL,N
+	s ALL=1,N=128
+	g STOPi
+STOP ; Command line stop thread
+	N ALL,N
+	S ALL=0,N=9
+STOPi
+	S ^SJOB("WWWSRV")=1
+	W !,"Stopping." F I=1:1:N Q:'ALL&(+$G(^SJOB("WWWSRV"))>1)  W:I>1 "." W I H 1  I ALL,I#5=4,$$COUNTNM^IJOBUTL("WWWSRV")<2 Q 
+	K ^BUFH,^JOB,^ASJOB,^ASJOBR,^SJOB("WWWSRV")
+	W ".OK",!
+	Q

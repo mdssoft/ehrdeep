@@ -1,0 +1,232 @@
+IDSCN ; Patient Discount routines [ 05/17/2024  1:12 AM ]
+CHIFRDT() ; List change date
+ Q $G(^DSCN)
+LIST(wSYS,WTAG,TAGS,NCR) ; Discount list
+ ; wSYS - with system types
+ ; WTAG - экранирование html тегов
+ ; TAGS - фильтровать по тегам
+ ; NCR - без перевода строки
+ N I,C,R
+ S (I,C)="",wSYS=+$G(wSYS),WTAG=$G(WTAG),TAGS=$G(TAGS)
+ S:TAGS'="" TAGS=$TR(TAGS," ","|")
+ I '$G(NCR) D W^RWU("|") S C=CR
+ F  S I=$O(^DSCN(I)) Q:I=""  I $G(^(I,"use")),$S(wSYS:1,1:'$G(^("sys"))),$S(TAGS="":1,1:$$FLinFL^TXTU($TR($G(^("tags"))," ","|"),TAGS)) S R=$G(^("nm")) S:WTAG R=$$TAG^TXTU(R) D WC^RWU(C_I_"|"_R) S C=CR
+ Q
+NAME(ID) ; Имя
+ Q:ID="" "" 
+ Q $G(^DSCN(ID,"nm"))
+REF(NIB,DGN) ; Пересчитать сумму накопления
+ N SK,H,X,FSK
+ S H=+$H,SK=$$GET^IPAC(NIB,"skd",H),FSK=""
+ S:SK'="" FSK=$$FLCNG^IPAC(NIB,"skd",H) ; с даты появления скидки
+ 
+ D:SK=""
+ .S DGN=$S($G(DGN)="":$$GET^IPAC(NIB,"stc",H),1:DGN)
+ .I $G(^cfg("dscn","cskd-ofor"))'="",$$FLinFL^TXTU(^cfg("dscn","cskd-ofor"),$$GET^IPAC(NIB,"ofor",H)) Q  ; not used
+ .S SK=$$GET^IINSC(DGN,"cskd",H)
+ .S FSK=$$FLCNG^IINSC(DGN,"skd",H)
+ .Q:SK="" 
+ .S X=$$GET^IINSC(DGN,"skdprog") Q:X="" 
+ .S:'$$FLinFL^TXTU($$GET^IPAC(NIB,"prog"_$$PIDX^IPAC(NIB,DGN,H)),X) SK=""
+ 
+ Q:SK="" 
+ Q:$G(^DSCN(SK,"tp"))'=2  Q:'+$G(^("use")) 
+ N G,VR,OT,DT,ID,S,N,I,K,ND,F,KX
+ S G=+$G(^("grp")),ND=+$G(^("nday")),F=1
+ S:ND ND=H-ND-1 ; расч. период
+ S G=NIB_$S(G:"|"_$$GET^IPAC(NIB,"grp",H),1:""),(S(1),S(2))=0
+ F I=1:1:9 S N=$P(G,"|",I) Q:N=""  S DT=FSK-1 F  S DT=$O(^PNF(N,DT)) Q:DT=""  D
+ .I ND,DT>ND S F=0 ; есть новые
+ .S ID="" F  S ID=$O(^PNF(N,DT,ID)) Q:ID=""  D
+ ..S OT=$P(ID,"|",2)
+ ..Q:$$GETSTAT^IUSL($P(ID,"|",1),DT,OT,$P(ID,"|",3))'=2 
+ ..I $D(^DSCN(SK,"ota")),'$D(^("ota",OT)) Q 
+ ..Q:$D(^DSCN(SK,"otd",OT)) 
+ ..; todo grpd, a
+ ..S K=$$GETPL^IUSL($P(ID,"|",1),DT,OT,$P(ID,"|",3),"s")
+ ..Q:K="" 
+ ..S K=+$P(K,"|",1),S(2)=S(2)+K S:I=1 S(1)=S(1)+K
+ I ND,F S (S(1),S(2))=0 ; сброс скидки
+ S K=$O(^DSCN(SK,"cn",S(1)+0.001),-1),KX=""
+ S:K'="" KX=$G(^(K)),S(3)=$S(KX="-":0,$E(KX)="=":0,1:+KX)
+ I +$G(^DSCN(SK,"grp")) S K=$O(^("cng",S(2))) S:K'="" S(4)=+$G(^(K))
+ S K=$O(^PDSC(NIB,H_","_($P($H,",",2)+1)),-1)
+ S:K'="" K=^PDSC(NIB,K)
+ S N=+$G(S(3))_"|"_+$G(S(4))
+ I KX="-" D SET^IPAC(NIB,"skd",H,"")
+ I $E(KX)="=" D SET^IPAC(NIB,"skd",H,$E(KX,2,99)) ; смена скидки
+ I N="0|0",$D(^PDSC(NIB)),'$G(^cfg("dscn","deref")) Q 
+ I K'=N S ^PDSC(NIB,$H)=N D UPD^IEXCH("IDSCN",NIB)
+ Q
+CALC(NI,OTD,USL,DGN,PRC,CNT,LPU,H,GRN,KSS,FLG) ; Вычислить скидку
+ ; H - дата скидки
+ ; GRN - ID гарантийного письма
+ ; FLG - флаги услуги 
+ N SK,SK1,X,H,FM
+ S:$G(H)="" H=+$H
+ S SK=$$GET^IPAC(NI,"skd",H),SK1=SK,KSS=+$G(KSS)
+ S DGN=$G(DGN),OTD=$G(OTD),USL=$G(USL),PRC=$G(PRC),CNT=$G(CNT),LPU=$G(LPU)
+ S FM=$G(^cfg("dscn","maxselskd"))
+ I KSS,SK=""!FM D 
+ .S DGN=$S(DGN="":$$GET^IPAC(NI,"stc",H),1:DGN)
+ .I $G(^cfg("dscn","cskd-ofor"))'="",$$FLinFL^TXTU(^cfg("dscn","cskd-ofor"),$$GET^IPAC(NI,"ofor",H)) Q  ; not used
+ .S SK=$$GET^IINSC(DGN,"cskd",H)
+ .I SK="" S SK=SK1 Q 
+ .I $G(GRN)="",'$$CHECK^IPAC(NI,H,DGN) S SK=""
+ .S X=$$GET^IINSC(DGN,"skdprog",H) Q:X="" 
+ .S:'$$FLinFL^TXTU($$GET^IPAC(NI,"prog"_$$PIDX^IPAC(NI,DGN,H)),X) SK=""
+ 
+ G:SK=""&(SK1="") calc1
+ I SK="",SK1'="" S SK=$$calcP(SK1,H,NI) D calcS Q:SK'="" +SK G calc1
+ I (SK1="")!(SK=SK1) S SK=$$calcP(SK,H,NI) D calcS Q:SK'="" +SK G calc1
+ 
+ I SK1'="",SK'=SK1 S SK=$$calcP(SK,H),SK1=$$calcP(SK1,H,NI) D calcS I SK'=""!(SK1'="") Q $S(SK1>SK:SK1,1:SK) ; выбор максимальной из 2-х
+calc1 
+ S SK=$O(^PDSC(NI,H_","_($P($H,",",2)+1)),-1)
+ S:SK'="" SK=^(SK)
+ Q:SK="" 0
+ Q $S($G(^cfg("discount","tgr"))=1:$P(SK,"|",1)+$P(SK,"|",2),$P(SK,"|",1)>$P(SK,"|",2):$P(SK,"|",1),1:$P(SK,"|",2))
+calcP(SK,H,NI) ; Служебная процедура по расчету
+ Q:SK="" 0
+ N X,SK1,G,RG,F,I
+ S:$G(LPU)="" LPU=+$$^I("ilpu")
+ Q:'+$G(^DSCN(SK,"use")) 0
+ S X=$G(^("lpd",LPU))
+ Q:$P(X,"|",1) 0
+ I $G(NI)'="" S X=$G(^DSCN(SK,"pstatus")) I X'="",'$$FLinFL^TXTU($$GET^IPAC(NI,"status",H),X) Q 0
+ S SK1=$P(X,"|",2),X=""
+ I $L(USL),$D(^DSCN(SK,"usl",USL)) S F=^(USL),I=$P(F,"|",1) I $S($P(F,"|",2)="":1,1:$$isF($G(FLG),$P(F,"|",2))) Q:'I 0 Q I
+ I DGN'="",$D(^DSCN(SK,"dgn")),'$D(^("dgn",DGN)) Q 0
+ I DGN'="",$D(^DSCN(SK,"dgnd")),$D(^("dgnd",DGN)) Q 0
+ I $L(OTD) Q:$D(^DSCN(SK,"otd",OTD)) 0 I $D(^DSCN(SK,"ota")),'$D(^("ota",OTD)) Q 0
+ I $L(OTD),$D(^DSCN(SK,"ots",OTD)) S X=^(OTD)
+ I $L(USL) D  Q:F 0
+ .S RG=$$GET^IPRICE(USL,"grp",PRC,H),F=0 Q:RG="" 
+ .S RG=$$getALL^NPRICEG(RG)
+ .F I=1:1:$L(RG,"|") S G=$P(RG,"|",I) D  Q:F 
+ ..I G'="",$D(^DSCN(SK,"grps",G)) S X=^(G),F=2 Q 
+ ..S:G="" G=-1 ; for check in allow
+ ..I $D(^DSCN(SK,"grpd",G)) S F=1 Q 
+ ..I $$GET^IPRICE(USL,"nosp",PRC,H) S F=1 Q 
+ ..I $D(^DSCN(SK,"grpa")),'$D(^("grpa",G)) S F=1 Q 
+ I DGN'="" S DGN=$$GET^IINSC(DGN,"dvid",H),G=0 D  Q:G 0
+ .I $D(^DSCN(SK,"dvid")),'$D(^("dvid",DGN)) S G=1 Q
+ .I $D(^DSCN(SK,"dvidd")),$D(^("dvidd",DGN)) S G=1 Q
+ Q:X'="" X ; для фиксированно установленой (otd/grp)
+ Q:SK1'="" SK1 ; для фиксированно установленой - филиал
+ S X=$G(^DSCN(SK,"tp"))
+ Q:X'=2 $G(^("cn",0))
+ I X=2 G calc1
+ Q 0
+calcS ; Проверка и коррекция, если скидка - сумма
+ Q:$E(SK)'="S" 
+ I USL="" S SK=0 Q 
+ S SK=+$J($E(SK,2,99)*100/$$PRICEH^IPRICE(USL,PRC,H)*$E(SK,2,99),"",4)
+ Q
+isF(FLG,X) ; Флаг присутствует/отсутствует среди других
+ N N
+ S N=0
+ I "!'"[$E(X) S X=$E(X,2,99),N=1 ; not
+ S X=$$FLinFL^TXTU(FLG,X)
+ Q:N 'X Q X 
+CALCID(SK,OTD,USL,DGN,PRC,CNT,LPU,DT,FLG)    ; Получить скидку по ID скидки
+ Q:SK="" 0
+ S DGN=$G(DGN),OTD=$G(OTD),USL=$G(USL),PRC=$G(PRC),CNT=$G(CNT),LPU=$G(LPU)
+ S:$G(DT)="" DT=+$H
+ S SK=$$calcP(SK,DT)
+ D calcS
+ Q:SK="" 0
+ Q +SK
+CHECK(NI,OTD,USL,DGN,PRC,DT,NKSS) ; Проверить скидку для отделения/услуги 
+ N SK,X
+ S:$G(DT)="" DT=+$H
+ S SK=$$GET^IPAC(NI,"skd",DT)
+ D:SK=""
+ .S DGN=$S($G(DGN)="":$$GET^IPAC(NI,"stc",DT),1:DGN)
+ .I $G(^cfg("dscn","cskd-ofor"))'="",$$FLinFL^TXTU(^cfg("dscn","cskd-ofor"),$$GET^IPAC(NI,"ofor",DT)) Q  ; not used
+ .S SK=$S($G(NKSS):0,1:$$GET^IINSC(DGN,"cskd",DT))
+ .Q:SK="" 
+ .S X=$$GET^IINSC(DGN,"skdprog",DT) Q:X="" 
+ .S:'$$FLinFL^TXTU($$GET^IPAC(NI,"prog"_$$PIDX^IPAC(NI,DGN,DT),DT),X) SK=""
+ Q:SK="" 0
+ S X=$G(^DSCN(SK,"pstatus"))
+ I X'="",'$$FLinFL^TXTU($$GET^IPAC(NI,"status",DT),X) Q 0
+ G CHECKID+1
+CHECKID(SK,OTD,USL,DGN,PRC) ; Проверить скидку по ее ID
+ Q:'+$G(^DSCN(SK,"use")) 0
+ Q:$P($G(^DSCN(SK,"lpd",+$$^I("ilpu"))),"|",1) 0
+ N G
+ I $L(USL),$D(^DSCN(SK,"usl",USL)) S G=$P(^(USL),"|",1) Q:'$L(G) 0 Q 1
+ I DGN'="",$D(^DSCN(SK,"dgn")),'$D(^("dgn",DGN)) Q 0
+ I DGN'="",$D(^DSCN(SK,"dgnd")),$D(^("dgnd",DGN)) Q 0
+ I $L(DGN) S DGN=$$GET^IINSC(DGN,"dvid",+$H),G=0 D  Q:G 0
+ .I $D(^DSCN(SK,"dvid")),'$D(^("dvid",DGN)) S G=1 Q
+ .I $D(^DSCN(SK,"dvidd")),$D(^("dvidd",DGN)) S G=1 Q
+ I $L(OTD) Q:$D(^DSCN(SK,"ota",OTD)) 1 Q:$D(^DSCN(SK,"otd",OTD)) 0 Q:$D(^DSCN(SK,"ota")) 0 Q:$D(^DSCN(SK,"otd")) 1
+ I $L(USL) S G=$$GET^IPRICE(USL,"grp",PRC,H) S:G="" G=-1 Q:$D(^DSCN(SK,"grpa",G)) 1 Q:$D(^DSCN(SK,"grpa")) 0 I G'=-1 Q:$D(^DSCN(SK,"grpd",G)) 0 Q:$D(^DSCN(SK,"grpd")) 1
+ Q 1
+GET(NI,DTM,DGN) ; Получить накопление на дату
+ Q:DTM=""!(NI="") 0
+ N SK,X,DT
+ S DT=+DTM,SK=$$GET^IPAC(NI,"skd",DT)
+ 
+ D:SK=""
+ .S DGN=$S($G(DGN)="":$$GET^IPAC(NI,"stc",DT),1:DGN)
+ .I $G(^cfg("dscn","cskd-ofor"))'="",$$FLinFL^TXTU(^cfg("dscn","cskd-ofor"),$$GET^IPAC(NI,"ofor",DT)) Q  ; not used
+ .S SK=$$GET^IINSC(DGN,"cskd",DT)
+ .Q:SK="" 
+ .S X=$$GET^IINSC(DGN,"skdprog",DT) Q:X="" 
+ .S:'$$FLinFL^TXTU($$GET^IPAC(NI,"prog"_$$PIDX^IPAC(NI,DGN,DT)),X) SK=""
+ 
+ Q:SK="" 0
+ Q:'+$G(^DSCN(SK,"use")) 0
+ Q:$P($G(^DSCN(SK,"lpd",+$$^I("ilpu"))),"|",1) 0
+ Q:$G(^DSCN(SK,"tp"))'=2 +$G(^("cn",0))
+ S DTM=$O(^PDSC(NI,DT_","_($P(DTM,",",2)+1)),-1)
+ S:DTM'="" DTM=^PDSC(NI,DTM)
+ Q:DTM="" 0
+ Q:$G(^cfg("discount","tgr")) $P(DTM,"|",1)+$P(DTM,"|",2)
+ Q $S($P(DTM,"|",1)>$P(DTM,"|",2):$P(DTM,"|",1),1:$P(DTM,"|",2))
+GETACC(NI,DTM) ; Получить значение накопительной скидки на дату
+ S DTM=$O(^PDSC(NI,+DTM_","_($P(DTM,",",2)+1)),-1)
+ S:DTM'="" DTM=^PDSC(NI,DTM)
+ Q:DTM="" 0
+ Q:$G(^cfg("discount","tgr")) $P(DTM,"|",1)+$P(DTM,"|",2)
+ Q $S($P(DTM,"|",1)>$P(DTM,"|",2):$P(DTM,"|",1),1:$P(DTM,"|",2))
+GETID(NI,DGN,DT,MODE) ; Получить ID скидки
+ ; MODE - 0/1/2=все скидки/только пациента/только договора
+ N SK,X
+ S MODE=+$G(MODE)
+ S:$G(DT)="" DT=+$H
+ S SK=$S(MODE=2:"",1:$$GET^IPAC(NI,"skd",DT))
+ Q:SK'="" SK Q:MODE=1 SK
+ S DGN=$G(DGN)
+ S DGN=$S(DGN="":$$GET^IPAC(NI,"stc",DT),1:DGN)
+ I $G(^cfg("dscn","cskd-ofor"))'="",$$FLinFL^TXTU(^cfg("dscn","cskd-ofor"),$$GET^IPAC(NI,"ofor",DT)) Q "" ; not used
+ S SK=$$GET^IINSC(DGN,"cskd",DT)
+ Q:SK="" ""
+ S X=$$GET^IINSC(DGN,"skdprog",DT) Q:X="" SK
+ S:'$$FLinFL^TXTU($$GET^IPAC(NI,"prog"_$$PIDX^IPAC(NI,DGN,DT)),X) SK=""
+ Q SK
+CLRACC(NI) ; Очистить накопительную скидку
+ q:'$D(^PDSC(NI))
+ K ^PDSC(NI)
+ D KGL^IEXCH("^PDSC",NI)
+ Q
+IsTAG(ID,TAGS) ; Проверить соответствие тегов
+ S TAGS=$TR(TAGS," ","|")
+ Q $$FLinFL^TXTU($TR($G(^DSCN(ID,"tags"))," ","|"),TAGS)
+MOV(FNIB,TNIB) ; Move from patient FNIB to TNIB
+ M ^PDSC(TNIB)=^PDSC(FNIB)
+ K ^PDSC(FNIB)
+ D GL^IEXCH("^PDSC",TNIB)
+ D KGL^IEXCH("^PDSC",FNIB)
+ D REF(TNIB,$$GET^IPAC(TNIB,"stc"))
+ Q
+WXCH(NI) ; Write - exchange
+ Q:NI=""  N GL S GL("D")="^PDSC("_NI
+ D S^XGUNET("GL","exp.nb-data")
+ Q
+RXCH ; Read - exchange
+ D R^XGUNET("hpar")
+ Q

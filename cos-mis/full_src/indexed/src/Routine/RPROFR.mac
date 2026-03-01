@@ -1,0 +1,193 @@
+RPROFR ; Отчетность и документы профосмотров [ 05/09/2021  3:24 PM ]
+ZA(DS,DE,TPX,MOD,TXT,DGN,WRK,SPSX) 
+ ; TPX - тип (проф/лмк/ФМС/дисп)
+ ; MOD - новые/вработе/заверш
+ ; TXT - fio или nib
+ ; SPSX - номер списка
+ N NI,DT,FIO,PL,R,CRT,BC,W,SL,RR,POL,V1,V2,VR1,VR2,VN1,VN2,OKL,I,M,MR,U,RRU,MRU,MRF
+ N J,TAB1,TAB2,TAB3,TABP2,TABP3,TABP4,TABP5,TABP6,TBD
+ N CM,CF,CC,CNI
+ D OWF^RWU(".xml"),W^RWU(^PP(0,1)_"<streport><data>")
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),TXT=$$UL^TXTU($$WD^TXTU(TXT))
+ 
+ S I=+$G(^MN("profres"))
+ S R="" F  S R=$O(^MN(I,R)) Q:R=""  S:$P($G(^MN(I,R)),"|",2) OKL(R)=1
+ 
+ S I=+$G(^MN("profvrres"))
+ S R="" F  S R=$O(^MN(I,R)) Q:R=""  S TAB1(R,1)=0,TAB1(R,2)=0
+ 
+ S (V1,V2,VR1,VR2,VN1,VN2)=0,CNI=""
+ S NI="" F  S NI=$O(^PROFP(NI)) Q:NI=""  D
+ .S PL=$S($D(^PROFP(NI,"vf29")):"vf29",1:"vf")
+ .S DT=DS-1 F  S DT=$O(^PROFP(NI,PL,DT)) Q:DT=""!(DT>DE)  D
+ ..I MOD=1,$D(^PROFP(NI,"res",DT)) Q  
+ ..I MOD>1,MOD<10,'$D(^PROFP(NI,"res",DT)) Q  ; TODO
+ ..I MOD=11,'$D(^PROFPL(NI,"prnr",DT)) Q  
+ ..I MOD=12,$D(^PROFPL(NI,"prnr",DT)) Q 
+ ..S RR=$G(^PROFP(NI,"res",DT)) Q:RR="" 
+ ..I DGN'="",$$GET^IPAC(NI,"stc",DT)'=DGN Q
+ ..I WRK'="",$$GET^IPAC(NI,"work",DT)'=WRK Q 
+ ..S SL=$$GET^IPAC(NI,"pspisidx",DT)
+ ..I SPSX'="",$S(SPSX="-":SL'="",1:SPSX'=SL) Q  
+ ..S M=+$P(RR,"|",1),MR=+$G(OKL(M))
+ ..S POL=$$GET^IPAC(NI,"pol",DT)
+ ..S V1=V1+1
+ ..I POL=2 S V2=V2+1
+ ..I MR S VR1=VR1+1 I POL=2 S VR2=VR2+1
+ ..I 'M S VN1=VN1+1 I POL=2 S VN2=VN2+1
+ ..;I MR S TAB1(M)=$G(TAB1(M))+1
+ ..I 'M S TABP2(NI)=DT
+ ..I M,'MR S TABP3(NI)=M_"|"_DT
+ ..S MRF="",CNI=NI
+ ..S U="" F  S U=$O(^PROFP(NI,"n",DT,U)) Q:U=""  D
+ ...S RRU=^PROFP(NI,"n",DT,U),MRU=$P(RRU,"|",8)
+ ...S:MRU&(MRF="") MRF=MRU
+ ...I $G(^PROFV("u302",U,"t"))="p" S TAB2(U,1)=$G(TAB2(U,1))+1 S:MRU TAB2(U,2)=$G(TAB2(U,2))+1
+ ...I $G(^PROFV("u302",U,"t"))="i" S TAB3(U,1)=$G(TAB3(U,1))+1 S:MRU TAB3(U,2)=$G(TAB3(U,2))+1
+ ...S MRF=MRU
+ ...I MRF,'$D(TBD(NI,MRF)) S TBD(NI,MRF)="",TAB1(MRF,1)=$G(TAB1(MRF,1))+1 I POL=2 S TAB1(MRF,2)=$G(TAB1(MRF,2))+1
+ S CM=V1,CF=V2
+ S CC=$$getpcnt^NPROF(CNI,DE)
+ S:CC'="" CM=$P(CC,"|",1),CF=$P(CC,"|",3)
+ 
+ D WTAG^RWU("v11",CM)
+ D WTAG^RWU("v12",CF)
+ 
+ D WTAG^RWU("v31",V1)
+ D WTAG^RWU("v32",V2)
+ 
+ D WTAG^RWU("v41",V1)
+ D WTAG^RWU("v42",V2)
+ 
+ ; завершили
+ D WTAG^RWU("v51",VR1)
+ D WTAG^RWU("v52",VR2)
+ 
+ ; процент охвата
+ D WTAG^RWU("v61",$S(V1:+$J(100*VR1/V1,"",2),1:0))
+ D WTAG^RWU("v62",$S(V2:+$J(100*VR2/V2,"",2),1:0))
+ 
+ ; не завершили
+ D WTAG^RWU("v71",VN1)
+ D WTAG^RWU("v72",VN2)
+ 
+ ; не прошли
+ D WTAG^RWU("v81",V1-VR1)
+ D WTAG^RWU("v82",V2-VR2)
+ 
+ ; TODO TABP1
+ I $D(TAB1) D
+ .S (J,RR)="" F  S J=$O(TAB1(J)) Q:J=""  S RR=$S(RR="":"",1:RR_CR)_$$NAME^ISPRAV("profvrres",J)_"|"_$G(TAB1(J,1))_"|"_$G(TAB1(J,2))
+ .D WTAG^RWU("tab1",RR)
+ 
+ I 0,$D(TAB2) D
+ .S (U,RR)="",J=1 F  S U=$O(TAB2(U)) Q:U=""  S V1=$G(TAB2(U,1)),V2=$G(TAB2(U,2)),RR=$S(RR="":"",1:RR_CR)_J_"|"_$G(^PROFV("u302",U))_"|"_V1_"|"_V2_"|"_$S(V1:+$J(100*V2/V1,"",2),1:0),J=J+1
+ .D WTAG^RWU("tab2",RR)
+ 
+ 
+ I 0,$D(TAB3) D
+ .S (U,RR)="",J=1 F  S U=$O(TAB3(U)) Q:U=""  S V1=$G(TAB3(U,1)),V2=$G(TAB3(U,2)),RR=$S(RR="":"",1:RR_CR)_J_"|"_$G(^PROFV("u302",U))_"|"_V1_"|"_V2_"|"_$S(V1:+$J(100*V2/V1,"",2),1:0),J=J+1
+ .D WTAG^RWU("tab3",RR)
+ 
+ I $D(TABP2) D
+ .S (NI,RR)="",J=1 F  S NI=$O(TABP2(NI)) Q:NI=""  S RR=$S(RR="":"",1:RR_CR)_J_"|"_$$FIO^IPAC(NI)_"|"_$G(^PROFP(NI,"depart",TABP2(NI))),J=J+1
+ .D WTAG^RWU("tabp2",CR_"|"_CR_RR)
+ 
+ I $D(TABP3) D
+ .S (NI,RR)="",J=1 F  S NI=$O(TABP3(NI)) Q:NI=""  D
+ ..S M=TABP3(NI),DT=$P(M,"|",2),M=$P(M,"|",1)
+ ..S RR=$S(RR="":"",1:RR_CR)_J_"|"_$$FIO^IPAC(NI)_"|"_$G(^PROFP(NI,"depart",DT))_"|"_$$NAME^ISPRAV("profres",M),J=J+1
+ .D WTAG^RWU("tabp3",CR_"|"_CR_RR)
+ 
+ 
+ D WTAGC^RWU("work",$$NAME^IINSC(DGN))
+ D WTAGC^RWU("wcontact",$$GET^IINSC(DGN,"fioo",DE))
+ D WTAG^RWU("dt",$$DT^DTUTL(DE))
+ 
+ D W^RWU("</data></streport>"),C^RWU
+ Q
+ZAL1(DS,DE,TPX,MOD,TXT,DGN,WRK,SPSX) ; list 1
+ ; TPX - тип (проф/лмк/ФМС/дисп)
+ ; MOD - новые/вработе/заверш
+ ; TXT - fio или nib
+ ; SPSX - номер списка
+ N NI,DT,FIO,PL,R,CRT,BC,W,SL,RR,POL,V1,V2,OKL,I,M,MR,U,RRU,MRU,MRF
+ N J,RR
+ D OWF^RWU(".xml"),W^RWU(^PP(0,1)_"<streport><data>")
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),TXT=$$UL^TXTU($$WD^TXTU(TXT))
+ 
+ S I=+$G(^MN("profres"))
+ S R="" F  S R=$O(^MN(I,R)) Q:R=""  S:$P($G(^MN(I,R)),"|",2) OKL(R)=1
+ 
+ S I=+$G(^MN("profvrres"))
+ S R="" F  S R=$O(^MN(I,R)) Q:R=""  S TAB1(R,1)=0,TAB1(R,2)=0
+ 
+ D W^RWU("<tab>||||"_CR)
+ 
+ S (V1,V2,VR1,VR2,VN1,VN2)=0,JJ=1
+ S NI="" F  S NI=$O(^PROFP(NI)) Q:NI=""  D
+ .S PL=$S($D(^PROFP(NI,"vf29")):"vf29",1:"vf")
+ .S DT=DS-1 F  S DT=$O(^PROFP(NI,PL,DT)) Q:DT=""!(DT>DE)  D
+ ..I MOD=1,$D(^PROFP(NI,"res",DT)) Q  
+ ..I MOD>1,MOD<10,'$D(^PROFP(NI,"res",DT)) Q  ; TODO
+ ..I MOD=11,'$D(^PROFPL(NI,"prnr",DT)) Q  
+ ..I MOD=12,$D(^PROFPL(NI,"prnr",DT)) Q 
+ ..S RR=$G(^PROFP(NI,"res",DT)) Q:RR="" 
+ ..I DGN'="",$$GET^IPAC(NI,"stc",DT)'=DGN Q
+ ..I WRK'="",$$GET^IPAC(NI,"work",DT)'=WRK Q 
+ ..S SL=$$GET^IPAC(NI,"pspisidx",DT)
+ ..I SPSX'="",$S(SPSX="-":SL'="",1:SPSX'=SL) Q  
+ ..S M=+$P(RR,"|",1),MR=+$G(OKL(M))
+ ..Q:'M  Q:'MR  
+ ..;D WC^RWU(CR_JJ_"|"_$$FIO^IPAC(NI)_"|"_$$GETE^IPAC(NI,"pol")_"|"_$$datar^NPROF(NI)_"|"_$G(^PROFP(NI,"depart",DT))_"|"_$G(^PROFP(NI,"workd",DT))_"|"_$$VFLST^IPROFVR(NI,DT))
+ ..S RR="",U="" F  S U=$O(^PROFP(NI,"n",DT,U)) Q:U=""  D
+ ...S RRU=^PROFP(NI,"n",DT,U),MRU=+$P(RRU,"|",8)
+ ...S:MRU>0 $P(RR,"|",MRU)="V"
+ ..S R=$$FIO^IPAC(NI)_", "_$E($$GETE^IPAC(NI,"pol"))_", "_$$datar^NPROF(NI)_"|"
+ ..S R=R_$$GET^IPROF(NI,"depart",DT)_", "_$$GET^IPROF(NI,"workd",DT)_"|"
+ ..S R=R_$$VFLST^IPROFVR(NI,DT)_"|"
+ ..S V1=$G(^PROFP(NI,"staj",DT))
+ ..S R=R_$S(V1:$$AGE^DTUTL(V1,+$H),1:"")_"|"
+ ..S R=R_$$NAME^ISPRAV("profres",M)_$S($P(RR,"|",8)="":"",1:", "_$P(RR,"|",8))
+ ..D WC^RWU(CR_JJ_"|"_R_"|"_RR)
+ ..S JJ=JJ+1
+ 
+ D W^RWU("</tab>")
+ 
+ D WTAGC^RWU("work",$$NAME^IINSC(DGN))
+ D WTAGC^RWU("wcontact",$$GET^IINSC(DGN,"fioo",DE))
+ D WTAG^RWU("dt",$$DT^DTUTL(DE))
+ 
+ D W^RWU("</data></streport>"),C^RWU
+ Q
+LMKK(DS,DE,TPX,MOD,TXT,DGN,WRK,SPSX) 
+ ; TPX - тип (проф/лмк/ФМС/дисп)
+ ; MOD - новые/вработе/заверш
+ ; TXT - fio или nib
+ ; SPSX - номер списка
+ N NI,DT,FIO,PL,R,CRT,BC,W,SL,V1,V2,V3,TP
+ D OWF^RWU(".xml"),W^RWU(^PP(0,1)_"<streport><data>")
+ S (V1,V2,V3)=0
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),TXT=$$UL^TXTU($$WD^TXTU(TXT))
+ D WTAG^RWU("dt",$$DT^DTUTL(DS))
+ S NI="" F  S NI=$O(^PROFP(NI)) Q:NI=""  D
+ .I TXT'="",+TXT=TXT,TXT'=NI Q
+ .S PL="lmk"
+ .S DT=DS-1 F  S DT=$O(^PROFP(NI,PL,DT)) Q:DT=""!(DT>DE)  D
+ ..I MOD=1,'$D(^PROFP(NI,"res",DT)) Q
+ ..I MOD>1,$D(^PROFP(NI,"res",DT)) Q  ; TODO
+ ..I DGN'="",$$GET^IPAC(NI,"stc",DT)'=DGN Q
+ ..I WRK'="",$$GET^IPAC(NI,"work",DT)'=WRK Q
+ ..S SL=$$GET^IPAC(NI,"pspisidx",DT)
+ ..I SPSX'="",$S(SPSX="-":SL'="",1:SPSX'=SL) Q  
+ ..S FIO=$$FIO^IPAC(NI)
+ ..I TXT'="",+TXT'=TXT,$$UL^TXTU(FIO)'[TXT Q 
+ ..S TP=$G(^PROFP(NI,"lmkp",DT)) Q:TP="" 
+ ..S:$P(TP,".",1)=1 V1=V1+1
+ ..S:$P(TP,".",1)=2 V2=V2+1
+ ..S:TP=5 V3=V3+1
+ D WTAG^RWU("val1",V1)
+ D WTAG^RWU("val2",V2)
+ D WTAG^RWU("val3",V3)
+ D W^RWU("</data></streport>"),C^RWU
+ Q

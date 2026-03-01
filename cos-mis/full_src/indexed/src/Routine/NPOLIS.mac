@@ -1,0 +1,310 @@
+NPOLIS ; Купля-продажа полисов мед. страхования [ 08/22/2023  0:23 AM ]
+SN ; Сохранить новый
+ N NEWW S NEWW=1 G S1
+S ; Сохранить существующий
+ N NEWW S NEWW=0
+S1 D ORH^RWU
+ N %J,A K XML,XMLR
+ F %J=1:1 S A=$$WD^TXTU($$R13^RWU) Q:%IFN["Z"  D XML^YIXMLRR
+ D CR^RWU
+ D W
+ Q
+W ; Запись
+ N NIB,PLS,DGN,NB,FR,PL,X S NB="nb_console",FR="regpolis"
+ S NIB=$G(XML(NB,FR,"nib")) K XML(NB,FR,"nib")
+ S PLS=$G(XML(NB,FR,"polis")) K XML(NB,FR,"polis")
+ S DGN=$G(XML(NB,FR,"stc"))
+ S X=$G(XML(NB,FR,"df"))
+ ; TODO - вторичные дог.
+ D:$L(X) 
+ .S X=$$DI^DTUTL(X),XML(NB,FR,"df")=X,Y=X+$G(XML(NB,FR,"dcnt"))-1
+ .D CLRFROM^IPAC(NIB,"dog_from",X,Y),CLRFROM^IPAC(NIB,"dog_to",X,Y)
+ .D SET^IPAC(NIB,"dog_from",X,X),SET^IPAC(NIB,"dog_to",X,Y,1)
+ .D WLOG^IPAC(NIB,X,$H)
+ S PL=$G(XML(NB,FR,"dofor")) S:$L(PL) XML(NB,FR,"dofor")=$$DI^DTUTL(PL)
+ D:NEWW=1 CREA^IBILL(NIB)
+ F PL="agent","agent0" S:'$D(XML(NB,FR,PL)) XML(NB,FR,PL)="" ; FIX, YIXMLRR dont saving zero values
+ S PL="" F  S PL=$O(XML(NB,FR,PL)) Q:PL=""  D SET^IPOLIS(NIB,PLS,PL,$G(XML(NB,FR,PL)))
+ D MKIDX^IPOLIS(PLS,NIB)
+ Q
+LPAC(NIB) ; Загрузить по N истории
+ Q:NIB=""  Q:'$D(^BTPL(NIB)) 
+ N P,A S (A,P)=""
+ F  S P=$O(^BTPL(NIB,P)) Q:P=""  S:$L(A) A=A_CR S A=A_P_"|"_P
+ D MSG^RWU(A)
+ Q
+LPLS(POLIS) ; Загрузить по полису
+ G:POLIS="" LPLSER
+ S POLIS=$$WD^TXTU(POLIS)
+ N NIB,PLS,TZR,I,X
+ S NIB=$$CHECK^IPOLIS(POLIS) G:NIB=0 LPLSER
+ M TZR=^BTPL($C(9)_"t")
+ D OWF^RWU(".XMLB"),W^RWU($G(^PP(0,2))_"<regpolis>")
+ D WTAGD^RWU("deposit",$$NOW^IBILL(NIB))
+ D WTAGDC^RWU("fio",$$FIO^IPAC(NIB))
+ D WTAGD^RWU("nib",NIB)
+ D WTAGC^RWU("paylst",$$PAYLSTs(NIB,POLIS,1))
+ K A,TZR("sum"),TZR("paylst")
+ S I=""
+ F  S I=$O(TZR(I)) Q:I=""  S X=$$GET^IPOLIS(NIB,POLIS,I) D WTAGDC^RWU(I,$S(I="df"!(I="dofor"):$$DT^DTUTL(X),1:X))
+ D W^RWU("</regpolis></nb_console>"),C^RWU
+ Q
+LPLSER D MSG^RWU(^PP(0,2)_"<regpolis><polis data=""""></regpolis></nb_console>",".xmlb")
+ Q
+LST ; Таблица неоплаченных
+ Q
+PAY(NIB,POLIS,SUM) ; Оплата полиса
+ S POLIS=$$WD^TXTU(POLIS)
+ S A=$$ASUMM^IPOLIS(NIB,POLIS,SUM)
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<regpolis>")
+ D WTAGD^RWU("deposit",$$NOW^IBILL(NIB))
+ D WTAGD^RWU("summ",$$CSUMM^IPOLIS(NIB,POLIS))
+ D WTAG^RWU("paylst",$$PAYLSTs(NIB,POLIS,1))
+ D W^RWU("</regpolis></nb_console>"),C^RWU
+ Q
+PAYLSTs(NIB,POLIS,IDX) ; Список платежей по абонементу (системно)
+ ; IDX - с индексом
+ N PLS,TZR,CDT,I,X,PP,S,SS,PPL
+ M TZR=^BTPL($C(9)_"t")
+ S PP=$$GET^IPOLIS(NIB,POLIS,"pp")
+ D:PP'=""
+ .S SS=0,I=$L(PP,"|")
+ .F I=1:1:$L(PP,"|") S X=$P(PP,"|",I),S=$P(X,":",1),X=$P(X,":",2),SS=SS+S,PPL(SS)=S_"|"_X
+ S I=$G(TZR("sum")),(A,CDT)="",SS=0
+ I $L(I) F  S CDT=$O(^BTPL(NIB,POLIS,I,CDT)) Q:CDT=""  S X=$G(^(CDT)),S=$P(X,"|",1),SS=SS+S,A=$S(A="":"",1:A_CR)_$S(IDX:CDT_"|",1:"")_S_" - "_$$DTM^DTUTL(CDT)
+ S S=SS
+ F  S SS=$O(PPL(SS)) Q:SS=""  S X=PPL(SS),A=$S(A="":"",1:A_CR)_$S(IDX:"|",1:"")_"К оплате "_$$DT2^DTUTL($P(X,"|",2))_" - "_($P(X,"|",1)-S),S=0
+ Q A
+PAYVARs(NIB,POLIS,VAR) ; Список платежей по абонементу (системно)
+ N PLS,TZR,CDT,I,X,PP,S,SS,PPL,SI
+ M TZR=^BTPL($C(9)_"t")
+ S PP=$$GET^IPOLIS(NIB,POLIS,"pp")
+ D:PP'=""
+ .S SS=0,I=$L(PP,"|")
+ .F I=1:1:$L(PP,"|") S X=$P(PP,"|",I),S=$P(X,":",1),X=$P(X,":",2),SS=SS+S,PPL(SS)=S_"|"_X
+ S I=$G(TZR("sum")),(A,CDT)="",SS=0
+ I $L(I) F  S CDT=$O(^BTPL(NIB,POLIS,I,CDT)) Q:CDT=""  S X=$G(^(CDT)),S=$P(X,"|",1),SS=SS+S,SI=+$O(PPL(SS-1)),PPL(SI,CDT)=S
+ ;S S=SS
+ ;F  S SS=$O(PPL(SS)) Q:SS=""  S X=PPL(SS),A=$S(A="":"",1:A_CR)_$S(IDX:"|",1:"")_"К оплате "_$$DT2^DTUTL($P(X,"|",2))_" - "_($P(X,"|",1)-S),S=0
+ K @VAR M @VAR=PPL
+ Q
+PAYP(NIB,POLIS,SUM) 
+ S POLIS=$$WD^TXTU(POLIS)
+ D PAYP^IPOLIS(NIB,POLIS,SUM)
+ G PAYL1
+PAYL(NIB,POLIS) 
+ S POLIS=$$WD^TXTU(POLIS)
+PAYL1 D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<paypolis>")
+ D WTAGD^RWU("deposit",$$NOW^IBILL(NIB))
+ D WTAGD^RWU("summ",$$CSUMM^IPOLIS(NIB,POLIS))
+ D WTAGD^RWU("price",+$$GET^IPOLIS(NIB,POLIS,"price"))
+ D WTAGC^RWU("lst",$$PAYLSTs(NIB,POLIS,0))
+ D W^RWU("</paypolis></nb_console>"),C^RWU
+ Q
+DOEND(NIB,POLIS) ; "Завершить" абонемент
+ S NIB=$$DOEND^IPOLIS(NIB,POLIS,+$H)
+ D MSG^RWU($S('NIB:"Завершение абонемента невозможно.",1:""))
+ Q
+IXML ; Import from XML and export to form
+ N XML,XMLR,L,A,%J
+ D ORH^RWU S A=""
+ F %J=1:1 S A=A_$$WD^TXTU($$R13^RWU) Q:%IFN["Z"  
+ D CR^RWU
+ S A="<xml>"_$P(A,"<xml>",2),A=$P(A,"</xml>",1)_"</xml>",A=$TR(A,CR,"")
+ S %J=1 D XML^YIXMLRR K A
+ S XML("xml","AgreementDate")=$$REEDT($G(XML("xml","AgreementDate")))
+ S XML("xml","Birthday")=$$REEDT($G(XML("xml","Birthday")))
+ S XML("xml","PeriodStart")=$$REEDT($G(XML("xml","PeriodStart")))
+ S XML("xml","iname")=$G(XML("xml","Name")) K XML("xml","Name")
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<impolis>")
+ S A="" F  S A=$O(XML("xml",A)) Q:A=""  D WTAGDC^RWU($$UL^TXTU(A),$G(XML("xml",A)))
+ D W^RWU("</impolis></nb_console>"),C^RWU
+ Q
+ISXML ; Import and save XML
+ N XML,XMLR,%J,P,PT,XR,NIB,NS,NE,X,POLIS,NB
+ D ORH^RWU
+ F %J=1:1 S A=$$TRIM^TXTU($$R^RWU) Q:%IFN["Z"  D XML^YIXMLRR
+ D CR^RWU
+ S P="impolis",PT="patients"
+ S NS=$G(^cfg("pspis-start")),NE=$G(^cfg("pspis-end"))
+ S:NS="" NS=50000 S:NE="" NE=299999
+ I $G(XML("nb_console",P,"agreementnumber"))=""!($G(XML("nb_console",P,"surname"))="")!($G(XML("nb_console",P,"periodstart"))="") D MSG^RWU(^PP(0,2)_"<impolis><msg>Ошибка импорта</msg><impolis>",".xmlb") Q
+ M XR=XML("nb_console") K XML
+ S NMP=$$WD^TXTU($G(XR(P,"agreementnumber"))),NIB=$$CHECK^IPOLIS(NMP)
+ I NIB'=0 D MSG^RWU(^PP(0,2)_"<impolis><msg>Уже зарегистрирован</msg><impolis>",".xmlb") Q
+ S XML(PT,"ofor")=1
+ S XML(PT,"fiof")=$G(XR(P,"surname"))
+ S XML(PT,"fioi")=$G(XR(P,"iname"))
+ S XML(PT,"fioo")=$G(XR(P,"midname"))
+ S XML(PT,"datar")=$G(XR(P,"birthday"))
+ S X=$E($$LU^TXTU($$WD^TXTU($G(XR(P,"sex")))),1)
+ S XML(PT,"pol")=$S((X="М")!(X=1):1,(X="Ж")!(X=2):2)
+ S XML(PT,"stc")=$G(^cfg("polis-reg-stc"))
+ S XML(PT,"menj")=$G(XR(P,"agent"))
+ S XML(PT,"polis")=$G(XR(P,"agreementnumber"))
+ S XML(PT,"savedate")=$$DT^DTUTL(+$H)
+ S XML(PT,"hist")=$$NEW^IPAC(NS,NE)
+ D W^YIPACN K XML
+ S NIB=$$CHECK^IPOLIS(NMP)
+ I NIB=0 D MSG^RWU(^PP(0,2)_"<impolis><msg>Регистрация не удалась</msg><impolis>",".xmlb") Q
+ S X=+$G(XR(P,"paidprice"))
+ D SET^IPOLIS(NIB,NMP,"dofor",$$DI^DTUTL($G(XR(P,"agreementdate"))))
+ D SET^IPOLIS(NIB,NMP,"df",$$DI^DTUTL($G(XR(P,"periodstart"))))
+ D SET^IPOLIS(NIB,NMP,"dcnt",365)
+ D SET^IPOLIS(NIB,NMP,"price",+$G(XR(P,"fullprice")))
+ D SET^IPOLIS(NIB,NMP,"branch",$$WD^TXTU($G(XR(P,"branch"))))
+ D SET^IPOLIS(NIB,NMP,"agent",$$WD^TXTU($G(XR(P,"agent"))))
+ D SET^IPOLIS(NIB,NMP,"external",1)
+ S:X>0 A=$$ASUMM^IPOLIS(NIB,NMP,X,1) ; in credit
+ D MSG^RWU(^PP(0,2)_"<impolis><msg>OK, Пациент N "_NIB_"</msg><impolis>",".xmlb")
+ Q
+REEDT(X) 
+ Q $$DT^DTUTL($$DI^DTUTL(X))
+LSTP(NIB) ; Список для пациента
+ N LST,I,R,PL,C,A,D,X
+ D OWF^RWU(".txt")
+ S PL="",I=1 F  S PL=$O(^BTPL(NIB,PL)) Q:PL=""  S LST($$GET^IPOLIS(NIB,PL,"dofor")_"|"_I)=PL_"|"_$$DEBTPL^IPOLIS(NIB,PL)_"|"_$$WUSERD^IPOLIS(NIB,PL,0),I=I+1
+ S (C,X)=""
+ F  S X=$O(LST(X),-1) Q:X=""  D
+ .S R=LST(X),I=$P(X,"|",1),PL=$P(R,"|",1)
+ .S A=PL_"|"_PL
+ .S A=A_$S(I="":"",1:" от "_$$DT^DTUTL(I))_$S($P(R,"|",2):" к оплате "_$P(R,"|",2),1:"")
+ .S A=A_", "_$$FIOSH^NUSER($P(R,"|",4))
+ .S I=$$GET^IPOLIS(NIB,PL,"tp")
+ .S:I'="" A=A_", "_$$NAME^NTPOLIS(I)
+ .S I=$$GET^IPOLIS(NIB,PL,"koef")
+ .S:I'="" A=A_", Коэф. "_I
+ .S I=$$GET^IPOLIS(NIB,PL,"skd")
+ .S:I'="" A=A_", Скидка "_I_"%"
+ .S I=$P(R,"|",3)
+ .S:I'="" A=A_", Созд. "_$$DTM^DTUTL(I)
+ .S I=$$GET^IPOLIS(NIB,PL,"df")
+ .I I'="" S I=I+$$GET^IPOLIS(NIB,PL,"dcnt")-1 S:+$H>I A=A_", Завершен"
+ .I '$$GET^IPOLIS(NIB,PL,"activate") S A=A_", не активирован"
+ .D WC^RWU(C_A) S C=CR
+ D C^RWU
+ Q
+DELP(NIB,POLIS) ; Удалить по пациенту
+ S POLIS=$$WD^TXTU(POLIS)
+ I '$$LCL^NUSER("polis","delall"),$$CSUMM^IPOLIS(NIB,POLIS) d MSG^RWU("Абонемент оплачен") Q
+ D DEL^IPOLIS(NIB,POLIS)
+ Q
+DELPAY(NIB,POLIS,KEY) ; Удалить платеж
+ I '$$LCL^IUSER("polis","delpay") D MSG^RWU("Удаление платежей запрещено.") Q 
+ S POLIS=$$WD^TXTU(POLIS)
+ D DELPAY^IPOLIS(NIB,POLIS,KEY)
+ Q
+MOVPAY(NIB,POLIS,KEY,NDT) ; Изменить дату платежа
+ I '$$LCL^IUSER("polis","movepay") D MSG^RWU("Измеение даты платежа запрещено.") Q
+ S NDT=$$DIH^DTUTL(NDT),POLIS=$$WD^TXTU(POLIS)
+ D MOVPAY^IPOLIS(NIB,POLIS,KEY,NDT)
+ Q
+IPAY ; Импорт абонементов/платежей
+ ; И.б.|альт. и.б.|ФИО|дата рожд|договор|полис|срок с|срок по|программы|сумма|число платежей|платеж 1|дата 1|платеж 2|дата 2|платеж 3|дата 3|платеж 4|дата 4
+ N A,X,N,R,BD,STC,POLIS,DS,DE,DC,MPR,PRIC,P1,D1,P2,D2,TM,PPC
+ D ORH^RWU
+ S TM=$$TI^DTUTL("12:00")
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D:%J>1
+ .S N=$P(A,"|",1)
+ .I N="" S X=$TR($P(A,"|",2)," ","") I X'="" S N=$O(^BTI("anib",X,""))
+ .I N="" S X=$$TRIM^TXTU($P(A,"|",3)),BD=$$DI^DTUTL($P(A,"|",4)) Q:X=""  S N=$$GETNIB^IPACFND($P(X," ",1),$P(X," ",2),$P(X," ",3),BD,"") Q:N=-1 
+ .Q:N=""  
+ .S STC=$P(A,"|",5),POLIS=$P(A,"|",6),MPR=$P(A,"|",9),PRIC=$P(A,"|",10)
+ .S DS=$$DI^DTUTL($P(A,"|",7)),DE=$$DI^DTUTL($P(A,"|",8))
+ .S:DS="" DS=+$H
+ .S DC=DE-DS+1
+ .S:POLIS="" POLIS="P"_"-"_DS_"-"_N
+ .D CREA^IPOLIS(N,POLIS,STC,"","",PRIC)
+ .D SET^IPOLIS(N,POLIS,"dcnt",DC)
+ .D:MPR'="" SET^IPOLIS(N,POLIS,"prog",MPR)
+ .S PPC=$P(A,"|",11) ; число плат.
+ .D:PPC
+ ..S P1=PRIC/PPC,X="",D1=DS,D2=DC\PPC
+ ..F R=1:1:PPC S $P(X,"|",R)=P1_":"_D1,D1=D1+D2
+ ..D SET^IPOLIS(N,POLIS,"pp",X)
+ .F X=0:2:6 D
+ ..S P1=+$TR($P(A,"|",12+X),",","."),D1=$$DI^DTUTL($P(A,"|",13+X))
+ ..Q:'P1
+ ..S:D1="" D1=+$H S D1=D1_","_TM
+ ..D ADD^IBILL(N,D1,P1,1,"","","абонемент")
+ ..S A=$$ASUMM^IPOLIS(N,POLIS,P1,,D1)
+ ..D URESIDX^IBILL(N,"BTPL:"_POLIS,P1)
+ .D ACTIVAT^IPOLIS(N,POLIS,DS)
+ .D:MPR'="" SET^IPAC(N,"prog",DS,MPR,1)
+ D CR^RWU
+ Q
+ACTIVAT(NIB,NMP) ; Принудительная активация полиса
+ I '$$LCL^IUSER("polis","activate") D MSG^RWU($$^T("Недостаточно прав.")) Q 
+ S NMP=$$WD^TXTU(NMP)
+ D ACTIVAT^IPOLIS(NIB,NMP,"",1)
+ Q
+SETTP(NIB,NMP,TP) ; Изменить тип
+ I '$$LCL^IUSER("polis","settype") D MSG^RWU($$^T("Недостаточно прав.")) Q 
+ S NMP=$$WD^TXTU(NMP)
+ D SET^IPOLIS(NIB,NMP,"tp",TP)
+ Q
+SETOW(NIB,NMP,OWNER) ; Изменить автора
+ I '$$LCL^IUSER("polis","setowner") D MSG^RWU($$^T("Недостаточно прав.")) Q
+ S NMP=$$WD^TXTU(NMP)
+ S OWNER=$$USRFKDR^IUSER(OWNER)
+ I OWNER="" D MSG^RWU("Сотрудник не является пользователем.") Q 
+ D SUSER^IPOLIS(NIB,NMP,OWNER)
+ Q
+SETLPU(NIB,NMP,LPU) ; Изменить филиал
+ I '$$LCL^IUSER("polis","setowner") D MSG^RWU($$^T("Недостаточно прав.")) Q
+ Q:LPU=""  Q:$$EXIST^ICONTR(LPU) 
+ S NMP=$$WD^TXTU(NMP)
+ D SLPU^IPOLIS(NIB,NMP,LPU)
+ Q
+HTML(NIB,NMP) ; Вывод информации в HTML
+ N X
+ D MINHDR^IHTML("")
+ D CSS^IHTML
+ D W^RWU(CR_".hdr { background-color: #66CCFF; }")
+ D W^RWU(CR_".right { text-align: right; }")
+ D CSSE^IHTML
+ D W^RWU(CR_"</head><body>")
+ D FLN^IHTML("Пациент:",NIB_" "_$$FIO^IPAC(NIB))
+ D FLN^IHTML("Абонемент № ",NMP_$S($$GET^IPOLIS(NIB,NMP,"activate"):" (активирован)",1:""))
+ S X=$$GET^IPOLIS(NIB,NMP,"tp")
+ D:X'="" W^RWU(CR_"<div>"_$$TAG^TXTU($$NAME^NTPOLIS(X))_"</div>")
+ D W^RWU(CR_"<hr>")
+ D FLN^IHTML("Зарегистрирован:",$$DTM^DTUTL($$WUSERD^IPOLIS(NIB,NMP,0)))
+ D FLN^IHTML("Число дней:",$$GET^IPOLIS(NIB,NMP,"dcnt"))
+ S X=$$GET^IPOLIS(NIB,NMP,"df")
+ D:X'="" FLN^IHTML("Дата начала действия:",$$DT^DTUTL(X))
+ S X=$$GET^IPOLIS(NIB,NMP,"stc")
+ D:X'="" FLN^IHTML("Договор:",$$NAME^IINSC(X))
+ S X=$$GET^IPOLIS(NIB,NMP,"price")
+ D:X'="" FLN^IHTML("Стоимость:",X)
+ S X=$$CSUMM^IPOLIS(NIB,NMP)
+ D:X FLN^IHTML("Оплачено:",X)
+ S X=$$GET^IPOLIS(NIB,NMP,"koef")
+ D:X'="" FLN^IHTML("Коэффициент стоимости:",X)
+ S X=$$GET^IPOLIS(NIB,NMP,"skd")
+ D:X'="" FLN^IHTML("Скидка:",X)
+ S X=$$GET^IPOLIS(NIB,NMP,"fioo")
+ D:X'="" FLN^IHTML("Контактное лицо:",X)
+ S X=$$GET^IPOLIS(NIB,NMP,"contacto")
+ D:X'="" FLN^IHTML("Координаты контактного лица:",X)
+ S X=$$GET^IPOLIS(NIB,NMP,"comm")
+ D:X'="" FLN^IHTML("Примечание:",X)
+ D END^IHTML
+ Q
+REGLCL 
+ K ^LCLI("polis")
+ S ^LCLI("polis")="Абонемент"
+ S ^LCLI("polis","delall")="Удаление оплаченного абонемента"
+ S ^LCLI("polis","skd")="Разрешение/запрет скидок пациента при продаже"
+ S ^LCLI("polis","mskd")="Разрешение/запрет ручных скидок при продаже"
+ S ^LCLI("polis","usprg")="Разрешение/запрет произвольных программ при продаже"
+ S ^LCLI("polis","round")="Округление сумм абонементов"
+ S ^LCLI("polis","posbal")="Продажа только при положительном кассовом балансе"
+ S ^LCLI("polis","delpay")="Разрешить удаление платежей"
+ S ^LCLI("polis","movepay")="Разрешить изменение даты платежа"
+ S ^LCLI("polis","activate")="Разрешить ручную активацию полиса"
+ S ^LCLI("polis","settype")="Разрешить изменение типа"
+ S ^LCLI("polis","seldate")="Выбор даты при продаже"
+ S ^LCLI("polis","setowner")="Разрешить изменение автора"
+ S ^LCLI("polis","autoactive")="Автоматически активировать продаваемые полисы"
+ Q

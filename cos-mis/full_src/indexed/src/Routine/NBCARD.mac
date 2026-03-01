@@ -1,0 +1,362 @@
+NBCARD ; Бонусные карты [ 04/01/2022  1:59 PM ]
+ADD(NIB,NUM,SUM) ; Продать
+ N X,TMK
+ S SUM=$$NNUM^TXTU(SUM)
+ I NUM="" D MSG^RWU("ERR") Q 
+ 
+ I SUM,$$ISPRC^IBCARD(NUM) D MSG^RWU("ERR") Q 
+ D:SUM ADD^IBCARD(NUM,SUM)
+ I 'SUM D  Q:$$IsMSG^RWU() 
+ .S X=$$GET^IBCARD(NUM)
+ .S SUM=$S($P(X,"|",2):$P(X,"|",2),1:$P(X,"|",1))
+ .D:'$$DOPAY^IBCARD(NUM) MSG^RWU("ERR")
+ 
+ I NIB'="" D SUB^IBILL(NIB,$H,SUM,"BC:"_NUM,"TMK") D:$D(TMK) SETPAY^IBCARD(NUM,NIB,TMK)
+ D MSG^RWU("OK")
+ Q
+DEL(NUM) ; Удалить неактивированный
+ Q:NUM=""  Q:'$D(^ML("bcard",NUM))  
+ N P
+ S P=$P($G(^ML("bcard",NUM,"plog")),"|",3)
+ D:P'="" DEL^IBILL($P(P,",",1),$P(P,",",2,3))
+ K ^ML("bcard",NUM)
+ D KGL^IEXCH("^ML","bcard",NUM)
+ Q
+VINIT 
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<addbcc><org1>")
+ D LSTFLsys^YCONTR("",,0,1)
+ D W^RWU("</org1><org2>")
+ D LSTFLsys^YCONTR("",,0,1)
+ D W^RWU("</org2><mark>|"_CR)
+ D LSTs^NSPRAV("bcrmark")
+ D W^RWU("</mark>")
+ D:$$LCL^IUSER("bcard","nosid") W^RWU("<sid1 visible=""no""/><sid2 visible=""no""/>")
+ D W^RWU("</addbcc></nb_console>"),C^RWU
+ Q
+VGEN(TP) ; Сгенерировать новый номер штрихкода
+ N R
+ S TP=$G(TP)
+ S R=$S($$EXIST^IINKR("bcard","tp"_TP):$$GET^IINKR("bcard","tp"_TP),1:$$GET^IINKR("bcard","all"))
+ D MSG^RWU($$LCL^IUSER("bcard","barpref")_R)
+ Q
+chk(CRD) ; Проверить карту на наличие
+ N DD
+ S DD=$O(^BCARD(CRD,+$H+1),-1) Q:DD="" 0
+ Q:$G(^BCARD(CRD,DD,"n"))'="" 0
+ Q 1
+use(CRD,NI) ; Применить карту
+ N DD,R
+ 
+ S DD=$O(^BCARD(CRD,+$H+1),-1) Q:DD="" 0
+ Q:$G(^BCARD(CRD,DD,"n"))'="" 
+ S R=$G(^BCARD(CRD,DD,"f"))
+ S SS=$P(R,"|",3),SK=$P(R,"|",4)
+ Q:SS="" 0
+ 
+ D ADD^IBILL(NI,$H,SS,7,$$KKM^IUSER(),"","","","","") ; TODO - 7
+ s ^BCARD(CRD,DD,"n")=NI,^BCARD(CRD,DD,"h")=$$USRH^IUSER()
+ D GL^IEXCH("^BCARD",CRD,DD)
+ 
+ Q 1
+usl(CRD,VR,DT,OT,ID)      ; Применить карту на услугу
+ N SK,SKD,@$$NEWVAR^IUSL,LP,R,DD,SS
+ 
+ S DD=$O(^BCARD(CRD,+$H+1),-1) Q:DD="" 
+ S R=$G(^BCARD(CRD,DD,"f"))
+ S SS=$P(R,"|",3),SK=$P(R,"|",4)
+ S LP=$$^I("ilpu")
+ 
+ Q:SS'=""  Q:SK="" 
+ D GET^IUSL(VR,DT,OT,ID)
+ S ISTC=$S($G(ISTC)'="":ISTC,1:$$GET^IPAC(NI,"stc",DT))
+ S:'PRC PRC=$$GET^IINSC(ISTC,"price",DT)
+ S U=$O(UL("")) Q:U=""
+ 
+ S SKD=$$CALCID^IDSCN(SK,OT,U,ISTC,PRC,UL(U),LP) 
+ Q:'SKD 
+ D SETSKD^IUSLD(VR,DT,OT,ID,SKD)
+ D SETPLE^IUSL(VR,DT,OT,ID,"cc",CRD)
+ 
+ s ^BCARD(CRD,DD,"n")=NI,^BCARD(CRD,DD,"h")=$$USRH^IUSER()
+ S ^BCARD(CRD,DD,"h",VR_"|"_DT_"|"_OT_"|"_ID)=$H
+ D GL^IEXCH("^BCARD",CRD,DD)
+ Q
+VADD 
+ N %J,A,DT,BAR,R,X,NN,MR
+ N @$$NEWVAR^YIXMLRR()
+ D RBUFH^YIXMLRR(1)
+ S BAR=$$vaf("bar") G:BAR="" VADDe
+ S DT=$$DI^DTUTL($$vaf("dt"))
+ S:DT="" DT=+$H
+ S NN='$D(^BCARD(BAR,DT))
+ S ^BCARD(BAR,DT)=$$vaf("tp")_"|"_$$USRH^IUSER()
+ S R=$$vaf("mark"),MR=R
+ S:R'="" $P(^BCARD(BAR,DT),"|",4)=R
+ S R=$$NNUM^TXTU($$vaf("price"))
+ S X=$$vaf("skd") S:X'="" $P(R,"|",2)=$$NNUM^TXTU(X)
+ S X=$$vaf("summ") S:X'="" $P(R,"|",3)=$$NNUM^TXTU(X)
+ S:R'="" ^BCARD(BAR,DT,"f")=R
+ 
+ S R=$$vaf("org1")
+ S X=$$vaf("staff1") S:X'="" $P(R,"|",2)=X
+ S X=$$vaf("sid1") S:X'="" $P(R,"|",3)=X
+ S:R'="" ^BCARD(BAR,DT,"ag1")=R
+ 
+ S R=$$vaf("org2")
+ S X=$$vaf("staff2") S:X'="" $P(R,"|",2)=X
+ S X=$$vaf("sid2") S:X'="" $P(R,"|",3)=X
+ S:R'="" ^BCARD(BAR,DT,"ag2")=R
+ 
+VADDe 
+ Q:'NN  Q:'MR 
+ Q:'$$GETN^ISPRAV("bcrmark",MR,4)  ; no autoprint
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<addbcc>")
+ D WTAGC^RWU("prn",$$prn(BAR,$$DI^DTUTL($G(DT))))
+ D W^RWU("</addbcc></nb_console>"),C^RWU
+ Q
+vaf(FL) 
+ Q $G(XML("nb_console","addbcc",FL))
+var(FL) 
+ Q $G(XML("nb_console","regbcc",FL))
+VDEL(BAR,DT) ; Удалить код
+ I BAR="" Q 
+ S DT=$$DI^DTUTL($G(DT))
+ S:DT="" DT=+$H
+ S DT=$O(^BCARD(BAR,DT-1),-1) Q:DT="" ""
+ I +$H=DT K ^BCARD(BAR,DT)
+ E  S ^BCARD(BAR,DT)=""
+ D REGL^IEXCH("^BCARD",BAR,DT)
+ Q
+VRINIT 
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<regbcc><org1>")
+ D LSTFLsys^YCONTR("",,0,1)
+ D W^RWU("</org1><org2>")
+ D LSTFLsys^YCONTR("",,0,1)
+ D W^RWU("</org2>")
+ D:$$LCL^IUSER("bcard","nosid") W^RWU("<sid1 visible=""no""/><sid2 visible=""no""/>")
+ D W^RWU("</regbcc></nb_console>"),C^RWU
+ Q
+VLOAD(BAR,FRM) ; Загрузить информацию по сертификату 
+ N DT,R,X
+ S:$G(FRM)="" FRM="regbcc"
+ S DT=$O(^BCARD(BAR,+$H+1),-1) Q:DT=""
+ Q:$G(^BCARD(BAR,DT))=""
+ 
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<"_FRM_">")
+ S R=$G(^BCARD(BAR,DT))
+ D WTAGDC^RWU("dt",$$DT^DTUTL(DT))
+ D WTAGDC^RWU("tp",$P(R,"|",1))
+ D WTAGDC^RWU("mark",$P(R,"|",4))
+ S R=$G(^BCARD(BAR,DT,"f"))
+ D WTAGDC^RWU("price",$P(R,"|",1))
+ D WTAGDC^RWU("skd",$P(R,"|",2))
+ D WTAGDC^RWU("summ",$P(R,"|",3))
+ D WTAGDC^RWU("rsumm",$P(R,"|",4))
+ ;D WTAGDC^RWU("nib",
+ D WTAGDC^RWU("comm",$G(^BCARD(BAR,DT,"c")))
+ S R=$G(^BCARD(BAR,DT,"ag1"))
+ D WTAGDC^RWU("org1",$P(R,"|",1))
+ D WTAGDC^RWU("staff1",$P(R,"|",2))
+ D WTAGDC^RWU("sid1",$P(R,"|",3))
+ S R=$G(^BCARD(BAR,DT,"ag2"))
+ D WTAGDC^RWU("org2",$P(R,"|",1))
+ D WTAGDC^RWU("staff2",$P(R,"|",2))
+ D WTAGDC^RWU("sid2",$P(R,"|",3))
+ D W^RWU("</"_FRM_"></nb_console>"),C^RWU
+ Q
+VAPPL ; Применить сертификат
+ N %J,A,DT,BAR,R,X
+ N @$$NEWVAR^YIXMLRR()
+ D RBUFH^YIXMLRR(1)
+ S BAR=$$var("bar") G:BAR="" VAPPLe
+ S DT=$O(^BCARD(BAR,+$H+1),-1) G:DT="" VAPPLe
+ G:$G(^BCARD(BAR,DT))="" VAPPLe
+ S R=$G(^BCARD(BAR,DT,"f"))
+ S X=$$var("rsumm") S:X'="" $P(R,"|",4)=X
+ S:R'="" ^BCARD(BAR,DT,"f")=R
+ 
+ S ^BCARD(BAR,DT,"n")=$$var("nib")
+ S ^BCARD(BAR,DT,"c")=$$var("comm")
+ 
+ D:$$LCL^IUSER("bcard","naplagc")'=0
+ .S R=$$var("org1")
+ .S X=$$var("staff1") S:X'="" $P(R,"|",2)=X
+ .S X=$$var("sid1") S:X'="" $P(R,"|",3)=X
+ .S:R'="" ^BCARD(BAR,DT,"ag1")=R
+ .S R=$$var("org2")
+ .S X=$$var("staff2") S:X'="" $P(R,"|",2)=X
+ .S X=$$var("sid2") S:X'="" $P(R,"|",3)=X
+ .S:R'="" ^BCARD(BAR,DT,"ag2")=R
+ 
+VAPPLe 
+ Q
+VPRN(BAR,DT) ; Получение формата печати
+ Q:BAR=""
+ D MSG^RWU($$prn(BAR,$$DI^DTUTL($G(DT))))
+ Q
+prn(BAR,DT) ; Системная информация о печати (формат)
+ N TP
+ S:$G(DT)="" DT=+$H
+ S DT=$O(^BCARD(BAR,DT+1),-1) Q:DT=""
+ S TP=$P(^BCARD(BAR,DT),"|",4) Q:TP=""
+ S TP=$$GET^ISPRAV("bcrmark",TP)
+ Q $P(TP,"|",2)_"@"_$TR($P(TP,"|",3),",","|")
+RPT(DS,DE,TSR) ; Отчет по проданным
+ ; TSR - статус сертификата
+ N I,D,R,X,Z,P1,P2
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D OWF^RWU(".txt")
+ D WC^RWU("Сертификат №|Цена|Номинал|Дата|Оператор|Продажа|Срок")
+ S I="" F  S I=$O(^ML("bcard",I)) Q:I=""  D
+ .S P1=^(I),P2=$G(^(I,"prc"))
+ .S:'P2 P2=P1
+ .S R=I_"|"_$TR(P2,".",",")_"|"_$TR(P1,".",","),X=$G(^("log"))
+ .S D=$P(X,"|",2)
+ .I D Q:D<DS  Q:D>DE 
+ .S Z=$G(^("pay"))
+ .I TSR=1,Z=0 Q  
+ .I TSR=2,Z'=0 Q 
+ .D WC^RWU(CR_R_"|"_$$DT^DTUTL(D)_"|"_$$FIOSH^NUSER($P(X,"|",1))_"|"_$S(Z=0:"нет",1:$$DTM^DTUTL($P($G(^ML("bcard",I,"plog")),"|",2)))_"|"_$$DT^DTUTL($G(^ML("bcard",I,"dt"))))
+ D C^RWU
+ Q
+RPTAPL(DS,DE) ; Отчет по проданным
+ N I,D,R,X,P1,P2,O1,O2
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D OWF^RWU(".txt")
+ D WC^RWU("Сертификат №|Цена|Номинал|Продан|Оператор|Оплачен|Применен|Пациент")
+ S I="" F  S I=$O(^ML("bcarda",I)) Q:I=""  D
+ .S P1=^(I),P2=$G(^(I,"prc"))
+ .S:'P2 P2=P1
+ .S X=$G(^("log")),D=$P(X,"|",2)
+ .I D Q:D<DS  Q:D>DE 
+ .S R=I_"|"_$TR(P2,".",",")_"|"_$TR(P1,".",",")
+ .S O1=$P($G(^("plog")),"|",2),O2=$G(^("appl")),N2=$P(O2,"|",3),O2=$P(O2,"|",2)
+ .D WC^RWU(CR_R_"|"_$$DT^DTUTL(D)_"|"_$$FIOSH^NUSER($P(X,"|",1))_"|"_$$DT^DTUTL(O1)_"|"_$$DT^DTUTL(O2)_"|"_N2_" "_$$FIOSH^IPAC(N2))
+ D C^RWU
+ Q
+BCLST(DS,DE,TP) ; Выданные сертификаты за период
+ N ID,DT,R,A,TPL
+ S TPL(1)="Подарочный",TPL(2)="Рекламный",TPL(3)="Скидочная карта"
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D OWF^RWU(".txt")
+ D WC^RWU("Сертификат №|Дата|Тип|Категория|Кто выдал|Стоимость|Скидка|Номинал|Менеджер|Агент|Сумма")
+ S ID="" F  S ID=$O(^BCARD(ID)) Q:ID=""  D
+ .S DT=DS-1 F  S DT=$O(^BCARD(ID,DT)) Q:DT=""!(DT>DE)  D
+ ..S R=^(DT) Q:R="" 
+ ..I TP'="",$P(R,"|",1)'=TP Q 
+ ..S A=ID_"|"_$$DT^DTUTL(DT)_"|"_TPL($P(R,"|",1))
+ ..S A=A_"|"_$S('$P(R,"|",4):"",1:$$NAME^ISPRAV("bcrmark",$P(R,"|",4)))
+ ..S A=A_"|"_$$FIO^IUSER($P(R,"|",2))
+ ..S R=$G(^BCARD(ID,DT,"f"))
+ ..S A=A_"|"_$TR($P(R,"|",1)_"|"_$P(R,"|",2)_"|"_$P(R,"|",3),".",",")
+ ..S R=$G(^BCARD(ID,DT,"ag1"))
+ ..S A=A_"|"_$S($P(R,"|",3)'="":$P(R,"|",3),$$IsFI^ICONTR($P(R,"|",1),DT):$$FIO^IKADRY($P(R,"|",2)),1:$$FIO^IPEOPL($P(R,"|",2)))
+ ..S R=$G(^BCARD(ID,DT,"ag1"))
+ ..S A=A_"|"_$S($P(R,"|",3)'="":$P(R,"|",3),$$IsFI^ICONTR($P(R,"|",1),DT):$$FIO^IKADRY($P(R,"|",2)),1:$$FIO^IPEOPL($P(R,"|",2)))
+ ..S A=A_"|"_$P($G(^BCARD(ID,DT,"f")),"|",4)
+ ..D WC^RWU(CR_A)
+ D C^RWU
+ Q
+fio(ORG,VR,DT) 
+ Q $S($$IsFI^ICONTR(ORG,DT):$$FIO^IKADRY(VR),1:$$FIO^IPEOPL(VR))
+BCBYAG(DS,DE,TP) ; Выданные сертификаты за период
+ N ID,DT,R,A,TPL,KX,S,P,L,NI
+ S TPL(1)="Подарочный",TPL(2)="Рекламный",TPL(3)="Скидочная карта"
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D OWF^RWU(".txt")
+ D WC^RWU("Сотрудник|Организация|Роль|Сертификатов|Лиц|Стоимость|Сумма платежей")
+ K ^BUF($J)
+ S ID="" F  S ID=$O(^BCARD(ID)) Q:ID=""  D
+ .S DT=DS-1 F  S DT=$O(^BCARD(ID,DT)) Q:DT=""!(DT>DE)  D
+ ..S R=^(DT) Q:R="" 
+ ..I TP'="",$P(R,"|",1)'=TP Q 
+ ..S R=$G(^(DT,"f")),S=$P(R,"|",1),P=$P(R,"|",4),NI=$G(^("n"))
+ ..S KX=$G(^BCARD(ID,DT,"ag1"))
+ ..I KX'="" S KX="1|"_KX,R=$G(^BUF($J,KX)),L=0 S:NI'=""&('$D(^(KX,NI))) ^(NI)="",L=1 S ^BUF($J,KX)=($P(R,"|",1)+1)_"|"_($P(R,"|",2)+L)_"|"_($P(R,"|",3)+S)_"|"_($P(R,"|",4)+P)
+ ..S KX=$G(^BCARD(ID,DT,"ag2"))
+ ..I KX'="" S KX="2|"_KX,R=$G(^BUF($J,KX)),L=0 S:NI'=""&('$D(^(KX,NI))) ^(NI)="",L=1 S ^BUF($J,KX)=($P(R,"|",1)+1)_"|"_($P(R,"|",2)+L)_"|"_($P(R,"|",3)+S)_"|"_($P(R,"|",4)+P)
+ S KX="" F  S KX=$O(^BUF($J,KX)) Q:KX=""  D
+ .S R=^(KX)
+ .S A=$S($P(KX,"|",4)'="":$P(KX,"|",4),1:$$fio($P(KX,"|",2),$P(KX,"|",3),DE))
+ .S A=A_"|"_$$NAME^ICONTR($P(KX,"|",2))
+ .S A=A_"|"_$S($P(KX,"|",1)=1:"Менеджер",1:"Агент")
+ .D WC^RWU(CR_A_"|"_R)
+ K ^BUF($J)
+ D C^RWU
+ Q
+AGC(VR,DS,DE,LOGG,TP) ; Получить агентские по сотруднику
+ N ID,DT,R,S,SS,X
+ S SS=0,LOGG=$G(LOGG)
+ S ID="" F  S ID=$O(^BCARD(ID)) Q:ID=""  D
+ .S DT=DS-1 F  S DT=$O(^BCARD(ID,DT)) Q:DT=""!(DT>DE)  D
+ ..S R=$G(^(DT,"f")),S=$P(R,"|",5) Q:'S 
+ ..S R=$S(TP=1:$G(^("ag1")),1:$G(^("ag2"))) Q:R=""
+ ..Q:'$P(R,"|",2)=VR
+ ..S SS=SS+S
+ ..Q:LOGG=""
+ ..S X=$O(@LOGG@(""),-1)+1
+ ..S ^(X)="Сумма по сертификату "_ID_" от "_$$DT^DTUTL(DT)_"|"_S
+ Q SS
+INBC ; Импорт сертификатов
+ ; номер|сумма|цена|<дата>|<срок дней>
+ N A,%J,NUM,SUM,PRC,DT,DC
+ D ORH^RWU
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  D:%J>1
+ .S NUM=$$TRIM^TXTU($P(A,"|",1))
+ .S SUM=$$NNUM^TXTU($P(A,"|",2))
+ .S PRC=$$NNUM^TXTU($P(A,"|",3))
+ .S DT=$$DI^DTUTL($P(A,"|",4))
+ .S DC=$$NNUM^TXTU($P(A,"|",5))
+ .Q:NUM="" 
+ .D ADD^IBCARD(NUM,SUM,PRC,1,DT,DC)
+ D CR^RWU
+ Q
+INCRD ; Импорт карт
+ ; Код|Дата|Процент скидки|Код скидки|Сумма
+ N A,%J,NUM,SUM,PRC,DT,DC
+ D ORH^RWU
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  D:%J>1
+ .S NUM=$$TRIM^TXTU($P(A,"|",1)) Q:NUM="" 
+ .S DT=$$DI^DTUTL($P(A,"|",2)) Q:DT=""
+ .S PRC=$$NNUM^TXTU($P(A,"|",3))
+ .S SUM=$$NNUM^TXTU($P(A,"|",4))
+ .S IDS=$P(A,"|",5) I IDS'="",'$D(^DSCN(IDS)) S IDS=""
+ .I PRC="",SUM="",IDS="" Q 
+ .S ^BCARD(NUM,DT)=3
+ .S ^BCARD(NUM,DT,"f")="|"_PRC_"|"_SUM_"|"_IDS
+ .D GL^IEXCH("^BCARD",NUM,DT)
+ D CR^RWU
+ Q
+IDELCRD ; Удалить неиспользуемую
+ ; Код|Дата
+ N A,%J,NUM,SUM,PRC,DT,DC
+ D ORH^RWU
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  D:%J>1
+ .S NUM=$$TRIM^TXTU($P(A,"|",1)) Q:NUM="" 
+ .S DT=$$DI^DTUTL($P(A,"|",2)) Q:DT="" 
+ .S DT=$O(^BCARD(NUM,DT+1),-1) Q:DT="" 
+ .Q:$G(^BCARD(NUM,DT,"n"))'="" 
+ .K ^BCARD(NUM,DT) D KGL^IEXCH("^BCARD",NUM,DT)
+ D CR^RWU
+ Q
+REGIPROC 
+ S ^IPROC("Касса","Реестры","Активные сертификаты")="RPT_NBCARD,1,3,d,Период продажи с,d,Период продажи по,t@string:0/Все#1/Проданные#2/Созданные,Статус сертификата"
+ S ^IPROC("Касса","Реестры","Проведенные сертификаты")="RPTAPL_NBCARD,1,2,d,Период продажи с,d,Период продажи по"
+ S ^IPROC("Маркетинг","Реестры","Реестр сертификатов")="BCLST_NBCARD,1,3,d,Период выдачи с,d,Период выдачи по,t@string:/Все#1/Подарочный#2/Рекламный#3/Скидочная карта,Вид сертификата"
+ S ^IPROC("Маркетинг","Сводные","Суммы по агентам")="BCBYAG_NBCARD,1,3,d,Период выдачи с,d,Период выдачи по,t@string:/Все#1/Подарочный#2/Рекламный#3/Скидочная карта,Вид сертификата"
+ 
+ S ^IMPROC("Импорт сертификатов пациентов")="INBC_NBCARD()"
+ Q
+REGLCL ;
+ K ^LCLI("bcard")
+ S ^LCLI("bcard")="Сертификаты пациентов"
+ S ^LCLI("bcard","nosid")="Запрет ввода произвольных идентификаторов"
+ S ^LCLI("bcard","barpref")="Префикс штрихкода"
+ S ^LCLI("bcard","naplagc")="Запрет изменения агентов при 'применении' сертификатов"
+ Q
+INITDB ;
+ S ^MN("root","bcrmark")="Категория сертификатов пациентов"
+ S ^MN("root","bcrmark","fname")="Наименование|Шаблон печати|Коорд. X,Y штрихкода|Автопечать"
+ S ^MN("root","bcrmark","ftype")="S|S|S|B"
+ S ^MN("root","bcrmark","fcode")="name|print_pattern|barcode_xy|autoprn"
+ Q

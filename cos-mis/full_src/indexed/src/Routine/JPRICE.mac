@@ -1,0 +1,25 @@
+JPRICE ; Pricelist routines
+EAPI(prc,dt) ; For external API, w. dates
+ S dt=$$DIH^DTUL($G(dt))
+ S:$G(prc)="" prc=$$CORCP^IPRICET("")
+ N code,F,dx,fl,fln,fll,obj,objd,i,l,val
+ s fll="pname:name|cname:shortname|oms:oms_code|rating:rating|grp:group|otd:depart|spec:spec|dsex:gender|ages:min_age|agee:max_age|cdsc:descr|tdsc:tech_descr"
+ s l=$L(fll,"|")
+ ; TODO vr
+ D OWC^RWU(".json")
+ S F="["
+ S code="" F  S code=$O(^CN(code)) Q:code=""  D:$D(^CN(code,prc))
+ .S dx=$O(^CN(code,prc,dt),-1)
+ .s obj={},objd={}
+ .d obj.%Set("code",code)
+ .I dx'="" S dx=dx-1 F  s dx=$O(^CN(code,prc,dx)) Q:dx=""  d objd.%Set($$DTISO^DTUTL(dx),^CN(code,prc,dx))
+ .d obj.%Set("price",objd)
+ .F i=1:1:l s fl=$P(fll,"|",i),fln=$P(fl,":",2),fl=$P(fl,":",1) D
+ ..S objd={},dx=$O(^CN(code,prc,fl,dt),-1)
+ ..S dx=dx-1 F  s dx=$O(^CN(code,prc,fl,dx)) Q:dx=""  D
+ ...s val=^(dx)
+ ...I fl="otd"!(fl="spec") 
+ ...d objd.%Set($$DTISO^DTUTL(dx),val)
+ ..d obj.%Set(fln,objd)
+ D WU^RWU("]"),CU^RWU
+ Q

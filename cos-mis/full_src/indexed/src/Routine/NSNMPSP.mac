@@ -1,0 +1,314 @@
+NSNMPSP ; Справочники СНМП [ 03/21/2012  0:45 AM ]
+LSTNM(NM) ; Вывод справочника по имени
+ N A,I
+ S (A,I)="" F  S I=$O(^EMM(NM,I)) Q:I=""  S A=$S(A="":"",1:A_CR)_I_"|"_$P(^(I),"|",1)
+ D MSG^RWU(A)
+ Q
+TAV ; Auto table
+ N ID,LST,H,A,D
+ S LST(1)="Свободна",LST(2)="На линии",LST(3)="В ремонте",LST(0)=""
+ S H=(+$H)_","_($P($H,",",2)+2)
+ D OWF^RWU(".txt")
+ S ID="" F  S ID=$O(^EAVT(ID)) Q:ID=""  D
+ .S D=$O(^EAVT(ID,"num",H),-1)
+ .S A=CR_ID_"|"_$S(D="":D,1:$G(^EAVT(ID,"num",D)))_"|"
+ .S D=$O(^EAVT(ID,"stat",H),-1)
+ .S A=A_LST($S(D="":0,1:+$G(^EAVT(ID,"stat",D))))_"|"
+ .S D=$O(^EAVT(ID,"road",H),-1)
+ .S A=A_$S(D="":0,1:$G(^EAVT(ID,"road",D)))_"|"
+ .S D=$O(^EAVT(ID,"comm",H),-1)
+ .S A=A_$S(D="":D,1:$G(^EAVT(ID,"comm",D)))
+ .D WC^RWU(A)
+ D C^RWU
+ Q
+GAVT(ID,DTM) ; Get auto num
+ Q:ID="" ""
+ Q:ID="-" "нет"
+ S:'$D(DTM) DTM=$H
+ S DTM=$O(^EAVT(ID,"num",DTM),-1) Q:DTM="" ""
+ Q ^EAVT(ID,"num",DTM)
+FAVLST ; Free auto list
+ D OWF^RWU(".txt")
+ D FAVLSTs
+ D C^RWU
+ Q
+FAVLSTs ; Free auto list (system)
+ N H,CC,ID,D
+ S H=(+$H)_","_($P($H,",",2)+2),CC=""
+ S ID="" F  S ID=$O(^EAVT(ID)) Q:ID=""  D
+ .S D=$O(^EAVT(ID,"stat",H),-1) Q:+$G(^EAVT(ID,"stat",D))'=1 
+ .S D=$O(^EAVT(ID,"num",H),-1) D WC^RWU(CC_$G(^EAVT(ID,"num",D))_"|"_ID)
+ .S CC=CR
+ Q
+NAV(NM) ; Create new auto
+ N X,H
+ S X=$O(^EAVT(""),-1)+1,NM=$$WD^TXTU(NM),H=$H
+ S ^EAVT(X,"num",H)=NM,^EAVT(X,"stat",H)=1,^EAVT(X,"road",H)=0
+ D TAV
+ Q
+SAV(ID,POLE,R) ; Set field in auto
+ G:ID=""!(POLE="") SAVEND G:'$D(^EAVT(ID)) SAVEND
+ S R=$$WD^TXTU(R)
+ D SETAVT^ISNMPSP(ID,POLE,$H,R)
+SAVEND D TAV
+ Q
+INITBR ; Инициализация справочника бригад
+ N I,A
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<bsnmp><shift>")
+ S (I,A)=""
+ F  S I=$O(^EMSH(I)) Q:I=""  S A=$S(A="":"",1:A_CR)_I_"|"_^(I)
+ D WC^RWU(A)
+ D W^RWU("</shift></bsnmp></nb_console>"),C^RWU
+ Q
+TBR ; Бригады
+ N ID,H,D,A,X
+ S H=(+$H)_","_($P($H,",",2)+1),ID=""
+ D OWF^RWU(".txt")
+ F  S ID=$O(^EMGRP(ID)) Q:ID=""  D
+ .S D=$O(^EMGRP(ID,"use",H),-1) Q:D=""  Q:^EMGRP(ID,"use",D)=0 
+ .S A=CR_ID_"|"_$$GETGRP^ISNMPSP(ID,"num",H)_"|"
+ .S D=$$GETGRP^ISNMPSP(ID,"auto",H)
+ .I D="" S D=$$GETGRP^ISNMPSP(ID,"nauto",H) S:D D="-"
+ .S A=A_$S(D="":"",D="-":"Без А/М",1:$$GAVT(D,H))_"|"
+ .S D=$$GETGRP^ISNMPSP(ID,"stat",H),A=A_$S(D="":D,1:$G(^EMM("bstat",D)))
+ .D WC^RWU(A)
+ D C^RWU
+ Q
+NBR(NM) ; Новая бригада
+ N ID,R,H,SH,T1,T2
+ S NM=$$WD^TXTU(NM),H=$H
+ ; поиск бригады NM
+ S ID="" F  S ID=$O(^EMGRP(ID)) Q:ID=""  Q:$$GETGRP^ISNMPSP(ID,"num",H)=NM
+ ; поиск любой свободной бригады
+ I ID="" F  S ID=$O(^EMGRP(ID)) Q:ID=""  Q:$$GETGRP^ISNMPSP(ID,"use",H)=0 
+ S:ID="" ID=$O(^EMGRP(""),-1)+1
+ S SH=$$SHTIME^ISNMPSP(H,$$GETGRP^ISNMPSP(ID,"shift",H))
+ S T1=$P(SH,"|",1)
+ D SETGRP^ISNMPSP(ID,"num",T1,NM)
+ D SETGRP^ISNMPSP(ID,"use",T1,1)
+ D SETGRP^ISNMPSP(ID,"stat",T1,5)
+ D UAVGRP^ISNMPSP(ID,T1)
+ D SETGRP^ISNMPSP(ID,"auto",T1,"")
+NBREND D TBR
+ Q
+DLBR(ID,TAB) ; Расформировать бригаду
+ N SH,T2
+ S NOW=$G(NOW)
+ I ID'="",$D(^EMGRP(ID)) D
+ .S SH=$$GETGRP^ISNMPSP(ID,"shift",$H)
+ .S SH=$$SHTIME^ISNMPSP($H,SH)
+ .S T2=$P(SH,"|",1) S:T2="" T2=$H
+ .D SETGRP^ISNMPSP(ID,"use",T2,0)
+ .D UAVGRP^ISNMPSP(ID,T2)
+ D:'$G(TAB) TBR
+ Q
+SBR(ID,POLE,R,SYS) ; Save field 
+ G:(ID="")!(POLE="") SBREND
+ N D
+ S D=$H
+ S R1=$$GETGRP^ISNMPSP(ID,POLE,D) G:R=R1 SBREND
+ D SETGRP^ISNMPSP(ID,POLE,D,R)
+ D:POLE="auto" REAVGRP^ISNMPSP(ID,D,R)
+SBREND D:'$G(SYS) TBR
+ Q
+SBRX ; Save additional fields
+ N NBC,FM,XML,XMLR,ID,R,F,H,TE,D,I,X,LST,LSTH,FX,SH,SHH,T1,T2,H1
+ D RBUFH^YIXMLRR(1)
+ S NBC="nb_console",FM="bsnmp"
+ S H=$H
+ S ID=$G(XML(NBC,FM,"id")) G:ID="" SBRXe
+ S SH=$G(XML(NBC,FM,"shift"))
+ S H1=$$SHTIME^ISNMPSP($H,SH),T1=$P(H1,"|",1),TE=$P(H1,"|",2)
+ S:T1'="" H=T1 S:TE="" TE=(+$H)_",86400"
+ 
+ S R=$G(XML(NBC,FM,"auto")),X=$G(XML(NBC,FM,"nauto"))
+ S:X R="" ; без А\М
+ D REAVGRP^ISNMPSP(ID,H,R,X) ; change auto status
+ F F="nauto","num","phone","shift","spec" D SETGRP^ISNMPSP(ID,F,H,$G(XML(NBC,FM,F)))
+ S R=$G(XML(NBC,FM,"vrl"))
+ S D=$$CNGFGRP^ISNMPSP(ID,"kadry"),FX=0
+ F I=2:1:99 S F=$P(R,CR,I) Q:F=""  D
+ .S T1=$P(F,"|",4),T2=$P(F,"|",5)
+ .S F=$P(F,"|",1) Q:F=""
+ .S X=$P(F,"@",1),F=$P(F,"@",2)
+ .S:+T1=T1 T1=T1_":00" S:+T2=T2 T2=T2_":00"
+ .S T1=$$TI^DTUTL(T1),T2=$$TI^DTUTL(T2)
+ .S H1=$S(T1="":H,1:$P(H,",",1)_","_T1)
+ .S LST(H1,X)=F
+ .I D'="",H1=H,$G(^EMGRP(ID,"kadry",D,X))=F Q 
+ .S FX=1
+ 
+ I FX,$D(LST) D  ; чистка и заполнение заново
+ .S X=$P(H,",",1)_",0" ; от начала дня
+ .F  S X=$O(^EMGRP(ID,"kadry",X)) Q:X=""!($$CMPDTM^DTUTL(X,TE)=1)  K ^EMGRP(ID,"kadry",X)
+ .S T1="" F  S T1=$O(LST(T1)) Q:T1=""  D
+ ..S T2=$O(LST(T1)) Q:T2=""
+ ..S I="" F  S I=$O(LST(T1,I)) Q:I=""  S:'$D(LST(T2,I)) LST(T2,I)=LST(T1,I)
+ .M ^EMGRP(ID,"kadry")=LST
+ .D GL^IEXCH("^EMGRP",ID,"kadry",H)
+SBRXe D TBR
+ Q
+KADRBR(ID,PL,DTM) ; Сотрудник из состава бригады
+ S DTM=(+DTM)_","_($P(DTM,",",2)+1)
+ S DTM=$O(^EMGRP(ID,"kadry",DTM),-1) Q:DTM="" ""
+ Q $G(^EMGRP(ID,"kadry",DTM,PL))
+LBRX(ID) ; Load additional fields
+ N D,X,I,TS,TE,TSS,SH,R,H,T1,T2,DX,DC,MX,LVR
+ S ID=+ID,H=$H
+ ; период смены
+ S SH=$$GETGRP^ISNMPSP(ID,"shift")
+ S T1=$$SHTIME^ISNMPSP($H,SH),TS=$P(T1,"|",1),TE=$P(T1,"|",2)
+ S TS=$S(SH:TS,1:(+$H)_",0")
+ S:TS'="" H=TS
+ S:TS="" TS=H S:TE="" TE=(+$H)_",86400"
+ 
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<bsnmp>")
+ D WTAGDC^RWU("id",ID)
+ D WTAGDC^RWU("num",$$GETGRP^ISNMPSP(ID,"num",H))
+ S X=$$GETGRP^ISNMPSP(ID,"auto",H),I=$$TAG^TXTU($$GAVT(X,H))
+ D WC^RWU("<auto title="""_I_""" data="""_X_"""/>")
+ D WTAGDC^RWU("nauto",+$$GETGRP^ISNMPSP(ID,"nauto",H))
+ D WTAGDC^RWU("spec",$$GETGRP^ISNMPSP(ID,"spec"))
+ D WTAGDC^RWU("shift",SH)
+ D WTAGDC^RWU("phone",$$GETGRP^ISNMPSP(ID,"phone"))
+ S D=$$CNGFGRP^ISNMPSP(ID,"kadry",TS)
+ S:D="" D=$$CNGFGRP^ISNMPSP(ID,"kadry")
+ D W^RWU("<vrl>")
+ ; Состав бригады
+ F I="vr","fl","vd" D LBRXkdr
+ S I="" F  S I=$O(^EMGRP(ID,"kadry",D,I)) Q:I=""  D:+I=I LBRXkdr
+ 
+ D W^RWU("</vrl>")
+ D W^RWU("</bsnmp></nb_console>"),C^RWU
+ Q
+LBRXkdr ; Процедура вывода члена бригады
+ ; отображение смещения времен для каждого сотрудника
+ ; (2 периода быть не может)
+ 
+ K LVR
+ S DX=$P(D,",",1)_","_($P(D,",",2)-1)
+ F  S DX=$O(^EMGRP(ID,"kadry",DX)) Q:DX=""!($$CMPDTM^DTUTL(DX,TE)=1)  D
+ .S X=$G(^EMGRP(ID,"kadry",DX,I))
+ .S (MX,R)="",T2=0,DC=$S($$CMPDTM^DTUTL(DX,TS)<0:TS,1:DX) ; beginning
+ .F  S R=$O(LVR(R)) Q:R=""  S T1=$P(LVR(R),"|",1) I T1>T2 S T2=T1,MX=R
+ .I MX'="",MX'=X,$P(LVR(MX),"|",2)="" S $P(LVR(MX),"|",2)=DC
+ .I X'="",'$D(LVR(X)) S LVR(X)=DC
+ I '$D(LVR) D WC^RWU(CR_I_"|"_^EMM("emgkdr",I)_"|||") Q 
+ S X="" F  S X=$O(LVR(X)) Q:X=""  D
+ .S R=LVR(X),T1=$P(R,"|",1),T2=$P(R,"|",2)
+ .S R=$$TM^DTUTL(T1)_"|"
+ .S R=R_$$TM^DTUTL($S(T2="":TE,1:T2))
+ .D WC^RWU(CR_I_"@"_X_"|"_^EMM("emgkdr",I)_"|"_$$FIO^IKADRY(X)_"|"_R)
+ Q
+PLSTBR(ID,IDK) ; Список сотрудников в бригаде
+ ; ID - бригада (опционально)
+ ; IDK - карта вызова (или бригада)
+ N DTM,R,I,A,X
+ I $G(IDK) S ID=$G(^EMKV(IDK,"brig")),DTM=$G(^("dts")),R=$G(^("t_prv")) S:R'="" $P(DTM,",",2)=R
+ S:DTM="" DTM=$H
+ S DTM=(+DTM)_","_($P(DTM,",",2)+1)
+ S DTM=$O(^EMGRP(ID,"kadry",DTM),-1) Q:DTM=""
+ S A=""
+ F I="vr","fl","vd" S X=$P($G(^EMGRP(ID,"kadry",DTM,I)),"|",1) S:X'="" A=$S(A="":"",1:A_CR)_$$FIO^IKADRY(X)_$C(9,9)_^EMM("emgkdr",I)
+ S I="" F  S I=$O(^EMGRP(ID,"kadry",DTM,I)) Q:I=""  I +I=I S X=$P(^(I),"|",1) S:X'="" A=$S(A="":"",1:A_CR)_$$FIO^IKADRY(X)_$C(9,9)_^EMM("emgkdr",I)
+ D MSG^RWU(A)
+ Q
+LDSP ; Диспетчеры
+ D OWF^RWU(".txt")
+ D LDSPs
+ D C^RWU
+ Q
+LDSPs 
+ N DSP,SP,VR,CC,H
+ S DSP=$G(^cfg("snmp","disp-spec")),(CC,VR)="",H=+$H
+ F  S VR=$O(^KDR(VR)) Q:VR=""  I $$USED^IKADRY(VR,H),$$IsSPEC^IKADRY(VR,DSP,H) D WC^RWU(CC_VR_"|"_$$FIOSH^IKADRY(VR)) S CC=CR
+ Q
+NMPV(ID,LT) ; Наименование поводов вызова
+ ; LT - сокращенно
+ N K,R
+ S R=$G(^EMPV(ID)),K=$P(R,"|",3)
+ Q:$G(LT) $P(R,"|",1)
+ Q $S(K="":"",1:$P(^EMPV(K),"|",1)_": ")_$P(R,"|",1)
+LNMPV(ID) ; Наименование поводов вызова
+ D MSG^RWU($$NMPV(ID))
+ Q
+LPVEX(TYP) ; Load povod from excel	TODO (new format)
+ N A,%J,R
+ D ORH^RWU
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D
+ .Q:%J=1
+ .S:TYP=1 ^EMPV($P(A,"|",1)+1)=$P(A,"|",2)
+ .S:TYP=2 ^EMPV($P(A,"|",2)+1,$P(A,"|",1))=$P(A,"|",3,4)
+ D CR^RWU
+ Q
+TABPV(STR,AID) ; Поводы к вызову
+ ; AID - везде идентификаторы
+ S STR=$$UL^TXTU($$WD^TXTU(STR))
+ D OWF^RWU(".txt")
+ N I,J,R,CC,K,LST,O,IS
+ S I="" F  S I=$O(^EMPV(I)) Q:I=""  D
+ .S R=^(I),J=$P(R,"|",3),O=$P(R,"|",2),R=$P(R,"|",1)
+ .I STR'="",$$UL^TXTU(R)'[STR Q
+ .I J="" S LST(I)=R Q
+ .I J'="",'$D(LST(J)) S LST(J)=$P(^EMPV(J),"|",1)
+ .S IS=$E("0000",1,4-$L(O))_O_"@"_I
+ .S LST(J,IS)=R
+ 
+ S (CC,I)="" F  S I=$O(LST(I)) Q:I=""  D
+ .D WC^RWU(CC_LST(I)_"|"_$S($G(AID):I,1:"")_"|1") S CC=CR
+ .S J="" F  S J=$O(LST(I,J)) Q:J=""  D
+ ..D WC^RWU(CC_$C(9)_LST(I,J)_"|"_$P(J,"@",2)_"|2")
+ D C^RWU
+ Q
+FNDPV(STR) ; Поиск в поводах к вызову (список)
+ N I,J,R,C
+ D OWF^RWU(".txt")
+ S STR=$$UL^TXTU($$WD^TXTU(STR)),C=""
+ S I="" F  S I=$O(^EMPV(I)) Q:I=""  D
+ .S R=$P(^(I),"|",1)
+ .I $$UL^TXTU(R)'[STR Q 
+ .D WC^RWU(C_I_"|"_R)
+ .S C=CR
+ D C^RWU
+ Q
+PVSAVE ; Сохранить поводы к вызову
+ N I,R,A,NN,PN,O
+ D ORH^RWU
+ S PN="",O=0
+ F I=1:1:99999 S A=$$WD^TXTU($$R^RWU()) Q:%IFN["Z"  D
+ .S NN=$P(A,"|",2)
+ .S:NN="" NN=$O(^EMPV(""),-1)+1
+ .I $E(A)'=$C(9) S PN=NN,^EMPV(NN)=$P(A,"|",1),O=0 Q
+ .S A=$E(A,2,999)
+ .S ^EMPV(NN)=$P(A,"|",1)_"|"_O_"|"_PN
+ .S O=O+1
+ D REGL^IEXCH("^EMPV")
+ Q
+cPV ; convert PV
+ N LL,LC
+ K ^EMPVn,^EMPVc
+ S II=1
+ S I="" F  S I=$O(^EMPV(I)) Q:I=""  D
+ .S ^EMPVn(II)=^EMPV(I),LL(I)=II
+ .S ^EMPVc(I_"000")=II
+ .S II=II+1
+ S I="" F  S I=$O(^EMPV(I)) Q:I=""  D
+ .S J="" F  S J=$O(^EMPV(I,J)) Q:J=""  D
+ ..S ^EMPVn(II)=^EMPV(I,J)
+ ..S $P(^EMPVn(II),"|",3)=LL(I)
+ ..S ^EMPVc(I_$E("000",1,3-$L(J))_J)=II
+ ..S II=II+1
+ S I="" F  S I=$O(^EMKV(I)) Q:I=""  D
+ .S J=$G(^(I,"pvv")) Q:J=""   w "."_^EMPVc(J)
+ .S ^EMKV(I,"pvv")=^EMPVc(J)
+ Q
+LSTREZT ; Список видов результатов
+ N I,R,C
+ S C=""
+ D OWF^RWU(".txt")
+ S I="" F  S I=$O(^EMM("emvres",I)) Q:I=""  D
+ .S R=^(I) Q:$P(R,"|",2)'=1 
+ .D WC^RWU(C_I_"|"_$P(R,"|",1))
+ .S C=CR
+ D C^RWU
+ Q

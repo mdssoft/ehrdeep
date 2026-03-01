@@ -1,0 +1,5 @@
+SYSinit ; Инициализация настроек системы [ 03/21/2010  2:00 PM ]
+ S ^PP(0,1)="<?xml version=""1.0"" encoding=""Windows-1251""?>"
+ S ^PP(0,2)=^PP(0,1)_"<nb_console>"
+ S ^PP(0,3)="<?xml version=""1.0""?><!DOCTYPE wml PUBLIC ""-//WAPFORUM//DTD WML 1.1//EN"" ""http://www.wapforum.org/DTD/wml_1.1.xml"">"
+ Q

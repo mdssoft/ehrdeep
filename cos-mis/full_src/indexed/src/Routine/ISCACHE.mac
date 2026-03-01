@@ -1,0 +1,67 @@
+MKDIR(BASE)     ; Make dirs <256>\<16>
+	N I,X,A,J,T
+	S T=$S($ZV["UNIX":"/",1:"\")
+	F I=0:1:255 D
+	.S X=$$HEX^CONU(I) S:$L(X)<2 X=0_X
+	.S A=$ZUTIL(140,9,BASE_T_X)
+	.F J=0:1:15 S A=$ZUTIL(140,9,BASE_T_X_T_$$HEX^CONU(J))
+	Q
+RMDIR(BASE)     ; Remove dirs <256>\<16>
+	N I,X,A,J,T
+	S T=$S($ZV["UNIX":"/",1:"\")
+	F I=0:1:255 D
+	.S X=$$HEX^CONU(I) S:$L(X)<2 X=0_X
+	.S A=$ZUTIL(140,10,BASE_T_X)
+	.F J=0:1:15 S A=$ZUTIL(140,10,BASE_T_X_T_$$HEX^CONU(J))
+	Q
+CPDIR(FDIR,TDIR)        ; Copy from <256>\<256> to <256>\<16>
+	F I=0:1:255 D
+	.S X=$$HEX^CONU(I) S:$L(X)<2 X=0_X
+	.F J=0:1:255 D
+	..S Y=$$HEX^CONU(J) S:$L(Y)<2 Y=0_Y
+	..S D=FDIR_"\"_X_"\"_Y
+	;..S FA=$ZOS(12,D_"\*.*",""),B=$P(FA,"^",1) Q:((+FA)<0)!($L(FA)=0)
+	;..F  D  S FA=$ZOS(13,FA),B=$P(FA,"^",1) Q:((+FA)<0)!($L(FA)=0)
+	;...S C=$$FNDIR^YYBPAS(B)
+	;...S A=$ZOS(3,D_"\"_B,TDIR_$TR(C,"\","/"))
+	;.W !,I
+	Q
+TOTIF(fn1,fn2,dir) ; Convert from pdf to tif
+	N stream
+	s fn1=dir_fn1,fn2=dir_fn2
+	d EXEBIN^ISUTL("pdf2tif.cmd """_fn1_""" """_fn2_"""") ; use Ghost Script
+	
+	d ostream.Clear()
+	d stream.Clear()
+	s stream=##class(%FileBinaryStream).%New() ; read tiff
+	s stream.Filename=fn2
+	s stream.RemoveOnClose=1
+	d stream.Rewind()
+	Q
+COMPILE ; Compile all routines
+	d $System.OBJ.CompileList("*.int","ckf") 
+	Q
+lproc(FN) ; Load progs from file
+	N io
+	S io=$IO
+	O 2:($J) U 2 D $System.OBJ.Load(FN,"c") C 2
+	U io
+	Q
+UNLOCKU ; Unlock Admin and _SYSTEM users
+	N Usr
+	F Usr="Admin","_SYSTEM" D usren(Usr)
+	Q
+usren(pUsername) ; Enable user
+	new tProperties,pSpace,tSC
+	Set pSpace=$ZNSPACE
+	ZN "%SYS"
+	
+	Set tSC = ##class(Security.Users).Get(pUsername, .tProperties)
+	
+	If tSC,'$G(tProperties("Enabled")) Do
+	.K tProperties
+	.Set tProperties("Enabled")=1
+	.Set tSC = ##class(Security.Users).Modify(pUsername, .tProperties)
+
+	ZN pSpace
+	Q

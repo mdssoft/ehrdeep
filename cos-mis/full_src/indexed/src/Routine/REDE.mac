@@ -1,0 +1,138 @@
+REDE ; Отчеты по единому документу [ 05/28/2018  1:25 PM ]
+VRMSLST(DS,DE,OTX,LPU) ; Список - медсестра-врачи
+ N VR,LP,LST,R,I,X,MS,DT,FF,OT,OTT
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S LPU=$S(+$$FR^I():$G(LPU),1:+$$^I("ilpu"))
+ S:'$D(^ZNFI("l")) LPU=""
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .I LPU'="",'$D(^ZNFI("l",LPU,VR)) Q 
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  I OTX=""!(OTX=OT) S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ..S R=$G(^(DT)) Q:R="" 
+ ..I LPU'="",'$D(^ZNFI("l",LPU,VR,DT)) Q
+ ..S X=$P(R,"|",1)
+ ..I X'="" S LST(DT,OT,X,VR)=$P(R,"|",2)_":"_$P(R,"|",5) Q 
+ ..S R=$P(R,"|",6) Q:R="" 
+ ..F I=1:1:$L(R,";") S X=$P(R,";",I),MS=$P(X,":",1) S:MS'="" LST(DT,OT,MS,VR)=$P(X,":",2,3)
+ D OWF^RWU(".txt")
+ D WC^RWU("Дата|"_$S(OTX="":"Отделение|",1:"")_"Медсестра "_$$TXTP^DTUTL(DS,DE)_"|Врач|Часов|Ставок")
+ S DT="" F  S DT=$O(LST(DT)) Q:DT=""  S OT="" F  S OT=$O(LST(DT,OT)) Q:OT=""  D
+ .S OTT=$$GOTD^YISPRAV(OT)
+ .S (R,MS)=""
+ .F  S MS=$O(LST(DT,OT,MS)) Q:MS=""  S VR="",R=$$FIO^IKADRY(MS) F  S VR=$O(LST(DT,OT,MS,VR)) Q:VR=""  D
+ ..S X=LST(DT,OT,MS,VR),I=+$P(X,":",2)
+ ..D WC^RWU(CR_$$DT2^DTUTL(DT)_"|"_$S(OTX="":OTT_"|",1:"")_R_"|"_$$FIO^IKADRY(VR)_"|"_$$TM^DTUTL($P(X,":",1))_"|"_$S('I:0,1:$TR(+$J(I/100,"",2),".",",")))
+ D C^RWU
+ Q
+VRTM(DS,DE,OTX,TOT,LPU) ; Время работы по ЕД
+ ; OTX - подразделение
+ ; TOT - суммарно
+ N VR,LP,LST,R,I,DT,FF,DX,OT
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S LPU=$S(+$$FR^I():$G(LPU),1:+$$^I("ilpu"))
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .I LPU'="",'$D(^ZNFI("l",LPU,VR)) Q 
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  I OTX=""!(OTX=OT) S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ..S R=$G(^(DT)) Q:R="" 
+ ..I LPU'="",'$D(^ZNFI("l",LPU,VR,DT)) Q
+ ..S DX=$S(TOT:1,1:DT)
+ ..S LST(DX,VR,1)=$G(LST(DX,VR,1))+$P(R,"|",2)
+ ..S LST(DX,VR,2)=$G(LST(DX,VR,2))+$P(R,"|",3)
+ ..S LST(DX,VR,3)=$G(LST(DX,VR,3))+$P(R,"|",4)
+ D OWF^RWU(".txt")
+ D WC^RWU($S(TOT:"",1:"Дата|")_"Врач "_$$TXTP^DTUTL(DS,DE)_"|На приеме|На ПНД|На прочих работах")
+ S DT="" F  S DT=$O(LST(DT)) Q:DT=""  D
+ .S VR="" F  S VR=$O(LST(DT,VR)) Q:VR=""  D
+ ..S R=$S(TOT:"",1:$$DT^DTUTL(DT)_"|")_$$FIO^IKADRY(VR)
+ ..F I=1,2,3 S R=R_"|"_$$TM^DTUTL($G(LST(DT,VR,I)))
+ ..D WC^RWU(CR_R)
+ D C^RWU
+ Q
+vrtl(DS,DE,OTX,LPU) 
+ K STAT
+ N VR,LP,R,I,DT,FF,OT
+ S LPU=$S(+$$FR^I():$G(LPU),1:+$$^I("ilpu"))
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .I LPU'="",'$D(^ZNFI("l",LPU,VR)) Q 
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  I OTX=""!(OTX=OT) S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ..S R=$G(^(DT)) Q:R="" 
+ ..I LPU'="",'$D(^ZNFI("l",LPU,VR,DT)) Q
+ ..S STAT(OT,VR,1)=$G(STAT(OT,VR,1))+$P(R,"|",2)
+ ..S STAT(OT,VR,2)=$G(STAT(OT,VR,2))+$P(R,"|",3)
+ ..S STAT(OT,VR,3)=$G(STAT(OT,VR,3))+$P(R,"|",4)
+ Q
+CONTR(DS,DE,UDA,LPU) ; Контроль ввода документов
+ N VR,LP,LST,R,I,X,FF,LSTD,DA
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S LPU=$S(+$$FR^I():$G(LPU),1:+$$^I("ilpu"))
+ K ^BUF($J)
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .I LPU'="",'$D(^ZNFI("l",LPU,VR)) Q
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ..I LPU'="",'$D(^ZNFI("l",LPU,VR,DT)) Q  
+ ..S X=0,I=""
+ ..F  S I=$O(^ZNF(VR,OT,DT,I)) Q:I=""  S X=X+1
+ ..Q:'X 
+ ..I UDA S I=$$GETDA^IUSL(VR,DT,OT) Q:(UDA=2)&(I'="")  Q:(UDA=3)&(I="") 
+ ..S ^BUF($J,OT,VR,DT)=X_$S(UDA'=1:"",I'="":" +",1:""),LSTD(DT)=""
+ D OWF^RWU(".txt")
+ S R="Сотрудник "_$$TXTP^DTUTL(DS,DE)
+ S DT="" F  S DT=$O(LSTD(DT)) Q:DT=""  S R=R_"|"_$P($$DT2^DTUTL(DT),".",1,2)
+ D WC^RWU(R)
+ S OT="" F  S OT=$O(^BUF($J,OT)) Q:OT=""  D
+ .D WC^RWU(CR_$$GOTD^YISPRAV(OT))
+ .S VR="" F  S VR=$O(^BUF($J,OT,VR)) Q:VR=""  D
+ ..S R=$$FIOSH^YIKADRY(VR)
+ ..S DT="" F  S DT=$O(LSTD(DT)) Q:DT=""  S R=R_"|"_$G(^BUF($J,OT,VR,DT))
+ ..D WC^RWU(CR_R)
+ D C^RWU
+ K ^BUF($J)
+ Q
+OPSTAT(DS,DE,LPU) ; Ввод операторами (статистика)
+ N VR,LP,LST,R,I,X,FF,TAB,OP
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S LPU=$S(+$$FR^I():$G(LPU),1:+$$^I("ilpu"))
+ K ^BUF($J)
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .I LPU'="",'$D(^ZNFI("l",LPU,VR)) Q
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ..I LPU'="",'$D(^ZNFI("l",LPU,VR,DT)) Q  
+ ..S I="" F  S I=$O(^ZNF(VR,OT,DT,I)) Q:I=""  D
+ ...S OP=$P($$GETLOG^IUSL(VR,DT,OT,I),"|",1) S:OP="" OP="-"
+ ...S TAB(OP,1)=$G(TAB(OP,1))+1
+ ...I '$D(^BUF($J,OP,VR)) S ^(VR)="",TAB(OP,2)=$G(TAB(OP,2))+1
+ 
+ D OWF^RWU(".txt")
+ D WC^RWU("Оператор "_$$TXTP^DTUTL(DS,DE)_"|Врачей|Записей")
+ S OP="" F  S OP=$O(TAB(OP)) Q:OP=""  D
+ .S R=$S(OP="-":"Не определен",1:$$FIO^IUSER(OP)_" ("_OP_")")
+ .D WC^RWU(CR_R_"|"_$G(TAB(OP,2))_"|"_$G(TAB(OP,1)))
+ D C^RWU
+ Q
+CHKU(DS,DE) ; Проверка услуг
+ N DT,VR,OT,ID,A,R,U,P,@$$NEWVAR^IUSL
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|№ И.Б.|Пациент|Дата|Врач|Отделение|Ошибка|Услуга")
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ..S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ...D GET^IUSL(VR,DT,OT,ID)
+ ...Q:'$D(ERR) 
+ ...Q:STAT=3  
+ ...S A=$$ECODE^IUSL(DT)
+ ...S U=$P($$GETUSLS^IUSL(VR,DT,OT,ID),"*",1)
+ ...S P=$S($G(PRC)'="":PRC,1:$$STARTTP^IPRICE(U,DT))
+ ...S NI=$G(NI)
+ ...D WC^RWU(CR_NI_"|"_NI_"|"_$$FIOSH^IPAC(NI)_"|"_$$DT2^DTUTL(DT)_"|"_$$FIOSH^IKADRY(VR)_"|"_$$GOTD^YISPRAV(OT)_"|"_A_"|"_U_" "_$$OWF^TXTU($$NAMEH^IPRICE(U,P,DT),99))
+ D C^RWU
+ Q
+REGIPROC ;
+ N D,FF,F
+ S D="Отчеты ЛПУ",FF=+$$FR^I()
+ S F=$S(FF:",t@storage:lpu,Филиал",1:"")
+ S ^IPROC(D,"Единые документы","Время работы и коэффициент медсестры")="VRMSLST_REDE,1,"_$S(FF:4,1:3)_",d,Период документов с,d,Период документов по,te@storage:otd@1,Отделение"_F
+ S ^IPROC(D,"Единые документы","Время работы врачей по ЕД")="VRTM_REDE,1,"_$S(FF:5,1:4)_",d,Период документов с,d,Период документов по,te@storage:otd@1,Отделение,t@string:0/Детально по дням#1/Суммарно,Отображать время"_F
+ S ^IPROC(D,"Единые документы","Контроль ввода ЕД")="CONTR_REDE,1,"_$S(FF:4,1:3)_",d,Период документов с,d,Период документов по,t@string:0/Нет#1/Статус подтверждения#2/Неподтвержденные#3/Подтвержденные,Контроль подтверждения"_F
+ S ^IPROC(D,"Единые документы","Статистика по операторам")="OPSTAT_REDE,1,"_$S(FF:3,1:2)_",d,Период документов с,d,Период документов по"_F
+ S ^IPROC(D,"Единые документы","Проверка услуг")="CHKU_REDE,100,2,d,Период услуг с,d,Период услуг по"
+ Q

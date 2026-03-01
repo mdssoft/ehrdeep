@@ -1,0 +1,73 @@
+RZABL ; Заболеваемость [ 02/08/2016  6:20 PM ]
+BYVR(DS,DE,OTX,TPX) ; Заболеваемость по врачам (итого)
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S:OTX=999 OTX=""
+ K ^BUF($J,"di")
+ N VR,OT,DT,ID,Fp,@$$NEWVAR^IUSL,TP,C,U
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D:OTX=""!(OTX=OT)
+ ..S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ...S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ....S DIA=$$GETDI^IUSL(VR,DT,OT,ID)
+ ....Q:DIA="" 
+ ....D GETLT^IUSL(VR,DT,OT,ID)
+ ....Q:STAT="w"!(STAT="d")  Q:$D(ERR) 
+ ....S FLG="|"_$G(FLG)_"|"
+ ....S TP=$S(FLG["|0|":0,FLG["|1|":1,FLG["|01|":101,1:"")
+ ....I TPX Q:TP=0  ; без неут. для приемов
+ ....I TPX S U=$O(UL("")) Q:U=""  D MKPRCF^IUSL() Q:("|"_$$GET^IPRICE(U,"cls",PRC,DT)_"|")'["|cns|" 
+ ....S R=TP_"|"_DIA
+ ....S ^(R)=$G(^BUF($J,"di",VR,R))+1
+ D OWF^RWU(".txt")
+ D WC^RWU("Врач, Вид диагноза|Наименование диагноза за период "_$$DT2^DTUTL(DS)_"-"_$$DT2^DTUTL(DE)_" |Случаев")
+ S VR="" F  S VR=$O(^BUF($J,"di",VR)) Q:VR=""  D
+ .D WC^RWU(CR_$$FIOSH^IKADRY(VR))
+ .S C=0
+ .S ID="" F  S ID=$O(^BUF($J,"di",VR,ID)) Q:ID=""  D
+ ..S R=^(ID),C=C+R,DIA=$P(ID,"|",2),TP=$P(ID,"|",1)
+ ..S TP=$S(TP=0:"неуточнен",TP=1:"в.впервые",TP=101:"сопутств.",1:"")
+ ..D WC^RWU(CR_TP_"|"_$$NAME^YMKB10(DIA)_"|"_R)
+ ..S C=C+1
+ .D:C WC^RWU(CR_"Итого: "_C)
+ K ^BUF($J,"di")
+ D C^RWU
+ Q
+BYVRLST(DS,DE,OTX,TPX) ; Заболеваемость по врачам (списком)
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S:OTX=999 OTX=""
+ K ^BUF($J,"di")
+ N VR,OT,DT,ID,@$$NEWVAR^IUSL,TP,C,DD,I
+ S I=0
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D:OTX=""!(OTX=OT)
+ ..S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ...S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ....S DIA=$$GETDI^IUSL(VR,DT,OT,ID)
+ ....Q:DIA="" 
+ ....D GETLT^IUSL(VR,DT,OT,ID)
+ ....Q:STAT="w"!(STAT="d")  Q:$D(ERR) 
+ ....S FLG="|"_$G(FLG)_"|",DD=$P(DIA,".",1)
+ ....S TP=$S(FLG["|0|":0,FLG["|1|":1,FLG["|01|":101,1:"")
+ ....I TPX Q:TP=0  ; без неут. для приемов
+ ....I TPX S U=$O(UL("")) Q:U=""  D MKPRCF^IUSL() Q:("|"_$$GET^IPRICE(U,"cls",PRC,DT)_"|")'["|cns|" 
+ ....S I=I+1
+ ....S ^BUF($J,"di",DD,DIA_"|"_NI_"|"_VR)=DIA_"|"_NI_"|"_TP_"|"_VR
+ D OWF^RWU(".txt")
+ D WC^RWU("Код|Пациент|Вид диагноза|Наименование диагноза за период "_$$DT2^DTUTL(DS)_"-"_$$DT2^DTUTL(DE)_" |Врач")
+ S DT="" F  S DT=$O(^BUF($J,"di",DT)) Q:DT=""  D
+ .S C=0
+ .S ID="" F  S ID=$O(^BUF($J,"di",DT,ID)) Q:ID=""  D
+ ..S R=^(ID)
+ ..S DIA=$P(R,"|",1),NI=$P(R,"|",2),TP=$P(R,"|",3),VR=$P(R,"|",4)
+ ..S TP=$S(TP=0:"неуточнен",TP=1:"в.впервые",TP=101:"сопутств.",1:"")
+ ..S R=DIA_"|"_$$FIO^IPAC(NI)_" ("_NI_")|"_TP_"|"_$$NAME^YMKB10(DIA)
+ ..D WC^RWU(CR_R_"|"_$$FIOSH^IKADRY(VR))
+ ..S C=C+1
+ .D:C WC^RWU(CR_"Итого: "_C)
+ K ^BUF($J,"di")
+ D C^RWU
+ Q
+REGIPROC ; 
+ S ^IPROC("Отчеты ЛПУ","Заболеваемость","Установленные диагнозы")="BYVRLST_RZABL,1,4,d,Период услуг с,d,Период услуг по,te@storage:otd@1,Отделение,t@string:1/Врачебным приемам#0/Всем услугам,Расчет по"
+ S ^IPROC("Отчеты ЛПУ","Заболеваемость","Сводка по врачам и диагнозам")="BYVR_RZABL,1,4,d,Период услуг с,d,Период услуг по,te@storage:otd@1,Отделение,t@string:1/Врачебным приемам#0/Всем услугам,Расчет по"
+ Q

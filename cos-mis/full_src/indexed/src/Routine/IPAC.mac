@@ -1,0 +1,527 @@
+IPAC ; Контингент (пациенты) [ 05/15/2024  12:10 PM ]
+GET(NI,POLE,D) ; Получить значение поля по И.Б. и дате
+ Q:NI=""!(POLE="") "" S:$G(D)="" D=+$H
+ S POLE=$S($D(TZRBTN(POLE)):TZRBTN(POLE),1:$G(^BTN($C(9)_"t",POLE)))
+ Q:POLE="" "" S D=$O(^BTN(NI,POLE,D+1),-1) Q:D="" "" Q ^(D)
+GETE(NI,POLE,D,FULL) ; Расширенные поля
+ ; FULL - =1 без ограничений по длине, >1 число символов ограничения
+ ; FULL=0 - стандартное ограничение 32
+ Q:NI=""!(POLE="") "" 
+ S:$G(D)="" D=+$H
+ Q:POLE="fio" $$FIO(NI,D)
+ Q:POLE="age" $$AGE(NI,D)
+ Q:POLE="address" $$ADR(NI,D)
+ Q:POLE="phones" $$TELS(NI,D)
+ I POLE="skd" S NI=$$GET^IDSCN(NI,D) Q:NI NI Q ""
+ Q:POLE="mnfio" $$FIOLAT(NI,D)
+ Q:POLE="bill" $$NOW^IBILL(NI,D)
+ Q:POLE="lnkhist" $$FIO($$GET(NI,POLE,D),D)
+ Q:POLE="pasp_date" $P($$GET(NI,"pasp_dan",D)," ",1)
+ Q:POLE="pasp_giver" $P($$GET(NI,"pasp_dan",D)," ",2,99)
+ S NI=$$GET(NI,POLE,D)
+GETEd 
+ Q:POLE="datar"!(POLE="dofor")!(POLE="dog_from")!(POLE="dog_to")!(POLE="pomsd")!(POLE="dog_to1")!(POLE="dog_from1")!(POLE="dog_to2")!(POLE="dog_from2") $$DT^DTUTL(NI)
+ I $E(POLE,1,3)="stc",$L(POLE)<5 Q $$NAMEH^YNDOG(NI,D)
+ Q:POLE="pol" $S(NI=1:"Муж.",NI=2:"Жен.",1:"Не указан")
+ S FULL=$G(FULL)
+ I POLE="work" Q:NI="" "" Q $G(^M(5,NI))
+ I POLE="ofor" Q:NI="" "" Q $G(^(+$G(^MN("ofor")),NI))
+ I POLE="region"!(POLE="place") Q:NI="" "" Q $$NAME^YKLADR(NI)
+ I POLE="whop" Q:NI="" "" Q $G(^(+$G(^MN("whocart")),NI))
+ I POLE="familyr" Q:NI="" "" Q $G(^(+$G(^MN("relationship")),NI))
+ I POLE="jobtitle" Q:NI="" "" Q $G(^(+$G(^MN("jobtitle")),NI))
+ I POLE="ush" Q:NI="" "" Q $$GUCH^YISPRAV(NI)
+ I POLE="prog"!(POLE="prog1")!(POLE="prog2") D  Q POLE
+ .N I,K,R S POLE=""
+ .F I=1:1:99 S K=$P(NI,"|",I) Q:K=""  S:$L(POLE) POLE=POLE_", " S R=$$NAMEH^IMPRP(K,D),POLE=POLE_$S(R="":K,FULL=1:R,1:$$OWF^TXTU(R,$S(FULL:FULL,1:32)))
+ I POLE="status" D  Q POLE
+ .N K,R S POLE=""
+ .F D=1:1:99 S K=$P(NI,"|",D) Q:K=""  S:$L(POLE) POLE=POLE_", " S R=$$GET^ISPRAV(1,K),POLE=POLE_$S(R="":K,FULL=1:R,1:$$OWF^TXTU(R,$S(FULL:FULL,1:32)))
+ 
+ I $D(^STRUCT("patients",POLE,"r")) N R S R=^("r") Q:$E(R)=":" $G(^(+$G(^MN($E(R,2,99))),NI)) ; если справочник описан в структуре
+ Q NI
+IsDT(PL) 
+ Q:POLE="datar"!(POLE="dofor")!(POLE="dog_from")!(POLE="dog_to")!(POLE="pomsd")!(POLE="dog_to1")!(POLE="dog_from1")!(POLE="dog_to2")!(POLE="dog_from2") 1
+ Q 0
+GETM(NI,POLE,RET) ; Получить поля по И.Б. -> @RET()=
+ K @RET Q:NI=""!(POLE="") 
+ S POLE=$S($D(TZRBTN(POLE)):TZRBTN(POLE),1:$G(^BTN($C(9)_"t",POLE)))
+ Q:POLE=""  
+ M @RET=^BTN(NI,POLE)
+ Q
+GETPIDX(NI,PL,DGN,DT) ; Получить поле prog... по индексу договора
+ Q $$GET(NI,PL_$$PIDX(NI,DGN,DT),DT)
+GETTZ(NI,POLE,D) ; Получить значение поля по И.Б. и дате с тезаур.
+ Q:POLE="" "" S D=$O(^BTN(NI,POLE,D+1),-1) Q:D="" "" Q ^(D)
+PLIDX(POLE) ; Получить индекс поля
+ Q $$GTZ^XMLU(POLE,"^BTN("""_$C(9)_"t""","^BTN("""_$C(9)_"r""")
+DECE(POLE,D,X) ; получить расшифровку поля четко на указанную дату
+ N NI S NI=X G GETEd
+NI(NIB) ; Получить системный код из внешнего
+ Q NIB ; TODO
+RNI(NIB) ; Получить внешний код из системного
+ Q NIB ; TODO
+vSET() ; Установить виртуальные поля
+ I POLE="pasp_date" S PLE="pasp_dan",U=$$GET(NI,PLE,DT),$P(U," ",1)=R D SET(NI,PLE,DT,U,$G(DOUPD)) Q 1
+ I POLE="pasp_giver" S PLE="pasp_dan",U=$$GET(NI,PLE,DT),$P(U," ",2,99)=R D SET(NI,PLE,DT,U,$G(DOUPD)) Q 1
+ Q 0
+SET(NI,POLE,DT,R,DOUPD) 
+ S POLE=$G(POLE),DT=$G(DT)
+ Q:NI=""  Q:POLE=""  Q:DT=""  
+ N PLE,DTPV,PR,U
+ I $E(POLE)="p" Q:$$vSET() 
+ S PLE=$$GTZ^XMLU(POLE,"^BTN("""_$C(9)_"t""","^BTN("""_$C(9)_"r""")
+ S DT=+DT,DTPV=$O(^BTN(NI,PLE,DT),-1),PR="",U=0
+ S:DTPV PR=^(DTPV)
+ I $D(^(DT)),R'=^(DT) D KD^ISSG("^BTN("""_NI_""","_PLE_","_DT_")") K ^BTN(NI,PLE,DT) S U=1
+ S:PR'=R ^(DT)=R,U=1
+ S DTPV=$O(^(DT))
+ I DTPV'="",R=^(DTPV) K ^(DTPV) S U=1
+ I PR'=R,$G(^cfg("pac","wlog")) S ^BTNL(NI,PLE,DT,$H)=R
+SETe D:POLE="fiof" SET(NI,"idxfio",DT,$$F^YIFAM(R),0)
+ D:U cREIDX(NI,DT,POLE)
+ D:+$G(DOUPD)&U UPD^IEXCH("IPACEX",NI)
+ Q
+SETFT(NI,POLE,DS,DE,R,DOUPD) ; Set value in period
+ Q:NI=""  Q:$G(POLE)=""  Q:$G(DS)=""  Q:$G(DE)=""  
+ N PLE,DT,DTPV,DTNE,PR,SR,NR,U,DW
+ S PLE=$$GTZ^XMLU(POLE,"^BTN("""_$C(9)_"t""","^BTN("""_$C(9)_"r""")
+ S DTNE=$O(^BTN(NI,PLE,DE+1),-1),PR="",U=0,DW=""
+ I DTNE'="" S NR=^(DTNE) S:NR=R DTNE="" ; get right next data
+ S DTPV=$O(^BTN(NI,PLE,+DS),-1)
+ S:DTPV'="" PR=^(DTPV)
+ S DT=DS-1 F  S DT=$O(^BTN(NI,PLE,DT)) Q:DT=""!(DT>DE)  I ^(DT)'=R D KD^ISSG("^BTN("""_NI_""","_PLE_","_DT_")") K ^BTN(NI,PLE,DT) S U=1
+ S:PR'=R ^(DS)=R,U=1,DW=DS
+ I DTNE="" S DTPV=$O(^(DE)) I DTPV'="",R=^(DTPV) K ^(DTPV) S U=1,DW=DTPV
+ I DTNE'="",NR'=R S ^BTN(NI,PLE,DE+1)=NR,U=1 S:$G(^cfg("pac","wlog")) ^BTNL(NI,PLE,DE+1,$H)=R,DW=DE+1
+ S:DW'="" ^BTN(NI,$$GTZ^XMLU("opfio","^BTN("""_$C(9)_"t""","^BTN("""_$C(9)_"r"""),DW)=$$USRH^IUSER()
+ S DT=DS
+ G SETe
+TELS(NI,D) ; All phones
+ Q:'$D(^BTN(NI)) ""
+ N T1,T2
+ S D=$G(D,+$H),T1=$$GET(NI,"pager",D),T2=$$GET(NI,"tel1",D)
+ I $L(T2) S:$L(T1) T1=T1_", " S T1=T1_T2
+ S T2=$$GET(NI,"tel2",D)
+ I $L(T2) S:$L(T1) T1=T1_", " S T1=T1_T2
+ Q T1
+TEL(NI,D) ; First active phone
+ Q:'$D(^BTN(NI)) ""
+ N T
+ S:$G(D)="" D=+$H
+ S T=$$GET(NI,"pager",D) Q:T'="" T
+ S T=$$GET(NI,"tel1",D) Q:T'="" T
+ Q $$GET(NI,"tel2",D)
+CLRFROM(NI,POLE,DT,DE) ; clear all data from date
+ Q:NI=""  Q:$G(POLE)=""  Q:$G(DT)=""  
+ S DE=$G(DE,99999)
+ S POLE=$$GTZ^XMLU(POLE,"^BTN("""_$C(9)_"t""","^BTN("""_$C(9)_"r""")
+ S DT=DT-1 F  S DT=$O(^BTN(NI,POLE,DT)) Q:DT=""!(DT>DE)  D KD^ISSG("^BTN("""_NI_""","_POLE_","_DT_")") K ^BTN(NI,POLE,DT)
+ D cREIDX(NI,DT,POLE)
+ Q
+CHKNUL(NI,MOD) ; Проверить отсутствие данных
+ ; MOD=1 - возвращать тип занятого ресурса
+ N R
+ S MOD=+$G(MOD)
+ I $D(^EPR(NI)) Q:MOD 1 Q 0 ; ЭМК
+ I $D(^PNF(NI)) Q:MOD 2 Q 0 ; услуги
+ S R=$D(^BILL(NI))
+ I R=1,$$IsCLR^IBILL(NI) S R=0 ; нет значащих платежей
+ I R Q:MOD 3 Q 0 ; счета
+ I $D(^DSHP(NI)) Q:MOD 4 Q 0 ; расписание
+ I $D(^MNTR(NI)) Q:MOD 5 Q 0 ; нетрудоспособность
+ I $D(^PROFP(NI)) Q:MOD 6 Q 0 ; профмедицина
+ I $D(^NAZI("n",NI)) Q:MOD 7 Q 0 ; назначения
+ I $D(^BTPL(NI)) Q:MOD 8 Q 0 ; абонементы
+ I $D(^GRNL(NI)) Q:MOD 9 Q 0 ; гар.письма
+ I $D(^MLAB(NI)) Q:MOD 10 Q 0 ; КДЛ
+ I $D(^CMS("P",NI)) Q:MOD 11 Q 0 ; Задачи
+ I $D(^HOSPI("n",NI)) Q:MOD 12 Q 0 ; Госпитализации
+ I $D(^UBOXI("nd",NI)) Q:MOD 13 Q 0 ; Коечный фонд
+ I $D(^OPSHI("nd",NI)) Q:MOD 14 Q 0 ; График операций
+ Q:MOD 0
+ Q 1
+CHKNTXT(TP) ; Описание кода занятого ресурса
+ Q:TP=1 "ЭМК"
+ Q:TP=2 "услуги"
+ Q:TP=3 "личный счет"
+ Q:TP=4 "расписание"
+ Q:TP=5 "нетрудоспособность"
+ Q:TP=6 "профмедицина"
+ Q:TP=7 "назначения"
+ Q:TP=8 "абонементы"
+ Q:TP=9 "гарантийные письма"
+ Q:TP=10 "лабораторные исследования"
+ Q:TP=11 "задачи"
+ Q:TP=12 "госпитализации"
+ Q:TP=13 "коечный фонд"
+ Q:TP=14 "график операций"
+ Q ""
+EXIST(NI) ; Patient exist ?
+ Q:NI="" 0 Q:'$D(^BTN($E(NI,1,99))) 0 Q 1
+NEXT(NI,IDX,X) ; итерация по пациентам
+ I '$D(IDX) S NI=$O(^BTN(NI)) Q:+NI'=NI "" Q:NI="" "" Q NI
+ I IDX="work" Q $O(^BTI(" w",X,NI))
+ I IDX="stc" Q $O(^BTI(" s",X,NI))
+ Q $O(^BTI(IDX,X,NI))
+InIDX(NI,IDX,X) ; Пациент присутствует в индексе
+ I IDX="work" Q $D(^BTI(" w",X,NI))
+ I IDX="stc" Q $O(^BTI(" s",X,NI))
+ Q $S($D(^BTI(IDX,X,NI)):1,1:0)
+NEXTIDX(IDX,X) ; Перебор только по индексам
+ Q:IDX="" ""
+ I IDX="work" Q $O(^BTI(" w",X))
+ I IDX="stc" Q $O(^BTI(" s",X))
+ Q $O(^BTI(IDX,X))
+ANYDTV(NI,FL,VAL,DS,DE) ; Значение есть хоть в каком значении поля на дату
+ N D
+ S FL=$S($D(TZRBTN(FL)):TZRBTN(FL),1:$G(^BTN($C(9)_"t",FL))),DE=$G(DE)
+ S D=$G(DS)-1 F  S D=$O(^BTN(NI,FL,D)) Q:D=""!(DE&(D>DE))  Q:^(D)=VAL
+ Q D'=""
+NANYDTV(NI,FL,VAL,DS,DE) ; Значения нет хоть в каком значении поля на дату
+ N D
+ S FL=$S($D(TZRBTN(FL)):TZRBTN(FL),1:$G(^BTN($C(9)_"t",FL))),DE=$G(DE)
+ S D=$G(DS)-1 F  S D=$O(^BTN(NI,FL,D)) Q:D=""!(DE&(D>DE))  Q:^(D)'=VAL
+ Q D'=""
+DTBTW(NI,FL,DS,DE,VAL) ; Период дат в котором есть поле
+ N D,D1,D2,R,F
+ S FL=$S($D(TZRBTN(FL)):TZRBTN(FL),1:$G(^BTN($C(9)_"t",FL)))
+ S D=$O(^BTN(NI,FL,DS+1),-1)-1,(D1,D2)="",F=0
+ F  S D=$O(^BTN(NI,FL,D)) Q:D=""!(D>DE)  S R=^(D),F=1 S:$S(D1="":0,1:R'=VAL) D2=D-1 S:$S(D1'="":0,1:R=VAL) D1=D Q:D2'="" 
+ I F,D1="",D2="" Q ""
+ S:D1<DS D1=DS S:D2="" D2=DE
+ Q D1_"|"_D2
+DTBTWF(NI,FL,DS,DE,VAL) ; Период дат в котором есть поле, включающее значение
+ N D,D1,D2,R,F
+ S FL=$S($D(TZRBTN(FL)):TZRBTN(FL),1:$G(^BTN($C(9)_"t",FL)))
+ S D=$O(^BTN(NI,FL,DS+1),-1)-1,(D1,D2)="",F=0
+ S:VAL'["|" VAL="|"_VAL_"|"
+ F  S D=$O(^BTN(NI,FL,D)) Q:D=""!(D>DE)  S R="|"_^(D)_"|",F=1 S:$S(D1="":0,1:R'[VAL) D2=D-1 S:$S(D1'="":0,1:R[VAL) D1=D Q:D2'="" 
+ I F,D1="",D2="" Q ""
+ S:D1<DS D1=DS S:D2="" D2=DE
+ Q D1_"|"_D2
+PIDX(NI,DGN,DT) ; Индекс договора
+ Q:DGN="" ""
+ D:'$D(TZRBTNs) PRETZR
+ Q:$$GETTZ(NI,TZRBTNs,DT)=DGN ""
+ Q:$$GETTZ(NI,TZRBTNs1,DT)=DGN 1
+ Q:$$GETTZ(NI,TZRBTNs2,DT)=DGN 2
+ Q ""
+PIDXN(NI,DGN,DT) ; Индекс договора, -1 если нет
+ Q:DGN="" -1
+ D:'$D(TZRBTNs) PRETZR
+ Q:$$GETTZ(NI,TZRBTNs,DT)=DGN ""
+ Q:$$GETTZ(NI,TZRBTNs1,DT)=DGN 1
+ Q:$$GETTZ(NI,TZRBTNs2,DT)=DGN 2
+ Q -1
+INSCNG(NI,DGN,DT) ; Дата начала изменение договора(с учетом разных полей)
+ Q:NI="" ""
+ N IDX,D,X,iP
+ D:'$D(TZRBTNs) PRETZR
+ S IDX=$$PIDXN(NI,DGN,DT) Q:IDX=-1 ""
+ S D=$S($G(DT)="":99999,1:DT+1)
+ S iP=+$G(TZRBTN("stc"_IDX))
+ F  S X=$O(^BTN(NI,iP,D),-1) Q:X=""  S D=X,IDX=$$PIDXN(NI,DGN,D-1) Q:IDX=-1 
+ Q D
+INSEND(NI,DGN,DT) ; Конечная дата договора
+ Q:NI="" ""
+ N IDX,D,iP
+ D:'$D(TZRBTNs) PRETZR
+ S IDX=$$PIDXN(NI,DGN,DT) Q:IDX=-1 ""
+ S D=$$GETTZ(NI,"dog_to"_IDX,DT) Q:D'="" D
+ S iP=+$G(TZRBTN("stc"_IDX))
+ S D=$O(^BTN(NI,iP,DT)) Q:D'="" D-1
+ Q ""
+FIRSTDT(NIB) ; Date of first typical record
+ D:'$D(TZRBTNs) PRETZR
+ S P=$G(TZRBTN("opfio"))
+ I P'="" Q $O(^BTN(NIB,P,""))
+ Q $O(^BTN(NIB,+$G(TZRBTN("fiof")),""))
+CREATED(NI) ; Date of first record
+ Q:'$D(^BTN(NI)) 0 N D,P,X S P="",D=99999
+ F  S P=$O(^BTN(NI,P)) Q:P=""  S X=$O(^(P,0)) I X'="" S:X<D D=X
+ Q:D=99999 "" Q D
+WRITED(NI) ; Date of first real write record
+ N DT,P,D
+ M:'$D(TZRBTN) TZRBTN=^BTN($C(9)_"t")
+ S P=$G(TZRBTN("opfio")) Q:P="" $$CREATED(NI)
+ S D="",DT=999999
+ F  S D=$O(^BTN(NI,P,D)) Q:D=""  S X=$P($G(^(D)),"|",2) I X'="",+X<DT S DT=+X
+ Q:DT=999999 $$CREATED(NI)
+ Q DT
+FLCNG(NI,PL,DT,POS)     ; Дата изменение поля
+ ; POS - направление, по умолч. - последн.
+ Q:NI=""!(PL="") ""
+ M:'$D(TZRBTN) TZRBTN=^BTN($C(9)_"t")
+ S:$G(POS)="" POS=-1
+ S DT=$S($G(DT)="":$S(POS<0:99999,1:""),1:DT+1)
+ Q $O(^BTN(NI,+$G(TZRBTN(PL)),DT),POS)
+ADD(F,I,O,BD,SEX,DGN,ANIB,NNIB,SD) ; Добавить пациента
+ ; ANIB - альтернативный номер И.Б.
+ ; NNIB - использовать указанный номер И.Б.
+ ; SD - дата сохранения
+ N XML,R,NI,PTI,PR
+ S DGN=$G(DGN),ANIB=$G(ANIB)
+ S:DGN="" DGN=$G(^cfg("def-stc"))
+ S NI=$S($G(NNIB)'="":NNIB,1:$$NEW(1,999999)),PTI="patients"
+ S XML(PTI,"hist")=NI
+ S XML(PTI,"fiof")=$$DW^TXTU(F)
+ S XML(PTI,"fioi")=$$DW^TXTU(I)
+ S XML(PTI,"fioo")=$$DW^TXTU(O)
+ S:BD'="" XML(PTI,"datar")=$$DT^DTUTL(BD)
+ S:SEX'="" XML(PTI,"pol")=SEX
+ S:DGN'="" XML(PTI,"stc")=DGN,XML(PTI,"ofor")=1
+ S:ANIB'="" XML(PTI,"anib")=$$DW^TXTU(ANIB)
+ S:$G(SD)'="" XML(PTI,"savedate")=$$DT^DTUTL(SD)
+ D W^YIPACN
+ Q NI
+CHKmsg(ID,TP) 
+ Q:ID=0 "Пациент снят"_$S(TP=1:"",1:" ("_$$GET^ISPRAV("ofor",TP)_")")
+ Q:ID=5 "Несоответствие договора пациента и услуги "_TP
+ S TP=$S(TP="":"",TP=1:" (2-й договор)",1:" (3-й договор)")
+ Q:ID=1 "Начальный срок за пределами"_TP
+ Q:ID=2 "Конечный срок за пределами"_TP
+ Q ""
+CHECKIDX(NI,DT,IDX,CG) ; Проверка на актуальность по IDX договора
+ ; CG - пропускать "Только по ГП" = 5
+ Q:'$D(^BTN(NI)) 0 S:$G(DT)="" DT=+$H
+ N D
+ D:'$D(TZRBTNs) PRETZR
+ S D=$O(^BTN(NI,+TZRBTN("ofor"),DT+1),-1)
+ I D'="",^(D)'=1 Q:'$G(CG) 0 Q:^(D)'=5 0
+ S D=$O(^BTN(NI,+$G(TZRBTN("dog_from"_IDX)),DT+1),-1)
+ I D'="",+^(D)>DT Q 0
+ S D=$O(^BTN(NI,+$G(TZRBTN("dog_to"_IDX)),DT+1),-1)
+ I D'="" S D=+^(D) I D>0,D<DT Q 0
+ Q 1
+CHECK(NI,DT,IST) ; Проверка на актуальность (возврат - номер дог.)
+ ; IST - конкретный договор
+ Q:'$D(^BTN(NI)) 0 S:$G(DT)="" DT=+$H
+ N D
+ D:'$D(TZRBTNs) PRETZR
+ S D=$O(^BTN(NI,+$G(TZRBTN("ofor")),DT+1),-1) I D'="",^(D)'=1,^(D)'="" Q 0
+ I $D(IST),IST'="" S D=$O(^BTN(NI,TZRBTNs,DT+1),-1) S:D'="" D=^(D) G:D'=IST CHECK1 ; не эта компания
+ S D=$O(^BTN(NI,+$G(TZRBTN("dog_from")),DT+1),-1) I D'="",+^(D)>DT G:'$D(IST) CHECK1 Q 0
+ S D=$O(^BTN(NI,+$G(TZRBTN("dog_to")),DT+1),-1) I D'="" S D=+^(D) I D>0,D<DT G:'$D(IST) CHECK1 Q 0
+ Q 1
+CHECK1 
+ S D=$O(^BTN(NI,TZRBTNs1,DT+1),-1) S:D'="" D=^(D)
+ I $D(IST) G:D'=IST CHECK2
+ Q:'+D 1
+ S D=$O(^BTN(NI,+$G(TZRBTN("dog_from1")),DT+1),-1) I D'="",+^(D)>DT G:'$D(IST) CHECK2 Q 0
+ S D=$O(^BTN(NI,+$G(TZRBTN("dog_to1")),DT+1),-1) I $L(D) S D=+^(D) I D>0,D<DT G:'$D(IST) CHECK2 Q 0
+ Q 2
+CHECK2 
+ S D=$O(^BTN(NI,TZRBTNs2,DT+1),-1) S:D'="" D=^(D)
+ Q:'+D 0 ; нету - нельзя
+ S D=$O(^BTN(NI,+$G(TZRBTN("dog_from2")),DT+1),-1) I D'="",+^(D)>DT Q 0
+ S D=$O(^BTN(NI,+$G(TZRBTN("dog_to2")),DT+1),-1) I D'="" S D=+^(D) I D>0,D<DT Q 0
+ Q 3
+TLST(X) ; To list
+ N R,I,K
+ S R=""
+ F I=1:1:$L(X,"|") S K=$P(X,"|",I) S:K'="" R=$S(R="":"",1:R_CR)_K_"|"
+ Q R
+FLST(X) ; From list
+ N R,I,K
+ S R=""
+ F I=1:1:$L(X,CR) S K=$P($P(X,CR,I),"|",1) S:K'="" R=$S(R="":"",1:R_"|")_K
+ Q R
+CHKINSD(NI,PIDX,DT) ; Проверить актуальность у страхового договора
+ N D
+ S PIDX=$$GET(NI,"stc"_PIDX,DT) Q:PIDX="" 1
+ S D=$$GET^IINSC(PIDX,"dog_from",DT) I D'="",D>DT Q 0
+ S D=$$GET^IINSC(PIDX,"dog_to",DT) I D'="",D<DT Q 0
+ Q 1
+NEW(NS,NE) ; Новый номер (внутр)
+ N NI,X,H,N,ND
+ S NI=$$GET^IQUOTA("^BTN",NS),H=+$H
+ I NI'="",NI<NE Q NI
+ S ND=(NE-NS)/10
+ L +^BTN
+ ; fast search
+ S NI=$O(^BTN(NE),-1)+1
+ I NI'>NE F  Q:$S(H>($G(^QUOTA("^BTN",NI))+1):'$D(^BTN(NI)),1:0)  S NI=NI+1  ; занято сегодня
+ I NI<NS,'$D(^BTN(NI)) S NI=NS
+ ; 1/10 search, if last period numbers
+ G:NI<(NS+((NE-NS)/2)) NEWe
+ S NI=""
+ F N=NS+ND:ND:NE-1 S X=$O(^BTN(N),-1)+1 I '$D(^BTN(X)),H>($G(^QUOTA("^BTN",X))+1) S NI=X Q 
+ G:NI'="" NEWe
+ ; full search
+ F N=NS:1:NE I '$D(^BTN(N)),H>($G(^QUOTA("^BTN",N))+1) S NI=N Q
+NEWe 
+ S:(NI="")!(NI>(NE-1)) NI=$O(^BTN($C(9)_0),-1)+1
+ S ^QUOTA("^BTN",NI)=H
+ L -^BTN
+ Q NI
+FIO(NI,DT) ; Полная фамилия
+ Q:NI="" "" Q:'$D(^BTN(NI)) ""
+ N D,P,KF,KI,KO,A S D=$S($G(DT)="":$H,1:DT)+1,A=""
+ S KF=$G(^($C(9)_"t","fiof")),KI=$G(^("fioi")),KO=$G(^("fioo"))
+fio1 I KF'="" S P=$O(^BTN(NI,KF,D),-1) S:$L(P) A=^(P)
+ I KI'="" S P=$O(^BTN(NI,KI,D),-1) S:$L(P) A=A_" "_^(P)
+ I KO'="" S P=$O(^BTN(NI,KO,D),-1) S:$L(P) A=A_" "_^(P)
+ Q A
+FIOLAT(NI,DT) ; Латинская полная фамилия
+ Q:'$D(^BTN(NI)) ""
+ N D,P,KF,KI,KO,A S D=$S($G(DT)="":$H,1:DT)+1,A=""
+ S KF=$G(^($C(9)_"t","mnf")),KI=$G(^("mni")),KO=$G(^("mno"))
+ G fio1
+FIOSH(NI,DT)             ; Сокращенная фамилия
+ Q:NI="" "" Q:'$D(^BTN(NI)) ""
+ N D,P,KF,KI,KO,A S D=$S($G(DT)="":+$H,1:DT)+1,A=""
+ S KF=$G(^($C(9)_"t","fiof")),KI=$G(^("fioi")),KO=$G(^("fioo"))
+ I KF'="" S P=$O(^BTN(NI,KF,D),-1) S:$L(P) A=^(P)
+ I KI'="" S P=$O(^BTN(NI,KI,D),-1),KI="" I $L(P) S KI=$E(^(P),1) S:$L(KI) A=A_" "_KI_"."
+ I KO'="" S P=$O(^BTN(NI,KO,D),-1) I $L(P) S KO=$E(^(P),1) I $L(KO) S:KI="" A=A_" ." S A=A_KO_"."
+ Q A
+AGE(NI,D) ; Возраст	
+ N YY1,YY2,MM1,MM2,DD1,DD2,A
+ S D=$G(D,+$H),A=$$GET(NI,"datar",D) Q:A="" ""
+ S YY1=$$DT^DTUTL(A),YY2=$$DT^DTUTL(D)
+ S DD1=+$P(YY1,".",1),MM1=+$P(YY1,".",2),YY1=+$P(YY1,".",3)
+ S DD2=+$P(YY2,".",1),MM2=+$P(YY2,".",2),YY2=+$P(YY2,".",3)
+ S A=YY2-YY1 S:MM2<MM1!((MM2=MM1)&(DD2<DD1)) A=A-1 Q A
+AGET(NI,D) ; Расширенный текстовый возраст
+ S D=$G(D,+$H),NI=$$GET(NI,"datar",D) Q:'NI ""
+ Q $$AGET^DTUTL(NI,D)
+ADR(NI,DT,SH) ; Полный адрес пациента
+ ; SH - short
+ Q:'$D(^BTN(NI)) ""
+ N X1,X2,D 
+ S D=$G(DT,+$H),X1=$$GET(NI,"region",D)
+ I $G(SH) s X1="" G adr1
+ S:$L(X1) X2=$G(^KLADR(X1)),X1=$S($TR($E(X1,3,10),0,"")="":$P(X2,"|",2)_" "_$P(X2,"|",3),1:$P(X2,"|",3)_" "_$P(X2,"|",2))
+ S X2=$$GETE(NI,"place",D)
+ I X2'=-1,$L(X2) S:$L(X1) X1=X1_", " S X1=X1_X2
+adr1 S X2=$$GET(NI,"street",D) I $L(X2) S:$L(X1) X1=X1_", " S X1=X1_X2
+ S X2=$$GET(NI,"dom",D) I $L(X2) S:$L(X1) X1=X1_", " S X1=X1_"дом "_X2
+ S X2=$$GET(NI,"korp",D) S:$L(X2) X1=X1_", корп. "_X2
+ S X2=$$GET(NI,"stroen",D) S:$L(X2) X1=X1_", стр. "_X2
+ S X2=$$GET(NI,"kvart",D) S:$L(X2) X1=X1_", кв. "_X2
+ Q X1
+GNIB(NI) ; Получить № ИБ по альтернативному номеру
+ Q:NI="" ""
+ N P
+ S P=$$LCL^IUSER("patients"," nibprefix")
+ S:P="" P=$G(^cfg("pac","nibprefix"))
+ S:P'="" NI=P_NI
+ I $D(^BTI("anib",NI)) Q $O(^(NI,""))
+ Q ""
+FLFLG(NI,FL,FLG,DT) ; Проверить поле по флагу на дату
+ N R
+ S R=$$GET(NI,FL,$G(DT)) Q:R="" 0
+ Q "|"_R_"|"[("|"_FLG_"|")
+ALLSTC(NIB,DS,DE,VAR) ; Список всех договоров в переменную
+ N I,J,DT
+ F J="",1,2 D
+ .D GETM^IPAC(NIB,"stc"_J,"LST")
+ .S DT=DS-1
+ .F  S DT=$O(LST(DT)) Q:DT=""!(DT>DE)  S I=LST(DT) S:I'="" @VAR@(I)=""
+ D GETDLST^IGRNL(NIB,DE,VAR,1)
+ Q
+CNTSTC(NIB,DT) ; Число договоров у пациента
+ N K
+ S K=$$GET(NIB,"cntstc",DT) Q:K'="" K
+ Q:$$GET(NIB,"stc2",DT) 3
+ Q:$$GET(NIB,"stc1",DT) 2
+ Q 1
+DEL(NI) ; Удалить пациента
+ N R,DT
+ ; если есть данные - в журнал
+ S R="" F  S R=$O(^BTN(NI,R)) Q:R=""  S DT="" F  S DT=$O(^BTN(NI,R,DT)) Q:DT=""  D:$D(^(DT))'[0 KD^ISSG("^BTN("""_NI_""","_R_","_DT_")")
+ 
+ D RMIDXU^YIPACN,K^ISSG("^BTN("_NI_")")
+ D KGL^IEXCH("^BTN",NI),KGL^IEXCH("^BILL",NI)
+ K ^BTN(NI)
+ Q
+RECNTSTC(NI,DTS,NUPD) ; Refresh cntstc
+ ; NUPD - без обновления
+ N PL,DTPV
+ S PL=$G(^BTN($C(9)_"t","stc2")),DTPV="",NUPD='$G(NUPD)
+ S:PL'="" DTPV=$O(^BTN(NI,PL,DTS+1),-1)
+ I DTPV'="",^(DTPV)'="" D SET(NI,"cntstc",DTPV,3,NUPD) Q
+ S PL=$G(^BTN($C(9)_"t","stc1")),DTPV=""
+ S:PL'="" DTPV=$O(^BTN(NI,PL,DTS+1),-1)
+ I DTPV'="",^(DTPV)'="" D SET(NI,"cntstc",DTPV,2,NUPD) Q
+ D SET(NI,"cntstc",DTS,1,NUPD)
+ Q
+RETZR ; Обновить тезаурус
+ K TZRBTNs,TZRBTN,TZRRBTN
+PRETZR ; Подготовить тезаурус
+ I $D(TZRBTNs),$D(TZRBTN),$D(TZRRBTN) Q 
+ M TZRBTN=^BTN($C(9)_"t"),TZRRBTN=^BTN($C(9)_"r")
+ ; fixed values
+ S TZRBTNs=+$G(TZRBTN("stc"))
+ S TZRBTNs1=+$G(TZRBTN("stc1"))
+ S TZRBTNs2=+$G(TZRBTN("stc2")) 
+ Q
+DOEVENT(NI) ; Обновить локальные события по пациенту
+ D UPD^YISYNC("L^YIPACN","("_NI_")")
+ D UPD^YISYNC("uPAC^NSPRASP","("_NI_")",1) ; FAKA
+ Q
+cREIDX(NI,DT,POLE) ; Реиндексация с проверкой по имени поля
+ I POLE'="stc",POLE'="stc1",POLE'="stc2",POLE'="work",POLE'="fiof",POLE'="anib" Q
+ D REIDX(NI,DT)
+ Q
+REIDX(NI,DT) ; Пересоздать индексы
+ D RMIDX^YIPACN,MKIDX^YIPACN(DT)
+ Q
+WLOG(NI,DTS,HR) ; Сохранить оператора
+ ; DTS - дата сохранения
+ ; HR - фактическое время
+ N FL,R
+ S FL=$$GTZ^XMLU("opfio","^BTN("""_$C(9)_"t""","^BTN("""_$C(9)_"r""")
+ S R=$$USR^IUSER()
+ S ^BTN(NI,FL,DTS)=R_"|"_HR
+ S ^BTNL(NI,FL,DTS,HR)=R
+ Q
+INITDB 
+ N I
+ S ^MN("root","bloodrh")="Группа крови"
+ S ^MN("root","uchastok")="Участок прикрепления"
+ S ^("uchastok","arch")=2
+ S ^MN("root","gender")="Пол"
+ S ^MN("root","ofor")="Статус оформления пациента"
+ S ^MN("root","whocart")="Местонахождение карты пациента"
+ S ^MN("root","mectorab")="Место работы пациента"
+ S ^MN("root","jobtitle")="Должность пациента"
+ S ^MN("root","status1")="Статус пациента"
+ S ^MN("root","pclssotr")="Головной сотрудник у пациента"
+ S ^MN("root","pdoctype")="Тип документа пациента"
+ D:'$D(^MN("gender"))
+ .S I=$$NEWIDX^YISPRAV("gender")
+ .S ^MN(I,1)="Мужской"
+ .S ^MN(I,2)="Женский"
+ D:'$D(^MN("pdoctype"))
+ .S I=$$NEWIDX^YISPRAV("pdoctype")
+ .S ^MN(I,0)="Паспорт"
+ .S ^MN(I,1)="Вод. права"
+ .S ^MN(I,2)="Загр. пасп."
+ .S ^MN(I,3)="Военн. билет"
+ .S ^MN(I,4)="Иностр.пасп."
+ D:'$D(^MN("relationship"))
+ .S I=$$NEWIDX^YISPRAV("relationship")
+ .S ^MN(I,1)="Муж"
+ .S ^MN(I,2)="Жена"
+ .S ^MN(I,3)="Отец"
+ .S ^MN(I,4)="Мать"
+ .S ^MN(I,5)="Сестра"
+ .S ^MN(I,6)="Брат"
+ .S ^MN(I,7)="Сын"
+ .S ^MN(I,8)="Дочь"
+ .S ^MN(I,9)="Бывш.супруги"
+ .S ^MN(I,10)="Опекун"
+ D:'$D(^MN("bloodrh"))
+ .S I=$$NEWIDX^YISPRAV("bloodrh")
+ .S ^MN(I,0)="не указано"
+ .S ^MN(I,1)="I ,Rh+"
+ .S ^MN(I,2)="II ,Rh+"
+ .S ^MN(I,3)="III ,Rh+"
+ .S ^MN(I,4)="IV ,Rh+"
+ .S ^MN(I,5)="I ,Rh-"
+ .S ^MN(I,6)="II ,Rh-"
+ .S ^MN(I,7)="III ,Rh-"
+ .S ^MN(I,8)="IV ,Rh-"
+ Q

@@ -1,0 +1,88 @@
+instMIS ; First init of Medexis [ 11/11/2018  2:19 PM ]
+BEGIN ; 
+ D RESET
+ D saddRGN^YKLADR
+ D REGDB
+ D ^SYSinst
+ Q
+CLRLOG 
+ N L
+ S L="" F  S L=$O(^LOG(L)) Q:L=""  I L'="1",L'="admin" K ^LOG(L),^PAS(L)
+ Q
+REGDB 
+ N P,X,R
+ S P="" F  S P=$O(^$R(P)) Q:P=""  I P'["." S R="INITDB^"_P X "S X=$T("_R_")" D:X'="" @(R)
+ Q
+RESET ; clear data
+ N I
+ K ^i
+ K ^BTN,^BTI,^BTLOG
+ K ^PNF,^ZNF
+ K ^BILL,^BILLI,^BILS,^BILLC
+ K ^BTPL,^BTPLS
+ K ^MPRP,^MPRPI
+ K ^EPR,^EPRD,^EPRI,^EPRLOG
+ K ^VRPOS,^VRPOSI
+ K ^DSH,^DSHP,^DSHW,^DSHI ; shedule
+ K ^MNTR,^MNTRI
+ K ^KDR,^KDRI
+ K ^DGN
+ K ^CGA
+ K ^PTBL
+ K ^CDOC,^CDOCI
+ K ^MLAB,^MLABI,^MLABE,^LABC,^LABT
+ K ^CME,^CMEI
+ K ^DSCN,^PDSC ; discount
+ K ^WRH,^WRHI,^WRHE ; warehouse
+ K ^PLPU,^PLPUI
+ K ^ZARP,^ZARV,^ZARPL,^ZARPI
+ ; price
+ K ^CN,^CNE,^CNA,^CNZ,^CNCL
+ S I=$$NEWIDX^YISPRAV("price")
+ K ^MN(I)
+ S I=$$NEWIDX^YISPRAV("gprice")
+ K ^MN(I)
+ ; work
+ K ^M(5)
+ 
+ D REG^IPROC,REGLCLI^NUSERS
+ D INITDB^RPTUSL,INITDB^NZARPS
+ Q
+ROOTRI(FN) ; Routine import from root dir
+ Q:$ZV'["Cache" 
+ S FN=$G(^WWW("host","default",9))_FN ; root dir
+ X "O 2:($J) U 2 D $System.OBJ.Load(FN,""c"") C 2 U 0"
+ Q
+RE ; reinit
+ D REG^IPROC,REGLCLI^NUSERS
+ D INITDB^RPTUSL,INITDB^NZARPS
+ Q
+REIDX 
+ D CREAIDX^YIPACN(0)
+ W !,"#",!
+ D REIDX^ICCME
+ W !,"#",!
+ D REIDX^ICMS
+ W !,"#",!
+ D REIDX^IMLAB
+ W !,"#",!
+ D REIDX^IOPERSH
+ W !,"#",!
+ D REIDX^IEPR
+ W !,"#",!
+ D REIDX^NKFUND
+ W !,"#",!
+ D REIDXS^YKLADR
+ W !,"#",!
+ D REIDX^INAZU(0)
+ W !,"#",!
+ D REIDX^IPLPU
+ W !,"#",!
+ D REIDXW^IRASPU,UPDDTE^IRASPU
+ W !,"end" 
+ Q
+IN(FN) ; Load proc and reinit
+ Q:$ZV'["Cache"
+ X "D $System.OBJ.Load(FN,""c"")"
+ D RE
+ Q

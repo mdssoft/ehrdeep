@@ -1,0 +1,14 @@
+RPPCAB ; Отчеты личного каб. пациента [ 11/07/2012  12:23 PM ]
+ULIST ; Список пользователей
+ N L,R,N
+ D OWF^RWU(".txt")
+ D WC^RWU("Логин|№ И.Б.|Ф.И.О. пациента|Последний вход")
+ S L="" F  S L=$O(^PPCAB(L)) Q:L=""  D
+ .S N=$G(^(L,"n")),R=$G(^("log"))
+ .S R=$$FIO^IPAC(N)_"|"_$$DTM^DTUTL(R)
+ .D WC^RWU(CR_L_"|"_N_"|"_R)
+ D C^RWU
+ Q
+REGIPROC 
+ S ^IPROC("Система","Пациенты","Пользователи личного кабинета")="ULIST_RPPCAB,1,0"
+ Q

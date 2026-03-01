@@ -1,0 +1,243 @@
+A ; Юр. лица [ 01/26/2023  1:56 PM ]
+INIT 
+ N R,I
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<contra><paytype>")
+ D WC^RWU("|Не используется"_CR_"-9|Безналичный расчет"_CR_"-5|Выбор кассового расчета")
+ D LSTs^NSPRAV("outkss",0,1,1)
+ D W^RWU("</paytype><flg>")
+ I '$$CHKSPR^ISPRAV("contrflg") D WC^RWU("lpu|Лечебное учреждение"_CR_"fi|Филиал"_CR_"gd|Головное подразделение"_CR_"cli|Клиент"_CR_"sup|Поставщик"_CR_"prt|Субподряд"_CR_"agn|Агент")
+ D LSTs^NSPRAV("contrflg",0,0,1)
+ D W^RWU("</flg>")
+ S R=$$LCL^NUSER("contr","hide")
+ I R'="" F I=1:1:$L(R,"|") D W^RWU("<"_$P(R,"|",I)_" visible=""no""/>")
+ D W^RWU("</contra></nb_console>"),C^RWU
+ Q
+DF(R,FFLG,ADD,USE,SRT) ; Табличный поиск по контрагентам
+ ; FFLG - фильтр по флагам
+ ; ADD - строка "добавить"
+ ; USE - показывать действующие
+ ; SRT - сортировка по имени
+ S R=$$LU^TXTU($$WD^TXTU(R)),FFLG=$G(FFLG),USE=$G(USE),SRT=$G(SRT)
+ N N,NM,NMF,LST
+ D OWF^RWU(".txt"),WC^RWU("Код|Наименование")
+ I $G(ADD),$$LCL^IUSER("contr","new")'=0 D WC^RWU(CR_"+|Добавить новое")
+ I R'="",$D(^CGA(R)) S NM=$$GET(R,"shortname",+$H) D WC^RWU(CR_R_"|"_NM) G DFe
+ S:FFLG'="" FFLG="|"_FFLG_"|"
+ S N="" F  S N=$O(^CGA(N)) Q:N=""  D
+ .I FFLG'="","|"_$$GET(N,"flg")_"|"'[FFLG Q 
+ .I USE,$$GET(N,"use")=0 Q 
+ .S NM=$$GET(N,"shortname")
+ .I R'="" S NMF=$$GET(N,"oname") I $$LU^TXTU(NM)'[R,$$LU^TXTU(NMF)'[R Q 
+ .I 'SRT D WC^RWU(CR_N_"|"_NM) Q 
+ .S LST($E(NM,1,10)_"|"_N)=NM
+ I SRT S N="" F  S N=$O(LST(N)) Q:N=""  D WC^RWU(CR_$P(N,"|",2)_"|"_LST(N))
+DFe D C^RWU
+ Q
+DL(N,DT) ; Загрузка
+ N DTF,PL,DS,R
+ S N=+N D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<contra>")
+ G:'$D(^CGA(N)) DLEND
+ S DTF("init_date")="",PL="",DT=$$DIH^DTUTL($G(DT))+1
+ F  S PL=$O(^CGA(N,PL)) Q:PL=""  D
+ .Q:PL="LOG" 
+ .S DS=$O(^(PL,DT),-1) Q:DS=""  S R=^(DS)
+ .S:$D(DTF(PL)) R=$$DT^DTUTL(R)
+ .I PL'="flg" D WTAGDC^RWU(PL,R) Q
+ .D WTAG^RWU(PL,R)
+ D WTAG^RWU("kod",N)
+DLEND D W^RWU("</contra></nb_console>"),C^RWU
+ Q
+PRDT(N,DT) ; Previous change date
+ N P,PD,CD
+ S DT=$$DIH^DTUTL(DT)
+ S P="",PD=0
+ F  S P=$O(^CGA(N,P)) Q:P=""  S CD=$O(^(P,DT),-1) I CD'="" S:CD>PD PD=CD
+ S:PD=0 PD=DT
+ D MSG^RWU($$DT^DTUTL(PD))
+ Q
+NXDT(N,DT) ; Next change date
+ N P,PD,CD
+ S DT=$$DIH^DTUTL(DT)
+ S P="",PD=99999
+ F  S P=$O(^CGA(N,P)) Q:P=""  S CD=$O(^(P,DT)) I CD'="" S:CD<PD PD=CD S:PD=99999 PD=DT
+ D MSG^RWU($$DT^DTUTL(PD))
+ Q
+DS ; Запись
+ Q:$$LCL^NUSER("contr","save")=0 
+ N @$$NEWVAR^YIXMLRR()
+ D RBUFH^YIXMLRR(1)
+ D W
+ Q
+W N NVD,DTF,PT,PR,DTS,R,DTPV
+ S NB="nb_console",PT="contra",DTS=$G(XML(NB,PT,"savedate"))
+ S N=$G(XML(NB,PT,"kod")),DTS=$$DIH^DTUTL(DTS)
+ I N="",$$LCL^IUSER("contr","new")=0 D MSG^RWU("Создание нового юрлица запрещено.") Q 
+ K XML(NB,PT,"savedate"),XML(NB,PT,"kod")
+ S XML(NB,PT,"LOG")=$$USRH^IUSER()
+ S DTF("init_date")="",PL="",NVD=0
+ I N="" L +^CGA F N=1:1:99999 I '$D(^CGA(N)) S NVD=1 Q ; new num
+ F  S PL=$O(^CGA(N,PL)) Q:PL=""  S:'$D(XML(NB,PT,PL)) XML(NB,PT,PL)=""
+ S PL="" F  S PL=$O(XML(NB,PT,PL)) Q:PL=""  D
+ .S R=$G(XML(NB,PT,PL)) S:$D(DTF(PL)) R=$$DI^DTUTL(R)
+ .S DTPV=+$O(^CGA(N,PL,DTS+1),-1),PR=$G(^(DTPV))
+ .S:R'=PR ^(DTS)=R K:R=PR ^(DTS)
+ L:NVD -^CGA
+ D MKIDX^ICONTR(N)
+ D:NVD MSG^RWU(^PP(0,2)_"<contra><kod>"_N_"</kod></contra></"_NB_">",".xmlb")
+ D UPD^IEXCH("YCONTR",N)
+ S ^CGA=$H
+ D W^ISSG("^CGA("_N_")")
+ Q
+DEL(N) ; Delete item
+ Q:N="" 
+ N X
+ Q:$$LCL^NUSER("contr","del")=0
+ S X=$$USEDTXT^ICONTR(N) I X'="" D MSG^RWU("Запись задействована в "_X) Q 
+ D DEL^ICONTR(N)
+ Q
+GET(N,POLE,DT) ; Значение поля
+ S:$G(DT)="" DT=+$H
+ S DT=$O(^CGA(N,POLE,DT+1),-1) Q:DT="" "" Q $G(^(DT))
+SET(N,POLE,DT,R) ; Установить поле
+ G SET+1^ICONTR 
+NAME(N) ; Наименование
+ G NAME+1^ICONTR
+NAMEH(N,DT) ; Наименование по дате
+ G NAMEH+1^ICONTR
+ADDR(N,DT,LT) ; Полный адрес
+ G ADDR+1^ICONTR
+ADDRY(N,DT) ; Полный Юр. адрес
+ G ADDRY+1^ICONTR
+CHECK(N,DT) ; Проверка на наличие
+ G CHECK+1^ICONTR
+LSTPRT ; Поставщики
+ D OWF^RWU(".txt")
+ D LSTNFs("prt")
+ D C^RWU
+ Q
+LSTNF ; List, NO filials
+ D OWF^RWU(".txt")
+ D LSTNFs()
+ D C^RWU
+ Q
+LSTNFs(AF) ; List, NO filials (system)
+ ; AF - дополнительный флаг
+ N N,NM,F,C
+ S (N,C)="",AF=$G(AF) F  S N=$O(^CGA(N)) Q:N=""  D
+ .S NM=$$GET(N,"shortname",+$H),F="|"_$$GET(N,"flg",+$H)_"|"
+ .I F'="||",F["|fi|" Q 
+ .I AF'="",F'[("|"_AF_"|") Q 
+ .Q:$$GET(N,"use",+$H)=0 
+ .D WC^RWU(C_N_"|"_NM) S C=CR
+ Q
+LSTFILTs ; Список филиалов, упрощенная системная версия
+ N C,N
+ S (C,N)=""
+ F  S N=$O(^CGAI("flg","fi",N)) Q:N=""  I $D(^CGA(N)),$$GET(N,"use",+$H)'=0,("|"_$$GET(N,"flg",+$H)_"|")["|fi|" D WC^RWU(C_N_"|"_$$NAME^ICONTR(N)) S C=CR
+ Q
+LSTFI(TXT) ; List, only filials
+ D OWF^RWU(".txt")
+ D LSTFIsys($G(TXT))
+ D C^RWU
+ Q
+LSTFLG(FLG,MOD,USE) ; List, by flags
+ D OWF^RWU(".txt")
+ D LSTFLsys("",$G(FLG),+$G(MOD),+$G(USE))
+ D C^RWU
+ Q
+LSTFIsys(TXT) 
+ N N,NM,F,C,D
+ S (N,C)="",TXT=$$LU^TXTU($$WD^TXTU(TXT)),D=+$H
+ F  S N=$O(^CGAI("flg","fi",N)) Q:N=""  D
+ .S F="|"_$$GET(N,"flg",+$H)_"|"
+ .Q:F'["|fi|"  
+ .Q:$$GET(N,"use",D)=0 
+ .S NM=$$GET(N,"shortname",D)
+ .I TXT'="" Q:$$LU^TXTU(NM)'[TXT 
+ .D WC^RWU(C_N_"|"_NM) S C=CR
+ Q
+LSTFLsys(FLG,FLG2,MOD,USE) ; Список по флагу
+ ; FLG (единичный) или FLG2 (множественные)
+ ; MOD=1 - пустая строка вначале
+ ; USE - только действующие
+ N N,NM,F,C,D
+ S (N,C)="",FLG=$G(FLG),FLG2=$G(FLG2),USE=$G(USE),D=+$H
+ S:$G(MOD)=1 C="|"_CR
+ S FLG=$S(FLG="":"",1:"|"_FLG_"|")
+ S:FLG2'="" FLG2=FLG_FLG2
+ F  S N=$O(^CGA(N)) Q:N=""  D
+ .S NM=$$GET(N,"shortname",D)
+ .S F=$$GET(N,"flg",D)
+ .I F="",FLG'=""!(FLG2'="") Q 
+ .I FLG'="",FLG2="",("|"_F_"|")'[FLG Q 
+ .I FLG2'="",'$$FLinFL^TXTU(F,FLG2) Q 
+ .I USE,$$GET(N,"use",D)=0 Q 
+ .D WC^RWU(C_N_"|"_NM) S C=CR
+ Q
+STAFF(ID) ; Сотрудники по организации
+ D OWF^RWU(".txt")
+ D LSTSTAF^ICONTR(ID,+$H)
+ D C^RWU
+ Q
+RXCH ; Exchange
+ N ID
+ D R^XGUNET("hpar")
+ I $D(ID) D RMIDX^ICONTR(ID),MKIDX^ICONTR(ID)
+ S ^CGA=$H
+ ; todo - send update filials
+ Q
+WXCH(ID)  ; Write exchange
+ N GL
+ S GL("A")="-^CGA("_ID_")",GL("C")="^CGA("_ID,GL("ID")="ID"
+ D S^XGUNET("GL","exp.nb-data")
+ Q
+LXLS ; Load from file
+ ; Code|Short name|Full name
+ N %J,A,ID,XML
+ K ^CGA,^CGAI
+ D ORH^RWU
+ S NB="nb_console",PT="contra"
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  D
+ .Q:%J<2 
+ .S ID=$P(A,"|",1) Q:ID="" 
+ .K XML
+ .S XML(NB,PT,"kod")=ID
+ .S XML(NB,PT,"shortname")=$P(A,"|",2)
+ .S XML(NB,PT,"oname")=$P(A,"|",3)
+ .D W
+ D CR^RWU
+ Q
+JSON(OTDL) ; JSON export
+ N N,X,D,F,OL,FF,DH
+ D OWF^RWU(".txt"),W^RWU("[")
+ S D=+$H,OTDL=$G(OTDL),DH=$H-90
+ I OTDL'="" F I=1:1:$L(OTDL,",") S OL($P(OTDL,",",I))=""
+ S N="",F=0 F  S N=$O(^CGAI("flg","fi",N)) Q:N=""  D:$D(^CGA(N)) 
+ .Q:'$$CHECK^ICONTR(N,D)
+ .S FF=0 ; TODO - переделать определение доступности отделений
+ .I $D(OL) S FF=1,X="" F  S X=$O(^DSH(N,X)) Q:X=""  I $D(OL(X)),$G(^DSH(N,X))>DH S FF=0 Q 
+ .Q:FF 
+ .D B^IJSON()
+ .D W^IJSON("id",N)
+ .D W^IJSON("name",$$GET(N,"oname",D))
+ .D W^IJSON("shortname",$$GET(N,"shortname",D))
+ .S X=$$GET(N,"mname",D)
+ .D:X'="" W^IJSON("extname",X)
+ .S X=$$GET(N,"license",D)
+ .D:X'="" W^IJSON("license",X)
+ .S X=$$GET(N,"phone",D)
+ .D:X'="" W^IJSON("phones",X)
+ .S X=$$GET(N,"call",D)
+ .D:X'="" W^IJSON("ephones",X)
+ .S X=$$GET(N,"email",D)
+ .D:X'="" W^IJSON("email",X)
+ .S X=$$GET(N,"internet",D)
+ .D:X'="" W^IJSON("web",X)
+ .S X=$$GET(N,"aregion",D)
+ .D:X'="" W^IJSON("region",$$NMTPLT^YKLADR(X)),W^IJSON("region_id",X)
+ .S X=$$ADDR(N,D)
+ .D:X'="" W^IJSON("address",X)
+ .D WC^RWU($S(F:",",1:"")_$$E^IJSON())
+ .S F=1
+ D W^RWU("]"),C^RWU
+ Q

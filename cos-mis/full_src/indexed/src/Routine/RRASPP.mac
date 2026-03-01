@@ -1,0 +1,77 @@
+RRASPP ; Посещения по расписанию [ 11/03/2015  1:10 AM ]
+TABPP(DS,DE,SMOD,GMOD,DVID,LPU,FLPU) ; Сводка по первичным пациентам
+ ; DVID - вид договора
+ ; FLPU - первичный по филиалу
+ N LP,VR,OT,DT,TM,NI,GI,TAB,L,CD,F,R,I
+ S LPU=$G(LPU)
+ S:'+$$FR^I() LPU=$$^I("ilpu")
+ d mkpp
+ S NI="" F  S NI=$O(^BUF($J,"nil",NI)) Q:NI=""  D
+ .S L=^(NI),F=^(NI,"v"),LP=$P(F,"|",1),VR=$P(F,"|",2)
+ .S:GMOD VR=0
+ .S TAB(LP,VR,1)=$G(TAB(LP,VR,1))+1
+ .I $D(^BUF($J,"nil",NI,1)) S TAB(LP,VR,2)=$G(TAB(LP,VR,2))+1
+ .I $D(^BUF($J,"nil",NI,2)) S TAB(LP,VR,3)=$G(TAB(LP,VR,3))+1
+ D OWF^RWU(".txt")
+ D WC^RWU("Филиал|Врач|Записано|Пришло|Остались")
+ S LP="" F  S LP=$O(TAB(LP)) Q:LP=""  D
+ .S VR="" F  S VR=$O(TAB(LP,VR)) Q:VR=""  D
+ ..S R=$$NAME^ICONTR(LP)_"|"_$S(GMOD:"Все",1:$$VFIOSH^IRASP2(VR))
+ ..F I=1,2,3 S R=R_"|"_(+$G(TAB(LP,VR,I)))
+ ..D WC^RWU(CR_R)
+ D C^RWU 
+ K ^BUF($J,"nil")
+ Q
+LSTPP(DS,DE,SMOD,VV,DVID,LPU,FLPU) ; Список первичных пациентов
+ ; VV - записанные, пришедшие, с 2 и более посещениями
+ ; DVID - вид договора
+ N LP,VR,OT,DT,TM,NI,GI,TAB,L,CD,F,R,I
+ S LPU=$G(LPU)
+ S:'+$$FR^I() LPU=$$^I("ilpu")
+ d mkpp
+ D OWF^RWU(".txt")
+ D WC^RWU("Филиал|Врач|№ И.Б.|Пациент|Пришел|Остался")
+ S NI="" F  S NI=$O(^BUF($J,"nil",NI)) Q:NI=""  D
+ .S L=^(NI),F=^(NI,"v"),LP=$P(F,"|",1),VR=$P(F,"|",2)
+ .S CD=""
+ .S:L="" L=$$FIO^IPAC(NI),CD=NI
+ .I VV=1 Q:'$D(^BUF($J,"nil",NI,1)) 
+ .I VV=2 Q:'$D(^BUF($J,"nil",NI,2)) 
+ .S R=$$NAME^ICONTR(LP)_"|"_$$VFIOSH^IRASP2(VR)_"|"_CD_"|"_L
+ .S R=R_"|"_$S($D(^BUF($J,"nil",NI,1)):1,1:"")_"|"_$S($D(^(2)):1,1:"")
+ .D WC^RWU(CR_R)
+ D C^RWU
+ K ^BUF($J,"nil")
+ Q
+mkpp 
+ N STOM,STOTD
+ K ^BUF($J,"nil")
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),FLPU=$G(FLPU)
+ M STOM=^cfg("stom-otd") S R=$G(^cfg("stom-otd")) S:R'="" STOM(R)=""
+ M STOTD=^cfg("stom-otd")
+ S:$G(^cfg("stom-otd"))'="" STOTD(^("stom-otd"))=""
+ S LP=""
+ F  S LP=$O(^DSH(LP)) Q:LP=""  I LPU=""!(LP=LPU) S OT="" F  S OT=$O(^DSH(LP,OT)) Q:OT=""  I $$isSMOD^RRASP(OT,SMOD) S VR="" F  S VR=$O(^DSH(LP,OT,VR)) Q:VR=""  S SP="" F  S SP=$O(^DSH(LP,OT,VR,SP)) Q:SP=""  S DT=DS-1 F  S DT=$O(^DSH(LP,OT,VR,SP,DT)) Q:DT=""!(DT>DE)  D
+ .S TM="" F  S TM=$O(^DSH(LP,OT,VR,SP,DT,TM)) Q:TM=""  D
+ ..S L=$G(^(TM)) Q:L="*"  Q:L=""  
+ ..S NI=$P(L,"|",1),GI=$P(L,"|",7)_"~"_LP
+ ..Q:NI="" 
+ ..I '$$EXIST^IPAC(NI) Q:GI=""  Q:DVID'=""  S:'$D(^BUF($J,"nil",GI)) ^(GI)=NI,^(GI,"v")=LP_"|"_VR Q 
+ ..I 'FLPU,$O(^PNF(NI,DT),-1)'="" Q  ; не первич.
+ ..I 'FLPU,$O(^DSHP(NI,DT),-1)'="" Q  ; не первич.
+ ..I FLPU,'$$IsPRP^IRPRASP(LP,OT,VR,SP,DT,TM,1) Q  ; по филиалу
+ ..I DVID'="",$$GET^IINSC($$GET^IPAC(NI,"stc",DT),"dvid",DT)'=DVID Q 
+ ..S:'$D(^BUF($J,"nil",NI)) ^(NI)="",^(NI,"v")=LP_"|"_VR
+ ..I $D(^PNF(NI))!$D(^EPRI("nd",NI)) S:'$D(^BUF($J,"nil",NI,1)) ^(1)=""
+ ..S CD=DT,F=0 F  S CD=$O(^PNF(NI,CD)) Q:CD=""  S F=F+1 Q:F>1
+ ..Q:F<1  ; только повторный прием, но возможно изменения 
+ ..S:'$D(^BUF($J,"nil",NI,2)) ^(2)=""
+ Q
+REGIPROC 
+ N A,B,F,FF
+ S FF=+$$FR^I()
+ S F=$S(FF:",t@storage:lpu,Филиал,t@string:0/Нет#1/Да,Первичный по филиалу",1:"")
+ S A="Отчеты ЛПУ",B="Посещаемость и обращаемость"
+ S ^IPROC(A,B,"Сводка по первичным пациентам")="TABPP_RRASPP,1,"_$S(FF:7,1:5)_",d,Начальная дата,d,Конечная дата,t@string:0/Всем подразделениям#1/Поликлинике#2/Стоматологии,Расчет по,t@string:0/Филиал-врач#1/Филиал,Группировать по,t@net:NMLST_NSPRAV(""dvid"")@1,Вид договора"_F
+ S ^IPROC(A,B,"Список первичных пациентов")="LSTPP_RRASPP,1,"_$S(FF:7,1:5)_",d,Начальная дата,d,Конечная дата,t@string:0/Всем подразделениям#1/Поликлинике#2/Стоматологии,Расчет по,t@string:0/Записавшихся#1/Пришедших#2/Оставшихся,Список пациентов,t@net:NMLST_NSPRAV(""dvid"")@1,Вид договора"_F
+ Q

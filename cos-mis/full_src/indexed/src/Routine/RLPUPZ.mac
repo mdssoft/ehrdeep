@@ -1,0 +1,297 @@
+RLPUPZ ; Отчеты по посещаемости и загрузке [ 09/04/2018  4:31 PM ]
+DO(DS,DE,TYP,OTP,ALLu,ABONpr,NNU) 
+ ; OTP - подразделение: 0-все,1-пол-ка,2-стом,3-стац
+ ; ALLu=0 В колонки "всего" не входят все услуги (прямые договора и пр.)
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),ABONpr=+$G(ABONpr)
+ S:ABONpr=2 ABONpr=1 ; не отдельной строкой
+ N TPL,SS,BTPLS,DGT,LP,OT,VR,I,X,SUM,LPN,SSS,zz,FF,uCNT,OTL,OTX,Ap,ZGV
+ S FF=+$$FR^I(),uCNT=0,Ap=0,ZGV=0,NNU=$G(NNU)
+ M BTPLS=^BTPLS("stc")
+ K ^BUF($J,"o"),^BUF($J,"f"),^BUF($J,"p")
+ D MAKE,POST,RAS
+ K ^BUF($J,"o"),^BUF($J,"f"),^BUF($J,"p")
+ D OWF^RWU(".htm")
+ F I=1:1:27 D WC^RWU(CR_$E($T(HTML+I),3,999))
+ D WC^RWU(CR_$$TXTP^DTUTL(DS,DE)_"</p>")
+ F I=1:1:41 D WC^RWU(CR_$E($T(HTM2+I),3,999))
+ S LP="" F  S LP=$O(SS(LP)) Q:LP=""!(LP="-")  D
+ .S LPN=$$NAMEH^ICONTR(LP,DE)
+ .I TYP'=3 S OT="" F  S OT=$O(SS(LP,OT)) Q:OT=""  D
+ ..S X="<tr><td colspan=""2"" class=""tab2"">"_$$GOTD^YISPRAV(OT)_"</td>"
+ ..F I=1:1:27 S X=X_"<td>"_$$FN($G(SUM(LP,OT,I)))_"</td>"
+ ..D WC^RWU(CR_X_"</tr>")
+ ..I TYP=2!(TYP=4)!(TYP=5) S VR=""  F  S VR=$O(SS(LP,OT,VR)) Q:VR=""  D
+ ...S X="<tr><td>"_$S(TYP=4!(TYP=5):$$GSPEC^YISPRAV(VR),1:$$FIOSH^YIKADRY(VR))_"</td><td>"_LPN_"</td>"
+ ...F I=1:1:27 S X=X_"<td>"_$$FN($G(SS(LP,OT,VR,I)))_"</td>"
+ ...D WC^RWU(CR_X_"</tr>")
+ .S X="<tr class=""tab3""><td colspan=""2"">Итого по "_LPN_"</td>"
+ .F I=1:1:27 S X=X_"<td>"_$$FN($G(SUM(LP,"-",I)))_"</td>"
+ .D WC^RWU(CR_X_"</tr>")
+ S:FF X="<tr class=""tab3""><td colspan=""2"">Итого</td>"
+ I FF F I=1:1:27 S X=X_"<td>"_$$FN($G(SUM("-","-",I)))_"</td>"
+ D:FF WC^RWU(CR_X_"</tr>")
+ D WC^RWU("</table>"_$S(ALLu:"",1:"<p class=""tab1"">* Отчет сформирован по типам договоров: индивидуальный, СК, СК по предоплате. Прочие договара не учитываются.</p>")_"</body></html>")
+ D C^RWU
+ Q
+DOTAB(DS,DE,TYP,OTP,ALLu,ABONpr,ZGV,NNU) 
+ ; OTP - подразделение: 0-все,1-пол-ка,2-стом,3-стац
+ ; ALLu=0 В колонки "всего" не входят все услуги (прямые договора и пр.)
+ ; ABONpr - =1 - абонементы в аванс, =2-абонементы отдельной колонкой
+ ; ZGV - представление "загрузки"
+ ; NNU - исключить нулевые услуги
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),ABONpr=+$G(ABONpr)
+ N TPL,SS,BTPLS,DGT,LP,OT,VR,I,X,SUM,LPN,SSS,zz,FF,uCNT,Ap,Xp,OTL,OTX
+ S FF=+$$FR^I(),uCNT=1,Ap=(ABONpr=2),NNU=$G(NNU)
+ M BTPLS=^BTPLS("stc")
+ K ^BUF($J,"o"),^("f"),^("p")
+ D MAKE,POST,RAS
+ K ^BUF($J,"o"),^("f"),^("p")
+ D OWF^RWU(".txt")
+ S X="Отделение"_$S(TYP=6:"|",1:", ")_"врач|Загрузка|Впервые|Впервые|Впервые|Впервые"
+ S:Ap X=X_"|Впервые"
+ S X=X_"|Обратилось|Обратилось|Обратилось|Обратилось"
+ S:Ap X=X_"|Обратилось"
+ S X=X_"|Посещ.|Посещ.|Посещ.|Посещ."
+ S:Ap X=X_"|Посещ."
+ S X=X_"|Посещаемость|Посещаемость|Посещаемость|Посещаемость"
+ S:Ap X=X_"|Посещаемость"
+ S X=X_"|Сумма|Сумма|Сумма|Сумма"
+ S:Ap X=X_"|Сумма"
+ S X=X_"|Услуг|Услуг|Услуг|Услуг"
+ S:Ap X=X_"|Услуг"
+ S X=X_"|Чек по пац.|Чек по пац.|Чек по пац."
+ S:Ap X=X_"|Чек по пац."
+ S X=X_"|Чек по пос.|Чек по пос.|Чек по пос."
+ S:Ap X=X_"|Чек по пос."
+ S X=X_";"
+ D WC^RWU(X)
+ S X=$$TXTP^DTUTL(DS,DE)_"|"_$S(TYP=6:"|",1:"")_$S(ZGV=2:"Всего/Запись/Факт",1:"")_"|"
+ F I=1:1:6 S X=X_"Всего|ФЛ|Факт|Аванс|" S:Ap X=X_"Абон.|"
+ S X=X_"ФЛ|Факт|Аванс"_$S(Ap:"|Абон.",1:"")
+ S X=X_"|ФЛ|Факт|Аванс"_$S(Ap:"|Абон.",1:"")
+ D WC^RWU(CR_X)
+ S LP="" F  S LP=$O(SS(LP)) Q:LP=""!(LP="-")  D
+ .S LPN=$$NAMEH^ICONTR(LP,DE) D WC^RWU(CR_LPN)
+ .I TYP'=3 S OT="" F  S OT=$O(SS(LP,OT)) Q:OT=""  D
+ ..S X=$S(OT'=0:$$GOTD^YISPRAV(OT),1:"")_$S(TYP=6:"|",1:"")
+ ..F I=1:1:$S(Ap:38,1:30) S X=X_"|"_$$FN($G(SUM(LP,OT,I)),I=1)
+ ..S X=$$POSTln(X)
+ ..D:TYP'=5&(TYP'=6) WC^RWU(CR_X)
+ ..I 2456[TYP S VR=""  F  S VR=$O(SS(LP,OT,VR)) Q:VR=""  D
+ ...S X=" - "_$S(TYP=4!(TYP=5):$$GSPEC^YISPRAV(VR),TYP=6:$$GSPEC^YISPRAV($P(VR,"@",1))_"|"_$$FIOSH^IKADRY($P(VR,"@",2)),1:$$FIOSH^IKADRY(VR))
+ ...F I=1:1:$S(Ap:39,1:31) S X=X_"|"_$$FN($G(SS(LP,OT,VR,I)),I=1)
+ ...S X=$$POSTln(X)
+ ...D WC^RWU(CR_X)
+ .S X="Итого по "_LPN_$S(TYP=6:"|",1:"")
+ .F I=1:1:$S(Ap:39,1:31) S X=X_"|"_$$FN($G(SUM(LP,"-",I)),I=1)
+ .S X=$$POSTln(X)
+ .D WC^RWU(CR_X)
+ I FF S X="Итого"_$S(TYP=6:"|",1:"") F I=1:1:$S(Ap:39,1:31) S X=X_"|"_$$FN($G(SUM("-","-",I)),I=1)
+ D:FF WC^RWU(CR_X)
+ D C^RWU
+ Q 
+GETTP(DG,DT) 
+ I $D(TPL(DG)) Q TPL(DG)
+ N X
+ S X=$D(BTPLS(DG))
+ S X=+$S(X:$S(Ap:8,ABONpr:1,1:9),1:$$GET^IINSC(DG,"dvid",DT))
+ I ABONpr=3,X=1 S X=9 ; в аванс только абон.
+ S X=$S(X=0:2,X=1:3,X=3:1,X=8:4,ALLu:0,1:9),TPL(DG)=X
+ Q X
+FN(X,NOTDO) 
+ Q:$G(NOTDO) X
+ S X=+X
+ Q $S(X[".":$TR($FN(X,"",2),".",","),1:X)
+MAKE ; Создание
+ N R
+ I OTP=1!(OTP=2) M OTL=^cfg("stom-otd") S R=$G(^cfg("stom-otd")) S:R'="" OTL(R)=""
+ I OTP=1!(OTP=3) M OTL=^cfg("stac-otd")
+ I OTP=1 M OTX=OTL K OTL S R="" F  S R=$$NEXT^ISPRAV("otd",R) Q:R=""  S:'$D(OTX(R)) OTL(R)=""
+ K OTX
+ D MKALLPRC^IUSLSC(DS,DE,1,"PRC^RLPUPZ","",'+$$FR^I())
+ K SUM M SUM=SSS
+ Q
+POST ; Постобработка
+ S NI="" F  S NI=$O(^BUF($J,"f",NI)) Q:NI=""  D
+ .S Z=$O(^BUF($J,"f",NI,"")) Q:Z=""  ; самое раннее время появл.
+ .S Z=^(Z)
+ .S VR=$P(Z,"|",1),OTD=$P(Z,"|",2),L=$P(Z,"|",3),Z=2+$P(Z,"|",4)
+ .S OTD=$S(TYP=5:0,TYP=6:0,1:OTD)
+ .S SS(L,OTD,VR,Z)=$G(SS(L,OTD,VR,Z))+1
+ .S:Z'=2 SS(L,OTD,VR,2)=$G(SS(L,OTD,VR,2))+1
+ .S SUM(L,OTD,Z)=$G(SUM(L,OTD,Z))+1
+ .S:Z'=2 SUM(L,OTD,2)=$G(SUM(L,OTD,2))+1
+ .S SUM(L,"-",Z)=$G(SUM(L,"-",Z))+1
+ .S:Z'=2 SUM(L,"-",2)=$G(SUM(L,"-",2))+1
+ .S SUM("-","-",Z)=$G(SUM("-","-",Z))+1
+ .S:Z'=2 SUM("-","-",2)=$G(SUM("-","-",2))+1
+ N VRC,OTC,LPC
+ S LP="",LPC=0 F  S LP=$O(SS(LP)) Q:LP=""  D
+ .S OT="",OTC=0 F  S OT=$O(SS(LP,OT)) Q:OT=""  D
+ ..S VR="",VRC=0 F  S VR=$O(SS(LP,OT,VR)) Q:VR=""  D
+ ...S VRC=VRC+1,OTC=OTC+1,LPC=LPC+1
+ ...F I=3:1:$S(Ap:6,1:5) D
+ ....S Xp=$S(Ap:2,1:0)
+ ....S SS(LP,OT,VR,10+Xp)=$G(SS(LP,OT,VR,10+Xp))+$G(SS(LP,OT,VR,I+8+Xp))
+ ....S Xp=$S(Ap:4,1:0)
+ ....S SS(LP,OT,VR,18+Xp)=$G(SS(LP,OT,VR,18+Xp))+$G(SS(LP,OT,VR,I+16+Xp))
+ ....S Xp=$S(Ap:5,1:0)
+ ....S:uCNT SS(LP,OT,VR,22+Xp)=$G(SS(LP,OT,VR,22+Xp))+$G(SS(LP,OT,VR,I+20+Xp))
+ ...F I=$S(Ap:12,1:10):1:$S(Ap:39,uCNT:31,1:27) S X=$G(SS(LP,OT,VR,I)),SUM(LP,OT,I)=$G(SUM(LP,OT,I))+X,SUM(LP,"-",I)=$G(SUM(LP,"-",I))+X,SUM("-","-",I)=$G(SUM("-","-",I))+X
+ .I OTC>0,'uCNT F I=22:1:27 S SUM(LP,"-",I)=$G(SUM(LP,"-",I))/OTC
+ .I OTC>0,uCNT F I=$S(Ap:31,1:26):1:$S(Ap:39,1:31) S SUM(LP,"-",I)=$G(SUM(LP,"-",I))/OTC
+ S Xp=$S(Ap:3,1:0)
+ I LPC>0 F I=14+Xp:1:17+Xp S SUM("-","-",I)=$G(SUM("-","-",I))/OTC
+ I LPC>0,'uCNT F I=22:1:27 S SUM("-","-",I)=$G(SUM("-","-",I))/OTC
+ I LPC>0,uCNT F I=$S(Ap:31,1:26):1:$S(Ap:39,1:31) S SUM("-","-",I)=$G(SUM("-","-",I))/OTC
+ Q
+POSTln(R) ; Постобработка
+ N I,X
+ S Xp=$S(Ap:3,1:0)
+ F I=15+Xp:1:18+Xp S X=$$nf($P(R,"|",I-8-$S(Ap:2,1:0))) S:X $P(R,"|",I)=$$FN($$nf($P(R,"|",I-4-$S(Ap:1,1:0)))/X)
+ I 'uCNT F I=23:1:25 S X=$$nf($P(R,"|",I-15)) S:X $P(R,"|",I)=$$FN($$nf($P(R,"|",I-3))/X)
+ I 'uCNT F I=26:1:28 S X=$$nf($P(R,"|",I-14)) S:X $P(R,"|",I)=$$FN($$nf($P(R,"|",I-6))/X)
+ S Xp=$S(Ap:6,1:0)
+ I uCNT F I=27+Xp:1:$S(Ap:36,1:29) S X=$$nf($P(R,"|",I-19-$S(Ap:5,1:0))) S:X $P(R,"|",I)=$$FN($$nf($P(R,"|",I-7-$S(Ap:2,1:0)))/X)
+ S Xp=$S(Ap:7,1:0)
+ I uCNT  F I=30+Xp:1:$S(Ap:40,1:32) S X=$$nf($P(R,"|",I-18-$S(Ap:5,1:0))) S:X $P(R,"|",I)=$$FN($$nf($P(R,"|",I-10-$S(Ap:3,1:0)))/X)
+ 
+ S X=$$nf($P(R,"|",7))
+ S:X $P(R,"|",15+$S(Ap:3,1:0))=$$FN($$nf($P(R,"|",11+$S(Ap:2,1:0)))/X)
+ Q R
+nf(X) ; reFN
+ Q +$TR(X,",",".")
+PRC 
+ N L,Z,K,C,ZC
+ I OTP,'$D(OTL(OTD)) Q 
+ S CSTC=+CSTC,L=+$G(LPU),FLG="|"_$G(FLG)_"|",OTX=OTD
+ S DGT=$S(FLG["|prf|":$S(ALLu:0,1:9),CSTC=0!KASS:1,1:$$GETTP(CSTC,DT)) Q:DGT=9
+ S K=VR
+ S C=$G(UL(U))
+ S ZC=$S($D(UL(U,1)):UL(U,1),1:$$PRICEH^IPRICE(U,PRC,DT)*KSKD*C)
+ I NNU,+ZC=0 Q 
+ I TYP=4!(TYP=5)!(TYP=6) S:$G(SP)="" SP=$$SPEC^IKARY(VR,DT) S K=SP
+ S:TYP=6 K=SP_"@"_VR
+ S:TYP=5!(TYP=6) OTX=0
+ ; Поиск раннего времени приема:
+ I $O(^PNF(NI,""))=DT S zz=$G(^(DT,VR_"|"_OTD_"|"_ID)),zz=$P($P(zz,"|",1),",",2) S:zz'="" ^BUF($J,"f",NI,zz)=K_"|"_OTD_"|"_L_"|"_DGT ; все секунды первого дня
+ 
+ S Xp=$S(Ap:7,1:6),Z=Xp+DGT
+ I '$D(^BUF($J,"o",NI)) S ^(NI)="",SSS("-","-",Z)=$G(SSS("-","-",Z))+1 S:Z'=Xp SSS("-","-",Xp)=$G(SSS("-","-",Xp))+1
+ I '$D(^(NI,L)) S ^(L)="",SSS(L,"-",Z)=$G(SSS(L,"-",Z))+1 S:Z'=Xp SSS(L,"-",Xp)=$G(SSS(L,"-",Xp))+1
+ I '$D(^(L,OTD)) S ^(OTD)="",SSS(L,OTX,Z)=$G(SSS(L,OTX,Z))+1 S:Z'=Xp SSS(L,OTX,Xp)=$G(SSS(L,OTX,Xp))+1
+ I '$D(^(OTD,K)) S ^(K)="",SS(L,OTX,K,Z)=$G(SS(L,OTX,K,Z))+1 S:Z'=Xp SS(L,OTX,K,Xp)=$G(SS(L,OTX,K,Xp))+1
+ S Z=L_","_VR_","_OTD_","_DT,Xp=$S(Ap:12,1:10)
+ I '$D(^BUF($J,"p",NI,Z)) S ^(Z)="",SS(L,OTX,K,Xp+DGT)=$G(SS(L,OTX,K,Xp+DGT))+1
+ S Xp=$S(Ap:22,1:18)
+ S SS(L,OTX,K,Xp+DGT)=$G(SS(L,OTX,K,Xp+DGT))+ZC
+ S Xp=$S(Ap:27,1:22)
+ S:uCNT SS(L,OTX,K,Xp+DGT)=$G(SS(L,OTX,K,Xp+DGT))+C
+ Q
+RAS 
+ N STAT,ST,J,INCC,T
+ S INCC=$S(OTP:"OTL",1:""),J=(TYP=5)!(TYP=6),T=$S(TYP=6:9,1:TYP=4!J)
+ D ZVRI^RRASP(DS,DE,$S(FF:"",1:+$$^I("ilpu")),T,1,1,,,J,INCC)
+ F L=1:1:9 S ST(L)=0
+ S L="" F  S L=$O(STAT(L)) Q:L=""  D:FF!(L=+$$^I("ilpu"))
+ .S (ST(3),ST(4),ST(8))=0
+ .S OT="" F  S OT=$O(STAT(L,OT)) Q:OT=""  D
+ ..I OTP,TYP'=5,TYP'=6,'$D(OTL(OT)) K STAT(L,OT) Q 
+ ..S VR="",(ST(1),ST(2),ST(7))=0
+ ..F  S VR=$O(STAT(L,OT,VR)) Q:VR=""  D
+ ...S X=+$G(STAT(L,OT,VR,1)),I=+$G(STAT(L,OT,VR,$S(ZGV=1:5,1:3)))
+ ...S J=+$G(STAT(L,OT,VR,5))
+ ...S ST(2)=ST(2)+X,ST(1)=ST(1)+I S:ZGV=2 ST(7)=ST(7)+J
+ ...S ST(4)=ST(4)+X,ST(3)=ST(3)+I S:ZGV=2 ST(8)=ST(8)+J
+ ...S ST(6)=ST(6)+X,ST(5)=ST(5)+I S:ZGV=2 ST(9)=ST(9)+J
+ ...S:X SS(L,OT,VR,1)=$$rasf(X,I,J)
+ ..S I=ST(1),X=ST(2),J=$G(ST(7))
+ ..S:ST(2) SUM(L,OT,1)=$$rasf(X,I,J)
+ .S I=ST(3),X=ST(4),J=$G(ST(8))
+ .S:ST(4) SUM(L,"-",1)=$$rasf(X,I,J)
+ S I=ST(5),X=ST(6),J=$G(ST(9))
+ S:ST(6) SUM("-","-",1)=$$rasf(X,I,J)
+ Q
+rasf(X,I,J) 
+ Q:ZGV=2 $P(X/60,".",1)_"/"_$P(I/60,".",1)_"/"_$P(J/60,".",1)
+ Q $FN((100*I)/X,"",2)
+USLER 
+ Q
+HTML 
+ ;<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+ ;<html>
+ ;<head>
+ ;<title>Сводка по посещаемости и загрузке ЛПУ</title>
+ ;<meta http-equiv="Content-Type" content="text/html; charset=windows-1251">
+ ;<style type="text/css">
+ ;<!--
+ ;.tab1 {
+ ;font-family: "Times New Roman", Times, serif;
+ ;font-size: 9px;
+ ;}
+ ;.tab2 {
+ ;font-family: "Times New Roman", Times, serif;
+ ;font-size: 9px;
+ ;font-style: italic;
+ ;font-weight: bold;
+ ;}
+ ;.tab3 {
+ ;font-family: "Times New Roman", Times, serif;
+ ;font-size: 10px;
+ ;font-weight: bold;
+ ;}
+ ;-->
+ ;</style>
+ ;</head>
+ ;<body>
+ ;<p align="center">Сводка по посещаемости и загрузке ЛПУ<br>
+HTM2 
+ ;<table width="100%" border="1" cellpadding="0" cellspacing="0" class="tab1">
+ ;<tr> 
+ ; <td rowspan="2">Фамилия, И.О. врача, отделение</td>
+ ; <td rowspan="2">Клиника</td>
+ ; <td rowspan="2">ЗАГРУЗКА</td>
+ ; <td colspan="4"><div align="center">ОБРАТИЛОСЬ ВПЕРВЫЕ</div></td>
+ ; <td colspan="4"><div align="center">КОЛИЧЕСТВО ОБРАТИВШИХСЯ</div></td>
+ ; <td colspan="4"><div align="center">КОЛИЧЕСТВО ПОСЕЩЕНИЙ</div></td>
+ ; <td colspan="4"><div align="center">ПОСЕЩАЕМОСТЬ</div></td>
+ ; <td colspan="4"><div align="center">ОКАЗАНО УСЛУГ</div></td>
+ ; <td colspan="3"><div align="center">СРЕДНИЙ ЧЕК ПО ПАЦИЕНТУ</div></td>
+ ; <td colspan="3"><div align="center">СРЕДНИЙ ЧЕК ПО ПОСЕЩЕНИЮ</div></td>
+ ;</tr>
+ ;<tr> 
+ ; <td>ВСЕГО</td>
+ ; <td>ФИЗЛИЦА</td>
+ ; <td>ФАКТ</td>
+ ; <td>АВАНС</td>
+ ; <td>ВСЕГО</td>
+ ; <td>ФИЗЛИЦА</td>
+ ; <td>ФАКТ</td>
+ ; <td>АВАНС</td>
+ ; <td>ВСЕГО</td>
+ ; <td>ФИЗЛИЦА</td>
+ ; <td>ФАКТ</td>
+ ; <td>АВАНС</td>
+ ; <td>СРЕДНЯЯ</td>
+ ; <td>ФИЗЛИЦА</td>
+ ; <td>ФАКТ</td>
+ ; <td>АВАНС</td>
+ ; <td>ВСЕГО</td>
+ ; <td>ФИЗЛИЦА</td>
+ ; <td>ФАКТ</td>
+ ; <td>АВАНС</td>
+ ; <td>ФИЗЛИЦА</td>
+ ; <td>ФАКТ</td>
+ ; <td>АВАНС</td>
+ ; <td>ФИЗЛИЦА</td>
+ ; <td>ФАКТ</td>
+ ; <td>АВАНС</td>
+ ;</tr>
+REGIPROC 
+ N X,T
+ S X="0/По отделениям#2/По врачам#4/По специальностям#5/Только специальности#6/Специальность+врач"_$S(+$$FR^I():"#3/По филиалам",1:"")
+ S X=",d,Начальный период,d,Конечный период,t@string:"_X_",Отображать отчет,t@string:0/Все#1/Поликлиника#2/Стоматология#3/Стационар,Подразделения,t@string:0/Нет#1/Да,Расчет по всем видам договоров,t@string:1/Да#0/Нет#3/Только абонементы#2/Отдельно,Учитывать абонементы как аванс"
+ S T="Посещаемость и обращаемость"
+ S ^IPROC("Отчеты ЛПУ",T,"Сводка по посещаемости и загрузке")="DO_RLPUPZ,3,7"_X_",t@string:0/Нет#1/Да,Исключить нулевые услуги"
+ S ^IPROC("Отчеты ЛПУ",T,"Таблица по посещаемости и загрузке")="DOTAB_RLPUPZ,1,8"_X_",t@string:0/В процентах#1/Проценты по факту#2/Десятично в минутах,Представление загрузки,t@string:0/Нет#1/Да,Исключить нулевые услуги,l,8,1"
+ Q

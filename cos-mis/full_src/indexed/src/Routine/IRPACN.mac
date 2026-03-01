@@ -1,0 +1,25 @@
+IRPACN ; Права для новых пациентов [ 01/06/2021  0:52 AM ]
+CHECK() ; data in XML
+ ; NSW - external value
+ N RR,F,FL
+ S RR=$G(XML("patients","newpac")),F=""
+ Q:'RR ""
+ N N,I,EXE,A,TX
+ S N=+$G(^MN("newpac")),(I,FL)=""
+ F  S I=$O(^MN(N,RR,"nstate",I)) Q:I=""  D
+ .S EXE=$G(^MN(N,RR,"nstate",I,"f")),A=$G(XML("patients",I))
+ .I A="",'$L(EXE) S F=$S(F="":"",1:F_CR)_^MN(N,RR,"nstate",I) S:FL="" FL=I Q
+ .Q:EXE=""
+ .S TX=$G(^MN(N,RR,"nstate",I))
+ .X "S:'("_EXE_") F=$S(F="""":"""",1:F_CR)_TX"
+ .I F'="",FL="" S FL=I
+ S NSW=+$G(^MN(N,RR,"fstate"," noswchk"))
+ Q RR_"|"_F_"|"_FL
+fl(FL) ; Получить значение поля
+ N X,TP
+ S X=$G(XML("patients",FL))
+ S TP=$P($G(^STRUCT("patients",FL)),"|",1)
+ S:TP="D" X=$$DI^DTUTL(X)
+ Q X
+nul(FL) ; Нулевое значение поля
+ Q:$$fl(X)="" 1 Q 0

@@ -1,0 +1,479 @@
+IPOLIS ; Учет персональных договоров - полисов [ 06/12/2020  1:21 PM ]
+CHECK(NMP) ; Проверка на существующий номер
+ N NI,P,A S A=$$RECONV(NMP),(NI,P)=""
+ F  S NI=$O(^BTPLI("p",A,NI)) Q:NI=""  S P=$G(^(NI)) Q:P=NMP 
+ Q:P=NMP NI Q 0
+NEW() ; Новый номер по этому ЛПУ
+ N LPU,USR,NN,X
+ S USR=1,X=$G(%LOG) F  S X=$O(^LOG(X),-1) Q:X=""  S USR=USR+1
+ S LPU=+$$^I("ilpu"),LPU=$E("000",1,3-$L(LPU))_LPU
+ L +^INKR("^BTPL")
+ S NN=+$G(^INKR("^BTPL"))+1,^INKR("^BTPL")=NN
+ L -^INKR("^BTPL")
+ S X=$G(^cfg("polis-pattern"))
+ I X'="" Q @X
+ Q LPU_"-"_USR_"-"_NN
+CREA(NIB,NMP,STC,TP,KOEF,SUM,NOPAY,PSUM,SDT) ; Создать
+ ; SUM - стоимость
+ ; PSUM - сумма первой оплаты
+ ; SDT - дата сохранения
+ Q:NIB=""!(NMP="")  
+ N TZLN,TZRLN,R,I,K,P,X,T
+ S:$G(^cfg("polis-reg-stc"))=STC STC=$G(^cfg("polis-stc"))
+ S TZLN="^BTPL("""_$C(9)_"t""",TZRLN="^BTPL("""_$C(9)_"r"""
+ S I=$$GTZ^XMLU("wdt",TZLN,TZRLN),TP=+$G(TP),KOEF=$G(KOEF,1)
+ S SUM=$G(SUM),NOPAY='+$G(NOPAY),PSUM=$G(PSUM)
+ S:$L(I) ^BTPL(NIB,NMP,I,$H)=$$USR^IUSER()
+ S I=$$GTZ^XMLU("stc",TZLN,TZRLN) S:$L(I) ^BTPL(NIB,NMP,I)=STC
+ S I=$$RECONV(NMP) S:$L(I) ^BTPLI("p",I,NIB)=NMP
+ ; значения по умолчанию
+ S:TP ^BTPL(NIB,NMP,$$GTZ^XMLU("tp",TZLN,TZRLN))=TP
+ S:KOEF'=1 ^BTPL(NIB,NMP,$$GTZ^XMLU("koef",TZLN,TZRLN))=KOEF
+ S P=$S('SUM:$G(^BTPLS("t",TP,"price",1)),1:SUM),R=P
+ S:KOEF P=P*KOEF
+ S X=$$LCL^NUSER("polis","round") S:X'="" P=+$J(P,"",X)
+ S:P ^BTPL(NIB,NMP,$$GTZ^XMLU("price",TZLN,TZRLN))=P
+ S:SDT ^BTPL(NIB,NMP,$$GTZ^XMLU("df",TZLN,TZRLN))=SDT
+ ; Себестоимость
+ S I=$S(SUM="":$G(^BTPLS("t",TP,"rprice",1)),1:SUM)
+ ; Агентские пропорциональные или абсолютные
+ S T=$G(^BTPLS("t",TP,"agf"))
+ S:KOEF I=$S(T=1:KOEF-1*R+I,1:I*KOEF)
+ S:X'="" I=+$J(I,"",X)
+ S:$L(I) ^BTPL(NIB,NMP,$$GTZ^XMLU("bprice",TZLN,TZRLN))=I
+ S I=$G(^BTPLS("t",TP,"dcnt"))
+ S:$L(I) ^BTPL(NIB,NMP,$$GTZ^XMLU("dcnt",TZLN,TZRLN))=I
+ S I=$G(^BTPLS("t",TP,"ptp"))
+ S:$L(I) ^BTPL(NIB,NMP,$$GTZ^XMLU("ptp",TZLN,TZRLN))=I
+ S I=$G(^BTPLS("t",TP,"prog"))
+ S:$L(I) ^BTPL(NIB,NMP,$$GTZ^XMLU("prog",TZLN,TZRLN))=I
+ ; Базовая стоимость (мин. сумма оплаты)
+ S I=$S(PSUM:PSUM,SUM="":+$G(^BTPLS("t",TP,"base-summ",1)),1:SUM)
+ S:'I I=$P($G(^BTPLS("t",TP,"pp")),";",1) ; оплача частями
+ S K=I ; для 1 шт.
+ S:KOEF I=I*KOEF
+ S:X'="" I=+$J(I,"",X)
+ S:'I I=+$G(^BTPLS("c","base-summ",STC)) ; к общ. параметрам коэф. не применяется
+ S:'I I=+$G(^BTPLS("c","base-summ"))
+ S:I ^BTPL(NIB,NMP,$$GTZ^XMLU("base-summ",TZLN,TZRLN))=I
+ D:NOPAY CHKPAY(NIB,NMP)
+ D UPD^IEXCH("IPOLIS",NMP)
+ Q
+CHKPAY(NIB,NMP) ; Проверить/добавить оплату
+ N B,P,K,S
+ S S=$$GET(NIB,NMP,"summ"),B=$$GET(NIB,NMP,"base-summ")
+ I B>S D ARES^IBILL(NIB,$H,B,"ARSUM^IPOLIS("""_NMP_""","_B_")","BTPL:"_NMP) Q  ; +кассовый аванс
+ S B=B-S
+ S K=$$NOW^IBILL(NIB)
+ S:$G(^cfg("polis-pay-max")) P=$$GET(NIB,NMP,"price")-S,B=$S(P'<K:P,K>B:K,1:B)
+ I $G(^cfg("polis-pay-min")),K>0,K<B D  
+ .D ARES^IBILL(NIB,$H,K,"ARSUM^IPOLIS("""_NMP_""","_K_")","BTPL:"_NMP)
+ .S B=B-K
+ Q:B 
+ D ARES^IBILL(NIB,$H,B,"ARSUM^IPOLIS("""_NMP_""","_B_")","BTPL:"_NMP)
+ Q
+ARSUM(NMP,SUM) 
+ S SUM=$$ASUMM($$CHECK(NMP),NMP,SUM)
+ Q
+PAYP(NIB,NMP,SUM) 
+ N S
+ S S=$$ASUMM(NIB,NMP,SUM)
+ D URESIDX^IBILL(NIB,"BTPL:"_NMP,SUM)
+ Q
+ASUMM(NIB,NMP,SUM,CREDIT,HH) ; Добавить сумму
+ ; HH - дата,время добавления
+ Q:NIB=""!(NMP="") 0 S SUM=+$TR(SUM,",;:/'`=\",".") Q:SUM<0 0
+ N TZLN,TZRLN,I,CSUM,PSUM,SSUM,STC,R,H,BS,BDT
+ S CSUM=$$NOW^IBILL(NIB),PSUM=9999999
+ I '+$G(CREDIT),CSUM<SUM Q 0
+ S:$G(HH)="" HH=+$H
+ S TZLN="^BTPL("""_$C(9),TZRLN=TZLN_"r""",TZLN=TZLN_"t"""
+ S I=$$GTZ^XMLU("price",TZLN,TZRLN)
+ I $L(I) S PSUM=+$G(^BTPL(NIB,NMP,I)) S:PSUM=0 PSUM=9999999
+ S I=$$GTZ^XMLU("base-summ",TZLN,TZRLN),BS=PSUM
+ I $L(I) S I=$G(^BTPL(NIB,NMP,I)) S:$L(I) BS=I
+ S I=$$GTZ^XMLU("summ",TZLN,TZRLN)
+ S SSUM=+$G(^BTPL(NIB,NMP,I))
+ S:(SSUM+SUM)>PSUM SUM=PSUM-SSUM 
+ Q:SUM=0 0 ; Незачем платить
+ S ^BTPL(NIB,NMP,I)=SSUM+SUM
+ S BDT=""
+ D SUB^IBILL(NIB,HH,SUM,"BTPL:"_NMP,"BDT")
+ Q:BDT="" 0 ; не прошла оплата
+ S I=$$GTZ^XMLU("sum",TZLN,TZRLN)
+ D:$L(I)
+ .S H=BDT
+ .F  Q:'$D(^BTPL(NIB,NMP,I,H))  S H=$P(H,",",1)_","_($P(H,",",2)+1)
+ .S ^BTPL(NIB,NMP,I,H)=(+SUM)_"|"_$$USR^IUSER()
+ D UPD^IEXCH("IPOLIS",NMP)
+ D:(SSUM+SUM)'<BS ACTIVAT(NIB,NMP,"",1)
+ ; Добавление 2-го платежа, после базового
+ I (SSUM+SUM)<PSUM,(SSUM+SUM)=BS S SUM=PSUM-SSUM-SUM D ARES^IBILL(NIB,$H,SUM,"ARSUM^IPOLIS("""_NMP_""","_SUM_")","BTPL:"_NMP)
+ Q 1
+CBILL(NI,LN,FR,TO) ; Изменить ключ платежа с на
+ Q:FR=""  Q:TO=""  Q:FR=TO 
+ S LN=$P(LN,"|",6) Q:$P(LN,":",1)'="BTPL" 
+ N TZLN,TZRLN,I,NMP
+ S TZLN="^BTPL("""_$C(9),TZRLN=TZLN_"r""",TZLN=TZLN_"t"""
+ S I=$$GTZ^XMLU("sum",TZLN,TZRLN),NMP=$P(LN,":",2)
+ Q:'$D(^BTPL(NI,NMP,I,FR)) 
+ M ^BTPL(NI,NMP,I,TO)=^BTPL(NI,NMP,I,FR)
+ K ^BTPL(NI,NMP,I,FR)
+ D UPD^IEXCH("IPOLIS",NMP)
+ Q
+UPDACT(NIB,NMP,UPD) ; Проверить сумму и активировать в случае необходимости
+ N I,S,BS,PSUM,TZLN,TZRLN
+ S TZLN="^BTPL("""_$C(9),TZRLN=TZLN_"r""",TZLN=TZLN_"t"""
+ S S=+$G(^BTPL(NIB,NMP,+$$GTZ^XMLU("summ",TZLN,TZRLN)))
+ S I=$$GTZ^XMLU("price",TZLN,TZRLN),PSUM=9999999
+ I $L(I) S PSUM=+$G(^BTPL(NIB,NMP,I)) S:PSUM=0 PSUM=9999999
+ S I=$$GTZ^XMLU("base-summ",TZLN,TZRLN),BS=PSUM
+ I $L(I) S I=$G(^BTPL(NIB,NMP,I)) S:$L(I) BS=I
+ Q:S<BS
+ D ACTIVAT(NIB,NMP,"",$G(UPD))
+ Q
+ACTIVAT(NIB,NMP,DT,UPD) ; Activate polis
+ N PTZLN,PTZRLN
+ S PTZLN="^BTPL("""_$C(9),PTZRLN=PTZLN_"r""",PTZLN=PTZLN_"t"""
+ N STC,I,J,TP,FL,DC,R,X,AD
+ S DT=$G(DT)
+ S I=+$$GTZ^XMLU("df",PTZLN,PTZRLN)
+ S:DT="" DT=$G(^BTPL(NIB,NMP,I))
+ S:DT="" DT=+$H
+ S:$G(^BTPL(NIB,NMP,I))="" ^(I)=DT ; если нет -прописываем дату при акт.
+ S I=$$GET^IPAC(NIB,"stc",DT)
+ S STC=$G(^BTPL(NIB,NMP,+$$GTZ^XMLU("stc",PTZLN,PTZRLN)))
+ I I=STC Q:$L($G(^BTPL(NIB,NMP,+$$GTZ^XMLU("activate",PTZLN,PTZRLN)))) 
+ S TP=$G(^BTPL(NIB,NMP,+$$GTZ^XMLU("ptp",PTZLN,PTZRLN)))
+ S DC=+$G(^BTPL(NIB,NMP,+$$GTZ^XMLU("dcnt",PTZLN,PTZRLN)))
+ ; добавочный полис
+ S AD=$G(^BTPL(NIB,NMP,+$$GTZ^XMLU("add",PTZLN,PTZRLN)))
+ G:AD'="" ACTIVATa
+ D CLRFROM^IPAC(NIB,"ofor",DT),SET^IPAC(NIB,"ofor",DT,1)
+ ; Проверяем 1-й или 2-й свободен
+ I TP=3 S FL=$$GET^IPAC(NIB,"stc",DT),TP=$S(FL="":1,$D(^BTPLS("dstc",FL)):1,$$GET^IPAC(NIB,"stc1",DT)'="":4,1:2)
+ ; Договора, полисы сроки, программы
+ S FL=$S(TP=4:"stc2",TP=2:"stc1",1:"stc")
+ D CLRFROM^IPAC(NIB,FL,DT),SET^IPAC(NIB,FL,DT,STC)
+ D:TP>1 SET^IPAC(NIB,"cntstc",DT,$S(TP=4:3,1:3))
+ D SET^IPAC(NIB,FL,DT+DC,$S(TP>1:"",$L($G(^cfg("def-stc"))):^("def-stc"),1:1))
+ S FL=$S(TP=4:"dog_from2",TP=2:"dog_from1",1:"dog_from")
+ D CLRFROM^IPAC(NIB,FL,DT),SET^IPAC(NIB,FL,DT,DT),SET^IPAC(NIB,FL,DT+DC,"")
+ S FL=$S(TP=4:"dog_to2",TP=2:"dog_to1",1:"dog_to")
+ D CLRFROM^IPAC(NIB,FL,DT),SET^IPAC(NIB,FL,DT,DT+DC-1),SET^IPAC(NIB,FL,DT+DC,"")
+ S FL=$S(TP=4:"polis2",TP=2:"polis1",1:"polis")
+ S R=$$GET^IPAC(NIB,FL,DT-1)
+ D CLRFROM^IPAC(NIB,FL,DT),SET^IPAC(NIB,FL,DT,NMP),SET^IPAC(NIB,FL,DT+DC,R)
+ S I=$G(^BTPL(NIB,NMP,+$$GTZ^XMLU("prog",PTZLN,PTZRLN)))
+ S:I="" I=$G(^BTPLS("c","prog"))
+ S FL=$S(TP=4:"prog2",TP=2:"prog1",1:"prog")
+ S R=$$GET^IPAC(NIB,FL,DT)
+ D:$L(I) CLRFROM^IPAC(NIB,FL,DT),SET^IPAC(NIB,FL,DT,I),SET^IPAC(NIB,FL,DT+DC,R)
+ ; Стоимость полиса
+ S FL="psumm"_$S(TP=4:"2",TP=2:"1",1:"") 
+ S I=$G(^BTPL(NIB,NMP,+$$GTZ^XMLU("price",PTZLN,PTZRLN)))
+ S R=$$GET^IPAC(NIB,FL,DT)
+ D CLRFROM^IPAC(NIB,FL,DT),SET^IPAC(NIB,FL,DT,I),SET^IPAC(NIB,FL,DT+DC,R) 
+ ; Лимит суммы
+ S FL="sumlimit"_$S(TP=4:"2",TP=2:"1",1:"")
+ S I=$G(^BTPL(NIB,NMP,+$$GTZ^XMLU("limit",PTZLN,PTZRLN)))
+ G:I="" ACTIVATe
+ S R=$$GET^IPAC(NIB,FL,DT)
+ D CLRFROM^IPAC(NIB,FL,DT),SET^IPAC(NIB,FL,DT,I),SET^IPAC(NIB,FL,DT+DC,R)
+ACTIVATe 
+ ; Назначения
+ S I=$G(^BTPL(NIB,NMP,+$$GTZ^XMLU("tp",PTZLN,PTZRLN)))
+ I I S I=$G(^BTPLS("t",I,"autonaz")) D:$L(I) MAKE^NNAZPT(NIB,I,DT,"",DC)
+ ; Индексы/флаги
+ S I=$H,^BTPL(NIB,NMP,+$$GTZ^XMLU("activate",PTZLN,PTZRLN))=I
+ S ^BTPLI("a",1,NIB,NMP)=I
+ D:$G(UPD) UPD^IEXCH("IPOLIS",NMP),UPD^IEXCH("IPACEX",NIB)
+ Q
+ACTIVATa ; Добавление к существующему
+ S TP=$G(^BTPL(NIB,AD,+$$GTZ^XMLU("ptp",PTZLN,PTZRLN))) ; тип базового
+ S I=$G(^BTPL(NIB,NMP,+$$GTZ^XMLU("prog",PTZLN,PTZRLN)))
+ S:I="" I=$G(^BTPLS("c","prog"))
+ S FL=$S(TP=4:"prog2",TP=2:"prog1",1:"prog")
+ S R=$$GET^IPAC(NIB,FL,DT)
+ F J=1:1:$L(I,"|") S X=$P(I,"|",J) Q:X=""  S R=$$STFLG^TXTU(R,X)
+ D SET^IPAC(NIB,FL,DT,R)
+ S FL=$S(TP=4:"dog_to2",TP=2:"dog_to1",1:"dog_to")
+ D CLRFROM^IPAC(NIB,FL,DT),SET^IPAC(NIB,FL,DT,DT+DC-1),SET^IPAC(NIB,FL,DT+DC,"")
+ ; TODO - настройка с учетом сроков
+ G ACTIVATe
+DOEND(NIB,NMP,DT) ; "Завершить" абонемент
+ Q:'$$GET(NIB,NMP,"activate") 0
+ N DF,CNT,R,P,TP,FL,PIDX
+ S DF=$$GET(NIB,NMP,"df"),CNT=$$GET(NIB,NMP,"dcnt")
+ Q:+$H>(DF+CNT) 0
+ S TP=$$GET(NIB,NMP,"ptp")
+ I TP=3 S FL=$$GET^IPAC(NIB,"stc",DT),TP=$S(FL="":1,$D(^BTPLS("dstc",FL)):1,$$GET^IPAC(NIB,"stc1",DT)'="":4,1:2)
+ S PIDX=$S(TP=4:2,TP=2:1,1:"")
+ S FL="stc"_PIDX,R=$$GET^IPAC(NIB,FL,DF+CNT)
+ S P=$G(^cfg("def-stc")),P=$S(P="":1,1:P)
+ S R=$S($$GET^IPAC(NIB,FL,DT)=R:P,1:R)
+ D SET^IPAC(NIB,FL,DT,R)
+ S FL="dog_from"_PIDX
+ D ENDfl
+ S FL="dog_to"_PIDX
+ D ENDfl
+ S FL="prog"_PIDX
+ D ENDfl
+ S FL="polis"_PIDX
+ D ENDfl
+ D SET(NIB,NMP,"dcnt",+$H-DT+1)
+ D UPD^IEXCH("IPACEX",NIB)
+ Q 1
+ENDfl 
+ S R=$$GET^IPAC(NIB,FL,DF+CNT+1) ; что по окончании стоит
+ S R=$S($$GET^IPAC(NIB,FL,DT)=R:"",1:R)
+ D SET^IPAC(NIB,FL,DT,R)
+ Q
+CSUMM(NIB,NMP) ; Текущая сумма полиса
+ Q:NIB=""!(NMP="") "" N TZLN,TZRLN,I
+ S TZLN="^BTPL("""_$C(9)_"t""",TZRLN="^BTPL("""_$C(9)_"r"""
+ S I=$$GTZ^XMLU("summ",TZLN,TZRLN) Q:I="" "" Q $G(^BTPL(NIB,NMP,I))
+RSUMM(NIB,NMP,UK) ; Полная базовая сумма полиса
+ ; UK - использовать коэффициент
+ Q:NIB=""!(NMP="") "" N TZLN,TZRLN,TP,P,K
+ S TZLN="^BTPL("""_$C(9)_"t""",TZRLN="^BTPL("""_$C(9)_"r"""
+ S TP=^BTPL(NIB,NMP,$$GTZ^XMLU("tp",TZLN,TZRLN))
+ S P=$G(^BTPLS("t",TP,"price",1))
+ I $G(UK) S K=$G(^BTPL(NIB,NMP,$$GTZ^XMLU("koef",TZLN,TZRLN))) S:K'="" P=P*K
+ S K=$$LCL^NUSER("polis","round") S:K'="" P=+$J(P,"",K)
+ Q P
+LAST(NIB,ACTIV) ; Получить последний абон.
+ ; ACTIV - действующий
+ I '$G(ACTIV) Q $O(^BTPL(NIB,""),-1)
+ N NMP,D,F
+ S NMP="",F=0 F  S NMP=$O(^BTPL(NIB,NMP),-1) Q:NMP=""  D  Q:F
+ .S D=$$GET(NIB,NMP,"df")+$$GET(NIB,NMP,"dcnt")
+ .Q:+$H>D
+ .S F=1
+ Q NMP
+ACTIV(NIB) ; есть ли активный договор и с какой даты
+ N DT,ID,X
+ S ID="",DT=$H-1 F  S ID=$O(^BTPL("a",1,NIB,ID)) Q:ID=""  S X=$G(^(ID)) Q:$P(X,",",1)>DT 
+ Q $S(ID="":"",1:ID_"|"_(+X))
+EXIST(NIB,NMP) 
+ Q:NIB="" 0 Q:NMP="" 0
+ Q $S($D(^BTPL(NIB,NMP)):1,1:0)
+ALLOW(NIB,NMP) ; По абонементу может осуществляться прием
+ I '$G(^cfg("polis","allactive")),'$$GET(NIB,NMP,"activate") Q 0
+ N X 
+ S X=$G(^cfg("polis","denynpay"))
+ Q:'X 1
+ Q:($H-$$GET(NIB,NMP,"df"))<X 1 ; еще время не пришло
+ Q:$$GET(NIB,NMP,"summ")<$$GET(NIB,NMP,"price") 0
+ Q 1
+MKIDX(NMP,NIB) 
+ N I S I=$$RECONV(NMP) S:$L(I) ^BTPLI("p",I,NIB)=NMP
+ Q
+SET(NIB,NMP,POLE,R) 
+ Q:NIB=""!(NMP="")!(POLE="summ")!(POLE="activate") 
+ N TZLN,TZRLN,I,L
+ S TZLN="^BTPL("""_$C(9)_"t""",TZRLN="^BTPL("""_$C(9)_"r""" 
+ S I=$$GTZ^XMLU("wdt",TZLN,TZRLN),L=$$^I("ilpu")
+ S:$L(I) ^BTPL(NIB,NMP,I,$H)=$G(%LOG)_$S(L="":L,1:"@"_L)
+ S I=$$GTZ^XMLU(POLE,TZLN,TZRLN) S:$L(I) ^BTPL(NIB,NMP,I)=R
+ D UPD^IEXCH("IPOLIS",NMP)
+ Q
+GET(NIB,NMP,POLE) 
+ Q:NIB=""!(NMP="")!(POLE="") ""
+ N TZLN,TZRLN,I
+ S TZLN="^BTPL("""_$C(9)_"t""",TZRLN="^BTPL("""_$C(9)_"r"""
+ S I=$$GTZ^XMLU(POLE,TZLN,TZRLN) Q:I="" "" Q $G(^BTPL(NIB,NMP,I))
+DEL(NIB,NMP) ; Delete polis TODO TZLN - PTZLN
+ Q:NIB=""!(NMP="")  
+ N TZLN,TZRLN,I,K,F,DT,TM
+ S TZLN="^BTPL("""_$C(9)_"t""",TZRLN="^BTPL("""_$C(9)_"r"""
+ D K^ISSG("^BTPL("""_NIB_""","""_NMP_""")")
+ ; remove pay
+ S K=$$GET(NIB,NMP,"base-summ")
+ ; удаление недоплатежей
+ D:K URES^IBILL(NIB,K,"ARSUM^IPOLIS("""_NMP_""","_K_")")
+ S I=$$GTZ^XMLU("sum",TZLN,TZRLN),K="",F=0
+ F  S K=$O(^BTPL(NIB,NMP,I,K)) Q:K=""  D  ; удаление платежей
+ .S DT=$P(K,",",1),TM=$P(K,",",2)
+ .K ^BILL(NIB,DT,TM),^BILLI(DT,TM,NIB)
+ .D KGL^IEXCH("^BILL",NIB,DT,TM)
+ .D KGL^IEXCH("^BILLI",DT,TM,NIB)
+ .D UPD^IEXCH("IBILL",NIB_","_DT)
+ .S:F<DT F=DT
+ D:F REFBALI^IBILL(NIB,F)
+ ; restore state, if active
+ D:$L($G(^BTPLI("a",1,NIB,NMP)))
+ .N DC,TP
+ .S TP=$G(^BTPL(NIB,NMP,+$$GTZ^XMLU("ptp",TZLN,TZRLN)))
+ .S DT=$G(^BTPL(NIB,NMP,$$GTZ^XMLU("df",TZLN,TZRLN)))
+ .S DC=+$G(^BTPL(NIB,NMP,+$$GTZ^XMLU("dcnt",TZLN,TZRLN)))
+ .S K=$S(TP=2:"stc1",1:"stc")
+ .D SET^IPAC(NIB,K,DT,$$GET^IPAC(NIB,K,DT+DC))
+ .S K=$S(TP=2:"dog_from1",1:"dog_from")
+ .D SET^IPAC(NIB,K,DT,$$GET^IPAC(NIB,K,DT+DC))
+ .S K=$S(TP=2:"dog_to1",1:"dog_to")
+ .D SET^IPAC(NIB,K,DT,$$GET^IPAC(NIB,K,DT+DC))
+ .S K=$S(TP=2:"polis1",1:"polis")
+ .D SET^IPAC(NIB,K,DT,$$GET^IPAC(NIB,K,DT+DC))
+ .S K=$S(TP=2:"prog1",1:"prog")
+ .D SET^IPAC(NIB,K,DT,$$GET^IPAC(NIB,K,DT+DC),1)
+ ; remove
+ K ^BTPL(NIB,NMP)
+ K ^BTPLI("a",1,NIB,NMP)
+ ; update
+ D KGL^IEXCH("^BTPL",NIB,NMP)
+ D KGL^IEXCH("^BTPLI","a",1,NIB,NMP)
+ S I=$$RECONV(NMP)
+ I $L(I) K ^BTPLI("p",I,NIB) D KGL^IEXCH("^BTPLI","p",I,NIB)
+ Q
+DELPAY(NIB,NMP,KEY) ; Удалить платеж из полиса
+ N I,S,TZLN,TZRLN
+ S TZLN="^BTPL("""_$C(9)_"t""",TZRLN="^BTPL("""_$C(9)_"r"""
+ S I=$$GTZ^XMLU("sum",TZLN,TZRLN) Q:I="" 
+ S S=$P(^BTPL(NIB,NMP,I,KEY),"|",1)
+ K ^BTPL(NIB,NMP,I,KEY)
+ S I=$$GTZ^XMLU("summ",TZLN,TZRLN)
+ S ^BTPL(NIB,NMP,I)=$G(^BTPL(NIB,NMP,I))-S
+ D UPD^IEXCH("IPOLIS",NMP)
+ D BDEL^NPACADM(NIB,$TR(KEY,",","@"),1,1)
+ Q
+MOVPAY(NIB,NMP,KEY,NDT) ; Переместить платеж
+ N I,NK,TZLN,TZRLN
+ S TZLN="^BTPL("""_$C(9)_"t""",TZRLN="^BTPL("""_$C(9)_"r"""
+ S I=$$GTZ^XMLU("sum",TZLN,TZRLN) Q:I=""
+ S NK=NDT_","_$P(KEY,",",2)
+ M ^BTPL(NIB,NMP,I,NK)=^BTPL(NIB,NMP,I,KEY)
+ K ^BTPL(NIB,NMP,I,KEY)
+ D UPD^IEXCH("IPOLIS",NMP)
+ D BDATE^NPACADM(NIB,$TR(KEY,",","@"),$$DT^DTUTL(NDT),1)
+ Q
+CNGPAY(NIB,NMP,KEY,SUMM) ; Изменить сумму платежа у полиса
+ ; KEY - $H оплаты
+ N I,I1,S,TZLN,TZRLN,R
+ S TZLN="^BTPL("""_$C(9)_"t""",TZRLN="^BTPL("""_$C(9)_"r"""
+ S I=$$GTZ^XMLU("sum",TZLN,TZRLN) Q:I=""
+ S I1=$$GTZ^XMLU("summ",TZLN,TZRLN) Q:I1="" 
+ S R=$G(^BTPL(NIB,NMP,I,KEY)) Q:R=""
+ S S=$P(R,"|",1) Q:S=SUMM
+ S ^BTPL(NIB,NMP,I1)=^BTPL(NIB,NMP,I1)-S+SUMM
+ S $P(R,"|",1)=SUMM,^BTPL(NIB,NMP,I,KEY)=R
+ D UPD^IEXCH("IPOLIS",NMP)
+ Q
+WUSER(NIB,NMP,FL) ; Get First(0)/Last(1) write user
+ N A,I,TZLN,TZRLN
+ S FL=$S($G(FL)=1:1,1:0)
+ D usrfn
+ S:FL=0 A=$O(^BTPL(NIB,NMP,I,"")) S:FL=1 A=$O(^BTPL(NIB,NMP,I,99999),-1)
+ Q:A="" "" Q ^(A)
+WUSERD(NIB,NMP,FL) ; Get First(0)/Last(1) date, time and write user
+ N A,I,TZLN,TZRLN
+ S FL=$S($G(FL)=1:1,1:0)
+ D usrfn
+ S:FL=0 A=$O(^BTPL(NIB,NMP,I,"")) S:FL=1 A=$O(^BTPL(NIB,NMP,I,99999),-1)
+ Q:A="" "" Q A_"|"_^(A)
+SUSER(NIB,NMP,USR) ; Set first user
+ N A,I,TZLN,TZRLN
+ D usrfn
+ S A=$O(^BTPL(NIB,NMP,I,"")) S:A="" A=$H
+ S:USR["@" ^BTPL(NIB,NMP,I,A)=USR
+ S:USR'["@" $P(^BTPL(NIB,NMP,I,A),"@",1)=USR
+ D UPD^IEXCH("IPOLIS",NMP) 
+ Q
+SLPU(NIB,NMP,LPU) ; Set first user's lpu
+ N A,I,TZLN,TZRLN
+ D usrfn
+ S A=$O(^BTPL(NIB,NMP,I,"")) S:A="" A=$H
+ S $P(^BTPL(NIB,NMP,I,A),"@",2)=LPU
+ D UPD^IEXCH("IPOLIS",NMP) 
+ Q
+usrfn ; helper for users
+ S TZLN="^BTPL("""_$C(9)_"t""",TZRLN="^BTPL("""_$C(9)_"r"""
+ S I=$$GTZ^XMLU("wdt",TZLN,TZRLN)
+ q
+CREATED(NIB,NMP) ; Когда создан
+ N A,I,TZLN,TZRLN
+ S TZLN="^BTPL("""_$C(9)_"t""",TZRLN="^BTPL("""_$C(9)_"r"""
+ S I=$$GTZ^XMLU("wdt",TZLN,TZRLN)
+ S A=$O(^BTPL(NIB,NMP,I,""))
+ Q A
+RECONV(R) ; перекодировать имя полиса
+ Q $$LU^TXTU($TR(R,"УКЕНХВАРОСМТ `[];',./~!@#$%^&*()_+|-=\{}L:""<>?","YKEHXBAPOCMT"))
+DOPAY ; pay all on current date (for CRON)
+ N NIB,NMP,PDT,PSU,PPR,H,P,S,R
+ S PDT=$G(^BTPL($C(9)_"t","df")),PSU=$G(^("summ")),PPR=$G(^("price"))
+ Q:PDT=""!(PSU="")!(PPR="") 
+ S H=+$H
+ S NIB="" F  S NIB=$O(^BTPL(NIB)) Q:NIB=""  S NMP="" F  S NMP=$O(^BTPL(NIB,NMP)) Q:NMP=""  D
+ .Q:$G(^(NMP,PDT))>H  ; old and now
+ .S S=+$G(^(PSU)),P=+$G(^(PPR)) Q:S=P  Q:P<S  Q:P=0 
+ .S R=$$NOW^IBILL(NIB) Q:'(R>0)  S S=P-S S:S>R S=R
+ .S R=$$ASUMM(NIB,NMP,R,0)
+ Q
+DEBT(NIB) ; Узнать сумму долга за полисы
+ N NMP,PDT,PSU,PPR,R,P,S
+ S PDT=$G(^BTPL($C(9)_"t","df")),PSU=$G(^("summ")),PPR=$G(^("price"))
+ Q:PDT=""!(PSU="")!(PPR="") 0
+ S R=0,NMP="" F  S NMP=$O(^BTPL(NIB,NMP)) Q:NMP=""  S S=+$G(^(NMP,PSU)),P=+$G(^(PPR)),R=R+$S(S=P!(P<S)!(P=0):0,1:P-S)
+ Q R
+DEBTPL(NIB,NMP) ; Узнать сумму долга за полис
+ N PDT,PSU,PPR,P,S
+ S PDT=$G(^BTPL($C(9)_"t","df")),PSU=$G(^("summ")),PPR=$G(^("price"))
+ Q:PDT=""!(PSU="")!(PPR="") 0
+ S S=+$G(^BTPL(NIB,NMP,PSU)),P=+$G(^(PPR))
+ Q $S(S=P!(P<S)!(P=0):0,1:P-S)
+DEBTL(NIB) ; Долги за полисы
+ N NIB,NMP,PDT,PSU,PPR,L,P,S,R
+ S PDT=$G(^BTPL($C(9)_"t","df")),PSU=$G(^("summ")),PPR=$G(^("price"))
+ Q:PDT=""!(PSU="")!(PPR="") 
+ S NMP="",L="" F  S NMP=$O(^BTPL(NIB,NMP)) Q:NMP=""  D
+ .S S=+$G(^(NMP,PSU)),P=+$G(^(PPR)) Q:S=P  Q:P<S  Q:P=0  S S=P-S
+ .S L=L_$S($L(L):"~",1:"")_NMP
+ Q L
+DEBTPP(NIB,NMP) ; Долг по этапному полису
+ N P,S,D,SU,SS,I,X
+ S P=$$GET(NIB,NMP,"pp") Q:P="" ""
+ S SU=$$GET(NIB,NMP,"summ"),SS=0,S="",D=""
+ F I=1:1:$L(P,"|") S X=$P(P,"|",I),SS=SS+$P(X,":",1) I SS>SU S S=SS-SU,D=$P(X,":",2) Q
+ Q S_"|"_D
+TPFLG(NIB,NMP,DT) ; Флаги из типа абонемента
+ ; NMP="" - активный сейчас
+ S:NMP="" NMP=$O(^BTPL(NIB,""),-1) ; TODO - по дате
+ Q:NMP="" ""
+ N T S T=$$GET(NIB,NMP,"tp") Q:T="" ""
+ Q $G(^BTPLS("t",T,"flg"))
+IMP     ; Import <- EDATA()
+ N NI,NMP,P,TZLN,TZRLN,I
+ S TZLN="^BTPL("""_$C(9)_"t""",TZRLN="^BTPL("""_$C(9)_"r"""
+ M ^BTPLI("p")=EDATA("p"),^BTPLI("a")=EDATA("a")
+ K EDATA("p"),EDATA("a")
+ S NI="" F  S NI=$O(EDATA(NI)) Q:NI=""  D
+ .S NMP="" F  S NMP=$O(EDATA(NI,NMP)) Q:NMP=""  D
+ ..S P=""
+ ..F  S P=$O(EDATA(NI,NMP,P)) Q:P=""  S I=$$GTZ^XMLU(P,TZLN,TZRLN) I I'="" K ^BTPL(NI,NMP,I) M ^BTPL(NI,NMP,I)=EDATA(NI,NMP,P)
+ ..D UPDACT(NI,NMP,0)
+ K EDATA
+ Q
+EXP(NMP)        ; Export -> EDATA()
+ K EDATA N NI,A,PL,P,TZ
+ S NI=$$CHECK(NMP),A=$$RECONV(NMP) M TZ=^BTPL($C(9)_"r")
+ M EDATA("p",A,NI)=^BTPLI("p",A,NI),EDATA("a",1,NI)=^BTPLI("a",1,NI)
+ S P="" F  S P=$O(^BTPL(NI,NMP,P)) Q:P=""  M EDATA(NI,NMP,TZ(P))=^BTPL(NI,NMP,P)
+ Q
+WXCH(NMP)       ; Write - exchange
+ N EDATA D EXP(NMP)
+ N GL S GL("EDATA")="EDATA"
+ D S^XGUNET("GL","exp.nb-data")
+ K EDATA
+ Q
+RXCH    ; Read - exchange
+ N EDATA
+ D R^XGUNET("hpar")
+ D IMP
+ Q
+INITDB 
+ S ^MN("root","salegrp")="Раздел продажи абонементов"
+ S ^MN("root","agspgrp")="Агентские группы абонементов"
+ S ^MN("root","agspgrp","fname")="Наименование|Типы начислений (агенты 0,1,2)=(проценты 0,90,10)"
+ S ^("ftype")="S|S"
+ S ^MN("root","agspgrp","fcode")="name|profit_type"
+ Q

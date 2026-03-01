@@ -1,0 +1,15 @@
+NMSGHUB ; Хаб сообщений [ 07/01/2009  0:31 AM ]
+LST(CHN) ; Список
+ N D,I,R,F,C
+ D OWF^RWU(".txt")
+ S (C,D)=""
+ F  S D=$O(^MSGHUB(CHN,D),-1) Q:D=""  S I="" F  S I=$O(^MSGHUB(CHN,D,I)) Q:I=""  D
+ .Q:$G(^MSGHUB(CHN,D,I,"ud","use")) 
+ .S F=$O(^MSGHUB(CHN,D,I,"data","")) Q:F="" 
+ .D WC^RWU(C_D_","_I_"|"_$$DTM^DTUTL($P(^MSGHUB(CHN,D,I,"uh"),"|",3))_", "_F)
+ .S C=CR
+ D C^RWU
+ Q
+DOUSE(CHN,DT,ID) ; Used
+ S ^MSGHUB(CHN,DT,ID,"ud","use")=1
+ Q

@@ -1,0 +1,171 @@
+IFTASK ; TaskFlow internal [ 11/15/2023  1:40 PM ]
+ADD(STAT,TP,TXT,BTS,DTS,DTE,DCTRL,IMP) ; Добавить задачу
+ ; TP - тип, TXT - описание
+ ; DCTRL - контр. даты исполнения, IMP - важность
+ ; BTS - головная задача
+ N R,K,SS,ID,LP
+ S SS="",TXT=$E($TR(TXT,"|","/"),1,255),DTS=$G(DTS),DTE=$G(DTE)
+ S:TP'="" SS=$O(^TSTS(TP,"s",""))
+ S:STAT="" STAT="w"
+ S R=STAT_"|"_TP_"|"_BTS_"|"_SS_"|"_TXT_"|"_$H_"|"_$$KDR^IUSER()
+ S:DTS'="" $P(R,"|",8)=DTS
+ S:DTE'="" $P(R,"|",9)=DTE
+ S:$G(DCTRL)'="" $P(R,"|",10)=DCTRL
+ S:$G(IMP)'="" $P(R,"|",11)=IMP
+ S $P(R,"|",12)=$$USR^IUSER()
+ S LP=$$^I("ilpu")
+ L +^TSK(LP)
+ S ID=$O(^TSK(LP,""),-1)+1,^(ID)=R
+ L -^TSK(LP)
+ S ^TSKI("status",STAT,LP,ID)=TP
+ D GL^IEXCH("^TSK",LP,ID)
+ D GL^IEXCH("^TSKI","status",STAT,LP,ID)
+ I DTS'="" S ^TSKI("df",DTS,LP,ID)=TP D GL^IEXCH("^TSKI","df",DTS,LP,ID)
+ I DTE'="" S ^TSKI("df",DTS,LP,ID)=TP D GL^IEXCH("^TSKI","de",DTE,LP,ID)
+ Q LP_","_ID
+DEL(LPU,ID) ; Удалить задачу
+ N R,X
+ S R=$G(^TSK(LPU,ID)) Q:R="" 
+ K ^TSK(LPU,ID)
+ S X=$P(R,"|",1)
+ K ^TSKI("status",X,LPU,ID) D KGL^IEXCH("^TSKI","status",X,LPU,ID)
+ S X=$P(R,"|",8)
+ I $L(X) K ^TSKI("df",+X,LPU,ID) D KGL^IEXCH("^TSKI","df",+X,LPU,ID)
+ S X=$P(R,"|",9)
+ I $L(X) K ^TSKI("de",+X,LPU,ID) D KGL^IEXCH("^TSKI","de",+X,LPU,ID)
+ D KGL^IEXCH("^TSK",LPU,ID)
+ Q
+GET(LPU,ID,PL) ; Получить поле
+ Q $G(^TSK(LPU,ID,PL))
+SET(LPU,ID,PL,R) ; Установить поле
+ I R="" K ^TSK(LPU,ID,PL) D KGL^IEXCH("^TSK",LPU,ID,PL) Q
+ S ^TSK(LPU,ID,PL)=R
+ D GL^IEXCH("^TSK",LPU,ID,PL)
+ Q
+GETSTAT(LPU,ID) ; Получить статус
+ Q:ID=""!(LPU="") ""
+ Q $P($G(^TSK(LPU,ID)),"|",1)
+SETSTAT(LPU,ID,STAT) ; Изменить статус
+ Q:ID=""!(LPU="") ""
+ N R,X
+ S X=$G(^TSK(LPU,ID)),R=$P(X,"|",1) Q:R="" ""
+ S:STAT="" STAT="w"
+ K ^TSKI("status",R,LPU,ID) D KGL^IEXCH("^TSKI","status",R,LPU,ID)
+ S $P(^TSK(LPU,ID),"|",1)=STAT
+ S ^TSK(LPU,ID,"sl",STAT)=$$USRH^IUSER()
+ S ^TSKI("status",STAT,LP,ID)=$P(X,"|",2)
+ D GLZ^IEXCH("^TSK",LPU,ID)
+ D GLZ^IEXCH("^TSK",LPU,ID,"sl",STAT)
+ D GL^IEXCH("^TSKI","status",STAT,LP,ID)
+ Q R
+SETSTG(LPU,ID,STG,COMM) ; Изменить состояние
+ ; STG - состояние
+ ; COMM - комментарий к состоянию
+ Q:ID=""!(LPU="") ""
+ N R,I,PS
+ S PS=$P($G(^TSK(LPU,ID)),"|",4)
+ S $P(^TSK(LPU,ID),"|",4)=STG
+ S:PS R=$G(^TSK(LPU,ID,"st",PS))
+ S ^TSK(LPU,ID,"st",STG)=$H_"|"_$$USR^IUSER()_"|"_$G(COMM)
+ D:PS&(R'="")  ; предыдущие состояния
+ .S I=$O(^TSK(LPU,ID,"stl",""),-1)
+ .S ^TSK(LPU,ID,"stl",I+1)=PS_"|"_$P(R,"|",1,2)
+ D GL^IEXCH("^TSK",LPU,ID)
+ Q R
+SETTXT(LPU,ID,TXT) ; Установить описание задачи
+ Q:ID=""!(LPU="") 
+ S $P(^TSK(LPU,ID),"|",5)=$TR(TXT,"|","/")
+ D GL^IEXCH("^TSK",LPU,ID)
+ Q
+SETUD(LPU,ID,KEY,TXT) ; Установить "пользовательское поле"
+ Q:ID=""!(KEY="") 
+ S LPU=+LPU,^TSK(+LPU,ID,"ud",KEY)=TXT
+ D GL^IEXCH("^TSK",LPU,ID,"ud",KEY)
+ Q
+GETUD(LPU,ID,KEY) ; Получить "пользовательское поле"
+ Q:ID=""!(KEY="") ""
+ Q $G(^TSK(+LPU,ID,"ud",KEY))
+GETUDE(LPU,ID,KEY,TP,TFL) ; Получить "пользовательское поле" с расшифровкой
+ ; TP - тип задачи
+ ; TFL - тип поля
+ Q:ID=""!(KEY="") ""
+ N R,T
+ S:$G(TP)="" TP=$P(^TSK(LPU,ID),"|",2)
+ S TFL=$G(TFL)
+ S R=$G(^TSK(LPU,ID,"ud",KEY))
+ S:TFL="" TFL=$P($G(^TSTS(TP,"ud",KEY)),"|",1)
+ I TFL="L" Q $G(^TSTS(TP,"udl",KEY,R))
+ I TFL="D" Q $$DT^DTUTL(R)
+ I TFL="vr" Q $$FIO^IKADRY(R)
+ I TFL="pac"  Q $$FIO^IPAC(R)
+ I TFL="stc" Q $$NAME^IINSC(R)
+ I TFL="contr" Q $$NAME^ICONTR(R)
+ Q R
+GETSUE(LPU,ID,STAT) ; Получить пользователя, кто поменял статус (с расшифр)
+ N R
+ S R=$G(^TSK(LPU,ID,"sl",STAT)) Q:R="" ""
+ Q $$FUSRH^IUSER(R)
+DELUD(LPU,ID,KEY) ; Удалить "пользовательское поле"
+ K ^TSK(LPU,ID,"ud",KEY)
+ D KGL^IEXCH("^TSK",LPU,ID,"ud",KEY)
+ Q
+NMUD(TP,KEY) ; Наименование поьлзовательских данных
+ Q $P($G(^TSTS(TP,"ud",KEY)),"|",2)
+STATNM(ST) ; Наименование статуса
+ Q:ST="w" "черновик"
+ Q:ST="d" "удалено"
+ Q:ST="a" "архив"
+ Q:ST=0 "создана"
+ Q:ST=1 "выполняется"
+ Q:ST=2 "пауза"
+ Q:ST=5 "отменено"
+ Q:ST=9 "завершено"
+ Q ""
+MFLADD(NM,ID,TXT) ; Простые справочники - добавить
+ Q:NM=""
+ I ID'="",$D(^MFL(NM,ID)) D WD^ISSG("^MFL("""_NM_""","_ID_")")
+ I ID="" L +^MFL(NM) S ID=$O(^MFL(NM,""),-1)+1,^(ID)="" L -^MFL(NM) 
+ S ^MFL(NM,ID)=TXT
+ S ID=$S(ID?1.N:ID,1:""""_$$DKAV^TXTU(ID)_"""")
+ D GL^IEXCH("^MFL",NM,ID)
+ Q
+MFLDEL(NM,ID) ; Простые справочники - удалить
+ Q:NM=""!(ID="") 
+ K ^MFL(NM,ID)
+ S ID=$S(ID?1.N:ID,1:""""_$$DKAV^TXTU(ID)_"""")
+ D KD^ISSG("^MFL("""_NM_""","_ID_")")
+ D KGL^IEXCH("^MFL",NM,ID)
+ Q
+GRPNM(ID) ; Имя группы
+ Q:ID="" ""
+ Q $P($G(^TGRP(ID)),"|",1)
+FLDNM(ID) 
+ Q:ID="" ""
+ Q $P($G(^MFL("fld",ID)),"|",1)
+CHKRGT(RIGHT) ; Проверить на наличие права
+ Q 1
+FNDTUID(UID) ; Найти тип по UID
+ N I
+ S I="" F  S I=$O(^TSTS(I)) Q:I=""  I $P(^(I),"|",3)=UID Q 
+ Q I
+TPNM(TP) ; Имя шаблона
+ Q $P($G(^TSTS(TP)),"|",1)
+TPUID(TP) ; UID шаблона
+ Q $P($G(^TSTS(TP)),"|",3)
+TPSTUID(TP,ST) ; UID статуса шаблона
+ Q $P($G(^TSTS(TP)),"|",3)
+REGLCL 
+ K ^LCLI("tasks")
+ S ^LCLI("tasks")="Управление задачами"
+ S ^LCLI("tasks","myotd")="Показывать задачи только по личному подразделению"
+ S ^LCLI("tasks","new")="Создание задачи"
+ S ^LCLI("tasks","del")="Удаление задачи"
+ S ^LCLI("tasks","end")="Завершение задачи"
+ S ^LCLI("tasks","cancel")="Отмена задачи"
+ S ^LCLI("tasks","ncancel")="Отмена новой задачи"
+ ;S ^LCLI("tasks","stage")="Изменение определенных этапов задачи"
+ S ^LCLI("tasks","set")="Изменение полей задачи"
+ S ^LCLI("tasks","scomm")="Изменение описания"
+ S ^LCLI("tasks","idlist")="Разрешенные задачи через |"
+ S ^LCLI("tasks","clear")="Очистка задачи (в исходное состояние)"
+ Q

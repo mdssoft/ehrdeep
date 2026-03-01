@@ -1,0 +1,413 @@
+A ; КОНТРОЛЬ ДОСТУПА [ 11/10/2020  2:17 PM ]
+CRD(NN,NV,DT)          ; КАРТА
+ ; NN - карта
+ ; NV - устройство
+ ; DT - дата,время регистрации
+ S NV=$G(NV),DT=$G(DT)
+ I $G(NN)="" D MSG^RWU("9|||||||||Вы незарегистрированы||") G CRDE
+ N L,TIP,TP,RD,TN,TK,DN,DK,DENY,DENT,TENT,TM,EN,DD,TT,RDD,LP,OK,X,fOO
+ S X=$G(^cfg("sec","crdexec"))
+ I X'="" X X I NN="" D MSG^RWU("9|||||||||Вы незарегистрированы||") G CRDE
+ S L=$G(^CARD(NN))
+ I L="" D MSG^RWU("9|||||||||Вы незарегистрированы"_NN_"||") G CRDE
+ I DT[":" S DT=$$DI^DTUTL($P(DT," ",1))_","_$$TI^DTUTL($P(DT," ",2))
+ S TIP=$P(L,"|",1),TP="Пациент"
+ S:TIP="D" TP="Сотрудник" 
+ S DN=$$DI^DTUTL($G(^CARD(NN,"fromdate"))),DK=$$DI^DTUTL($G(^("todate"))),TN=$$TI^DTUTL($G(^("fromtime"))),TK=$$TI^DTUTL($G(^("totime")))
+ S:DT="" DT=$H
+ S DD=+DT,TT=$P(DT,",",2),OK=0
+ S RD="Доступ разрешен",RDD=1
+ I TN'="",TT<TN S RD="Запрещенное время",RDD=2
+ I TK'="",TT>TK,TK>0 S RD="Запрещенное время",RDD=2
+ I DN'="",DD<DN S RD="Доступ закрыт",RDD=3
+ I DK'="",DD>DK,DK>0 S RD="Доступ закрыт",RDD=3
+ S DENY=$G(^("deny"))
+ I DENY=1 S RD="Вход запрещен",RDD=4
+ S DN=$G(^cfg("sec","io-time")) ; флюктуации вход-выход (def =1.5 мин)
+ S:DN="" DN=90
+ S X=$Q(^CRDLOG(NN,""),-1) S:X'="" X=$QS(X,2)_","_$QS(X,3)
+ I X'="",$$TMBTW^DTUTL($H,X)<DN S TT=$P(X,",",2),DD=$P(X,",",1),EN=$P(^CRDLOG(NN,DD,TT),"|",4) G CRD1 ; исключаем флюктуации и ставим пред время (60 сек.)
+ S L=$G(^CARD(NN,"enter")),ENT=$P(L,",",1),DENT=$P(L,",",2),TENT=$P(L,",",3)
+ S EN=$S(RDD'=1:2,ENT="":1,1:ENT)
+ G:RDD'=1 CRD1
+ S DN=$G(^cfg("sec","between-dd")) ; Выход не более дней (=0-сегодня)
+ S X=$G(^CARD(NN,"btwdd")) S:X DN=X ; частный период по карте
+ S fOO=$G(^cfg("sec","oneout"))
+ S EN=$$enDEV(NV) ; фикс. вход/выход по устройству
+ I EN'="",'fOO,EN=$$LASTEN^ISEC(NN,DN) S RD="Регистрация в этом месте запрещена",RDD=5 G CRD1
+ S X=$$TMBTW^DTUTL(DT,DENT_","_TENT)\3600,DN=$S(DN:DN*24,1:"")
+ S EN=$S(EN:EN,ENT="":1,DN=""&(DD'=DENT):1,DN&(X>DN):1,ENT=1:2,1:1)
+ I fOO,$$LASTEN^ISEC(NN,$S(DN:DN/24,1:1))=2 D
+ .D ANLAST^ISEC(NN,DD,2)
+ .S EN=2
+ D wLOG(NN,DD,TT,NV,RDD,EN)
+ S OK=1
+CRD1 
+ S RD=$S(RDD'=1:RD,EN=2:"До скорого свидания",1:RD)
+ S TN=$$GETVR^ISCARD(NN),TK=$$FIOSH^IKADRY(TN)
+ I $G(^cfg("sec-login")) S L=$$USRFKDR^IUSER(TN) S:L'="" ^LOG(L,"deny")=$S(EN=1:0,1:1)
+ S DK=$G(^CARD(NN,"otd")) S:DK="" DK=$$OTD^IKADRY(TN,DD)
+ I OK,$D(^$R("NPTBL")) D REGTBL(TN,DK,DD,TT,EN)
+ S X=$$GET^IKADRY(TN,"doljn",DD),X=$$GET^YISPRAV("doljn",X)
+ S DK=$$GOTD^YISPRAV(DK)
+ S LP=$$GET^IKADRY(TN,"blpu",DD),LP=$$NAME^ICONTR(LP)
+ S X=RDD_"|"_$G(^CARD(NN,"num"))_"|"_TP_"|"_TK_"|"_LP_"|"_DK_"|"_X_"|"_$G(^("autoname"))_"|"_$G(^("pac_comment"))_"|"_RD_"|"
+ D MSG^RWU(X_$$TM^DTUTL(TT)_"|"_$$DT^DTUTL(DD))
+CRDE 
+ Q
+KDR(TN,DEV,DTM) ; Событие сотрудника по таб. номеру
+ Q:TN="" 
+ N CC
+ S CC=$$GETVCARD^ISCARD(TN) Q:CC="" 
+ D CRD^YISEC(CC,$G(DEV),$G(DTM))
+ Q
+IN(CRD,DEV) ; Регистрация входа по устройству
+ Q:CRD=""  Q:'$D(^CARD(CRD)) 
+ N H,TN,OT,OK,R,TP
+ S H=$H
+ S R=$G(^CARD(CRD))
+ S ^CARD(CRD,"enter")="1,"_H
+ S TN=$G(^CARD(CRD,"owner")),TP=$P(R,"|",1)
+ S:TN="" TN=$P(R,"|",2)
+ G:TP="P" inP
+ S OT=$G(^CARD(CRD,"otd")) S:OT="" OT=$$GET^IKADRY(TN,"otd")
+ D wLOG(CRD,$P(H,",",1),$P(H,",",2),"",1,1)
+ D:$D(^$R("NPTBL")) REGTBL(TN,OT,$P(H,",",1),$P(H,",",2),1)
+ Q
+inP 
+ ; TODO
+ Q
+OUT(CRD,DEV) ; Регистрация выхода по устройству
+ Q:CRD=""  Q:'$D(^CARD(CRD)) 
+ N H,TN,OT,OK,TP
+ S H=$H
+ S ^CARD(CRD,"enter")="2,"_H
+ S TN=$G(^CARD(CRD,"owner"))
+ S OT=$G(^CARD(CRD,"otd")) S:OT="" OT=$$GET^IKADRY(TN,"otd")
+ D wLOG(CRD,$P(H,",",1),$P(H,",",2),"",1,2)
+ D:$D(^$R("NPTBL")) REGTBL(TN,OT,$P(H,",",1),$P(H,",",2),2)
+ Q
+INK(TN,UNIQ) ; Вход сотрудника по таб. номеру
+ ; UNIQ - уникальная регистрация (ранний вход)
+ Q:TN="" 
+ S TN=$$GETVCARD^ISCARD(TN) Q:TN=""
+ I $G(UNIQ),$$IsREG^ISEC(TN,+$H,1)'="" Q 
+ D IN(TN,"")
+ Q
+OUTK(TN,UNIQ) ; Выход сотрудника по таб. номеру
+ ; UNIQ - уникальная регистрация (поздний выход)
+ Q:TN="" 
+ N K
+ S TN=$$GETVCARD^ISCARD(TN) Q:TN=""
+ I $G(UNIQ) S K=$$IsREG^ISEC(TN,+$H,2) D:K'="" dLOG(TN,$P(K,",",1),$P(K,",",2))
+ D OUT(TN,"")
+ Q
+CCHK(CRD) ; Проверка на возможность прохода (пациент/врач)
+ I CRD="" D MSG^RWU(0) Q
+ I '$D(^CARD(CRD)) D MSG^RWU(0) Q
+ D MSG^RWU(1)
+ Q
+CRES(CRD) ; Резервирование временной карты
+ Q
+CFREE(CRD) ; Освобождение временной карты
+ Q
+wLOG(NN,DD,TT,DEV,REZ,EN) ; Регистрация события карты
+ ; NN - номер карты
+ ; DD - дата
+ ; TT - время
+ ; DEV - устройство
+ ; REZ - числовой статус
+ ; EN - 1-вход/0-выход
+ N R
+ ; id|device|result|in/out|mode(0-auto,1-manual)|LOG|<comment>
+ S R="|"_DEV_"|"_REZ_"|"_EN,OK=1
+ S $P(R,"|",6)=$$USR^IUSER()
+ S $P(R,"|",9)=$$^I("ilpu")
+ L +^CRDLOG(NN,DD)
+ F  Q:'$D(^CRDLOG(NN,DD,TT))  S TT=TT+1
+ S ^CRDLOG(NN,DD,TT)=R
+ L -^CRDLOG(NN,DD)
+ D GL^IEXCH("^CRDLOG",NN,DD,TT)
+ S:$D(^CARD(NN)) ^(NN,"enter")=EN_","_DD_","_TT
+ D DO^ITRIG("sec","card")
+ Q
+dLOG(NN,DD,TT) ; Удаление события карты
+ L +^CRDLOG(NN)
+ K ^CRDLOG(NN,DD,TT)
+ L -^CRDLOG(NN)
+ D KGL^IEXCH("^CRDLOG",NN,DD,TT)
+ Q
+REGTBL(TN,OT,DD,TT,EN) ; Регистрация в табеле
+ Q:TN=""!(OT="")  ; not set VR/OTD
+ Q:$G(^cfg("sec","notbl")) 
+ N LPU,A
+ S LPU=+$$^I("ilpu")
+ S $P(^PTBL(LPU,OT,TN,DD,2),"|",EN)=TT_"@0" ; auto mode
+ D GL^IEXCH("^PTBL",LPU,OT,TN,DD,2)
+ Q
+SCREV(DEV,ONF,DTM) ; Событие устройства
+ ; ONF - 0/1 - вкл/выкл
+ Q:DEV="" 
+ S DTM=$$DTI^DTUTL($G(DTM)) S:DTM="" DTM=$H
+ S ONF=$$CBOOL^TXTU(ONF)
+ S ^SRC(DEV,"ev",DTM)=ONF
+ D DO^ITRIG("sec","dev")
+ Q
+enDEV(DEV) ; Устройство на вход или выход (1/2)
+ Q:DEV="" ""
+ Q $G(^SRC(DEV,"enter"))
+FC(NUM,TIP,OW,AUTO,DENY)     ; ПОИСК
+ S:+$G(DENY)=0 DENY=""
+ N NN,TYP,A,DEN,PAC,DENN,LPU,R
+ D OWF^RWU(".txt"),W^RWU("T"_CR)
+ S NN="" F  S NN=$O(^CARD(NN)) Q:NN=""  D
+ .I NUM'="" Q:NUM'=$G(^CARD(NN,"num"))
+ .I TIP'="" Q:TIP'=$G(^CARD(NN,"ctype"))
+ .I OW'="" Q:OW'=$G(^CARD(NN,"owner"))
+ .I AUTO'="" Q:AUTO'=$G(^CARD(NN,"autoname"))
+ .I DENY'="" Q:DENY'=$G(^CARD(NN,"deny"))
+ .S R=^CARD(NN)
+ .S TYP=$P(R,"|",1),A=$P(R,"|",2),(DEN,PAC,TPAC)=""
+ .S DENN=$G(^CARD(NN,"deny")) S:DENN=1 DEN="да"
+ .I TYP="P" S PAC=$$FIOSH^IPAC(A),TPAC="пац. ",LPU=$$^I("ilpu")
+ .I TYP="D" S PAC=$$FIOSH^IKADRY(A),TPAC="сотр. ",LPU=$$^I("ilpu")
+ .I TYP="O" S LPU=$G(^BTK(A,"org")),TPAC="прочие ",PAC=A
+ .D WC^RWU(NN_"|"_$G(^CARD(NN,"num"))_"|"_TPAC_"|"_PAC_"|"_$$NAME^ICONTR(LPU)_"|"_$G(^CARD(NN,"autoname"))_"|"_DEN_CR)
+ D C^RWU
+ Q
+EVL ;ЗАПИСЬ ПРОХОДОВ
+ N NN,DT,TT,NV,RDD,A,DTN,R
+ D ORH^RWU
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  D WW
+ ;D CLOG
+ Q
+WW S NN=$P(A,"|",1),DT=$P(A,"|",2),TT=$P(A,"|",3),NV=$P(A,"|",4),RDD=$P(A,"|",5)
+ S DT=$$DI^DTUTL(DT),TT=$P(TT,":",1)*3600+($P(TT,":",2)*60)+$P(TT,":",3)
+ S:DT="" DT=+$H S:NN="" NN="000"
+ S:%J=1 DTN=DT
+ ;S:$D(^CRDLOG(NN,DT,TT)) TT=TT_".1"
+ S R=NN_"|"_NV_"|"_RDD
+ S $P(R,"|",6)=$$USR^IUSER()
+ S $P(R,"|",9)=$$^I("ilpu")
+ S ^CRDLOG(NN,DT,TT)=R
+ Q
+CLOG ; Correct log
+ K TYP S NSCR="" F  S NSCR=$O(^SCR(NSCR)) Q:NSCR=""  S TY=$G(^SCR(NSCR,"typ")) S:TY=1 TYP(NSCR)=""
+ S NN="" F  S NN=$O(^CRDLOG(NN)) Q:NN=""  D
+ .S DT="",DTT=0 F  S DT=$O(^CRDLOG(NN,DT)) Q:DT=""  D
+ ..S DTT=DT,TT="",TTN=0,EV=2 F  S TT=$O(^CRDLOG(NN,DT,TT)) Q:TT=""  D
+ ...S TR=TT-TTN I TR<61 K ^CRDLOG(NN,DT,TT) Q
+ ...S RDD=$P(^(TT),"|",3),NSCR=$P(^(TT),"|",2) I RDD'=1 S EV=2,TTN=TT Q
+ ...I EV=1 S EV=2
+ ...E  S EV=1
+ ...S ^(TT)=$P(^(TT),"|",1,3)_"|"_EV,TTN=TT
+ .S:$D(^CARD(NN)) ^CARD(NN,"enter")=EV_","_DTT_","_TTN
+ Q
+ ;.S DT=DTN-1,DTT=0 F  S DT=$N(^CRDLOG(NN,DT)) Q:DT=-1  D
+UPDC(DT) ; ВЫВЕСТИ ИЗМЕНЕНИЯ КАРТ ПО ДАТЕ
+ D OWF^RWU(".txt")
+ S DTT=$$DI^DTUTL(DT)
+ S NN="" F  S NN=$O(^SCR(NN)) Q:NN=""  S LOG=$G(^SCR(NN,"log")) I LOG=%LOG D
+ .S ^SCR(NN,"ip")=$G(^JOB(%JOB,6))
+ .S A="d|"_NN
+ .F POLE="name","com","ctrl","grp","stio" S A=A_"|"_$G(^SCR(NN,POLE))
+ .D WC^RWU(A_CR)
+ S NN="" F  S NN=$O(^CARD(NN)) Q:NN=""  S DD=$P($P($G(^(NN)),"|",3),",",1) D:DD'<DTT
+ .Q:$E(NN)="Q"  Q:+$G(^CARD(NN,+$O(^CARD(NN,"dis",DTT),-1)))=1  
+ .S A="c|"_NN
+ .F POLE="num","owner","ctype","deny","fromdate","todate","fromtime","totime","useauto","autoname" S A=A_"|"_$G(^CARD(NN,POLE))
+ .I $D(^("enter")) S A=A_"|1"_(+^("enter"))_"|1"
+ .D WC^RWU(A_CR)
+ .S A="u|"_$P(A,"|",4,5)
+ .S TIP=$P(^CARD(NN),"|",1),PAC=$P(^(NN),"|",2)
+ .I TIP="D" S FIO=$$GET^IKADRY(PAC,"f")_"|"_$$GET^IKADRY(PAC,"i")_"|"_$$GET^IKADRY(PAC,"o"),SPE=$$SPEC^IKADRY(PAC),OTD=$$OTD^IKADRY(PAC) D WC^RWU(A_"|"_FIO_"|"_$$GOTD^YISPRAV(OTD)_"|"_$$GSPEC^YISPRAV(SPE)_CR) Q 
+ .I TIP="P" S FIO=$$GET^IPAC(PAC,"fiof")_"|"_$$GET^IPAC(PAC,"fioi")_"|"_$$GET^IPAC(PAC,"fioo") D WC^RWU(A_"|"_FIO_"||"_CR) Q
+ .I TIP="O" S F=$G(^BTK(PAC,"fiof")),I=$G(^("fioi")),O=$G(^("fioo")),OTD=$G(^("podr")),SPE=$G(^("spec")) D WC^RWU(A_"|"_F_"|"_I_"|"_O_"|"_OTD_"|"_SPE_CR) Q
+ D C^RWU
+ Q
+UPDCS(DT) ; ВЫВЕСТИ ИЗМЕНЕНИЯ КАРТ ТЕКУЩЕЕ
+ D OWF^RWU(".TXT")
+ S DTT=$$DI^DTUTL(DT)
+ S ^SYNC("YISEC",$H)="updcs"
+ S (NN,NNN)="" F  S NN=$O(^CARDI("upd",NN)) Q:NN=""  D
+ .Q:$E(NN)="Q"
+ .S ^SYNC("YISEC",$H)=NN
+ .S NNN=NNN_" "_NN,A="c|"_NN
+ .F POLE="num","owner","ctype","deny","fromdate","todate","fromtime","totime","useauto","autoname" S A=A_"|"_$G(^CARD(NN,POLE))
+ .I $D(^CARD(NN,"enter")) S A=A_"|1"_(+^("enter"))_"|1"
+ .D WC^RWU(A_CR)
+ .S A="u|"_$P(A,"|",4,5)
+ .k ^CARDI("upd",NN)
+ .S TIP=$P(^CARD(NN),"|",1),PAC=$P(^(NN),"|",2)
+ .I TIP="D" S FIO=$$GET^IKADRY(PAC,"f")_"|"_$$GET^IKADRY(PAC,"i")_"|"_$$GET^IKADRY(PAC,"o"),SPE=$$SPEC^IKADRY(PAC),OTD=$$OTD^IKADRY(PAC) D WC^RWU(A_"|"_FIO_"|"_$$GOTD^YISPRAV(OTD)_"|"_$$GSPEC^YISPRAV(SPE)_CR) Q 
+ .I TIP="P" S FIO=$$GET^IPAC(PAC,"fiof")_"|"_$$GET^IPAC(PAC,"fioi")_"|"_$$GET^IPAC(PAC,"fioo") D WC^RWU(A_"|"_FIO_"||"_CR) Q
+ .I TIP="O" S F=$G(^BTK(PAC,"fiof")),I=$G(^("fioi")),O=$G(^("fioo")),OTD=$G(^("podr")),SPE=$G(^("spec")) D WC^RWU(A_"|"_F_"|"_I_"|"_O_"|"_OTD_"|"_SPE_CR) Q
+ S ^SYNC("YISEC",$H)=NNN
+ D C^RWU
+ Q
+TIP 
+ I TIP="D" S FIO=$$GET^IKADRY(PAC,"f")_"|"_$$GET^IKADRY(PAC,"i")_"|"_$$GET^IKADRY(PAC,"o"),TP="сотр.",SPE="",OTD=$$OTD^IKADRY(PAC),OTD=OTD_" "_$$GOTD^YISPRAV(OTD) Q
+ I TIP="P" S FIO=$$GET^IPAC(PAC,"fiof")_"|"_$$GET^IPAC(PAC,"fioi")_"|"_$$GET^IPAC(PAC,"fioo"),SPE="",OTD=$$NAME^IINSC($$GET^IPAC(PAC,"stc")),TP="пациент" Q
+ S:TIP="O" FIO="||"_O,OTD=$G(^("podr")),SPE=$G(^("spec")),TP="ф.лица"
+ Q
+KTO(DN,DK,TIPP)     ; КТО В УЧРЕЖДЕНИИ
+ G KTO+1^RSEC
+KTON(DN,DK,TIPP)     ; КТО НЕ ОБРАЩАЛСЯ
+ G KTON+1^RSEC
+TIMEO(DN,DK,TIPP,OTDD,TIME) ; ВХОД ПО ОТДЕЛЕНИЯМ
+ G TIMEO+1^RSEC
+TIME(DN,DK,TIPP)     ; ВХОД ВЫХОД В УЧРЕЖДЕНИИ
+ G TIME+1^RSEC
+FOOD(DN,DK,TIPP)   ; ПОСЕЩЕНИЕ СТОЛОВОЙ
+ K TYP
+ S NSCR="" F  S NSCR=$O(^SCR(NSCR)) Q:NSCR=""  S TY=$G(^SCR(NSCR,"typ")) S:TY=2 TYP(NSCR)=""
+ S DNN=$$DI^DTUTL(DN),DTK=$$DI^DTUTL(DK),S=0
+ D OWF^RWU(".txt")
+ D WC^RWU("N|Фамилия|Имя|Отчество|кто|отд./орг.|кол. обедов"_CR)
+ S NN="" F  S NN=$O(^CARD(NN)) Q:NN=""  D
+ .S HID=$G(^CARD(NN,"hide")) Q:HID=1
+ .S TIP=$P(^CARD(NN),"|",1),PAC=$P(^(NN),"|",2)
+ .I TIPP'="" Q:TIPP'=TIP
+ .S DT=DNN-1,SS=0 F  S DT=$O(^CRDLOG(NN,DT)) Q:DT=""  Q:DT>DTK  D
+ ..S TT="" F  S TT=$O(^CRDLOG(NN,DT,TT)) Q:TT=""  S L=$P(^(TT),"|",2) I $D(TYP(L)) S SS=SS+1 Q
+ .Q:SS=0
+ .D TIP S OTD=$E(OTD,1,30)
+ .D WC^RWU(PAC_"|"_FIO_"|"_TP_"|"_OTD_"|"_SS_CR)
+ .S S=S+SS
+ D WC^RWU("|||||ИТОГО за период с "_DN_" по "_DK_"|"_S)
+ D C^RWU
+ Q
+SYNCJ ;ДЛЯ JOB
+ S %WW=0
+ I $G(^CARD)="upd" S OPE="updatedb",^SYNC("YISEC",$H)="sync "_OPE D SYNC S ^CARD=0
+ I $G(^CARD)=1 S OPE="syncdb",^SYNC("YISEC",$H)="sync "_OPE D SYNC S ^CARD=0
+ H 5 G SYNCJ
+ Q
+SYNC ;СИНХРОНИЗАЦИЯ КАРТ
+ K IP
+ S J="" F  S J=$O(^SCR(J)) Q:J=""  S IPJ=$G(^SCR(J,"ip")),LOGC=$G(^SCR(J,"log")) S:IPJ'="" IP(IPJ)=LOGC
+ S SOC=2099,IPJ=-1 F  S IPJ=$N(IP(IPJ)) Q:IPJ=-1  S HOS=IPJ D CONECT
+ Q
+CONECT ;S BYT=0 S HOST=$ZDEV($I),HOST=$P(HOST,"~",1) W:%WW !,"IP:",HOST," С ",HOS," DTIM=",DTIM
+ O 56 U 56::"TCP" S %DEV=$KEY U 56:(%DEV:2) W /SOCKET(HOS,SOC) S ZC=$ZC G:ZC ER S UV="56:(%DEV:2)"
+ ;S UV=0
+ S NN="" F JNN=1:1 S NN=$O(^CARDI("upd",NN)) Q:NN=""  I JNN<10 G UPDD
+ U UV
+ W OPE_$C(13)
+ S ZC=OPE
+ R R:60 I $ZC U:%WW 0 W:%WW "TIMEOUT",! G ER
+ H 1
+ C 56
+ S ^SYNC("YISEC",$H)=HOS_" OK"
+ U:%WW 0 W:%WW HOS," OK ",R,!
+ Q
+ER S ^SYNC("YISEC",$H)=HOS_" ER "_ZC
+ U:%WW 0 W:%WW HOS," ",IP(HOS)," ERROR ",ZC,! C 56 Q
+ Q
+UPDDW ;вывод в сокет
+ S ER=0
+ U UV
+ W A_$C(13)
+ S ZC=A
+ R R:60 I $ZC U:%WW 0 W:%WW "TIMEOUT",! S ER=1
+ Q
+UPDD ;ПОСЫЛКА В СОКЕТ
+ S ^SYNC("YISEC",$H)="updtime"
+ S (NN,NNN)="" F  S NN=$O(^CARDI("upd",NN)) Q:NN=""  D
+ .Q:$E(NN)="Q"
+ .S NNN=NNN_" "_NN
+ .S A="card:"_NN
+ .F POLE="num","owner","ctype","deny","fromdate","todate","fromtime","totime","useauto","autoname" S A=A_"|"_$G(^CARD(NN,POLE))
+ .I $D(^("enter")) S A=A_"|1"_(+^("enter"))_"|1"
+ .D UPDDW I ER G ER
+ .S A="user:"_$P(A,"|",3,4)
+ .S TIP=$P(^CARD(NN),"|",1),PAC=$P(^(NN),"|",2)
+ .D UPDDTIP
+ .D UPDDW I ER G ER
+ .K ^CARDI("upd",NN)
+ S ^SYNC("YISEC",$H)=HOS_" "_NNN_" OK"
+ C 56
+ Q
+UPDDTIP ;
+ I TIP="D" S %A=PAC X ^PP(2,23) S FIO=$TR($P($G(^P(PAC,"V")),"/",2,4),"/","|"),A=A_"|"_FIO_"|"_OTD_"|"_SPE Q
+ I TIP="P"&(PAC<1000000) S FIO=$TR($P($G(^BT(PAC,"K")),$C(9),2,4),$C(9),"|"),A=A_"|"_FIO_"||" Q
+ I TIP="P"&(PAC'<1000000) S F=$G(^BTK(PAC,"fiof")),I=$G(^("fioi")),O=$G(^("fioo")),OTD=$G(^("podr")),SPE=$G(^("spec")),A=A_"|"_F_"|"_I_"|"_O_"|"_OTD_"|"_SPE Q
+ I TIP="O" S F=$G(^BTK(PAC,"fiof")),I=$G(^("fioi")),O=$G(^("fioo")),OTD=$G(^("podr")),SPE=$G(^("spec")),A=A_"|"_F_"|"_I_"|"_O_"|"_OTD_"|"_SPE Q
+ Q
+MPAC(NI,DN)     ; МИГРАЦИЯ ПАЦИЕНТА
+ S OTDD="",TIMM1=0,TIMM2=99999
+ K ^BUF($J)
+ D OWF^RWU("1.TXT")
+ S DNN=$$DI^DTUTL(DN)
+ S DTN=DNN D CLOG
+ D WC^RWU("Время|Статус|Услуга|Сотрудник"_CR)
+ I NI'="" S NNP=1 D MPACN
+ I NI="" S NNP=0 D
+ .S NN="" F  S NN=$O(^CRDLOG(NN)) Q:NN=""  I $D(^CRDLOG(NN,DNN))>0 S NI=$P($G(^CARD(NN)),"|",2) S DNNN=$N(^CARD(NN,DNN)) S:DNNN>0 NI=$G(^CARD(NN,DNNN,"owner")) S:NI'="" ^BUF($J,NI)=NN
+ .S NN="" F  S NN=$O(^CARD(NN)) Q:NN=""  S DTT=+$P(^CARD(NN),"|",3) I DTT=DNN S NI=$P(^CARD(NN),"|",2) S:NI'="" ^BUF($J,NI)=NN
+ .S NI=999999 F  S NI=$O(^BUF($J,NI)) Q:NI=""  S NN=^(NI) D MPACN
+ D C^RWU
+ Q
+MPACN S %A=NI
+ I %A<1000000 X ^PP(1,21) S PAC=%A
+ I %A'<1000000 X ^PP(3,21) S PAC=%A
+ D WC^RWU("Дата: "_DN_"|"_NI_" "_PAC_CR)
+ K BUF
+ I NNP=1 S NN="" F  S NN=$O(^CRDLOG(NN)) Q:NN=""  D MPLOG
+ I NNP=0 D MPLOG
+ S USL="" F  S USL=$O(^NIKSS(NI,DT,USL)) Q:USL=""  S NKS=-1 F  S NKS=$N(^NIKSS(NI,DT,USL,NKS)) Q:NKS=-1  S LKS=^(NKS) D:LKS'=""
+ .S %A=$P(LKS,"|",1) X ^PP(2,21)
+ .S TIM=$P(LKS,",",2),TIMM=$$TI^DTUTL(TIM),CE1=+$E(USL,1,$L(USL)-3),CE2=+$E(USL,$L(USL)-2,$L(USL)),NACE=$G(^CE(CE1,CE2))
+ .S BUF(TIM)="$"_TIMM_"||"_USL_" "_NACE_"|"_%A
+ S KSS=-1 F  S KSS=$N(^KSS(KSS),-1) Q:KSS=-1  D
+ .S NNI=$G(^KSS(KSS,"ckod")) Q:NNI'=NI
+ .S DTT=$G(^("pay")),DTT=$P(DTT,"|",2),TIM=$P(DTT,",",2),DTT=$P(DTT,",",1) Q:DTT'=DT
+ .S SUM=$G(^("summ")),BUF(TIM)="$"_$$TM^DTUTL(TIM)_"|оплата суммы -"_SUM
+ S JT=-1 F  S JT=$N(BUF(JT)) Q:JT=-1  D
+ .S A="" S L=$G(BUF(JT)) D
+ ..I $E(L)="+" S A=A_"| время преб. "_$$TM^DTUTL($P(L,"+",2)) Q
+ ..I $E(L)="$" S A=$E(L,2,200) Q
+ ..S EV=$P(L,"|",4),TIM=$P(L,"|",5),EVV=" вышел " S:EV'=1 EVV=" вошел" S:$P(L,"|",3)'=1 EVV=" запрет входа" S:TIM="" EVV="" S TIM=TIM_"|"_EVV,A=A_TIM
+ .D WC^RWU(A_CR)
+ .I JT=1 S A1="||"
+ Q
+MPLOG Q:$D(^CARD(NN))=0!($D(^CARD(NN))=10)
+ I NNP=1 S NNI=$P(^CARD(NN),"|",2) Q:NNI'=NI
+ S HID=$G(^CARD(NN,"hide")) Q:HID=1
+ S TIP=$P(^CARD(NN),"|",1)
+ S DTT=$P(^CARD(NN),"|",3),TIM=$P(DTT,",",2),DTT=+DTT I DTT=DNN S BUF(TIM)="$"_$$TM^DTUTL(TIM)_"|оформлена карта "_$G(^CARD(NN,"num"))
+ S DT=DNN S TIM=-1,JT=0,EVP=0 F  S TIM1=TIM,TIM=$N(^CRDLOG(NN,DT,TIM)) Q:TIM<TIMM1!(TIM>TIMM2)  Q:TIM=-1  S L=^(TIM),EV=$P(L,"|",4),NSCR=$P(L,"|",2) S:EV="" L=L_"|" S:EV=1 EVP=1 S JT=JT+1 S BUF(TIM)=L_"|"_$$TM^DTUTL(TIM)
+ I TIM1>0&(JT>0) S TIM0=$N(^CRDLOG(NN,DT,-1)),TTT=TIM1-TIM0 I TTT>0 S JT=JT+1,BUF(99999)="+"_TTT
+ Q
+CHKBTW ; Проверить времена между входом-выходом
+ N N,D,T,T1,T2,TMN,TMX,X,V,LST
+ S N="" F  S N=$O(^CRDLOG(N)) Q:N=""  D
+ .S V=$$GETVR^ISCARD(N) Q:V="" 
+ .S TMN=999999,TMX=0,T1=""
+ .K LST
+ .S D="" F  S D=$O(^CRDLOG(N,D)) Q:D=""  D
+ ..S T="" F  S T=$O(^CRDLOG(N,D,T)) Q:T=""  D
+ ...I T1="" S T1=D_","_T Q
+ ...S T2=D_","_T
+ ...S X=$$TMBTW^DTUTL(T2,T1) Q:X<3600
+ ...S X=X\3600 ; hours
+ ...S:X<TMN TMN=X
+ ...S:X>TMX TMX=X
+ ...S LST(X)=$G(LST(X))+1
+ ...S T1=""
+ .S (T,T1)="",X=0 F  S T=$O(LST(T)) Q:T=""  S:LST(T)>X X=LST(T),T1=T
+ .Q:T1<15  Q:X<5
+ .S ^CARD(N,"btwdd")=2 ; two day
+ .W !,$$FIO^IKADRY(V)_" "_$S('TMN:"",TMN<21:"day",1:"long")_" Min="_TMN_", Mid="_T1
+ Q
+CORREN ; Correct. enter-exit
+ N N,D,T,DNN,EN,R
+ S N="" F  S N=$O(^CRDLOG(N)) Q:N=""  D
+ .S DNN=$G(^CARD(N,"btwdd")),EN=1
+ .S D="" F  S D=$O(^CRDLOG(N,D)) Q:D=""  D
+ ..S:DNN<2 EN=1
+ ..S T="" F  S T=$O(^CRDLOG(N,D,T)) Q:T=""  D
+ ...S R=^(T)
+ ...S:$P(R,"|",4)'=EN $P(R,"|",4)=EN,^(T)=R
+ ...S EN=$S(EN=1:2,1:1)
+ Q

@@ -1,0 +1,112 @@
+RBR1P ; Отчеты Бранчевский, раздел 1 [ 10/17/2018  1:25 AM ]
+F125(DS,DE) ; Отчет о выполнении плана АПП поликлиники №1
+ N CAT,REZ
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S LPU=1 ; pk1
+ D mk2529
+ D MAKE^IDOCGEN("1_25.xlsx","REZ","xlsx")
+ Q
+F126(DS,DE) ; Отчет о выполнении плана АПП поликлиники №3
+ N CAT,REZ
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S LPU=5 ; pk3
+ D mk2529
+ D MAKE^IDOCGEN("1_26.xlsx","REZ","xlsx")
+ Q
+F127(DS,DE) ; Отчет о выполнении плана АПП поликлиники №1
+ N CAT
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S LPU=""
+ ;D mk2529
+ D MAKE^IDOCGEN("1_27.xlsx","REZ","xlsx")
+ Q
+F128(DS,DE) ; Отчет о выполнении плана АПП поликлиники №1
+ N CAT
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S LPU=""
+ ;D mk2529
+ D MAKE^IDOCGEN("1_28.xlsx","REZ","xlsx")
+ Q
+F129(DS,DE) ; Отчет о выполнении плана АПП поликлиники №1
+ N CAT
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S LPU=""
+ ;D mk2529
+ D MAKE^IDOCGEN("1_29.xlsx","REZ","xlsx")
+ Q
+ ; 1,1 - апп, платно - c01.01
+ ; 1,2 - апп, oms - c01.01+
+ ; 2 - VIP - c01.01.01
+ ; 3 - IOL - 
+ ; 4 - катаракта - 
+ ; 5 - фемто - 
+ ; 6 - осложнения - 
+ ; 7 - эстетика - 
+ ; 8 - витрео - 
+ ; 9 - дети - 
+ ; 10 - инъекции - 
+mkGRP ; Создать группы услуг
+  
+ Q
+mk2529 ; Создать отчеты по выполнении плата АПП
+ N DTT,TAB,M1,SUM,TPX,DNU,DNUV,AGE,UU,TPE,POS,X1,X2
+ N DS1,DE1,YY,KEY,P1,P2
+ S DTT=$$DT^DTUTL(DS),MM=+$P(DTT,".",2),YY=$P(DTT,".",3)
+ S REZ("sheets","list","A5")="Отчет о выполнении плана АПП в "_YY_" году"
+ D FILLU^ICNLIST($$FNDBYFL^ICNLIST("uid","c01.01"),"DNU",1)
+ D FILLU^ICNLIST($$FNDBYFL^ICNLIST("uid","c01.01.01"),"DNUV",2)
+ 
+ K ^BUF($J,"pp")
+ D ITERATE^IUSLD("mk2529p^RBR1P",DS,DE,,,LPU)
+ 
+ S M1="" F  S M1=$O(TAB(M1)) Q:M1=""  D
+ .S DS1=$$DI^DTUTL("01."_M1_"."_YY),DE1=$$EOFM^DTUTL(DS1)
+ .S X1=+$G(TAB(M1,3)),X2=+$G(TAB(M1,8))
+ .S KEY=12+MM,CC(5,M1)="01."_M1_"."_YY_"|"_DS1_"|"_DE1_"|"_LPU
+ .S P1=$$GETPLP^NFPLAN(LPU,"c01.01","pos",DS1,DE1)
+ .S P2=$$GETPLP^NFPLAN(LPU,"c01.01","kss",DS1,DE1)
+ .S REZ("sheets","list","B"_KEY)=P1
+ .S REZ("sheets","list","C"_KEY)=X1 ; пос
+ .S REZ("sheets","list","G"_KEY)=P2
+ .S REZ("sheets","list","E"_KEY)=$S(P1:+$J(P2/P1,"",2),1:0) ; ср.чек pl
+ .S REZ("sheets","list","F"_KEY)=$S(X1:+$J(X2/X1,"",2),1:0) ; ср.чек
+ .S REZ("sheets","list","H"_KEY)=X2 ; сумм
+ .S REZ("sheets","list","J"_KEY)=$$GETPLP^NFPLAN(LPU,"c05.01","pos",DS1,DE1)
+ .S REZ("sheets","list","K"_KEY)=+$G(TAB(M1,11)) ; OMC
+ .S REZ("sheets","list","N"_KEY)=+$G(TAB(M1,14)) ; All
+ .S X1=+$G(TAB(M1,17)),X2=+$G(TAB(M1,23))
+ .S P1=$$GETPLP^NFPLAN(LPU,"c01.01.01","pos",DS1,DE1)
+ .S P2=$$GETPLP^NFPLAN(LPU,"c01.01.01","kss",DS1,DE1)
+ .S REZ("sheets","list","Q"_KEY)=X1 ; пос
+ .S REZ("sheets","list","P"_KEY)=P1
+ .S REZ("sheets","list","S"_KEY)=$S(P1:+$J(P2/P1,"",2),1:0) ; ср.чек pl
+ .S REZ("sheets","list","T"_KEY)=$S(X1:+$J(X2/X1,"",2),1:0) ; ср.чек
+ .S REZ("sheets","list","V"_KEY)=P2
+ .S REZ("sheets","list","W"_KEY)=X2 ; сумм
+ 
+ Q
+mk2529p 
+ Q:OT'=1  ; только поликлиника
+ Q:"wd"[$$GETSTAT^IUSL(VR,DT,OT,ID)
+ D GET^IUSL(VR,DT,OT,ID)
+ S UU=$O(UL("")) Q:UU="" 
+ 
+ S POS=0
+ I '$D(^BUF($J,"pp",NI_"|"_VR_"|"_DT)) S ^(NI_"|"_VR_"|"_DT)="",POS=1
+ 
+ S M1=$$MONTH^DTUTL(DT)
+ S SUM=$$SUMM^IUSL(VR,DT,OT,ID)
+ 
+ S:POS TAB(M1,14)=$G(TAB(M1,14))+1
+ 
+ I KASS,$D(DNU(UU)) D  ; платный
+ .S:POS TAB(M1,3)=$G(TAB(M1,3))+1
+ .S TAB(M1,8)=$G(TAB(M1,8))+SUM
+ 
+ I KASS,$D(DNUV(UU)) D  ; VIP
+ .S:POS TAB(M1,17)=$G(TAB(M1,17))+1
+ .S TAB(M1,23)=$G(TAB(M1,23))+SUM
+ 
+ I PRC=5 D  Q 
+ .S TAB(M1,11)=$G(TAB(M1,11))+SUM
+ Q

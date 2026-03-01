@@ -1,0 +1,699 @@
+ISUTL ; Information System Utilities [ 02/06/2019  11:03 PM ]
+IMPCFG(FN) ; Импорт конфигурации
+ N LVL,I
+ S LVL=0
+ K ^cfg,^LCL,^WWW("roles"),^WWW("user")
+ I LVL>0 S I=+$G(^MN("otd")) K:I ^(I) S I=+$G(^MN("spec")) K:I ^(I)
+ D REROLES^NUSERS
+ Q
+EXPCFG(FN,LVL) ; Экспорт конфигурации
+ Q
+DELUVR(VR) 
+ ; Удалить услуги врача
+ N OT,DT,NI,ID
+ S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  S DT="" F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""  S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  S NI=$P($G(^ZNF(VR,OT,DT,ID,"e")),"~",2) D:NI'=""
+ .K ^PNF(NI,DT,VR_"|"_OT_"|"_ID)
+ .I '$D(^PNF(NI,DT)),$D(^ZNFI("dn",DT,NI)) K ^(NI)
+ K ^ZNF(VR)
+ Q
+SETPPRG(DGN,PRG,DT) 
+ N R,NI,K,P
+ W "Set patients programm to '"_PRG_"' where stc="_DGN,!,"Continue ? "
+ R R Q:$TR($E(R,1),"y","Y")'="Y"
+ S DT=$$DI^DTUTL(DT)
+ S NI="" F  S NI=$$NEXT^IPAC(NI) Q:NI=""  S K=$$GET^IPAC(NI,"stc",DT) I K=DGN S P=$$GET^IPAC(NI,"prog",DT) I P'=PRG D SET^IPAC(NI,"prog",DT,PRG,1) W "."
+ W "OK",!
+ Q
+SETPSTC(DGN,DGT,DT) 
+ N R,NI,K
+ W "Set patients stc to '"_DGT_"' where stc="_DGN,!,"Continue ? "
+ R R Q:$TR($E(R,1),"y","Y")'="Y"
+ S DT=$$DI^DTUTL(DT)
+ S NI="" F  S NI=$$NEXT^IPAC(NI,"stc",DGN) Q:NI=""  S K=$$GET^IPAC(NI,"stc",DT) I K=DGN D SET^IPAC(NI,"stc",DT,DGT,1) W "."
+ W "OK",!
+ Q
+SETSUM ; Set field "s"
+ N VR,OT,DT,ID,II
+ S VR="",II=0 F  S VR=$O(^ZNF(VR)) Q:VR=""  S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D
+ .S DT="" F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""  S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ..Q:$D(^(ID,"s")) 
+ ..D GET^IUSL(VR,DT,OT,ID)
+ ..Q:STAT="w"!(STAT="d") 
+ ..Q:'((STAT=2)!($G(FLG)["kss")) 
+ ..Q:$D(UL)=0 
+ ..D SETSUM^IUSL(VR,DT,OT,ID)
+ ..D UGL^IEXCH("^ZNF("_VR_","_OT_","_DT_","_ID_",""s"")")
+ ..S II=II+1 I II=15 S II=0 W "." H 5
+ W !,"OK"
+ Q
+BILLPU(USR,LPU,ZZ,MXDT) ; set all data for USR to USR@LPU (^BILL)
+ N X,Y,Z,A I $D(MXDT)=0 N MXDT S MXDT=99999
+ S X="" F  S X=$O(^BILL(X)) Q:(X="")!(X="00")  S Y="" F  S Y=$O(^BILL(X,Y)) Q:(Y="")!(Y>MXDT)  S Z="" F  S Z=$O(^BILL(X,Y,Z)) Q:Z=""  S A=$G(^(Z)) I A'="" I $P($P(A,"|",5),"@",1)=USR S $P(A,"|",5)=USR_"@"_LPU,^BILL(X,Y,Z)=A
+ Q:+$G(ZZ)=0 
+ S Y="" F  S Y=$O(^BILL("00",Y)) Q:Y=""  S Z="" F  S Z=$O(^BILL("00",Y,Z)) Q:Z=""  D
+ .S A=$G(^(Z)) I A'="" I $P($P(A,"|",2),"@",1)=USR S $P(A,"|",2)=USR_"@"_LPU,^BILL("00",Y,Z)=A Q
+ .S A=$G(^BILL("00",Y,Z,"ik")) I A'="" I $P($P(A,"|",2),"@",1)=USR S $P(A,"|",2)=USR_"@"_LPU,^BILL("00",Y,Z,"ik")=A Q 
+ .S A=$G(^BILL("00",Y,Z,"ok")) I A'="" I $P($P(A,"|",2),"@",1)=USR S $P(A,"|",2)=USR_"@"_LPU,^BILL("00",Y,Z,"ok")=A Q 
+ Q
+DELNIB(NIB) 
+ ; Удалить пациента со всеми данными
+ N NI S NI=NIB
+ D RMIDX^YIPACN
+ K ^BILL(NIB) ; todo - BILLI
+ K ^EPR(NIB)
+ ; todo - ZNF
+ Q
+SETULPU 
+ ; Проставить у всех услуг принадлежность к текущему ЛПУ
+ N O,DT,NI,ID,V,LPU,I
+ S I=0
+ S LPU=+$$^I("ilpu") I LPU=0 W !,"Cannot set, - not set ^i(ilpu)",! Q 
+ S V="" F  S V=$O(^ZNF(V)) Q:V=""  S O="" F  S O=$O(^ZNF(V,O)) Q:O=""  D
+ .S DT="" F  S DT=$O(^ZNF(V,O,DT)) Q:DT=""  S ID="" D
+ ..F  S ID=$O(^ZNF(V,O,DT,ID)) Q:ID=""  S I=I+1,^ZNF(V,O,DT,ID,"l")=LPU
+ W !,"Prosessed "_I_" records",!
+ Q
+BILLLPU(USR,LPU) 
+ ; Проставить у всех проплат для пользователя - ЛПУ
+ N X,Y,Z
+ S X="" F  S X=$O(^BILL(X)) Q:(X="")!(X="00")  S Y="" F  S Y=$O(^BILL(X,Y)) Q:Y=""  S Z="" F  S Z=$O(^BILL(X,Y,Z)) Q:Z=""  S A=^(Z) I $P(A,"|",5)=USR S $P(A,"|",5)=USR_"@"_LPU,^BILL(X,Y,Z)=A
+ Q
+FNDPDDG(SDG) ; Find double patient dog, SDG - first dogovor
+ N N,H,CH,F1,F2,I1,I2,DG,DG2,NN,R
+ S CH=+$H
+ S N="" F  S N=$$NEXT^IPAC(N) Q:N=""  D
+ .S H=$$CREATED^IPAC(N)
+ .S DG=$$GET^IPAC(N,"stc",H) Q:DG'=SDG 
+ .S DG2=$$GET^IPAC(N,"stc",CH)
+ .Q:DG=DG2 
+ .S F1=$$GET^IPAC(N,"fiof",H),F2=$$GET^IPAC(N,"fiof",CH)
+ .Q:F1=F2 
+ .S I1=$$GET^IPAC(N,"fioi",H),I2=$$GET^IPAC(N,"fioi",CH)
+ .Q:I1=I2
+ .W !,N_" "_F1_"/"_F2_", "_I1_"/"_I2_", "_DG_"/"_DG2_" : Move ?"
+ .R R Q:$$LU^TXTU($E(R,1))'="Y" 
+ .S NN=$$NEW^IPAC(1,20000) D EXTRCTP(N,H,NN)
+ Q
+EXTRCTP(FNIB,FDT,TNIB) ; Extract patient from date to TNIB
+ N PL
+ S PL="" F  S PL=$O(^BTN(FNIB,PL)) Q:PL=""  D
+ .Q:$D(^BTN(FNIB,PL,FDT))=0 
+ .M ^BTN(TNIB,PL,FDT)=^BTN(FNIB,PL,FDT) K ^BTN(FNIB,PL,FDT)
+ D UPD^IEXCH("IPACEX",FNIB)
+ D UPD^IEXCH("IPACEX",TNIB)
+ Q
+MOVPBAT ; Batch move, read from ^BUF("x"
+ N I,FN,TN,A
+ S I="" F  S I=$O(^BUF("x",I)) Q:I=""  D
+ .S A=^(I),TN=$P(A,"|",1),FN=$P(A,"|",2) Q:TN=""!(FN="") 
+ .D MOVPAC(FN,TN,1,1)
+ Q
+MOVPAC(FNIB,TNIB,WW,UPD,NMP) 
+ I $D(WW)=0 S WW=1 ; write to screen
+ I $D(UPD)=0 S UPD=0 ; network update
+ I $D(NMP)=0 S NMP=0 ; not move patient data
+ I $D(^BTN(FNIB))=0 W:WW !,"Patient 1 NOT found !" Q 
+ I $D(^BTN(TNIB))=0 W:WW !,"Patient 2 NOT found !" Q 
+ N X,Y,Z,K,BILL,NI,L,LP
+ ; EPR - 
+ S LP=$$^I("ilpu"),L=$$GID^I(LP)
+ S X="" F  S X=$O(^EPR(FNIB,X)) Q:X=""  D
+ .S Y=X
+ .F  S Y=$S(L="":Y+1,1:($E(Y,1,$L(Y)-3)+1)_L) Q:$D(^EPR(TNIB,Y))=0  
+ .M ^EPR(TNIB,Y)=^EPR(FNIB,X) K ^EPR(FNIB,X)
+ .; todo - ^EPRD
+ .D:UPD KGL^IEXCH("^EPR",FNIB),GL^IEXCH("^EPR",TNIB)
+ W:WW !,"EPR - OK" K L
+ ; BILL
+ W:WW !,"BILL - " S BILL=""
+ I $D(^BILL(TNIB))!$D(^BILL(FNIB)) D
+ .D CLRBILL(FNIB,TNIB)
+ .S BILL=$G(^BILL(TNIB))+$G(^BILL(FNIB)),^BILL(TNIB)=BILL
+ .S X="" F  S X=$O(^BILL(FNIB,X)) Q:X=""  S Y="" F  S Y=$O(^BILL(FNIB,X,Y)) Q:Y=""  D
+ ..D K^ISSG("^BILL("_FNIB_","_X_","_Y_")="""_$G(^BILL(FNIB,X,Y))_"""")
+ ..S Z=Y F  Q:$D(^BILL(TNIB,X,Z))=0  S Z=Z+1
+ ..M ^BILL(TNIB,X,Z)=^BILL(FNIB,X,Y) S L(TNIB_","_X)=""
+ .K ^BILL(FNIB) D:UPD UGL^IEXCH("-^BILL("_FNIB_")")
+ .I UPD S X="" F  S X=$O(L(X)) Q:X=""  D UPD^IEXCH("IBILL",X)
+ .D MKBLI(TNIB)
+ W:WW "OK"
+ ; Netr
+ S X="" F  S X=$O(^MNTR(X)) Q:X=""  D:$D(^MNTR(X,FNIB))
+ .M ^MNTRI("c",X,TNIB)=^MNTRI("c",X,FNIB) K ^MNTRI("c",X,FNIB)
+ .D:UPD UGL^IEXCH("-^MNTRI(""c"","_X_","_FNIB_")")
+ .D:UPD UGL^IEXCH("^MNTRI(""c"","_X_","_TNIB)
+ .S Y=$P($G(^MNTR(X,FNIB,"n")),"|",1) S:Y'="" ^MNTRI("n",Y)=X_"|"_TNIB
+ .I Y'="" D:UPD UGL^IEXCH("^MNTRI(""n"","""_Y_"""")
+ .S Y="" F  S Y=$O(^MNTRI("o",Y)) Q:Y=""  I $D(^MNTRI("o",Y,X,FNIB)) S ^(TNIB)="" K ^(FNIB) D:UPD UGL^IEXCH("^MNTR(""o"","_Y_","_X_","_TNIB),UGL^IEXCH("-^MNTR(""o"","_Y_","_X_","_FNIB_")") Q 
+ .M ^MNTR(X,TNIB)=^MNTR(X,FNIB) K ^MNTR(X,FNIB)
+ .D:UPD UGL^IEXCH("^MNTR("_X_","_TNIB)
+ .D:UPD UGL^IEXCH("-^MNTR("_X_","_FNIB_")")
+ .W:WW !,"Moved MNTR("_X_","_FNIB_") - OK"
+ ; Polis
+ I $D(^BTPL(FNIB))'=0 W !,"Found - POLIS, not moved !!"
+ ; ZNF
+ W:WW !,"ZNF - "
+ S X="" F  S X=$O(^PNF(FNIB,X)) Q:X=""  S Y="" F  S Y=$O(^PNF(FNIB,X,Y)) Q:Y=""  D
+ .Q:$D(^(Y))=0  
+ .S Z=$G(^(Y)),^PNF(TNIB,X,Y)=Z K ^PNF(FNIB,X,Y)
+ .I '$D(^PNF(FNIB,X)),$D(^ZNFI("dn",X,FNIB)) K ^(FNIB) D:UPD KGL^IEXCH("^ZNFI","dn",X,FNIB)
+ .I '$D(^ZNFI("dn",X,TNIB)) S ^(TNIB)="" D:UPD GL^IEXCH("^ZNFI","dn",X,TNIB)
+ .D:UPD UGL^IEXCH("^PNF("_TNIB_","_X_","""_Y_"""")
+ .S K=$G(^ZNF($P(Y,"|",1),$P(Y,"|",2),X,$P(Y,"|",3),"e"))
+ .Q:K=""  
+ .S $P(K,"~",2)=TNIB,^ZNF($P(Y,"|",1),$P(Y,"|",2),X,$P(Y,"|",3),"e")=K
+ .D:UPD UGL^IEXCH("^ZNF("_$P(Y,"|",1)_","_$P(Y,"|",2)_","_X_","_$P(Y,"|",3))
+ D:UPD UGL^IEXCH("-^PNF("_FNIB_")")
+ W:WW "OK"
+ D:$D(^PROFP(FNIB))
+ .W:WW !,"PROFP - "
+ .M ^PROFP(TNIB)=^PROFP(FNIB) K ^PROFP(FNIB)
+ .D:UPD UGL^IEXCH("-^PROFP("_FNIB_")"),UGL^IEXCH("^PROFP("_TNIB)
+ .W:WW "OK"
+ D:$D(^DSHP(FNIB))
+ .W:WW !,"Shedule - "
+ .S X="" F  S X=$O(^DSHP(FNIB,X)) Q:X=""  S Y="" F  S Y=$O(^DSHP(FNIB,X,Y)) Q:Y=""  D
+ ..S Z="" F  S Z=$O(^DSHP(FNIB,X,Y,Z)) Q:Z=""  D
+ ...S K=^(Z)
+ ...S L=$G(^DSH($P(K,"|",1),$P(K,"|",2),Z,$TR($P(K,"|",3),"@","|"),X,Y))
+ ...Q:L=""  S $P(L,"|",1)=TNIB,^(Y)=L
+ ...D:UPD UGL^IEXCH("^DSH",$P(K,"|",1),$P(K,"|",2),Z,$TR($P(K,"|",3),"@","|"),X,Y)
+ .M ^DSHP(TNIB)=^DSHP(FNIB) K ^DSHP(FNIB)
+ .D:UPD UGL^IEXCH("-^DSHP("_FNIB_")"),UGL^IEXCH("^DSHP("_TNIB)
+ .W:WW "OK"
+ ; CARD
+ W:WW !,"CARD - "
+ S K="" F  S K=$O(^CARDI(FNIB,K)) Q:K=""  I ^(K)="P" S Y=$G(^CARD(K)),$P(Y,"|",2)=TNIB,^CARD(K)=Y,^CARDI(TNIB,K)="P" K ^CARDI(FNIB,K) D:UPD UGL^IEXCH("^CARD("""_K_""")"),UGL^IEXCH("-^CARDI("_FNIB_","""_K_""")"),UGL^IEXCH("^CARDI("_TNIB)
+ W:WW "OK"
+ ; BTN
+ S NI=FNIB D RMIDX^YIPACN
+ M:'NMP ^BTN(TNIB)=^BTN(FNIB)
+ D:NMP hMOVP
+ K ^BTN(FNIB)
+ D:UPD UGL^IEXCH("-^BTN("_FNIB_")")
+ D NORM^IPACEX(TNIB)
+ D:UPD UPD^IEXCH("IPACEX",TNIB)
+ Q
+hMOVP 
+ N LST,X
+ M LST=^BTN(FNIB)
+ S X=$G(^BTN($C(9)_"t","stc")) K:X'="" LST(X)
+ S X=$G(^BTN($C(9)_"t","stc1")) K:X'="" LST(X)
+ S X=$G(^BTN($C(9)_"t","polis")) K:X'="" LST(X)
+ S X=$G(^BTN($C(9)_"t","dog_from")) K:X'="" LST(X)
+ S X=$G(^BTN($C(9)_"t","dog_to")) K:X'="" LST(X)
+ S X=$G(^BTN($C(9)_"t","prog")) K:X'="" LST(X)
+ S X=$G(^BTN($C(9)_"t","prog1")) K:X'="" LST(X)
+ M ^BTN(TNIB)=LST
+ Q
+CLRBILL(NI1,NI2) 
+ N DT,TM S DT=""
+ F  S DT=$O(^BILLI(DT)) Q:DT=""  S TM="" F  S TM=$O(^BILLI(DT,TM)) Q:TM=""  K ^BILLI(DT,TM,NI1),^BILLI(DT,TM,NI1)
+ Q
+MKBLI(NI) 
+ N DT,TM,SM,R,S,K
+ S SM=0,DT=""
+ F  S DT=$O(^BILL(NI,DT)) Q:DT=""!(+DT'=DT)  S TM="" F  S TM=$O(^BILL(NI,DT,TM)) Q:TM=""  D
+ .S R=$G(^(TM)),K=$P(R,"|",1) I K'="",K'="+",K'="-" Q 
+ .S S=+$P(R,"|",2),SM=SM+S,^BILLI(DT,TM,NI)=SM_"|"_S_"|"_$S(K="":"S",K="-":"M",1:"A")_"|"_$P(R,"|",5)
+ Q
+MOVBIL(FROM,TO,SUM) 
+ I $$CHECK^IPAC(FROM)=0!($$CHECK^IPAC(TO)=0) W !,"Wrong patients" Q 
+ I $$NOW^IBILL(FROM)<SUM W !,"Cannot do it !" Q 
+ N REZ,HH,%LOG S HH=$H,REZ="",%LOG="sys"
+ D SUB^IBILL(FROM,HH,SUM,"BILL:T:"_TO_":"_HH,"REZ")
+ I REZ="" W !,"Err in sub." Q 
+ D SUB^IBILL(TO,HH,-SUM,"BILL:F:"_FROM_":"_REZ)
+ W !,"OK"
+ Q
+SANIB ; Set "anib" in ^BTN
+ N X,I,H,A S X="",H=+$H,A="anib"
+ W !,"Starting - "
+ F I=1:1 S X=$O(^BTI(A,X)) Q:X=""  D SET^IPAC($G(^(X)),A,H,X)
+ W "OK (",I,")"
+ Q
+FDBLP ; Find double patients
+ K ^BUF("dbl")
+ W !,"Start 'kadavr' search ."
+ N STT,NIT,FF
+ S NI="",FF=0
+ F  S NI=$$NEXT^IPAC(NI) Q:NI=""  D
+ .S A=$$FIO^IPAC(NI)
+ .S:A'="" ^BUF("dbl",A)=$G(^BUF("dbl",A))+1,^BUF("dbl",A,NI)=""
+ W "."
+ S A=""
+ F  S A=$O(^BUF("dbl",A)) Q:A=""  K:$G(^BUF("dbl",A))<2 ^BUF("dbl",A)
+ W ".OK",!
+ S A=""
+ F  S A=$O(^BUF("dbl",A)) Q:A=""  D  Q:FF 
+ .W !,"> "_A K STT S NI="",I=1
+ .F  S NI=$O(^BUF("dbl",A,NI)) Q:NI=""  W !," "_I_". - "_NI_" STC="_$$NAME^IINSC($$GET^IPAC(NI,"stc",+$H))_", BDate="_$$DT^DTUTL($$GET^IPAC(NI,"datar",+$H)) S STT(I)=NI,I=I+1
+ .W !," -> Split to number: " R R I (R="q")!(R="Q") S FF=1 Q 
+ .S R=$$TRIM^TXTU(R) Q:R=""  Q:$G(STT(R))="" 
+ .S NIT=STT(R) K STT(R)
+ .S R="" F  S R=$O(STT(R)) Q:R=""  D MOVPAC(STT(R),NIT,0)
+ .W ", Assign ""anib"": " R R Q:R=""  D SET^IPAC(NIT,"anib",+$H,R)
+ K ^BUF("dbl")
+ Q
+SPLITCN(TDT) ; Split price to date
+ S TDT=$$DI^DTUTL(TDT)
+ N I,V,N,X,IDX S IDX=0
+ S I="" F  S I=$O(^CN(I)) Q:I=""  S V="" F  S V=$O(^CN(I,V)) Q:V=""  D
+ .F  S N=$O(^CN(I,V,TDT)) Q:+N'=N  S ^CN(I,V,TDT)=^CN(I,V,N),IDX=IDX+1 K ^CN(I,V,N)
+ .S N=99999 F  S N=$O(^CN(I,V,N)) Q:N=""  D
+ ..F  S X=$O(^CN(I,V,N,TDT)) Q:+X'=X  S ^CN(I,V,N,TDT)=^CN(I,V,N,X),IDX=IDX+1 K ^CN(I,V,N,X)
+ W !,"Processed "_IDX_" records"
+ Q
+SHWPUSL(NI,TDT) ; Show ZNF by patient and date
+ N DTT,VR,OT,ID,X
+ S DTT=$$DI^DTUTL(TDT)
+ S X="" F  S X=$O(^PNF(NI,DTT,X)) Q:X=""  D
+ .S VR=$P(X,"|",1),OT=$P(X,"|",2),ID=$P(X,"|",3)
+ .S R=$G(^ZNF(VR,OT,DTT,ID,"e")) Q:R=""
+ .W !,VR_"-"_OT_"-"_DTT_"-"_ID_"="_R
+ Q
+DOPAY(TDT,ST) ; if not pay - pay, to date
+ W !,"Do pay ->"
+ I $D(ST)=0 N ST S ST="0"
+ N DTT,NI,VT,OT,ID,X,R,K
+ S DTT=$$DI^DTUTL(TDT)
+ S NI="" F  S NI=$O(^BILL(NI)) Q:NI=""  D
+ .Q:$D(^BILL(NI,DTT))=0 
+ .Q:$D(^PNF(NI,DTT))=0 
+ .S X="" F  S X=$O(^PNF(NI,DTT,X)) Q:X=""  D
+ ..S VR=$P(X,"|",1),OT=$P(X,"|",2),ID=$P(X,"|",3)
+ ..S R=$G(^ZNF(VR,OT,DTT,ID,"e")) Q:R=""  Q:$P(R,"~",1)'=ST 
+ ..W !,"Do: "_VR_","_OT_","_DTT_","_ID_" where R="_R_" B="_$G(^BILL(NI))
+ ..R K Q:$TR(K,"y","Y")'="Y"
+ ..S $P(R,"~",1)="w",^ZNF(VR,OT,DTT,ID,"e")=R
+ ..D SBSYS^YNED(NI,VR,OT,TDT,1) ; credit !
+ ..S K=$O(^BILL(NI,+$H,99999),-1)
+ ..S R=$O(^BILL(NI,DTT,99999),-1)+1
+ ..I (K="")!(R=1) W !,"Failure !!!!" Q
+ ..S ^BILL(NI,DTT,R)=^BILL(NI,+$H,K) K ^BILL(NI,+$H,K)
+ Q
+MVREGP(DGN) ; Move patient registration to dog_from
+ N N,DF,DC,PL,TZR,PP,DST
+ M TZR=^BTN($C(9)_"r")
+ S N="" F  S N=$$NEXT^IPAC(N,"stc",DGN) Q:N=""  D:$$GET^IPAC(N,"stc",+$H)=DGN
+ .S DF=$$GET^IPAC(N,"dog_from",+$H),DC=$$CREATED^IPAC(N)
+ .Q:DF=""
+ .S DST=$$GET^IPAC(N,"stc",+$H)
+ .I DC'>DF D:DST'=DGN SET^IPAC(N,"stc",DF,DGN)  Q 
+ .S PL="" F  S PL=$O(^BTN(N,PL)) Q:PL=""  D
+ ..Q:$L($D(^BTN(N,PL)))<2 
+ ..S PP=$G(TZR(PL)) Q:PP="" 
+ ..D SET^IPAC(N,PP,DF,$$GET^IPAC(N,PP,+$H))
+ .D UPD^IEXCH("IPACEX",N)
+ Q
+IMP ; Импорт данных в ^IMPORT(X)
+ N X,%J,A
+ D ORH^RWU
+ S X=$O(^IMPORT(""),-1)+1
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  S ^IMPORT(X,%J)=$$WD^TXTU(A)
+ D CR^RWU
+ Q
+UPDALL(NIB) 
+ Q:NIB="" 
+ N X,Y,Z
+ D UPD^IEXCH("IPACEX",NIB)
+ D UGL^IEXCH("^EPR("_NIB)
+ D UGL^IEXCH("^BILL("_NIB)
+ S X="" F  S X=$O(^BILL(NIB,X)) Q:X=""  S Y=""  F  S Y=$O(^BILL(NIB,X,Y)) Q:Y=""  D UGL^IEXCH("^BILLI("_X_","_Y_","_NIB)
+ 
+ D UGL^IEXCH("^PNF("_NIB)
+ S X="" F  S X=$O(^PNF(NIB,X)) Q:X=""  S Y="" F  S Y=$O(^PNF(NIB,X,Y)) Q:Y=""  D
+ .Q:$D(^(Y))=0
+ .D UGL^IEXCH("^ZNF("_$P(Y,"|",1)_","_$P(Y,"|",2)_","_X_","_$P(Y,"|",3))
+ 
+ D UGL^IEXCH("^CARDI("_NIB)
+ S X="" F  S X=$O(^CARDI(NIB,X)) Q:X=""  D:^(X)="P" UGL^IEXCH("^CARD("""_X_""")")
+ ; todo - MNTR,DSH
+ Q
+SETPOLST ; Установить пол на основании статистики имен
+ K ^BUF($J)
+ N N,K,R,P,I
+ S N="" F  S N=$$NEXT^IPAC(N) Q:N=""  D
+ .S P=$$GET^IPAC(N,"pol",+$H) Q:P="" 
+ .S R=$$GET^IPAC(N,"fioi",+$H) Q:R=""
+ .S R=$$LU^TXTU(R)
+ .S K=$G(^BUF($J,R))
+ .I K'=""&(K'=P) S ^BUF($J,R,"z")="" Q
+ .I K="" S ^BUF($J,R)=P
+ .S ^(1)=$G(^BUF($J,R,1))+1
+ S N="",K=0,R=0
+ F  S N=$O(^BUF($J,N)) Q:N=""  S K=K+1 I $D(^(N,"z")) S R=R+1 K ^(N)
+ W !,"Found="_K_", Exluded="_R
+ S I=0 
+ W !
+ S N="" F  S N=$$NEXT^IPAC(N) Q:N=""  D
+ .S P=$$GET^IPAC(N,"pol",+$H) Q:P'="" 
+ .S R=$$GET^IPAC(N,"fioi",+$H) Q:R=""
+ .S R=$$LU^TXTU(R) Q:'$D(^BUF($J,R)) 
+ .S K=R,R=^(R) Q:^(K,1)<4  S I=I+1
+ .S K=$$CREATED^IPAC(N)
+ .D SET^IPAC(N,"pol",K,R,1) I I#1999=0 W "." H 1
+ W !,"Set patients="_I
+ Q
+SETPOL ; Установить пол у пациентов
+ N N,F,I,O,R,D,J
+ S N="",J=0 F  S N=$$NEXT^IPAC(N) Q:N=""  D
+ .Q:'$$GET^IPAC(N,"pol") 
+ .S F=$$GET^IPAC(N,"fiof") Q:F="" 
+ .S I=$$GET^IPAC(N,"fioi")
+ .S O=$$GET^IPAC(N,"fioo")
+ .S R=$$SEXF^YIFAM(F,I,O) Q:'R 
+ .S D=$$CREATED^IPAC(N) 
+ .D SET^IPAC(N,"pol",D,R,1)
+ .W:J#100=0 "."
+ .S J=J+1
+ W !,"Set patients="_J
+ Q
+NULSDG(DS,DE,COUNT) ; Null second dogovor
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N R,DT,NI,KX,VR,OT,ID,I
+ S I=0
+ S NI="" F  S NI=$O(^PNF(NI)) Q:NI=""  D
+ .S DT=DS-1 F  S DT=$O(^PNF(NI,DT)) Q:DT=""!(DT>DE)  D
+ ..S KX="" F  S KX=$O(^PNF(NI,DT,KX)) Q:KX=""  D
+ ...S R=^(KX) Q:$P(R,"|",2)=""  ; no ISTC
+ ...S I=I+1 Q:$G(COUNT) 
+ ...S $P(R,"|",2)="",^PNF(NI,DT,KX)=R
+ ...S VR=$P(KX,"|",1),OT=$P(KX,"|",2),ID=$P(KX,"|",3)
+ ...S R=$G(^ZNF(VR,OT,DT,ID,"e"))
+ ...I R'="" S $P(R,"~",6)="",^("e")=R
+ ...D UPD^IUSL(VR,OT,DT,ID,NI)
+ W !,"Step1 found="_I
+ S I=0
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D
+ ..S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""  D
+ ...S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ....S R=$G(^(ID,"e")) Q:R=""  Q:$P(R,"~",6)=""  
+ ....S I=I+1 Q:$G(COUNT) 
+ ....S $P(R,"~",6)="",^("e")=R
+ ....D UPD^IUSL(VR,OT,DT,ID)
+ W !,"Step2 found="_I
+ Q
+PROFRFW ; reformat workn in ^PROF
+ N NI,DT,C1,I,X1,W
+ S C1="" F I=1:1:255 S:$C(I)'?1.N C1=C1_$C(I)
+ S NI="" F  S NI=$O(^PROFP(NI)) Q:NI=""  D:$$GET^IPAC(NI,"stc",+$H)=91
+ .S DT="" F  S DT=$O(^PROFP(NI,"workn",DT)) Q:DT=""  D
+ ..S R=^(DT),X1=$TR(R,C1,"") Q:X1=""  
+ ..S:X1=9312 X1=9 S X1="Мастердент-"_X1
+ ..S ^PROFP(NI,"workn",DT)=X1
+ ..W !,X1
+ ..D UGL^IEXCH("^PROFP("_NI)
+ ..S W=$$pWORK^NPSPIS($$DW^TXTU(X1))
+ ..D SET^IPAC(NI,"work",DT,W,1)
+ Q
+PROFUF(DS,DE) ; usl find
+ N NI,UVL,D,R,A,U,V
+ S DS=$$DI^DTUTL(DS),DE=$$DI^DTUTL(DE)
+ S UVL(23501)=9278_"|"_90
+ S NI="" F  S NI=$O(^PROFP(NI)) Q:NI=""  D:$$GET^IPAC(NI,"stc",+$H)=91
+ .S D=DS-1 F  S D=$O(^PROFP(NI,"n",D)) Q:D=""!(D>DE)  S U="" F  S U=$O(^PROFP(NI,"n",D,U)) Q:U=""  D:$D(UVL(U))
+ ..S R=^(U)  Q:$P(R,"|",3,6)'="" 
+ ..S V=UVL(U)
+ ..S A=$$ADD^IUSL($P(V,"|",1),D,$P(V,"|",2),U,"Z00.0","prf","",10,"","")
+ ..S $P(R,"|",3)=$P(V,"|",1)_"|"_$P(V,"|",2)_"|"_D_"|"_A
+ ..S ^PROFP(NI,"n",D,U)=R
+ ..D UGL^IEXCH("^PROFP("_NI_",""n"","_D_","_U_")")
+ Q
+NSU(DS,DE) ; Неподписанные услуги - автоподпись
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S:'$D(CR) CR=$C(13,10)
+ N NI,R,OT,VR,DT,ID,FR,LP
+ S LP=$$^I("ilpu"),FR=+$$FR^I()
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D
+ ..S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ...S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ....S R=$G(^(ID,"e")) Q:R=""  Q:$P(R,"~",1)'="w" 
+ ....I 'FR I LP Q:LP'=$G(^("l")) 
+ ....S NI=$P(R,"~",2)
+ ....D SBSYS^YNED(NI,VR,OT,$$DT^DTUTL(DT),ID)
+ ; TODO - Log  
+ Q
+FIXNAZU(DS,DE) ; Расставить назначения в недоназначенные услуги
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N ID,R,D,NI,VR,X,V,O,I,i
+ K ^BUF($J)
+ S i=0
+ S ID="" F  S ID=$O(^NAZ(ID)) Q:ID=""  D
+ .S R=$G(^(ID,"i")) Q:R="" 
+ .S D=+$P(R,"|",5) Q:D<DS  Q:D>DE 
+ .S X=$O(^("a",""),-1) Q:X'=1  
+ .S NI=$P(R,"|",2),VR=$P(R,"|",6)
+ .Q:$$SPEC^IKADRY(VR)'=79 
+ .S ^BUF($J,NI,D,VR)=ID
+ S NI="" F  S NI=$O(^BUF($J,NI)) Q:NI=""  D
+ .S D="" F  S D=$O(^BUF($J,NI,D)) Q:D=""  D
+ ..S X="" F  S X=$O(^PNF(NI,D,X)) Q:X=""  D
+ ...S V=$P(X,"|",1),O=$P(X,"|",2),I=$P(X,"|",3)
+ ...Q:'$D(^BUF($J,NI,D,V)) 
+ ...Q:$D(^ZNF(O,V,D,I,"f")) 
+ ...W !,O_","_V_","_D_","_I Q 
+ ...S ^ZNF(O,V,D,I,"f")=^BUF($J,NI,D,V)
+ ...D GL^IEXCH("^ZNF",O,V,D,I,"f")
+ W !,i
+ Q
+MVDSH(LP,VR1,OT1,SP1,VR2,OT2,SP2) ; Переместить врача в расписании
+ N D,T,R,N
+ K ^DSHI("sp",LP,SP1,OT1_"|"_VR1)
+ S D="" F  S D=$O(^DSH(LP,OT1,VR1,SP1,D)) Q:D=""  D
+ .S ^DSH(LP,OT2,VR2,SP2,D)=^(D)
+ .D GL^IEXCH("^DSH",LP,OT2,VR2,SP2,D)
+ .S T="" F  S T=$O(^DSH(LP,OT1,VR1,SP1,D,T)) Q:T=""  D
+ ..S R=$G(^(T))
+ ..I '$L(R) K ^(T) S ^DSH(LP,OT2,VR2,SP2,D,T)="" Q 
+ ..M ^DSH(LP,OT2,VR2,SP2,D,T)=^DSH(LP,OT1,VR1,SP1,D,T)
+ ..S N=$P(R,"|",1) S:N="" N=$P(R,"|",7)
+ ..Q:'$$EXIST^IPAC(N)
+ ..S R=^DSHP(N,D,T,VR1),$P(R,"|",2)=OT2,$P(R,"|",3)=SP2
+ ..S ^DSHP(N,D,T,VR2)=R
+ ..D KGL^IEXCH("^DSHP",N,D,T,VR1),GL^IEXCH("^DSHP",N,D,T,VR2)
+ .K ^DSH(LP,OT1,VR1,SP1,D)
+ .D KGL^IEXCH("^DSH",LP,OT1,VR1,SP1,D)
+ .D GL^IEXCH("^DSH",LP,OT2,VR2,SP2,D)
+ Q:$D(^DSHI("sp",LP,SP2,OT2_"|"_VR2)) 
+ S ^DSHI("sp",LP,SP2,OT2_"|"_VR2)=SP2
+ D GL^IEXCH("^DSHI","sp",LP,SP2,OT2_"|"_VR2)
+ Q
+FILUSL(NIS,NIE,USL,DIA,OT,VR,DT) 
+ N NI,R
+ S NI=NIS-1 F  S NI=$$NEXT^IPAC(NI) Q:NI=""!(NI>NIE)  D
+ .S A=$$ADD^IUSL(VR,DT,OT,NI,USL,DIA,"","","","","")
+ Q
+MKZARI(DS,DE) ; Сформировать журнал долговых услуг
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S:'$D(CR) CR=$C(13,10)
+ N NI,R,OT,VR,DT,ID,FR,LP,NOO,O
+ S NOO=+$G(^cfg("zarp","nootd"))
+ S LP=$$^I("ilpu"),FR=+$$FR^I()
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D
+ ..S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ...S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ....S R=$G(^(ID,"e")) Q:R=""  Q:$P(R,"~",1)="w" 
+ ....I 'FR I LP Q:LP'=$G(^("l")) 
+ ....Q:$G(^("zrp"))'=2 
+ ....S O=$S(NOO:$$OTD^IKADRY(VR),1:OT)
+ ....S ^ZARPI("uexc",LP,O,VR,VR_"|"_OT_"|"_DT_"|"_ID)=""
+ ....W "."
+ Q
+MKVACC ; Создать номенклатуру вакцин из прейскуранта
+ N K,W,NM,R,P,CR,TIP
+ S K="",CR=$C(13,10)
+ F  S K=$O(^CN(K)) Q:K=""  D:"|"_$$GET^IPRICE(K,"cls",1,+$H)_"|"["|vcc|"
+ .S NM=$$NAME^IPRICE(K,1),W=$$IsNAME^IWRHS(NM)
+ .D:'$L(W) 
+ ..S W=$O(^WRHE(""),-1)+1
+ ..S R=NM,$P(R,"|",3)=6,$P(R,"|",5)=12 ; Вакцины, Амп.
+ ..S ^WRHE(W)=R
+ .S DTS=+$H,N=K
+ .S P="" F  S P=$O(^CN(K,P)) Q:P=""  S TIP=P D SET^IPRICE(K,"mat",P,+$H,W_"@1"),SET^IPRICE(K,"tmat",P,+$H,2)
+ Q
+ZCON 
+ S V="" F  S V=$O(^ZNF(V)) Q:V=""  S O="" F  S O=$O(^ZNF(V,O)) Q:O=""  D
+ .S D="" F  S D=$O(^ZNF(V,O,D)) Q:D=""  S ID="" F  S ID=$O(^ZNF(V,O,D,ID)) Q:ID=""  D
+ ..S R=$G(^(ID,"m")) Q:R=""
+ ..S F=$P(R,"~",2) Q:F'["kss"  Q:F'["grn" 
+ ..S F=$$EXFLG^TXTU(F,"grn"),$P(R,"~",2)=F,^("m")=R
+ ..D GL^IEXCH("^ZNF",V,O,D,ID,"m")
+ ..;W !,$P(^("e"),"~",2)_"  "_F_"  "_$$DT^DTUTL(D)
+ Q
+SETKDRNI ; Проставить в кадрах номера историй из пациентов
+ N K,NI,DG,F,I,O,DTB
+ S:$G(%LOG)="" %LOG="sys"
+ S K="" F  S K=$O(^KDR(K)) Q:K=""  D
+ .S F=$$GET^IKADRY(K,"f")
+ .S I=$$GET^IKADRY(K,"i")
+ .S O=$$GET^IKADRY(K,"o")
+ .S DTB=$$GET^IKADRY(K,"bdate") S:$L(DTB)<8 DTB=""
+ .S NI=$$GETNIB^IPACFND(F,I,O,$$DI^DTUTL(DTB),"",1)
+ .Q:NI<1  Q:NI="" 
+ .W "."
+ .D SET^IKADRY(K,"nib",+$H,NI)
+ Q
+CNGSKD(DS,DE,DGN,SSK,IDSK) ; Проставить скидку по договору
+ ; SSK - значение скидки
+ ; IDSK - ID скидки
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S DGN=$G(DGN),SSK=$G(SSK),IDSK=$G(IDSK)
+ S:'$D(CR) CR=$C(13,10)
+ K ^BUF($J)
+ N NI,R,OT,VR,DT,ID,FR,LP,S,X,DG,SK1,PRCC,U,SS,SKF,SKI
+ S S=0,SKI=""
+ I DGN'="",IDSK="" S SKI=$$GET^YNDOG(DGN,"skd",DE)
+ S:SKI="" SKI=IDSK
+ S LP=$$^I("ilpu")
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D
+ ..S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ...S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ....S R=$G(^(ID,"e")) Q:R=""  Q:$P(R,"~",1)="w" 
+ ....Q:$P(R,"~",1)=2  Q:R["kss" 
+ ....D GET^IUSL(VR,DT,OT,ID)
+ ....S DG=$S($G(ISTC)'="":ISTC,1:$$GET^IPAC(NI,"stc",DT))
+ ....S PRCC=$$PRC^IINSC(DG,NI,DT) ; TODO - stom prc
+ ....I DGN="",$$GET^YNDOG(DG,"dvid")>1 Q  ; только СК 
+ ....S U=$P($P(R,"~",3),"*",1) Q:U="" 
+ ....S SKF=1,SK1=""
+ ....I DGN'="" Q:DG'=DGN  I $$GET^YNPRICE(U,"nosp",PRCC,DT) S SKF=0
+ ....I DGN'="",$P(R,"~",4)'=PRCC S $P(R,"~",4)=PRCC,^ZNF(VR,OT,DT,ID,"e")=R
+ ....I DGN'="",SK1'="",'$$CHECKID^IDSCN(SKI,OT,U,DGN,PRCC) S SKF=0
+ ....S:SKF SK1=$S(IDSK'="":$$CALCID^IDSCN(IDSK,OT,U,DGN,PRCC,1),SSK="":"",1:SSK)
+ ....S:'SK1 SK1="" S:SK1'="" SK1=100-SK1
+ ....I DGN'="",$P(R,"~",5)'=SK1 S $P(R,"~",5)=SK1,^ZNF(VR,OT,DT,ID,"e")=R
+ ....K ^ZNF(VR,OT,DT,ID,"s")
+ ....D GET^IUSL(VR,DT,OT,ID) ; another
+ ....S SS=$$SUMM^IUSL(VR,DT,OT,ID)
+ ....;I $P(R,"~",5)'="" W !,VR_","_OT_","_DT_","_ID_"="_$P(R,"~",5)
+ ....S ^ZNF(VR,OT,DT,ID,"s")=SS,S=S+SS
+ W !,S
+ K ^BUF($J)
+ Q
+SETDIA(DS,DE,WW) ; Присвоить диагнозы из EPRD(,,"diag" в ZNF
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),WW='+$G(WW)
+ N NI,ID,R,VR,DT,OT,DI,I
+ K ^BUF($J)
+ W:WW !,"Preprocess"
+ S NI="" F  S NI=$O(^EPRI("nd",NI)) Q:NI=""  D
+ .S DT=DS-1 F  S DT=$O(^EPRI("nd",NI,DT)) Q:DT=""!(DT>DE)  D
+ ..S ID="" F  S ID=$O(^EPRI("nd",NI,DT,ID)) Q:ID=""  D
+ ...S R=^(ID),VR=$P($G(^EPR(NI,ID,"o")),"|",2) Q:VR=""   
+ ...S DI=$G(^EPRD(NI,ID,"diag")) Q:DI="" 
+ ...S DI=$P(DI," ",1) Q:'$$CHECK^YMKB10(DI) 
+ ...S ^BUF($J,VR,DT,NI)=DI
+ W:WW !,"Set data"
+ S I=0
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D
+ ..S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D  W:WW "."
+ ...S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ....S R=$G(^(ID,"m")) Q:$P(R,"~",1)'=""  ; уже есть
+ ....S NI=$P($G(^("e")),"~",2) Q:NI="" 
+ ....S DI=$G(^BUF($J,VR,DT,NI)) Q:DI=""  
+ ....S $P(R,"~",1)=DI,^ZNF(VR,OT,DT,ID,"m")=R,I=I+1
+ W:WW !,"Total="_I
+ K ^BUF($J)
+ Q
+SETNAZ(FROM,TO) 
+ N ID,I,A,KX,OT,VR,DT,IDX,R
+ S ID=FROM-1 F  S ID=$O(^NAZ(ID)) Q:ID=""  D  Q:$P(ID,".",1)=TO
+ .S I="" F  S I=$O(^NAZ(ID,"a",I)) Q:I=""  D
+ ..S KX=$P(^(I),"|",11) Q:KX=""  
+ ..S OT=$P(KX,"@",1),VR=$P(KX,"@",2),DT=$P(KX,"@",3),IDX=$P(KX,"@",4)
+ ..S R=$G(^ZNF(VR,OT,DT,IDX,"f"))
+ ..I R'="",R'="*" Q 
+ ..W "."
+ ..S ^ZNF(VR,OT,DT,IDX,"f")=ID 
+ Q
+CLRWRK ; Очистить неиспользованные места работы
+ N N,W,D,MM
+ S W="" F  S W=$O(^BTI(" w",W)) Q:W=""  D:'$D(^M(5,W)) 
+ .S N="" F  S N=$O(^BTI(" w",W,N)) Q:N=""  D
+ ..D GETM^IPAC(N,"work","MM")
+ ..W "."
+ ..I '$D(MM) K ^BTI(" w",W,N) Q
+ ..S D="" F  S D=$O(MM(D)) Q:D=""  D:MM(D)=W SET^IPAC(N,"work",D,"",1)
+ ..K ^BTI(" w",W,N)
+ Q
+MOVUVR(DS,DE,FVR,TVR,ULST) ; Переместить услуги из списка с FVR на TVR
+ N R,UU,TOTD
+ Q:TVR="" 
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S TOTD=$$OTD^IKADRY(TVR)
+ D ITERATE^IUSLD("MOVUVRp^ISUTL(VR,OT,DT,ID)",DS,DE,FVR)
+ Q
+MOVUVRp(VR,OT,DT,ID) 
+ Q:VR=TVR 
+ Q:"wd"[$$GETSTAT^IUSL(VR,DT,OT,ID) 
+ S UU=$$GETUSLS^IUSL(VR,DT,OT,ID) Q:UU="" 
+ Q:'$$IsLST^ICNLIST(ULST,UU) 
+ W "." 
+ S ID=$$MOV^IUSL(VR,DT,OT,ID,TVR,TOTD)
+ Q
+NAZUVR(DS,DE,ULST) ; Присвоить невыполненным назначениям услуги в соответтвии со списком
+ N VR,OT,DT,ID,NI,IDX,I,R,P,FLG
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S VR=$$GET^ICNLIST(ULST,"vr")
+ I VR="" W !,"No VR" Q
+ S OT=$$OTD^IKADRY(VR)
+ S %LOG="sys"
+ S DT=DS-1 F  S DT=$O(^NAZI("d",DT)) Q:DT=""!(DT>DE)  D
+ .S IDX="" F  S IDX=$O(^NAZI("d",DT,IDX)) Q:IDX=""  D
+ ..Q:+$P($G(^NAZ(IDX,"e")),"|",1)
+ ..S R=$G(^("i")) Q:R=""
+ ..S NI=$P(R,"|",2)
+ ..S I="" F  S I=$O(^NAZ(IDX,"a",I)) Q:I=""  D
+ ...S R=^(I),U=$P(R,"|",5),P=$P(R,"|",6)
+ ...Q:$P(R,"|",1)
+ ...Q:$P(R,"|",11)'="" 
+ ...Q:'$$IsLST^ICNLIST(ULST,U)
+ ...S FLG=$P(R,"|",9)
+ ...W !,NI_" "_U_" "_FLG
+ ...S ID=$$ADD^IUSL(VR,DT,OT,NI,U,"",FLG,"",P,"","")
+ ...S:FLG'["nop" R=$$SETSTAT^IUSL(VR,DT,OT,ID,0)
+ ...D EXS^INAZN(IDX,I)
+ Q
+MOVUSL(U1,U2) ; Изменить код услуги 1 на 2 в прайсе, услугах, назнач.
+ N U,P,I,R,OT,VR,DT
+ ; price
+ S P="" F  S P=$O(^CN(U1,P)) Q:P=""  D
+ .M ^CN(U2,P)=^CN(U1,P) K ^CN(U1,P)
+ .M ^CNE(U2,P)=^CNE(U1,P) K ^CNE(U1,P)
+ .D KGL^IEXCH("^CN",U1,P),GL^IEXCH("^CN",U2,P)
+ .D KGL^IEXCH("^CNE",U1,P),GL^IEXCH("^CNE",U2,P)
+ ; TODO ^CNAV, ^CNA
+ ; naz
+ S I="" F  S I=$O(^NAZ(I)) Q:I=""  D
+ .S P="" F  S P=$O(^NAZ(I,"a",P)) Q:P=""  D
+ ..S R=^(P) Q:$P(R,"|",5)'=U1
+ ..S $P(^(P),"|",5)=U2
+ ..D GL^IEXCH("^NAZ",I,"a",P)
+ ; usl
+ D MOVUSL^IEDUTL(U1,U2)
+ ; bill
+ D MOVUSL^IBILUTL(U1,U2)
+ ; mprog
+ D MOVUSL^IMPRP(U1,U2,+$H)
+ Q
+FREEFS() ; Free disk space
+ N X
+ X "S X=$ZUTIL(86)"
+ S X=$P($TR($P(X,"*",1),"\","/"),"/",1)_"/"
+ X "S X=$ZUTIL(140,13,X)"
+ Q $P(X,",",1)*$P(X,",",4)
+EXEBIN(CMD) ; EXEC command in bin directory
+ n tmp,deflocation,filename,os,dd
+ s os=($$UL^TXTU($ZV)["unix"),tmp=$zu(86)
+ I 'os s tmp=$TR(tmp,"\","/"),dd="/"
+ I os s dd="\"
+ s deflocation=$P(tmp,dd,1,$L(tmp,dd)-1)
+ s filename=deflocation_dd_"bin"_dd
+ s filename=filename_CMD
+ X "d $zf(-1,filename)"
+ Q

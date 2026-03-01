@@ -1,0 +1,49 @@
+IMHS ; Доп. утилиты ЭИБ [ 08/05/2012  11:28 PM ]
+GET(TP,FL) ; Поле типа документа
+ Q $G(^DTYPE(TP,FL))
+UID(NI,ID) ; uid документа
+ N T
+ S T=$G(^EPR(NI,ID,"t")) Q:T="" ""
+ Q $G(^DTYPE(T,"uid"))
+TP(NI,ID) 
+ Q ^EPR(NI,ID,"t")
+ALLOWD(NI,ID,OTD,SP,VR) ; Проверка документа на соответствие видимости
+ N TP
+ S TP=^EPR(NI,ID,"t")
+ G ALLOW+1
+ALLOW(TP,OTD,SP,VR) ; Проверка типа на соответствие видимости
+ N X,VRX
+ S OTD="|"_OTD_"|",SP="|"_SP_"|",VRX="|"_VR_"|"
+ S X=$$LCL^NUSER("epr","nnflt")
+ Q:$G(^DTYPE(TP,"use"))=0 0
+ Q:$G(^("hidden")) 0
+ G:X ALLOWe
+ I $D(^("otd")) S X=^("otd") I X'="*",X'="","|"_X_"|"'[OTD Q
+ I $D(^("tn")) S X=^("tn") I X'="*",X'="","|"_X_"|"'[VRX Q
+ I $D(^("spec")) S X=^("spec") I X'="*",X'="","|"_X_"|"'[SP Q
+ALLOWe 
+ S X=$G(^("owner")) I $L(X),X'=VR Q 0
+ S X=$G(^("rights"))
+ I "aw"'[$E(X,1),"aw"'[$E(X,3) Q 0
+ Q 1
+MKIDX(N) ; Создать индексы для типа документа
+ N C,R
+ S C="" F  S C=$O(^DTYPE(N,"fields",C)) Q:C=""  S ^DTYPEI("fields",C,N)="" D GL^IEXCH("^DTYPEI","fields",C,N)
+ S R=$G(^DTYPE(N,"uid"))
+ Q:R="" 
+ I '$D(^DTYPEI("uid",R)) S ^(R)=N D GL^IEXCH("^DTYPEI","uid",R)
+ Q
+RMIDX(N) ; Удалить индексы для типа документа
+ N C,R
+ S C="" F  S C=$O(^DTYPE(N,"fields",C)) Q:C=""  K ^DTYPEI("fields",C,N) D KGL^IEXCH("^DTYPEI","fields",C,N)
+ S R=$G(^DTYPE(N,"uid"))
+ Q:R="" 
+ I $D(^DTYPEI("uid",R)),^(R)=N K ^(R) D KGL^IEXCH("^DTYPEI","uid",R)
+ Q
+MKIDXA ; Пересоздать все индексы
+ N T
+ K ^DTYPEI
+ S T="" F  S T=$O(^DTYPE(T)) Q:T=""  D MKIDX(T)
+ D REGL^IEXCH("^DTYPEI")
+ Q
+ 

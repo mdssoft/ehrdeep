@@ -1,0 +1,347 @@
+RMEDSTD ; Отчеты по МЭС [ 01/22/2019  5:36 PM ]
+CTRNU(DS,DE,MOD,REQ,LPU) ; Контроль выполнения
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),REQ=+$G(REQ),LPU=$G(LPU)
+ K ^BUF($J)
+ S:'$$FR^I() LPU=$$^I("ilpu")
+ N VR,OT,ID,DT,NI,ST,DIA,R,PRC,U,CNT,UL,CDT,FDT,KX,NAZ
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D
+ ..S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ...S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ....I LPU'="",$G(^(ID,"l"))'=LPU Q
+ ....S DIA=$$GETDI^IUSL(VR,DT,OT,ID)
+ ....Q:DIA=""
+ ....I MOD,("|"_$$GETFLG^IUSL(VR,DT,OT,ID)_"|")'["|1|" Q 
+ ....Q:'$$isDIA^NMEDSTD(DIA) 
+ ....S NI=$$GETNIB^IUSL(VR,DT,OT,ID) Q:NI=""
+ ....S:$G(^BUF($J,NI,DIA))<DT ^(DIA)=DT
+ S NI="" F  S NI=$O(^BUF($J,NI)) Q:NI=""  D
+ .S DIA="" F  S DIA=$O(^BUF($J,NI,DIA)) Q:DIA=""  D
+ ..S DT=^(DIA)
+ ..S ST=$$getST^NMEDSTD(NI,DIA)
+ ..I ST="" K ^BUF($J,NI,DIA) Q
+ ..K UL
+ ..D getULST^NMEDSTD(ST,"UL",REQ)
+ ..Q:'$D(UL)
+ ..S CDT=$P($G(^MOSMES("base",ST,"n")),"|",1) S:CDT="" CDT=30
+ ..S DT=DT-1,FDT=DT,CDT=DT+CDT
+ ..F  S DT=$O(^PNF(NI,DT)) Q:DT=""!(DT>CDT)  D  Q:'$D(UL)  
+ ...S KX="" F  S KX=$O(^PNF(NI,DT,KX)) Q:KX=""  D
+ ....S U=$$GETUSLS^IUSL($P(KX,"|",1),DT,$P(KX,"|",2),$P(KX,"|",3))
+ ....S CNT=$P(U,"*",2),U=$P(U,"*",1)
+ ....Q:U=""
+ ....S:CNT="" CNT=1
+ ....Q:'$D(UL(U)) 
+ ....S R=UL(U)
+ ....I (R-CNT)'>0 K UL(U) Q
+ ....S UL(U)=R-CNT
+ ..; внешние назн.
+ ..S NAZ=$$FNDMES^INAZN(NI,ST,+$H-FDT) ; не очень корректно только с DT
+ ..I NAZ'="" S KX="" F  S KX=$O(^NAZ(NAZ,"a",KX)) Q:KX=""  D
+ ...S U=^(KX) Q:$P(U,"|",15)=""  
+ ...S U=$P(U,"|",5) Q:U="" 
+ ...Q:'$D(UL(U)) 
+ ...S R=UL(U)
+ ...I (R-1)'>0 K UL(U) Q
+ ...S UL(U)=R-1
+ ..I '$D(UL) K ^BUF($J,NI,DIA) Q
+ ..M ^BUF($J,NI,DIA)=UL
+ S PRC=$$CORCP^IPRICET(0)
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|Пациент "_$$TXTP^DTUTL(DS,DE)_"|Диагноз|Дата|Услуга|Кол-во")
+ S NI="" F  S NI=$O(^BUF($J,NI)) Q:NI=""  D
+ .S DIA="" F  S DIA=$O(^BUF($J,NI,DIA)) Q:DIA=""  D
+ ..S R=^(DIA)
+ ..D WC^RWU(CR_NI_"|"_$$FIO^IPAC(NI)_"|"_DIA_"|"_$$DT^DTUTL($P(R,"|",1))_"|")
+ ..S (U,ST)="" F  S U=$O(^BUF($J,NI,DIA,U)) Q:U=""  D
+ ...S R=^(U)
+ ...S KX=$G(^MOSMES("usl",U))
+ ...S:KX="" KX=$$NAME^IPRICE(U,PRC)
+ ...D WC^RWU(ST_U_"|"_R)
+ ...S ST=CR_NI_"||||"
+ K ^BUF($J)
+ D C^RWU
+ Q
+LST(DS,DE,MOD,REQ,LPU) ; Список случаев
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),REG=+$G(REQ),LPU=$G(LPU)
+ S:'$$FR^I() LPU=$$^I("ilpu")
+ K ^BUF($J)
+ N VR,OT,ID,DT,NI,ST,DIA,R,PRC,U,CNT,UL,CDT,KX,UMC,UCC,FDT,NAZ
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D
+ ..S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ...S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ....I LPU'="",$G(^(ID,"l"))'=LPU Q
+ ....S DIA=$$GETDI^IUSL(VR,DT,OT,ID)
+ ....Q:DIA=""
+ ....I MOD,("|"_$$GETFLG^IUSL(VR,DT,OT,ID)_"|")'["|1|" Q
+ ....Q:'$$isDIA^NMEDSTD(DIA) 
+ ....S NI=$$GETNIB^IUSL(VR,DT,OT,ID) Q:NI=""
+ ....S:$P($G(^BUF($J,NI,DIA)),"|",1)<DT ^(DIA)=DT_"|"_VR
+ S NI="" F  S NI=$O(^BUF($J,NI)) Q:NI=""  D
+ .S DIA="" F  S DIA=$O(^BUF($J,NI,DIA)) Q:DIA=""  D
+ ..S DT=^(DIA)
+ ..S ST=$$getST^NMEDSTD(NI,DIA)
+ ..I ST="" K ^BUF($J,NI,DIA) Q
+ ..K UL
+ ..D getULST^NMEDSTD(ST,"UL",REQ)
+ ..Q:'$D(UL)
+ ..S CDT=$P($G(^MOSMES("base",ST,"n")),"|",1) S:CDT="" CDT=30
+ ..S DT=DT-1,FDT=DT,CDT=DT+CDT,(UMC,UCC)=0
+ ..; услуги
+ ..F  S DT=$O(^PNF(NI,DT)) Q:DT=""!(DT>CDT)  D  Q:'$D(UL)  
+ ...S KX="" F  S KX=$O(^PNF(NI,DT,KX)) Q:KX=""  D
+ ....S U=$$GETUSLS^IUSL($P(KX,"|",1),DT,$P(KX,"|",2),$P(KX,"|",3))
+ ....S CNT=$P(U,"*",2),U=$P(U,"*",1)
+ ....Q:U=""
+ ....S:CNT="" CNT=1
+ ....Q:'$D(UL(U)) 
+ ....S UCC=UCC+CNT
+ ..; внешние назн.
+ ..S NAZ=$$FNDMES^INAZN(NI,ST,+$H-FDT) ; не очень корректно только с DT
+ ..I NAZ'="" S KX="" F  S KX=$O(^NAZ(NAZ,"a",KX)) Q:KX=""  D
+ ...S U=^(KX) Q:$P(U,"|",15)=""  
+ ...S U=$P(U,"|",5) Q:U="" 
+ ...S:$D(UL(U)) UCC=UCC+1
+ ..S U="" F  S U=$O(UL(U)) Q:U=""  S UMC=UMC+UL(U)
+ ..S ^BUF($J,NI,DIA,1)=UMC,^(2)=UCC
+ S PRC=$$CORCP^IPRICET(0)
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|Пациент "_$$TXTP^DTUTL(DS,DE)_"|Диагноз|Дата|Установил|Услуг по МЭС|Выполнено услуг")
+ S NI="" F  S NI=$O(^BUF($J,NI)) Q:NI=""  D
+ .S DIA="" F  S DIA=$O(^BUF($J,NI,DIA)) Q:DIA=""  D
+ ..S R=^(DIA),UMC=$G(^(DIA,1)),UCC=$G(^(2))
+ ..S R=$$DT^DTUTL($P(R,"|",1))_"|"_$$FIOSH^IKADRY($P(R,"|",2))
+ ..S R=NI_"|"_$$FIO^IPAC(NI)_"|"_DIA_"|"_R_"|"_$TR(UMC_"|"_UCC,".",",")
+ ..D WC^RWU(CR_R)
+ K ^BUF($J)
+ D C^RWU
+ Q
+CMNZ(DS,DE,MOD,DVID,LPU) ; Контроль выполнения МЭС
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),LPU=$G(LPU)
+ S:'$$FR^I() LPU=$$^I("ilpu")
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|Первичный диагноз|Пациент "_$$TXTP^DTUTL(DS,DE)_"|Врач|"_$S(MOD=2:"Услуга|",1:"")_"Кол-во положенных услуг по МЭСу|Кол-во назначенных услуг по МЭСУ|% назначенных|Кол-во выполненных услуг по МЭСУ|% выполненных")
+ K ^BUF($J)
+ N VR,OT,ID,DT,NI,ST,DIA,R,PRC,U,CNT,UL,CDT,KX,UC,UCC,FDT,NAZ,MESL,ULN,ULNC,DGN,DV,PRC,FL
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D
+ ..S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ...S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ....I LPU'="",$G(^(ID,"l"))'=LPU Q
+ ....S DIA=$$GETDI^IUSL(VR,DT,OT,ID),(PRC,U)=""
+ ....Q:DIA=""
+ ....S:MOD=1!(MOD=3) FL="|"_$$GETFLG^IUSL(VR,DT,OT,ID)_"|"
+ ....I MOD=1,FL'["|1|" Q
+ ....Q:'$$isDIA^NMEDSTD(DIA) 
+ ....I MOD=2,'$$isUSLCLS() Q 
+ ....I MOD=3,$S(FL["|perv|":0,$$isUSLPP():0,1:1) Q 
+ ....S NI=$$GETNIB^IUSL(VR,DT,OT,ID) Q:NI=""  
+ ....I DVID'="" S DGN=$$GETDGN^IUSL(VR,DT,OT,ID) S:DGN="" DGN=$$GET^IPAC(NI,"stc",DT) Q:DVID'=$$GET^IINSC(DGN,"dvid",DT) 
+ ....S:$P($G(^BUF($J,NI,DIA)),"|",1)<DT ^(DIA)=DT_"|"_VR_"||"_U_"|"_PRC ; TODO - основываться на коде стандарта а не диагноза
+ 
+ S NI="" F  S NI=$O(^BUF($J,NI)) Q:NI=""  D
+ .S DIA="" F  S DIA=$O(^BUF($J,NI,DIA)) Q:DIA=""  D
+ ..S DT=$P(^(DIA),"|",1)
+ ..S ST=$$getST^NMEDSTD(NI,DIA)
+ ..I ST="" K ^BUF($J,NI,DIA) Q
+ ..D filMESL(ST)
+ ..Q:'$D(MESL(ST))
+ ..K UL M UL=MESL(ST)
+ ..I MESL(ST)=0 K ^BUF($J,NI,DIA) Q 
+ ..S $P(^BUF($J,NI,DIA),"|",3)=ST
+ ..S CDT=$P($G(^MOSMES("base",ST,"n")),"|",1) S:CDT="" CDT=30
+ ..D filNAZ(NI,DT) ; назначения
+ ..; услуги
+ ..S DT=DT-1,FDT=DT,CDT=DT+CDT,(UMC,UCC)=0
+ ..F  S DT=$O(^PNF(NI,DT)) Q:DT=""!(DT>CDT)  D  Q:'$D(UL)  
+ ...S KX="" F  S KX=$O(^PNF(NI,DT,KX)) Q:KX=""  D
+ ....S U=$$GETUSLS^IUSL($P(KX,"|",1),DT,$P(KX,"|",2),$P(KX,"|",3))
+ ....S CNT=$P(U,"*",2),U=$P(U,"*",1)
+ ....Q:U=""
+ ....S:CNT="" CNT=1
+ ....Q:'$D(UL(U)) 
+ ....S UCC=UCC+CNT
+ ..S ^BUF($J,NI,DIA,1)=ULNC,^(2)=UCC
+ 
+ S NI="" F  S NI=$O(^BUF($J,NI)) Q:NI=""  D
+ .S DIA="" F  S DIA=$O(^BUF($J,NI,DIA)) Q:DIA=""  D
+ ..S R=^(DIA),ST=$P(R,"|",3),U=$P(R,"|",4),PRC=$P(R,"|",5),ULNC=$G(^(DIA,1)),UCC=$G(^(2)),UC=MESL(ST)
+ ..S R=NI_"|"_DIA_"|"_$$FIO^IPAC(NI)_"|"_$$FIOSH^IKADRY($P(R,"|",2))
+ ..S:MOD=2 R=R_"|"_U_" "_$$CNAME^IPRICE(U,PRC)
+ ..S R=R_"|"_UC_"|"_ULNC_"|"_$$fn(+$J(100*ULNC/UC,"",2))_"|"_UCC_"|"_$$fn(+$J(100*UCC/UC,"",2))
+ ..D WC^RWU(CR_R)
+ 
+ K ^BUF($J)
+ 
+ D C^RWU
+ Q
+isUSLCLS() 
+ S U=$P($$GETUSLS^IUSL(VR,DT,OT,ID),"*",1) Q:U="" 0
+ S PRC=$$STARTTP^IPRICE(U,DT,0)
+ Q $$FLinFL^TXTU($$GET^IPRICE(U,"cls",PRC,DT),"mes")
+isUSLPP() ; Perv
+ Q $$FLinFL^TXTU($$GET^IPRICE(U,"cls",PRC,DT),"perv")
+filMESL(ST) ; 
+ Q:$D(MESL(ST))
+ N UL,I,C
+ D getULST^NMEDSTD(ST,"UL",1)
+ M MESL(ST)=UL
+ S C=0,I="" F  S I=$O(UL(I)) Q:I=""  S C=C+UL(I)
+ S MESL(ST)=C
+ Q
+filNAZ(NI,DT) ; -> ULN
+ K ULN
+ S ULNC=0
+ N ID,R,I,U
+ S ID="" F  S ID=$O(^NAZI("n",NI,ID)) Q:ID=""  S R=^(ID) D:$P(R,"|",3)=DT
+ .S I="" F  S I=$O(^NAZ(ID,"a",I)) Q:I=""  S U=$P(^(I),"|",5) I U'="",$D(UL(U)) S ULN(U)="",ULNC=ULNC+1
+ Q
+EQS(DS,DE,MOD,REQ,LPU) ; По оборудованию
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),REG=+$G(REQ),LPU=$G(LPU)
+ S:'$$FR^I() LPU=$$^I("ilpu")
+ K ^BUF($J)
+ N VR,OT,ID,DT,ST,DI,R,X,PRC,U,ULL,CNT,CDT,KX,FDT,NAZ,@$$NEWVAR^IUSL(),SS
+ ; TODO - несколько МЭС в периоде
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D
+ ..S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ...S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ....I LPU'="",$G(^(ID,"l"))'=LPU Q
+ ....S DI=$$GETDI^IUSL(VR,DT,OT,ID)
+ ....Q:DI=""
+ ....I MOD,("|"_$$GETFLG^IUSL(VR,DT,OT,ID)_"|")'["|1|" Q
+ ....Q:'$$isDIA^NMEDSTD(DI) 
+ ....S NI=$$GETNIB^IUSL(VR,DT,OT,ID) Q:NI=""
+ ....S ST=$$getST^NMEDSTD(NI,DI) Q:ST="" 
+ ....S:$P($G(^BUF($J,"d",NI,ST)),"|",1)<DT ^(ST)=DT
+ S NIB="" F  S NIB=$O(^BUF($J,"d",NIB)) Q:NIB=""  D
+ .S ST="" F  S ST=$O(^BUF($J,"d",NIB,ST)) Q:ST=""  D
+ ..S DT=^(ST)
+ ..K ULL
+ ..D getULST^NMEDSTD(ST,"ULL",REQ)
+ ..Q:'$D(ULL)
+ ..S U="" F  S U=$O(ULL(U)) Q:U=""  S ^(U)=$G(^BUF($J,"uu",ST,"s",U))+ULL(U)
+ ..S ^("p")=$G(^BUF($J,"uu",ST,"p"))+1
+ ..S CDT=$P($G(^MOSMES("base",ST,"n")),"|",1) S:CDT="" CDT=30
+ ..S DT=DT-1,FDT=DT,CDT=DT+CDT
+ ..; услуги
+ ..F  S DT=$O(^PNF(NIB,DT)) Q:DT=""!(DT>CDT)  D  Q:'$D(ULL)  
+ ...S KX="" F  S KX=$O(^PNF(NIB,DT,KX)) Q:KX=""  D
+ ....D GET^IUSL($P(KX,"|",1),DT,$P(KX,"|",2),$P(KX,"|",3)) 
+ ....Q:$D(ERR)!(STAT="w") 
+ ....S U=$O(UL("")) Q:U=""  S CNT=UL(U)
+ ....Q:'$D(ULL(U)) 
+ ....S SS=$$SUMM^IUSL($P(KX,"|",1),DT,$P(KX,"|",2),$P(KX,"|",3))
+ ....S ^(1)=$G(^BUF($J,"uu",ST,"u",U,1))+SS
+ ....S ^(2)=$G(^(2))+CNT
+ ....S ULL(U)=$G(ULL(U))-CNT K:'ULL(U) ULL(U)
+ ..; внешние назн.
+ ..S NAZ=$$FNDMES^INAZN(NIB,ST,+$H-FDT) ; не очень корректно только с DT
+ ..I NAZ'="" S KX="" F  S KX=$O(^NAZ(NAZ,"a",KX)) Q:KX=""  D
+ ...S U=^(KX) Q:$P(U,"|",15)=""  
+ ...S U=$P(U,"|",5) Q:U="" 
+ ...Q:'$D(ULL(U)) 
+ ...S ^(2)=$G(^BUF($J,"uu",ST,"u",U,2))+1
+ 
+ S R="",KX=1,SS="" F  S R=$O(^EQUIP(R)) Q:R=""  D
+ .S ^BUF($J,"uei",R)=KX,$P(SS,"|",KX)=^EQUIP(R),KX=KX+1
+ .S U="" F  S U=$O(^EQUIP(R,"usl",U)) Q:U=""  S ^BUF($J,"ue",U)=R
+ 
+ D OWF^RWU(".txt")
+ D WC^RWU("МЭС|Параметр|Всего|"_SS)
+ K SS
+ 
+ S PRC=$$CORCP^IPRICET(0)
+ S ST="" F  S ST=$O(^BUF($J,"uu",ST)) Q:ST=""  D
+ .S KX="",NAZ=0
+ .K USL
+ .S U="" F  S U=$O(^BUF($J,"uu",ST,"s",U)) Q:U=""  D
+ ..S ID=$G(^BUF($J,"ue",U)) Q:ID=""  Q:ST="Z"
+ ..K SS
+ ..S SS(1)=$G(^BUF($J,"uu",ST,"u",U,1)),SS(2)=$G(^(2)),SS(3)=$G(^BUF($J,"uu",ST,"s",U))
+ ..S SS(4)=$$PRICE^IPRICE(U,PRC)*(SS(3)-SS(2))
+ ..S ^(1)=$G(^BUF($J,"uu",ST,"o",ID,1))+SS(1)
+ ..S ^(2)=$G(^BUF($J,"uu",ST,"o",ID,2))+SS(2)
+ ..S ^(3)=$G(^BUF($J,"uu",ST,"o",ID,3))+SS(3)
+ ..S ^(4)=$G(^BUF($J,"uu",ST,"o",ID,4))+SS(4)
+ ..S ^(1)=$G(^BUF($J,"uu","Z","o",ID,1))+SS(1)
+ ..S ^(2)=$G(^BUF($J,"uu","Z","o",ID,2))+SS(2)
+ ..S ^(3)=$G(^BUF($J,"uu","Z","o",ID,3))+SS(3)
+ ..S ^(4)=$G(^BUF($J,"uu","Z","o",ID,4))+SS(4)
+ ..S NAZ=1
+ .I ST'="Z",'NAZ Q 
+ .S X=$G(^BUF($J,"uu",ST,"p"))
+ .S:ST'="Z" ^("p")=$G(^BUF($J,"uu","Z","p"))+X
+ .K SS
+ .S SS(0,1)=X
+ .S ID="" F  S ID=$O(^BUF($J,"uu",ST,"o",ID)) Q:ID=""  D
+ ..S U=^BUF($J,"uei",ID)
+ ..S SS(U,1)=SS(0,1)
+ ..S CNT=$G(^BUF($J,"uu",ST,"o",ID,2))
+ ..S SS(0,2)=$G(SS(0,2))+$G(^BUF($J,"uu",ST,"o",ID,1))
+ ..S SS(0,3)=$G(SS(0,3))+CNT
+ ..S SS(0,4)=$G(SS(0,4))+$G(^BUF($J,"uu",ST,"o",ID,3))-CNT
+ ..S SS(0,5)=$G(SS(0,5))+$G(^BUF($J,"uu",ST,"o",ID,4))
+ ..; ---
+ ..S SS(U,2)=$G(SS(U,2))+$G(^BUF($J,"uu",ST,"o",ID,1))
+ ..S SS(U,3)=$G(SS(U,3))+CNT
+ ..S SS(U,4)=$G(SS(U,4))+$G(^BUF($J,"uu",ST,"o",ID,3))-CNT
+ ..S SS(U,5)=$G(SS(U,5))+$G(^BUF($J,"uu",ST,"o",ID,4))
+ .S KX="",ID="" F  S ID=$O(SS(ID)) Q:ID=""  S $P(KX,"|",ID+1)=$TR($G(SS(ID,1)),".",",")
+ .D WC^RWU(CR_ST_"|Кол-во случаев|"_KX)
+ .D WC^RWU(CR_ST_"|Число лиц|"_KX)
+ .S KX="",ID="" F  S ID=$O(SS(ID)) Q:ID=""  S CNT=$G(SS(ID,3)),$P(KX,"|",ID+1)=$TR($S(CNT:+$J($G(SS(ID,2))/CNT,"",2),1:0),".",",")
+ .D WC^RWU(CR_ST_"|Ср.стоимость услуги|"_KX)
+ .S KX="",ID="" F  S ID=$O(SS(ID)) Q:ID=""  S $P(KX,"|",ID+1)=$TR($G(SS(ID,2)),".",",")
+ .D WC^RWU(CR_ST_"|Сумма услуг|"_KX)
+ .S KX="",ID="" F  S ID=$O(SS(ID)) Q:ID=""  S $P(KX,"|",ID+1)=$TR($G(SS(ID,3)),".",",")
+ .D WC^RWU(CR_ST_"|Услуг выполнено|"_KX)
+ .S KX="",ID="" F  S ID=$O(SS(ID)) Q:ID=""  S CNT=$G(SS(ID,4)),$P(KX,"|",ID+1)=$TR($S(CNT:+$J($G(SS(ID,5))/CNT,"",2),1:0),".",",")
+ .D WC^RWU(CR_ST_"|Ср.стоимость услуги|"_KX)
+ .S KX="",ID="" F  S ID=$O(SS(ID)) Q:ID=""  S $P(KX,"|",ID+1)=$TR($G(SS(ID,5)),".",",")
+ .D WC^RWU(CR_ST_"|Сумма услуг|"_KX)
+ .S KX="",ID="" F  S ID=$O(SS(ID)) Q:ID=""  S $P(KX,"|",ID+1)=$TR($G(SS(ID,4)),".",",")
+ .D WC^RWU(CR_ST_"|Услуг не выполнено|"_KX)
+ 
+ D C^RWU
+ 
+ K ^BUF($J)
+ Q
+CHKUST(DT) ; Проверка медстандартов на действующие услуги
+ ; DT - Дата отчета
+ N ST,UL,U,R,T,P,T1
+ K ^BUF($J)
+ S DT=$$DIH^DTUTL(DT)
+ D OWF^RWU(".txt")
+ D WC^RWU("Код услуги|Наименование|Стандарт|Результат")
+ S ST="" F  S ST=$O(^MOSMES("base",ST)) Q:ST=""  D
+ .Q:$G(^MOSMES("base",ST,"use"))=0 
+ .S R=$G(^("udt"))
+ .I R'="" Q:+$P(R,"|",1)>DT  I $P(R,"|",2),+$P(R,"|",2)<DT Q  ; срок действия
+ .S T="" F  S T=$O(^MOSMES("base",ST,"u",T)) Q:T=""  S T1="" F  S T1=$O(^MOSMES("base",ST,"u",T,T1)) Q:T1=""  S U="" F  S U=$O(^MOSMES("base",ST,"u",T,T1,U)) Q:U=""  D
+ ..S UL=$G(^MOSMES("usl",U,"a")) Q:UL="" 
+ ..S:'$D(^BUF($J,UL,ST)) ^(ST)=""
+ S U="" F  S U=$O(^BUF($J,U)) Q:U=""  D
+ .S P=$$STARTTP^IPRICE(U,DT,0)
+ .I 'P D WC^RWU(CR_U_"||"_$$stl(U)_"|нет услуги") Q 
+ .I '$$CHECKH^IPRICE(U,P,DT) D WC^RWU(CR_U_"|"_$$NAMEH^IPRICE(U,P,DT)_"|"_$$stl(U)_"|в архиве") Q 
+ D C^RWU
+ K ^BUF($J)
+ Q
+stl(U) 
+ N R,T
+ S (R,T)="" F  S T=$O(^BUF($J,U,T)) Q:T=""  S R=$S(R="":"",1:R_",")_T
+ Q R
+fn(X) ;
+ Q $TR(X,".",",")
+REGIPROC 
+ N FF,A,R
+ S FF=+$$FR^I(),R="Отчеты ЛПУ"
+ S A=",d,Дата с,d,Дата по,t@string:0/По любому диагнозу#1/По первичному диагнозу,Установить случай,t@string:0/Всем услугам#1/Обязательным услугам,Контроль по" 
+ S ^IPROC(R,"МЭС","Невыполненные услуги по МЭС")="CTRNU_RMEDSTD,100,"_$S(FF:5,1:4)_A_$S(FF:",t@storage:lpu,Филиал",1:"")
+ S ^IPROC(R,"МЭС","Список случаев по МЭС")="LST_RMEDSTD,100,"_$S(FF:5,1:4)_A_$S(FF:",t@storage:lpu,Филиал",1:"")
+ S ^IPROC("Отчеты ЛПУ","МЭС","Контроль выполнения МЭС")="CMNZ_RMEDSTD,100,"_$S(FF:5,1:4)_",d,Дата с,d,Дата по,t@string:0/По любому диагнозу#1/По первичному диагнозу#2/По классу услуг#3/По первичным,Установить случай,t@net:NMLCR_NSPRAV(""dvid"")@1,Вид договора"_$S(FF:",t@storage:lpu,Филиал",1:"")
+ S ^IPROC(R,"Оборудование","План выручки по оборудованию")="EQS_RMEDSTD,1,"_$S(FF:5,1:4)_A_$S(FF:",t@storage:lpu,Филиал",1:"")
+ S ^IPROC("Система","Проверка услуг МЭС")="CHKUST_RMEDSTD,1,1,d,Дата отчета"
+ Q

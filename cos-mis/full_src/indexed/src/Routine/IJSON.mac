@@ -1,0 +1,46 @@
+IJSON ; JSON parser [ 04/04/2019  5:03 PM ]
+ENC(GGL) ; Encode to string
+ Q
+DEC(STR,GGL) ; Decode from string
+ F I=1:1:$L(STR)
+ Q
+B() 
+ S %JSON="{",%JSONI=0
+ Q
+W(VAR,TXT) ; Write value
+ N J
+ S TXT=$TR(TXT,$C(1,2,3,4,5),"")
+ S J=-1 F  S J=$F(TXT,"\",J+1) Q:J=0  S $E(TXT,J-1)="\\"
+ S J=-1 F  S J=$F(TXT,"""",J+1) Q:J=0  S $E(TXT,J-1)="\"""
+ S J=-1 F  S J=$F(TXT,$C(13),J+1) Q:J=0  S $E(TXT,J-1)="\r"
+ S J=-1 F  S J=$F(TXT,$C(10),J+1) Q:J=0  S $E(TXT,J-1)="\n"
+ S J=-1 F  S J=$F(TXT,$C(9),J+1) Q:J=0  S $E(TXT,J-1)="\t"
+ I +TXT'=TXT,$E(TXT)'="[" S TXT=""""_TXT_""""
+ S %JSON=%JSON_$S(%JSONI:",",1:"")_""""_VAR_""":"_TXT,%JSONI=1
+ Q
+WR(VAR,TXT) ; Write raw value
+ S %JSON=%JSON_$S(%JSONI:",",1:"")_""""_VAR_""":"_TXT,%JSONI=1
+ Q
+WBL(VAR,VAL) ; Write boolean value
+ S VAL=$S(VAL:"true",1:"false")
+ S %JSON=%JSON_$S(%JSONI:",",1:"")_""""_VAR_""":"_VAL,%JSONI=1
+ Q
+WD(VAR,DT,NEW) ; Write date
+ S DT=$$DTISO^DTUTL(DT)_"T"_$$TIME^DTUTL(DT)_".000+04:00",NEW=+$G(NEW)
+ S %JSON=%JSON_$S(%JSONI:",",1:"")_""""_VAR
+ S %JSON=%JSON_""":"_$S(NEW:"new Date(",1:"")_""""_DT_""""_$S(NEW:")",1:"")
+ Q
+E() 
+ Q %JSON_"}"
+DTM(DT)
+ Q $$DTISO^DTUTL(DT)_"T"_$$TIME^DTUTL(DT)_".000+04:00"
+FS(TXT) ; Parse JSON
+ set json = ##class(%DynamicAbstractObject).%FromJSON(TXT)
+ Q json
+NEW()
+ Q {}
+TS(obj)
+ ;Q obj.$toJSON()
+ ;Q obj.%ToJSON()
+ Q ""
+ 

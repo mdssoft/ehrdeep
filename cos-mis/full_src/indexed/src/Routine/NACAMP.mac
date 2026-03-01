@@ -1,0 +1,80 @@
+NACAMP ; Рекламные акции [ 10/16/2023  4:56 PM ]
+LST(NI) 
+ N I,R,A,X,T,D,LP
+ S D=+$H,T=$P($H,",",2),LP=$$^I("ilpu")
+ S (A,I)="" F  S I=$O(^ACAMP(I)) Q:I=""  D
+ .Q:$G(^ACAMP(I,"use"))=0  
+ .; TODO - dates
+ .S X=$G(^ACAMP(I,"cond","ts"))
+ .I X,X>T Q 
+ .S X=$G(^ACAMP(I,"cond","te"))
+ .I X,X<T Q 
+ .S X=$G(^ACAMP(I,"cond","ds"))
+ .I X,X>D Q 
+ .S X=$G(^ACAMP(I,"cond","de"))
+ .I X,X<D Q 
+ .I $D(^ACAMP(I,"cond","lpu")),'$D(^ACAMP(I,"cond","lpu",LP)) Q 
+ .S A=$S(A="":"",1:A_CR)_I_"|"_^ACAMP(I)
+ D MSG^RWU(A)
+ Q
+IsOK(I,VR,DT,OT,ID) ; Check condition
+ I $D(^ACAMP(I,"cond","vr")) Q:'$D(^ACAMP(I,"cond","vr",VR)) 0
+ I $D(^ACAMP(I,"cond","lpu")) Q:'$D(^ACAMP(I,"cond","lpu",+$$^I("ilpu"))) 0
+ Q 1
+upd(I,VR,DT,OT,ID) ; update one service
+ N SK,SKD,@$$NEWVAR^IUSL,LP,F
+ S SK=$G(^ACAMP(I,"res","sk"))
+ S LP=$$^I("ilpu"),F=0
+ 
+ D GETLT^IUSL(VR,DT,OT,ID)
+ S ISTC=$S($G(ISTC)'="":ISTC,1:$$GET^IPAC(NI,"stc",DT))
+ S:'PRC PRC=$$GET^IINSC(ISTC,"price",DT)
+ S U=$O(UL("")) Q:U=""
+ 
+ D:SK'=""
+ .S SKD=$$CALCID^IDSCN(SK,OT,U,ISTC,PRC,UL(U),LP)
+ .Q:SKD="" 
+ .D SETSKD^IUSLD(VR,DT,OT,ID,SKD)
+ .D SETPLE^IUSL(VR,DT,OT,ID,"aca",I)
+ 
+ Q
+IMP ; Импорт акций
+ N %J,A,X,ID,NM,AR,SK,TS,TE,DS,DE,LP,VR,LL
+ D ORH^RWU
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D
+ .Q:%J<2
+ .S A=$$DBLSP^TXTU(A)
+ .S X=$P(A,"|",1) S:X'="" ID=X,LL(ID)=""
+ .S X=$P(A,"|",2) S:X'="" ^ACAMP(ID)=X
+ .S X=$P(A,"|",3) S:X'="" ^ACAMP(ID,"use")=X
+ .S X=$P(A,"|",4) S:X'="" ^ACAMP(ID,"res","sk")=X
+ .S X=$P(A,"|",5) S:X'="" ^ACAMP(ID,"cond","ds")=$$DI^DTUTL(X)
+ .S X=$P(A,"|",6) S:X'="" ^ACAMP(ID,"cond","de")=$$DI^DTUTL(X)
+ .S X=$P(A,"|",7) S:X'="" ^ACAMP(ID,"cond","ts")=$$TI^DTUTL(X)
+ .S X=$P(A,"|",8) S:X'="" ^ACAMP(ID,"cond","te")=$$II^DTUTL(X)
+ .S X=$P(A,"|",11) S:X'=""&$D(^CGA(X)) ^ACAMP(ID,"cond","lpu",X)=1
+ .S X=$P(A,"|",12) S:X'=""&$D(^KDR(X)) ^ACAMP(ID,"cond","vr",X)=1
+ D CR^RWU
+ 
+ S ID="" F  S ID=$O(LL(ID)) Q:ID=""  D REGL^IEXCH("^ACAMP",ID)
+ Q
+EXP ; Экспорт акций
+ N ID,R,X,I,LL
+ D OWF^RWU(".txt")
+ D WC^RWU("Код|Наименование|Используется|Скидка|Дата начала|Дата окончания|Время начала|Время окончания|-|-|Филиал|Врач")
+ S ID="" F  S ID=$O(^ACAMP(ID)) Q:ID=""  D
+ .S R=ID_"|"_$G(^ACAMP(ID))_"|"_$G(^ACAMP(ID,"use"))
+ .S R=R_"|"_$G(^ACAMP(ID,"res","sk"))
+ .S R=R_"|"_$$DT^DTUTL($G(^ACAMP(ID,"cond","ds")))_"|"_$$DT^DTUTL($G(^ACAMP(ID,"cond","de")))
+ .S R=R_"|"_$$TM^DTUTL($G(^ACAMP(ID,"cond","ts")))_"|"_$$TM^DTUTL($G(^ACAMP(ID,"cond","te")))
+ .K LL
+ .S X="",I=0 F  S X=$O(^ACAMP(ID,"cond","lpu",X)) Q:X=""  S LL(I,1)=X,I=I+1
+ .S X="",I=0 F  S X=$O(^ACAMP(ID,"cond","vr",X)) Q:X=""  S LL(I,2)=X,I=I+1
+ .S R=R_"|||"_$G(LL(0,1))_"|"_$G(LL(0,2))
+ .D WC^RWU(CR_R)
+ .S I=0 F  S I=$O(LL(I)) Q:I=""  D WC^RWU(CR_"||||||||||"_$G(LL(I,1))_"|"_$G(LL(I,2)))
+ D C^RWU
+ Q
+REGIPROC 
+ S ^IPROC("Система","Экспорт акций")="EXP_NACAMP,1,0"
+ Q

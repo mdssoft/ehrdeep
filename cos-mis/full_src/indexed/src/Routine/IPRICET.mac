@@ -1,0 +1,53 @@
+IPRICET ; Управление прейскурантами [ 08/28/2019  1:32 PM ]
+GETCP(ID) ; Price name
+ Q $P($G(^(+$G(^MN("tprice")),+ID)),"|",1)
+CHKCP(ID) ; Check if price exists
+ Q:$D(^(+$G(^MN("tprice")),+ID)) 1
+ Q 0
+CORCP(ID) ; Check and correct price
+ Q:$D(^(+$G(^MN("tprice")),+ID)) ID
+ N N,I
+ S N="",I=+$G(^MN("tprice")) F  S N=$O(^MN(I,N)) Q:N=""  Q:$P(^(N),"|",4)'=0
+ Q N
+CRNCCP(ID) ; Валюта прейскуранта
+ Q:ID="" ""
+ Q $P($G(^(+$G(^MN("tprice")),ID)),"|",2)
+CRNCU(ID,USL,DT) ; Валюта прейскуранта по услуге
+ Q:ID="" ""
+ N X
+ S X=$P($G(^(+$G(^MN("tprice")),ID)),"|",2)
+ Q:X="" ""
+ Q:'$D(^CNE(USL,ID,"ncrnc")) X
+ Q $S($$GET^IPRICE(USL,"ncrnc",ID,$G(DT)):"",1:X) ; если нет запрета на вал.
+CRNCUV(ID,USL,DT) ; Валюта прейскуранта по услуге (коэфф. по дате)
+ Q:ID="" 1
+ N X
+ S X=$P($G(^(+$G(^MN("tprice")),ID)),"|",2)
+ Q:X="" 1
+ Q:'$D(^CNE(USL,ID,"ncrnc")) $$GETH^ISPRAV("crncy",X,"",DT)
+ Q $S($$GET^IPRICE(USL,"ncrnc",ID,DT):1,1:$$GETH^ISPRAV("crncy",X,"",DT)) ; если нет запрета на вал.
+CRNCV(ID,DT) ; Валюта прейскуранта (коэфф. по дате)
+ Q:ID="" ""
+ S ID=$P($G(^(+$G(^MN("tprice")),ID)),"|",2)
+ Q:ID="" 1
+ Q $$GETH^ISPRAV("crncy",ID,"",DT)
+CREATEPR(FROM,TO,K,H) ; Создать из существующего
+ N N,PL,R,D
+ S N="" S:$G(H)="" H=+$H
+ F  S N=$O(^CN(N)) Q:N=""  D:$$CHECK^IPRICE(N,FROM) 
+ .S ^CN(N,TO,H)=+$FN($$PRICEH^IPRICE(N,FROM,H)*K/100,"",2)
+ .S PL=999999 F  S PL=$O(^CN(N,FROM,PL)) Q:PL=""  D
+ ..S D=$O(^(PL,H+1),-1) Q:D=""
+ ..M ^CN(N,TO,PL,H)=^CN(N,FROM,PL,D)
+ .S PL="" F  S PL=$O(^CNE(N,FROM,PL)) Q:PL=""  D
+ ..S D=$O(^(PL,H+1),-1) Q:D=""
+ ..M ^CNE(N,TO,PL,H)=^CNE(N,FROM,PL,D)
+ .D GL^IEXCH("^CN",N,TO),GL^IEXCH("^CNE",N,TO)
+ Q
+USEDL(VAR) ; Список используемых
+ N I,K,R
+ S I=+$G(^MN("tprice"))
+ S K="" F  S K=$O(^MN(I,K)) Q:K=""  D
+ .S R=^(K) Q:$P(R,"|",4)
+ .S @VAR@(K)=""
+ Q

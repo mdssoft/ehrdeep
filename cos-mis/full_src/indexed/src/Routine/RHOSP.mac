@@ -1,0 +1,132 @@
+RHOSP ; ОТчеты по стационару [ 09/24/2018  5:52 PM ]
+NZ(DS,DE,LPU) ; Контроль направлений на госпитализацию
+ N STL,ID,R,RR,X,D,FF,ST,DI,I,OT,VR,@$$NEWVAR^IUSL(),DT,U,P,KEY,LE
+ M STL=^cfg("stac-otd") 
+ S FF=+$$FR^I()
+ S:'FF LPU=$$^I("ilpu")
+ S LE=$RE(LPU)
+ K ^BUF($J)
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ ; Назначения без выполнения
+ S D=DS-1 F  S D=$O(^NAZI("d",D)) Q:D=""!(D>DE)  D
+ .S ID="" F  S ID=$O(^NAZI("d",D,ID)) Q:ID=""  I ('LPU)!($P(ID,".",2)=LE),$P(^(ID),"|",1)="h" D
+ ..S R=$G(^NAZ(ID,"i")) Q:R=""
+ ..S ST=$P($G(^("e")),"|",1)
+ ..Q:ST[28  ;Q:ST'=0  ; ожидание
+ ..S NI=$P(R,"|",2),VR=$P(R,"|",3),K=$G(^("a"))
+ ..S DI=$P(K,"|",2)
+ ..S ^BUF($J,NI,D)=VR_"|"_$P(R,"|",4)_"|"_$P(K,"|",3)_"|"_DI
+ ..S I="" F  S I=$O(^NAZ(ID,"a",I)) Q:I=""  D
+ ...S R=^(I),U=$P(R,"|",5),P=$P(R,"|",6),KEY=$P(R,"|",11) Q:KEY="" 
+ ...S VR=$P(KEY,"@",2),DT=$P(KEY,"@",3)
+ ...S ^BUF($J,NI,D,2,I)=VR_"|"_U_"|"_P_"|"_DT_"|"_$$GETSUM^IUSL(VR,DT,$P(KEY,"@",1),$P(KEY,"@",4))
+ 
+ 
+ ;S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ ;.I LPU'="",'$D(^ZNFI("l",LPU,VR)) Q
+ ;.S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D:$D(STL(OT))
+ ;..S DT=DS-1 F  S DT=$O(^
+ 
+ D OWF^RWU(".txt")
+ D WC^RWU("Специальность|Врач|Филиал|№ И.Б.|Пациент "_$$TXTP^DTUTL(DS,DE)_"|Посещение|Повод направления|Диагноз|Прием в стационаре|Дата|Врач стационара|Операция в стационаре|Дата|Стоимость|Исход")
+ S NI="" F  S NI=$O(^BUF($J,NI)) Q:NI=""  D
+ .S DT="" F  S DT=$O(^BUF($J,NI,DT)) Q:DT=""  D
+ ..S X=^(DT),VR=$P(X,"|",1)
+ ..S I=$O(^(DT,2,""))
+ ..S R=$$GSPEC^YISPRAV($$SPEC^IKADRY(VR))_"|"_$$FIO^IKADRY(VR)_"|"
+ ..S R=R_$$NAME^ICONTR($P(X,"|",2))_"|"_NI_"|"_$$FIO^IPAC(NI)_"|"
+ ..S R=R_$$DT^DTUTL(DT)_"|"_$P(X,"|",3)_"|"
+ ..S R=R_$$NAME^YMKB10($P(X,"|",4),50)_"|"
+ ..I I="" D WC^RWU(CR_R) Q
+ ..S I="" F  S I=$O(^BUF($J,NI,DT,2,I)) Q:I=""  D
+ ...S D=^(I),U=$P(D,"|",2),P=$P(D,"|",3),DI=$P(D,"|",4)
+ ...S RR="||"_$$FIO^IKADRY($P(D,"|",1))_"|"
+ ...S RR=RR_$$OWF^TXTU($S(U="":U,1:$$CNAMEH^IPRICE(U,P,DI)),99)_"|"
+ ...S RR=RR_$$DT^DTUTL(DI)_"|"_$TR($P(D,"|",5),".",",")
+ ...D WC^RWU(CR_R_RR)
+ D C^RWU
+ Q
+JRNH(DS,DE,OTD,STAT) ; Журнал госпитализаций
+ ; STAT - выписан все/да/нет
+ N DT,ID,R,NI,A,DI,HE,HR,OT
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D OWF^RWU(".txt")
+ D WC^RWU("Карта №|Пациенты "_$$TXTP^DTUTL(DS,DE)_"|Пол|Возраст|Прибытие|Убытие|Диагноз|Вид|Результат|Отделение")
+ S DT=DS-1 F  S DT=$O(^HOSP(DT)) Q:DT=""!(DT>DE)  D
+ .S ID="" F  S ID=$O(^HOSP(DT,ID)) Q:ID=""  D
+ ..S R=^(ID) Q:$P(R,"|",3)=2  
+ ..S NI=$P(R,"|",1),DI=$P(R,"|",7)
+ ..S HE=$O(^HOSP(DT,ID,"h",""),-1),HR=""
+ ..S:HE'="" HR=^(HE)
+ ..S OT=$P(HR,"|",2)
+ ..I OTD'="",OTD'=OT Q
+ ..S A=$P(R,"|",13) ; выписка
+ ..I STAT=1,'A Q
+ ..I STAT=2,A Q
+ ..S A=$P(R,"|",2)_"|"_$$FIO^IPAC(NI)_"|"_$$GETE^IPAC(NI,"pol",DT)_"|"
+ ..S A=A_$$AGE^IPAC(NI,DT)_"|"_$$DT^DTUTL(DT)_"|"
+ ..S A=A_$$DT^DTUTL($P(R,"|",5))_"|"_$$NAME^YMKB10(DI,50)
+ ..S A=A_"|"_$$NAME^ISPRAV("vhosp",$P(R,"|",6))
+ ..S A=A_"|"_$$NAME^ISPRAV("orezhosp",$P(R,"|",14))
+ ..D WC^RWU(CR_A_"|"_$$GOTD^YISPRAV(OT))
+ D C^RWU
+ Q
+CNLST(DS,DE,TPX,LPU) ; Журнал отмены госпитализаций
+ ; DS - дата начала
+ ; DE - дата окончания
+ ; TPX - причина отмены
+ ; LPX - филиал
+ N DT,ID,R,NI,LP,A,R1,RC,X
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),LPU=$G(LPU)
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|№ карты|№ и.б.|Пациент "_$$TXTP^DTUTL(DS,DE)_"|Дата|Отменено|Причина|Примечание|Оператор")
+ S DT=DS-1 F  S DT=$O(^HOSP(DT)) Q:DT=""!(DT>DE)  D
+ .S ID="" F  S ID=$O(^HOSP(DT,ID)) Q:ID=""  D
+ ..S R=^(ID)
+ ..Q:$P(R,"|",3)'=2  
+ ..S LP=$P(R,"|",16)
+ ..I LPU'="",LPU'=LP Q 
+ ..S NI=$P(R,"|",1),R1=$G(^(ID,"sc")),RC=$G(^("c"))
+ ..S TP=$P(R1,"|",1)
+ ..I TPX'="",TPX'=TP Q 
+ ..S A=NI_"|"_$P(R,"|",3)_"|"_NI_"|"_$$FIO^IPAC(NI)_"|"_$$DT^DTUTL(DT)
+ ..S A=A_"|"_$$DTM^DTUTL($P(R1,"|",4))
+ ..S A=A_"|"_$$NAME^ISPRAV("cvhosp",TP)
+ ..S X=$P(R1,"|",2)
+ ..S A=A_"|"_RC_$S(RC=""!(X=""):"",1:", ")_X
+ ..D WC^RWU(CR_A_"|"_$$FIO^IUSER($P(R1,"|",3)))
+ D C^RWU
+ Q
+WTMOP(DS,DE,XLPU) ; Время ожидания перед операцией
+ N LP,OT,CAB,DT,TM,R,A,NI,T1,T2
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),XLPU=$G(XLPU)
+ S:'$$FR^I() XLPU=$$^I("ilpu")
+ D OWF^RWU(".txt")
+ D WC^RWU("Дата|№ И.Б.|Пациент "_$$TXTP^DTUTL(DS,DE)_"|Оформление|Начало операции|Время ожидания")
+ S LP="" F  S LP=$O(^OPSH(LP)) Q:LP=""  D:XLPU=""!(XLPU=LP) 
+ .S OT="" F  S OT=$O(^OPSH(LP,OT)) Q:OT=""  S CAB="" F  S CAB=$O(^OPSH(LP,OT,CAB)) Q:CAB=""  D
+ ..S DT=DS-1 F  S DT=$O(^OPSH(LP,OT,CAB,DT)) Q:DT=""!(DT>DE)  D
+ ...S TM="" F  S TM=$O(^OPSH(LP,OT,CAB,DT,TM)) Q:TM=""  D
+ ....S R=^(TM),T1=$P($G(^(TM,"tm")),"|",1),T2=$P($G(^("r")),"|",1)
+ ....Q:28[(+$P(R,"|",7))  ; отмена, бронь - не выводим
+ ....S:T1="" T1=DT_","_TM ; если нет отметки факта
+ ....S NI=$P(R,"|",1) Q:NI=""  
+ ....S A=$$DT^DTUTL(DT)_"|"_NI_"|"_$$FIO^IPAC(NI)
+ ....S A=A_"|"_$$DTM^DTUTL(T2)
+ ....S A=A_"|"_$$DTM^DTUTL(T1)
+ ....S X=$S(T2:$P($$MNBTW^DTUTL(T1,T2),".",1),1:0)
+ ....S:X<0 X=0
+ ....S A=A_"|"_$S('X:"",1:$$TM^DTUTL(X*60))
+ ....D WC^RWU(CR_A)
+ 
+ D C^RWU
+ Q
+REGIPROC 
+ N FF,F
+ S FF=+$$FR^I()
+ S F=$S(FF:",t@storage:lpu,Филиал",1:"")
+ S ^IPROC("Стационар","Контроль направлений на госпитализацию")="NZ_RHOSP,1,"_$S(FF:3,1:2)_",d,Начальная дата,d,Конечная дата"_F
+ S ^IPROC("Стационар","Журнал госпитализаций")="JRNH_RHOSP,1,4,d,Начальная дата,d,Конечная дата,te@storage:otd@1,Отделение,t@string:0/Все#1/Да#2/Нет,Выписанные"
+ S ^IPROC("Стационар","Журнал отмены госпитализаций")="CNLST_RHOSP,100,"_$S(FF:4,1:3)_",d,Начальная дата,d,Конечная дата,t@net:NMLCR_NSPRAV(""cvhosp""),Причина отмены"_F
+ S ^IPROC("Стационар","Время ожидания перед операцией")="WTMOP_RHOSP,1,"_$S(FF:3,1:2)_",d,Начальная дата,d,Конечная дата"_F
+ Q

@@ -1,0 +1,124 @@
+IMPRP ; Программы обслуживания [ 10/10/2024  11:01 PM ]
+EXIST(N) ; Программа существует
+ Q:'$D(^MPRP(N)) 0
+ Q 1
+EXISTA(X) ; Существование неск. программ на наличие
+ N I,Q
+ S Q=1 F I=1:1:$L(X,"|") I '$D(^MPRP($P(X,"|",I))) S Q=0 Q 
+ Q Q
+CHECK(N,DT) ; Действует на дату
+ Q:'$D(^MPRP(N)) 0
+ S DT=$O(^MPRP(N,"use",+DT+1),-1) Q:DT="" 1 Q:^(DT)=0 0
+ Q 1
+CHECKA(X,DT) ; Проверить неск. программ на наличие
+ S DT=$G(DT) S:DT="" DT=+$H
+ N I,Q
+ S Q=1 F I=1:1:$L(X,"|") I '$$CHECK($P(X,"|",I),DT) S Q=0 Q 
+ Q Q
+GET(N,PL,DT) ; Получить значение
+ S DT=$O(^MPRP(N,PL,DT+1),-1) Q:DT="" "" Q $G(^(DT))
+NAME(N) ; Имя
+ N DT S DT=$O(^MPRP(N,"cname",+$H+1),-1) Q:DT="" "" Q ^(DT)
+NAMES(NN,DT) ; Несколько имен через |
+ N I,A,N
+ S A="",DT=$G(DT)
+ F I=1:1:$L(NN,"|") S N=$P(NN,"|",I) S:N'="" A=$S(A="":"",1:A_",")_$$NAMEH(N,DT)
+ Q A
+NAMEH(N,DT) ; Имя на дату
+ S:DT="" DT=+$H
+ S DT=$O(^MPRP(N,"cname",+DT+1),-1)
+ Q:DT="" "" Q ^(DT)
+IsUn(N,DT) ; Есть уникальные программы
+ N X,I,F
+ S F=0
+ F I=1:1:$L(N,"|") S X=$P(N,"|",I) I X'="",$$GET(X,"uniq",DT) S F=1 Q
+ Q F
+IsI2(FL) ; Double index
+ Q:FL="s"!(FL="o")!(FL="u") 1 Q 0
+CHKLPU(N,DT,LPU) ; Филиал
+ Q:LPU="" 1
+ S DT=$O(^MPRP(N,"lpu",+DT+1),-1) Q:DT="" 1
+ S DT=$G(^(DT)) Q:DT="" 1
+ Q $$FLinFL^TXTU(LPU,DT)
+CHKLPUA(N,DT,LPU)  ; Филиал по программам
+ Q:N="" 1 Q:LPU="" 1
+ N X,I,F,T
+ S F=0
+ F I=1:1:99 S X=$P(N,"|",I) Q:X=""  S T=$$GET(X,"tp",DT),F=F+$S($$CHKLPU(X,DT,LPU):T,1:-T)
+ Q F
+FNDNM(NM,DT) ; Поиск по совпадению имени
+ N ID
+ S NM=$$LU^TXTU(NM),ID="",DT=$G(DT)
+ S:DT="" DT=+$H
+ F  S ID=$O(^MPRP(ID)) Q:ID=""  I $$LU^TXTU($$GET(ID,"cname",DT))=NM Q 
+ Q ID
+NEW(DT) ; Get new ID
+ N ID
+ L +^MPRP
+ S ID=$O(^MPRP(""),-1)
+ ; digits and letters until 'z'
+ F  S ID=$S(ID="":1,ID?1N.N:ID+1,$A(ID)>122:1,1:$C($A(ID)+1)) Q:'$D(^MPRP(ID))
+ S ^MPRP(ID,"pname",DT)=""
+ L -^MPRP
+ Q ID
+MOVUSL(FUSL,TUSL,DT) ; Изменить во всех программах код услуги
+ ; DT - дата изменения
+ Q:FUSL=TUSL 
+ N N,D,R,DI,F
+ S N="" F  S N=$O(^MPRP(N)) Q:N=""  D
+ .F F="d","s","v","i" D  ; запрещенные,доступные,согласование,в приеме
+ ..S D=$O(^MPRP(N,"u",F,DT+1),-1)
+ ..I D,$D(^MPRP(N,"u",F,D,FUSL)) D
+ ...M:D'=DT ^MPRP(N,"u",F,DT)=^MPRP(N,"u",F,D)
+ ...M ^MPRP(N,"u",F,DT,TUSL)=^MPRP(N,"u",F,DT,FUSL)
+ ...K ^MPRP(N,"u",F,DT,FUSL)
+ ...D REGL^IEXCH("^MPRP",N,"u",F,DT)
+ .S D=$O(^MPRP(N,"u","e",DT+1),-1),DI="" ; по диагнозам
+ .I D F  S DI=$O(^MPRP(N,"u","e",D,DI)) Q:DI=""  D:$D(^(DI,FUSL))
+ ..M:D'=DT ^MPRP(N,"u","e",DT,DI)=^MPRP(N,"u","e",D,DI)
+ ..M ^MPRP(N,"u","e",DT,DI,TUSL)=^MPRP(N,"u","e",DT,DI,FUSL)
+ ..D REGL^IEXCH("^MPRP",N,"u","e",DI,DT)
+ .S D=$O(^MPRP(N,"u","a",DT+1),-1) ; разрешенные+кратность
+ .I D,$D(^MPRP(N,"u","a",D,FUSL)) D
+ ..M:D'=DT ^MPRP(N,"u","a",DT)=^MPRP(N,"u","a",D)
+ ..M ^MPRP(N,"u","a",DT,TUSL)=^MPRP(N,"u","a",DT,FUSL)
+ ..D POSTGEN(N,DT)
+ ..D REGL^IEXCH("^MPRP",N,"u","a",DT)
+ .; TODO - stom
+ Q
+POSTGEN(N,DT) ; Генерация доп. данных
+ G:'$D(^MPRP(N,"u","a",DT)) POSTGEN1 ; на эту дату не изменялось
+ K ^BUF($J,"prpg")
+ N U,R,RZ S U=""
+ F  S U=$O(^MPRP(N,"u","a",DT,U)) Q:U=""  S R=^(U),RZ=$P(R,"|",6),R=$P(R,"|",4) I R'="" S ^BUF($J,"prpg",R,U)=RZ
+ K ^MPRP(N,"u","g",DT)
+ F  S U=$O(^MPRP(N,"u","a",DT,U)) Q:U=""  S R=$P(^(U),"|",4) I R'="" M ^MPRP(N,"u","g",DT,U)=^BUF($J,"prpg",R)
+ K ^BUF($J,"prpg")
+ D REGL^IEXCH("^MPRP",N,"u","g",DT)
+POSTGEN1 
+ Q:'$D(^MPRP(N,"u","i",DT)) 
+ K ^BUF($J,"prpg")
+ ; TODO - usli
+ 
+ K ^BUF($J,"prpg")
+ Q
+MVDT(N,D1,D2) ; Переместить сохраненную программу с 1-й на 2-ю дату
+ ; D1 - с даты
+ ; D2 - на дату
+ N F,I2
+ S F="" F  S F=$O(^MPRP(N,F)) Q:F=""  D
+ .I F="s"!(F="o")!(F="u") D  Q 
+ ..S I2="" F  S I2=$O(^MPRP(N,F,I2)) Q:I2=""  D
+ ...Q:'$D(^MPRP(N,F,I2,D1)) 
+ ...M ^MPRP(N,F,I2,D2)=^MPRP(N,F,I2,D1)
+ ...K ^MPRP(N,F,I2,D1)
+ ...D KGL^IEXCH("^MPRP",N,F,I2,D1),GL^IEXCH("^MPRP",N,F,I2,D2)
+ .Q:'$D(^MPRP(N,F,D1)) 
+ .M ^MPRP(N,F,D2)=^MPRP(N,F,D1)
+ .K ^MPRP(N,F,D1)
+ .D KGL^IEXCH("^MPRP",N,F,D1),GL^IEXCH("^MPRP",N,F,D2)
+ D POSTGEN^IMPRP(N,D2)
+ Q
+INITDB 
+ S ^MN("root","mprpfld")="Разделы программ обслуживания"
+ Q

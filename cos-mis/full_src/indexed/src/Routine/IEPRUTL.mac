@@ -1,0 +1,288 @@
+IEPRUTL ; Утилиты ЭИБ [ 09/24/2021  6:03 PM ]
+A 
+ W !,$C(9),"Шаблоны документов ЭИБ"
+ W !,"1. Поиск полей"
+ W !,"2. Добавление полей"
+ W !,"3. Замена имени поля"
+ W !,"4. Поиск по шаблону печати"
+ W !,"5. Замена в шаблоне печати"
+ W !,"6. Добавление в справочник"
+ W !,"7. Замена в справочнике"
+ W !,"8. Шаблоны заполнения"
+ W !,"9. Утилиты"
+ W !,"0. Выход"
+ W !,">" R CMD
+ Q:CMD=0 
+ D:CMD=1 FNDFL D:CMD=2 ADDFL D:CMD=3 CNGFL
+ D:CMD=4 FNDPT D:CMD=5 CNGPT D:CMD=6 ADDLS
+ D:CMD=7 CNGLS D:CMD=8 EPRPT D:CMD=9 UTL
+ G A
+UTL 
+ W !,$C(9),"Утилиты"
+ W !,"0. Выход"
+ W !,"1. Восстановление справочников"
+ W !,"2. Поиск измененных справочников"
+ W !,">" R CMD
+ Q:CMD=0
+ D:CMD=1 RESPL D:CMD=2 SPLF
+ G UTL
+FNDFL 
+ N FR,TR,TP,FL
+ W !,"Имя поля:" R FR
+ W !,"Заголовок поля:" R TR
+ W !,"Тип поля:" R TP
+ I FR="",TR="" W !,"Необходимо указать или имя или заголовок поля" Q 
+ W !,"Processing ...",!
+ S TR=$$UL^TXTU(TR),TP=$$UL^TXTU(TP)
+ S PT="" F  S PT=$O(^DTYPE(PT)) Q:PT=""  D
+ .I FR'="",'$D(^(PT,"fields",FR)) Q
+ .S FL="" F  S FL=$O(^DTYPE(PT,"fields",FL)) Q:FL=""  Q:$$fndP() 
+ .Q:FL=""
+ .W !,PT_" "_$G(^DTYPE(PT,"tname"))
+ W !
+ Q
+fndP() 
+ I FR'="",FR'=FL q 0
+ I TR'="",$$UL^TXTU($G(^DTYPE(PT,"fields",FL,"@tit")))'=TR q 0
+ I TP'="",$G(^DTYPE(PT,"fields",FL,"@tp"))'=TP q 0
+ Q 1
+ADDFL 
+ N FR,TR,TP,NNUM,PT,II,FL,X,LI
+ W !,"Имя поля:" R FR Q:FR=""
+ W !,"Заголовок поля:" R TR Q:TR="" 
+ W !,"Тип поля <s>:" R TP S:TP="" TP="s"
+ W !,"Имя справочника:" R LI
+ W !,"Ограничить номерами шаблонов:" R NNUM
+ W !,"Processing document type...",!
+ S:NNUM'="" NNUM=","_$TR(NNUM,";/\: ",",,,,")_","
+ S PT="" F  S PT=$O(^DTYPE(PT)) Q:PT=""  D:'$D(^(PT,"fields",FR))
+ .I NNUM'="",NNUM'[(","_PT_",") Q
+ .S FL="",II=0 F  S FL=$O(^DTYPE(PT,"fields",FL)) Q:FL=""  S X=$G(^(FL)) S:X>II II=X
+ .S II=II+1
+ .S ^DTYPE(PT,"fields",FR)=II
+ .S ^DTYPE(PT,"fields",FR,"@tit")=TR
+ .S ^DTYPE(PT,"fields",FR,"@tp")=TP
+ .S:LI'="" ^DTYPE(PT,"fields",FR,"@lst")=LI
+ .S:TP="m" ^DTYPE(PT,"fields",FR,"@h")="v"
+ Q
+CNGFL ; Замена имени поля
+ N PT,FR,TO,R,NNUM,NI,ID,LST,I
+ W !,"Существующее имя поля:" R FR
+ Q:FR="" 
+ W !,"Новое имя поля:" R TO
+ Q:TO="" 
+ W !,"Ограничить номерами шаблонов:" R NNUM
+ W !,"Processing document type...",!
+ S:NNUM'="" NNUM=","_$TR(NNUM,";/\: ",",,,,")_","
+ S PT="" F  S PT=$O(^DTYPE(PT)) Q:PT=""  D:$D(^(PT,"fields",FR))
+ .I NNUM'="",NNUM'[(","_PT_",") Q 
+ .I $D(^DTYPE(PT,"fields",TO)) W !,"Already exist in "_PT Q 
+ .M ^DTYPE(PT,"fields",TO)=^DTYPE(PT,"fields",FR)
+ .K ^DTYPE(PT,"fields",FR)
+ .S LST(PT)=""
+ .W !,"Found in "_PT
+ W !,"Processing exist record.."
+ S I=0
+ S NI="" F  S NI=$O(^EPRI("t",NI)) Q:NI=""  D
+ .S PT="" F  S PT=$O(LST(PT)) Q:PT=""  D:$D(^EPRI("t",NI,PT))
+ ..S ID="" F  S ID=$O(^EPRI("t",NI,PT,ID)) Q:ID=""  D
+ ...Q:'$D(^EPRD(NI,ID,FR)) 
+ ...M ^EPRD(NI,ID,TO)=^EPRD(NI,ID,FR)
+ ...K ^EPRD(NI,ID,FR)
+ ...D GL^IEXCH("^EPRD",NI,ID,TO)
+ ...D KGL^IEXCH("^EPRD",NI,ID,FR)
+ ...W:I#50=0 "." S I=I+1
+ W !,"OK"
+ Q
+FNDPT 
+ N STR,NNUM,LST,R,I,N,Q,J,K
+ W !,"Что искать:" R STR Q:STR="" 
+ W !,"Ограничить номерами:" R NNUM
+ W !,"Processing...",!
+ S NNUM=$TR(NNUM,";/\: ",",,,,")
+ F I=1:1 S R=$P(NNUM,",",I) Q:R=""  S LST(R)=""
+ I '$D(LST) S I="" F  S I=$O(^DTYPE(I)) Q:I=""  S LST(I)=""
+ S N="" F  S N=$O(LST(N)) Q:N=""  D
+ .S Q=1
+ .S K=$G(^DTYPE(N,"print"))
+ .I K="" S I="" F  S I=$O(^DTYPE(N,"print",I)) Q:I=""  S R=^(I) I R[STR S Q=0 Q 
+ .I K="m" S J="" F  S J=$O(^DTYPE(N,"print",J)) Q:J=""  Q:'Q  S I="" F  S I=$O(^DTYPE(N,"print",J,I)) Q:I=""  S R=^(I) I R[STR S Q=0 Q
+ .Q:Q 
+ .W !,N_" "_^DTYPE(N,"tname")
+ Q
+CNGPT 
+ N FR,TO,NNUM,R,I,N,Q,J,K,X
+ W !,"Что менять:" R FR
+ Q:FR="" 
+ W !,"На что менять:" R TO
+ Q:TO="" 
+ W !,"Ограничить номерами:" R NNUM
+ W !,"Processing...",!
+ S NNUM=$TR(NNUM,";/\: ",",,,,")
+ F I=1:1 S R=$P(NNUM,",",I) Q:R=""  S LST(R)=""
+ I '$D(LST) S I="" F  S I=$O(^DTYPE(I)) Q:I=""  S LST(I)=""
+ S N="" F  S N=$O(LST(N)) Q:N=""  D
+ .S Q=1
+ .S K=$G(^DTYPE(N,"print"))
+ .I K="" S I="" F  S I=$O(^DTYPE(N,"print",I)) Q:I=""  S R=^(I) I R[FR D  S Q=0 Q 
+ ..S X=$F(R,FR),$E(R,X-$L(FR),X-1)=TO,^(I)=R
+ .I K="m" S J="" F  S J=$O(^DTYPE(N,"print",J)) Q:J=""  Q:'Q  S I="" F  S I=$O(^DTYPE(N,"print",J,I)) Q:I=""  S R=^(I) I R[FR D  S Q=0 Q
+ ..S X=$F(R,FR),$E(R,X-$L(FR),X-1)=TO,^(I)=R
+ .Q:Q 
+ .W !,N_" "_^DTYPE(N,"tname")
+ Q
+ADDLS ; Добавить в справочник
+ N PT,LNM,AFTER,BEG,TXT,I,J,CC,CNM,F
+ W !,"Имя справочника:" R LNM
+ Q:LNM="" 
+ W !,"Создать справочник в случае отсутствия <y/N>: " R I S CNM=$S((I="Y")!(I="y"):1,1:0)
+ W !,"Строка для добавления:" R TXT
+ Q:TXT="" 
+ W !,"Добавить в начало <y/N>: " R I S:(I="Y")!(I="y") I=1 S BEG=+I
+ I BEG S AFTER=""
+ I 'BEG W !,"Добавить после строки:" R AFTER
+ W !,"Ограничить номерами шаблонов:" R NNUM
+ W !,"Processing document type"
+ S:NNUM'="" NNUM=","_$TR(NNUM,";/\: ",",,,,")_","
+ S PT="" F  S PT=$O(^DTYPE(PT)) Q:PT=""  D:$S(CNM:1,1:$D(^(PT,"list",LNM)))
+ .I NNUM'="",NNUM'[(","_PT_",") Q
+ .S F=0,I="" F  S I=$O(^DTYPE(PT,"list",LNM,I)) Q:I=""  I ^(I)=TXT S F=1 Q
+ .Q:F 
+ .S I="",CC=$S(BEG:1,AFTER="":0,1:1)
+ .I AFTER'="" F  S I=$O(^DTYPE(PT,"list",LNM,I)) Q:I=""  Q:^(I)=AFTER  
+ .I AFTER'="",I="" Q  ; not found
+ .I BEG S I=0 Q:$G(^DTYPE(PT,"list",LNM,I))=TXT
+ .I CC S J="" F  S J=$O(^DTYPE(PT,"list",LNM,J),-1) Q:J=""!(J=I)  D  
+ ..S ^DTYPE(PT,"list",LNM,J+1)=^DTYPE(PT,"list",LNM,J)
+ ..D GL^IEXCH("^DTYPE",PT,"list",LNM,J+1)
+ .S:I="" I=$O(^DTYPE(PT,"list",LNM,""),-1)
+ .S I=I+1
+ .W "."
+ .S ^DTYPE(PT,"list",LNM,I)=TXT
+ .D GL^IEXCH("^DTYPE",PT,"list",LNM,I)
+ W !
+ Q
+CNGLS ; Замена в справочнике
+ N PT,LNM,FR,TO,I,J,PRI
+ W !,"Имя справочника (*-все):" R LNM
+ Q:LNM="" 
+ W !,"Что изменить:" R FR
+ Q:FR="" 
+ W !,"На что изменить:" R TO
+ Q:TO=""
+ W !,"Ограничить номерами шаблонов:" R NNUM
+ W !,"Заменять в частных справочниках<y/N>: " R PRI S PRI=$S((PRI="Y")!(PRI="y"):1,1:0)
+ W !,"Processing document type"
+ S:NNUM'="" NNUM=","_$TR(NNUM,";/\: ",",,,,")_","
+ S PT="" F  S PT=$O(^DTYPE(PT)) Q:PT=""  D:$S(LNM="*":1,1:$D(^(PT,"list",LNM)))
+ .I NNUM'="",NNUM'[(","_PT_",") Q
+ .I LNM'="*" D CNGLSp Q
+ .S LNM="" F  S LNM=$O(^DTYPE(PT,"list",LNM)) Q:LNM=""  D CNGLSp D:PRI CNGLSvp
+ W !
+ Q
+CNGLSp 
+ S I="" F  S I=$O(^DTYPE(PT,"list",LNM,I)) Q:I=""  D:^(I)=FR
+ .S ^(I)=TO
+ .D GL^IEXCH("^DTYPE",PT,"list",LNM,I) W "." 
+ Q
+CNGLSvp 
+ N TT,VR
+ S VR="" F  S VR=$O(^EPRPT(VR)) Q:VR=""  D
+ .S TT="" F  S TT=$O(^EPRPT(VR,PT,TT)) Q:TT=""  D:$D(^EPRPT(VR,PT,TT," list",LNM))
+ ..S I="" F  S I=$O(^EPRPT(VR,PT,TT," list",LNM,I)) Q:I=""  D:^(I)=FR
+ ..S ^(I)=TO
+ ..D GL^IEXCH("^EPRPT",VR,PT,TT," list",LNM,I) W "."
+ Q
+EPRPT 
+ W !,$C(9),"Шаблоны заполнения"
+ W !,"1. Перенести по врачу"
+ W !,"2. Удалить по врачу"
+ W !,"0. Назад"
+ W !,">" R CMD
+ D:CMD=1 EPTMOV D:CMD=2 EPTDV
+ Q:CMD=0 
+ G EPRPT
+EPTMOV 
+ N FVR,TVR,ID
+ W !,"Код врача, от кого перенести:" R FVR
+ I '$$EXIST^IKADRY(FVR) W " - Не найден",! Q
+ W " ("_$$FIOSH^IKADRY(FVR)_")"
+ W !,"Код врача, кому перенести:" R TVR
+ I '$$EXIST^IKADRY(TVR) W " - Не найден",! Q
+ W " ("_$$FIOSH^IKADRY(TVR)_")"
+ W !,"Код типа документа:" R ID
+ I '$D(^DTYPE(ID)) W " - Не найден",! Q
+ W " ("_^DTYPE(ID,"tname")_")",!
+ M ^EPRPT(TVR,ID)=^EPRPT(FVR,ID)
+ K ^EPRPT(FVR,ID)
+ D KGL^IEXCH("^EPRPT",FVR,ID)
+ D REGL^IEXCH("^EPRPT",TVR,ID)
+ W "..OK",!
+ Q
+EPTDV 
+ N VR,ID
+ W !,"Код врача:" R VR
+ I '$$EXIST^IKADRY(VR) W " - Не найден",! Q
+ W " ("_$$FIOSH^IKADRY(VR)_")"
+ W !,"Код типа документа:" R ID
+ I '$D(^DTYPE(ID)) W " - Не найден",! Q
+ W " ("_^DTYPE(ID,"tname")_")"
+ W !,"Удалить <Y/N>:" R R#1
+ Q:$TR(R,"y","Y")'="Y" 
+ K ^EPRPT(VR,ID)
+ D KGL^IEXCH("^EPRPT",VR,ID)
+ W "..OK",!
+ Q
+SPLF ; Поиск кто изменил документ и поле
+ N VR,ID,FL,FX,R,H,LL,JJ,J
+ W !,"Код типа документа:" R ID
+ I '$D(^DTYPE(ID)) W " - Не найден",! Q
+ W !,"Имя поля:" R FL
+ W !
+ S II=1,J=0
+ S VR="" F  S VR=$O(^ISLOG("MHLIST",VR)) Q:VR=""  D
+ .S H="" F  S H=$O(^ISLOG("MHLIST",VR,H),-1) Q:H=""  D 
+ ..S J=J+1 W:J#2000 "."
+ ..Q:$P($G(^(H,1)),"|",1)'=ID 
+ ..S FX=$G(^(2))
+ ..I FL'="",FX'=FL Q 
+ ..S R=$O(^(""),-1)-3
+ ..S LL(II)=VR_"|"_H_"|"_$P(^ISLOG("MHLIST",VR,H,1),"|",2)_"|"_R_$S(FL="":"|"_FX,1:""),II=II+1
+ W !,"Найденные варианты:"
+ S II="" F  S II=$O(LL(II)) Q:II=""  D
+ .S R=LL(II),VR=$P(R,"|",1),FX=$P(R,"|",5)
+ .W !,II,". "_VR_" "_$$FIOSH^IKADRY(VR)_" "_$$DTM^DTUTL($P(R,"|",2))_" строк: "_$P(R,"|",4)_$S(FX="":"",1:" поле: "_FX)_$S($P(R,"|",3)="":"",1:" личный")
+ Q
+RESPL ; Восстановление справочников полей
+ N VR,ID,FL,I,R,H,II,LL
+ W !,"Код врача:" R VR
+ I '$$EXIST^IKADRY(VR) W " - Не найден",! Q
+ W " ("_$$FIOSH^IKADRY(VR)_")"
+ W !,"Код типа документа:" R ID
+ I '$D(^DTYPE(ID)) W " - Не найден",! Q
+ W !,"Имя поля:" R FL
+ S II=1
+ S H="" F  S H=$O(^ISLOG("MHLIST",VR,H),-1) Q:H=""  D  Q:II>9
+ .Q:$P($G(^(H,1)),"|",1)'=ID 
+ .I FL'="",$G(^(2))'=FL Q 
+ .S R=$O(^(""),-1)-3
+ .S LL(II)=H_"|"_$P(^ISLOG("MHLIST",VR,H,1),"|",2)_"|"_R,II=II+1
+ W !,"Найденные варианты:"
+ S II="" F  S II=$O(LL(II)) Q:II=""  D
+ .S R=LL(II)
+ .W !,II,". "_$$DTM^DTUTL($P(R,"|",1))_" строк: "_$P(R,"|",3)_$S($P(R,"|",2)="":"",1:" личный")
+ W !,"0. Отмена",!,">" R R
+ Q:R=""  Q:R=0  Q:'$D(LL(R)) 
+ D SRLSTFr^YIMHS(VR,$P(LL(R),"|",1))
+ w !,"..выполнено",!
+ Q
+UPDAGE(NI,FL) ; Обновить возраст на актуальный в полях карты
+ ; FL - имя поля возраста
+ N ID,X
+ S:$G(FL)="" FL="age"
+ S ID="" F  S ID=$O(^EPRD(NI,ID)) Q:ID=""  D:$D(^EPRD(NI,ID,FL))
+ .S X=+$P($G(^EPR(NI,ID,"dt")),"|",1) Q:'X 
+ .S ^EPRD(NI,ID,FL)=$$AGE^IPAC(NI,X)
+ .D GL^IEXCH("^EPRD",NI,ID,FL)
+ .W "."
+ Q

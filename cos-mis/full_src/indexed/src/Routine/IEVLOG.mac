@@ -1,0 +1,91 @@
+IEVLOG ; Прикладные события [ 07/10/2018  2:54 AM ]
+VRSTART(LPU,OT,VR,NI,DTX) ; Start VR time register 
+ ; DTX - дата в расписании
+ Q:LPU=""!(OT="")!(VR="")!(NI="") 
+ Q:'$$EXIST^YIKADRY(VR) 
+ Q:'$$EXIST^IPAC(NI) 
+ N DT,TM,R,UI,ROT,RSP,RTM
+ S DT=$H,TM=$P(DT,",",2),DT=$S($G(DTX)="":+DT,1:DTX),UI=0
+ S R=$O(^VRPOS(LPU,OT,VR,DT,NI,""),-1)
+ I $L(R),$P($G(^(R)),"~",1)="" K ^(R) D KGL^IEXCH("^VRPOS",LPU,OT,VR,DT,NI,R) ; начатые ранее, но незакрытые
+ S R=$$GETVR^IRASP2(LPU,VR,DT,TM),ROT=$P(R,"~",1),RSP=$P(R,"~",2)
+ S RTM=$$FNDNITM^IRASP2(LPU,ROT,VR,RSP,DT,NI)
+ S ^VRPOS(LPU,OT,VR,DT,NI,TM)="~"_RSP_"@"_ROT_"@"_RTM
+ S:'$D(^VRPOSI("ni",NI,VR)) ^(VR)=DT,UI=1
+ I R'="" S ^VRPOS(LPU,R,VR,DT)=OT D GL^IEXCH("^VRPOS",LPU,R,VR,DT) I '$$LCL^IUSER("evlog","no-auto-come"),'$G(^cfg("evlog","no-auto-come")) D COME^IRASP2(LPU,$P(R,"~",1),VR,$P(R,"~",2),DT,TM,NI,0,1)
+ D GL^IEXCH("^VRPOS",LPU,OT,VR,DT,NI,TM)
+ D:UI GL^IEXCH("^VRPOSI","ni",NI,VR)
+ Q
+VREND(LPU,OT,VR,DT,NI,ULST) ; End VR time register (ULST - ID услуг)
+ Q:LPU=""!(OT="")!(VR="")!(NI="") 
+ Q:'$$EXIST^YIKADRY(VR) 
+ Q:'$$EXIST^IPAC(NI) 
+ N R,TM,K
+ S TM=$O(^VRPOS(LPU,OT,VR,DT,NI,""),-1) Q:TM="" 
+ S R=$G(^(TM)),$P(R,"~",1)=$P($H,",",2),$P(R,"~",3)=$TR(ULST,"|","~")
+ S ^(TM)=R,R=$P(R,"~",2)
+ D:'$G(^cfg("evlog","no-auto-out")) COME^IRASP2(LPU,$P(R,"@",2),VR,$P(R,"@",1),DT,TM,NI,1,1)
+ D GL^IEXCH("^VRPOS",LPU,OT,VR,DT,NI,TM)
+ Q
+VRETM(LPU,OT,VR,DT,NI) ; End VR time register (only time)
+ Q:LPU=""!(OT="")!(VR="")!(NI="") 
+ Q:'$$EXIST^YIKADRY(VR) 
+ Q:'$$EXIST^IPAC(NI) 
+ N R,TM
+ S TM=$O(^VRPOS(LPU,OT,VR,DT,NI,""),-1) Q:TM="" 
+ S R=$G(^(TM)),$P(R,"~",1)=$P($H,",",2),^VRPOS(LPU,OT,VR,DT,NI,TM)=R
+ D GL^IEXCH("^VRPOS",LPU,OT,VR,DT,NI,TM)
+ Q
+MOVPAC(FNI,TNI) ; Перемещение информации с одного пациента на другого
+ Q:'$D(^VRPOSI("ni",FNI)) 
+ N LP,OT,VR,DT
+ S LP="" F  S LP=$O(^VRPOS(LP)) Q:LP=""  D
+ .S OT="" F  S OT=$O(^VRPOS(LP,OT)) Q:OT=""  D
+ ..S VR="" F  S VR=$O(^VRPOS(LP,OT,VR)) Q:VR=""  D:$D(^VRPOSI("ni",FNI,VR))
+ ...S DT=^(VR)-1 F  S DT=$O(^VRPOS(LP,OT,VR,DT)) Q:DT=""  D:$D(^(DT,FNI))
+ ....M ^VRPOS(LP,OT,VR,DT,TNI)=^VRPOS(LP,OT,VR,DT,FNI)
+ ....K ^VRPOS(LP,OT,VR,DT,FNI)
+ ....D GL^IEXCH("^VRPOS",LP,OT,VR,DT,TNI)
+ ....D KGL^IEXCH("^VRPOS",LP,OT,VR,DT,FNI)
+ M ^VRPOSI("ni",TNI)=^VRPOSI("ni",FNI)
+ K ^VRPOSI("ni",FNI)
+ D GL^IEXCH("^VRPOSI","ni",TNI)
+ D KGL^IEXCH("^VRPOSI","ni",FNI)
+ Q
+RMPAC(NI) ; Удалить все записи с пациентом
+ Q:'$D(^VRPOSI("ni",NI)) 
+ N LP,OT,VR,DT
+ S LP="" F  S LP=$O(^VRPOS(LP)) Q:LP=""  D
+ .S OT="" F  S OT=$O(^VRPOS(LP,OT)) Q:OT=""  D
+ ..S VR="" F  S VR=$O(^VRPOS(LP,OT,VR)) Q:VR=""  D:$D(^VRPOSI("ni",NI,VR))
+ ...S DT=^(VR)-1 F  S DT=$O(^VRPOS(LP,OT,VR,DT)) Q:DT=""  D:$D(^(DT,NI))
+ ....K ^VRPOS(LP,OT,VR,DT,FNI)
+ ....D KGL^IEXCH("^VRPOS",LP,OT,VR,DT,FNI)
+ K ^VRPOSI("ni",FNI)
+ D KGL^IEXCH("^VRPOSI","ni",FNI)
+ Q
+CHKUU ; Проверить и очистить все неиспользуемые записи
+ N LP,OT,VR,DT,NI
+ S LP="" F  S LP=$O(^VRPOS(LP)) Q:LP=""  D
+ .S OT="" F  S OT=$O(^VRPOS(LP,OT)) Q:OT=""  D
+ ..S VR="" F  S VR=$O(^VRPOS(LP,OT,VR)) Q:VR=""  D
+ ...I '$$EXIST^IKADRY(VR,+$H) K ^VRPOS(LP,OT,VR) D KGL^IEXCH("^VRPOS",LP,OT,VR) W "." Q 
+ ...S DT="" F  S DT=$O(^VRPOS(LP,OT,VR,DT)) Q:DT=""  D
+ ....S NI="" F  S NI=$O(^VRPOS(LP,OT,VR,DT,NI)) Q:NI=""  D:'$$EXIST^IPAC(NI)
+ .....W "."
+ .....K ^VRPOS(LP,OT,VR,NI)
+ .....D KGL^IEXCH("^VRPOS",LP,OT,VR,NI)
+ .....Q:'$D(^VRPOSI("ni",NI))
+ .....K ^VRPOSI("ni",NI)
+ .....D KGL^IEXCH("^VRPOSI","ni",NI)
+ S NI="" F  S NI=$O(^VRPOSI("ni",NI)) Q:NI=""  D
+ .S VR="" F  S VR=$O(^VRPOSI("ni",NI,VR)) Q:VR=""  D:'$$EXIST^IKADRY(VR,+$H)
+ ..K ^VRPOSI("ni",NI,VR)
+ ..D KGL^IEXCH("^VRPOSI","ni",NI,VR)
+ ..W "."
+ Q
+REGLCL ; 
+ K ^LCLI("evlog")
+ S ^LCLI("evlog")="События приема пациентов"
+ S ^LCLI("evlog","no-auto-come")="Запрет автоматической отметки прихода пациента в расписании"
+ Q

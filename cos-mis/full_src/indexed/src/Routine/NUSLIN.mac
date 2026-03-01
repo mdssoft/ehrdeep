@@ -1,0 +1,56 @@
+NUSLIN ; Импорт услуг и пациентов из таблицы [ 04/18/2020  0:43 AM ]
+DO 
+ N J,R,NI,FF,FI,FO,DT,U,NU,SS,DI,RNI,PRC,DGN,VR,CNT,OTD
+ S PRC=$$FIND^ISPRAV("tprice","Внешний прейскурант")
+ D:PRC="" ADD^ISPRAV("tprice","Внешний прейскурант")
+ S:PRC="" PRC=$$FIND^ISPRAV("tprice","Внешний прейскурант")
+ S DGN=97,VR=2
+ S OTD=$$OTD^IKADRY(VR)
+ D ORH^RWU
+ F J=1:1 S R=$$R^RWU Q:%IFN["Z"  I J>3,R'="" D 
+ .S R=$$WD^TXTU(R)
+ .S NI=$P(R,"|",1),FF=$P(R,"|",2),FI=$P(R,"|",3),FO=$P(R,"|",4)
+ .S DT=$P(R,"|",8),U=$P(R,"|",9),NU=$P(R,"|",10)
+ .S CNT=$P(R,"|",11),SS=$P(R,"|",12),DI=$P(R,"|",13)
+ .Q:NI=""  Q:DT=""  Q:U=""  Q:NU="" 
+ .S DT=$$DI^DTUTL(DT) Q:DT=""  
+ .S RNI=$$fndNI(NI,FF,FI,FO) Q:RNI="" 
+ .D chkUSL(U,NU,PRC,DT,SS)
+ .S:CNT=1 CNT="" S:CNT'="" CNT="*"_CNT
+ .S R=$$ADD^IUSL(VR,DT,OTD,RNI,U_CNT,DI,"","",PRC,"","")
+ .S R=$$SETPL^IUSL(VR,DT,OTD,R,"s",SS)
+ D CR^RWU
+ Q
+fndNI(NI,FF,FI,FO) 
+ N NN
+ S NN=$O(^BTI("anib","E"_NI,""))
+ Q:NN'="" NN
+ S NN=$$GETNIB^IPACFND(FF,FI,FO,"","")
+ Q:NN'="" NN
+ Q $$ADD^IPAC(FF,FI,FO,"",$$SEX^YIFAM(FF),DGN,"E"_NI)
+chkUSL(U,NU,PRC,DT,SUM) 
+ I $$CHECKH^IPRICE(U,PRC,DT) Q 
+ S DT=DT-30 ; с запасом
+ S ^CN(U,PRC,DT)=SUM
+ S ^CN(U,PRC,"cname",DT)=NU
+ S ^CN(U,PRC,"name",DT)=NU
+ Q
+IMP 
+ ; nib|f|i|o|datar|dgn|prc|ot|vr|dt|usl|cnt|diag
+ N J,R,NI,FF,FI,FO,DT,U,NU,VR,SS,DI,PRC,DGN,VR,CNT,OTD,BD
+ D ORH^RWU
+ F J=1:1 S R=$$R^RWU Q:%IFN["Z"  I J>1,R'="" D 
+ .S R=$$WD^TXTU(R)
+ .S NI=$P(R,"|",1),FF=$P(R,"|",2),FI=$P(R,"|",3),FO=$P(R,"|",4)
+ .S BD=$$DI^DTUTL($P(R,"|",5))
+ .I NI="" S NI=$$GETNIB^IPACFND(FF,FI,FO,BD,"",2)
+ .Q:NI="" 
+ .S DGN=$P(R,"|",6),PRC=$P(R,"|",7)
+ .S VR=$P(R,"|",9),OTD=$P(R,"|",8),DT=$$DIH^DTUTL($P(R,"|",10))
+ .S U=$P(R,"|",11),CNT=$P(R,"|",12),DI=$P(R,"|",13)
+ .S:CNT=1 CNT="" S:CNT'="" CNT="*"_CNT
+ .Q:VR=""  Q:OTD=""  Q:DT=""  Q:U="" 
+ .S R=$$ADD^IUSL(VR,DT,OTD,NI,U_CNT,DI,"","",PRC,"","",DGN)
+ D CR^RWU
+ Q
+ 

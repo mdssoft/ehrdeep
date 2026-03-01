@@ -1,0 +1,345 @@
+RSSMCEQ ; Отчет по оборудованию [ 12/12/2016  11:19 PM ]
+DO(DS,DE,MODE,VTP,LPUX) 
+ ; MODE - по клиникам\по оборудованию
+ ; VTP - с раскладкой по видам договоров
+ N SPX,DIAX,EQX,EQLN,EQTXT,TABLE,TABLEV,I1,I2,EQ,A,R,I,C,J,K,X1,X2,X3,X4
+ N ULX,ULC,DGL,DGT,EQI,PERV,CNT,DCNT
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),DCNT=DE-DS+1
+ K ^BUF($J)
+ D init
+ D tmpdb
+ D ITERATE^IUSLD("proc^RSSMCEQ(VR,OT,DT,ID)",DS,DE,,,LPUX)
+ D post
+ 
+ D OWF^RWU(".txt")
+ D WC^RWU("Оборудование|Единиц|Загрузка|План|План|Факт|Факт|Недополученна;")
+ D WC^RWU(CR_$$TXTP^DTUTL(DS,DE)_"|оборуд.|оборуд.%|Услуг|Выручка|Услуг|Выручка|Выручка")
+ S I1="" F  S I1=$O(TABLE(I1)) Q:I1=""  D
+ .S X1=$S('MODE:$$NAME^ICONTR(I1),1:$G(EQTXT(I1))) ; ??
+ .D WC^RWU(CR_X1)
+ .S I2="" F  S I2=$O(TABLE(I1,I2)) Q:I2=""  D
+ ..S R=$S(MODE:$$NAME^ICONTR(I2),1:EQTXT(I2))
+ ..F I=1:1:7 S R=R_"|"_$TR($G(TABLE(I1,I2,I)),".",",")
+ ..D WC^RWU(CR_R)
+ ..Q:'VTP
+ ..S DGT="" F  S DGT=$O(TABLEV(I1,I2,DGT)) Q:DGT=""  D
+ ...S R=" - "_$$NAME^ISPRAV("dvid",DGT)
+ ...F I=1:1:7 S R=R_"|"_$TR($G(TABLEV(I1,I2,DGT,I)),".",",")
+ ...D WC^RWU(CR_R)
+ D C^RWU
+ K ^BUF($J)
+ Q
+tmpdb 
+ S I="" F  S I=$O(^EQUIP(I)) Q:I=""  D
+ .S X1=0,X2=0,X3=$G(EQLN(I)) Q:'X3 
+ .S C="" F  S C=$O(^EQUIP(I,"usl",C)) Q:C=""  D
+ ..S ^BUF($J,"ue",C)=X3
+ ..S X1=X1+1,X2=X2+$$PRICE^IPRICE(C,1)
+ .S:X1 ^BUF($J,"usum",X3)=+$J(X2/X1,"",2) ; стоим. усл. на оборуд.
+ 
+ S L="" F  S L=$O(^PLPU(L)) Q:L=""  D:LPUX=""!(LPUX=L)
+ .S X1="" F  S X1=$O(^PLPU(L,X1)) Q:X1=""  D
+ ..S X2="" F  S X2=$O(^PLPU(L,X1,X2)) Q:X2=""  D
+ ...S C="" F  S C=$O(^PLPU(L,X1,X2,"cab",C)) Q:C=""  D
+ ....S I="" F  S I=$O(^PLPU(L,X1,X2,"cab",C,"eq",I)) Q:I=""  D
+ .....S R=^(I),J=$P(R,"|",1),K=$P(R,"|",2) S:K="" K=1
+ .....Q:J=""  ; no dev
+ .....S X3=$G(EQLN(J)) Q:X3="" 
+ .....S X4=$G(^BUF($J,"usum",X3))
+ .....S:'MODE TABLE(L,X3,1)=$G(TABLE(L,X3,1))+K,TABLE(L,X3,4)=X4
+ .....S:MODE TABLE(X3,L,1)=$G(TABLE(X3,L,1))+K,TABLE(X3,L,4)=X4
+ Q
+init 
+ ; 1
+ S EQLN(1)=1,EQTXT(1)="ЭКГ"
+ S SPX(1,1)="",SPX(2,1)=""
+ ; 2
+ S EQLN(2)=2,EQTXT(2)="Холтер ЭКГ"
+ S EQX(2,2)=""
+ ; 3
+ S EQLN(3)=3,EQTXT(3)="Монитор АД"
+ S EQX(3,3)=""
+ ; 5
+ S EQLN(5)=5,EQTXT(5)="ЭЭГ"
+ S SPX(35,5)=""
+ ; 6
+ S EQLN(6)=6,EQTXT(6)="ЛОР-комбайн"
+ S SPX(33,6)=""
+ ; 7
+ S EQLN(7)=7,EQTXT(7)="УЗИ"
+ S SPX(13,7)=""
+ ; 8
+ S EQLN(8)=8,EQTXT(8)="Кольпоскоп"
+ S SPX(28,8)=""
+ ; 9
+ S EQLN(9)=9,EQTXT(9)="Стресс-дорожка"
+ S SPX(2,9)=""
+ ; 10
+ S EQLN(10)=10,EQTXT(10)="Сургитрон"
+ S SPX(28,10)="",SPX(37,10)="",SPX(15,10)="",SPX(12,10)=""
+ ; 11
+ S EQLN(11)=11,EQTXT(11)="Урологическое оборудование"
+ S SPX(15,11)="",DIAX("N41",11)="",DIAX("N41.1",11)=""
+ ; 12
+ S EQLN(22)=12,EQTXT(12)="Аппарат ударно-волновой терапии"
+ S SPX(14,12)="",SPX(12,12)="",SPX(35,12)=""
+ F I="M61","M84","M77.3","M75" S DIAX(I,12)=""
+ ; 13
+ S EQLN(23)=13,EQTXT(13)="Физиотерапевтический комбайн BTL-1"
+ S SPX(9,13)="",SPX(87,13)=""
+ ; 14
+ S EQLN(24)=14,EQTXT(14)="Физиотерапевтический комбайн BTL-2"
+ S SPX(9,14)="",SPX(87,14)=""
+ ; 15
+ S EQLN(25)=15,EQTXT(15)="Ингалятор"
+ S SPX(1,15)="",SPX(50,15)="",SPX(33,15)="",SPX(9,15)=""
+ F I="J02","J02.0","J02.8","J02.9","J04","J04.0","J04.1","J04.2","J05","J05.0","J05.1","J06","J06.0","J06.8","J06.9","J12","J12.0" S DIAX(I,15)=""
+ F I="J12.1","J12.2","J12.8","J12.9","J13","J14","J15","J15.0","J15.1","J15.2","J15.3","J15.4","J15.5","J15.6","J15.7","J15.8","J15.9" S DIAX(I,15)=""
+ F I="J16","J16.0","J16.8","J17","J17.0","J17.1","J17.2","J17.3","J17.8","J18","J18.0","J18.1","J18.2","J18.8","J18.9","J20","J20.0" S DIAX(I,15)=""
+ F I="J20.1","J20.2","J20.3","J20.4","J20.5","J20.6","J20.7","J20.8","J20.9","J21","J21.0","J21.8","J21.9","J22" S DIAX(I,15)=""
+ ; 16
+ S EQLN(26)=16,EQTXT(16)="УФО"
+ S SPX(1,16)="",SPX(50,16)=""
+ F I="J00","J01","J01.0","J01.1","J01.2","J01.3","J01.4","J01.8","J01.9","J02","J02.0","J02.8","J02.9","J03","J03.0","J03.8","J03.9","J05","J05.0","J05.1","J06","J06.0","J06.8","J06.9","J22" S DIAX(I,16)=""
+ ; 17
+ S EQLN(27)=17,EQTXT(17)="Щелевая лампа"
+ S SPX(31,17)=""
+ F I="H00","H00.0","H00.1","H01","H01.0","H01.1","H01.8","H01.9","H02","H02.0","H02.1","H02.2","H02.3","H02.4","H02.5","H02.6","H02.7","H02.8","H02.9","H03","H03.0","H03.1","H03.8","H04","H04.0","H04.1","H04.2" S DIAX(I,17)=""
+ F I="H04.3","H04.4","H04.5","H04.6","H04.8","H04.9","H05","H05.0","H05.1","H05.2","H05.3","H05.4","H05.5","H05.8","H05.9","H06","H06.0","H06.1","H06.2","H06.3","H10","H10.0","H10.1","H10.2","H10.3","H10.4","H10.5" S DIAX(I,17)=""
+ F I="H10.8","H10.9","H11","H11.0","H11.1","H11.2","H11.3","H11.4","H11.8","H11.9","H13","H13.0","H13.1","H13.2","H13.3","H13.8","H15","H15.0","H15.1","H15.8","H15.9","H16","H16.0","H16.1","H16.2","H16.3","H16.4" S DIAX(I,17)=""
+ F I="H16.8","H16.9","H17","H17.0","H17.1","H17.8","H17.9","H18","H18.0","H18.1","H18.2","H18.3","H18.4","H18.5","H18.6","H18.7","H18.8","H18.9","H19","H19.0","H19.1","H19.2","H19.3","H19.8","H20","H20.0","H20.1" S DIAX(I,17)=""
+ F I="H20.2","H20.8","H20.9","H21","H21.0","H21.1","H21.2","H21.3","H21.4","H21.5","H21.8","H21.9","H22","H22.0","H22.1","H22.8","H25","H25.0","H25.1","H25.2","H25.8","H25.9","H26","H26.0","H26.1","H26.2","H26.3" S DIAX(I,17)=""
+ F I="H26.4","H26.8","H26.9","H27","H27.0","H27.1","H27.8","H27.9","H28","H28.0","H28.1","H28.2","H28.8","H30","H30.0","H30.1","H30.2","H30.8","H30.9","H31","H31.0","H31.1","H31.2","H31.3","H31.4","H31.8","H31.9" S DIAX(I,17)=""
+ F I="H32","H32.0","H32.8","H33","H33.0","H33.1","H33.2","H33.3","H33.4","H33.5","H34","H34.0","H34.1","H34.2","H34.8","H34.9","H35" S DIAX(I,17)=""
+ F I="H35.0","H35.1","H35.2","H35.3","H35.4","H35.5","H35.6","H35.7","H35.8","H35.9","H36","H36.0","H36.8","H40","H40.0","H40.1","H40.2","H40.3","H40.4","H40.5","H40.6","H40.8","H40.9","H42","H42.0","H42.8","H43" S DIAX(I,17)=""
+ F I="H43.0","H43.1","H43.2","H43.3","H43.8","H43.9","H44","H44.0","H44.1","H44.2","H44.3","H44.4","H44.5","H44.6","H44.7","H44.8","H44.9","H45","H45.0","H45.1","H45.8","H46","H47","H47.0","H47.1","H47.2","H47.3" S DIAX(I,17)=""
+ F I="H47.4","H47.5","H47.6","H47.7","H48","H48.0","H48.1","H48.8","H49","H49.0","H49.1","H49.2","H49.3","H49.4","H49.8","H49.9","H50","H50.0","H50.1","H50.2","H50.3","H50.4","H50.5","H50.6","H50.8","H50.9","H51" S DIAX(I,17)=""
+ F I="H51.0","H51.1","H51.2","H51.8","H51.9","H52","H52.0","H52.1","H52.2","H52.3","H52.4","H52.5","H52.6","H52.7","H53","H53.0","H53.1","H53.2","H53.3","H53.4","H53.5","H53.6","H53.8","H53.9","H54","H54.0","H54.1" S DIAX(I,17)=""
+ F I="H54.2","H54.3","H54.4","H54.5","H54.6","H54.7","H55","H57","H57.0","H57.1","H57.8","H57.9","H58","H58.0","H58.1","H58.8","H59","H59.0","H59.8","H59.9" S DIAX(I,17)=""
+ ; 18
+ S EQLN(28)=18,EQTXT(18)="Пневмотонометр"
+ S SPX(31,18)=""
+ F I="H15","H15.0","H15.1","H15.8","H15.9","H16","H16.0","H16.1","H16.2","H16.3","H16.4","H16.8","H16.9","H17","H17.0","H17.1","H17.8","H17.9","H18","H18.0","H18.1","H18.2","H18.3","H18.4","H18.5","H18.6","H18.7" S DIAX(I,18)=""
+ F I="H18.8","H18.9","H19","H19.0","H19.1","H19.2","H19.3","H19.8","H20","H20.0","H20.1","H20.2","H20.8","H20.9","H21","H21.0","H21.1","H21.2","H21.3","H21.4","H21.5","H21.8","H21.9","H22","H22.0","H22.1","H22.8" S DIAX(I,18)=""
+ F I="H25","H25.0","H25.1","H25.2","H25.8","H25.9","H26","H26.0","H26.1","H26.2","H26.3","H26.4","H26.8","H26.9","H27","H27.0","H27.1","H27.8","H27.9","H28","H28.0","H28.1","H28.2","H28.8","H30","H30.0","H30.1" S DIAX(I,18)=""
+ F I="H30.2","H30.8","H30.9","H31","H31.0","H31.1","H31.2","H31.3","H31.4","H31.8","H31.9","H32","H32.0","H32.8","H33","H33.0","H33.1","H33.2","H33.3","H33.4","H33.5","H34","H34.0","H34.1","H34.2","H34.8","H34.9" S DIAX(I,18)=""
+ F I="H35","H35.0","H35.1","H35.2","H35.3","H35.4","H35.5","H35.6","H35.7","H35.8","H35.9","H36","H36.0","H36.8","H40","H40.0","H40.1","H40.2","H40.3","H40.4","H40.5","H40.6","H40.8","H40.9","H42","H42.0","H42.8" S DIAX(I,18)=""
+ F I="H43","H43.0","H43.1","H43.2","H43.3","H43.8","H43.9","H44","H44.0","H44.1","H44.2","H44.3","H44.4","H44.5","H44.6","H44.7","H44.8","H44.9","H45","H45.0","H45.1","H45.8","H46","H47","H47.0","H47.1","H47.2" S DIAX(I,18)=""
+ F I="H47.3","H47.4","H47.5","H47.6","H47.7","H48","H48.0","H48.1","H48.8","H52","H52.0","H52.1","H52.2","H52.3","H52.4","H52.5","H52.6","H52.7" S DIAX(I,18)=""
+ ; 19
+ S EQLN(29)=19,EQTXT(19)="Кераторефрактометр"
+ S SPX(31,19)=""
+ F I="H25","H25.0","H25.0","H25.1","H25.2","H25.8","H25.9","H26.2","H27.0","H33","H33.0","H35.0","H35.4","H40","H40.0","H40.1","H49","H49.0","H49.1","H49.2","H49.3","H49.4","H49.8","H49.9","H50","H50.0","H50.1" S DIAX(I,19)=""
+ F I="H50.2","H50.3","H50.4","H50.5","H50.6","H50.8","H50.9","H51","H51.0","H51.1","H51.2","H51.8","H51.9","H52","H52.0","H52.1","H52.2","H52.3","H52.4","H52.5","H52.6","H52.7","H53","H53.0","H53.1","H53.2","H53.3" S DIAX(I,19)=""
+ F I="H53.4","H53.5","H53.6","H53.8","H53.9","H54","H54.0","H54.1","H54.2","H54.3","H54.4","H54.5","H54.6","H54.7","H57.1","H57.8","I79.2","I79.8","S05","S05.0","S05.1","S05.2","S05.3","S05.4","S05.5","S05.6","S05.7","S05.8","S05.9" S DIAX(I,19)=""
+ ; 20
+ S EQLN(14)=20,EQTXT(20)="Урофлоуметр"
+ S SPX(15,20)=""
+ ; 21
+ S EQLN(20)=21,EQTXT(21)="Цистоскоп"
+ S SPX(15,21)=""
+ F I="N30.2","N30.3","N30.4","N30.8","N30.9","N32.0","N32.3","N32.8","N32.9","C67","D30.3" S DIAX(I,21)=""
+ ; 22
+ S EQLN(30)=22,EQTXT(22)="Гастроскоп"
+ S SPX(3,22)="",SPX(1,22)="",SPX(12,22)=""
+ ; 23
+ S EQLN(31)=23,EQTXT(23)="Колоноскоп"
+ S SPX(3,23)="",SPX(1,23)="",SPX(12,23)=""
+ ; 24
+ S EQLN(16)=24,EQTXT(24)="R-графия"
+ S SPX(68,24)=""
+ ; 25
+ S EQLN(21)=25,EQTXT(25)="Маммография"
+ S SPX(68,25)=""
+ ; 26
+ S EQLN(17)=26,EQTXT(26)="Лор-Эндо"
+ S SPX(33,26)=""
+ Q
+post ; постобработка
+ S I1="" F  S I1=$O(TABLE(I1)) Q:I1=""  D
+ .S I2="" F  S I2=$O(TABLE(I1,I2)) Q:I2=""  D
+ ..S X1=$G(TABLE(I1,I2,1)),X3=$G(TABLE(I1,I2,3))
+ ..S EQI=$S('MODE:I2,1:I1),LP=$S('MODE:I1,1:I2)
+ ..S X4=$G(^BUF($J,"usum",EQI))
+ ..S:EQI=1 X3=X3*0.5
+ ..S:EQI=2 X3=X1*DCNT
+ ..S:EQI=3 X3=X1*DCNT
+ ..S:EQI=5 X3=X3*0.1
+ ..S:EQI=6 X3=24*X1*DCNT ;X3
+ ..S:EQI=7 X3=24*X1*DCNT ;X3
+ ..S:EQI=8 X3=X3*0.25
+ ..S:EQI=9 X3=X3*0.05
+ ..S:EQI=10 X3=X3*0.15
+ ..S:EQI=11 X3=X3*5*0.6
+ ..S:EQI=12 X3=X3*5
+ ..S:EQI=13 X3=24*X1*DCNT ;X3
+ ..S:EQI=14 X3=24*X1*DCNT ;X3
+ ..S:EQI=15 X3=X3*5
+ ..S:EQI=16 X3=X3*5
+ ..S:EQI=17 X3=X3
+ ..S:EQI=18 X3=X3
+ ..S:EQI=19 X3=X3*2
+ ..S:EQI=20 X3=X3*0.25
+ ..S:EQI=21 X3=X3
+ ..S:EQI=22 X3=X3*0.5
+ ..S:EQI=23 X3=X3*0.1
+ ..S:EQI=24 X3=24*X1*DCNT,X3=$S(LP=3:X3*0.75,1:X3) ;X3
+ ..S:EQI=25 X3=$S(LP=3:X3*0.25,1:0)
+ ..S:EQI=26 X3=X3*0.1
+ ..S X3=+$J(X3,"",2),X4=+$J(X3*X4,"",2)
+ ..S X5=$G(TABLE(I1,I2,5))
+ ..S TABLE(I1,I2,2)=$S(X3:100*$J(X5/X3,"",4),1:0)
+ ..S TABLE(I1,I2,3)=X3
+ ..S TABLE(I1,I2,4)=X4
+ ..S TABLE(I1,I2,7)=X4-$G(TABLE(I1,I2,6))
+ ..Q:'VTP
+ ..S DGT="" F  S DGT=$O(TABLEV(I1,I2,DGT)) Q:DGT=""  D 
+ ...S X4=$G(^BUF($J,"usum",EQI))
+ ...S X3=$G(TABLEV(I1,I2,DGT,3))
+ ...S:EQI=1 X3=X3*0.5
+ ...S:EQI=2 X3=0 ;X1*DCNT
+ ...S:EQI=3 X3=0 ;X1*DCNT
+ ...S:EQI=5 X3=X3*0.1
+ ...S:EQI=6 X3=0 ;24*X1*DCNT ;X3
+ ...S:EQI=7 X3=0 ;24*X1*DCNT ;X3
+ ...S:EQI=8 X3=X3*0.25
+ ...S:EQI=9 X3=X3*0.05
+ ...S:EQI=10 X3=X3*0.15
+ ...S:EQI=11 X3=X3*5*0.6
+ ...S:EQI=12 X3=X3*5
+ ...S:EQI=13 X3=0 ;24*X1*DCNT ;X3
+ ...S:EQI=14 X3=0 ;24*X1*DCNT ;X3
+ ...S:EQI=15 X3=X3*5
+ ...S:EQI=16 X3=X3*5
+ ...S:EQI=17 X3=X3
+ ...S:EQI=18 X3=X3
+ ...S:EQI=19 X3=X3*2
+ ...S:EQI=20 X3=X3*0.25
+ ...S:EQI=21 X3=X3
+ ...S:EQI=22 X3=X3*0.5
+ ...S:EQI=23 X3=X3*0.1
+ ...S:EQI=24 X3=0 ;24*X1*DCNT,X3=$S(LP=3:X3*0.75,1:X3) ;X3
+ ...S:EQI=25 X3=$S(LP=3:X3*0.25,1:0)
+ ...S:EQI=26 X3=X3*0.1
+ ...S X3=+$J(X3,"",2),X4=+$J(X3*X4,"",2)
+ ...S TABLEV(I1,I2,DGT,1)=X1
+ ...S X5=$G(TABLEV(I1,I2,DGT,5))
+ ...S TABLEV(I1,I2,DGT,2)=$S(X3:100*$J(X5/X3,"",4),1:0)
+ ...S TABLEV(I1,I2,DGT,3)=X3
+ ...S TABLEV(I1,I2,DGT,4)=X4
+ ...S TABLEV(I1,I2,DGT,7)=X4-$G(TABLEV(I1,I2,DGT,6))
+ 
+ Q
+proc(VR,OT,DT,ID) ; процедура подсчета
+ Q:"wd"[$$GETSTAT^IUSL(VR,DT,OT,ID) 
+ 
+ S ULX=$$GETUSLS^IUSL(VR,DT,OT,ID) Q:ULX=""
+ S ULC=$P(ULX,"*",2) S:ULC="" ULC=1
+ S ULX=$P(ULX,"*",1) Q:ULX=""
+ 
+ S EQI=$G(^BUF($J,"ue",ULX))
+ S SP=$$GETSP^IUSL(VR,DT,OT,ID) Q:SP="" 
+ S:VTP DGT=$$GETDGT^IRPUSL($$GETDGN^IUSL(VR,DT,OT,ID),DT)
+ 
+ S LPU=$$GETLPU^IUSL(VR,DT,OT,ID)
+ D:EQI fcalc
+ 
+ I 'EQI,'SP Q
+ I '$D(SPX(+SP)),'$D(EQX(+EQI)) Q 
+ D GET^IUSL(VR,DT,OT,ID,1)
+ Q:'$D(UL)
+ S DIA=$G(DIA)
+ S CNT=UL($O(UL(""))) S:CNT="" CNT=1
+ S PERV=$$IsFPOS^IUSL(NI,OT,VR,DT,ID)
+ ; 1
+ I $D(SPX(SP,1)),'$D(^BUF($J,"tmp",1,NI)) S ^(NI)="" d add(LPU,1,1)
+ I VTP,$D(SPX(SP,1)),'$D(^BUF($J,"tmpt",DGT,1,NI)) S ^(NI)="" d addT(LPU,1,1)
+ ; 5
+ I $D(SPX(SP,5)),'$D(^BUF($J,"tmp",5,NI)) S ^(NI)="" d add(LPU,5,1)
+ I VTP,$D(SPX(SP,5)),'$D(^BUF($J,"tmpt",DGT,5,NI)) S ^(NI)="" d addT(LPU,5,1)
+ ; 6
+ I $D(SPX(SP,6)),'$D(^BUF($J,"tmp",6,DT,NI)) S ^(NI)="" d add(LPU,6,1)
+ I VTP,$D(SPX(SP,6)),'$D(^BUF($J,"tmpt",DGT,6,DT,NI)) S ^(NI)="" d addT(LPU,6,1)
+ ; 7
+ I $D(SPX(SP,7)),'$D(^BUF($J,"tmp",7,DT,NI)) S ^(NI)="" d add(LPU,7,1)
+ I VTP,$D(SPX(SP,7)),'$D(^BUF($J,"tmpt",DGT,7,DT,NI)) S ^(NI)="" d addT(LPU,7,1)
+ ; 8
+ I $D(SPX(SP,8)),'$D(^BUF($J,"tmp",8,DT,NI)) S ^(NI)="" d add(LPU,8,1)
+ I VTP,$D(SPX(SP,8)),'$D(^BUF($J,"tmpt",DGT,8,DT,NI)) S ^(NI)="" d addT(LPU,8,1)
+ ; 9
+ I $D(SPX(SP,9)),'$D(^BUF($J,"tmp",9,DT,NI)) S ^(NI)="" d add(LPU,9,1)
+ I VTP,$D(SPX(SP,9)),'$D(^BUF($J,"tmpt",DGT,9,DT,NI)) S ^(NI)="" d addT(LPU,9,1)
+ ; 10
+ I $D(SPX(SP,10)),'$D(^BUF($J,"tmp",10,NI)) S ^(NI)="" d add(LPU,10,1)
+ I VTP,$D(SPX(SP,10)),'$D(^BUF($J,"tmpt",DGT,10,NI)) S ^(NI)="" d addT(LPU,10,1)
+ ; 11
+ I DIA'="",$D(SPX(SP,11)),$D(DIAX(DIA,11)),'$D(^BUF($J,"tmp",11,"DIA11",NI)) S ^(NI)="" d add(LPU,11,1)
+ I VTP,DIA'="",$D(SPX(SP,11)),$D(DIAX(DIA,11)),'$D(^BUF($J,"tmpt",DGT,11,"DIA11",NI)) S ^(NI)="" d addT(LPU,11,1)
+ ; 12
+ I DIA'="",$D(SPX(SP,12)),$D(DIAX(DIA,12)),'$D(^BUF($J,"tmp",12,DIA,NI)) S ^(NI)="" d add(LPU,12,1)
+ I VTP,DIA'="",$D(SPX(SP,12)),$D(DIAX(DIA,12)),'$D(^BUF($J,"tmpt",DGT,12,DIA,NI)) S ^(NI)="" d addT(LPU,12,1)
+ ; 13
+ I $D(SPX(SP,13)),'$D(^BUF($J,"tmp",13,DT,NI)) S ^(NI)="" d add(LPU,13,1)
+ I VTP,$D(SPX(SP,13)),'$D(^BUF($J,"tmpt",DGT,13,DT,NI)) S ^(NI)="" d addT(LPU,13,1)
+ ; 14
+ I $D(SPX(SP,14)),'$D(^BUF($J,"tmp",14,DT,NI)) S ^(NI)="" d add(LPU,14,1)
+ I VTP,$D(SPX(SP,14)),'$D(^BUF($J,"tmpt",DGT,14,DT,NI)) S ^(NI)="" d addT(LPU,14,1)
+ ; 15
+ I DIA'="",$D(SPX(SP,15)),$D(DIAX(DIA,15)),'$D(^BUF($J,"tmp",15,"DIA15",NI)) S ^(NI)="" d add(LPU,15,1) ; любой диагн.
+ I VTP,DIA'="",$D(SPX(SP,15)),$D(DIAX(DIA,15)),'$D(^BUF($J,"tmpt",DGT,15,"DIA15",NI)) S ^(NI)="" d addT(LPU,15,1)
+ ; 16
+ I DIA'="",$D(SPX(SP,16)),$D(DIAX(DIA,16)),'$D(^BUF($J,"tmp",16,"DIA16",NI)) S ^(NI)="" d add(LPU,16,1)
+ I VTP,DIA'="",$D(SPX(SP,16)),$D(DIAX(DIA,16)),'$D(^BUF($J,"tmpt",DGT,16,"DIA16",NI)) S ^(NI)="" d addT(LPU,16,1)
+ ; 17
+ I DIA'="",$D(SPX(SP,17)),$D(DIAX(DIA,17)),'$D(^BUF($J,"tmp",17,DIA,NI)) S ^(NI)="" d add(LPU,17,1)
+ I VTP,DIA'="",$D(SPX(SP,17)),$D(DIAX(DIA,17)),'$D(^BUF($J,"tmpt",DGT,17,DIA,NI)) S ^(NI)="" d addT(LPU,17,1)
+ ; 18
+ I DIA'="",$D(SPX(SP,18)),$D(DIAX(DIA,18)),'$D(^BUF($J,"tmp",18,DIA,NI)) S ^(NI)="" d add(LPU,18,1)
+ I VTP,DIA'="",$D(SPX(SP,18)),$D(DIAX(DIA,18)),'$D(^BUF($J,"tmpt",DGT,18,DIA,NI)) S ^(NI)="" d addT(LPU,18,1)
+ ; 19
+ I DIA'="",$D(SPX(SP,19)),$D(DIAX(DIA,19)),'$D(^BUF($J,"tmp",19,DIA,NI)) S ^(NI)="" d add(LPU,19,1)
+ I VTP,DIA'="",$D(SPX(SP,19)),$D(DIAX(DIA,19)),'$D(^BUF($J,"tmpt",DGT,19,DIA,NI)) S ^(NI)="" d addT(LPU,19,1)
+ ; 20
+ I PERV,$D(SPX(SP,20)),'$D(^BUF($J,"tmp",20,NI)) S ^(NI)="" d add(LPU,20,1)
+ I VTP,PERV,$D(SPX(SP,20)),'$D(^BUF($J,"tmpt",DGT,20,NI)) S ^(NI)="" d addT(LPU,20,1)
+ ; 21
+ I DIA'="",$D(SPX(SP,21)),$D(DIAX(DIA,21)),'$D(^BUF($J,"tmp",21,DIA,NI)) S ^(NI)="" d add(LPU,21,1)
+ I VTP,DIA'="",$D(SPX(SP,21)),$D(DIAX(DIA,21)),'$D(^BUF($J,"tmpt",DGT,21,DIA,NI)) S ^(NI)="" d addT(LPU,21,1)
+ ; 22
+ I PERV,$D(SPX(SP,22)),'$D(^BUF($J,"tmp",22,NI)) S ^(NI)="" d add(LPU,22,1)
+ I VTP,PERV,$D(SPX(SP,22)),'$D(^BUF($J,"tmpt",DGT,22,NI)) S ^(NI)="" d addT(LPU,22,1)
+ ; 23
+ I PERV,$D(SPX(SP,23)),'$D(^BUF($J,"tmp",23,NI)) S ^(NI)="" d add(LPU,23,1)
+ I VTP,PERV,$D(SPX(SP,23)),'$D(^BUF($J,"tmpt",DGT,23,NI)) S ^(NI)="" d addT(LPU,23,1)
+ ; 24
+ I $D(SPX(SP,24)),'$D(^BUF($J,"tmp",24,DT,NI)) S ^(NI)="" d add(LPU,24,1)
+ I VTP,$D(SPX(SP,24)),'$D(^BUF($J,"tmpt",DGT,24,DT,NI)) S ^(NI)="" d addT(LPU,24,1)
+ ; 25
+ I LPU=3,$D(SPX(SP,25)) d add(LPU,25,CNT)
+ I VTP,LPU=3,$D(SPX(SP,25)) d addT(LPU,25,CNT)
+ ; 26
+ I $D(SPX(SP,26)),'$D(^BUF($J,"tmp",26,NI)) S ^(NI)="" d add(LPU,26,1)
+ I VTP,$D(SPX(SP,26)),'$D(^BUF($J,"tmpt",DGT,26,NI)) S ^(NI)="" d addT(LPU,26,1)
+ Q
+add(X1,X2,V) 
+ S:MODE TABLE(X2,X1,3)=$G(TABLE(X2,X1,3))+V
+ S:'MODE TABLE(X1,X2,3)=$G(TABLE(X1,X2,3))+V
+ Q
+addT(X1,X2,V) 
+ S:MODE TABLEV(X2,X1,DGT,3)=$G(TABLEV(X2,X1,DGT,3))+V
+ S:'MODE TABLEV(X1,X2,DGT,3)=$G(TABLEV(X1,X2,DGT,3))+V
+ Q
+fcalc ; подсчет по факту
+ S X2=EQI
+ S X1=LPU
+ S:MODE X2=LPU,X1=EQI ; перевернуть
+ S X3=$$GETSUM^IUSL(VR,DT,OT,ID)
+ S TABLE(X1,X2,5)=$G(TABLE(X1,X2,5))+ULC
+ S TABLE(X1,X2,6)=$G(TABLE(X1,X2,6))+X3
+ Q:'VTP
+ S TABLEV(X1,X2,DGT,5)=$G(TABLEV(X1,X2,DGT,5))+ULC
+ S TABLEV(X1,X2,DGT,6)=$G(TABLEV(X1,X2,DGT,6))+X3
+ Q
+REGIPROC 
+ S ^IPROC("ССМЦ","Выручка по оборудованию")="DO_RSSMCEQ,1,5,d,Дата отчета,d,Дата по,t@string:0/По клиникам#1/По оборудованию,Вид отчета,t@string:0/Обычный#1/По видам договоров,Формат,t@storage:lpu,Филиал"
+ Q

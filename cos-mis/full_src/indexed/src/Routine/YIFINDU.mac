@@ -1,0 +1,17 @@
+A ;ПОИСК ПАЦИЕНТА  [ 11/10/2006  11:29 AM ]
+ Q
+YF(STR) ;ПОИСК ИСТОРИИ
+ D YF^YIFINDN(STR)
+ Q
+YFD(STR,DOGG) ;ПОИСК ИСТОРИИ ПО ДОГОВОРУ
+ D YFD^YIFINDN(STR,DOGG)
+ Q
+YFM(STR,MRR) ;ПОИСК ИСТОРИИ ПО МЕСТУ РАБОТЫ
+ D YFM^YIFINDN(STR,MRR)
+ Q
+YFPL(STR,DOGG) ;ПОИСК ИСТОРИИ ПО ПОЛИСУ
+ D YFPL^YIFINDN(STR,DOGG)
+ Q
+FIO(NI) ; ФИО пациента
+ D FIO^YIFINDN(NI)
+ Q

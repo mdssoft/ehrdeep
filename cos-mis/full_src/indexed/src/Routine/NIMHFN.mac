@@ -1,0 +1,238 @@
+NIMHFN ; Функции Электронной Истории Болезни [ 12/06/2021  5:07 PM ]
+CDIAG(X,NIB,VR,SP,DT) ; Текущий диагноз врача (последний)
+ N @$$NEWVAR^IUSL,KX,VRx,OT,A
+ S:$G(DT)="" DT=+$H
+ S (A,KX)="" F  S KX=$O(^PNF(NIB,DT,KX),-1) Q:KX=""!$L(A)  D
+ .S VRx=$P(KX,"|",1),OT=$P(KX,"|",2) Q:VRx'=VR 
+ .D GETLT^IUSL(VRx,DT,OT,$P(KX,"|",3))
+ .Q:$D(ERR)!(STAT="d")!(STAT="w")!($G(DIA)="")
+ .S A=DIA
+ D MSG^RWU($$NAME^YMKB10(A))
+ Q
+CDIAGS(X,NIB,VR,SP,DT) ; Текущие диагнозы врача (все)
+ N @$$NEWVAR^IUSL,KX,VRx,OT,A
+ S:$G(DT)="" DT=+$H
+ S (A,KX)="" F  S KX=$O(^PNF(NIB,DT,KX),-1) Q:KX=""  D
+ .S VRx=$P(KX,"|",1),OT=$P(KX,"|",2) Q:VRx'=VR 
+ .D GETLT^IUSL(VRx,DT,OT,$P(KX,"|",3))
+ .Q:$D(ERR)!(STAT="d")!(STAT="w")!($G(DIA)="")
+ .S A=A_$S(A="":"",1:", ")_$$NAME^YMKB10(DIA)
+ D MSG^RWU(A)
+ Q
+LDIAG(X,NIB,VR,SP,DT) ; Последний диагноз пациента
+ N @$$NEWVAR^IUSL,KX,D,A
+ S (A,D)="" F  S D=$O(^PNF(NIB,D),-1) Q:D=""!(A'="")  D
+ .S KX="" F  S KX=$O(^PNF(NIB,D,KX),-1) Q:KX=""!(A'="")  D
+ ..D GETLT^IUSL($P(KX,"|",1),D,$P(KX,"|",2),$P(KX,"|",3))
+ ..Q:$D(ERR)!(STAT="d")!(STAT="w")!($G(DIA)="")
+ ..S A=DIA
+ D MSG^RWU($$NAME^YMKB10(A))
+ Q
+LSTVRS(X,NIB,VR,SP) ; Все врачи, лечившие пациента (спец, врач)
+ N is S is=1
+ G LSTvr
+LSTVR(X,NIB,VR,SP) ; Все врачи, лечившие пациента (врач, спец)
+ N is S is=0
+LSTvr N KX,DT,V,S,VL
+ S %L="Вернуться к справочнику|#reset",DT=""
+ F  S DT=$O(^PNF(NIB,DT)) Q:DT=""  S KX="" F  S KX=$O(^PNF(NIB,DT,KX)) Q:KX=""  D:$P(KX,"|",1)'=VR
+ .S V=$P(KX,"|",1) Q:$D(VL(V))  S VL(V)=""
+ .S S=$P(^(KX),"|",3) S:S="" S=$$SPEC^IKADRY(V)
+ .S S=$$GSPEC^YISPRAV(S)
+ .S %L=%L_CR_$S(is:S_", ",1:"")_$$FIOSH^IKADRY(V)_$S(is:"",1:", "_S)
+ Q
+LSTVRL(X) ; Все врачи, лечившие пациента (корневой список)
+ ; NIB - с вышележащей процедуры
+ N KX,DT,V,S,VR,VL,P
+ S S=+$$MXDT^INAZN() S:'S S=60 ; за посл. S дней
+ S A="",DT=+$H-S-1,VR=$$KDR^IUSER()
+ S:X>1 P=$$GET^IPAC(NIB,"pol"),A="Обрати"_$S(P=2:"лась",1:"лся")_" самостоятельно"
+ I X>2,$O(^PNF(NIB,DT+1),-1) S A=A_CR_"Повторный прием"
+ F  S DT=$O(^PNF(NIB,DT)) Q:DT=""  S KX="" F  S KX=$O(^PNF(NIB,DT,KX)) Q:KX=""  D:$P(KX,"|",1)'=VR
+ .S V=$P(KX,"|",1) Q:$D(VL(V))  S VL(V)=""
+ .S S=$P(^(KX),"|",3) S:S="" S=$$SPEC^IKADRY(V)
+ .S A=A_$S(A="":"",1:CR)_$$FIOSH^IKADRY(V)_", "_$$GSPEC^YISPRAV(S)
+ S:X>1 V="Направлен"_$S(P=2:"а",1:""),A=A_CR_V_" из другого учреждения"_CR_V_" по гарантийному письму"
+ I X>2 S V="",X=X-2 F  S V=$O(^EPRL("lstvrl",X,V)) Q:V=""  S A=A_CR_^(V)
+ Q A
+DOCBYPL(PL,NIB,VR,SP) ; Список документов пац. с определенным полем
+ N ID,T,A,FLD
+ S A="Вернуться к справочнику|#reset",PL=$$WD^TXTU(PL)
+ S FLD=$P(PL,"~",2),PL=$P(PL,"~",1)
+ Q:PL=""!(NIB="")  
+ S ID="" F  S ID=$O(^EPR(NIB,ID),-1) Q:ID=""  D:$$ISSBS^IEPR(NIB,ID)
+ .S T=$$GET^IEPR(NIB,ID,"t") Q:T=""  
+ .Q:$$GET^IMHS(T,"ext")'="rpt"  ; только структурные
+ .I FLD'="",$G(^DTYPE(T,"folder"))'=FLD Q 
+ .Q:'$D(^DTYPE(T,"fields",PL))
+ .Q:'$$ISDATA^IEPR(NIB,ID,PL)  
+ .S T=$P($$GET^IEPR(NIB,ID,"dt"),"|",1)
+ .S A=A_CR_$$DT2^DTUTL(+T)_", "_$$GET^IEPR(NIB,ID,"n")_"|#ft:DOCPL^NIMHFN@"_ID_"~"_PL
+ D MSG^RWU(A)
+ Q
+DOCLAB(PL,NIB,VR,SP) ; Список документов пац. с определенным полем
+ N ID,T,A,FLD,LID
+ S A="Вернуться к справочнику|#reset",PL=$$WD^TXTU(PL)
+ S FLD=$P(PL,"~",2),PL=$P(PL,"~",1)
+ Q:NIB=""   
+ S ID="" F  S ID=$O(^EPR(NIB,ID),-1) Q:ID=""  D:$$ISSBS^IEPR(NIB,ID)
+ .S T=$$GET^IEPR(NIB,ID,"t") Q:T=""  
+ .S LID=$G(^EPR(NIB,ID,"data")) Q:LID="" 
+ .;Q:$G(^EPR(NIB,ID,"ext"))'="tab"  ; только tab
+ .I FLD'="",$G(^DTYPE(T,"folder"))'=FLD Q 
+ .Q:'$D(^MLAB(NIB,LID))  
+ .S T=$P($$GET^IEPR(NIB,ID,"dt"),"|",1)
+ .S A=A_CR_$$DT2^DTUTL(+T)_", "_$$GET^IEPR(NIB,ID,"n")_"|#ft:LABTAB^NIMHFN@"_ID_"~"_PL
+ D MSG^RWU(A)
+ Q
+DOCPL(PL,NIB,VR,SP) 
+ Q:PL=""!(NIB="") 
+ S PL=$$WD^TXTU(PL),SP=$P(PL,"~",1),PL=$P(PL,"~",2)
+ d MSG^RWU($$GETDATA^YIMH(NIB,SP,PL))
+ Q
+LABTAB(PL,NIB,VR,SP) 
+ Q:PL=""!(NIB="") 
+ S PL=$$WD^TXTU(PL),SP=$P(PL,"~",1)
+ D EXPTXT^NMLAB(NIB,SP)
+ Q
+NAZLST(PL,NIB,VR,SP) ; Все активные назначения
+ ; Sample: "Назначения пациента|#fc:NAZLST^NIMHFN"
+ N ID,R,K,Z,SP,I,X,V,A
+ S ID="",A="Вернуться к справочнику|#reset"
+ F  S ID=$O(^NAZI("n",NIB,ID)) Q:ID=""  S R=^(ID),Z=+$P(R,"|",5) I "acdlp"[$P(R,"|",1) D:Z'=2
+ .S K=$G(^NAZ(ID,"a")),Z=$P(K,"|",4),K=$P(K,"|",1)
+ .D:K=""
+ ..S (SP,I)=""
+ ..F  S I=$O(^NAZ(ID,"a",I)) Q:I=""  S X=$P(^(I),"|",2) I $L(X) S:SP="" SP=X I SP'=X S SP="" Q
+ ..S:$L(SP) K=$$GSPEC^YISPRAV(SP)
+ .I K="",$L(Z) S K=$P($G(^NAZM("pt",Z)),"|",1)
+ .S K=$S(K="":$$TPLST^NNAZN($P(R,"|",1)),1:K)
+ .S Z=$$DT2^DTUTL($P(R,"|",3))
+ .S V=$$FIO^IKADRY($$fromVRI^INAZN(ID))
+ .S A=A_CR_K_$S(Z="":"",1:" ("_Z_")")_$S(V="":"",1:" "_V)_"|#ft:NAZTXT^NIMHFN@"_ID
+ D MSG^RWU(A)
+ Q
+NAZTXT(ID,NIB,VR,SP) ; Текст назначения
+ S SP=$P($G(^NAZ(ID,"i")),"|",1)
+ D:SP'="l" NTXT^NNAZU(ID,NIB)
+ D:SP="l" NTXTLAB^NNAZU(ID,NIB,1)
+ Q
+LNAZN(X,NIB,VR,SP) ; Назначения пациенту
+ N I,R,P,PRC,U,X,A,Z
+ S Z=""
+ S PRC=$$PRC^IINSC($$GET^IPAC(NIB,"stc",+$H),NIB,+$H)
+ S PRC=$$CORCP^IPRICET(PRC)
+ S I="" F  S I=$O(^NAZI("n",NIB,I)) Q:I=""  D
+ .S R=$G(^NAZ(I,"i")) Q:R=""
+ .S X=+$P(R,"|",5)
+ .Q:$P(R,"|",3)'=VR
+ .Q:+$H'=X 
+ .S X="" F  S X=$O(^NAZ(I,"a",X)) Q:X=""  D
+ ..S R=^(X),U=$P(R,"|",5),P=$P(R,"|",6) S:P="" P=PRC
+ ..S:Z="" Z="Назначено:"
+ ..I U="" S A=$P(R,"|",2) S:$L(A) Z=Z_CR_$$GSPEC^YISPRAV(A)_" ("_$$SPTYPE^INAZN(A)_")" Q 
+ ..S Z=Z_CR_U_" "_$$NAME^IPRICE(U,P)
+ D MSG^RWU(Z)
+ Q
+VRASP(X) ; Даты расписания текущего врача (30 записей)
+ N LP,OT,VR,SP,DT,I,A
+ S LP=+$$^I("ilpu"),A="",I=1
+ S OT=$G(^JOB(%JOB,"epr-otd")),VR=$G(^("epr-vr")),SP=$G(^("epr-spec"))
+ Q:OT=""  Q:VR=""  Q:SP="" 
+ S DT=+$H F  S DT=$O(^DSH(LP,OT,VR,SP,DT)) Q:DT=""  S A=A_$S(A="":"",1:CR)_$$DT^DTUTL(DT),I=I+1 Q:I>30  
+ D MSG^RWU(A)
+ Q
+USLS(X,NIB,VRx,SPx) ; Услуги пациента
+ ; Sample: "Проведенные манипуляции|#ft:USLS^NIMHFN@"
+ ; X=1 - и неподписанные
+ N LNRUN,UER,ZZ,SUSU,UETT,EC,ECW,EUE
+ S LNRUN="USLp^NIMHFN",UER=0,ZZ="",NIB=$G(NIB)
+ S ECW=$G(^cfg("ed","show-ecode")),EUE=$G(^cfg("ed","show-uet"))
+ D DOSC^NPACSC(NIB,+$H,+$H,+$G(X))
+ D MSG^RWU(ZZ)
+ Q
+USLSF(NIB,VRx) ; Услуги пациента (альт. вызов)
+ ; Sample: "Проведенные манипуляции|#ft:USLS^NIMHFN@"
+ ; X=1 - и неподписанные
+ N LNRUN,UER,ZZ,SUSU,UETT,EC,ECW,EUE
+ S LNRUN="USLp^NIMHFN",UER=0,ZZ="",NIB=$G(NIB)
+ S ECW=$G(^cfg("ed","show-ecode")),EUE=$G(^cfg("ed","show-uet"))
+ D DOSC^NPACSC(NIB,+$H,+$H,0)
+ Q ZZ
+ff(X) ; 
+ Q:X=0 0
+ Q:X<1 0_X
+ Q X
+USLp 
+ Q:VRx'=VR 
+ S PRC=+$G(PRC)
+ S U="" F  S U=$O(UL(U)) Q:U=""  D
+ .S CNT=$G(UL(U)),SUSU=$G(UL(U,1)),EC=""
+ .S EC=$S(ECW:$$GET^IPRICE(U,"ecode",$G(PRC),DT),1:"")
+ .S ZZ=ZZ_$S(ZZ="":"",1:CR)_U_" "_$S(EC'="":"("_EC_") ",1:"")_$$NAMEH^IPRICE(U,$G(PRC),DT)_$S(CNT>1:", "_CNT_" шт.",1:"")
+ .I SUSU S ZZ=ZZ_" "_SUSU_" руб." I EUE S UETT=$$GET^IPRICE(U,"uetv",$G(PRC),DT)*CNT S:UETT>0 ZZ=ZZ_"("_$$ff(UETT)_" УЕТ)"
+ Q
+STUSLS(X,NIB,VRx,SPx) ; Услуги пациента с №-ми зубов
+ ; Sample: "Проведенные манипуляции|#ft:STUSLS^NIMHFN@"
+ ; X=1 - и неподписанные
+ N LNRUN,UER,NZ,REZ
+ S LNRUN="STUSLp^NIMHFN",UER=0,REZ="",NIB=$G(NIB)
+ D DOSC^NPACSC(NIB,+$H,+$H,+$G(X))
+ D MSG^RWU(REZ)
+ Q
+STUSLp 
+ Q:VRx'=VR 
+ S NZ=$$GETPL^IUSL(VR,DT,OT,$P(KX,"|",3),"nz")
+ S U="" F  S U=$O(UL(U)) Q:U=""  D
+ .S CNT=$G(UL(U))
+ .S REZ=REZ_$S(REZ="":"",1:CR)_U_" "_$$NAMEH^IPRICE(U,$G(PRC),DT)_$S(CNT>1:", "_CNT_" шт.",1:"")_$S(NZ'="":", Зуб № "_NZ,1:"")
+ Q
+TOOTHS(X,NIB,VRx,SPx) ; Зубы пациента
+ ; Sample: "Отмеченные зубы|#fc:TOOTHS^NIMHFN"
+ N LNRUN,UER,NZ,TLST,Z,A
+ S LNRUN="NZUBp^NIMHFN",UER=0,A="Вернуться к справочнику|#reset",NIB=$G(NIB)
+ D DOSC^NPACSC(NIB,+$H-365,+$H,1) ; в течении года
+ S NZ="" F  S NZ=$O(TLST(NZ)) Q:NZ=""  S Z=$TR(NZ,"/",","),A=A_CR_"№ "_Z_"|"_Z
+ D MSG^RWU(A)
+ Q
+NZUBp 
+ S NZ=$$GETPL^IUSL(VR,DT,OT,$P(KX,"|",3),"nz") Q:NZ="" 
+ S TLST(NZ)=""
+ Q
+USLSNZ(X,NIB,VRx,SPx) ; Услуги пациента с назначившим
+ N LNRUN,UER,REZ
+ S LNRUN="USLnzp^NIMHFN",UER=0,REZ=""
+ D DOSC^NPACSC(NIB,+$H,+$H)
+ D MSG^RWU(REZ)
+ Q
+USLnzp 
+ Q:VRx'=VR 
+ N A
+ S U="" F  S U=$O(UL(U)) Q:U=""  D
+ .S CNT=$G(UL(U))
+ .S REZ=REZ_$S(REZ="":"",1:CR)_U_" "_$$NAMEH^IPRICE(U,$G(PRC),DT)_$S(CNT>1:", "_CNT_" шт.",1:"")
+ ..S A=$$GETPL^IUSL(VR,DT,OT,$P(KX,"|",3),"f")
+ .Q:'$L(A) 
+ .S A=$$fromVRI^INAZN(A) S:$L(A) REZ=REZ_"; назн. "_$$FIOSH^IKADRY(A)
+ Q
+USLSMT(X,NIB,VRx,SPx) ; Услуги пациента с материалами
+ N LNRUN,UER,REZ
+ S LNRUN="USLmtp^NIMHFN",UER=0,REZ="",NIB=$G(NIB)
+ D DOSC^NPACSC(NIB,+$H,+$H)
+ d MSG^RWU(REZ)
+ Q
+USLmtp 
+ Q:VRx'=VR 
+ N A
+ S U="" F  S U=$O(UL(U)) Q:U=""  D
+ .S CNT=$G(UL(U))
+ .S REZ=REZ_$S(REZ="":"",1:CR)_U_" "_$$NAMEH^IPRICE(U,$G(PRC),DT)_$S(CNT>1:", "_CNT_" шт.",1:"")
+ .S A=$$GETPL^IUSL(VR,DT,OT,$P(KX,"|",3),"mt") Q:A=""
+ .S REZ=REZ_"; "_$$NAMESALL^IWRHS(A)
+ Q
+RGDOSE(ID,NIB,VR,SP,DT) ; Рентгеновская доза (для списка)
+ S ID=$$GETbyVR^NRGDOSE(NIB,VR,$S($G(DT)="":+$H,1:DT))
+ D MSG^RWU($S(ID:ID_" мЗв",1:""))
+ Q
+RGDose(NIB,VR) ; Рентгеновская доза (Функция)
+ Q $$GETbyVR^NRGDOSE(NIB,VR,+$H)

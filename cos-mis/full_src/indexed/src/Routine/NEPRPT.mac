@@ -1,0 +1,219 @@
+NEPRPT ; Fill EPR pattern [ 10/20/2020  1:51 PM ]
+LST(VR,DTP,NIB,sID) ; List of patterns
+ ; sID - ID текущего документа
+ D OWF^RWU(".txt")
+ D LSTsys(VR,DTP,NIB,0,$G(sID))
+ D C^RWU
+ Q
+LSTNM(VR,DTP,NIB) ; List of patterns (only names)
+ D OWF^RWU(".txt")
+ D LSTsys(VR,DTP,"",1)
+ D C^RWU
+ Q
+LSTsys(VR,DTP,NIB,ON,sID) 
+ ; DTP - document type
+ ; ON - only names
+ N NM,C,T1,T2,DTPX,I,TP,X,PSS
+ S ON=+$G(ON),NM=$S(ON:"",1:"По диагнозу|diag"),C="",sID=$G(sID)
+ S T1='+$G(^cfg("epr","no-prev-sel"))
+ S T2='+$G(^cfg("epr","no-prev-msel"))
+ S PSS=$$LCL^NUSER("epr","pat-sys")
+ S DTPX=$G(^DTYPE(DTP,"altid"))
+ S DTPX=$S(DTPX="":DTP,1:DTP_","_DTPX)
+ I 'ON,NIB'="" F I=1:1:$L(DTPX,",") S TP=$P(DTPX,",",I) D:$D(^EPRI("t",NIB,TP))
+ .I $O(^(TP,sID))="",$O(^(sID),-1)="" Q  ; только текущий или никакой
+ .I NM'["|prev" S NM=NM_CR_"Из предыдущего документа|prev"
+ .S X="" F  S X=$O(^EPRI("t",NIB,DTP,X)) Q:X=""  Q:VR=^(X) 
+ .I NM'["|mprev" S:X'="" NM=NM_CR_"Из своего предыдущего документа|mprev"
+ .I NM'["|sel" S:T1 NM=NM_CR_"Выбрать предыдущий документ|sel"
+ .I NM'["|msel",X'="" S:T2 NM=NM_CR_"Выбрать свой предыдущий документ|msel"
+ I 'ON D WC^RWU(NM) S C=CR
+ S NM="" F  S NM=$O(^EPRPT(" ",DTP,NM)) Q:NM=""  I $$sysFln(NM) D WC^RWU(C_"Общие: "_NM_"|"_" @"_NM) S C=CR
+ I VR S NM="" F  S NM=$O(^EPRPT(VR,DTP,NM)) Q:NM=""  I $$sysFln(NM) D WC^RWU(C_NM_"|"_VR_"@"_NM) S C=CR
+ I VR,$$LCL^NUSER("epr","pat-all") S VR="" F  S VR=$O(^EPRPT(VR)) Q:VR=""  I VR'=" " S NM="" F  S NM=$O(^EPRPT(VR,DTP,NM)) Q:NM=""  I $$sysFln(NM) D WC^RWU(C_$$FIOSH^YIKADRY(VR)_": "_NM_"|"_VR_"@"_NM) S C=CR
+ Q
+sysFln(NM) 
+ Q:PSS 1
+ Q:NM="default" 0
+ Q 1
+LSTVR(DTP) ; Список авторов по шаблону определнного типа
+ N LL,VR,A
+ S VR="" F  S VR=$O(^EPRPT(VR)) Q:VR=""  S:$D(^EPRPT(VR,DTP)) LL(VR)=""
+ S (A,VR)="" F  S VR=$O(LL(VR)) Q:VR=""  S A=$S(A="":"",1:A_CR)_VR_"|"_$$FIO^IKADRY(VR)
+ D MSG^RWU(A)
+ Q
+LSTDOC(SEL,DTP,NIB,MY) ; Список документов данного типа
+ N X,R,D,V,I,DTPX
+ S (X,V)="",MY=$G(MY)
+ S:MY V=$$KDR^IUSER()
+ D OWF^RWU(".txt")
+ S DTPX=$G(^DTYPE(DTP,"altid"))
+ S DTPX=$S(DTPX="":DTP,1:DTP_","_DTPX)
+ D WC^RWU("Назад, к выбору способа заполнения|back")
+ F I=1:1:$L(DTPX,",") S DTP=$P(DTPX,",",I) D:DTP'=""
+ .F  S X=$O(^EPRI("t",NIB,DTP,X)) Q:X=""  D
+ ..Q:'+$P($G(^EPR(NIB,X,"s")),"|",1) 
+ ..S D=$P($G(^("dt")),"|",1),R=$G(^("n"))
+ ..I MY,V'=$P($G(^("o")),"|",2) Q  ; не свои
+ ..D WC^RWU(CR_$$DT2^DTUTL(D)_", "_R_"|id:"_X)
+ D C^RWU
+ Q
+S ; Save pattern
+ N XML,%J,A,LVL,ID,L,N,TP,NIB,PTF,VR,NM,VRP
+ S (NIB,NNM)=""
+ S VRP=$S($$LCL^NUSER("epr","pat-cnmk"):"vrid",1:"vr")
+ D ORH^RWU,OEV^XMLR("TAGS^NEPRPT","TAGD^NEPRPT","TAGE^NEPRPT")
+ F %J=1:1 S A=$$RA^RWU Q:%IFN["Z"  D REV^XMLR(A)
+ D CEV^XMLR,CR^RWU
+ Q:VR=""!(TP="")!(NM="") 
+ D REGL^IEXCH("^EPRPT",VR,TP,NM)
+ Q
+TAGS ; Tag start
+ Q:%XM(2)="xml"
+ I $O(%XM(4,""),-1)=1 S:%XM(2)'="content" XML(%XM(2))="" 
+ Q
+TAGD ; Tag data
+ Q:%XM(2)="xml"  
+ S LVL=$O(%XM(4,""),-1)
+ I LVL=1,%XM(2)="ext",$G(XML(VRP))'="",$G(XML(VRP))'="",$G(XML("ptname"))'="" K ^EPRPT(XML(VRP),XML("tp"),XML("ptname"))
+ I LVL=1,%XM(2)'="content" S:%XM(2)=VRP&(%XD="!") %XD=" " S XML(%XM(2))=XML(%XM(2))_%XD Q 
+ Q:%XD=""   
+ Q:$G(XML("tp"))=""  Q:$G(XML("ptname"))=""  Q:$G(XML(VRP))="" 
+ N I,X
+ S X="^EPRPT("""_XML(VRP)_""","_XML("tp")_","""_XML("ptname")_""""
+ F I=$S($G(XML("ext"))="rpt":4,1:2):1:LVL S X=X_","""_$$DKAV^TXTU($$WD^TXTU(%XM(4,I)))_""""
+ I $D(@(X_")")) S X=X_","_($O(@(X_","""")"),-1)+1)
+ I $G(XML("ext"))="rpt" Q:'$D(PTF($$WD^TXTU(%XM(2)))) 
+ X "S "_X_")=%XD"
+ Q
+TAGE ; Tag end
+ Q:%XM(2)="xml"   
+ S:%XM(2)=VRP VR=XML(VRP)
+ S:%XM(2)="tp" TP=XML("tp")
+ S:%XM(2)="ptname" NM=$E(XML("ptname"),1,128)
+ I 1=$O(%XM(4,""),-1) D:%XM(2)="fields" PTF Q 
+ Q
+PTF 
+ N I,X,R
+ S X=XML("fields")
+ F I=1:1:999 S R=$P(X,"|",I) Q:R=""  D
+ .Q:$G(^EFLTYPE(R,"npt")) 
+ .I TP'="",$G(^DTYPE(TP,"fields",R,"@npt")) Q 
+ .S PTF(R)=""
+ Q
+FILL(VR,DTP,ID,NIB,IDn,PRF) ; Заполнить документ
+ ; DTP - тип документа
+ ; ID - из какого док-та
+ ; IDn - в какой док-т
+ ; PRF - профиль документа
+ N EXT,P,J,MY,NOFL,T,R,TPX,NZUB,V
+ S ID=$$WD^TXTU(ID),IDn=$G(IDn),MY=0,V=VR
+ S EXT=$G(^DTYPE(DTP,"ext")) Q:EXT'="rpt"&(EXT'="txt")&(EXT'="rtf") 
+ ; какие поля не присылать
+ D:IDn'=""
+ .S P="" F  S P=$O(^EPR(NIB,IDn,"s",P)) Q:P=""  S NOFL(P)=""
+ .S T=$G(^EPR(NIB,IDn,"t"))
+ .S P="" F  S P=$O(^DTYPE(T,"fields",P)) Q:P=""  I $G(^(P,"@tp"))="cpl",$D(^EPRD(NIB,IDn,P)),$$cplImg($G(^(P))) S NOFL(P)="" ; искл. поля с файлами
+ ; Исключение полей профиля
+ I $G(PRF)'="" S P="" F  S P=$O(^DTYPE(DTP,"profiles",PRF,"fields",P)) Q:P=""  S:$G(^(P,"u"))=0 NOFL(P)=""
+ S P=$G(^cfg("epr","nocpyfl"))
+ I P'="" F T=1:1:$L(P,"|") S NOFL($P(P,"|",T))=""
+ F P="age","pnum","pfio","date","time" S NOFL(P)=""
+ 
+ G:$P(ID,":",1)="id" FILLid
+ G:ID="prev" FILLpr I ID="mprev" S MY=1 G FILLpr
+ S:ID["@" VR=$P(ID,"@",1),ID=$P(ID,"@",2,9)
+ 
+ I EXT="txt"!(EXT="rtf") D  Q 
+ .D OWF^RWU(".txt"),WC^RWU($$TAG^TXTU($G(^EPRPT(VR,DTP,ID))))
+ .S P=""
+ .F  S P=$O(^EPRPT(VR,DTP,ID,P)) Q:P=""  D:'$D(NOFL(P)) WC^RWU($$TAG^TXTU(^(P)))
+ .D C^RWU
+ S NZUB=$$NZUB^ISTOM(NIB,V,+$H) ; TODO
+ D OWF^RWU(".xmlb")
+ D W^RWU(^PP(0,2)_"<mhist><erpt><streport><data>")
+ S P="" F  S P=$O(^EPRPT(VR,DTP,ID,P)) Q:P=""  D:$E(P,1)'=" "  ; не системные
+ .Q:$D(NOFL(P))  
+ .S R=$$TAG^TXTU(^(P))
+ .I R["*NZ*" S R=$$TRT^TXTU(R,"*NZ*",NZUB)
+ .I R["*DIAG*"  ; TODO
+ .D WC^RWU("<"_P_">"_R)
+ .S J="" F  S J=$O(^EPRPT(VR,DTP,ID,P,J)) Q:J=""  D
+ ..S R=$$TAG^TXTU(^(J))
+ ..I R["*NZ*" S R=$$TRT^TXTU(R,"*NZ*",NZUB)
+ ..I R["*DIAG*"  ; TODO
+ ..D WC^RWU(R)
+ .D WC^RWU("</"_P_">")
+ S P=$D(^EPRPT(VR,DTP,ID," list"))
+ D:P W^RWU("</data><lists>"),FILLlst(VR,DTP,ID),W^RWU("</lists></streport></erpt></mhist></nb_console>")
+ D:'P W^RWU("</data></streport></erpt></mhist></nb_console>")
+ D C^RWU
+ Q
+FILLid ; Fill by ID
+ N I,IID,VR
+ S IID=$P(ID,":",2)
+ S T=$G(^EPR(NIB,IID,"t"))
+ S P="" F  S P=$O(^DTYPE(T,"fields",P)) Q:P=""  I $G(^(P,"@tp"))="cpl",$D(^EPRD(NIB,IID,P)),$$cplImg($G(^(P))) S NOFL(P)="" ; искл. поля с файлами
+ G FILLpr1
+FILLpr ; Fill from revious
+ N I,IID,VR
+ S (I,IID,VR)=""
+ S TPX=$G(^DTYPE(DTP,"altid"))
+ S TPX=","_$S(TPX="":DTP,1:DTP_","_TPX)_","
+ S:MY VR=$$KDR^IUSER()
+ F  S I=$O(^EPR(NIB,I),-1) Q:I=""  D  q:IID'="" 
+ .Q:TPX'[(","_$G(^(I,"t"))_",")  ; любой из серии
+ .Q:'$P($G(^("s")),"|",1)
+ .I VR=""!$S('MY:1,1:VR=$P($G(^("o")),"|",2)) S IID=I
+ Q:IID="" 
+FILLpr1 I EXT="txt"!(EXT="rtf") D  Q 
+ .D OWF^RWU(".txt"),WC^RWU($$TAG^TXTU(^EPRD(NIB,IID)))
+ .S P="" F  S P=$O(^EPRD(NIB,IID,P)) Q:P=""  D:'$D(NOFL(P)) WC^RWU($$TAG^TXTU(^(P)))
+ .D C^RWU
+ D OWF^RWU(".xmlb")
+ D W^RWU(^PP(0,2)_"<mhist><erpt><streport><data>")
+ S P="" F  S P=$O(^EPRD(NIB,IID,P)) Q:P=""  S R=^(P) I $G(^DTYPE(DTP,"fields",P,"@sw"))'=0 S T=$G(^("@tp")) I T'="n",T'="i" D 
+ .Q:$D(NOFL(P)) 
+ .D WC^RWU("<"_P_">"_$$TAG^TXTU(R)) S J=""
+ .F  S J=$O(^EPRD(NIB,IID,P,J)) Q:J=""  D WC^RWU($$TAG^TXTU(^(J)))
+ .D WC^RWU("</"_P_">")
+ D W^RWU("</data></streport></erpt></mhist></nb_console>")
+ D C^RWU
+ Q
+FILLlst(VRX,DTP,ID) ; Справочники по шаблону
+ N P,K,A,R,LST
+ S P="" F  S P=$O(^EPRPT(VRX,DTP,ID," list",P)) Q:P=""  D
+ .D WC^RWU("<list nm="""_P_""" tag=""pat"">") S A=""
+ .I $E(P,1,4)="fnc:" X ("S K="_$E(P,5,99)) D WC^RWU(K_"</list>") Q
+ .F K=1:1 S R=$G(^EPRPT(VRX,DTP,ID," list",P,K)) Q:R=""  D WC^RWU(A_^(K)) S A=CR
+ .D W^RWU("</list>")
+ ; autolists
+ I $D(LST) N VR S VR=$$KDR^IUSER() ; sub var
+ I '+$G(NODT) S P="" F  S P=$O(LST(P)) Q:P=""  D
+ .D WC^RWU("<list nm="""_LST(P)_""" tag=""pat"">") S R=$E(P,1,4)
+ .I R="fnc:" X ("S K="_$E(P,5,99)) D WC^RWU(K)
+ .I R="prc:" K %L S %NoFN=1 D @$E(P,5,99) I $D(%L) D W^RWU(%L) K %L,%B
+ .D W^RWU("</list>")
+ Q
+cplImg(R) ; Проверить, что в комплексном поле изображения (файлы)
+ N F,I,X
+ S F=0 F I=1:1:99 S X=$P(R,CR,I) Q:X=""  I $P(X,"|",3)'="" S F=1 Q
+ Q F
+GETPL(OW,PT,NM,PL) ; get pattern field (owner,pattern,name,field)
+ Q:OW=""!(PT="")!(NM="") ""
+ N EXT,P,Q
+ S EXT=$G(^DTYPE(PT,"ext")),Q="",P=""
+ I EXT="txt"!(EXT="rtf") S Q=$$TAG^TXTU(^EPRPT(OW,PT,NM)) F  S P=$O(^EPRPT(OW,PT,NM,P)) Q:P=""  S Q=Q_$$TAG^TXTU(^(P))
+ I EXT="rpt" S Q=$$TAG^TXTU(^EPRPT(OW,PT,NM,PL)) F  S P=$O(^EPRPT(OW,PT,NM,PL,P)) Q:P=""  S Q=Q_$$TAG^TXTU(^(P))
+ Q Q
+DELPT(DTP,ID,VRx,NIB,sID) ; Удалить шаблон
+ N R,VR
+ S ID=$$WD^TXTU(ID),VR=$P(ID,"@",1),ID=$P(ID,"@",2)
+ I $D(^LOG(%LOG,"lcl","epr")) S R=+^("epr") I '$S(VR=" ":$G(^LCL("epr",R,"pat-cdel")),1:$G(^LCL("epr",R,"pat-del"))) D MSG^RWU("Недостаточно прав.") Q 
+ D K^ISSG("^EPRPT("""_VR_""","_DTP_","""_ID_""")")
+ K ^EPRPT(VR,DTP,ID)
+ D OWF^RWU(".xmlb")
+ D W^RWU(^PP(0,2)_"<mhfill><lst>")
+ D LSTsys($G(VRx),DTP,NIB,0,$G(sID))
+ D W^RWU("</lst></mhfill></nb_console>"),C^RWU
+ Q

@@ -1,0 +1,78 @@
+EXPAC ; Patient export
+PAC(NS,NE,FN)
+ N IO,NI,FL,FLI,R,RX,DT,NM
+ S CR=$C(13,10)
+ M FLI=^BTN($c(9)_"r")
+ S IO=$$OW^FIL(FN) Q:IO=""
+ U IO
+ W "<?xml version=""1.0"" encoding=""windows-1251""?>"
+ W CR,"<InterchangeEnvelope version=""1.0"">"
+ W CR,"<Head>"
+ W CR,$$DW^TXTU("<DocName>Пациенты</DocName>")
+ W CR,$$DW^TXTU("<DocID>patient</DocID>")
+ S I=$H
+ W CR,"<Timestamp>"_$$DTISO^DTUTL(I)_"T"_$$TIME^DTUTL(I)_".000</Timestamp>"
+ W CR,"<FieldNames>"
+ S FL="" F  S FL=$O(FLI(FL)) Q:FL=""  D
+ .S RX=$G(FLI(FL)) Q:RX="" 
+ .S NM=$P($G(^STRUCT("patients",FL)),"|",2) Q:NM="" 
+ .S R=$P($G(^STRUCT("patients",FL,"r")),":",2) ; ref
+ .W CR,"<"_RX_" name="""_$$TAG^TXTU(NM)_""" "_$S(R="":"",1:" ref="""_R_"""")_"/>"
+ W CR,"</FieldNames>"
+ W CR,"</Head>"
+ W CR,"<Body><Patients>"
+ S NI=NS-1 F  S NI=$$NEXT^IPAC(NI) Q:NI>NE!(NI="")  D
+ .W CR,"<Item id="""_NI_""">"
+ .S FL="" F  S FL=$O(^BTN(NI,FL)) Q:FL=""  D
+ ..S NM=$G(FLI(FL)) Q:NM="" 
+ ..Q:NM="opfio"  Q:NM="deposit"  Q:NM="idxfio"  Q:NM="pplogin"  Q:NM="apin"  
+ ..S:NM="datar" NM="birthdate"
+ ..S:NM="pol" NM="gender"
+ ..S:NM="pager" NM="mphone"
+ ..S DT="" F  S DT=$O(^BTN(NI,FL,DT)) Q:DT=""  D
+ ...S R=$G(^(DT))
+ ...S:NM="birthdate"!(NM="dofor")!(NM="dog_from")!(NM="dog_to")!(NM="pomsd")!(NM="dog_to1")!(NM="dog_from1")!(NM="dog_to2")!(NM="dog_from2") R=$$DT^DTUTL(R)
+ ...W CR,"<Field id="""_NM_""" dt="""_$$DT^DTUTL(DT)_""">"
+ ...W $$TAG^TXTU(R),"</Field>"
+ .W CR,"</Item>"
+ W CR,"</Patients></Body></InterchangeEnvelope>"
+ C IO
+ Q
+PACREFS(FN)
+ N IO,NI,FL,R,RX,NM
+ S CR=$C(13,10)
+ S IO=$$OW^FIL(FN) Q:IO=""
+ U IO
+ W "<?xml version=""1.0"" encoding=""windows-1251""?>"
+ W CR,"<InterchangeEnvelope version=""1.0"">"
+ W CR,"<Head>"
+ W CR,$$DW^TXTU("<DocName>Справочники</DocName>")
+ W CR,$$DW^TXTU("<DocID>references</DocID>")
+ S I=$H
+ W CR,"<Timestamp>"_$$DTISO^DTUTL(I)_"T"_$$TIME^DTUTL(I)_".000</Timestamp>"
+ W CR,"</Head>"
+ W CR,"<Body>"
+ D erefn("work",5,"Место работы")
+ F NM="ofor","jobtitle","rcource","bloodrh","pdoctype","relationship","uchastok","whocart" d eref(NM)
+ W CR,"</Body></InterchangeEnvelope>"
+ C IO
+ Q
+eref(nm)
+ N nnm,i
+ s nnm=$G(^MN("rot",nm))
+ W CR,"<Data code="""_nm_""" name="""_$$TAG^TXTU(nnm)_""">"
+ s i="" F  s i=$O(^MN(nm,i)) Q:i=""  D
+ .W CR,"<Item id="""_i_""">"
+ .W $$TAG^TXTU($G(^MN(nm,i)))
+ .W CR,"</Item>"
+ W CR,"</Data>"
+ Q
+erefn(nm,in,name)
+ N i
+ W CR,"<Data code="""_nm_""" name="""_$$TAG^TXTU(name)_""">"
+ s i="" F  s i=$O(^M(nm,i)) Q:i=""  D
+ .W CR,"<Item id="""_i_""">"
+ .W $$TAG^TXTU($G(^M(nm,i)))
+ .W CR,"</Item>"
+ W CR,"</Data>"
+ Q

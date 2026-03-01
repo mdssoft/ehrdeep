@@ -1,0 +1,456 @@
+NBILL ; Отчеты по кассе [ 02/28/2023  4:49 PM ]
+ADDSTC(STC,SUM) 
+ N KV,IDK,OPL
+ S SUM=+$TR(SUM,", ","."),OPL=1
+ S IDK=$$KKM^IUSER(),KV=$$GET^IINKR("NKSS")
+ D ADD^IBILL("J"_STC,$H,SUM,OPL,IDK,"","",KV)
+ Q
+GRAPH(DT,LPU) ; График (7 дней от даты)
+ N MODE,DS,DE,EXNIB S EXNIB="",MODE=0
+ S DE=$$DIH^DTUTL(DT),DS=DE-6
+ D DAYS1
+ Q
+DAYS(DS,DE,EXNIB,LPU) ; Доход, списание по дням
+ N MODE S MODE=1
+ S DE=$$DIH^DTUTL(DE),DS=$$DIH^DTUTL(DS)
+ S:EXNIB'="" EXNIB="|"_$TR(EXNIB,",;:/ .\","|||||||")_"|"
+DAYS1 N NI,TM,DT,SUM,SUMM,BUF,L,OPE,TP,PLST,I,A,FK,VTP
+ S VTP=$G(^cfg("ksv-pko"))
+ ; банк. карты
+ S I=+$G(^MN("paytype")),FK="|2|",L=""
+ F  S L=$O(^MN(I,L)) Q:L=""  S:$P(^(L),"|",6) FK=FK_L_"|"
+ 
+ S:$G(LPU)="" LPU=""
+ I LPU="",'+$$FR^I() S LPU=$$^I("ilpu")
+ D OWF^RWU(".txt")
+ D WC^RWU("Дата|"_$S(MODE:"Пациентов|",1:"")_"Принято, руб.|Наличные|Б.карты|БСО|Списано"_$S(MODE:"|Возвраты",1:""))
+ F I=1:1:7 S BUF(I)=0,SUMM(I)=0
+ S NI="",DT=DS-1
+ F  S DT=$O(^BILLI(DT)) Q:DT=""!(DT>DE)  D
+ .S TM="" K PLST,BUF F I=1:1:7 S BUF(I)=0
+ .F  S TM=$O(^BILLI(DT,TM)) Q:TM=""  S NI="" F  S NI=$O(^BILLI(DT,TM,NI)) Q:NI=""  D:EXNIB'[("|"_NI_"|")
+ ..S L=$G(^BILL(NI,DT,TM)) Q:L=""
+ ..I LPU'="",$P($P(L,"|",5),"@",2)'=LPU Q 
+ ..S ID=+$P(L,"|",4),SUM=+$P(L,"|",2),TP=$P(L,"|",3)
+ ..S:FK[("|"_TP_"|") TP=2
+ ..Q:TP>4  I VTP,TP>VTP Q 
+ ..S OPE=$P(L,"|",1)
+ ..I OPE'="+",OPE'="-",OPE'="" Q 
+ ..S:'$D(PLST(NI)) PLST(NI)="",SUMM(1)=SUMM(1)+1,BUF(1)=BUF(1)+1
+ ..S L=$S(OPE="":6,OPE="-":7,TP=1:3,TP=2:4,TP=3:5,1:0)
+ ..Q:L=0 
+ ..S:OPE="+" BUF(2)=BUF(2)+SUM,SUMM(2)=SUMM(2)+SUM
+ ..S:OPE'="+" SUM=-1*SUM
+ ..S BUF(L)=BUF(L)+SUM,SUMM(L)=SUMM(L)+SUM
+ .Q:'BUF(1) 
+ .S A=CR_$$DT^DTUTL(DT)
+ .F I=$S(MODE:1,1:2):1:$S(MODE:7,1:6) S A=A_"|"_$$fn(BUF(I))
+ .D WC^RWU(A)
+ D:MODE&SUMM(1)
+ .S A=CR_"Итого:"
+ .F I=$S(MODE:1,1:2):1:$S(MODE:7,1:6) S A=A_"|"_$$fn(SUMM(I))
+ .D WC^RWU(A)
+ D C^RWU
+ Q
+ALL(DS,DE,EXNIB,KVN,OTP,VITP,VKM) ; Все кассовые операции за период
+ ; EXNIB - исключить пациента
+ ; KVN - номер квитанции
+ ; OTP - тип операции 0/1/2 - все/принято/списано
+ ; VITP - выводить тип(описание) платежа
+ ; VKM - вывод ККМ
+ N NI,TI,DT,SUM,SUM1,SUM2,SUMD,SUMR,L,OPE,TP,FF,R,LP,KV,COM,VTP,E,A
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),KVN=$G(KVN)
+ S:EXNIB'="" EXNIB="|"_$TR(EXNIB,",;:/ .\","|||||||")_"|"
+ S FF=+$$FR^I(),LP=$$^I("ilpu")
+ S VTP=$G(^cfg("ksv-pko"))
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|№ И.Б.|Ф.И.О. Пациента|Дата, время"_$S(OTP=0!(OTP=1):"|Принято",1:"")_$S(OTP=0!(OTP=2):"|Списано",1:"")_"|Квитанция"_$S(VITP:"|Описание",1:"")_"|Примечание"_$S(VKM:"|ККМ",1:"")_$S(FF:"|Филиал",1:""))
+ S SUMD=0,SUMR=0,DT=DS-1
+ F  S DT=$O(^BILLI(DT)) Q:DT=""!(DT>DE)  S TI="" F  S TI=$O(^BILLI(DT,TI)) Q:TI=""  S NI="" F  S NI=$O(^BILLI(DT,TI,NI)) Q:NI=""  D:EXNIB'[("|"_NI_"|")
+ .S L=$G(^BILL(NI,DT,TI)),TP=$P(L,"|",3) Q:L="" 
+ .Q:TP>4  I VTP,TP>VTP Q 
+ .S OPE=$P(L,"|",1)
+ .I OPE'="+",OPE'="-",OPE'="" Q 
+ .S SUM1="",SUM2="",ID=+$P(L,"|",4),SUM=+$P(L,"|",2),R=$P(L,"|",5)
+ .I OPE'="" S SUM1=SUM
+ .I OPE="" S SUM2=-SUM
+ .I 'FF,LP'="",$P($P(L,"|",5),"@",2)'=LP Q  ; this LPU
+ .S KV=$P(L,"|",8)
+ .I KVN'="",KVN'=KV Q 
+ .S COM=$P(L,"|",7)
+ .S R=$$PAYTP^IBILL($P(L,"|",3),L),E=$P(L,"|",6)
+ .S:$P(E,":",1)="N" R=R_" №"_$P(E,":",2)
+ .S:COM'="" R=$S(R="":"",1:R_", ")_COM
+ .S A=NI_"|"_NI_"|"_$$FIO^IPAC(NI,DT)_"|"_$$DT^DTUTL(DT)_", "_$$TM^DTUTL(TI)
+ .I OTP=0 S A=A_"|"_$TR(SUM1_"|"_SUM2,".",",")
+ .I OTP=1 S A=A_"|"_$TR(SUM1,".",",") Q:OPE="" 
+ .I OTP=2 S A=A_"|"_$TR(SUM2,".",",") Q:OPE'="" 
+ .S A=A_"|"_KV
+ .I VITP S A=A_"|"_$$GPTYPE^IBILL(L,,1)
+ .D WC^RWU(CR_A_"|"_R_$S(VKM:"|"_$$NAME^ISPRAV("kkm",ID),1:"")_$S(FF:"|"_$$NAME^ICONTR(+$P(R,"@",2)),1:""))
+ .S SUMD=SUMD+SUM1,SUMR=SUMR+SUM2
+ D:SUMD'=0!(SUMR'=0) WC^RWU(CR_"|||Итого:|"_$TR(SUMD_"|"_SUMR,".",","))
+ D C^RWU
+ Q
+RET(DS,DE,KVN,LPUX) ; Журнал возвратов
+ ; KVN - номер квитанции
+ N NI,TI,DT,SUM,SUMD,L,OPE,TP,FF,R,LP,KV,COM,VTP,E,U
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),KVN=$G(KVN)
+ S FF=+$$FR^I(),LP=""
+ S:FF&$G(LPUX) LP=LPUX
+ S:'FF LP=$$^I("ilpu")
+ S VTP=$G(^cfg("ksv-pko"))
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|№ И.Б.|Ф.И.О. Пациента "_$$TXTP^DTUTL(DS,DE)_"|Дата, время|Сумма|Квитанция|Примечание|По чеку"_$S(FF:"|Филиал",1:""))
+ S SUMD=0,DT=DS-1
+ F  S DT=$O(^BILLI(DT)) Q:DT=""!(DT>DE)  S TI="" F  S TI=$O(^BILLI(DT,TI)) Q:TI=""  S NI="" F  S NI=$O(^BILLI(DT,TI,NI)) Q:NI=""  D
+ .S L=$G(^BILL(NI,DT,TI)),TP=$P(L,"|",3) Q:L="" 
+ .Q:TP>4  I VTP,TP>VTP Q 
+ .S OPE=$P(L,"|",1) Q:OPE'="-" 
+ .I LP'="",$P($P(L,"|",5),"@",2)'=LP Q  
+ .S ID=+$P(L,"|",4),SUM=-$P(L,"|",2),U=$P(L,"|",5)
+ .S KV=$P(L,"|",8)
+ .I KVN'="",KVN'=KV Q 
+ .S COM=$P(L,"|",7)
+ .S R=$$PAYTP^IBILL($P(L,"|",3),L),E=$P(L,"|",6)
+ .S:$P(E,":",1)="N" R=R_" №"_$P(E,":",2)
+ .S:COM'="" R=$S(R="":"",1:R_", ")_COM
+ .S RE=$S($P(E,":",1)="RET":$P(E,":",2),$P(E,":",3)="RET":$P(E,":",4),1:"")
+ .S L=$$FIO^IPAC(NI,DT)_"|"_$$DT^DTUTL(DT)_", "_$$TM^DTUTL(TI)
+ .D WC^RWU(CR_NI_"|"_NI_"|"_L_"|"_$TR(SUM,".",",")_"|"_KV_"|"_R_"|"_RE_$S(FF:"|"_$$NAME^ICONTR(+$P(U,"@",2)),1:""))
+ .S SUMD=SUMD+SUM
+ D:SUMD WC^RWU(CR_"|||Итого:|"_$TR(SUMD,".",","))
+ D C^RWU
+ Q
+RETU(DS,DE,LPUX) ; Журнал возвратов на счет
+ N NI,TI,DT,SUM,SUMD,L,OPE,TP,FF,R,LP,KV,COM,VTP,E
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S FF=+$$FR^I(),LP=""
+ S:FF&$G(LPUX) LP=LPUX
+ S:'FF LP=$$^I("ilpu")
+ S VTP=$G(^cfg("ksv-pko"))
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|№ И.Б.|Ф.И.О. Пациента "_$$TXTP^DTUTL(DS,DE)_"|Дата, время|Сумма|Примечание"_$S(FF:"|Филиал",1:""))
+ S SUMD=0,DT=DS-1
+ F  S DT=$O(^BILLI(DT)) Q:DT=""!(DT>DE)  S TI="" F  S TI=$O(^BILLI(DT,TI)) Q:TI=""  S NI="" F  S NI=$O(^BILLI(DT,TI,NI)) Q:NI=""  D
+ .S L=$G(^BILL(NI,DT,TI)),TP=$P(L,"|",3) Q:L="" 
+ .Q:TP>4  I VTP,TP>VTP Q 
+ .S OPE=$P(L,"|",1) Q:OPE'="" 
+ .I LP'="",$P($P(L,"|",5),"@",2)'=LP Q  
+ .S ID=+$P(L,"|",4),SUM=$P(L,"|",2),R=$P(L,"|",5)
+ .Q:$E(SUM)'="+"  S SUM=+SUM
+ .S COM=$P(L,"|",7)
+ .S R=$$PAYTP^IBILL($P(L,"|",3),L),E=$P(L,"|",6)
+ .S:$P(E,":",1)="N" R=R_" №"_$P(E,":",2)
+ .S:COM'="" R=$S(R="":"",1:R_", ")_COM
+ .S L=$$FIO^IPAC(NI,DT)_"|"_$$DT^DTUTL(DT)_", "_$$TM^DTUTL(TI)
+ .D WC^RWU(CR_NI_"|"_NI_"|"_L_"|"_$TR(SUM,".",",")_"|"_R_$S(FF:"|"_$$NAME^ICONTR(+$P(R,"@",2)),1:""))
+ .S SUMD=SUMD+SUM
+ D:SUMD WC^RWU(CR_"|||Итого:|"_$TR(SUMD,".",","))
+ D C^RWU
+ Q
+PIPL(DS,DE) ; Кассовые итоги по пациентам
+ N NI,TI,DT,SUM,SUM1,SUM2,SUMD,SUMR,L,OPE,TP,VTP
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S VTP=$G(^cfg("ksv-pko"))
+ D OWF^RWU(".txt")
+ D WC^RWU("№ И.Б.|Ф.И.О. Пациента|Принято|Списано|Баланс")
+ K ^BUF($J)
+ S NI="",(SUMD,SUMR)=0
+ F  S NI=$O(^BILL(NI)) Q:NI=""!(NI="00")  D
+ .S (SUMD,SUMR)=0,DT=DS-1 
+ .F  S DT=$O(^BILL(NI,DT)) Q:DT=""!(DT>DE)!(+DT'=DT)  S TI="" F  S TI=$O(^BILL(NI,DT,TI)) Q:TI=""  D
+ ..S L=^(TI),SUM=+$P(L,"|",2),TP=$P(L,"|",3)
+ ..Q:TP>4  I VTP,TP>VTP Q 
+ ..S OPE=$P(L,"|",1)
+ ..I OPE'="+",OPE'="-",OPE'="" Q 
+ ..S SUM1="",SUM2=""
+ ..I OPE'="" S SUM1=(+SUM)*1
+ ..I OPE="" S SUM2=(+SUM)*(-1)
+ ..S SUMD=SUMD+SUM1,SUMR=SUMR+SUM2
+ .D WC^RWU(CR_NI_"|"_$$FIO^IPAC(NI,DE)_"|"_$TR(SUMD_"|"_SUMR_"|"_(SUMD-SUMR),".",","))
+ ;D:SUMD'=0!(SUMR'=0) WC^RWU(CR_"||Итого:|"_$TR(SUMD_"|"_SUMR,".",","))
+ D C^RWU
+ Q
+PDEBT(MIN,DVID,DGN,STAT,nSTAT,CDT,WDT,PINF,LPU) ; Должники - пациенты
+ ; MIN - минимальная сумма долга
+ ; DVID - вид договора
+ ; DGN - договор
+ ; STAT - статус пациента
+ ; nSTAT - поиск по отсутствию статуса
+ ; CDT - ограничить датой посещения
+ N NI,SM,DT,TM,QQ,X,R,A,FF,U,L,STC,D,S,SU,PS,PT,PX,SS
+ S FF=$$FR^I()
+ S MIN=-MIN,WDT=+WDT,LPU=$G(LPU),PINF=+$G(PINF)
+ S CDT=$$DI^DTUTL(CDT)
+ S R=STAT K STAT
+ F L=1:1:$L(R,"|") S X=$P(R,"|",L) S:X'="" STAT("|"_X_"|")=""
+ S:'FF&(LPU="") LPU=+$$^I("ilpu")
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|№ И.Б.|Ф.И.О. Пациента|Долг|"_$S(PINF:"Последний платеж|Сумма платежа|Вид платежа|"_$S(PINF=2:"Посещение|",1:""),1:"")_"Договор|Статус|Скидка|Примечание"_$S(FF:"|Филиал",1:""))
+ S NI="" F  S NI=$O(^BILL(NI)) Q:NI=""!(NI="00")  S SM=$G(^(NI)) D:SM<0
+ .I MIN,SM>MIN Q 
+ .S DT=999999,R="|",(QQ,PS)=0,(D,X,PT,PX)="" K L
+ .F  S DT=$O(^BILL(NI,DT),-1) Q:DT=""!QQ!(+DT'=DT)  D
+ ..S TM=99999 F  S TM=$O(^BILL(NI,DT,TM),-1) Q:TM=""!QQ  D
+ ...S X=$G(^(TM)) 
+ ...S SS=$P(X,"|",2)
+ ...I $P($G(^BILLI(DT,TM,NI)),"|",1)>0 S QQ=1 ; баланс стал в >=0 
+ ...I SS>0,PX="" S D=$$DT^DTUTL(DT)_", "_$$TM^DTUTL(TM),PS=$P(X,"|",2),PT=$P(X,"|",3),PX=X Q  ; сохр. платеж
+ ...;Q:SS>  ; только отриц. суммы
+ ...S:SS<0 L(+$P($P(X,"|",5),"@",2))="" ; все филиалы с отр. балансом.
+ .I LPU,'$D(L(LPU)) Q 
+ .I CDT'="",'$D(^PNF(NI,CDT)) Q  ; Услуги на выбранную дату
+ .S:WDT DT=+$H ; на текущ. дату
+ .S R=0
+ .I $D(STAT) S R=1,SU=$$GET^IPAC(NI,"status",DT) Q:'nSTAT&(SU="")  S SU="|"_SU_"|",S="" F  S S=$O(STAT(S)) Q:S=""  I SU[S S R=$S(nSTAT:2,1:0) Q
+ .I nSTAT,R=2 Q
+ .I R,'nSTAT Q 
+ .S STC=$$GET^IPAC(NI,"stc",DT)
+ .I $L(DGN),STC'=DGN,$$PIDXN^IPAC(NI,DGN,DT)=-1 Q 
+ .I $L(DVID),DVID'=$$GET^IINSC(STC,"dvid",DT) Q 
+ .S R=$S('PINF:"",PX="":"|||",1:D_"|"_$$fn(PS)_"|"_$$GPTYPE^IBILL(PX,,1)_"|")
+ .S:PINF=2 X=$O(^PNF(NI,""),-1),R=R_$S(X="":"",1:$$DT2^DTUTL(X))_"|"
+ .S R=R_$$NAME^IINSC(STC)_"|"_$$GETE^IPAC(NI,"status",DT)
+ .S R=R_"|"_$$GETE^IPAC(NI,"skd",DT)
+ .S R=R_"|"_$$OWF^TXTU($TR($$GET^IPAC(NI,"text",DT),$C(9)_CR," "),255)
+ .S R=NI_"|"_NI_"|"_$$FIO^IPAC(NI,DT)_"|"_$$fn(-SM)_"|"_R
+ .I 'FF!('$D(L)) D WC^RWU(CR_R) Q 
+ .S (A,X)="" F  S X=$O(L(X)) Q:X=""  S A=A_$S(A="":"",1:", ")_$$NAME^ICONTR(X)
+ .D WC^RWU(CR_R_"|"_A)
+ D C^RWU
+ Q
+PDEBTDT(MIN,CDT,DVID,DGN,STAT,nSTAT,PINF,LPU) ; Должники - пациенты на дату
+ ; DVID - вид договора
+ ; STAT - статусы пациента
+ ; nSTAT - поиск по отсутствию статусов
+ ; PINF - информация по последнему платежу
+ N NI,SM,DT,TM,X,R,RS,FF,U,L,STC,D,S,SU,PS,PT,PX
+ S FF=$$FR^I()
+ S MIN=-MIN,LPU=$G(LPU),PINF=$G(PINF)
+ S CDT=$$DIH^DTUTL(CDT)
+ S R=STAT K STAT
+ F L=1:1:$L(R,"|") S X=$P(R,"|",L) S:X'="" STAT("|"_X_"|")=""
+ S:'FF&(LPU="") LPU=+$$^I("ilpu")
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|№ И.Б.|Ф.И.О. Пациента на "_$$DT2^DTUTL(CDT)_"|Долг|Текущ. баланс|"_$S(PINF:"Последний платеж|Сумма платежа|Вид платежа|"_$S(PINF=2:"Посещение|",1:""),1:"")_"Договор|Статус|Скидка|Примечание"_$S(FF:"|Филиал",1:""))
+ S (NI,R)=""
+ F  S NI=$O(^BILL(NI)) Q:NI=""!(NI="00")  S SM=$$NOW^IBILL(NI,CDT) D:SM<0
+ .I MIN,SM>MIN Q 
+ .S DT=999999,(PS,QQ)=0,(PT,PX)="" K L
+ .F  S DT=$O(^BILL(NI,DT),-1) Q:DT=""!(QQ=1)!(+DT'=DT)  S TM=99999 F  S TM=$O(^BILL(NI,DT,TM),-1) Q:TM=""  S X=$G(^(TM)),L(+$P($P(X,"|",5),"@",2))="" I $P(X,"|",1)="" S D=$$DT^DTUTL(DT)_", "_$$TM^DTUTL(TM),PS=-$P(X,"|",2),PT=$P(X,"|",3),PX=X,QQ=1 Q 
+ .I LPU,'$D(L(LPU)) Q 
+ .S R=0
+ .I $D(STAT) S R=1,SU=$$GET^IPAC(NI,"status",CDT) Q:'nSTAT&(SU="")  S SU="|"_SU_"|",S="" F  S S=$O(STAT(S)) Q:S=""  I SU[S S R=$S(nSTAT:2,1:0) Q
+ .I nSTAT,R=2 Q
+ .Q:R&('nSTAT) 
+ .S STC=$$GET^IPAC(NI,"stc",CDT)
+ .I DGN'="",STC'=DGN,$$PIDXN^IPAC(NI,DGN,CDT)=-1 Q 
+ .I DVID'="",DVID'=$$GET^YNDOG(STC,"dvid",CDT) Q 
+ .S RS=$S(PINF:D_"|"_$$fn(PS)_"|"_$$GPTYPE^IBILL(PX,,1)_"|",1:"")
+ .S:PINF=2 X=$O(^PNF(NI,""),-1),RS=RS_$S(X="":"",1:$$DT2^DTUTL(X))_"|"
+ .S R=NI_"|"_NI_"|"_$$FIO^IPAC(NI,CDT)
+ .S R=R_"|"_$$fn(-SM)_"|"_$$fn($$NOW^IBILL(NI))_"|"_RS
+ .S R=R_$$NAME^IINSC(STC)_"|"_$$GETE^IPAC(NI,"status",CDT)
+ .S R=R_"|"_$$GETE^IPAC(NI,"skd",DT)
+ .S R=R_"|"_$$OWF^TXTU($TR($$GET^IPAC(NI,"text",DT),$C(9)_CR," "),255)
+ .I 'FF!('$D(L)) D WC^RWU(CR_R) Q 
+ .S X="" F  S X=$O(L(X)) Q:X=""  D WC^RWU(CR_R_"|"_$$NAME^ICONTR(X))
+ D C^RWU
+ Q
+PPDEBT(MIN) ; Должники - пациенты, подробно
+ N NI,SM,DT,TM,X,OPE,LBL,SUM,TP,HD,R,FF
+ D OWF^RWU(".txt")
+ S (NI,R)="",MIN=-$G(MIN),FF=$$FR^I()
+ D WC^RWU("№ И.Б.|Пациент|Долг|Дата, время|Операция|Сумма"_$S(FF:"|Филиал",1:""))
+ F  S NI=$O(^BILL(NI)) Q:NI=""!(NI="00")  S SM=$G(^(NI)) D:SM<0
+ .I MIN,SM>MIN Q 
+ .S HD=NI_"|"_$$FIO^IPAC(NI)_"|"_$$fn(0-SM)
+ .S DT=999999 F  S DT=$O(^BILL(NI,DT),-1) Q:DT=""!(+DT'=DT)  S TM=99999 F  S TM=$O(^BILL(NI,DT,TM),-1) Q:TM=""  S X=$G(^(TM)) D:X'=""
+ ..S OPE=$P(X,"|",1) Q:OPE'="+"&(OPE'="-")&(OPE'="")
+ ..S SUM=$P(X,"|",2),TXT=$$GPTYPE^IBILL(X)
+ ..S:OPE=""&($E(SUM,1)="-") SUM=-SUM S:OPE="-" SUM=-SUM
+ ..S R=$$fn(SUM)
+ ..S:FF R=R_"|"_$$NAME^ICONTR($P($P(X,"|",5),"@",2))
+ ..D WC^RWU(CR_HD_"|"_$$DT^DTUTL(DT)_", "_$$TM^DTUTL(TM)_"|"_TXT_"|"_R)
+ ..S HD="||"
+ D C^RWU
+ Q
+DEBDT(DS,DE) ; Долги сформированные в период (на конец каждого дня)
+ N DT,TM,NI,R,S,T,S0
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|№ И.Б.|Ф.И.О. пациента "_$$TXTP^DTUTL(DS,DE)_"|Дата|Долг|За день")
+ S DT=DS-1 F  S DT=$O(^BILLI(DT)) Q:DT=""!(DT>DE)  D
+ .S TM="" F  S TM=$O(^BILLI(DT,TM)) Q:TM=""  D
+ ..S NI="" F  S NI=$O(^BILLI(DT,TM,NI)) Q:NI=""  D
+ ...S S=$P($G(^(NI)),"|",1) Q:S'<0 
+ ...S T=$O(^BILL(NI,DT,""),-1) Q:T'=TM  ; не последний за день
+ ...S S0=$$NOW^IBILL(NI,DT-1) S:S0>0 S0=0
+ ...D WC^RWU(CR_NI_"|"_NI_"|"_$$FIO^IPAC(NI)_"|"_$$DT^DTUTL(DT)_"|"_$$fn(-S)_"|"_$$fn(-(S-S0)))
+ D C^RWU
+ Q
+PBAL(NS,NE,NNUL,MNSUM) ; Баланс - пациенты (начиная с суммы MNSUM)
+ N NI,SM,DT,TM,QQ,X,R,FF,U
+ S MNSUM=+$G(MNSUM),FF=$$FR^I(),NNUL=+NNUL
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|№ И.Б.|Ф.И.О. Пациента|Баланс|Последний платеж|Сумма платежа|Договор"_$S(FF:"|Филиал",1:""))
+ S NI=NS,R=""
+ F  S NI=$O(^BILL(NI)) Q:NI=""!(NI="00")!((NE'="")&(NI>NE))  D
+ .S SM=$G(^(NI))
+ .I MNSUM'="" Q:SM<MNSUM 
+ .I NNUL,SM=0 Q 
+ .S DT=999999,X="",R="|",QQ=0 F  S DT=$O(^BILL(NI,DT),-1) Q:DT=""!(QQ=1)!(+DT'=DT)  S TM=99999 F  S TM=$O(^BILL(NI,DT,TM),-1) Q:TM=""!QQ  S X=$G(^(TM)) I $P(X,"|",1)="+" S R=$$DT^DTUTL(DT)_", "_$$TM^DTUTL(TM)_"|"_$P(X,"|",2),QQ=1 Q 
+ .S R=R_"|"_$$NAME^IINSC($$GET^IPAC(NI,"stc",DT))
+ .S:FF R=R_"|"_$$NAME^ICONTR($P($P(X,"|",5),"@",2))
+ .S SM=$$fn(SM)
+ .D WC^RWU(CR_NI_"|"_NI_"|"_$$FIO^IPAC(NI,DT)_"|"_SM_"|"_R)
+ D C^RWU
+ Q
+PBYDT(DTC) ; Положительный баланс на дату - пациенты, подробно
+ N NI,SM,DT,TM,X,OPE,LBL,SUM,TP,HD,SS
+ S DTC=$$DIH^DTUTL(DTC)
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|Пациент|Баланс на "_$$DT^DTUTL(DTC)_"|Текущий баланс")
+ S (NI,R)=""
+ F  S NI=$O(^BILL(NI)) Q:NI=""!(NI="00")  D
+ .S HD=NI_" "_$$FIO^IPAC(NI)_"|",SS=0
+ .S DT=0 F  S DT=$O(^BILL(NI,DT)) Q:DT=""!(DT>DTC)  S TM="" F  S TM=$O(^BILL(NI,DT,TM)) Q:TM=""  S X=$G(^(TM)) D:X'=""
+ ..S OPE=$P(X,"|",1) Q:OPE'="+"&(OPE'="-")&(OPE'="")
+ ..S SUM=$P(X,"|",2),SS=SS+SUM ; TXT=$$GPTYPE^IBILL(X)
+ .D:SS>0 WC^RWU(CR_NI_"|"_HD_$$fn(SS)_"|"_$$fn(+$G(^BILL(NI))))
+ D C^RWU
+ Q
+DGNLST(DS,DE,SLP) ; Группировка сумм по договорам
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N STAT,L,DG,CM,OPE,TM,SS,LPU,LOG,TP,X
+ K ^BUF($J,"ni")
+ S LPU=$$^I("ilpu") S:'+$$FR^I() SLP=1
+ S VTP=$G(^cfg("ksv-pko"))
+ D OWF^RWU(".txt")
+ D WC^RWU("За период "_$$DT2^DTUTL(DS)_"-"_$$DT2^DTUTL(DE)_"||||Списано|Списано|Списано;"_CR)
+ D WC^RWU("Договор|Лиц|Авансы|Возвраты|за услуги|за абонемент|за прочее|Баланс")
+ S DT=DS-1 F  S DT=$O(^BILLI(DT)) Q:DT=""!(DT>DE)  S TM="" F  S TM=$O(^BILLI(DT,TM)) Q:TM=""  S NI="" F  S NI=$O(^BILLI(DT,TM,NI)) Q:NI=""  D
+ .S L=$G(^BILL(NI,DT,TM))
+ .I SLP=1 Q:$P($P(L,"|",5),"@",2)'=LPU 
+ .S DG=+$$GET^IPAC(NI,"stc",DT)
+ .S CM=$P(L,"|",6),SUM=+$P(L,"|",2),TP=$P(L,"|",3)
+ .Q:TP>4  I VTP,TP>VTP Q 
+ .S OPE=$P(L,"|",1) Q:OPE'="+"&(OPE'="-")&(OPE'="")
+ .I OPE'="" S:SUM>0 STAT(DG,1)=$G(STAT(DG,1))+SUM S:SUM<0 STAT(DG,2)=$G(STAT(DG,2))-SUM
+ .I OPE="" D
+ ..S X=$S($E(CM,1,2)="ZN":3,$E(CM,1,4)="BTPL":4,1:5)
+ ..S STAT(DG,X)=$G(STAT(DG,X))-SUM
+ .S:'$D(^BUF($J,"ni",DG,NI)) ^BUF($J,"ni",DG,NI)="",STAT(DG,6)=$G(STAT(DG,6))+1
+ K ^BUF($J,"ni")
+ S DG="" F  S DG=$O(STAT(DG)) Q:DG=""  D
+ .S CM=$G(STAT(DG,1))-$G(STAT(DG,2))-$G(STAT(DG,3))-$G(STAT(DG,4))-$G(STAT(DG,4))
+ .S:DG=0 L="Договор не определен" S:DG'=0 L=$$NAMEH^YNDOG(DG,DE)
+ .S L=L_"|"_$TR(+$G(STAT(DG,6))_"|"_+$G(STAT(DG,1))_"|"_+$G(STAT(DG,2)),".",",")
+ .D WC^RWU(CR_L_"|"_$TR(+$G(STAT(DG,3))_"|"_+$G(STAT(DG,4))_"|"_+$G(STAT(DG,5))_"|"_CM,".",","))
+ .S SS(1)=$G(SS(1))+$G(STAT(DG,6))
+ .S SS(2)=$G(SS(2))+$G(STAT(DG,1)),SS(3)=$G(SS(3))+$G(STAT(DG,2))
+ .S SS(4)=$G(SS(4))+$G(STAT(DG,3)),SS(5)=$G(SS(5))+$G(STAT(DG,4))
+ .S SS(6)=$G(SS(6))+$G(STAT(DG,5)),SS(7)=$G(SS(7))+$G(CM)
+ S L="   Итого:" F CM=1:1:6 S L=L_"|"_$$fn($G(SS(CM)))
+ D WC^RWU(CR_L)
+ D C^RWU
+ Q
+CLSLST(DS,DE,LPU) ; Группировка сумм по типам
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N STAT,L,DG,CM,OPE,TM,SS,LPU,LOG,ID,STOTD,TP,SUM,VTP
+ K ^BUF($J,"ni")
+ S LPU=$G(LPU) S:'$$FR^I() LPU=$$^I("ilpu")
+ M STOTD=^cfg("stom-otd")
+ S VTP=$G(^cfg("ksv-pko"))
+ D OWF^RWU(".txt")
+ D WC^RWU("За период "_$$DT2^DTUTL(DS)_"-"_$$DT2^DTUTL(DE)_";"_CR)
+ D WC^RWU("Договор|Всего|Поликлиника|Стоматология|Абонементы|Прочее|Авансы")
+ S DT=DS-1 F  S DT=$O(^BILLI(DT)) Q:DT=""!(DT>DE)  S TM="" F  S TM=$O(^BILLI(DT,TM)) Q:TM=""  S NI="" F  S NI=$O(^BILLI(DT,TM,NI)) Q:NI=""  D
+ .S L=$G(^BILL(NI,DT,TM))
+ .I LPU'="",$P($P(L,"|",5),"@",2)'=LPU Q 
+ .S DG=+$$GET^IPAC(NI,"stc",DT)
+ .S CM=$P(L,"|",6),SUM=+$P(L,"|",2),TP=+$P(L,"|",3)
+ .Q:TP>4  I VTP,TP>VTP Q
+ .S OPE=$P(L,"|",1) Q:OPE'="+"&(OPE'="-")&(OPE'="")
+ .I OPE'="" S STAT(DG,1)=$G(STAT(DG,1))+SUM Q
+ .I OPE="" S TP=$P($P(CM,"/",1),":",1),OT=$P($P(CM,"/",1),":",3) D
+ ..I $E(TP,1,2)="ZN" S L=$S($D(STOTD(OT)):3,1:2),STAT(DG,L)=$G(STAT(DG,L))-SUM Q
+ ..I TP="BTPL"!(CM="Оплата полиса") S STAT(DG,4)=$G(STAT(DG,4))-SUM Q
+ ..S STAT(DG,5)=$G(STAT(DG,5))-SUM
+ S DG="" F  S DG=$O(STAT(DG)) Q:DG=""  D
+ .S CM=$G(STAT(DG,1))-$G(STAT(DG,2))-$G(STAT(DG,3))-$G(STAT(DG,4))-$G(STAT(DG,5))
+ .S:DG=0 L="Договор не определен" S:DG'=0 L=$$NAMEH^YNDOG(DG,DE)
+ .S L=L_"|"_$TR(+$G(STAT(DG,1))_"|"_+$G(STAT(DG,2))_"|"_+$G(STAT(DG,3)),".",",")
+ .D WC^RWU(CR_L_"|"_$TR(+$G(STAT(DG,4))_"|"_+$G(STAT(DG,5))_"|"_CM,".",","))
+ .F L=1:1:5 S SS(L)=$G(SS(L))+$G(STAT(DG,L))
+ .S SS(6)=$G(SS(6))+$G(CM)
+ S L="   Итого:" F CM=1:1:6 S L=L_"|"_$$fn($G(SS(CM)))
+ D:$D(SS) WC^RWU(CR_L)
+ D C^RWU
+ Q
+fn(X) 
+ Q $TR(X,".",",")
+LBINF(NI) 
+ D MSG^RWU($$NOW^IBILL(NI)) 
+ Q
+LBPRN(NIB) 
+ N SS,ARR,DT,DT1,J,J1,TPL
+ S SS=$$NOW^IBILL(NIB),DT=+$H,DT1=DT+1 ; TODO - next dgn
+ S ARR("summ")=SS
+ S ARR("txtsumm")=$$TXTSUM^TXTU(SS)
+ S J=$$GET^IPAC(NIB,"polis",DT)
+ S ARR("agrnum")=$S(J="":NIB,1:J)
+ S J1=$$GET^IPAC(NIB,"polis",DT1)
+ S ARR("agrnum1")=$S(J1="":NIB,1:J1)
+ S TPL="zavans.docx"
+ D PRNTPLm^NPACU(NIB,DT)
+ Q
+LBMOV(NI) 
+ N SS,DT
+ S SS=$$NOW^IBILL(NI),DT=+$H
+ Q:SS<1 
+ D SUB^IBILL(NI,DT_","_$P($H,",",2),SS,"Перенос аванса")
+ ; TODO - type
+ D ADD^IBILL(NI,(DT+1)_",60",SS,"",$$KKM^IUSER(),"","Зачет аванса")
+ Q
+GRBYLPU(DT) ; Приход наличных по ЛПУ (разным) аз 10 посл .дней
+ Q
+PKOSUM(NI,DS,DE,TYP) ; Сумма по типам операций пациента
+ ; TYP=2/1/0/3/9/99=расх/дох/все/приход/все/долги 
+ N OPE,SUM,TP,SSS,L,TI,K,X,C,PA,DT
+ S SSS=0,TYP=+$G(TYP)
+ S PA=+$G(^cfg("pko-pac-all"))
+ 
+ S DT=DE+1 F  S DT=$O(^BILL(NI,DT),-1) Q:DT=""!(DT<DS)  S TI="" F  S TI=$O(^BILL(NI,DT,TI),-1) Q:TI=""  D
+ .S L=^(TI),OPE=$P(L,"|",1),TP=$P(L,"|",3)
+ .I 'PA Q:TP>5 
+ .I PA>1,TP>PA Q 
+ .I OPE'="+",OPE'="-",$L(OPE) Q 
+ .S SUM=$P(L,"|",2)
+ .I TYP=2 Q:OPE="+"  Q:OPE=""&($E(SUM,1)="+")  S SSS=SSS+SUM Q 
+ .I TYP=1 Q:OPE="-"  Q:OPE=""&($E(SUM,1)="-")  S SSS=SSS+SUM Q 
+ .I TYP=3,OPE'="+" Q 
+ .S SSS=SSS+SUM
+ Q SSS
+REGIPROC 
+ N D,F,L,P,K,DD
+ S D="Отчеты ЛПУ",P="Отчеты по пациентам",K="Касса"
+ S F=$$FR^I()
+ S L=$S(F:",t@storage:lpu,Филиал",1:"")
+ S DD="d,Период с,d,Период по"
+ S ^IPROC(K,"Кассовые операции за период")="ALL_NBILL,100,7,"_DD_",s,Исключить пациентов (номера И.Б.),s,№ квитанции,t@string:0/Все#1/Принято#2/Списано,Тип операции,t@string:0/Нет#1/Да,Выводить описание,t@string:0/Нет#1/Да,Выводить ККМ,p,,1"
+ S ^IPROC(K,"Журнал возврата средств")="RET_NBILL,100,"_$S(F:4,1:3)_","_DD_",s,Номер квитанции"_L_",p,,1"
+ S ^IPROC(K,"Журнал возврата средств на счета пациентов")="RETU_NBILL,100,"_$S(F:3,1:2)_","_DD_L_",p,,1"
+ S ^IPROC(K,"Касса по дням")="DAYS_NBILL,1,"_$S(F:4,1:3)_","_DD_",s,Исключить пациентов (номера И.Б.)"_L
+ S ^IPROC(D,K,"Наличные платежи по договорам")="DGNLST_NBILL,1,3,d,Период с,d,Период по,t@string:1/Текущее#0/Все,Учреждение"
+ S ^IPROC(D,"Сводные","Отчет по типам кассовых доходов")="CLSLST_NBILL,1,"_$S(F:3,1:2)_",d,Период с,d,Период по"_L
+ S ^IPROC(K,"Диаграмма - Касса по дням")="GRAPH_NBILL,11,"_$S(F:2,1:1)_",d,Начальная дата периода (7 дней)"_L
+ S ^IPROC(P,K,"Должники по наличной оплате")="PDEBT_NBILL,100,"_$S(F:9,1:8)_",s,Минимальная сумма долга,t@net:NMLCR_NSPRAV(""dvid""),Вид договора,te@storage:dog,Договор,c@net:NMLST_NSPRAV(1),Статус пациента,t@string:0/Нет#1/Да,Поиск по отсутствию статусов,d,Ограничить датой посещения,t@string:1/На текущую дату#0/На дату платежа,Информация по пациенту,t@string:0/Нет#1/Да#2/Да с посещениями,Информация по последнему платежу"_L
+ S ^IPROC(P,K,"Должники по наличной оплате на дату")="PDEBTDT_NBILL,100,"_$S(F:8,1:7)_",s,Минимальная сумма долга,d,Дата расчета,t@net:NMLCR_NSPRAV(""dvid""),Вид договора,te@storage:dog,Договор,c@net:NMLST_NSPRAV(1),Статус пациента,t@string:0/Нет#1/Да,Поиск по отсутствию статусов,t@string:0/Нет#1/Да#2/Да с посещениями,Информация по последнему платежу"_L
+ S ^IPROC(P,K,"Платежи по должникам")="PPDEBT_NBILL,1,1,s,Минимальная сумма долга"
+ S ^IPROC(P,K,"Кассовый баланс на дату")="PBYDT_NBILL,100,1,d,Конечная дата расчета"
+ S ^IPROC(P,K,"Должники в периоде")="DEBDT_NBILL,100,2,d,Начальная дата,d,Конечная дата"
+ S ^IPROC(P,K,"Кассовый баланс")="PBAL_NBILL,100,4,s,Номера историй с,s,Номера историй по,t@string:1/Да#0/Нет,Не показывать нулевой баланс,s,Минимальная сумма"
+ S:F ^IPROC(K,"Диаграмма - Касса по филиалам")="GRBYLPU_NBILL,11,1,d,Начальная дата периода (10 дней)"
+ Q

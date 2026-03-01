@@ -1,0 +1,608 @@
+IUSLUTL ; Утилиты Единого Документа [ 08/29/2023  3:59 PM ]
+REZNF(DS,DE,NIB,DTCNG,CNG) ; Восстановить из ZNFL на дату
+ S CNG=+$G(CNG)
+ N DT,OT,VR,ID,R,DTM,PL,F
+ S VR="" F  S VR=$O(^ZNFL(VR)) Q:VR=""  D
+ .S OT="" F  S OT=$O(^ZNFL(VR,OT)) Q:OT=""  D
+ ..S DT=DS-1 F  S DT=$O(^ZNFL(VR,OT,DT)) Q:DT=""!(DT>DE)  S ID="" F  S ID=$O(^ZNFL(VR,OT,DT,ID)) Q:ID=""  D
+ ...S F=0,PL=""
+ ...S NI=$P($G(^ZNF(VR,OT,DT,ID,"e")),"~",2) I NI'="" Q:NI'=NIB 
+ ...F  S PL=$O(^ZNFL(VR,OT,DT,ID,PL)) Q:PL=""  S DTM="" F  S DTM=$O(^ZNFL(VR,OT,DT,ID,PL,DTM)) Q:DTM=""  D:+DTM=DTCNG
+ ....Q:PL'="e" 
+ ....S F=1 W !,"ZNF("_VR_","_OT_","_DT_","_ID_","_PL_") /"_$$DTM^DTUTL(DTM)_"/="_^(DTM)
+ ....Q:'CNG  Q:PL="log"  
+ ....I PL="pnf" S ^PNF(NI,DT,VR_"|"_OT_"|"_ID)=^ZNFL(VR,OT,DT,ID,PL,DTM) Q 
+ ....S ^ZNF(VR,OT,DT,ID,PL)=^ZNFL(VR,OT,DT,ID,PL,DTM)
+ Q
+ZNFLD(VR,OT,DT,ID,DTM) ; Восстановить на дату по ID
+ N PL,DM,L,PNF,NI,PF
+ S (L,PL,PF)=""
+ F  S PL=$O(^ZNFL(VR,OT,DT,ID,PL)) Q:PL=""  D
+ .S DM="" F  S DM=$O(^ZNFL(VR,OT,DT,ID,PL,DM)) Q:DM=""  D:$$CMPDTM^DTUTL(DM,DTM)'=1 
+ ..I PL="log" S L=^(DM) Q
+ ..I PL="pnf" S PF=DM Q
+ ..S ^ZNF(VR,OT,DT,ID,PL)=^ZNFL(VR,OT,DT,ID,PL,DM)
+ ..D REGL^IEXCH("^ZNF",VR,OT,DT,ID,PL)
+ D:PF'=""
+ .S PNF=$G(^ZNFL(VR,OT,DT,ID,"pnf",PF)) Q:PNF=""  
+ .S NI=$$GETNIB^IUSL(VR,DT,OT,ID) Q:NI="" 
+ .S ^PNF(NI,DT,VR_"|"_OT_"|"_ID)=PNF
+ .D REGL^IEXCH("^PNF",NI,DT,VR_"|"_OT_"|"_ID)
+ .I '$D(^ZNFI("dn",DT,NI)) S ^(NI)="" D GL^IEXCH("^ZNFI","dn",DT,NI)
+ D:PF="" REPNF^IUSL(VR,DT,OT,ID,DTM,L)
+ Q
+ZNFLVR(VR,OT,DS,DE) ; Восстановить по врачу за период
+ N DT,ID,DTM
+ S DT=DS-1 F  S DT=$O(^ZNFL(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ .S ID="" F  S ID=$O(^ZNFL(VR,OT,DT,ID)) Q:ID=""  D:'$D(^ZNF(VR,OT,DT,ID))
+ ..S DTM=$O(^ZNFL(VR,OT,DT,ID,"pnf",""),-1) Q:DTM="" 
+ ..D ZNFLD(VR,OT,DT,ID,DTM)
+ ..W "."
+ Q
+MKILPU ; Создать индекс по ЛПУ
+ N LP,VR,OT,DT,ID
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D
+ ..S DT="" F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""  S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ...S LP=$G(^(ID,"l")) Q:LP=""  
+ ...Q:$D(^ZNFI("l",LP,VR,DT)) 
+ ...S ^ZNFI("l",LP,VR,DT)=""
+ D GL^IEXCH("^ZNFI","l")
+ Q
+MKIDT ; Создать индекс по дате
+ N NI,DT
+ S NI="" F  S NI=$O(^PNF(NI)) Q:NI=""  D
+ .S DT="" F  S DT=$O(^PNF(NI,DT)) Q:DT=""  D
+ ..I '$D(^ZNFI("dn",DT,NI)) S ^(NI)="" D GL^IEXCH("^ZNFI","dn",DT,NI)
+ Q
+UPDKSS ; Обновить статус 2 для кассовых услуг
+ N LP,VR,OT,DT,ID,X,II,ST,@$$NEWVAR^IUSL()
+ S II=0
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D
+ ..S DT="" F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""  S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ..S ST=$$GETSTAT^IUSL(VR,DT,OT,ID)
+ ..Q:ST'=0  ; sbsc, w.o. kss
+ ..Q:$$ISPL^IUSL(VR,DT,OT,ID,"fr")  ; франшизу пока не трогаем
+ ..I $$IsFLG^IUSL(VR,DT,OT,ID,"kss") Q 
+ ..D GET^IUSL(VR,DT,OT,ID)
+ ..S DGN=$S($G(ISTC)="":$$GET^IPAC(NIB,"stc",DT),1:ISTC)
+ ..Q:$$GET^IINSC(DGN,"dvid",DT)'=3 
+ ..S X=$$SETSTAT^IUSL(VR,DT,OT,ID,2)
+ ..S II=II+1
+ W !,"Total: "_II
+ Q
+CMPUST(DS,DE,GL) ; Сравнить статусы ZNF с другой глобалью
+ N VR,OT,DT,ID,R,R1,I
+ S I=0
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D
+ ..S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ...S R1=$P($G(@GL@(VR,OT,DT,"e")),"~",1) Q:R1=""  ; нет аналога
+ ...Q:R1=$P($G(^ZNF(VR,OT,DT,"e")),"~",1) 
+ ...S $P(^ZNF(VR,OT,DT,"e"),"~",1)=R1,I=I+1
+ w !,"Total: "_I 
+ Q
+SETSPPNF ; Установить специальности во всех ^PNF
+ N N,D,KX,VR,OT,I,J,R,SP
+ S I=0,J=0
+ S N="" F  S N=$O(^PNF(N)) Q:N=""  D
+ .S D="" F  S D=$O(^PNF(N,D)) Q:D=""  D
+ ..S KX="" F  S KX=$O(^PNF(N,D,KX)) Q:KX=""  D
+ ...S R=^(KX) Q:$P(R,"|",3)'="" 
+ ...S VR=$P(KX,"|",1),OT=$P(KX,"|",2)
+ ...S SP=$P($G(^ZNF(VR,OT,D,$P(KX,"|",3),"m")),"~",4)
+ ...S:SP="" SP=$$SPbyOTD^IKADRY(VR,OT,D)
+ ...I SP="" S J=J+1 Q
+ ...S $P(^PNF(N,D,KX),"|",3)=SP
+ ...S I=I+1
+ W !,"Total="_I_", Error="_J
+ Q
+SDPNF(NI,DS,DE,PRC,DGN) ; Установить договор если прейскурант =PRC
+ N D,KX,VR,OT,I,R,ID
+ S I=0
+ S D=DS-1 F  S D=$O(^PNF(NI,D)) Q:D=""!(D>DE)  D
+ .S KX="" F  S KX=$O(^PNF(NI,D,KX)) Q:KX=""  D
+ ..S VR=$P(KX,"|",1),OT=$P(KX,"|",2),ID=$P(KX,"|",3)
+ ..S R=$G(^ZNF(VR,OT,D,ID,"e")) Q:R="" 
+ ..Q:$P(R,"~",1)=2  ; kss
+ ..Q:$P(R,"~",4)'=PRC
+ ..Q:$P(R,"~",6)=DGN
+ ..S $P(R,"~",6)=DGN,^("e")=R
+ ..D GL^IEXCH("^ZNF",VR,OT,D,ID,"e")
+ ..S I=I+1
+ W !,"Total="_I
+ Q
+CNGPRC(DS,DE,DGN,LPU,PRC) ; Установить прейскурант на услуги по договору
+ N VR,OT,DT,ID,R,VT,DG,NI,ISTC
+ S VT=$$GET^IINSC(DGN,"dvid",DE),LPU=$G(LPU)
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D
+ ..S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ...S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ....S R=$G(^(ID,"e")) Q:R=""  Q:$P(R,"~",1)="w"
+ ....I VT'=3 Q:$P(R,"~",1)=2  Q:R["kss" 
+ ....I LPU,$G(^("l"))'=LPU Q 
+ ....Q:$P(R,"~",4)=PRC 
+ ....S NI=$P(R,"~",2),ISTC=$P(R,"~",6)
+ ....S DG=$S(ISTC'="":ISTC,1:$$GET^IPAC(NI,"stc",DT))
+ ....Q:DG'=DGN 
+ ....D SETPRC^IUSL(VR,DT,OT,ID,PRC)
+ Q
+CLRSUM(DS,DE,DGN,LPU) ; Очистить сумму по договору
+ N VR,OT,DT,ID,R,VT,DG,NI,ISTC
+ S VT=$$GET^IINSC(DGN,"dvid",DE),LPU=$G(LPU)
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D
+ ..S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ...S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ....S R=$G(^(ID,"e")) Q:R=""  Q:$P(R,"~",1)="w"
+ ....I VT'=3 Q:$P(R,"~",1)=2  Q:R["kss" 
+ ....I LPU,$G(^("l"))'=LPU Q 
+ ....S NI=$P(R,"~",2),ISTC=$P(R,"~",6)
+ ....S DG=$S(ISTC'="":ISTC,1:$$GET^IPAC(NI,"stc",DT))
+ ....Q:DG'=DGN 
+ ....I $D(^ZNF(VR,OT,DT,ID,"s")) k ^("s")
+ Q
+CNGSKD(DS,DE,DGN,LPU,SSK) ; Проставить скидку по договору
+ S DGN=$G(DGN),SSK=$G(SSK)
+ N NI,R,OT,VR,DT,ID,FR,LP,S,X,DG,SK1,PRCC,U,SS,GG,DSKD
+ S DSKD=$$GET^IINSC(DGN,"skd"),LPU=$G(LPU)
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D
+ ..S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ...S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ....S R=$G(^(ID,"e")) Q:R=""  Q:$P(R,"~",1)="w" 
+ ....Q:$P(R,"~",1)=2  Q:R["kss" 
+ ....I LPU,$G(^("l"))'=LPU Q
+ ....D GET^IUSL(VR,DT,OT,ID)
+ ....S DG=$S($G(ISTC)'="":ISTC,1:$$GET^IPAC(NI,"stc",DT))
+ ....S PRCC=$$PRC^IINSC(DG,NI,DT)
+ ....S SK1="" S:SSK'="" SK1=100-SSK
+ ....I DGN="",$$GET^IINSC(DG,"dvid")'=3 Q  ; только СК если без договора
+ ....S U=$P($P(R,"~",3),"*",1) Q:U="" 
+ ....I DGN'="",$P(R,"~",4)'=PRCC S $P(R,"~",4)=PRCC,^ZNF(VR,OT,DT,ID,"e")=R
+ ....I DGN'="" Q:DG'=DGN  I $$GET^IPRICE(U,"nosp",PRCC,DT) S SK1=""
+ ....I DGN'="",DSKD'="" S GG=$$GET^IPRICE(U,"grp",PRCC,DT) I GG'="",$D(^DSCN(DSKD,"grpd",GG)) S SK1=""
+ ....I DGN'="",$P(R,"~",5)'=SK1 Q 
+ ....D CNGSKDp
+ Q
+CNGSKDN(DS,DE,NIB,LPU,SSK,UPDSK) ; Проставить скидку по пациенту
+ ; SSK - скидка
+ ; UPDSK - обновить исходя из правил
+ S SSK=$G(SSK),LPU=$G(LPU),UPDSK=$G(UPDSK)
+ N NI,KX,R,OT,VR,DT,ID,FR,LP,S,X,DG,SK1,PRCC,U,SS,GG,DSKD,CNT
+ S DT=DS-1 F  S DT=$O(^PNF(NIB,DT)) Q:DT=""!(DT>DE)  D
+ .S KX="" F  S KX=$O(^PNF(NIB,DT,KX)) Q:KX=""  D
+ ..S VR=$P(KX,"|",1),OT=$P(KX,"|",2),ID=$P(KX,"|",3)
+ ..S R=$G(^ZNF(VR,OT,DT,ID,"e")) Q:R=""  Q:$P(R,"~",1)="w" 
+ ..Q:$P(R,"~",1)=2  Q:R["kss" 
+ ..I LPU,$G(^("l"))'=LPU Q
+ ..S U=$P(R,"~",3) Q:U=""  
+ ..S CNT=$P(U,"*",2),U=$P(U,"*",1) S:CNT="" CNT=1
+ ..D GET^IUSL(VR,DT,OT,ID)
+ ..S DG=$S($G(ISTC)'="":ISTC,1:$$GET^IPAC(NI,"stc",DT))
+ ..S PRCC=$$PRC^IINSC(DG,NI,DT)
+ ..I UPDSK S SSK=$$CALC^IDSCN(NI,OT,U,DG,PRCC,CNT,,DT,$G(^ZNF(VR,OT,DT,ID,"g"))) ; TODO - clear skd
+ ..S SK1="" S:SSK'="" SK1=100-SSK
+ ..I 'UPDSK,$P(R,"~",4)'=PRCC S $P(R,"~",4)=PRCC,^ZNF(VR,OT,DT,ID,"e")=R
+ ..I $$GET^IPRICE(U,"nosp",PRCC,DT) S SK1=""
+ ..;S GG=$$GET^IPRICE(U,"grp",PRCC,DT)
+ ..;I GG'="",$D(^DSCN(DSKD,"grpd",GG)) S SK1=""
+ ..Q:$P(R,"~",5)=SK1
+ ..D CNGSKDp
+ Q
+CNGSKDp ; Служебная процедура изменения скидки
+ S $P(R,"~",5)=SK1,^ZNF(VR,OT,DT,ID,"e")=R
+ K ^ZNF(VR,OT,DT,ID,"s")
+ D GET^IUSL(VR,DT,OT,ID) ; another
+ S SS=$$SUMM^IUSL(VR,DT,OT,ID)
+ S ^ZNF(VR,OT,DT,ID,"s")=SS
+ D UPD^IUSL(VR,OT,DT,ID,NI)
+ Q
+FNDSNIB(DS,DE) ; Проверка затирания услуг по И.Б.
+ N DT,OT,VR,ID,R,DTM,PL,F,HH,RR,PRR
+ S VR="" F  S VR=$O(^ZNFL(VR)) Q:VR=""  D
+ .S OT="" F  S OT=$O(^ZNFL(VR,OT)) Q:OT=""  D
+ ..S DT=DS-1 F  S DT=$O(^ZNFL(VR,OT,DT)) Q:DT=""!(DT>DE)  S ID="" F  S ID=$O(^ZNFL(VR,OT,DT,ID)) Q:ID=""  D
+ ...S NI="",RR=""
+ ...S HH="" F  S HH=$O(^ZNFL(VR,OT,DT,ID,"e",HH)) Q:HH=""  D
+ ....S PNI=NI,PST=$P(RR,"~",1),PRR=RR
+ ....S RR=^(HH),NI=$P(RR,"~",2)
+ ....I PST=2,PNI'=NI W !,"NI="_NI_"/"_PNI_" Usl="_$P(RR,"~",3)_"/"_$P(PRR,"~",3)_"  ("_$$DT^DTUTL(DT)_")" ;VR_","_OT_","_DT_","_ID
+ Q
+FNDNU(DS,DE,NIB,USL) ; Поиск пациента и услуги в архиве
+ N DT,OT,VR,ID,R,DTM,PL,F,HH,RR
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S VR="" F  S VR=$O(^ZNFL(VR)) Q:VR=""  D
+ .S OT="" F  S OT=$O(^ZNFL(VR,OT)) Q:OT=""  D
+ ..S DT=DS-1 F  S DT=$O(^ZNFL(VR,OT,DT)) Q:DT=""!(DT>DE)  S ID="" F  S ID=$O(^ZNFL(VR,OT,DT,ID)) Q:ID=""  D
+ ...S HH="" F  S HH=$O(^ZNFL(VR,OT,DT,ID,"e",HH)) Q:HH=""  D
+ ....S RR=^(HH),NI=$P(RR,"~",2) Q:NI'=NIB 
+ ....I USL'="",USL'=$P($P(RR,"~",3),"*",1) Q 
+ ....W !,"NI="_NI_" Usl="_$P(RR,"~",3)_"  ("_$$DT^DTUTL(DT)_"), Key="_VR_","_OT_","_DT_","_ID
+ Q
+CNGUSL(DS,DE,FU,TU,PRCX) ; Изменить один код услуги на другой
+ ; FU - исходный код услуги
+ ; TU - на какой код услуги
+ ; PRCX - только по данному прайсу (опционально)
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),PRCX=$G(PRCX)
+ S:'$D(CR) CR=$C(13,10)
+ N NI,R,OT,VR,DT,ID,X,DG,U,P,@$$NEWVAR^IUSL
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D
+ ..S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ...S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ....S R=$G(^(ID,"e")) Q:R=""  
+ ....S X=$P(R,"~",3)
+ ....Q:$P(X,"*",1)'=FU 
+ ....S P=+$P(R,"~",4)
+ ....I PRCX,P,P'=PRCX Q 
+ ....I PRCX,'P D GET^IUSL(VR,DT,OT,ID,1) Q:PRC'=PRCX 
+ ....w "."
+ ....S $P(X,"*",1)=TU,$P(R,"~",3)=X
+ ....S ^ZNF(VR,OT,DT,ID,"e")=R
+ ....D GL^IEXCH("^ZNF",VR,OT,DT,ID,"e")
+ Q
+CNGUSLS(DS,DE,DGN,FPRC,TPRC,VAR) ; Изменить коды услуг по прайсам
+ ; FPRC - исходный прейскурант
+ ; TPRC - на какой прейскурант
+ ; VAR - Переменная с соответствием услуг
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S:'$D(CR) CR=$C(13,10)
+ N NI,R,OT,VR,DT,ID,X,DG,U,P,TU,@$$NEWVAR^IUSL
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D
+ ..S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ...S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ....S R=$G(^(ID,"e")) Q:R=""  
+ ....S X=$P(R,"~",3),U=$P(X,"*",1) Q:U="" 
+ ....Q:'$D(@VAR@(U)) 
+ ....S P=+$P(R,"~",4)
+ ....I P,P'=FPRC Q 
+ ....I FPRC,'P D GET^IUSL(VR,DT,OT,ID,1) Q:PRC'=FPRC 
+ ....I DGN'="",$$GETDGN^IUSL(VR,DT,OT,ID)'=DGN Q 
+ ....w "."
+ ....S TU=@VAR@(U)
+ ....;W !,U_"->"_TU_" "_$$DT^DTUTL(DT) 
+ ....S $P(X,"*",1)=TU,$P(R,"~",3)=X
+ ....S:TPRC'="" $P(R,"~",4)=TPRC
+ ....S ^ZNF(VR,OT,DT,ID,"e")=R
+ ....D GL^IEXCH("^ZNF",VR,OT,DT,ID,"e")
+ Q
+DELUSL(DS,DE,UU,PRCX) ; Удалить определенный код услуги
+ ; UU - код услуги
+ ; PRCX - только по данному прайсу (опционально)
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),PRCX=$G(PRCX)
+ S:'$D(CR) CR=$C(13,10)
+ N NI,R,OT,VR,DT,ID,X,DG,U,P,@$$NEWVAR^IUSL
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D
+ ..S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ...S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ....S R=$G(^(ID,"e")) Q:R=""  
+ ....S X=$P(R,"~",3)
+ ....Q:$P(X,"*",1)'=UU 
+ ....S P=+$P(R,"~",4),NI=$P(R,"~",2)
+ ....I PRCX,P,P'=PRCX Q 
+ ....I PRCX,'P D GET^IUSL(VR,DT,OT,ID,1) Q:PRC'=PRCX 
+ ....w "."
+ ....S ^ISLOG("IUSLUTL","D",VR_"@"_DT_"@"_OT_"@"_ID,$H)=""
+ ....D UDEL^NPACADM(NI,VR_"@"_DT_"@"_OT_"@"_ID,1,1)
+ Q
+UPDNET(DS,DE,LPU) ; Update by LPU from DS to DE
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D
+ ..S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ...S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D 
+ ....I LPU,$G(^(ID,"l"))'=LPU Q 
+ ....D UPD^IUSL(VR,OT,DT,ID) w "."
+ Q
+UPDNETL(DS,DE,LPU) ; Update to LPU from DS to DE
+ N LP
+ S LP=$$^I("ilpu")
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D
+ ..S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ...S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D 
+ ....D UPDA^IEXCH("IUSL",VR_","_OT_","_DT_","_ID,LP,LPU) w "."
+ Q
+UPDZ(DS,DE) ; Update headers of ZNF from DS to DE
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D
+ ..S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ...D GLZ^IEXCH("^ZNF",VR,OT,DT)
+ Q
+MOVVR(FVR,TVR) ; Переместить все с одного на другого врача
+ N OT,DT,ID,X
+ S OT="" F  S OT=$O(^ZNF(FVR,OT)) Q:OT=""  D
+ .S DT="" F  S DT=$O(^ZNF(FVR,OT,DT)) Q:DT=""  D
+ ..S ID="" F  S ID=$O(^ZNF(FVR,OT,DT,ID)) Q:ID=""  D 
+ ...S X=$$MOV^IUSL(FVR,DT,OT,ID,TVR,"")
+ Q
+MOVOT(VR,OT,TOT,DS,DE) ; Изменить отделение по врачу
+ N OT,DT,ID,X
+ S DS=$G(DS),DE=$G(DE) S:DE="" DE=99999
+ S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D
+ .S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ..S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D 
+ ...S X=$$MOV^IUSL(VR,DT,OT,ID,"",TOT)
+ Q
+MOVOTV(OT,TOVR,DS,DE) ; Переместить все отделение на врача
+ N OT,DT,ID,X
+ S DS=$G(DS),DE=$G(DE) S:DE="" DE=99999
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D:$D(^ZNF(VR,OT))
+ .S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ..S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D 
+ ...S X=$$MOV^IUSL(VR,DT,OT,ID,TVR)
+ ...S ^TMP("UMOV10",VR,OT,DT,ID)=TVR_"|"_X
+ Q
+DIAEtU(DS,DE,ALL) ; Диагнозы из ЭМК в усл. без назнач.
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),ALL=$G(ALL)
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D
+ ..S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ...S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ....S R=$G(^(ID,"f")) Q:R'=""
+ ....S DI=$P($G(^("m")),"~",1)
+ ....I 'ALL,DI'="" Q 
+ ....S NI=$P($G(^("e")),"~",2)
+ ....S EPR=$$CHKDT^IEPR(NI,VR,DT,1) Q:EPR="" 
+ ....S ED=$$DIAG^IEPR(NI,EPR) Q:ED="" 
+ ....Q:DI=ED 
+ ....S $P(^ZNF(VR,OT,DT,ID,"m"),"~",1)=ED w "."
+ Q
+DIAFRNZ(DS,DE) ; Диагнозы из назначений
+ N VR,OT,DT,ID,DI,DNZ
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D
+ ..S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ...S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ....S R=$G(^(ID,"f")) Q:R=""
+ ....S DI=$P($G(^("m")),"~",1) Q:DI'=""
+ ....S DNZ=$P($G(^NAZ(R,"a")),"|",2) Q:DNZ="" 
+ ....W "."
+ ....S $P(^ZNF(VR,OT,DT,ID,"m"),"~",1)=DNZ
+ Q
+CNGSTAT(DS,DE,FST,TST) ; Изменить статус услуги на другой
+ ; FST - исходный статус
+ ; TST - на какой статус
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),PRCX=$G(PRCX)
+ S:'$D(CR) CR=$C(13,10)
+ N NI,R,OT,VR,DT,ID,X,@$$NEWVAR^IUSL
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D
+ ..S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ...S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ....S R=$G(^(ID,"e")) Q:R=""  
+ ....Q:$P(R,"~",1)'=FST
+ ....S $P(R,"~",1)=TST 
+ ....w "."
+ ....S ^ZNF(VR,OT,DT,ID,"e")=R
+ ....D GL^IEXCH("^ZNF",VR,OT,DT,ID,"e")
+ Q
+DOSEND(ID) ; for IMSGHUB
+ N IDX,VR,OT,DT,I,TP,UID,KEY,S,TXT,U,@$$NEWVAR^IUSL
+ S TP=$G(^MSGHUB("iusl",ID,"tp")) Q:TP="" 
+ S UID=$G(^("uid"))
+ S IDX="" F  S IDX=$O(^MSGOUT("iusl",ID,IDX)) Q:IDX=""  D
+ .S KEY=$G(^(IDX,"data",1)) Q:KEY="" 
+ .S VR=$P(KEY,"@",1),DT=$P(KEY,"@",2),OT=$P(KEY,"@",3),I=$P(KEY,"@",4)
+ .D GET^IUSL(VR,DT,OT,I)
+ .S S=$$SUMM^IUSL(VR,DT,OT,I)
+ .S TXT=$$wsend() Q:TXT="" 
+ .S KEY=$$ADDSEND^IMSGHUB(TP,UID,"","",TXT)
+ .D ENDSEND^IMSGHUB(KEY)
+ .D endsend^IMSGHUB("iusl",ID,IDX)
+ Q
+wsend() 
+ N TXT
+ S U=$O(UL("")) Q:U="" ""
+ S TXT="<?xml version=""1.0"" encoding=""windows-1251"" ?><exchange><usl>"
+ D ttag("date",$$DT^DTUTL(DT))
+ D ttag("vr",$$FIO^IKADRY(VR))
+ D ttag("otd",$$GOTD^YISPRAV(OT))
+ D ttag("srcnib",NI)
+ D ttag("patient",$$FIO^IPAC(NI))
+ D ttag("datar",$$GETE^IPAC(NI,"datar",DT))
+ D ttag("code",U)
+ D ttag("count",UL(U))
+ D ttag("diag",$G(DIA))
+ D ttag("summ",S)
+ S TXT=TXT_CR_"</usl></exchange>"
+ S TXT=$$DW^TXTU(TXT)
+ Q TXT
+ttag(TAG,VAL) 
+ S TXT=TXT_CR_"<"_TAG_">"_$$TAG^TXTU(VAL)_"</"_TAG_">"
+ Q
+DORECV(ID) ; for IMSGHUB
+ ; NULL
+ Q
+INRECV() ; Import, for IMSGHUB
+ N XML,NI,VR,DT,OT,FF,FI,FO,BD,X,CNT
+ D RBUFH^YIXMLRR(1)
+ S FF=$$gte("patient"),BD=$$DI^DTUTL($$gte("datar"))
+ S FI=$P(FF," ",2),FO=$P(FF," ",3),FF=$P(FF," ",1)
+ S NI=$$GETNIB^IPACFND(FF,FI,FO,BD,"",1) Q:NI="" 
+ S VR=$$FNDFIO^NVFIND($$gte("vr"))
+ S:VR="" VR=$G(^cfg("extvr")) Q:VR=""  ; TODO
+ S OT=$$OTD^IKADRY(VR)
+ S DT=$$DI^DTUTL($$gte("date"))
+ S CNT=$$gte("count") S:CNT=1 CNT="" S:CNT'="" CNT="*"_CNT
+ S X=$$ADD^IUSL(VR,DT,OT,NI,$$gte("code")_CNT,$$gte("diag"),"","")
+ S CNT=$$SETPL^IUSL(VR,DT,OT,X,"s",$$gte("summ"))
+ S CNT=$$SETPL^IUSL(VR,DT,OT,X,"imp",1)
+ Q
+gte(TAG) ; Get tag from exchange
+ Q $G(XML("exchange","usl",TAG))
+CHKCODE(USL) ; Проверка наличия кода услуги в ZNF
+ N LP,VR,OT,DT,ID,R,U,F
+ S F=0
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D  Q:F 
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D  Q:F 
+ ..S DT="" F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""  S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D  Q:F
+ ...S R=$G(^(ID,"e")) Q:R=""  
+ ...S X=$P(R,"~",3),U=$P(X,"*",1) Q:U="" 
+ ...I U=USL S F=DT
+ I F W !,"Found at "_$$DT^DTUTL(F)
+ Q
+CHKCODES(LVAR) ; Проверка кодов на наличие
+ ; LVAR - массив кодов услуг
+ N LP,VR,OT,DT,ID,R,U
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D   
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D   
+ ..S DT="" F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""  S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D  
+ ...S R=$G(^(ID,"e")) Q:R=""  
+ ...S X=$P(R,"~",3),U=$P(X,"*",1) Q:U="" 
+ ...I $D(@LVAR@(U)),'$G(@LVAR@(U)) S @LVAR@(U)=1
+ Q
+CHKPRC(PRC) ; Проверка наличия прайса в ZNF
+ N LP,VR,OT,DT,ID,R,U,F,PP,DG,DLST
+ S F="" F  S F=$O(^DGN(F)) Q:F=""  D
+ .S R=$$GET^IINSC(F,"price",+$H) I R'="",R=PRC S DLST(F)="" 
+ .S R=$$GET^IINSC(F,"cprice",+$H) I R'="",R=PRC S DLST(F)="" 
+ S F=0
+ S F=0
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D  Q:F 
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D  Q:F 
+ ..S DT="" F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""  S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D  Q:F
+ ...S R=$G(^(ID,"e")) Q:R=""  
+ ...S PP=$P(R,"~",4),DG=$P(R,"~",6)
+ ...I PP=PRC S F=DT Q
+ ...I DG'="",$D(DLST(DG)) S F=DT Q
+ I F W !,"Found at "_$$DT^DTUTL(F)
+ Q
+CHKDDI ; Проверка наличия двойных диагнозов, преобразование в 1 
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D
+ ..S DT="" F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""  D
+ ...S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ....S R=$G(^(ID,"m")) Q:R=""  Q:R'["||" 
+ ....S X=$TR($$DBLSP^TXTU($TR($P(R,"~",2),"|"," "))," ","|")
+ ....S $P(^ZNF(VR,OT,DT,ID,"m"),"~",2)=X
+ ....D GL^IEXCH("^ZNF",VR,OT,DT,ID,"m")
+ ....W "-"
+ Q
+DOSBS(DS,DE,NKSS,DGX) ; Подписать услуги за период
+ ; NKSS - за исключенем кассы
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),NKSS=$G(NKSS)
+ S:'$D(CR) CR=$C(13,10)
+ N NI,R,OT,VR,DT,ID,X,@$$NEWVAR^IUSL,cred,UDT
+ S cred=+$G(^cfg("credit"))
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D
+ ..S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ...S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ....Q:$P($G(^(ID,"e")),"~",1)'="w" 
+ ....I NKSS,$P($G(^(ID,"m")),"~",2)["kss" Q 
+ ....I DGX,$$GETDGN^IUSL(VR,DT,OT,ID)'=DGX Q 
+ ....K %L,UDT
+ ....S NI=$$GETNIB^IUSL(VR,DT,OT,ID)
+ ....D SBSYS^YNED(NI,VR,OT,$$DT^DTUTL(DT),cred,"UDT",ID) ; TODO - sbs only first serv.
+ ....W:$G(%L)'="" !,%L
+ Q
+DOUSBS(DS,DE,DGN)       ; Подписать услуги за период
+ ; NKSS - за исключенем кассы
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S:'$D(CR) CR=$C(13,10)
+ Q:DGN="" 
+ N NI,R,OT,VR,DT,ID,X,@$$NEWVAR^IUSL
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D
+ ..S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ...S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ....Q:$P($G(^(ID,"e")),"~",1)="w" 
+ ....I $$GETDGN^IUSL(VR,DT,OT,ID)'=DGN Q 
+ ....K %L
+ ....D usbs(VR,OT,DT,ID)
+ ....W:$G(%L)'="" !,%L
+ Q
+usbs(VR,OT,DT,ID) 
+ N IDX,NRM,RCL,SP
+ S IDX=ID,NRM=0,RCL=2,SP=$$SPEC^IKADRY(VR)
+ D RETsys^YNED
+ Q
+COPY(FNI,TNI,DS,DE) ; Создать копию услуг
+ N KX,KNX,DT,VR,OT,ID,NID,P,PD,PT
+ S DS=$G(DS),DE=$G(DE) S:DE="" DE=99999
+ S DT=DS-1 F  S DT=$O(^PNF(FNI,DT)) Q:DT=""!(DT>DE)  D
+ .S KX="" F  S KX=$O(^PNF(FNI,DT,KX)) Q:KX=""  D
+ ..S VR=$P(KX,"|",1),OT=$P(KX,"|",2),ID=$P(KX,"|",3)
+ ..S NID=$O(^ZNF(VR,OT,DT,""),-1)+1 F  Q:'$D(^ZNF(VR,OT,DT,NID))  S NID=NID+1
+ ..M ^ZNF(VR,OT,DT,NID)=^ZNF(VR,OT,DT,ID)
+ ..S $P(^ZNF(VR,OT,DT,NID,"e"),"~",2)=TNI
+ ..S KNX=KX,$P(KNX,"|",3)=NID
+ ..M ^PNF(TNI,DT,KNX)=^PNF(FNI,DT,KX)
+ ..S P=$G(^ZNF(VR,OT,DT,NID,"p")) Q:P="" 
+ ..S PD=$P(P,",",1),PT=$P(P,",",2)
+ ..D SETZNFU^IBILL(TNI,PD,PT,ID,NID)
+ Q
+CHKPNF(NI,KIL) ; Проверить некорректные и.б. в ZNF
+ N KX,DT,VR,OT,ID,N
+ S KIL=$G(KIL)
+ S DT="" F  S DT=$O(^PNF(NI,DT)) Q:DT=""  D
+ .S KX="" F  S KX=$O(^PNF(NI,DT,KX)) Q:KX=""  D
+ ..S VR=$P(KX,"|",1),OT=$P(KX,"|",2),ID=$P(KX,"|",3)
+ ..S N=$P($G(^ZNF(VR,OT,DT,ID,"e")),"~",2)
+ ..Q:N=NI 
+ ..w !,"PNF("_NI_")!="_N_" ^ZNF("_VR_","_OT_","_DT_","_ID
+ ..I KIL K ^PNF(NI,DT,KX) w "..remove ^PNF"
+ Q
+ZBK(NI,VER) ; Резервная копия услуг в ^ZNFBK
+ N KX,DT,VR,OT,ID
+ S VER=+$G(VER)
+ K ^ZNFBK(NI,VER,"Z"),^ZNFBK(NI,VER,"P")
+ S DT="" F  S DT=$O(^PNF(NI,DT)) Q:DT=""  D
+ .S KX="" F  S KX=$O(^PNF(NI,DT,KX)) Q:KX=""  D
+ ..S VR=$P(KX,"|",1),OT=$P(KX,"|",2),ID=$P(KX,"|",3)
+ ..M ^ZNFBK(NI,VER,"Z",VR,OT,DT,ID)=^ZNF(VR,OT,DT,ID)
+ M ^ZNFBK(NI,VER,"P")=^PNF(NI)
+ Q
+CPSPACE(NI,DS,DE,FROM,UPD) ; Копия из другой области в текущую
+ N KX,DT,OT,VR,ID
+ S UPD=+$G(UPD)
+ S DT=DS-1 F  S DT=$O(^|FROM|PNF(NI,DT)) Q:DT=""!(DT>DE)  D
+ .S KX="" F  S KX=$O(^|FROM|PNF(NI,DT,KX)) Q:KX=""  D
+ ..S VR=$P(KX,"|",1),OT=$P(KX,"|",2),ID=$P(KX,"|",3)
+ ..K ^ZNF(VR,OT,DT,ID)
+ ..M ^ZNF(VR,OT,DT,ID)=^|FROM|ZNF(VR,OT,DT,ID)
+ ..D:UPD REGL^IEXCH("^ZNF",VR,OT,DT,ID)
+ .M ^PNF(NI,DT)=^|FROM|PNF(NI,DT)
+ .D:UPD REGL^IEXCH("^PNF",NI,DT)
+ Q
+CLRFL(NI,FL,DS,DE) ; Удалить поле
+ N KX,DT,VR,OT,ID,R
+ S DS=$G(DS),DE=$G(DE) S:DE="" DE=99999
+ S DT=DS-1 F  S DT=$O(^PNF(NI,DT)) Q:DT=""!(DT>DE)  D
+ .S KX="" F  S KX=$O(^PNF(NI,DT,KX)) Q:KX=""  D
+ ..S VR=$P(KX,"|",1),OT=$P(KX,"|",2),ID=$P(KX,"|",3)
+ ..S R=$$KILPL^IUSL(VR,DT,OT,ID,FL)
+ Q
+CLRALL(DS,DE) ; Удалить все услуги из периода
+ N NI,R,OT,VR,DT,ID,@$$NEWVAR^IUSL
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D
+ ..S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ...S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ....S R=$$CLR^IUSL(VR,DT,OT,ID)
+ Q
+CHKPAY(DS,DE) ; Проверить ссылки на платежи
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S:'$D(CR) CR=$C(13,10)
+ N NI,R,OT,VR,DT,ID,X,D,T,NI,I
+ S I=0
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D
+ ..S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ...S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ....S R=$G(^(ID,"e")) Q:R=""  
+ ....Q:$P(R,"~",1)'=2
+ ....S NI=$P(R,"~",2)
+ ....S D=$G(^("p")) Q:D="" 
+ ....S T=$P(D,",",2),D=$P(D,",",1)
+ ....I $D(^BILL(NI,D,T)) S I=I+1 Q 
+ ....w !,NI_" "_$$DT^DTUTL(DT)_" "_VR_" "_$$FIO^IKADRY(VR)_" = "_$P(R,"~",3)_" "_$G(^ZNF(VR,OT,DT,ID,"s"))_" р."
+ ....w !,NI_","_D_","_T
+ w !,"Total: "_I
+ Q

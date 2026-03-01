@@ -1,0 +1,290 @@
+REPR ; Отчеты ЭМК [ 10/08/2021  1:02 PM ]
+CSTAT(DS,DE,VR,OTD) ; Используемые документы
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ K ^BUF($J,"idx")
+ N DT,NI,ID,FL,TX,R,C,T,V
+ S DT=DS-1 F  S DT=$O(^EPRI("dt",DT)) Q:DT=""!(DT>DE)  D
+ .S NI="" F  S NI=$O(^EPRI("dt",DT,NI)) Q:NI=""  D
+ ..S ID="" F  S ID=$O(^EPRI("nd",NI,DT,ID)) Q:ID=""  D
+ ...S OW=^(ID)
+ ...S:VR!OTD V=$P(OW,"|",2)
+ ...I VR'="",V'=VR Q 
+ ...I OTD'="",$$OTD^IKADRY(V)'=OTD Q 
+ ...S T=$G(^EPR(NI,ID,"t")) Q:T="" 
+ ...S C=$G(^BUF($J,"idx",T)),^(T)=C+1
+ ...S:'$D(^BUF($J,"idx",T,NI)) ^(NI)=""
+ D OWF^RWU(".txt")
+ D WC^RWU("Наименование документа "_$$TXTP^DTUTL(DS,DE)_"|Пациентов|Количество")
+ S T="" F  S T=$O(^BUF($J,"idx",T)) Q:T=""  D
+ .S TX=$G(^DTYPE(T,"tname")),C=0
+ .S R="" F  S R=$O(^BUF($J,"idx",T,R)) Q:R=""  S C=C+1
+ .D WC^RWU(CR_TX_"|"_$G(^BUF($J,"idx",T))_"|"_C)
+ K ^BUF($J,"idx")
+ D C^RWU
+ Q
+OWSTAT(DS,DE,OTD) ; Статистика по авторам
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ K ^BUF($J,"idx")
+ N DT,NI,ID,FL,TX,R,C,T,V
+ S DT=DS-1 F  S DT=$O(^EPRI("dt",DT)) Q:DT=""!(DT>DE)  D
+ .S NI=""
+ .F  S NI=$O(^EPRI("dt",DT,NI)) Q:NI=""  D
+ ..S ID="" F  S ID=$O(^EPRI("nd",NI,DT,ID)) Q:ID=""  D
+ ...S V=$P(^(ID),"|",2)
+ ...I OTD'="",$$OTD^IKADRY(V)'=OTD Q 
+ ...S T=+$G(^EPR(NI,ID,"t")) 
+ ...S C=$G(^BUF($J,"idx",V)),^(V)=C+1
+ ...S:'$D(^BUF($J,"idx",V,"n",NI)) ^(NI)=""
+ ...S:'$D(^BUF($J,"idx",V,"t",T)) ^(T)=""
+ D OWF^RWU(".txt")
+ D WC^RWU("Автор "_$$TXTP^DTUTL(DS,DE)_"|Пациентов|Документов|Типов")
+ S V="" F  S V=$O(^BUF($J,"idx",V)) Q:V=""  D
+ .S TX=$$FIO^IKADRY(V),(C,T)=0
+ .S NI="" F  S NI=$O(^BUF($J,"idx",V,"n",NI)) Q:NI=""  S C=C+1
+ .S R="" F  S R=$O(^BUF($J,"idx",V,"t",R)) Q:R=""  S T=T+1
+ .D WC^RWU(CR_TX_"|"_C_"|"_$G(^BUF($J,"idx",V))_"|"_T)
+ K ^BUF($J,"idx")
+ D C^RWU
+ Q
+EST(DS,DE,VR,OTD,DET) ; Оценка карт по сотрудникам
+ ; DET - по документам
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),DET=$G(DET)
+ N DT,NI,ID,R,C,T,V,ES,TAB,I2,X
+ S DT=DS-1 F  S DT=$O(^EPRI("dt",DT)) Q:DT=""!(DT>DE)  D
+ .S NI=""
+ .F  S NI=$O(^EPRI("dt",DT,NI)) Q:NI=""  D
+ ..S ID="" F  S ID=$O(^EPRI("nd",NI,DT,ID)) Q:ID=""  D
+ ...S V=$P(^(ID),"|",2)
+ ...I VR'="",V'=VR Q 
+ ...I OTD'="",$$OTD^IKADRY(V)'=OTD Q 
+ ...S T=$G(^EPR(NI,ID,"t")) Q:T="" 
+ ...S ES=$G(^("est")) Q:ES="" 
+ ...S I2=$S(DET:T,1:0)
+ ...S TAB(V,I2,0)=$G(TAB(V,I2,0))+1
+ ...S TAB(V,I2,3)=$G(TAB(V,I2,3))+ES
+ ...S X=$G(TAB(V,I2,1))
+ ...S:$S(X="":1,1:X>ES) TAB(V,I2,1)=ES
+ ...S X=$G(TAB(V,I2,2))
+ ...S:$S(X="":1,1:X<ES) TAB(V,I2,2)=ES
+ 
+ D OWF^RWU(".txt")
+ D WC^RWU("Сотрудник "_$$TXTP^DTUTL(DS,DE)_$S(DET:"|Документ",1:"")_"|Записей|Оценка (мин)|Оценка (макс)|Среднее")
+ S V="" F  S V=$O(TAB(V)) Q:V=""  D
+ .S VR=$$FIO^IKADRY(V)
+ .S I2="" F  S I2=$O(TAB(V,I2)) Q:I2=""  D
+ ..S R=$S(DET:"|"_$G(^DTYPE(I2,"tname")),1:"")
+ ..S C=$G(TAB(V,I2,0))
+ ..S R=R_"|"_C_"|"_$G(TAB(V,I2,1))_"|"_$G(TAB(V,I2,2))
+ ..S R=R_"|"_$S(C:+$J($G(TAB(V,I2,3))/C,"",2),1:"")
+ ..D WC^RWU(CR_VR_R)
+ D C^RWU
+ Q
+ESTLST(DS,DE,VR,TYP,VAL) ; Оценка карт по сотрудникам (списком)
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),VAL=+$$TRIM^TXTU(VAL)
+ N DT,NI,ID,C,R,T,V,ES,X
+ D OWF^RWU(".txt")
+ D WC^RWU("Пациент "_$$TXTP^DTUTL(DS,DE)_"|Автор|Дата|Документ|Оценка|Замечание")
+ S DT=DS-1 F  S DT=$O(^EPRI("dt",DT)) Q:DT=""!(DT>DE)  D
+ .S NI=""
+ .F  S NI=$O(^EPRI("dt",DT,NI)) Q:NI=""  D
+ ..S ID="" F  S ID=$O(^EPRI("nd",NI,DT,ID)) Q:ID=""  D
+ ...S V=$P(^(ID),"|",2)
+ ...I VR'="",V'=VR Q 
+ ...S T=$G(^EPR(NI,ID,"t")) Q:T="" 
+ ...S ES=$G(^("est")) Q:ES="" 
+ ...I TYP=1,ES'>VAL Q
+ ...I TYP=2,ES'<VAL Q
+ ...I TYP=0,ES'=VAL Q
+ ...S R=$$FIO^IPAC(NI,DT)_"|"_$$FIOSH^IKADRY(V,DT)_"|"
+ ...S C=$O(^EPRLOG(NI,ID,"c",""),-1)
+ ...S:C'="" C=$P(^(C),"|",2)_" ("_$$DTM^DTUTL($P(C,",",1,2))_")"
+ ...D WC^RWU(CR_R_$$DT^DTUTL(DT)_"|"_$G(^EPR(NI,ID,"n"))_"|"_ES_"|"_C)
+ D C^RWU
+ Q
+LSTCL(TP,FLNM,PRV) ; Вывод текста справочников
+ ; TP - Тип документа
+ ; FLNM - Имя поля
+ ; PRV - частные справочники
+ N ID,FL,LST,R,I,DF,VR,VRL
+ S FLNM=$$WD^TXTU(FLNM)
+ I PRV S VR="" F  S VR=$O(^EPRPT(VR)) Q:VR=""  S PT="" F  S PT=$O(^EPRPT(VR,PT)) Q:PT=""  S VRL(PT,VR)=""
+ D OWF^RWU(".txt")
+ D WC^RWU("Элемент|Наименование|Данные справочника")
+ S ID="" F  S ID=$O(^DTYPE(ID)) Q:ID=""  D
+ .I TP'="",ID'=TP Q 
+ .K LST S DF=1
+ .S FL="" F  S FL=$O(^DTYPE(ID,"fields",FL)) Q:FL=""  D
+ ..I FLNM'="",$$UL^TXTU(FL)'=$$UL^TXTU(FLNM) Q 
+ ..S R=$G(^(FL,"@lst")) Q:R="" 
+ ..S LST(R)=""
+ .S FL="" F  S FL=$O(LST(FL)) Q:FL=""  D:$D(^DTYPE(ID,"list",FL)) 
+ ..I DF S DF=0 D WC^RWU(CR_"документ:|"_$G(^DTYPE(ID,"tname")))
+ ..D WC^RWU(CR_"список:|"_FL)
+ ..S I="" F  S I=$O(^DTYPE(ID,"list",FL,I)) Q:I=""  D WC^RWU(CR_"||"_$TR($P(^(I),"|",1),$C(9),"-"))
+ .Q:'PRV 
+ .S VR="" F  S VR=$O(VRL(ID,VR)) Q:VR=""  D
+ ..S FL="" F  S FL=$O(^EPRPT(VR,ID,"default"," list",FL)) Q:FL=""  D:$D(^DTYPE(ID,"list",FL))
+ ...I DF S DF=0 D WC^RWU(CR_"документ:|"_$G(^DTYPE(ID,"tname")))
+ ...D WC^RWU(CR_"список ("_$$FIO^IKADRY(VR)_"):|"_FL)
+ ...S I="" F  S I=$O(^EPRPT(VR,ID,"default"," list",FL,I)) Q:I=""  D WC^RWU(CR_"||"_$TR($P(^(I),"|",1),$C(9),"-"))
+ D C^RWU
+ Q
+EVLIST(NI,DS,DE,USR) ; События в картах пациента
+ N ID,DT,R,T,X,K,A
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+  
+ D OWF^RWU(".txt")
+ D WC^RWU("Дата|Документ|Автор|Событие|Дата, время|Пользователь|Примечание")
+ I NI'="" S DT=DS-1 F  S DT=$O(^EPRI("nd",NI,DT)) Q:DT=""!(DT>DE)  D
+ .S ID="" F  S ID=$O(^EPRI("nd",NI,DT,ID)) Q:ID=""  D
+ ..S R=$$DT^DTUTL(DT)_"|"_$G(^EPR(NI,ID,"n"))_"|"_$$FIO^IKADRY($$KDR^IEPR(NI,ID))
+ ..S K=$G(^EPR(NI,ID,"dt")),T=$P(K,"|",3) S:T="" T=$P(K,"|",3)
+ ..D WC^RWU(CR_R_"|Создан|"_$$DTM^DTUTL(T))
+ ..S T="" F  S T=$O(^EPRLOG(NI,ID,"e",T)) Q:T=""  D
+ ...S X=^(T),K=$P(X,"|",1),X=$P(X,"|",2)
+ ...S A=$S(K="S":"Подписан",K="H":"Частично подписан",K="U":"Убрана подпись",K="Y":"Частично убрана подпись",K="P":"Напечатан",K="V":"Просмотрен",K="W":"Сохранен",1:K)
+ ...D WC^RWU(CR_"|||"_A_"|"_$$DTM2^DTUTL(T)_"||"_$$FIO^IKADRY(X))
+ ..S T="" F  S T=$O(^EPRLOG(NI,ID,"c",T)) Q:T=""  D
+ ...S X=^(T),K=$P(T,",",3),X=$TR($P(X,"|",2,99),"|","/")
+ ...S A="Комментарий|"_$$DTM2^DTUTL($P(T,",",1,2))_"|"_$$FIO^IKADRY(K)
+ ...D WC^RWU(CR_"|||"_A_"|"_X)
+ D C^RWU
+ Q
+EVVR(DS,DE,VRX) ; Изменения сотрудником медкарт
+ N NI,ID,DT,R,T,N,X,K,A,AV
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D OWF^RWU(".txt")
+ D WC^RWU("Пациент|Дата|Документ|Автор|Событие|Дата, время|Примечание")
+ S NI="" F  S NI=$O(^EPRLOG(NI)) Q:NI=""  D
+ .S ID="" F  S ID=$O(^EPRLOG(NI,ID)) Q:ID=""  D
+ ..S DT=DS_",",T=""
+ ..F  S DT=$O(^EPRLOG(NI,ID,"e",DT)) Q:DT=""!($P(DT,",",1)>DE)  D
+ ...S X=^(DT),K=$P(X,"|",1),X=$P(X,"|",2)
+ ...Q:VRX'=X  
+ ...S A=$S(K="S":"Подписан",K="H":"Частично подписан",K="U":"Убрана подпись",K="Y":"Частично убрана подпись",K="P":"Напечатан",K="V":"Просмотрен",K="W":"Сохранен",1:K)
+ ...S:T="" T=$P($G(^EPR(NI,ID,"dt")),"|",1),N=$G(^EPR(NI,ID,"n"))
+ ...S AV=$$FIO^IKADRY($$KDR^IEPR(NI,ID))
+ ...D WC^RWU(CR_NI_" "_$$FIOSH^IPAC(NI)_"|"_$$DT2^DTUTL(T)_"|"_N_"|"_AV_"|"_A_"|"_$$DTM2^DTUTL(DT)_"|")
+ ..S DT=DS_",",T=""
+ ..F  S DT=$O(^EPRLOG(NI,ID,"c",DT)) Q:DT=""!($P(DT,",",1)>DE)  D
+ ...S X=^(DT),K=$P(T,",",3),X=$TR($P(X,"|",2,99),"|","/")
+ ...Q:VRX'=K 
+ ...S A="Комментарий|"_$$DTM2^DTUTL($P(DT,",",1,2))
+ ...S:T="" T=$P($G(^EPR(NI,ID,"dt")),"|",1),N=$G(^EPR(NI,ID,"n"))
+ ...D WC^RWU(CR_NI_" "_$$FIOSH^IPAC(NI)_"|"_$$DT2^DTUTL(T)_"|"_N_"|"_AV_"|"_A_"|"_X)
+ D C^RWU
+ Q
+LSTBTP(DS,DE,DTP,VR,LPUX) ; Список пациентов по типу и автору
+ N FF,DT,NI,V,O
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),LPUX=$G(LPUX),FF=$$FR^I()
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|№ И.Б.|Пациенты "_$$TXTP^DTUTL(DS,DE)_"|Автор|Дата|Документ|Создан"_$S(FF:"|Филиал",1:""))
+ S DT=DS-1 F  S DT=$O(^EPRI("dt",DT)) Q:DT=""!(DT>DE)  D
+ .S NI="" F  S NI=$O(^EPRI("dt",DT,NI)) Q:NI=""  D
+ ..I DTP'="",'$D(^EPRI("t",NI,DTP)) Q 
+ ..S ID="" F  S ID=$O(^EPRI("nd",NI,DT,ID)) Q:ID=""  D
+ ...S V=$P(^(ID),"|",2)
+ ...I VR'="",V'=VR Q 
+ ...I DTP'="",$G(^EPR(NI,ID,"t"))'=DTP Q 
+ ...S O=$G(^EPR(NI,ID,"o")),LP=$P(O,"|",3)
+ ...I LPUX'="",LPUX'=LP Q 
+ ...S R=NI_"|"_NI_"|"_$$FIO^IPAC(NI,DT)_"|"_$$FIOSH^IKADRY(V,DT)_"|"
+ ...D WC^RWU(CR_R_$$DT^DTUTL(DT)_"|"_$G(^EPR(NI,ID,"n"))_"|"_$$DTM^DTUTL($P($G(^EPR(NI,ID,"dt")),"|",3))_$S(FF:"|"_$$NAME^ICONTR(LP),1:""))
+ D C^RWU
+ Q
+CHKDIA(DS,DE,VRX,OTD,DGX,FDI) ; Проверка диагнозов
+ N DT,NI,ID,FL,TX,R,F,D,T,V,OW,OT,DIA,DIAL,KX,I,V,O,FR,TPLST,DG,A
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S FR=$$FR^I()
+ 
+ S ID="" F  S ID=$O(^DTYPE(ID)) Q:ID=""  I $D(^DTYPE(ID,"fields","diag")) S TPLST(ID)=""
+ 
+ D OWF^RWU(".txt")
+ D WC^RWU("mhist:env:pac|Дата|Пациент|Врач|Диагноз|Диагнозы услуг|Наименование документа|Договор"_$S(FR:"|Филиал",1:""))
+ 
+ S DT=DS-1 F  S DT=$O(^EPRI("dt",DT)) Q:DT=""!(DT>DE)  D
+ .S NI="" F  S NI=$O(^EPRI("dt",DT,NI)) Q:NI=""  D
+ ..S ID="" F  S ID=$O(^EPRI("nd",NI,DT,ID)) Q:ID=""  D
+ ...S OW=^(ID),T=$P(OW,"|",1) Q:T="" 
+ ...Q:'$D(TPLST(T)) 
+ ...S V=$P(OW,"|",2)
+ ...I VRX'="",V'=VRX Q 
+ ...I OTD'="" S OT=$P($G(^EPR(NI,ID,"o")),"|",5) S:OT="" OT=$$OTD^IKADRY(V) Q:OT'=OTD 
+ ...S T=$G(^EPR(NI,ID,"t")) Q:T="" 
+ ...S D=$G(^EPRD(NI,ID,"diag"))
+ ...S DIA=$P($S($P(D," ",1)="?":$P(D," ",2),1:$P(D," ",1)),".",1)
+ ...Q:DIA=""  
+ ...D getDIAU(NI,DT,V)
+ ...S F=0
+ ...S:$O(DIAL(DIA))'="" F=1
+ ...I 'F,$O(DIAL(DIA),-1)'="" S F=1
+ ...Q:'F 
+ ...S DG=$$GET^IPAC(NI,"stc",DE)
+ ...I DGX'="",DGX'=DG Q 
+ ...S:FDI DIA=$$NAME^YMKB10(DIA)
+ ...S (D,F)="" F  S D=$O(DIAL(D)) Q:D=""  S F=$S(F="":"",1:F_" ")_D
+ ...S A=NI_"|"_$$DT^DTUTL(DT)_"|"_NI_" "_$$FIO^IPAC(NI)
+ ...S A=A_"|"_$$FIO^IKADRY(V)_"|"_DIA_"|"_F_"|"_$G(^DTYPE(T,"tname"))
+ ...S A=A_"|"_$$NAME^IINSC(DG,DE)
+ ...S:FR A=A_"|"_$$NAME^ICONTR($P($G(^EPR(NI,ID,"o")),"|",3))
+ ...D WC^RWU(CR_A)
+ 
+ D C^RWU
+ Q
+getDIAU(NI,DT,VR) ; Список диагнозов на услугах -> DIAL
+ N V
+ K DIAL
+ S KX="" F  S KX=$O(^PNF(NI,DT,KX)) Q:KX=""  D
+ .S V=$P(KX,"|",1),O=$P(KX,"|",2),I=$P(KX,"|",3)
+ .Q:V'=VR 
+ .S D=$P($$GETDI^IUSL(V,DT,O,I),".",1) Q:D=""  
+ .S DIAL(D)=""
+ Q
+LSTEPR(DS,DE,DTP,FNX,FLX) ; Вывод документов по условию полей
+ ; DS - начало периода
+ ; DE - окончание периода
+ ; DTP - тип документа
+ ; FNX - формула фильтра
+ ; FLX - выводимые поля
+ ; У отчета ограничение размера выводимых полей в 512 символов
+ N FLL,NI,DT,ID,KX,TP,R,I,J,X,IC
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S FLX=$$WD^TXTU($TR(FLX,",;:\ ","||||"))
+ S FNX=$$WD^TXTU(FNX)
+ S J=0 F I=1:1:$L(FLX,"|") S X=$P(FLX,"|",I) S:X'="" J=J+1,FLL(J)=X
+ S IC=J
+ 
+ D OWF^RWU(".txt")
+ ; Заголовок
+ S R=""
+ I IC F I=1:1:IC S R=R_"|"_$G(^DTYPE(DTP,"fields",FLL(I),"@tit"))
+ D WC^RWU("mhist:env:pac|№ И.Б.|Пациент "_$$TXTP^DTUTL(DS,DE)_"|Дата|Наименование|Автор"_R)
+ s ^KKK=FNX
+ 
+ ; Данные
+ S DT=DS-1 F  S DT=$O(^EPRI("dt",DT)) Q:DT=""!(DT>DE)  D
+ .S NI="" F  S NI=$O(^EPRI("dt",DT,NI)) Q:NI=""  D
+ ..Q:'$D(^EPRI("t",NI,DTP)) 
+ ..S ID="" F  S ID=$O(^EPRI("dt",DT,NI,ID)) Q:ID=""  D
+ ...Q:$G(^EPR(NI,ID,"t"))'=DTP 
+ ...I FNX'="",'$$EQ^IEVAL(FNX,"^EPRD("""_NI_""","_ID_")",1) Q 
+ ...S R=NI_"|"_NI_"|"_$$FIOSH^IPAC(NI)_"|"_$$DT2^DTUTL(DT)_"|"_$G(^EPR(NI,ID,"n"))_"|"_$$FIOSH^IKADRY($$KDR^IEPR(NI,ID))
+ ...I IC F I=1:1:IC S R=R_"|"_$TR($E($G(^EPRD(NI,ID,FLL(I))),1,512),CR," ")
+ ...D WC^RWU(CR_R)
+ D C^RWU
+ Q
+REGIPROC ; 
+ N FF,F,E
+ S F=$$FR^I(),FF=$S(F:",t@storage:lpu,Филиал",1:"")
+ S E="ЭМК"
+ S ^IPROC(E,"Используемые документы")="CSTAT_REPR,1,4,d,Начальная дата,d,Конечная дата,te@net:FLST_NVFIND(""""),Автор,te@storage:otd@1,Отделение"
+ S ^IPROC(E,"Статистика по авторам ЭМД")="OWSTAT_REPR,1,3,d,Начальная дата,d,Конечная дата,te@net:NMLST_NSPRAV(""otda"")@1,Отделение"
+ S ^IPROC(E,"Оценка карт")="EST_REPR,1,5,d,Начальная дата,d,Конечная дата,te@net:FLST_NVFIND(""""),Автор,te@storage:otd@1,Отделение,t@string:0/Нет#1/Да,По видам документов"
+ S ^IPROC(E,"Список оценки карт")="ESTLST_REPR,1,5,d,Начальная дата,d,Конечная дата,te@net:FLST_NVFIND(""""),Автор,t@string:1/Больше чем#2/Меньше чем#0/Равно,Соотношение,s,Значение оценки"
+ S ^IPROC(E,"События в картах пациента")="EVLIST_REPR,1,3,e@pac,№ и.б. пациента,d,Период документов с,d,Период документов по"
+ S ^IPROC(E,"Служебные","Выгрузка справочников документов ЭМК")="LSTCL_REPR,1,3,te@net:LTDTFN_YIMHS()@1,Тип документа,s,Имя поля,t@string:0/Нет#1/Да,Вывод частных справочников"
+ S ^IPROC(E,"Служебные","Изменение в картах по врачу")="EVVR_REPR,1,3,d,Начальная дата,d,Конечная дата,te@net:FLST_NVFIND(""""),Сотрудник"
+ S ^IPROC(E,"Список документов по типу")="LSTBTP_REPR,100,"_$S(F:5,1:4)_",d,Начальная дата,d,Конечная дата,te@net:LSTNM_YIMHS(""""),Тип документа,te@net:FLST_NVFIND(""""),Сотрудник"_FF
+ S ^IPROC(E,"Вывод документов по типу")="LSTEPR_REPR,100,5,d,Начальная дата,d,Конечная дата,te@net:LSTNM_YIMHS(""""),Тип документа,s,Выражение фильтра,s,Список полей"
+ S ^IPROC(E,"Контроль диагнозов")="CHKDIA_REPR,100,6,d,Начальная дата,d,Конечная дата,te@net:FLST_NVFIND(""""),Автор,te@storage:otd@1,Отделение,te@storage:dog,Договор,t@string:0/Нет#1/Да,Расшифровывать диагноз"
+ Q

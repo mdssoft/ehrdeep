@@ -1,0 +1,452 @@
+NGRNL ; Гарантийные письма [ 07/11/2023  1:38 AM ]
+OINIT(NIB) ; Init, if open
+ N A,DGN,R,I,X,K,PL
+ S DGN=$$GET^IPAC(NIB,"stc")
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<pacgrnl>")
+ D WTAGDC^RWU("pfio",$$FIO^IPAC(NIB))
+ S A=+$$LCL^IUSER("grnl","prgbystc")
+ D WTAGU^RWU("prg",A)
+ S A=$$LCL^IUSER("grnl","setprc")
+ D WC^RWU("<prc visible="""_$S(A:"yes",1:"no")_""">")
+ S K=$$LCL^IUSER("grnl","prcbystc")
+ D:'K WC^RWU("|По умолчанию"),LSTs^NSPRAV("tprice",0,1)
+ D:K lstPRC(DGN)
+ D W^RWU("</prc><list>"),LSTsys(NIB,0,10),W^RWU("</list>")
+ S R=$$LCL^IUSER("grnl","setfields")
+ I R'="" F I=1:1:$L(R,$C(9)) S X=$P(R,$C(9),I),PL=$P(X,"=",1),X=$P(X,"=",2,99),K=$E(X) X:K="@" "S X="_X D WTAGDC^RWU(PL,X)
+ S R=$$LCL^IUSER("grnl","lkfields")
+ I R'="" F I=1:1:$L(R,$C(9)) S X=$P(R,$C(9),I) D W^RWU("<"_X_" enabled=""no""/>")
+ D W^RWU("</pacgrnl></nb_console>"),C^RWU
+ Q
+LSTsys(NIB,IsID,MOD) ; Список писем по пациенту (system)
+ ; IsID - 0/1 = шифратор/список
+ ; MOD - 0/1/2/9 = обычно/отметка, что действ/только действ/с "устным"
+ Q:NIB="" 
+ N LS,R,D,X,K,U,A
+ S MOD=$G(MOD)
+ S D="" F  S D=$O(^GRNL(NIB,D)) Q:D=""  D
+ .S U=""
+ .I MOD,MOD<9 S X=$G(^(D)),U=$S(X="":1,X'<D:1,1:0) I MOD=2,'U Q  
+ .I MOD=9 Q:$G(^GRNL(NIB,D,"orapp")) 
+ .I MOD=0 Q:'$G(^GRNL(NIB,D,"orapp"))
+ .S R=$G(^(D,"n"))
+ .S LS(D_"|"_$P(R,"|",1))=$P(R,"|",2)_"|"_D_$S(U:"|1",1:"")
+ S (D,R)="",IsID=+$G(IsID)
+ F  S D=$O(LS(D)) Q:D=""  D
+ .S A=LS(D),X=$P(A,"|",1),X=$S(X="":X,1:"№ "_X_" ")
+ .S K=$P(D,"|",2),K=$S(K="":$P(D,".",1),1:K),U=$P(A,"|",3)
+ .D WC^RWU(R_$S(IsID:"",1:$P(A,"|",2)_"|")_X_"от "_$$DT2^DTUTL(K)_$S(U:"(+)",1:""))
+ .S R=CR
+ Q
+LST(NIB,IsID,MOD) ; Список писем по пациенту
+ ; IsID - 0/1 = шифратор/список
+ Q:NIB="" 
+ D OWF^RWU(".txt")
+ D LSTsys(NIB,$G(IsID),$G(MOD))
+ D C^RWU
+ Q
+S ; Save XML
+ N %J,N,A,I,F,X
+ K ^BUF($J,"grn")
+ D OEVH^XMLU("TAGS^NGRNL","TAGD^NGRNL","TAGE^NGRNL")
+ D CLRTAGS
+ D W
+ K ^BUF($J,"grn")
+ Q
+W ; Write
+ N X,R,NIB,DT,I,NN,NUM,D,DD,K,PL,SC,TEST,STC,DE,PR,X1,F,Z,TMP,MD,ssP
+ S NIB=$G(^BUF($J,"grn","nib"))
+ Q:NIB="" 
+ D DO^ITRIG("grnl","save")
+ G:$E($G(DT))="|" We
+ S DT=$G(^BUF($J,"grn","sel")),NN=0,MD=""
+ S D=$G(^BUF($J,"grn","df"))
+ I D="",$$LCL^IUSER("grnl","chkdtnn") S DT="|Не указана дата начала действия" G We
+ S:D="" D=+$H
+ I $L(DT),$P(DT,".",1)'=D S MD=DT,DT="" ; изменение даты
+ S:DT="" DT=$$NNUM^IGRNL(NIB,D),NN=1
+ S R=+$G(^LOG(%LOG,"lcl","grnl")),D=$P(DT,".",1)
+ S NUM=$G(^BUF($J,"grn","nn"))
+ I R,$G(^LCL("grnl",R,"new"))=0,'$D(^GRNL(NIB,DT)) S DT="|Недостаточно прав" G We 
+ I R,$G(^LCL("grnl",R,"save"))=0,$D(^GRNL(NIB,DT)) S DT="|Недостаточно прав" G We 
+ I $D(^GRNL(NIB,DT)),R,$G(^LCL("grnl",R,"wowner")),$P($P($G(^GRNL(NIB,DT,"log")),"|",1),"@",1)'=%LOG S DT="|Вы вправе изменить только введенные Вами письма" G We
+ I $D(^GRNL(NIB,DT)),R S X=+$G(^LCL("grnl",R,"wdays")) I X,D+X>+$H S DT="|Вы вправе изменить письма только в течении "_R_" дней" G We
+ 
+ S R=$$LCL^IUSER("grnl","pacflnn"),A=""
+ I R'="" F I=1:1:$L(R,";") S X=$P(R,";",I) I $$GET^IPAC(NIB,X,$P(DT,".",1))="" S A=$S(A="":"",1:A_CR)_$$NM^YIPACN(X)
+ I A'="" S DT="|Не заполнены поля учетной карточки:"_CR_A G We
+ 
+ S X=$G(^BUF($J,"grn","prg")),PR=""
+ F I=1:1 S K=$P(X,CR,I) Q:K=""  S PR=$S(PR="":"",1:PR_"|")_$P(K,"|",1)
+ S ^BUF($J,"grn","prg")=PR
+ 
+ I +$G(^BUF($J,"grn","uprg")),$G(^BUF($J,"grn","prg"))="",$$GET^IPAC(NIB,"prog")="" S DT="|Не указаны программы" G We
+ 
+ S DE=$G(^BUF($J,"grn","de"))
+ I DE="",$$LCL^IUSER("grnl","chkdtnn") S DT="|Не указана дата окончания действия" G We
+ 
+ S R=$G(^BUF($J,"grn","stc")),X=$$GET^IPAC(NIB,"stc",D)
+ I R'="",$$LCL^IUSER("grnl","chkpolis"),$G(^BUF($J,"grn","polis"))="" S DT="|Не указан полис" G We
+ S STC=$S(R'="":R,1:X)
+ S R=$$LCL^IUSER("grnl","chkfields") 
+ I R'="" S F=0 F I=1:3:$L(R,$C(9)) D  G:F We
+ .S PL=$P(R,$C(9),I),X=$P(R,$C(9),I+1),X1=$P(R,$C(9),I+2) Q:PL="" 
+ .S PL=$G(^BUF($J,"grn",PL))
+ .I X="",PL="" S DT="|"_$S(X1="":"Не заполнены необходимые данные",1:X1),F=1 Q 
+ .Q:X="" 
+ .I @("PL"_X) S DT="|"_$S(X1="":"Не заполнены необходимые данные",1:X1),F=1 Q
+ 
+ S R=$G(^BUF($J,"grn","stc")),X=$$GET^IPAC(NIB,"stc",D),SC=0,I=R
+ I $L(R),$$LCL^IUSER("grnl","setstc") S X=R
+ S:R="" R=X
+ I $$GET^IINSC(R,"ngrnl",DT) S DT="|Для данного договора запрещено создание гарантийных писем" G We ; нельзя ГП
+ 
+ ; clear prev.
+ I MD'="" M ^GRNL(NIB,DT,"log")=^GRNL(NIB,MD,"log") K ^GRNL(NIB,MD) D KGL^IEXCH("^GRNL",NIB,MD)
+ ; save data
+ S ^GRNL(NIB,DT,"s")=I
+ S Z=$G(^BUF($J,"grn","inf"))!$G(^BUF($J,"grn","orapp"))
+ I $L(R),'Z,$$LCL^IUSER("grnl","setstc") S SC=1,STC=R
+ I R'=X,'Z,$$LCL^IUSER("grnl","fxstc")'=0,$G(^cfg("def-stc"))=X S SC=1,STC=R
+ I DE="",$G(^cfg("grnl","mxday")) S DE=DT+^("mxday")
+ S ^GRNL(NIB,DT)=DE
+ S R=""
+ S X=$G(^BUF($J,"grn","dt")) S:X'="" $P(R,"|",1)=X
+ S X=$G(^BUF($J,"grn","nn")) S:X'="" $P(R,"|",2)=X
+ D SET(NIB,DT,"inf",+$G(^BUF($J,"grn","inf")))
+ D SET(NIB,DT,"orapp",+$G(^BUF($J,"grn","orapp")))
+ D SET(NIB,DT,"agr",+$G(^BUF($J,"grn","agr")))
+ D SET(NIB,DT,"up",+$G(^BUF($J,"grn","uprg")))
+ D SET(NIB,DT,"smm",$TR($G(^BUF($J,"grn","summ")),",","."))
+ 
+ I $$LCL^IUSER("grnl","basepolis") S X=$$PIDXN^IPAC(NIB,STC,D) I X'=-1,$$GET^IPAC(NIB,"polis"_X,D)'=$G(^BUF($J,"grn","polis")) S ^BUF($J,"grn","polis")=$$GET^IPAC(NIB,"polis"_X,D) 
+ 
+ F X="img","prg","prc","polis" D SET(NIB,DT,X,$G(^BUF($J,"grn",X)))
+ ; не изменять номер
+ I 'NN,$$LCL^IUSER("grnl","ncnum") G:$G(^GRNL(NIB,DT,"n"))'="" W1
+ D SET(NIB,DT,"n",R)
+W1 ; отделения
+ S R=$G(^BUF($J,"grn","otd"))
+ K ^GRNL(NIB,DT,"otd")
+ F I=1:1:99 S X=$P(R,"|",I) Q:X=""  S ^GRNL(NIB,DT,"otd",X)=""
+ ; специальности
+ S R=$G(^BUF($J,"grn","spec"))
+ K ^GRNL(NIB,DT,"spc")
+ F I=1:1:99 S X=$P(R,"|",I) Q:X=""  S ^GRNL(NIB,DT,"spc",X)=""
+ ; диагнозы
+ K ^GRNL(NIB,DT,"dia")
+ F I=0:1 S X=$G(^BUF($J,"grn","diag",I)) Q:X=""  S ^GRNL(NIB,DT,"dia",X)=""
+ ; услуги
+ K ^GRNL(NIB,DT,"u")
+ F I=1:1 S X=$G(^BUF($J,"grn","usl",I)) Q:X=""  S R=$P(X,"|",1) S:R'="" ^GRNL(NIB,DT,"u",R)=$P(X,"|",3)
+ ; примечание
+ K ^GRNL(NIB,DT,"c")
+ S I="" F  S I=$O(^BUF($J,"grn","descr",I)) Q:I=""  S ^GRNL(NIB,DT,"c",I+1)=^(I)
+ S R=$H,I=$$USR^IUSER()
+ S ^GRNL(NIB,DT,"log")=I_"|"_R,^GRNL(NIB,DT,"log",R)=I
+ D W^ISSG("^GRNL("_NIB_","_DT_")")
+ D KGL^IEXCH("^GRNL",NIB,DT),GL^IEXCH("^GRNL",NIB,DT)
+ ; доп. поля в УК
+ s ssP=0,R=$$LCL^IUSER("grnl","setpac")
+ I SC,R'="" F I=1:1:$L(R,$C(9)) S X=$P(R,$C(9),I),PL=$P(X,"=",1),X=$P(X,"=",2,99),K=$E(X),TEST=1 X:K="@" "S X="_$E(X,2,99) I TEST D SETFT^IPAC(NIB,PL,D,DE,X,1) S ssP=1
+ S PL=$G(^GRNL(NIB,DT,"polis"))
+ D DO^ITRIG("grnl","post")
+ D:SC=1
+ .S I=$$GET^IPAC(NIB,"stc",D),R=$$GET^IPAC(NIB,"polis",D)
+ .I R'="",PL'="",$$GET^IINSC(I,"dvid",D)=3 S R="" ; индивид.
+ .D:PL'=""&(R="") SETFT^IPAC(NIB,"polis",D,DE,PL)
+ .D SETFT^IPAC(NIB,"stc",D,DE,STC,1)
+ .S ssP=1
+ D:SC=2
+ .S DD=$$CREATED^IPAC(NIB),X=$S(DD>D:DD,1:D)
+ .S I=$$GET^IPAC(NIB,"stc",X),R=$$GET^IPAC(NIB,"polis",X)
+ .I R'="",PL'="",$$GET^IINSC(I,"dvid",X)=3 S R="" ; индивид.
+ .D SET^IPAC(NIB,"stc",X,STC,1)
+ .D:PL'=""&(R="") SET^IPAC(NIB,"polis",X,PL,1)
+ .D WLOG^IPAC(NIB,X,$H)
+ .S ssP=1
+ I SC=0,PL'="",$$LCL^IUSER("grnl","setpolis") D  ; no changes in stc
+ .S I=$$PIDXN^IPAC(NIB,$G(^BUF($J,"grn","stc")),D) Q:I=-1  ; another stc
+ .S R=$$GET^IPAC(NIB,"polis"_I,D)
+ .Q:R=PL 
+ .S R=$$LCL^IUSER("grnl","setpolisof")
+ .I R'="",R'=$$GET^IPAC(NIB,"ofor",D) Q 
+ .D SET^IPAC(NIB,"polis",D,PL,1)
+ .D WLOG^IPAC(NIB,D,$H)
+ .S ssP=1
+ D:ssP DOEVENT^IPAC(NIB) ; лок. события пациента
+We 
+ D MSG^RWU(^PP(0,2)_"<pacgrnl><sel data="""_$$TKAV^TXTU(DT)_"""/></pacgrnl></nb_console>",".xmlb")
+ Q
+pW(PRM) ; One param for chkfields
+ Q $G(^BUF($J,"grn",PRM))
+pW2(PRM,IDX) ; Two param for chkfields
+ Q $G(^BUF($J,"grn",PRM,IDX))
+CHKNEW(NIB) ; Проверить условия по письму
+ N R,I,X,H,A
+ S R=$$LCL^IUSER("grnl","pacflnn"),A="",H=+$H
+ Q:R="" 
+ F I=1:1:$L(R,";") S X=$P(R,";",I) I $$GET^IPAC(NIB,X,H)="" S A=$S(A="":"",1:A_CR)_$$NM^YIPACN(X)
+ I A'="" D MSG^RWU("Не заполнены поля учетной карточки:"_CR_A) Q
+ 
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<pacgrnl>")
+ S R=$$LCL^IUSER("grnl","setfields")
+ I R'="" F I=1:1:$L(R,$C(9)) S X=$P(R,$C(9),I),PL=$P(X,"=",1),X=$P(X,"=",2,99),K=$E(X) X:K="@" "S X="_X D WTAGDC^RWU(PL,X)
+ D W^RWU("</pacgrnl></nb_console>"),C^RWU
+ Q
+lstPRC(DGN) ; Список прейскурантов по договору
+ N P,A
+ S A="|По умолчанию"
+ S P=$$GET^IINSC(DGN,"price")
+ S:P'="" A=$S(A="":"",1:A_CR)_P_"|Основной"
+ S P=$$GET^IINSC(DGN,"sprice")
+ S:P'="" A=$S(A="":"",1:A_CR)_P_"|Стоматология"
+ S P=$$GET^IINSC(DGN,"dprice")
+ S:P'="" A=$S(A="":"",1:A_CR)_P_"|Педиатрия"
+ S P=$$GET^IINSC(DGN,"pprice")
+ S:P'="" A=$S(A="":"",1:A_CR)_P_"|Профмедицина"
+ D WC^RWU(A)
+ Q
+CNGDGN(NIB,DGN) ; Смена договора в ГП
+ N R
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<pacgrnl>") ;<prg>|")
+ ;D PRBYDGN^NPSPIS(DGN) S R=CR_%L K %L,%B
+ ;D W^RWU(R_"</prg>")
+ D:$$LCL^IUSER("grnl","prcbystc") W^RWU("<prc>"),lstPRC(DGN),W^RWU("</prc>")
+ D W^RWU("</pacgrnl></nb_console>"),C^RWU
+ Q
+DGNPRG(NIB,DGN) ; Программы по договору
+ S:DGN="" DGN=$$GET^IPAC(NIB,"stc")
+ D PRBYDGN^NPSPIS(DGN)
+ Q
+SET(NIB,DT,PL,X) 
+ I X="" K ^GRNL(NIB,DT,PL) Q 
+ I '$D(^GRNL(NIB,DT,PL)) S ^(PL)=X Q 
+ S:^(PL)'=X ^(PL)=X
+ Q
+TAGS ; Start tag
+ S A=%XM(2)
+ Q:A="xml"!(A="nb_console")!(A="pacgrnl")
+ S ^BUF($J,"grn",A)=""
+ Q
+TAGD ; Tag data
+ S A=%XM(2)
+ Q:A="xml"!(A="nb_console")!(A="pacgrnl")
+ I A'="usl",A'="diag",A'="descr" S ^(A)=^BUF($J,"grn",A)_%XD  Q
+ S I=+$O(^BUF($J,"grn",A,""),-1),X=$G(%XM("a"))_%XD
+ F  S F=X[CR Q:'F  S N=$P(X,CR,1),X=$P(X,CR,2,9999),^(I)=$G(^BUF($J,"grn",A,I))_N,I=I+1
+ S %XM("a")=X,%XM("i")=I
+ Q
+TAGE 
+ S A=%XM(2)
+ I A'="usl",A'="diag",A'="descr" Q 
+ Q:$G(%XM("a"))="" 
+ S I=%XM("i"),^(I)=$G(^BUF($J,"grn",A,I))_%XM("a")
+ K %XM("a")
+ Q
+CLRTAGS ; Чистка лишних данных
+ N PL,I,R
+ F PL="usl","diag" S I="" F  S I=$O(^BUF($J,"grn",PL,I)) Q:I=""  K:$P(^(I),"|",1)="" ^(I)
+ Q
+L(NIB,DT) ; Load
+ N DGN,P,PP,R,R1,X,D,I,SP,DP,XP
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<pacgrnl>")
+ S D=$P(DT,".",1)
+ S DGN=$G(^GRNL(NIB,DT,"s"))
+ 
+ ;D W^RWU("<prg>|")
+ ;D PRBYDGN^NPSPIS(DGN) S R=CR_%L K %L,%B
+ ;D WC^RWU(R_"</prg>")
+ 
+ D WTAGDC^RWU("df",D)
+ D WTAGDC^RWU("de",$G(^GRNL(NIB,DT)))
+ D WTAGDC^RWU("stc",DGN) ; default, if not set
+ S:DGN="" DGN=$$GET^IPAC(NIB,"stc",D)
+ S P=$S($$AGE^IPAC(NIB,D)<19:$$GET^IINSC(DGN,"dprice",D),1:"")
+ S:P="" P=$$CORCP^IPRICET($$GET^IINSC(DGN,"price",D))
+ S SP=$$CORCP^IPRICET($$GET^IINSC(DGN,"sprice",D))
+ S R=$G(^GRNL(NIB,DT,"n"))
+ D WTAGDC^RWU("dt",$P(R,"|",1))
+ D WTAGDC^RWU("nn",$P(R,"|",2)) ; Номер
+ D WTAGDC^RWU("inf",+$G(^GRNL(NIB,DT,"inf")))
+ D WTAGDC^RWU("orapp",+$G(^GRNL(NIB,DT,"orapp")))
+ D WTAGDC^RWU("agr",+$G(^GRNL(NIB,DT,"agr")))
+ D WTAGDC^RWU("img",$G(^GRNL(NIB,DT,"img")))
+ D WTAGDC^RWU("uprg",$G(^GRNL(NIB,DT,"up")))
+ D WTAGDC^RWU("polis",$G(^GRNL(NIB,DT,"polis")))
+ S XP=$G(^GRNL(NIB,DT,"prg")),R=""
+ F I=1:1:$L(XP,"|") S X=$P(XP,"|",I),R=$S(R="":"",1:R_CR)_X_"|"_$$NAME^IMPRP(X)
+ D WTAGC^RWU("prg",R)
+ D WTAGDC^RWU("summ",$G(^GRNL(NIB,DT,"smm")))
+ S R=$G(^GRNL(NIB,DT,"prc")) S:R'="" P=R
+ D WTAGDC^RWU("prc",R)
+ S R=$G(^GRNL(NIB,DT,"log"))
+ D WTAGDC^RWU("owner",$$FIOSH^NUSER($P(R,"|",1),2)_", "_$$DTM^DTUTL($P(R,"|",2)))
+ D:$D(^GRNL(NIB,DT,"c")) ; Описание
+ .D W^RWU("<descr>")
+ .S (R,X)=""
+ .F  S X=$O(^GRNL(NIB,DT,"c",X)) Q:X=""  D WC^RWU(R_^(X)) S R=CR
+ .D W^RWU("</descr>")
+ S (R,X)=""
+ F  S X=$O(^GRNL(NIB,DT,"otd",X)) Q:X=""  S R=R_$S(R="":"",1:"|")_X
+ D WTAGD^RWU("otd",R)
+ S (R,X)=""
+ F  S X=$O(^GRNL(NIB,DT,"spc",X)) Q:X=""  S R=R_$S(R="":"",1:"|")_X
+ D WTAGD^RWU("spec",R)
+ S (R,X)=""
+ D W^RWU("<diag>")
+ F  S X=$O(^GRNL(NIB,DT,"dia",X)) Q:X=""  D WC^RWU(R_$$NAME^YMKB10(X)_"|"_X) S R=CR
+ D W^RWU("</diag><usl>")
+ S P=$$PRC^IINSC(DGN,NIB,DT,0,"","") ; TODO - age
+ S (R,X)=""
+ F  S X=$O(^GRNL(NIB,DT,"u",X)) Q:X=""  D
+ .S R=^(X),PP=$G(^(X,"p"))
+ .S R1=$S(PP'="":PP,$$EXIST^IPRICE(X,P):P,$$EXIST^IPRICE(X,SP):SP,1:$$CORCP^IPRICET($$STARTTP^IPRICE(X,D)))
+ .D WC^RWU(CR_X_"|"_$$NAMEH^IPRICE(X,R1,D)_"|"_R)
+ D W^RWU("</usl></pacgrnl></nb_console>"),C^RWU
+ Q
+DEL(NIB,DT) ; Delete
+ D MSG^RWU("ER")
+ Q:'$D(^LOG(%LOG,"lcl","grnl")) 
+ N R S R=+^("grnl")
+ Q:'+$G(^LCL("grnl",R,"del")) 
+ K ^GRNL(NIB,DT)
+ D K^ISSG("^GRNL("_NIB_","_DT_")")
+ D KGL^IEXCH("^GRNL",NIB,DT)
+ D MSG^RWU("OK")
+ Q
+ADDAGR(NI,USL,UKEY,DGN,OTD,VR,DT) ; Добавить письмо по согласованию
+ N PRC,SKD,FLG,X,X1,R,GID,CNT,PP
+ S PRC=$P(UKEY,"@",2),SKD=$P(UKEY,"@",4),FLG=$P(UKEY,"@",6)
+ S DT=$$DIH^DTUTL($G(DT)),SP=$$SPEC^IKADRY(VR)
+ S USL=$$LU^TXTU(USL),CNT=$P(USL,"*",2),USL=$P(USL,"*",1)
+ S:'CNT CNT=1
+ S:DGN="" DGN=$$GET^IPAC(NI,"stc",DT)
+ S PP=PRC
+ I PRC="",$$STOM^IEDE(OTD,SP) S PRC=$$GET^IINSC(DGN,"sprice",DT)
+ S:PRC="" PRC=$$PRC^IINSC(DGN,NI,DT,FLG["k")
+ S PRC=$$CORCP^IPRICET(PRC)
+ S:UKEY=""&(SKD="") SKD=$$CALC^IDSCN(NI,"",USL,DGN,PRC,1)
+ I +SKD>100,$$GET^IPRICE(USL,"nosn",PRC,DT) S SKD=""
+ S X=$$PRICEH^IPRICE(USL,PRC,DT)
+ S:SKD X=+$J((100-SKD)*X/100,"",2)
+ S GID=DT-1 F  S GID=$O(^GRNL(NI,GID)) Q:GID=""!($P(GID,".",1)'=DT)  I $G(^(GID,"agr"))=1,$G(^("vr"))=VR Q 
+ S:GID="" GID=$$NNUM^IGRNL(NI,DT),^GRNL(NI,GID,"vr")=VR,^("agr")=1
+ S ^GRNL(NI,GID,"u",USL)=$G(^GRNL(NI,GID,"u",USL))+CNT
+ S:PP'="" ^(USL,"p")=PP
+ S ^GRNL(NI,GID,"smm")=$G(^GRNL(NI,GID,"smm"))+(X*CNT)
+ S ^GRNL(NI,GID,"log")=$$USRH^IUSER()
+ D GL^IEXCH("^GRNL",NI,GID)
+ D MSG^RWU("="_NI_"@"_GID)
+ Q
+GRNLTXT(NIB,KEY) ; Текстовое описание гарантийного письма
+ Q:NIB=""  
+ N K,M,P,D,DT,R,I,X
+ S K=$P(KEY,"@",2)
+ G:$$IsIMG^IGRNL(NIB,K) GRNLIMG+1
+ S M=$$IsPRG^IGRNL(NIB,K)!$$APRGID^IGRNL(NIB,K),DT=$$DT^IGRNL(NIB,K)
+ I M S D=$$DGN^IGRNL(NIB,K),P=$$PRG^IGRNL(NIB,K) S:D="" D=$$GET^IPAC(NIB,"stc",DT) S:P="" P=$$GET^IPAC(NIB,"prog"_$$PIDX^YIPACN(NIB,D,DT),DT)
+ 
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,1))
+ D:'M W^RWU("<nb_console><run>RUN_REPORT{ktext.frm}</run><ktext><txt>")
+ D:M W^RWU("<storage><kwhtml type=""plain"" action=""new"">"_$$TAG^TXTU("<html><body>")),NCSS^IHTML(1)
+ 
+ I M S I=$$DTXTsys^NPACINF(NIB,D,P,1,0) D W^RWU($$TAG^TXTU("<hr><div style=""background-color: #FFFFFF; color: #000000"" class=MsoNormal>"))
+ 
+ S I=""
+ F  S I=$O(^GRNL(NIB,K,"c",I)) Q:I=""  D WC^RWU($S(I>1:CR,1:"")_^(I))
+ 
+ D:M W^RWU($$TAG^TXTU("</div></body></html>")_"</kwhtml></storage><nb_console><run>RUN_REPORT{kwhtml.frm}</run><kwhtml>")
+ D:'M W^RWU("</txt>")
+ 
+ D WTAGDC^RWU("label","Гарантийное письмо "_$$TDSC^IGRNL(NIB,K))
+ 
+ D W^RWU($S(M:"</kwhtml>",1:"</ktext>")_"</nb_console>")
+ D C^RWU
+ Q
+GRNLIMG(NIB,KEY) ; Изображение гарантийного письма
+ N D,R,I
+ S D=$P(KEY,"@",2),R=$G(^GRNL(NIB,D,"n")),I=$$IMG^IGRNL(NIB,D)
+ Q:'$$EXIST^IDBFIL("/DBDIR/"_I) 
+ D OWF^RWU(".xmlb")
+ D W^RWU(^PP(0,1)_"<nb_console><run>RUN_REPORT{kweimage.frm}</run>")
+ S:$L(R) D=$P(R,"|",2),R=$S(D="":"",1:" №"_D)_" от "_$$DT2^DTUTL($P(R,"|",1))
+ D WC^RWU("<kweimage><label data=""Гарантийное письмо "_R_"""/>")
+ S I="net:DBDIR/"_I
+ D W^RWU("<img data="""_I_"""/></kweimage></nb_console>")
+ D C^RWU
+ Q
+GETINF(KEY) ; Информация по ГП в HTML
+ N I,NI,ID,A,B,Z,J,D,P,F,DGN,PRG,DT,PP,AGR,DE
+ D OWF^RWU(".htm")
+ D WC^RWU("<!DOCTYPE HTML PUBLIC ""-//W3C//DTD HTML 4.01 Transitional//EN""><html><head>")
+ D WC^RWU(CR_"<meta http-equiv=""Content-Type"" content=""text/html; charset=windows-1251"">")
+ D WC^RWU(CR_"<style type=""text/css""><!--")
+ D WC^RWU(CR_".hdr { background-color: #66CCFF; }")
+ D WC^RWU(CR_".hds { background-color: #DDDDDD; }")
+ D WC^RWU(CR_".norm { background-color: #FFFFFF; color: #000000}")
+ D WC^RWU(CR_"--></style></head><body>")
+ F I=1:1:$L(KEY,"|") D
+ .S A=$P(KEY,"|",I),NI=$P(A,"@",1),ID=$P(A,"@",2) Q:NI=""!(ID="") 
+ .S A=$G(^GRNL(NI,ID)),DT=$P(ID,".",1),DE=$P(A,"|",1) S:DE="" DE=30
+ .S Z=$G(^(ID,"n")),D=$P(Z,"|",1)
+ .S Z=$S($P(Z,"|",2)="":"б.н.",1:"№ "_$P(Z,"|",2))
+ .S DGN=$G(^("s")) S:DGN="" DGN=$$GET^IPAC(NI,"stc",DT)
+ .S X=$G(^("inf"))
+ .S:D'="" Z=Z_" от "_$$DT2^DTUTL(D)
+ .D WC^RWU(CR_"<p class=""hdr""><b>"_Z_"</b></p>")
+ .D WC^RWU($$^T("Период действия с")_" <b>"_$$DT2^DTUTL(DT)_"</b>"_$S(A:" "_$$^T("по")_" <b>"_$$DT2^DTUTL(A)_"</b>",1:""))
+ .S X=$G(^("orapp"))
+ .D:X WC^RWU("<br><font color=""#0000FF"">"_$$^T("Согласовано устно.","grnl")_"</font><br>")
+ .D:X WC^RWU("<br><font color=""#0000FF"">"_$$^T("Информационно-справочное письмо.","grnl")_"</font><br>")
+ .S X=$G(^GRNL(NI,ID,"smm"))
+ .D:X WC^RWU("<br>"_$$^T("Сумма ограничений","grnl")_": <b>"_X_"</b>")
+ .S AGR=$G(^GRNL(NI,ID,"agr"))
+ .D:AGR WC^RWU("<br>"_$S(AGR=1:$$^T("На согласовании","grnl"),1:$$^T("Согласовано","grnl")))
+ .S X=$G(^GRNL(NI,ID,"vr"))
+ .D:X'="" WC^RWU("<br>"_$$^T("Врач")_": "_$$FIO^IKADRY(X))
+ .S X=$G(^GRNL(NI,ID,"log"))
+ .D:X'="" WC^RWU("<br>"_$$^T("Изменено")_": "_$$FUSRH^IUSER(X))
+ .D:$O(^GRNL(NI,ID,"otd",""))'=""
+ ..D WC^RWU(CR_"<p class=""hds"">"_$$^T("Отделения")_"</p>")
+ ..S (Z,X)=""
+ ..F  S X=$O(^GRNL(NI,ID,"otd",X)) Q:X=""  S Z=Z_$S(Z="":"",1:", ")_$$GOTD^YISPRAV(X)
+ ..D WC^RWU(Z)
+ .D:$O(^GRNL(NI,ID,"spc",""))'=""
+ ..D WC^RWU(CR_"<p class=""hds"">"_$$^T("Специальности")_"</p>")
+ ..S (Z,X)=""
+ ..F  S X=$O(^GRNL(NI,ID,"spc",X)) Q:X=""  S Z=Z_$S(Z="":"",1:", ")_$$GSPEC^YISPRAV(X)
+ ..D WC^RWU(Z)
+ .D GRNLL^IUSLD(NI,ID,DT,DE,"ULL")
+ .D:$O(^GRNL(NI,ID,"u",""))'=""
+ ..D WC^RWU(CR_"<p class=""hds"">"_$$^T("Услуги")_"</p>")
+ ..S (Z,X)="",P=$G(^GRNL(NI,ID,"prc"))
+ ..I P="" S P=$$GET^IINSC(DGN,"price",DT) S P=$$CORCP^IPRICET(P)
+ ..F  S X=$O(^GRNL(NI,ID,"u",X)) Q:X=""  D
+ ...S B=^(X),PP=$G(^(X,"p"))
+ ...S:PP="" PP=P
+ ...D WC^RWU(Z_X_" "_$$NAMEH^IPRICE(X,PP,DT)_$S(B:", "_B_$$^T(" шт."),1:"")_$S(AGR:" "_$$PRICEH^IPRICE(X,PP,DT)_$$^T(" руб."),1:"")_$S($D(ULL(X)):" <b>Выполнено: "_ULL(X)_"</b>",1:""))
+ ...S Z="<br>"
+ .D:$O(^GRNL(NI,ID,"dia",""))'=""
+ ..D WC^RWU(CR_"<p class=""hds"">"_$$^T("Диагнозы")_"</p>")
+ ..S (Z,X)=""
+ ..F  S X=$O(^GRNL(NI,ID,"dia",X)) Q:X=""  D WC^RWU(Z_$$NAME^YMKB10(X)) S Z="<br>"
+ .D:$$IsCOMM^IGRNL(NI,ID)
+ ..D WC^RWU(CR_"<p class=""hds"">"_$$^T("Примечание")_"</p>")
+ ..D W^RWU("<div>") ; экранирование
+ ..S J="" F  S J=$O(^GRNL(NI,ID,"c",J)) Q:J=""  D WC^RWU($S(J>1:"<br>",1:"")_^(J))
+ ..D W^RWU("</div>")
+ .D:$$APRGID^IGRNL(NI,ID) 
+ ..S PRG=$$PRG^IGRNL(NI,ID) Q:PRG="" 
+ ..D W^RWU("<hr><p class=""norm"">")
+ ..F Z=1:1:$L(PRG,"|") S X=$P(PRG,"|",Z) D DGPINFs^NPACINF(DGN,X,DT,1)
+ ..D W^RWU("</p>")
+ D WC^RWU("</body></html>")
+ D C^RWU
+ Q
+OPLIST(NIB,KEY) ; Operator List
+ N DT,R,A
+ S (DT,A)=""
+ F  S DT=$O(^GRNL(NIB,KEY,"log",DT)) Q:DT=""  S R=^(DT),A=$S(A="":"",1:A_CR)_$$DT2^DTUTL(DT)_$C(9)_$$DTM^DTUTL(DT)_$C(9)_$$FIO^NUSER(R,2)
+ D MSG^RWU(A)
+ Q

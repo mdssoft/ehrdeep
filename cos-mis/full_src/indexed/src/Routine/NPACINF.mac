@@ -1,0 +1,73 @@
+NPACINF ; Информация о пациенте [ 07/23/2020  3:15 PM ]
+DTXTsys(NIB,DGN,PRG,HTM,sINF,DT) ; Описание по договору
+ ; DGN - договора
+ ; PRG - программа
+ ; HTM - вывод в html
+ ; sINF - доп. информация по договору
+ Q:NIB=""  
+ N I,R,H,X,C,T,F,Z,L,CC
+ S H=$G(DT),C="",ISTC=$G(ISTC),DGN=$G(DGN),SYS=$G(SYS),C=""
+ S:H="" H=+$H
+ S R=$$GETL2^YNDOG(DGN,"texts","-",H)
+ G:'HTM DOGTXT1
+ 
+ S CC="</DIV><DIV class=MsoNormal>"
+ S F=0
+ D:sINF
+ .S T=$$GET^YNDOG(DGN,"disp",H),X=$$GET^YNDOG(DGN,"fioo",H)
+ .Q:T="" 
+ .S X=$$GET^YNDOG(DGN,"fioo",H)
+ .S X=$S(X'="":"<br>Ф.И.О. контактного лица: "_X,1:"")
+ .S C=C_"Телефон диспетчера: "_T_X_"<hr>",F=1
+ 
+ S C=C_"<DIV>"
+ F T="<BODY>","<body>" I R[T S R=$P(R,T,2),R=$P(R,T,1)
+ F T="BODY>","body>" I R[("<"_T) S R=$P(R,"<"_T,2),R=$P(R,"</"_T,1)
+ I R'="" D WC^RWU($$TAG^TXTU(C_R)) S C=CC
+ 
+ F I=1:1:99 S X=$P(PRG,"|",I) Q:X=""  D
+ .;S R=$$GETL2^YNDOG(DGN,"texts",X,H)
+ .F Z="",1:1 S R=$$GETL2LN^YNDOG(DGN,"texts",X,H,Z) Q:R=""  D
+ ..F T="BODY>","body>" I R[("<"_T) S R=$P(R,"<"_T,2),R=$P(R,"</"_T,1)
+ ..Q:R="" 
+ ..s R=$$TRT^TXTU(R,"<body>",""),R=$$TRT^TXTU(R,"</body>","")
+ ..s R=$$TRT^TXTU(R,"<html>",""),R=$$TRT^TXTU(R,"</html>","")
+ ..S L=$L(R)
+ ..D:L<20000 WC^RWU($$TAG^TXTU(C_R))
+ ..D:L>19999 WC^RWU($$TAG^TXTU(C_$E(R,1,16384))),WC^RWU($$TAG^TXTU($E(R,16385,32768)))
+ ..S C=CC,F=1 
+ .F Z="",1:1 S R=$$GETLN^YMPRP(X,"dsc",H,Z) Q:R=""  D
+ ..F T="BODY>","body>" I R[("<"_T) S R=$P(R,"<"_T,2),R=$P(R,"</"_T,1)
+ ..D WC^RWU($$TAG^TXTU(C_R)) S C=""
+ .S C=CC
+ I C["<hr>" D WC^RWU($$TAG^TXTU(C_"</DIV>")) S C="",F=1
+ D:C'["</DIV>" W^RWU($$TAG^TXTU("</DIV>")) S F=1
+ Q F
+DOGTXT1 
+ I R'="" D WC^RWU(C_$$TAG^TXTU(R)) S C=CR_CR
+ F I=1:1:99 S X=$P(PRG,"|",I) Q:X=""  D
+ .S R=$$GETL2^YNDOG(DGN,"texts",X,H)
+ .I R'="" D WC^RWU(C_$$TAG^TXTU(R)) S C=CR_CR Q 
+ .Q:'$$IsLN^YMPRP(X,"dsc",H)
+ .F T="",1:1 S R=$$GETLN^YMPRP(X,"dsc",H,T) Q:R=""  D WC^RWU(C_$$TAG^TXTU(R)) S C=""
+ .S C=CR_CR
+ Q $S(C="":0,1:1)
+DGPINFs(DGN,PRG,DT,HTM) ; Подробная информация по программе (sys)
+ ; DGN - договор
+ ; PRG - программа в договоре
+ ; HTM - вывод в html формате
+ N R,A,T,Z
+ S A="" S:HTM A="<DIV>"
+ S R=$$GETL2^YNDOG(DGN,"texts","-",DT)
+ I HTM F T="BODY>","body>" I R[("<"_T) S R=$P(R,"<"_T,2),R=$P(R,"</"_T,1)
+ I R'="" D WC^RWU(A_R_CR) S:A'="" A="</DIV><DIV>"
+ ; S R=$$GETL2^YNDOG(DGN,"texts",PRG,DT)
+ F Z="",1:1 S R=$$GETL2LN^YNDOG(DGN,"texts",PRG,DT,Z) Q:R=""  D
+ .I HTM F T="BODY>","body>" I R[("<"_T) S R=$P(R,"<"_T,2),R=$P(R,"</"_T,1)
+ .I R'="" D WC^RWU(A_R) S:A'="" A="</DIV><DIV>"
+ 
+ F Z="",1:1 S R=$$GETLN^YMPRP(PRG,"dsc",DT,Z) Q:R=""  D
+ .I HTM F T="BODY>","body>" I R[("<"_T) S R=$P(R,"<"_T,2),R=$P(R,"</"_T,1)
+ .I R'="" D WC^RWU(A_R) S:A'="" A="/DIV>"
+ D:A'["</DIV>"&HTM W^RWU("</DIV>")
+ Q

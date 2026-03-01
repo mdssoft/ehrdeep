@@ -1,0 +1,71 @@
+RBASERPM ; Упр. отчетность - Медицина [ 09/04/2018  4:38 PM ]
+LITE(DS,DE,MODE) 
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N LPU,SP,VR,R,X,X1,X2,X3,X4,X5,X6,TX,spLST,ID,U1
+ K ^BUF($J)
+ S R=+$G(^MN("spec")),SP=""
+ F  S SP=$O(^MN(R,SP)) Q:SP=""  S spLST(SP)=+$$GSPEC^YISPRAV(SP,"tp")
+ S R="LPU,USER1,SP" S:MODE R=R_",VR"
+ D MK^IRPRASP(DS,DE,"^BUF($J,0",R,"time,use",1,"PROCSH^RBASERPM")
+ D MK^IRPUSL(DS,DE,"^BUF($J,0",R,"ppl,pos,sum,cnt",1,"PROCU^RBASERPM")
+ D OWF^RWU(".txt")
+ D WC^RWU("Филиал "_$$TXTP^DTUTL(DS,DE)_"|Загрузка|Загрузка|Посещений|Часов в|Пришедших|Кол-во|Сумма|Доля в|Число|Число посещ.|Услуг на|Стоимость|Стоимость;")
+ D WC^RWU(CR_" - Специальность|%|фактически|в час|распис.|лиц|посещений|услуг|сумме услуг|услуг|на обратившегося|посещение|посещения|часа работы")
+ S R=+$G(^MN("tspec")),U1=""
+ K spLST
+ F  S U1=$O(^MN(R,U1)) Q:U1=""  S spLST(U1)=^(U1)
+ S LPU="" F  S LPU=$O(^BUF($J,0,LPU)) Q:LPU=""  D:$E(LPU,1)'=" "
+ .S R=LPU D LN(1)
+ .K TX(1) S TX(1,1)=$G(^BUF($J,0,LPU," pos")),TX(1,2)=$G(^(" sum"))
+ .D WC^RWU(CR_$S(LPU=-1:"ВСЕГО по сети",1:$$NAME^ICONTR(LPU))_"|"_R)
+ .S U1="" F  S U1=$O(^BUF($J,0,LPU,U1)) Q:U1=""  D:$E(U1,1)'=" "
+ ..S R=U1 D LN(2)
+ ..D WC^RWU(CR_" "_$S(U1=0:"Не определено",1:$G(spLST(U1)))_"|"_R)
+ ..K TX(2) S TX(2,1)=$G(^BUF($J,0,LPU,U1," pos")),TX(2,2)=$G(^(" sum"))
+ ..S SP="" F  S SP=$O(^BUF($J,0,LPU,U1,SP)) Q:SP=""  D:$E(SP,1)'=" "
+ ...S R=SP D LN(3)
+ ...K TX(3) S TX(3,1)=$G(^BUF($J,0,LPU,U1,SP," pos")),TX(3,2)=$G(^(" sum"))
+ ...D WC^RWU(CR_" - "_$$GSPEC^YISPRAV(SP)_"|"_R)
+ ...Q:'MODE 
+ ...S VR="" F  S VR=$O(^BUF($J,0,LPU,U1,SP,VR)) Q:VR=""  D:$E(VR,1)'=" "
+ ....S R=VR D LN(4)
+ ....D WC^RWU(CR_"     "_$$FIOSH^YIKADRY(VR)_"|"_R)
+ ; K ^BUF
+ D C^RWU
+ Q
+LN(LVL) ; Line calculation
+ S X4=$G(^(R," time"))/60,X=0
+ S X1=$G(^(" use"))/60
+ S R=$S('X4:"",1:$$FN(100*X1/X4))_"|"
+ S X5=+$G(^(" cnt")),X3=+$G(^(" pos"))
+ S X2=+$G(^(" ppl")),X1=+$G(^(" sum"))
+ S X6=+$G(^(" cnt"))
+ I LVL>1 S:X4 X=+$$GSPEC^YISPRAV(SP,"pp")
+ S R=R_$S(X:$$FN(100*X3/(X4*X)),1:"")
+ S R=R_"|"_$S('X4:0,1:$$FN(X3/X4))_"|"_$$FN(X4)_"|"
+ S R=R_X2_"|"_X3
+ S R=R_"|"_$$FN(X1)_"|"
+ S R=R_$S(+$G(TX(LVL-1,2)):$$FN(100*X1/TX(LVL-1,2)),1:"")_"|"
+ S R=R_($TR(+$FN(X6,"",2),".",","))_"|"
+ S R=R_$S('X2:0,1:$$FN(X3/X2))_"|"
+ S R=R_$S('X3:0,1:$$FN(X5/X3))_"|"
+ S R=R_$S('X3:0,1:$$FN(X1/X3))_"|"
+ S R=R_$S('X4:0,1:$$FN(X1/X4))
+ Q
+FN(X) 
+ Q $TR($FN(X,"",2),".",",")
+PROCSH ; Filter proc DSH
+ ;S NI=$P(L,"|",1)
+ S USER1=+$G(spLST(SP))
+ Q
+PROCU ; Filter proc USL
+ S USER1=+$G(spLST(SP))
+ Q:KASS!(FLG["|prf|")  
+ S DGT=$$GETDGT^IRPUSL(CSTC,DT) 
+ Q:DGT'=2 
+ Q:$D(^BTPLS("stc",CSTC)) 
+ S TEST=1
+ Q
+REGIPROC 
+ S ^IPROC("Управленческая отчетность","Медицина","Характеристика услуг в разрезе специальностей")="LITE_RBASERPM,1,3,d,Дата начала периода,d,Дата окончания периода,t@string:0/Только по специальностям#1/По специальностям и сотрудникам,Вид отчета"
+ Q

@@ -1,0 +1,637 @@
+IKDLEML ; Routines for Endomedlab (Aplhalab)
+SETUP
+	S ^cfg("lab","eml",1,"server")="eml.alfalab.org"
+	S ^cfg("lab","eml",1,"port")=8108
+	S ^cfg("lab","eml",1,"service")="/sod/service/"
+	S ^cfg("lab","eml",1,"ssl")=0 ; 1
+	S ^cfg("lab","eml",1,"user")="joe2"
+	S ^cfg("lab","eml",1,"passwd")="joes_pwd"
+	S ^cfg("lab","eml",1,"pre")="eml" ; prefix
+	s ^cfg("lab","eml",1,"id")=1
+	S ^cfg("lab","eml",1,"addpac")=0 ; 1
+	S ^cfg("lab","eml",1,"debug")=0
+	S ^cfg("lab","eml",1,"receiver")="eml"
+	Q
+DOSEND ; Отправка заявок
+	N DT,NI,ID,S3,CT,LAB,LP,NW
+	S CT=$G(^cfg("lab","noprnbar"))
+	S ^KKKLABD=$H
+	S DT=$H-1 F  S DT=$O(^MLABI("d",DT)) Q:DT=""  D   ; -3 !ADD
+	.S ID="" F  S ID=$O(^MLABI("d",DT,ID)) Q:ID=""  D
+	..;Q:ID'=20392001  
+	..S NI=^(ID) ;Q:NI'=2237403   
+	..S LAB=$P($G(^MLAB(NI,ID,"lab")),"|",1) Q:'LAB
+	..Q:$G(^LABC(LAB,"uid"))'="eml" 
+	..w 1
+	..S S3=$P($G(^MLAB(NI,ID,"s3")),"|",1) Q:'S3  
+	..;w !,2
+	..Q:'$P($G(^("s31")),"|",1) 
+	..;w !,3
+	..I CT,'$P($G(^("s3")),"|",1) Q 
+	..;w !,4
+	..Q:$P($G(^("s4")),"|",1)=2
+	..w 5
+	..Q:$P($G(^("s9")),"|",1)
+	..S LP=$P($G(^("s1")),"|",4)
+	..S NW=+$G(^LABC(LAB,"lpu",LP,"nw")) u 0 w "."
+	..I 'NW Q:'$$MKSEND(NI,ID)  ; protocol v.1
+	..I NW Q:'$$MKSEND2(NI,ID)  ; proctocol v.2
+	..D SETSTAT^IMLAB(NI,ID,4,2) ; у контрагента
+	Q
+DORECV(IDX) ; Получение исследований по всем лабораториям
+	; запуск из IMSGHUB
+	D DOSEND
+	N LST,I,LAB,X,MOD
+	S LAB="" F  S LAB=$O(^LABC(LAB)) Q:LAB=""  I $G(^(LAB,"uid"))="eml" D  
+	.S X=$G(^("id"))
+	.S:X'="" LST(LAB,X)=""
+	.S I="" F  S I=$O(^LABC(LAB,"lpu",I)) Q:I=""  S X=$G(^(I,"id")) S:X'="" LST(LAB,X)="",LST(LAB,X,"nw")=$G(^("nw"))
+	
+	S LAB="" F  S LAB=$O(LST(LAB)) Q:LAB=""  D
+	.S I="" F  S I=$O(LST(LAB,I)) Q:I=""  D:'$G(LST(LAB,I,"nw")) CHECK(LAB,I) D:$G(LST(LAB,I,"nw")) GETALL(LAB,I)
+	Q
+TEST
+	S F=$$OR^FIL("c:\msm\eml.xml"),RR=""
+ 	U F F  R R#1 S RR=RR_R Q:$$ST^FIL()=0  
+ 	C F U 0 W !,$L(RR),!
+ 	S A=$$OPEN^WWWCLI("93.127.11.173","9912")
+ 	D OWF^RWU(".txt"),W^RWU(RR),C^RWU
+ 	D BUFH2B^WWWCLI(A,".txt")
+ 	S ^WCLSI(A,"oh","ContentType")="text/xml; charset=""UTF-8"""
+ 	S ^WCLSI(A,"oh","User-Agent")="IS SOAP Emulation"
+ 	S X=$$POST^WWWCLI(A,"/sod/service/RequestService")
+	U 0 W !,"POST OK="_X,!
+	D OBUF^WWWCLI(A)
+	S I=$$BUFCNT^WWWCLI(A) F X=1:1:I W $$RBUF^WWWCLI(A)
+	D CBUF^WWWCLI(A)
+	D CLOSE^WWWCLI(A)
+	Q
+MKSEND(NI,ID) ; Old type protocol (v.1 - strict SOAP)
+	N LAB,ALAB,I,R,a,srv,req,pac,order,VR,LPU
+	S LAB=$P($G(^MLAB(NI,ID,"lab")),"|",1)
+	Q:'LAB 0
+	S R=$G(^MLAB(NI,ID,"s1"))
+	S VR=$P(R,"|",5),LPU=+$P(R,"|",4)
+	S ALAB=$G(^LABC(LAB,"lpu",LPU,"id"))
+	S:ALAB="" ALAB=$G(^LABC(LAB,"id"))
+	S:ALAB="" ALAB=LAB
+	Q:'$D(^cfg("lab","eml",ALAB)) 0
+	s srv=##class(Endomed.RequestServiceImplPort).%New()
+	s a=srv.WSSecurityLogin(^cfg("lab","eml",ALAB,"user"),^cfg("lab","eml",ALAB,"passwd"))
+	s req=##class(Endomed.ns1.CreateRequestRequest).%New()
+	s req.patient=##class(Endomed.ns1.CreateRequestPatient).%New()
+	s req.patient.code=NI
+	s req.patient.firstName=$$LU^TXTU($$GET^IPAC(NI,"fioi"))
+	s req.patient.middleName=$$LU^TXTU($$GET^IPAC(NI,"fioo"))
+	s req.patient.lastName=$$LU^TXTU($$GET^IPAC(NI,"fiof"))
+	s req.patient.birthDate=$ZDATETIME($$GET^IPAC(NI,"datar"),3,1)
+	S I=$$GET^IPAC(NI,"pol")
+	s req.patient.gender=$S(I=1:"male",I=2:"female",1:"undefined")
+	s req.biomaterial=##class(Endomed.ns1.CreateRequestBiomaterial).%New()
+	s req.biomaterial.barcode=^MLAB(NI,ID,"bar")
+	S R=$O(^MLAB(NI,ID,"mi",""))
+	I R'="" S req.biomaterial.biomaterialCode=$$fndBIO^IMLABS(LAB,R)
+	
+	S R=^MLAB(NI,ID,"ul")
+	F I=1:1:$L(R,"|") d
+	.S a=^LABTI("LAB",LAB,"CN",$P($P($P(R,"|",I),":",1),"*",1)) ; услуги LAB
+	.s order=##class(Endomed.ns1.Order).%New()
+	.s order.code=a
+	.s:$G(^MLAB(NI,ID,"ci")) order.highPriority=1
+	.d req.biomaterial.orders.Insert(order)
+	S req.mode="create"
+	S req.request=##class(Endomed.ns1.CreateRequestRequestInfo).%New()
+	S req.request.id=ID
+	S R=$G(^LABC(LAB,"lpu",LPU,"eid"))
+	S:R="" R=$G(^LABC(LAB,"eid"))
+	S req.request.departmentCode=R
+	S req.request.departmentName=$$NAME^ICONTR(LPU)
+	S req.request.doctorCode=VR ; // ^("s1")..
+	S req.request.doctorName=$$FIO^IKADRY(VR)
+	s a=srv.createRequest(req)
+	Q 1
+CHECK(LAB,ALAB)
+	N I,R,a,srv,req,rez,obj,ver,cver,ID
+	S:$G(ALAB)="" ALAB=LAB
+	Q:'$D(^cfg("lab","eml",ALAB)) 0
+	S cver=+$G(^cfg("lab","eml",ALAB,"stamp"))
+	s srv=##class(Endomed.RequestServiceImplPort).%New()
+	s a=srv.WSSecurityLogin(^cfg("lab","eml",ALAB,"user"),^cfg("lab","eml",ALAB,"passwd"))
+	s req=##class(Endomed.ns1.GetRequestStateRequest).%New()
+	S req.lastTimestamp=cver
+	s rez=srv.getRequestState(req)
+	F I=1:1:rez.Count() D  
+	.s obj=rez.GetAt(I)
+	.s ver=obj.version
+	.;s ^KKZ(ver)=$G(^KKZ(ver))+1
+	.I ver>cver s cver=ver
+	.S ID=obj.id
+	.;u 0 w !,"ID="_ID
+	.;u 0 w !,"state="_obj.lisState
+	.;u 0 w !,"ver="_ver
+	.D GET(LAB,ID,ALAB)
+	S ^cfg("lab","eml",ALAB,"stamp")=cver
+	;u 0 w !,"Stamp="_cver
+	Q
+GET(LAB,ID,ALAB)
+	N I,R,J,a,srv,req,rez,obj,met,micr,anti,ant,prm,pnm,unit,nrm,comm,rPRM,RR,bar,xID,xNI,lpu,flnm,C0
+	S:$G(ALAB)="" ALAB=LAB
+	Q:'$D(^cfg("lab","eml",ALAB)) 0
+	s srv=##class(Endomed.RequestServiceImplPort).%New()
+	s a=srv.WSSecurityLogin(^cfg("lab","eml",ALAB,"user"),^cfg("lab","eml",ALAB,"passwd"))
+	s req=##class(Endomed.ns1.GetRequestResultRequest).%New()
+	s req.requestId=ID
+	s rez=srv.getRequestResult(req)
+	s met=rez.biomaterial.methods
+	s micr=rez.biomaterial.microorganisms
+	s bar=rez.biomaterial.barcode
+	s R=$$BARID^IMLAB(bar) Q:R=""  ; not found internal ID
+	S xID=$P(R,"|",1),xNI=$P(R,"|",2)
+	s lpu=$$^I("ilpu")
+	s C0=$C(0)
+	u 0 w !,"Barcode="_bar_", NI="_xNI_", ID="_xID
+	;u 0 w !,"Methods"
+	F I=1:1:met.Count() D
+	.s obj=met.GetAt(I)
+	.s R=$$TGA^TXTU($TR($$U8W^TXTU(obj.textValue),C0,""))
+	.S:R="" R=obj.numericValue
+	.s prm=$TR($$U8W^TXTU(obj.code),RR,""),pnm=$TR($$U8W^TXTU(obj.name),C0,"")
+	.s unit=$TR($$U8W^TXTU(obj.unitName),RR,""),nrm=$$TGA^TXTU($TR($$U8W^TXTU(obj.norm),C0,""))
+	.s flnm="eml."_$S(prm="":$E($TR(pnm,"~!@#$%^&*()_+|{}:""<>?;'[],./",""),1,64),1:prm) ; ode, or, if not exist - name as code
+	.s rPRM=$$CHKAP^IMLABS(flnm,pnm,unit) q:rPRM=""   ; !ADD
+	.D CHKNM^IMLABS(flnm,pnm)
+	.;u 0 w !,prm_"="_pnm_"="_R_" "_unit_"/"_nrm_"/"
+	.S RR=$$RENORM^IMLABU(nrm)
+	.S ^MLAB(xNI,xID,"d",rPRM)=$TR(R_"|"_$P(RR,"|",1)_"|"_$P(RR,"|",2)_$S($P(RR,"|",3)="":"",1:"|||"_$P(RR,"|",3)),$C(0),"")
+	.S RR=$G(^MLAB(xNI,xID,"d",rPRM,"s"))
+	.S RR=1
+	.S $P(RR,"|",2)=$H,$P(RR,"|",4)=lpu,$P(RR,"|",8)=LAB
+	.S ^MLAB(xNI,xID,"d",rPRM,"s")=RR
+	.D GL^IEXCH("^MLAB",xNI,xID,"d",rPRM)
+	S:'$D(^MLAB(xNI,xID,"s9")) ^("s9")="0|"_$H
+	D SBREZ^NMLABR(xID,1)
+	;S R=$$SBS^IMLAB(xID) ; !ADD
+	;Q
+	;u 0 w !,"Microorgan"
+	s RR=$C(0)
+	F I=1:1:micr.Count() D
+	.s obj=micr.GetAt(I)
+	.s prm=$TR($$U8W^TXTU(obj.code),RR,""),pnm=$$TGA^TXTU($TR($$U8W^TXTU(obj.name),RR,""))
+	.D CHKMCO^IMLABS("eml."_prm,pnm)
+	.;u 0 w !,$$U8W^TXTU(obj.code_"="_obj.name_"= found("_obj.found_"), count="_obj.value)
+	.s anti=obj.antibiotics
+	.;w !," Antibiotics:"
+	.F J=1:1:anti.Count() D
+	..s obj=anti.GetAt(J)
+	..s ant=$TR($$U8W^TXTU(obj.code),RR,""),pnm=$$TGA^TXTU($TR($$U8W^TXTU(obj.name),RR,""))
+	..D CHKANT^IMLABS("eml."_ant,pnm)
+	..;w !,$$U8W^TXTU(obj.code_"="_obj.name_"="_obj.value_" ("_obj.comment_")")
+	Q
+SPR
+	S ALAB=9
+	S DT=$$DTM^DTUTL($H)
+	S MSG="query-dictionaries-version"
+	S MSG="query-next-referral-results"
+	S MSG="query-referral-results"
+	S rcv=$G(^cfg("lab","eml",ALAB,"receiver")) S:rcv="" rcv="eml"
+	S RR="<?xml version=""1.0"" encoding=""Windows-1251""?>"
+	S RR=RR_"<Message MessageType="""_MSG_""" Date="""_DT
+	S RR=RR_""" Sender="""_^cfg("lab","eml",ALAB,"user")_""" Receiver="""_rcv_""" Password="""_^cfg("lab","eml",ALAB,"passwd")_""">"
+	S RR=RR_"<Query LisId="""" Nr=""7312027095"" MisId=""""/> "
+	S RR=RR_"</Message>"
+ 	S A=$$OPEN^WWWCLI(^cfg("lab","eml",ALAB,"server"),^cfg("lab","eml",ALAB,"port"))
+ 	D OWF^RWU(".txt"),W^RWU(RR),C^RWU
+ 	D BUFH2B^WWWCLI(A,".txt")
+ 	S ^WCLSI(A,"oh","ContentType")="text/xml; charset=""Windows-1251"""
+ 	S ^WCLSI(A,"oh","User-Agent")="Medexis"
+ 	S X=$$POST^WWWCLI(A,"/sod/service/RequestService")
+	U 0 W !,"POST OK="_X,!
+	D OBUF^WWWCLI(A)
+	S I=$$BUFCNT^WWWCLI(A) F X=1:1:I W $$RBUF^WWWCLI(A)
+	D CBUF^WWWCLI(A)
+	D CLOSE^WWWCLI(A)
+	Q
+GA
+	S ALAB="" F  S ALAB=$O(^cfg("lab","eml",ALAB)) Q:ALAB=""  D GETNEXT(ALAB,ALAB)
+	Q
+GETALL(LAB,ALAB)
+	N I
+	F I=1:1:500 Q:'$$GETNEXT(LAB,ALAB)
+	Q
+GETNEXT(LAB,ALAB)
+	N I,R,a,srv,req,rez,obj,met,micr,anti,ant,prm,pnm,unit,nrm,comm,ID,rcv,X,T,TP
+	S:$G(ALAB)="" ALAB=LAB
+	Q:'$D(^cfg("lab","eml",ALAB)) 0
+ 
+	S DT=$$DTM^DTUTL($H)
+	S rcv=$G(^cfg("lab","eml",ALAB,"receiver")) S:rcv="" rcv="eml"
+	S MSG="query-next-referral-results"
+	S RR="<?xml version=""1.0"" encoding=""Windows-1251""?>"
+	S RR=RR_"<Message MessageType="""_MSG_""" Date="""_DT
+	S RR=RR_""" Sender="""_^cfg("lab","eml",ALAB,"user")_""" Receiver="""_rcv_""" Password="""_^cfg("lab","eml",ALAB,"passwd")_"""/>"
+	
+ 	S A=$$OPEN^WWWCLI(^cfg("lab","eml",ALAB,"server"),^cfg("lab","eml",ALAB,"port"))
+ 	D OWF^RWU(".txt"),W^RWU(RR),C^RWU
+ 	D BUFH2B^WWWCLI(A,".txt")
+ 	S ^WCLSI(A,"oh","ContentType")="text/xml; charset=""Windows-1251"""
+ 	S ^WCLSI(A,"oh","User-Agent")="Medexis"
+ 	S X=$$POST^WWWCLI(A,"/sod/service/RequestService")
+	;U 0 W !,"POST OK="_X,!
+	
+	K ^BUF($J)
+	N ID,DTM,IsOK,prm,pnm,unit,nrm,bar,AA,xID,xNI,lpu,ver,RR,RX,rPRM,FF,Axx,TL,mpref
+	S mpref=$S($G(^LABC(LAB,"CN"))="i":"",1:"eml.") ; встроенная лаб.
+	S AA=A,FF=0,IsOK=0,(xID,bar,ver,TL)=""
+	D OEV^XMLR("otgTS^IKDLEML","otgTD^IKDLEML","")
+	D OBUF^WWWCLI(AA)
+	U 0
+	S I=$$BUFCNT^WWWCLI(AA),bar=""
+	F X=1:1:I S A=$$RBUF^WWWCLI(AA),%J=X,Axx=A D REV^XMLR(A) S:bar'="" ^KKKLABD(bar,X)=Axx ;D XML^YIXMLRR
+	D CBUF^WWWCLI(AA)
+ 	D CLOSE^WWWCLI(AA)
+ 	;w !,"xID="_xID_",bar="_bar_",ver="_ver_",IsOK="_IsOK
+ 	I xID'="",bar'="",IsOK D
+ 	.S:'$D(^MLAB(xNI,xID,"s9")) ^("s9")="0|"_$H
+	.D SBREZ^NMLABR(xID,1)
+	.;S R=$$SBS^IMLAB(xID) ; !ADD
+	I bar'="",ver'="" s ^KKKBAR(bar)=$H_"|"_xID D SENDOK(LAB,ALAB,bar,ver) ; TODO - проверка успешности отправки
+	Q $S(bar="":0,1:1)
+GETID(IDLAB,LAB,ALAB)
+	N I,R,a,srv,req,rez,obj,ID,NI,DT,LPU,rcv,mpref,X,T,TP
+	
+	
+	D:LAB=""
+	.S ID=$$BARID^IMLAB(IDLAB) Q:ID=""
+	.S NI=$P(ID,"|",2),ID=$P(ID,"|",1)
+	.S LAB=$P($G(^MLAB(NI,ID,"lab")),"|",1)
+	.Q:'LAB 
+	.S R=$G(^MLAB(NI,ID,"s1")),LPU=+$P(R,"|",4)
+	.S ALAB=$G(^LABC(LAB,"lpu",LPU,"id"))
+	.S:ALAB="" ALAB=$G(^LABC(LAB,"id"))
+	S:$G(ALAB)="" ALAB=LAB
+	
+	Q:ALAB="" 0
+	Q:'$D(^cfg("lab","eml",ALAB)) 0
+	
+	S mpref=$S($G(^LABC(LAB,"CN"))="i":"",1:"eml.") ; встроенная лаб. !ADD
+ 
+	S DT=$$DTM^DTUTL($H)
+	S rcv=$G(^cfg("lab","eml",ALAB,"receiver")) S:rcv="" rcv="eml"
+	S MSG="query-referral-results"
+	S RR="<?xml version=""1.0"" encoding=""Windows-1251""?>"
+	S RR=RR_"<Message MessageType="""_MSG_""" Date="""_DT
+	S RR=RR_""" Sender="""_^cfg("lab","eml",ALAB,"user")_""" Receiver="""_rcv_""" Password="""_^cfg("lab","eml",ALAB,"passwd")_""">"
+	S RR=RR_"<Query LisId="""" Nr="""_IDLAB_""" MisId=""""/> "
+	S RR=RR_"</Message>"
+	u 0 w !,RR
+	
+ 	S A=$$OPEN^WWWCLI(^cfg("lab","eml",ALAB,"server"),^cfg("lab","eml",ALAB,"port"))
+ 	D OWF^RWU(".txt"),W^RWU(RR),C^RWU
+ 	D BUFH2B^WWWCLI(A,".txt")
+ 	S ^WCLSI(A,"oh","ContentType")="text/xml; charset=""Windows-1251"""
+ 	S ^WCLSI(A,"oh","User-Agent")="Medexis"
+ 	S X=$$POST^WWWCLI(A,"/sod/service/RequestService")
+	U 0 W !,"POST OK="_X,!
+	
+	K ^BUF($J)
+	N ID,DTM,IsOK,prm,pnm,unit,nrm,comm,bar,AA,xID,xNI,lpu,ver,RR,RX,rPRM,FF,Axx,TL
+	S AA=A,FF=0,IsOK=0,(xID,bar,ver,TL)=""
+	D OEV^XMLR("otgTS^IKDLEML","otgTD^IKDLEML","")
+	D OBUF^WWWCLI(AA)
+	U 0
+	S I=$$BUFCNT^WWWCLI(AA),bar=""
+	F X=1:1:I S A=$$RBUF^WWWCLI(AA),%J=X,Axx=A D REV^XMLR(A) S:bar'="" ^KKKLABD(bar,X)=Axx w Axx ;D XML^YIXMLRR
+	D CBUF^WWWCLI(AA)
+ 	D CLOSE^WWWCLI(AA)
+ 	u 0 w !,"xID="_xID_",bar="_bar_",ver="_ver_",IsOK="_IsOK
+ 	I xID'="",bar'="",IsOK D
+ 	.S:'$D(^MLAB(xNI,xID,"s9")) ^("s9")="0|"_$H
+	.D SBREZ^NMLABR(xID,1)
+	.S X=$$SBS^IMLAB(xID) ; !ADD
+	I bar'="",ver'="" s ^KKKBAR(bar)=$H_"|"_xID D SENDOK(LAB,ALAB,bar,ver) ; TODO - проверка успешности отправки
+	Q $S(bar="":0,1:1)
+SENDOK(LAB,ALAB,BAR,VER)
+	N I,R,a,srv,req,rez,obj,ID,rcv
+	S:$G(ALAB)="" ALAB=LAB
+	Q:'$D(^cfg("lab","eml",ALAB)) 0
+	S DT=$$DTM^DTUTL($H)
+	S rcv=$G(^cfg("lab","eml",ALAB,"receiver")) S:rcv="" rcv="eml"
+	S MSG="result-referral-results-import"
+	S RR="<?xml version=""1.0"" encoding=""Windows-1251""?>"
+	S RR=RR_"<Message MessageType="""_MSG_""" Date="""_DT
+	S RR=RR_""" Sender="""_^cfg("lab","eml",ALAB,"user")_""" Receiver="""_rcv_""" Password="""_^cfg("lab","eml",ALAB,"passwd")_""">"
+	S RR=RR_"<Version Version="""_VER_"""/><Referral LisId="""" Nr="""_BAR_""" MisId="""" />"
+	S RR=RR_"</Message>"
+	;w !,RR
+ 	S A=$$OPEN^WWWCLI(^cfg("lab","eml",ALAB,"server"),^cfg("lab","eml",ALAB,"port"))
+ 	D OWF^RWU(".txt"),W^RWU(RR),C^RWU
+ 	D BUFH2B^WWWCLI(A,".txt")
+ 	S ^WCLSI(A,"oh","ContentType")="text/xml; charset=""Windows-1251"""
+ 	S ^WCLSI(A,"oh","User-Agent")="Medexis"
+ 	S X=$$POST^WWWCLI(A,"/sod/service/RequestService")
+	
+	;U 0 W !,"Send OK ="_X,!
+	;D OBUF^WWWCLI(A)
+	;S I=$$BUFCNT^WWWCLI(A) F X=1:1:I W $$RBUF^WWWCLI(A)
+	;D CBUF^WWWCLI(A)
+	D CLOSE^WWWCLI(A)
+	Q
+otgTS 
+	S A=%XM(2)
+	;u 0 w !,A
+	I A="Referral" S ID="",FF=1
+	I A="Version" S ver=$G(%XM(2,"p","Version")),(xNI,xID)=""
+	I A="Patient" S xNI=$$GETNIB^IPACFND($G(%XM(2,"p","LastName")),$G(%XM(2,"p","FirstName")),$G(%XM(2,"p","MiddleName")),+$$DI^DTUTL($G(%XM(2,"p","BirthDate"))),"",1) W !,"Patient="_xNI zw %XM(2,"p")
+	I FF=1,A="Referral" D  Q
+	.S bar=$G(%XM(2,"p","Nr")),DTM=$G(%XM(2,"p","DoneDate")),IsOK=($G(%XM(2,"p","Done"))="true")
+	.S RX=$$DTI^DTUTL($G(%XM(2,"p","MinPlanDate")))
+	.S:RX'="" TL=RX
+	.S RX=$$DTI^DTUTL($G(%XM(2,"p","MaxPlanDate")))
+	.S:RX'="" TL=TL_"|"_RX
+	.;u 0 W !,"bar="_bar_",DTM="_DTM_" ver="_ver_" done="_IsOK ;zw %XM
+	.I xNI'="",xID'="" D  
+	..s R=$$BARID^IMLAB(bar)
+	..I R="" s ^KKKBARE(bar)=$H Q  ; not found internal ID
+	..S xID=$P(R,"|",1),xNI=$P(R,"|",2)
+	.;w " NI="_xNI
+	.I xNI'="",xID="" s xID=$$MK^IMLAB(xNI,+$H,"",LAB,LAB) ; create new clear record
+	.s lpu=$$^I("ilpu")
+	.Q:xID=""  Q:xNI=""
+	.S:'$D(^MLAB(xNI,xID,"s5")) ^("s5")="0|"_$H
+	.S:TL'="" ^MLAB(xNI,xID,"tl")=TL
+	I A="Blanks" S FF=2
+	;u 0 w !,1_" "_$G(%XM(2,"p","Name"))
+	Q:FF'=2
+	;u 0 w !,2
+	Q:A'="Item" 
+	;u 0 w !,3
+	Q:xID="" 
+	;u 0 w !,"R="_$$TGA^TXTU($$TRIM^TXTU($G(%XM(2,"p","Value"))))_" prm="_$$TGA^TXTU($G(%XM(2,"p","Name")))
+	;u 0 w !,4_" "_$G(%XM(2,"p","Value"))
+	S R=$$TGA^TXTU($$TRIM^TXTU($G(%XM(2,"p","Value")))) Q:R="" 
+	s prm=$G(%XM(2,"p","Code"))
+	s pnm=$$TGA^TXTU($G(%XM(2,"p","Name")))
+	s unit=$$TGA^TXTU($G(%XM(2,"p","UnitName")))
+	s nrm=$$TGA^TXTU($G(%XM(2,"p","Norms")))
+	s comm=$$TGA^TXTU($G(%XM(2,"p","Comment")))
+	;W !,prm_"="_pnm_"("_unit_")"
+	;w !,"::"_R_" // "_nrm
+	;Q
+	
+	s R=$$num(R)
+	
+	s rPRM=$$CHKAP^IMLABS(mpref_prm,pnm,unit)
+	D CHKNM^IMLABS(mpref_prm,pnm)
+	;u 0 w !,xNI_","_xID_",""d"","_prm_"/"_rPRM_"="_pnm_"="_R_" "_unit_"/"_nrm_"/"
+	S RR=$$RENORM^IMLABU(nrm)
+	S T=$G(^LABT("T",rPRM,"t"))
+	I T'="" S TP=$P(T,"|",1),X=$P(T,"|",2) S:TP="T" R=$$TRIM^TXTU(R) I TP="N"!(TP="") S R=+$$fnum(R) S:X'="" R=$J(R,"",X) ; формат
+	S RX=$TR(R_"|"_$P(RR,"|",1)_"|"_$P(RR,"|",2)_$S($P(RR,"|",3)="":"",1:"|||"_$P(RR,"|",3)),$C(0),"")
+	S:comm'="" $P(RX,"|",6)=$S($P(RX,"|",6)="":"",1:$P(RX,"|",6)_"; ")_comm
+	I $D(^MLAB(xNI,xID,"d",rPRM)),^(rPRM)'=RX S ^MLABE(xNI,xID,"d",rPRM,$H)=^MLAB(xNI,xID,"d",rPRM)
+	S ^MLAB(xNI,xID,"d",rPRM)=RX
+	S RR=$G(^MLAB(xNI,xID,"d",rPRM,"s"))
+	S RR=1
+	S $P(RR,"|",2)=$H,$P(RR,"|",4)=lpu,$P(RR,"|",8)=LAB
+	S ^MLAB(xNI,xID,"d",rPRM,"s")=RR
+	S:'$D(^MLAB(xNI,xID,"s8")) ^("s8")="1|"_$H
+	D GL^IEXCH("^MLAB",xNI,xID,"d",rPRM)
+	Q
+otgTD 
+	Q
+fnum(X) ; фиксированная конверсия, если нет других символов
+	I $TR(X,"1234567890,.","")'="" Q X
+	Q +$TR(R,",",".")
+num(X) ; text to number
+	N R1
+	S R1=$TR(X,",",".")
+	I +R1=R1 Q R1
+	I $E(R1)=0,0_(+R1)=R1 Q 0_(+R1)
+	I $E(R1,$L(R1))=0,(+R1)_0=R1 Q (+R1)_0
+	Q X
+cvtall
+	n n,i,ii,ie
+	s ii=0,ie=50000
+	s n="" f  s n=$O(^MLAB(n)) Q:n=""  D  Q:ii>ie
+	.s i="" F  s i=$O(^MLAB(n,i)) Q:i=""  D   Q:ii>ie
+	..i $$cvtval(n,i) s ii=ii+1
+	w !,n
+	Q	
+cvtval(ni,id)
+	N p,R,V,V2,f
+	s f=0
+	s p="" F  S p=$O(^MLAB(ni,id,"d",p)) Q:p=""  D
+	.S R=^(p),V=$P(R,"|",1)
+	.s V2=$$num(V) Q:V=V2
+	.s $P(^MLAB(ni,id,"d",p),"|",1)=V2,f=1
+	Q f
+SPRUU(LAB,FN) ; Get registers
+	N DT,MSG,RR,rcv,srv,F,K,mod,xmod,T,id,nm,cnm,idx,cul,ALAB,uc,tlst,blst,kx,x
+	S DT=$$DTM^DTUTL($H),LAB=$G(LAB),F=""
+	S:'LAB LAB=$O(^LABC(""))
+	S cul=$S($G(^LABC(LAB,"CN"))="i":1,1:0) ; по услугам
+	S ALAB=$G(^LABC(LAB,"id")) Q:ALAB="" 
+	S:$G(FN)'="" F=$$OW^FIL(FN)
+	S MSG="query-dictionaries"
+	S rcv=$G(^cfg("lab","eml",ALAB,"receiver")) S:rcv="" rcv="eml"
+	S RR="<?xml version=""1.0"" encoding=""Windows-1251""?>"
+	S RR=RR_"<Message MessageType="""_MSG_""" Date="""_DT
+	S RR=RR_""" Sender="""_^cfg("lab","eml",ALAB,"user")_""" Receiver="""_rcv_""" Password="""_^cfg("lab","eml",ALAB,"passwd")_""">"
+	S RR=RR_"</Message>"
+ 	S A=$$OPEN^WWWCLI(^cfg("lab","eml",ALAB,"server"),^cfg("lab","eml",ALAB,"port"))
+ 	D OWF^RWU(".txt"),W^RWU(RR),C^RWU
+ 	D BUFH2B^WWWCLI(A,".txt")
+ 	S ^WCLSI(A,"oh","ContentType")="text/xml; charset=""Windows-1251"""
+ 	S ^WCLSI(A,"oh","User-Agent")="Medexis"
+ 	S X=$$POST^WWWCLI(A,"/sod/service/RequestService")
+	U 0 W !,"POST OK="_X,!
+	s zzxx=0
+	D OEV^XMLR("sprTS^IKDLEML","sprTD^IKDLEML","sprTE^IKDLEML")
+	D OBUF^WWWCLI(A)
+	S mod=0,xmod=0
+	S I=$$BUFCNT^WWWCLI(A) F X=1:1:I S K=$$RBUF^WWWCLI(A) D REV^XMLR(K) I F'="" U F W K U 0
+	C:F'="" F
+	D CBUF^WWWCLI(A)
+	D CLOSE^WWWCLI(A)
+	D MKLABTI^NMLABU
+	Q
+sprTS
+	S T=%XM(2)
+	I T="Biomaterials" s mod=1 Q 
+	I T="Analyses" s mod=2 w !,"aS" Q 
+	I T="Tests" s mod=3 Q 
+	I T="ContainerTypes" s mod=4 Q 
+	I $G(uc)'="",uc["09.05.004" w !,"Tu="_uc_",T="_T_",3="_$G(%XM(3)),! ; zw %XM w !
+	I mod=2,T="AnalysisBiomaterials",$G(%XM(3)) s xmod=5 Q 
+	I mod=2,T="AnalysisTests",$G(%XM(3)) s xmod=6 Q 
+	
+	Q:'mod 
+	
+	I mod=1,T="Item" D  Q  ; M
+	.s nm=$G(%XM(2,"p","Name")),id=$G(%XM(2,"p","Code")) Q:id=""!(nm="") 
+	.I cul S $P(^LABT("M",id),"|",1)=nm Q 
+	.s idx=$$FNDABI^IMLABS(nm)
+	.S ^LABC(LAB,"M",id)=idx_"|"_nm
+	
+	I mod=3,T="Item" D  Q 
+	.s nm=$G(%XM(2,"p","Name")),id=$G(%XM(2,"p","Code")) Q:id=""!(nm="") 
+	.s:'cul id="eml."
+	.s cnm=$G(%XM(2,"p","ShortName")) S:cnm="" cnm=nm
+	.s ^LABT("T",id)=cnm,^LABT("T",id,"n")=nm
+	
+	I mod=4,T="Item" D  Q 
+	.s nm=$G(%XM(2,"p","Name")),id=$G(%XM(2,"p","Code")) Q:id=""!(nm="") 
+	.s:'cul id="eml."
+	.s cnm=$G(%XM(2,"p","ShortName")) S:cnm="" cnm=nm
+	.S ^LABT("CONT",id)=cnm,^LABT("CONT",id,"dsc")=nm
+	
+	I mod=2,'xmod,T="Item" D  Q 
+	.k tlst,blst
+	.s uc=$$TRIM^TXTU($G(%XM(2,"p","Code")))
+	.;w "/"_uc
+	.I uc["09.05.004" w !,"U="_uc,! s zzxx=1 ; zw %XM w ! 
+	
+	I xmod=5,T="Item" D  Q 
+	.s id=$G(%XM(2,"p","BiomaterialCode")) q:id="" 
+	.i cul ; TODO
+	.I uc["09.05.004" w !,"5u="_uc_",t="_id,!
+	.s blst(id)=$G(%XM(2,"p","ContainerTypeCode"))
+	
+	I xmod=6,T="Item" D  Q 
+	.s id=$G(%XM(2,"p","TestCode")) q:id="" 
+	.s:'cul id="eml."_id ; !ADD
+	.I uc["09.05.004" w !,"6u="_uc_",t="_id,!
+	.s kx=$G(^LABT("T",id,"u")),kx=$$STFLG^TXTU(kx,uc)
+	.S ^LABT("T",id,"u")=kx
+	.s tlst(id)=""
+	Q
+sprTD
+	Q
+sprTE
+	S T=%XM(2)
+	I T="Biomaterials" s mod=0 Q 
+	I T="Analyses" s mod=0 w !,"aE" Q 
+	I T="Tests" s mod=0 Q 
+	I T="ContainerTypes" s mod=0 Q 
+	;I mod=2,T="Item" 
+	I mod=2,T="AnalysisBiomaterials" s xmod=0 s zzxx=0 q 
+	I mod=2,T="AnalysisTests" s xmod=0 s:uc["A09.05.003" zzxx=1 q 
+	
+	I mod=2,'xmod,T="Item" D  Q 
+	.s kx="" f  s kx=$O(tlst(kx)) q:kx=""  d
+	..s x="" f  s x=$O(blst(x)) q:x=""  s ^LABT("T",kx,"b",x)=1
+	.k tlst,blst
+	
+	Q
+STEST
+	S NI=214303,ID=66791002
+	D MKSEND2(NI,ID)
+	Q
+MKSEND2(NI,ID)
+	; Protocol v.2
+	N LAB,ALAB,I,J,R,C,U,a,req,pac,order,VR,OT,LPU,DT,RV,X,%J,SID,LID,DTT,BIO,rcv,cul,UUL,ZI
+	S LAB=$P($G(^MLAB(NI,ID,"lab")),"|",1)
+	Q:'LAB 0
+	S cul=$S($G(^LABC(LAB,"CN"))="i":1,1:0) ; по услугам
+	S DTT=+$G(^MLAB(NI,ID))
+	S:'DTT DTT=+$H
+	S ZI=$G(^MLAB(NI,ID,"zi"))
+	S R=$G(^MLAB(NI,ID,"s1"))
+	I $P(ZI,"|",4)'="" S VR=$P(R,"|",4)
+	I VR="" S VR=$P(R,"|",5)
+	S LPU=+$P(R,"|",4),OT=$$OTD^IKADRY(VR)
+	S ALAB=$G(^LABC(LAB,"lpu",LPU,"id"))
+	S:ALAB="" ALAB=$G(^LABC(LAB,"id"))
+	S:ALAB="" ALAB=LAB
+	Q:'$D(^cfg("lab","eml",ALAB)) 0
+	S RV=$G(^LABC(LAB,"lpu",LPU,"eid"))
+	S:RV="" RV=$G(^LABC(LAB,"eid"))
+	S DT=$$DTM^DTUTL($H)
+ 
+	S MSG="query-create-referral"
+	S rcv=$G(^cfg("lab","eml",ALAB,"receiver")) S:rcv="" rcv="eml"
+	S RR="<?xml version=""1.0"" encoding=""Windows-1251""?>"
+	S RR=RR_"<Message MessageType="""_MSG_""" Date="""_DT
+	S RR=RR_""" Sender="""_^cfg("lab","eml",ALAB,"user")_""" Receiver="""_rcv_""" Password="""_^cfg("lab","eml",ALAB,"passwd")_""">"
+	S RR=RR_"<Patient Id="""_NI_""" MisId="""_NI_""" LastName="""_$$GET^IPAC(NI,"fiof",DTT)_""" FirstName="""_$$GET^IPAC(NI,"fioi",DTT)_""" MiddleName="""_$$GET^IPAC(NI,"fioo",DTT)_""""
+	I $G(^cfg("lab","pemail")) D  
+	.S X=$$GET^IPAC(NI,"pemail",DTT) Q:X="" 
+	.S RR=RR_" patient_email_address="""_X_""" need_send_patient_email=""true"""
+	.D SETRT^IMLAB(NI,ID,"mail",1)
+	.Q:'$G(^MSGHUB("labeml",1,"slog")) 
+	.S D=$H,R=$O(^MSGSLOG("labeml",1,+D,""),-1)+1,^MSGSLOG("labeml",1,+D,R)="|"_X_"|"_NI_"|"_$H_"|"_D
+	I $G(^LABC(LAB,"lpu",LPU,"isadr")) D  
+	.S X=$$ADR^IPAC(NI,DTT)
+	.S:X'="" RR=RR_" Address="""_$$HTML^TXTU(X)_""""
+	S RR=RR_" Gender="""_$$GET^IPAC(NI,"pol",DTT)_""" BirthDate="""_$$GETE^IPAC(NI,"datar",DTT)_" 00:00:00"" />"
+	S RR=RR_"<Referral Id="""_ID_""" Nr="""_^MLAB(NI,ID,"bar")_""""
+    S RR=RR_" DeliveryDate="""_$$DTM^DTUTL($P($G(^MLAB(NI,ID,"s3")),"|",2))_""""
+    S RR=RR_" SamplingDate="""_$$DTM^DTUTL($P($G(^MLAB(NI,ID,"s2")),"|",2))_""""
+	S RR=RR_" DoctorName="""_$$FIO^IKADRY(VR)_""" DoctorCode="""_VR_""""
+	S X=$G(^MLAB(NI,ID,"fl","ndbr"))
+	S:X RR=RR_" PregnancyWeek="""_X_""" "
+	S X=$G(^MLAB(NI,ID,"fl","dcl"))
+	S:X RR=RR_" CyclePeriod="""_X_""" "
+	S X=$G(^MLAB(NI,ID,"fl","sutdd"))
+	S:X RR=RR_" DiuresisMl="""_X_""" "
+	S:$G(^MLAB(NI,ID,"ci")) RR=RR_" Cito=""true"" "
+	S X=$G(^MLAB(NI,ID,"nt"))
+	S:$P(X,"|",1)'="" RR=RR_" DiagnosisCode="""_$$HTML^TXTU($P(X,"|",1))_""" "
+	S:$P(X,"|",2)'="" RR=RR_" Comment="""_$$HTML^TXTU($P(X,"|",2))_""" "
+	S:'cul RR=RR_" DepartmentName="""_$$HTML^TXTU($$NAME^ICONTR(LPU))_""" DepartmentCode="""_RV_"""/>"
+	S:cul RR=RR_" DepartmentName="""_$$HTML^TXTU($$GOTD^YISPRAV(OT))_""" DepartmentCode="""_OT_"""/>"
+
+	S RR=RR_"<Assays>"
+	S BIO="" F  S BIO=$O(^MLAB(NI,ID,"mi",BIO)) Q:BIO=""  D
+	.S R=$S(cul:BIO,1:$$fndBIO^IMLABS(LAB,BIO)) Q:R="" 
+    .S RR=RR_"<Assay Barcode="""_$$GETBAR^IMLAB(NI,ID,BIO)_""" BiomaterialCode="""_R_""">"
+    .S RR=RR_"<Orders>"
+	.S R=^MLAB(NI,ID,"ul")
+	.F I=1:1:$L(R,"|") d
+	..S U=$P($P(R,"|",I),":",1),C=$P(U,"*",2),U=$P(U,"*",1) Q:U="" 
+	..I cul I '$$UisBIO^IMLABS(U,BIO) q  w !,"NoB "_U_" B="_BIO Q 
+	..S a=$S(cul:U,1:$G(^LABTI("LAB",LAB,"CN",U))) Q:a="" 
+	..Q:$D(UUL(U))  S UUL(U)="" ; уже передано
+	..S:'C C=1
+	..;w !,"OK "_U_" B="_BIO
+	..F J=1:1:C S RR=RR_"<Order Code="""_a_"""/>" ; услуги LAB
+    .S RR=RR_"</Orders></Assay>"
+    S RR=RR_"</Assays>"
+	;w RR  
+	S RR=RR_"</Message>"
+ 	S SID=$$OPEN^WWWCLI(^cfg("lab","eml",ALAB,"server"),^cfg("lab","eml",ALAB,"port"))
+ 	D OWF^RWU(".txt"),W^RWU(RR),C^RWU
+ 	D BUFH2B^WWWCLI(SID,".txt")
+ 	S ^WCLSI(SID,"oh","ContentType")="text/xml; charset=""Windows-1251"""
+ 	S ^WCLSI(SID,"oh","User-Agent")="Medexis"
+ 	S X=$$POST^WWWCLI(SID,"/sod/service/RequestService")
+	;U 0 W !,"POST OK="_X,!
+	D OBUF^WWWCLI(SID)
+	S I=$$BUFCNT^WWWCLI(SID) F %J=1:1:I S A=$$RBUF^WWWCLI(SID) D XMLAN^YIXMLRR
+	D CBUF^WWWCLI(SID)
+	D CLOSE^WWWCLI(SID)
+	S LID=$G(XML("Message","Referral",$c(3)_"LisId"))
+	I LID="" zw XML
+	Q:LID="" 0
+	S $P(^MLAB(NI,ID,"lab"),"|",2)=LID
+	S $P(^MLAB(NI,ID,"lab"),"|",3)=$$DTI^DTUTL(XML("Message",$c(3)_"Date"))
+	D GL^IEXCH("^MLAB",NI,ID,"lab")
+	Q 1
+REQWRK(DS,DE) ; Запросить со статусом "в работе" за период
+	N NI,ID,D,S3,S9,BAR,OK
+	S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+	S DT=DS-1 F  S DT=$O(^MLABI("d",DT)) Q:DT=""!(DT>DE)  S ID="" F  S ID=$O(^MLABI("d",DT,ID)) Q:ID=""  D
+	.S NI=^MLABI("c",ID) Q:NI="" 
+	.S S3=$G(^MLAB(NI,ID,"s3")),S9=$G(^("s9"))
+	.Q:'$P(S3,"|",1)  Q:$P(S9,"|",1)
+	.S BAR=$$GETBAR^IMLAB(NI,ID)
+	.W !,ID_" "_$$FIO^IPAC(NI)_" "_BAR
+	.S OK=$$GETID(BAR,"","")
+	Q
+EJRN(DS,DE) ; Журнал отправки email
+	D emllst^NCONTP("",DS,DE)
+	Q
+REGIPROC 
+	Q:'$G(^MSGHUB("labeml",1,"slog")) 
+	S ^IPROC("Лаборатория","Журнал отправки email (Эндомедлаб)")="EJRN_IKDLEML,1,2,d,Период с,d,Период по"
+	Q

@@ -1,0 +1,33 @@
+NIBILL ; Кассовые операции [ 07/10/2019  0:36 AM ]
+INITIM ; inmoney.frm init
+ N FRM s FRM="inmoney" G initf
+INITIML ; inmoneylt.frm init
+ N FRM s FRM="inmoneylt" G initf
+initf 
+ N A
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<"_FRM_">")
+ S A="mode="_+$G(^cfg("offline-kkm"))_CR
+ S A=A_"qq="_$$LCL^IUSER("bill","dblquest")_CR
+ S A=A_"move="_(+$$LCL^IUSER("bill","pacmove"))_CR
+ S A=A_"noprn="_$$LCL^IUSER("bill","imnoprn")_CR
+ S A=A_"noprnz="_$$LCL^IUSER("bill","imnoprnz")_CR
+ S A=A_"retc="_$$LCL^IUSER("bill","saveretc")_CR
+ S A=A_"nulpayv="_$$LCL^IUSER("bill","nulpayv")_CR
+ S A=A_"txti="_$G(^cfg("bill","kkm-txti"))_CR
+ S A=A_"txto="_$G(^cfg("bill","kkm-txto"))_CR
+ S A=A_"acc="_$G(^cfg("bill","useacc"))_CR
+ S A=A_"nfio="_$S($$LCL^IUSER("bill","kkmfio")=0:1,1:0)_CR
+ S A=A_"strict="_$G(^cfg("bill","strict"))_CR
+ 
+ D W^RWU("<cfg>"_A_"</cfg><tpay>")
+ D BTPLST^IBILL(0,,"xpac")
+ D W^RWU("</tpay>")
+ D WTAGC^RWU("kkm",$$NAME^ISPRAV("kkm",$$KKM^IUSER()))
+ D WTAGC^RWU("kkm_port",$$GETN^ISPRAV("kkm",$$KKM^IUSER(),7))
+ D WC^RWU("</"_FRM_"></nb_console>"),C^RWU
+ Q
+OPENIM(NI) ; Load data to inmoney
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<inmoney>")
+ D WTAGD^RWU("bonus",+$$NOW^IBILS(NI))
+ D W^RWU("</inmoney></nb_console>"),C^RWU
+ Q

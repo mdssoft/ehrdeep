@@ -1,0 +1,99 @@
+XGUNET ; eXtended Global Utilities for Network [ 08/02/2016  1:48 PM ]
+S(GLST,FIL,KIL) ; Save globals GLST - Gl. list, if KIL - kill node if not exist
+ N G,%GL,I,L,R,%IFN,%ST,FN,GP,F
+ S:'$D(KIL) KIL=0
+ M %GL=@GLST
+ S $ZT="ERR^XGUNET"
+ D OWF^RWU(FIL)
+ S R="" F  S R=$O(%GL(R)) Q:R=""  D
+ .S G=%GL(R) Q:G=""  S GP=G,F=0
+ .I G["(" S F=1 S:$E(G,$L(G))'=")" G=G_")",F=0
+ .I $E(G,1)="-" D WW(G) Q
+ .I G["(" S GP=$$RESGL(G)_")",G=GP
+ .I KIL,$D(@G)[0 D WW("-"_G) Q 
+ .I F S I=$D(@G) D:I'[0 WW(G),WW($G(@G)) Q 
+ .F  S I=$D(@G) D:I'[0 WW(G),WW($G(@G)) S G=$Q(@G) Q:'$$IN(G,GP) 
+ D C^RWU
+ Q
+RESGL(G) ; recode subscripts
+ Q:G'["(" G N GG,L,I
+ S L=$QL(G),GG=$P(G,"(",1)_"("
+ F I=1:1:L S X=$QS(G,I) S GG=GG_$S($L(X)>16!(+X'=X):""""_X_"""",1:X) S:I<L GG=GG_","
+ Q GG
+IN(G1,G2) ; GL1 subnodes in GL2
+ I G2'["(" Q:G1'[G2 0
+ Q:G1="" 0 Q:G2="" 0
+ N L1,L2,I,F
+ S L1=$QL(G1),L2=$QL(G2)
+ Q:L1<L2 0
+ S F=1 F I=1:1:L2 I $QS(G1,I)'=$QS(G2,I) S F=0 Q 
+ Q F
+R(FIL,ENC) ; Read globals
+ N FN,DEV,L,R,G,PG,I,GL,CR,%IFN,%ST,FN,%RLL,%EOF
+ D ORF^RWU(FIL)
+ S %RLL="",$ZT="ERR^XGUNET"
+ S CR=$C(13,10),GL=""
+ ; Read loop
+RLOOP S L=$$RLEN(4) I $G(%EOF)=1 G ROKL 
+ S L=$$FHEX^CONU(L),G=$$RLEN(L)
+ I $G(%EOF)=1!(G="") G REND 
+ S:$G(ENC) G=$$WD^TXTU(G)
+ I $E(G,1)="-" S $E(G,1)="",PG=G K:G'["""""" @G G RLOOP 
+ S L=$$RLEN(4)
+ I $G(%EOF)=1 G REND
+ S L=$$FHEX^CONU(L),R=""
+ I L>0 S R=$$RLEN(L) I $G(%EOF)=1 G REND
+ S:$G(ENC) R=$$WD^TXTU(R)
+ S:G'["""""" @G=R S PG=G ; TODO пустые индексы исключать на более раннем этапе
+ G RLOOP
+ROKL 
+REND D CR^RWU
+ Q
+ERR 
+ S ^ERLOG("XGUNET",+$H,+$P($H,",",2))=$ZE_"|"_$G(G)
+ Q
+RLEN(L) 
+ Q:$G(%EOF) "" 
+ N C,X,E,A,K
+ S C=$L(%RLL),(A,X)="",K=0
+ I C'<L S X=$E(%RLL,1,L),%RLL=$E(%RLL,L+1,C) Q X 
+ F  S:C<L A=$$RA^RWU(),K=$L(A),C=C+K S E=$$EOF^RWU Q:E   D  Q:X'=""
+ .I (C-K)<L,C'<L S K=L-$L(%RLL),X=%RLL_$E(A,1,K),%RLL=$E(A,K+1,C),A="" Q 
+ .S %RLL=%RLL_A,K=0,A=""
+ Q:'E X
+ S:X="" X=%RLL_A,%RLL=""
+ S %EOF=1
+ Q X
+MKL(X) 
+ S X=$$HEX^CONU(+X) S X=$E("000",1,4-$L(X))_X Q X
+WW(X) 
+ D W^RWU($$MKL($L(X))_X) Q
+WWCL(SID,X) 
+ S X=$$MKL($L(X))_X
+ S:+$G(^EXCFG("enc")) X=$$DW^TXTU(X)
+ D WBUF^WWWCLI(SID,X) Q
+WWBH(X) 
+ D W^RWU($$MKL($L(X))_X) Q
+SWTO(SID,GL,TO) ; Save w. half syntax to TO=1/2=WWWCLI/BUFH
+ N G,I,GP,L,K,F
+ S $ZT="ERR^XGUNET"
+ S G=GL Q:G=""  
+ S GP=G,F=0
+ I G["(" S F=1 S:$E(G,$L(G))'=")" G=G_")",F=0
+ I $E(G,1)="-" D:TO=1 WWCL(SID,G) D:TO=2 WWBH(G) Q 
+ I G["(" S GP=$$RESGL(G)_")",G=GP
+ S L=$QL(G) F I=1:1:L S GP(I)=$QS(G,I)
+ I F S I=$D(@G) I I=1!(I=11) D:TO=1 WWCL(SID,G),WWCL(SID,$G(@G)) D:TO=2 WWBH(G),WWBH($G(@G)) Q 
+ F  Q:G=""  D
+ .F K=1:1:L I GP(K)'=$QS(G,K) S G="" Q 
+ .Q:G=""  S I=$D(@G)
+ .I I=1!(I=11) D:TO=1 WWCL(SID,G),WWCL(SID,$G(@G)) D:TO=2 WWBH(G),WWBH($G(@G))
+ .S G=$Q(@G) Q:G=""  
+ .I '$$IN(G,GP) S G="" 
+ Q
+SWCL(SID,GL) ; Save to WWWCLI w. half syntax
+ D SWTO(SID,GL,1)
+ Q
+SBH(GL) ; Save to BUFH w. half syntax
+ D SWTO(0,GL,2)
+ Q

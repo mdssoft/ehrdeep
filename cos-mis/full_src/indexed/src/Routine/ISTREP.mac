@@ -1,0 +1,113 @@
+ISTREP ; StReport [ 02/20/2017  10:07 AM ]
+OPEN(NM) 
+ K %ISTREP
+ D W^RWU("<?xml version=""1.0"" encoding=""Windows-1251""?>")
+ D WC^RWU(CR_"<streport"_$S($G(NM)="":"",1:" nm="""_NM_"""")_">")
+ Q
+CLOSE 
+ D W^RWU(CR_"</streport>")
+ K %ISTREP
+ Q
+FIELD(TP,NM,SRC,W,H,MD) ; Add field
+ S NM="<field tp="""_TP_""" nm="""_NM_""""
+ S:$G(W)'="" NM=NM_" w="""_W_""""
+ S:$G(H)'="" NM=NM_" h="""_H_""""
+ S:$G(MD)'="" NM=NM_" mode="""_MD_""""
+ S:$G(SRC)'="" NM=NM_" src="""_SRC_""""
+ S %ISTREP("fl")=$G(%ISTREP("fl"))_NM_"/>"
+ Q
+ENDFLD() 
+ Q:'$D(%ISTREP("fl")) 
+ D W^RWU(CR_"<fields>")
+ D WC^RWU(%ISTREP("fl"))
+ D W^RWU("</fields>")
+ K %ISTREP("fl")
+ Q
+FONT(I,NM,SZ,ST) ; Name, Size, Style
+ S %ISTREP("f")=$G(%ISTREP("f"))_"<font id="""_I_""" name="""_NM_""" size="""_SZ_""""_$S($G(ST)="":"",1:" style="""_ST_"""")_"/>"
+ Q
+CSTART(PG,CP,BRD,PRN,DPX,TRAY,PP) ; Content start
+ ; PG - orientation 'p' - portr., 'l' - landsc.
+ ; CP - copies
+ ; BRD - border, in mm. 
+ ; PRN - printer number (in client loc.set.)
+ ; DPX - duplex (1,2,3)
+ ; TRAY - tray number (1-4)
+ ; PP - paper type
+ S PG=$G(PG),CP=$G(CP),BRD=$G(BRD),PRN=$G(PRN)
+ S DPX=$G(DPX),TRAY=$G(TRAY),PP=$G(PP)
+ S:'BRD BRD=5
+ N R
+ D W^RWU(CR_"<print>")
+ I $D(%ISTREP("f")) D W^RWU(CR_"<fonts>"_CR_%ISTREP("f")_CR_"</fonts>")
+ S R="<content"
+ S:PG'="" R=R_" orn="""_PG_""""
+ S:CP'="" R=R_" cpy="""_CP_""""
+ S:PRN'="" R=R_" pri="""_PRN_""""
+ S:DPX R=R_" duplex="""_PRN_""""
+ S:TRAY R=R_" pgsrc="""_TRAY_""""
+ S:PP R=R_" pgsz="""_PP_""""
+ N BRDL,BRDR,BRDT,BRDB
+ S:BRD'["|" (BRDL,BRDR,BRDT,BRDB)=BRD
+ S:BRD["|" BRDL=$P(BRD,"|",1),BRDR=$P(BRD,"|",2),BRDT=$P(BRD,"|",3),BRDB=$P(BRD,"|",4)
+ D W^RWU(CR_R_" brt="""_BRDT_""" brl="""_BRDL_""" brr="""_BRDR_""" brb="""_BRDB_""">")
+ Q
+CEND 
+ D W^RWU(CR_"</content>"_CR_"</print>")
+ Q
+LD(X,F,A) ; Line w. data : font, align
+ D WC^RWU(CR_"<l"_$S($G(F)="":"",1:" f="""_F_"""")_$S($G(A)="":"",1:" a="""_A_"""")_"><d>"_$$TAG^TXTU(X)_"</d></l>")
+ Q
+H(MM) 
+ D W^RWU(CR_"<l h="""_MM_"""/>")
+ Q
+NPG() ; New page
+ D W^RWU(CR_"<mp cmd=""break""/>")
+ Q
+HLINE(MM,X) ; Линия с бордюром
+ S:$G(X)="" X="t"
+ D W^RWU(CR_"<l h="""_MM_""" b="""_X_"""/>")
+ Q
+TAB(LN,SZ,H,F,C,AA,FF) ; строка таблицы
+ ; SZ - cols size
+ ; H - height
+ ; F - font
+ ; C - color
+ ; AA - cell align
+ ; FF - cell fonts
+ N I,L,A,S,a
+ S L=$L(SZ,"|"),A="",F=$G(F),S=0,C=$G(C),AA=$G(AA),FF=$G(FF)
+ F I=1:1:L S S=S+$P(SZ,"|",I)
+ S A="<l b=""tlbr"" w="""_S_""" "_$S(F'="":"f="""_F_""" ",1:"")_"a=""c"""_$S(C="":"",1:" c="""_C_"""")_">"
+ F I=1:1:L S a=$P(AA,"|",I),A=A_"<d "_$S(a="":"",1:"a="""_a_""" ")_$S(H="":"",1:"h="""_H_""" ")_"w="""_$P(SZ,"|",I)_""" "_$S($P(FF,"|",I)'="":"f="""_$P(FF,"|",I)_""" ",1:"")_"b=""tbr"">"_$$TAG^TXTU($P(LN,"|",I))_"</d>"
+ D WC^RWU(CR_A_"</l>")
+ Q
+TLN(LN,SZ,F,C,B,AA) ; табличная линия
+ N I,L,A,S,a
+ S L=$L(SZ,"|"),A="",F=$G(F),S=0,C=$G(C),B=$G(B),AA=$G(AA)
+ F I=1:1:L S S=S+$P(SZ,"|",I)
+ S A="<l "_$S(B="":"",1:"b="""_B_""" ")_"w="""_S_""""_$S(F="":"",1:" f="""_F_"""")_$S(C="":"",1:" c="""_C_"""")_">"
+ F I=1:1:L S a=$P(AA,"|",I),A=A_"<d "_$S(a="":"",1:"a="""_a_""" ")_"w="""_$P(SZ,"|",I)_""">"_$$TAG^TXTU($P(LN,"|",I))_"</d>"
+ D WC^RWU(CR_A_"</l>")
+ Q
+TXT(TXT,F) ; Простой текст
+ S F=$G(F)
+ S TXT=$$TAG^TXTU(TXT)
+ D WC^RWU("<l><d"_$S(F="":"",1:" f="""_F_"""")_">"_TXT_"</d></l>")
+ Q
+LNPRM(PRM,TXT,F1,F2) ; Параметр (имя: данные)
+ ; F1,F2 - id шрифтов
+ S PRM=$$TAG^TXTU(PRM)
+ S TXT=$$TAG^TXTU(TXT)
+ S F1=$G(F1),F2=$G(F2)
+ D WC^RWU(CR_"<l><d"_$S(F1="":"",1:" f="""_F1_"""")_">"_PRM_": </d><d"_$S(F2="":"",1:" f="""_F2_"""")_">"_TXT_"</d></l>")
+ Q
+LNPRMP(PRM,TXT) ; Параметр в параграфе (имя: данные)
+ S PRM=$$TAG^TXTU(PRM)
+ S TXT=$$TAG^TXTU(TXT)
+ D WC^RWU(CR_"<p><d>"_PRM_": </d><d>"_TXT_"</d></p>")
+ Q
+SUBSCR(TXT,FIO,DTM) ; Подпись
+ S FIO=$G(FIO),DTM=$G(DTM)
+ D WC^RWU("<l><d w=""50""/><d>"_TXT_"</d><d w=""35"" h=""f"" b=""b""/>"_$S($L(FIO):"<d>/ "_FIO_" /</d>",1:"")_$S($L(DTM):"<d>, "_DTM_"</d>",1:"")_"</l>")
+ Q

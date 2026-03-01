@@ -1,0 +1,27 @@
+JSPRAV ; Интерфейс справочников
+LIST(name,use)
+ ; name - register name
+ ; use - only used
+ Q:$G(name)="" 
+ S use=$G(use)
+ N I,N,LN,LNT,F,R,I,J,obj,ari
+ S I=$G(^MN(name)) I I="" D MSG^RWU("[]") Q 
+ S R=$G(^MN("root",name,"fcode")),LN(1)="name"
+ I R'="" F J=1:1:$L(R,"|") S F=$P(R,"|",J) S:F'="" LN(J)=F
+ S ari=$G(^MN("root",name,"arch"))
+ D OWC^RWU(".json")
+ S F="["
+ S N="" F  S N=$O(^MN(I,N)) Q:N=""  D
+ .S R=^(N)
+ .i use,ari,$P(R,"|",ari) Q  ; archive index
+ .s obj={}
+ .s obj.id=N
+ .F J=1:1:$L(R,"|") D obj.%Set(LN(J),$P(R,"|",J))
+ .D WU^RWU(F_obj.%ToJSON())
+ .S F=","
+ D WU^RWU("]"),CU^RWU
+ Q
+GET(name,id)
+ Q
+PUT
+ Q

@@ -1,0 +1,145 @@
+NRTRASP ; Create doctor's shedule times [ 01/05/2021  0:53 AM ]
+L(ID) ; Load data by ID
+ Q:ID=""  S ID=$$WD^TXTU(ID) Q:'$D(^M(141,ID)) 
+ N R S R=^M(141,ID)
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<trtime>")
+ D WTAGDC^RWU("kod",ID)
+ D WTAGDC^RWU("nm",$P(R,"|",1))
+ D WTAGDC^RWU("time",$P(R,"|",2))
+ D WTAGDC^RWU("arch",$P(R,"|",3))
+ D WTAGC^RWU("otd",$TR($G(^M(141,ID,"otd")),"~","|"))
+ D WTAGC^RWU("spec",$TR($G(^M(141,ID,"spec")),"~","|"))
+ D WTAGC^RWU("mxp",$G(^M(141,ID,"mxp")))
+ D WTAGDC^RWU("stat",$G(^M(141,ID,"stat")))
+ D W^RWU("</trtime></nb_console>"),C^RWU
+ Q
+TAB(OTD,SP) ; Show table
+ N ID,O,S,R,F
+ S:OTD=999 OTD="" S:OTD'="" OTD="~"_OTD_"~"
+ S:SP=999 SP="" S:SP'="" SP="~"_SP_"~"
+ D OWF^RWU(".txt")
+ S ID="" F  S ID=$O(^M(141,ID)) Q:ID=""  D
+ .S R=^(ID),O=$G(^(ID,"otd")),S=$G(^("spec")),F=0
+ .S:OTD=""!(SP="") F=1
+ .I 'F,OTD'="",("~"_O_"~")[OTD S F=1
+ .I 'F,SP'="",("~"_S_"~")[SP S F=1
+ .Q:'F 
+ .D WC^RWU(CR_ID_"|"_$P(R,"|",1))
+ D C^RWU
+ Q
+LST ; List for tabrasp.frm
+ D OWF^RWU(".txt")
+ D LSTsys
+ D C^RWU
+ Q
+LSTsys ; Список времен расписания
+ N ID,O,S,R,C
+ D:'$G(^cfg("rasp-mk-safeclr")) WC^RWU("@|пусто")
+ S (C,ID)="" F  S ID=$O(^M(141,ID)) Q:ID=""  D
+ .S R=^(ID),O=$G(^(ID,"otd")),S=$G(^("spec"))
+ .Q:$P(R,"|",3) 
+ .D WC^RWU(CR_ID_"@"_O_"@"_S_"|"_ID_" "_$P(R,"|",1))
+ .S C=CR
+ D:$G(^cfg("rasp-mk-safeclr")) WC^RWU(CR_"@|пусто")
+ Q
+LKEY(ID) ; Get Time Key
+ Q:ID="" "" Q:ID="*" ""
+ Q ID_"@"_$G(^M(141,"otd"))_"@"_$G(^("spec"))
+LST2 ; List for mkrasp.frm
+ N ID,O,S,R,C
+ D OWF^RWU(".txt"),WC^RWU("|пусто")
+ S C="",ID="" F  S ID=$O(^M(141,ID)) Q:ID=""  D
+ .S R=^(ID),O=$G(^(ID,"otd")),S=$G(^("spec"))
+ .Q:$P(R,"|",3) 
+ .D WC^RWU(CR_ID_"|"_ID_" "_$P(R,"|",1))
+ .S C=CR
+ D C^RWU
+ Q
+S ; Save data
+ D RBUFH^YIXMLRR(1)
+ N A M A=XML("nb_console","trtime")
+ D CLOSE^YIXMLRR,W
+ Q
+W ; Write data
+ N I,X,R,F,T,%J,TML
+ S R=$G(A("time")) G:R="" w1
+ S X=$$GENTML^IMRASP(R,"TML")
+ I 'X D MSG^RWU("Время приемов указано с ошибками.") Q 
+ 
+ D CHKTML^IMRASP Q:$$IsMSG^RWU() ; min/max time
+ 
+w1 S %J=$G(A("kod")) Q:%J="" 
+ D WD^ISSG("^M(141,"""_%J_""")")
+ S ^M(141,%J)=$G(A("nm"))_"|"_$G(A("time"))_"|"_$G(A("arch"))
+ S ^M(141,%J,"otd")=$TR($G(A("otd")),"|","~")
+ S ^M(141,%J,"spec")=$TR($G(A("spec")),"|","~")
+ S R=$G(A("mxp")) S:R=1 R=""
+ S ^M(141,%J,"mxp")=R
+ S ^M(141,%J,"stat")=$G(A("stat"))
+ S ^("v")=$G(^M(141,%J,"v"))+1 ; version
+ K ^M(141,%J,"t")
+ M ^M(141,%J,"t")=TML
+ S ^M(141,%J,"log")=$$USRH^IUSER()
+ Q:$G(^cfg("rasp-mk","noupdtm")) 
+ D REGL^IEXCH("^M",141,%J)
+ Q
+DEL(ID) ; Delete
+ S ID=$$WD^TXTU(ID)
+ D MSG^RWU("ERR")
+ Q:ID=""  Q:'$D(^M(141,ID)) 
+ D KD^ISSG("^M(141,"""_ID_""")")
+ K ^M(141,ID)
+ D MSG^RWU("OK")
+ Q:$G(^cfg("rasp-mk","noupdtm"))
+ D KGL^IEXCH("^M",141,ID)
+ Q
+LPT(KEY) ; Вывод времени вида приема
+ N OT,SP,ID,R,A
+ S OT=$P(KEY,"~",2),SP=$P(KEY,"~",4),A=""
+ Q:OT=""!(SP="") 
+ S:'$D(^DSHM("tt",OT,SP)) OT="-"
+ S ID="" F  S ID=$O(^DSHM("tt",OT,SP,ID)) Q:ID=""  D
+ .S R=^(ID)
+ .S A=A_$S(A="":"",1:CR)_$P(R,"|",1)_"@"_ID_"|"_$P(R,"|",2)
+ D MSG^RWU(A)
+ Q
+ZTRL ; Загрузить типы времен расписания
+ N Id,I,R
+ D OWF^RWU(".txt")
+ D WC^RWU("|Наименование|Текст в расписании|Цвет|Нет записи|Рабочее|Доступ")
+ S Id=+$G(^MN("raspzt")),I=""
+ F  S I=$O(^MN(Id,I)) Q:I=""  S R=^(I) D WC^RWU(CR_I_"@"_$P(R,"|",1,2)_"|"_$P(R,"|",4)_"|пример|"_$S($P(R,"|",3):"да",1:"нет")_"|"_$S($P(R,"|",5):"да",1:"нет")_"|"_$P(R,"|",6))
+ D C^RWU
+ Q
+ZTRADD(NM) ; Добавить типы времен расписания
+ N Id,ID
+ S Id=$$NEWIDX^YISPRAV("raspzt"),NM=$$WD^TXTU(NM)
+ L +^MN(Id)
+ S ID=$O(^MN(Id,""),-1)+1,^(ID)="|"_NM
+ L -^MN(Id)
+ D MSG^RWU(ID)
+ Q
+ZTRSET(ID,POS,STR) ; Изменить типы времен расписания
+ N Id S Id=+$G(^MN("raspzt"))
+ D MSG^RWU(1)
+ S STR=$$WD^TXTU(STR),ID=$P(ID,"@",1)
+ S STR=$S(POS=0:STR,POS=1:STR,POS=2:STR,POS=3!(POS=4):$S(STR="да":1,1:0),POS=5:$S('+STR:"",1:STR),1:0)
+ S POS=$S(POS=0:2,POS=1:4,POS=2:1,POS=3:3,POS=4:5,POS=5:6,1:0)
+ I 'POS D MSG^RWU(0) Q 
+ S $P(^MN(Id,ID),"|",POS)=STR
+ D UPD^IEXCH("YISPRAV","raspzt")
+ Q
+ZTRDEL(ID) ; Удалить типы времен расписания
+ I ID="" D MSG^RWU("Ошибка идентификатора") Q 
+ N Id S Id=+$G(^MN("raspzt"))
+ D K^ISSG("^MN("_Id_","_ID_")")
+ K ^MN(Id,ID)
+ D UPD^IEXCH("YISPRAV","raspzt")
+ Q
+INITDB 
+ S ^MN("root","raspzt")="Типы резерва времени расписания"
+ S ^MN("root","raspzt","fname")="Код CSS|Текст в расписании|Нет записи|Наименование|Рабочее время"
+ S ^MN("root","raspzt","fcode")="css_code|title|readonly|name|worktime"
+ S ^MN("root","raspzt","ftype")="S|S|B|S|B"
+ S ^MN("root","dshstat")="Статус типа времени в расписании"
+ Q

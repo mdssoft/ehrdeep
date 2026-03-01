@@ -1,0 +1,64 @@
+NKDLPSM ; Импорт услуги из отчета Acros-PSM [ 09/24/2019  4:56 PM ]
+IU 
+ N %J,A,OT,VR,SP,DT,NI,U,CNT,R,F,ID,D,IF,VTP,DG,DOMS,DGB
+ S VR=$G(^cfg("lab","impvr")) Q:VR="" 
+ S OT=$$OTD^IKADRY(VR),SP=$$SPEC^IKADRY(VR)
+ S DOMS=$G(^cfg("lab","impoms")) ; договор ОМС
+ S DG="" F  S DG=$O(^DGN(DG)) Q:DG=""  S:$$GET^IINSC(DG,"dvid",+$H)=6 DGB(DG)=""
+ K ^BUF("y")
+ D ORH^RWU
+ S F=0,DT=""
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  D
+ .S A=$$WD^TXTU(A)
+ .I 'F,$$UL^TXTU(A)["период" S DT=$$DIT^DTUTL($P($P(A,"|",2)," ",6,10)) Q
+ .I 'F,DT'="",$P(A,"|",3)="ИД" S F=1 Q
+ .I F,$P(A,"|",1)="Итого:" S F=0 Q
+ .Q:'F  Q:DT=""
+ .S VTP=$$LU^TXTU($P(A,"|",7))
+ .I VTP["КАСС" d err("Касса") Q
+ .S NI=$P(A,"|",3) I NI="" d err("Нет И.Б.") Q 
+ .I '$$EXIST^IPAC(NI) d err("Нет пациента") Q
+ .S R=$P(A,"|",5) I R="" d err("Нет услуг") Q 
+ .D addusl(R)
+ D CR^RWU
+ I DT="" D MSG^RWU("Дата не определена") Q 
+ D OWF^RWU(".txt"),WC^RWU("Результат"_CR)
+ S JJ="" F  S JJ=$O(^BUF("y",JJ)) Q:JJ=""  D WC^RWU(^BUF("y",JJ)_CR)
+ D C^RWU
+ Q
+err(Z) 
+ S ^BUF("y",JJ)=Z_":"_A
+ S JJ=JJ+1
+ Q
+dgt(NI,TP) ; определить тип договора
+ I TP["ОМС",DOMS'="" Q DOMS
+ N X
+ I TP["БЮДЖ" D  Q:X'="" X
+ .S X=$$GET^IPAC(NI,"stc",DT) I X'="",$D(DGB(X)) Q 
+ .S X=$$GET^IPAC(NI,"stc1",DT) I X'="",$D(DGB(X)) Q
+ .S X=$$GET^IPAC(NI,"stc2",DT) I X'="",$D(DGB(X)) Q
+ .S X=""
+ S X=$$GET^IPAC(NI,"stc",DT) I X'="",X'=DOMS,'$D(DGB(X)) Q "" ; default
+ S X=$$GET^IPAC(NI,"stc1",DT) I X'="",X'=DOMS,'$D(DGB(X)) Q X
+ Q ""
+addusl(X) ; Декодирование услуг
+ N I,L
+ S X=$TR(X," ","")
+ ; LDC style I +$$PIDXN^IPAC(NI,12605,DT)>0 S DG=12605
+ S DG=$$dgt(NI,VTP)
+ F I=1:1:$L(X,";") D
+ .S U=$P(X,";",I),CNT=1
+ .I U["х" S CNT=$P(U,"х",2),U=$P(U,"х",1) S:'CNT CNT=1
+ .; 5 days
+ .S IF=0,D=DT-2 F  S D=$O(^PNF(NI,D)) Q:D=""!(D>DT)  I $$FNDUSL^IUSL(NI,D,U)'="" S IF=1 Q 
+ .Q:IF  ; такие услуги есть
+ .I IF D err("Ранее введена "_U) Q ; такие услуги есть
+ .I '$$EXIST^IPRICE(U) D err("Ошибка кода "_U) Q 
+ .S:CNT>1 U=U_"*"_CNT
+ .S ID=$$ADD^IUSL(VR,DT,OT,NI,U,"","","",,,,DG) Q:ID="" 
+ .; I DG'="",$$CHKUA^YMPRP("ж",DT,U)'<0 D SETDGN^IUSL(VR,DT,OT,ID,DG)
+ .S ^KDLUSL(VR,DT,OT,NI,ID)=U_"|"_$H
+ Q
+REGIPROC 
+ S ^IMPROC("Импорт услуг КДЛ")="IU_NKDLPSM()"
+ Q

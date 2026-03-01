@@ -1,0 +1,95 @@
+ICHIFR ; Системные шифраторы [ 08/20/2018  4:52 PM ]
+IsSYNC(NM) ; Справочник подлежит синхронизации
+ Q:NM="rastxt" 1
+ Q:NM="jobtitle" 1
+ Q:NM="doljn" 1
+ Q:NM="rsource" 1
+ Q:NM="ofor" 1
+ Q:NM="pricecls" 1
+ Q:NM="whocart" 1
+ Q:NM="dgtype" 1
+ Q:NM="dog" 1
+ Q:NM="spec" 1
+ Q:NM="otd" 1
+ Q:NM=1!(NM="status1") 1 ; status
+ Q:NM=5!(NM="mectorab") 1 ; mectorab
+ Q 0
+STORww(NM,NEW) ; Содержимое справочника с заголовками
+ ; NEW - первичная загрузка (0-обновление)
+ N D
+ S D=$$STORdt(NM)
+ D W^RWU("<"_NM_" type=""plain"" action=""new"""_$S(D'="":" date="""_D_"""",1:"")_">")
+ D STORsys(NM)
+ D W^RWU("</"_NM_">")
+ Q
+STORdt(NM) ; Дата изменения справочника
+ I NM="dog" Q $G(^DGN)
+ I NM="lprog"!(NM="aprog") Q $G(^MPRP)
+ I NM="newpac" Q $$TUPD^IRPAC()
+ I NM="region" Q $G(^KLADR("U"))
+ I NM="lpu" Q $G(^CGA)
+ I NM="gd" Q $G(^CGA)
+ I NM="skd" Q $$CHIFRDT^IDSCN()
+ ; all other
+ Q $$CNGDT^ISPRAV(NM)
+STORsys(NM) ; Получить содержимое постоянного справочника
+ N X
+ I NM="mectorab" D LSTs^NSPRAV(5,,,1) Q
+ I NM="status1" D LSTs^NSPRAV(1,,,1) Q 
+ I NM="status2" D LSTs^NSPRAV(2,,,1) Q
+ 
+ I NM="dog" D W^RWU("|"_CR),LSTsys^YNDOG($G(^cfg("chifr","dgn-all")),+$G(^cfg("chifr","dgn-num"))),WC^RWU(CR_"|ВСЕ") Q
+ 
+ I NM="lprog" S X=+$G(^cfg("chifr","lprog","sort")) D:'X LSTsys^YMPRP(+$H,1,1) D:X LSTSsys^YMPRP(+$H,1,1) Q
+ I NM="aprog" S X=+$G(^cfg("chifr","lprog","sort")) D:X LSTSsys^YMPRP(+$H) D:'X LSTsys^YMPRP(+$H) Q 
+ 
+ I NM="lpu" D W^RWU("|"_CR),LSTFILTs^YCONTR Q
+ I NM="gd" D W^RWU("|"_CR),LSTFLsys^YCONTR("gd","",0,1) Q
+ I NM="otd"!(NM="spec") D LSTs^NSPRAV(NM,,,1),WC^RWU(CR_"|Все") Q
+ I NM="otda" D LSTs^NSPRAV(NM,,,1) Q 
+ I NM="tprice" S X=+$G(^cfg("price-tsort")) D:X LMNS("tprice",0) D:'X LMN("tprice",0) Q
+ I NM="newpac" D CHIFR^IRPAC Q
+ I NM="region" D W^RWU("|"_CR),SELADRL^YKLADR Q
+ I NM="uchastok" D LSTs^NSPRAV(NM,0,1,1) Q 
+ I NM="addpfn" D LST^NFNPAC Q  
+ I NM="rastxt" D LSTs^NSPRAV("rastxt",2,1,1) Q 
+ I NM="stof" D LSTs^NSPRAV(NM,1,,1) Q 
+ I NM="stof-ort"!($E(NM,1,5)="stof-") D LSTs^NSPRAV(NM,1,,1) Q 
+ I NM="skd" D LIST^IDSCN(,1) Q
+ I NM="gender" D LMN(NM,1) Q 
+ D LMN(NM,0)
+ Q
+name(NM,ID) ; Получить содержимое элемента справочника
+ I NM="dog" Q $$NAME^IINSC(ID)
+ I NM="lprog"!(NM="aprog") Q $$NAME^IMPRP(ID) 
+ I NM="lpu"!(NM="contr")!(NM="gd") Q $$NAME^ICONTR(ID)
+ I NM="region" Q $$NAME^YKLADR(ID)
+ I NM="skd" Q $$NAME^IDSCN(ID)
+ I NM="otd" Q $$GOTD^YISPRAV(ID)
+ I NM="spec" Q $$GSPEC^YISPRAV(ID)
+ Q $$NAME^ISPRAV(NM,ID)
+LMNS(NAME,uCR) ; Load from ^MN, sort
+ N N,ID,L
+ S:'$D(uCR) uCR=0
+ S N="",ID=$G(^MN(NAME))
+ D:uCR W^RWU("|")
+ F  S N=$O(^MN(ID,N)) Q:N=""  S L(^MN(ID,N))=$P(N,"|",1)
+ F  S N=$O(L(N)) Q:N=""  D WC^RWU($S(uCR:CR,1:"")_L(N)_"|"_N_$S(uCR:"",1:CR))
+ Q
+LMN(NAME,uCR,REF,SYS) ; Load from ^MN, only names
+ ; REF - not new, only refresh SYS=1
+ N N,ID,U
+ S uCR=+$G(uCR),REF=+$G(REF),N="",ID=$G(^MN(NAME))
+ D:uCR W^RWU("|")
+ F  S N=$O(^MN(ID,N)) Q:N=""  D WC^RWU($S(uCR:CR,1:"")_N_"|"_$P(^MN(ID,N),"|",1)_$S(uCR:"",1:CR))
+ Q
+SYNC(NM) ; Синхронизировать справочник у пользователей
+ Q:'$$IsSYNC(NM) 
+ D SENDALL^YISYNC("doSYNC^ICHIFR","("""_NM_""")",1)
+ Q
+doSYNC(NM) ; system proc
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,1))_"<storage><"_NM_">")
+ D STORsys(NM)
+ D W^RWU("</"_NM_"></storage>")
+ D C^RWU
+ Q
