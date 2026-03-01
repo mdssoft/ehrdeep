@@ -1,0 +1,1107 @@
+IBILL ; Финансовый счет пациента [ 07/22/2024  0:14 AM ]
+USE(NIB) ; Используется счет
+ Q:'$D(^BILL(NIB)) 0 Q 1
+CREA(NIB) ; Создать
+ S ^BILL(NIB)=0
+ D UPD^IEXCH("IBILL",NIB_","_(+$H))
+ Q
+NOW(NIB,DT) ; Состояние на текущий момент
+ N A S A=$G(^BILL(NIB)) S:A["link:" NIB=$E(A,6,$L(A)),A=$G(^(NIB))
+ G:$D(DT) NOWdt
+ I $L($G(^BILL(NIB,"B"))) S A=A+$G(^BILL(^("B")))
+ Q A-$G(^BILL(NIB,"L"))
+FTBILL(NIB) ; Текущее состояние счета в тексте
+ N R,A,I,S
+ S R=$$DEBT(NIB),A=$$SRES(NIB)
+ S A=$S(R=0:"",1:", Долг: "_R)_$S(A=0:"",1:", К оплате: "_A)
+ I $D(^BILL(NIB,"SC")) S I="" F  S I=$O(^BILL(NIB,"SC",I)) Q:I=""  S S=+$P(^(I),"|",1) S:S'=0 A=A_", "_S_" ("_$$GETN^ISPRAV("payacc",I,2)_")"
+ Q $$NOW(NIB)_A
+NOWdt 
+ N TM,S
+ S DT=DT+1,(S,A)=0
+ F  Q:A  S DT=$O(^BILL(NIB,DT),-1) Q:DT=""  S TM="" F  Q:A  S TM=$O(^BILL(NIB,DT,TM),-1) Q:TM=""   I $D(^BILLI(DT,TM,NIB))'[0 S S=$P(^(NIB),"|",1),A=1 Q
+ 
+ Q S
+ ; Old style:
+ N TM,S,R S DT=DT+1,S=0
+ F  S DT=$O(^BILL(NIB,DT),-1) Q:DT=""  S TM="" F  S TM=$O(^BILL(NIB,DT,TM)) Q:TM=""  S R=^(TM),A=$P(R,"|",1) S:A="+"!(A="-")!(A="") S=S+$P(R,"|",2)
+ Q S
+NOWI(NIB) ; Состояние на текущий момент (для вн. исп.)
+ N A S A=$G(^BILL(NIB)) S:A["link:" NIB=$E(A,6,$L(A)),A=$G(^(NIB))
+ Q A-$G(^(NIB,"L"))
+REAL(NIB) ; Полная сумма на текущий момент
+ S A=$G(^BILL(NIB)) Q:A["link:" $G(^($E(A,6,$L(A))))
+ I $L($G(^BILL(NIB,"B"))) S A=A+$G(^BILL(^("B")))
+ Q A
+DEBT(NIB) ; Кредитный долг
+ N A S A=$G(^BILL(NIB)) S:A["link:" NIB=$E(A,6,$L(A))
+ Q:'$D(^(NIB,"D")) 0
+ N D,T,S S D="",S=0
+ F  S D=$O(^BILL(NIB,"D",D)) Q:D=""!(+D'=D)  S T="" F  S T=$O(^BILL(NIB,"D",D,T)) Q:T=""  S A=^(T),S=S+($P(A,"|",2)-$P(A,"|",1))
+ Q S
+REALNIB(NIB) ; Реальный номер счета
+ N A S A=$G(^BILL(NIB)) Q:A["link:" $E(A,6,$L(A))
+ Q NIB
+SUBTP(NIB,DTH,SUM,TXT,TP) 
+ N RETz,COM,KV,ADD,SC,KKM
+ G SUB1
+SUB(NIB,DTH,SUM,TXT,RETz,COM,KV,ADD,SC,KKM) ; Вычесть (прибавить если отрицат.) RET=DTM
+ ; TXT - системное примечание
+ ; RETz - имя переменной для возврата даты
+ ; COM - текстовое примечание
+ ; KV - № квитанции
+ ; ADD - вычитать из существующего платежа
+ ; SC - счет
+ ; KKM - ID кассы 
+ N TP S TP="" 
+SUB1 Q:NIB=""  N K,DTM,DL,PNI,X,LP,LOG,AR
+ S:DTH'["," DTH=$H S DTM=$P(DTH,",",2)
+ Q:$P($G(^BILL(NIB,"S")),"|",1)  ; readonly
+ S SUM=+$TR(SUM,",","."),LP=$$^I("ilpu"),SC=$G(SC)
+ S LOG=$G(%LOG)_$S($L(LP):"@"_LP,1:""),AR=""
+ I $G(ADD),$D(^BILL(NIB,+DTH,DTM)) S AR=^(DTM),$P(AR,"|",6)=$$ADDKEY($P(AR,"|",6),TXT),$P(AR,"|",2)=$P(AR,"|",2) G SUB2  ; TODO
+ S KKM=$G(KKM) S:KKM="" KKM=$$KKM^IUSER()
+ S K="|"_$S(SUM<0:"+"_(0-SUM),1:"-"_SUM)_"|"_TP_"|"_KKM_"|"_LOG
+ S:$G(TXT)'="" $P(K,"|",6)=TXT
+ S:$G(COM)'="" $P(K,"|",7)=COM
+ S:$G(KV)'="" $P(K,"|",8)=KV
+ S:SC'="" $P(K,"|",12)=SC
+SUB2 
+ S DL=$G(^BILL(NIB))
+ I DL["link:" S PNI=NIB,NIB=$E(DL,6,$L(DL)) Q:NIB="" 
+ L +^BILL(NIB)
+ S X=$G(^BILL(NIB))
+ I X<SUM,$G(^BILL(NIB,"B"))'="" S X=X+$$DOBRW(NIB,SUM-X)
+ F  Q:'$D(^BILL(NIB,+DTH,DTM))  S DTM=DTM+1 ; Чтобы не затиралось
+ S ^(DTM)=K
+ S K=X-SUM,^BILL(NIB)=K
+ S:SC ^BILL(NIB,"SC",SC)=$G(^BILL(NIB,"SC",SC))-SUM
+ L -^BILL(NIB)
+ I $D(RETz),RETz'="" X "S "_RETz_"=+DTH_"",""_DTM"
+ S ^BILLI(+DTH,DTM,NIB)=K_"|"_(0-SUM)_"|S|"_LOG_$S(DL["link:":"|"_$G(PNI),1:"")
+ I K>0,+$G(^BILL(NIB,"R"))>0 D DORES(NIB,K)
+ D UPD^IEXCH("IBILL",NIB_","_(+DTH))
+ D DO^ITRIG("bill","sub")
+ Q
+SUBD(NIB,DTH,SUM,TXT,RETz,COM,KV,SC,KKM) ; вычесть с перемещением нехватки в долг
+ I '+$G(^cfg("debt")) D SUB(NIB,DTH,SUM,TXT,$G(RETz),$G(COM),$G(KV),,$G(SC)) Q 
+ N S,W,X
+ Q:NIB=""  
+ Q:$P($G(^BILL(NIB,"S")),"|",1)  ; readonly  
+ S S=$$NOW(NIB),W=DTH,X=$S(SUM'>S:SUM,S<0:0,1:S)
+ D:X SUB(NIB,DTH,X,TXT,"W",$G(COM),$G(KV),,$G(SC),$G(KKM))
+ I $D(RETz),RETz'="" X "S "_RETz_"=W"
+ Q:X=SUM 
+ I $P(TXT,":",1)="ZNF" S $P(TXT,":",1)="ZND"
+ D ADEBT(NIB,W,SUM,S,TXT,$G(COM)) ; TODO - SC
+ D DO^ITRIG("bill","sub")
+ Q
+PDEBT(NIB,DTH,SUM) ; Оплатить зарегистрированный долг
+ Q:NIB=""  
+ N T S T=$G(^BILL(NIB)) I T["link:" S NIB=$E(T,6,$L(DL)) Q:NIB="" 
+ N S S S=$$DEBT(NIB),T=$P(DTH,",",2) S:SUM>S SUM=S
+ S S=$G(^BILL(NIB,"D",+DTH,T))
+ D SUB(NIB,$H,SUM,$P(S,"|",6))
+ S SUM=$P(S,"|",1)+SUM
+ S $P(S,"|",1)=SUM,^BILL(NIB,"D",+DTH,T)=S,^(T,$H)=$P(S,"|",1)-SUM
+ D GL^IEXCH("^BILL",NIB,"D",+DTH,T)
+ ; I SUM=$P(S,"|",2) K ^BILL(NIB,"D",+DTH,T) D KGL^IEXCH("^BILL",NIB,"D",+DTH,T) ; предистория остается !
+ Q
+SUBCHK(NIB,SUM,TP) ; Проверка для возврата сумм
+ N S,K,PNI,DL
+ S S=$$NOW(NIB)
+ S DL=$G(^BILL(NIB))
+ I DL["link:" S PNI=NIB,NIB=$E(DL,6,$L(DL)) Q:NIB="" ""
+ I $P($G(^BILL(NIB,"S")),"|",1) Q "Изменение данного счета запрещено"
+ S K=+$$LCL^IUSER("bill","relnolim")
+ I 'K,S<SUM Q "Возврат превышает сумму зачисленных наличных." 
+ I 'K,DL<SUM Q "Возврат превышает сумму доступных средств."
+ I K=2!(K=21),$S(K=21&(S'<SUM):0,1:SUM>$$GSUMM^IBILL(NIB,0,+$H,"+",$G(TP))) Q "Возврат превышает сумму платежей данного типа"
+ I K=3!(K=31),$S(K=31&(S'<SUM):SUM<$$GSUMM^IBILL(NIB,0,+$H,"+",TP),1:SUM>$$GSUMM^IBILL(NIB,+$H,+$H,"+",$G(TP))) Q "Возврат превышает сумму платежй данного типа за сегодня" 
+ Q ""
+SUBM(NIB,DTH,SUM,KKM,COM,TYP,TXT)     ; Вернуть сумму - по чеку
+ Q:NIB=""  
+ Q:'$$KKM^IUSER() 
+ Q:$P($G(^BILL(NIB,"S")),"|",1)  ; readonly
+ N K,DTM,DL,PNI,S,LOG
+ S:DTH'["," DTH=$H
+ S DTM=$P(DTH,",",2),DTH=+DTH,SUM=+$TR(SUM,",","."),TYP=$G(TYP)
+ S DL=$G(^BILL(NIB))
+ I DL["link:" S PNI=NIB,NIB=$E(DL,6,$L(DL)) Q:NIB="" 
+ S K=$$^I("ilpu"),LOG=$G(%LOG)_$S(K="":K,1:"@"_K)
+ S S=$$NOW(NIB)
+ S K=$$SUBCHK(NIB,SUM,$G(TYP))
+ Q:K'="" K
+ ; Q:+$G(^BILL(NIB))<SUM 
+ S K="-|-"_SUM_"|"_TYP_"|"_KKM_"|"_$$USR^IUSER()
+ S:$G(TXT)'="" $P(K,"|",6)=TXT
+ S:$G(COM)'="" $P(K,"|",7)=COM
+ 
+ L +^BILL(NIB)
+ F  Q:'$D(^BILL(NIB,DTH,DTM))  S DTM=DTM+1
+ S ^(DTM)=K
+ S K=$G(^BILL(NIB))-SUM,^(NIB)=K
+ L -^BILL(NIB)
+ S ^BILLI(DTH,DTM,NIB)=K_"|"_(0-SUM)_"|M|"_LOG_$S(DL["link:":"|"_$G(PNI),1:"")
+ D UPD^IEXCH("IBILL",NIB_","_DTH)
+ Q
+SUBMF(NIB,DTH,SUM,KKM,TYP)     ; Вернуть сумму (начать транзакцию)
+ Q:NIB=""  
+ Q:'$$KKM^IUSER() 
+ Q:$P($G(^BILL(NIB,"S")),"|",1)  ; readonly
+ N K,DTM,DL,PNI,DT,TM,S,LOG
+ S:DTH'["," DTH=$H S DTM=$P(DTH,",",2)
+ S SUM=+$TR(SUM,",","."),TYP=$G(TYP)
+ S K=$$^I("ilpu"),LOG=$G(%LOG)_$S(K="":K,1:"@"_K)
+ S DL=$G(^BILL(NIB))
+ I DL["link:" S PNI=NIB,NIB=$E(DL,6,$L(DL)) Q:NIB="" 
+ S DT="",S=0 F  S DT=$O(^BILL(NIB,DT)) Q:DT=""!(+DT'=DT)  S TM="" F  S TM=$O(^BILL(NIB,DT,TM)) Q:TM=""  S K=$G(^(TM)) I $P(K,"|",1)="+"!($P(K,"|",1)="-")  S:$P(K,"|",3)=1 S=S+$P(K,"|",2)
+ S K=$$SUBCHK(NIB,SUM,$G(TYP))
+ Q:K'="" K
+ S K="V|-"_SUM_"|"_TYP_"|"_KKM_"|"_LOG
+ F  Q:'$D(^BILL(NIB,+DTH,DTM))  S DTM=DTM+1
+ S ^BILL(NIB,+DTH,DTM)=K
+ Q
+ADD(NIB,DTH,SUM,TYP,KKM,TXT,COM,KV,VAR,CNUM,SC,SR) ; Прибавить
+ ; KKM - ID кассы
+ ; TXT - служебный текст
+ ; COM - пользоват. коммент.
+ ; KV - квитанция
+ ; CNUM - номер чека
+ ; SC - счет
+ ; SR - способ расчета
+ Q:NIB=""  
+ I 'KKM,'$$KKM^IUSER() Q  
+ Q:$P($G(^BILL(NIB,"S")),"|",1)  ; readonly
+ N K,DTM,DL,PNI,LOG
+ S:DTH'["," DTH=$H S DTM=$P(DTH,",",2)
+ S SUM=+$TR(SUM,",",".")
+ S LOG=$$USR^IUSER()
+ S K="+|"_SUM_"|"_TYP_"|"_KKM_"|"_LOG
+ S:$G(TXT)'="" $P(K,"|",6)=TXT
+ S:$G(COM)'="" $P(K,"|",7)=COM
+ S:$G(KV)'="" $P(K,"|",8)=KV
+ S:$G(CNUM)'="" $P(K,"|",9)=CNUM
+ S:$G(SC)'="" $P(K,"|",12)=SC
+ S:$G(SR)'="" $P(K,"|",13)=SR
+ S DL=$G(^BILL(NIB)),DTH=+DTH
+ I DL["link:" S PNI=NIB,NIB=$E(DL,6,$L(DL)) Q:NIB="" 
+ F  Q:'$D(^BILL(NIB,DTH,DTM))  S DTM=DTM+1
+ S ^(DTM)=K
+ L +^BILL(NIB)
+ S K=$G(^BILL(NIB))+SUM,^(NIB)=K
+ S:SC ^BILL(NIB,"SC",SC)=$G(^BILL(NIB,"SC",SC))+SUM
+ L -^BILL(NIB)
+ S ^BILLI(DTH,DTM,NIB)=K_"|"_SUM_"|A|"_LOG_$S(DL["link:":"|"_$G(PNI),1:"")
+ D UPD^IEXCH("IBILL",NIB_","_DTH) ; вначале, если в DORES ошибка
+ I K>0,+$G(^BILL(NIB,"R"))>0 D DORES(NIB,K)
+ D DO^ITRIG("bill","add")
+ I $G(VAR)'="" S @VAR=NIB_","_DTH_","_DTM
+ Q
+ADDF(NIB,DTH,SUM,TYP,KKM,SC,SR) ; Прибавить (начать транзакцию)
+ ; TYP - тип платежа
+ ; KKM - касса
+ ; SC - счет
+ ; SR - тип расчета
+ Q:NIB=""  
+ Q:$G(^cfg("bill","nosystr"))
+ Q:'$$KKM^IUSER()  
+ Q:$P($G(^BILL(NIB,"S")),"|",1)  ; readonly
+ N K,DTM,DL,PNI,LOG
+ S:DTH'["," DTH=$H S DTM=$P(DTH,",",2)
+ S SUM=+$TR(SUM,",",".")
+ S K=$$^I("ilpu"),LOG=$G(%LOG)_$S(K="":K,1:"@"_K)
+ S K="P|"_SUM_"|"_TYP_"|"_KKM_"|"_LOG
+ S:$G(SC)'="" $P(K,"|",12)=SC
+ S:$G(SR)'="" $P(K,"|",13)=SR
+ S DL=$G(^BILL(NIB))
+ I DL["link:" S PNI=NIB,NIB=$E(DL,6,$L(DL)) Q:NIB="" 
+ F  Q:'$D(^BILL(NIB,+DTH,DTM))  S DTM=DTM+1
+ S ^(DTM)=K
+ Q
+REMBILL(NIB,DTM,SUM,RETXT,ITXT) ; Ликвидировать часть суммы из платежа
+ ; RETXT - какую ссылку менять 
+ ; ITXT - на какую ссылку менять
+ Q:SUM=0 
+ N DL S DL=$G(^BILL(NIB)) I DL["link:" S NIB=$E(DL,6,$L(DL)) Q:NIB="" 0
+ N TM,S1,A,AL
+ S TM=+$P(DTM,",",2),DTM=+DTM
+ Q:'$D(^BILL(NIB,DTM,TM)) 
+ S A=^(TM),S1=$P(A,"|",2),$P(A,"|",2)=S1+SUM,AL=$P(A,"|",6)
+ S AL=$$DELKEY(AL,RETXT),$P(A,"|",6)=AL
+ S ^BILLLOG(NIB,DTM,TM,$H)=$$USR^IUSER()_"|"_$G(^BILL(NIB,DTM,TM))
+ I AL="" K ^BILL(NIB,DTM,TM),^BILLI(DTM,TM,NIB) D KGL^IEXCH("^BILL",NIB,DTM,TM),KGL^IEXCH("^BILLI",DTM,TM,NIB)
+ I AL'="" S ^BILL(NIB,DTM,TM)=A
+ D REFBALI(NIB,DTM) ; reindex
+ ; обновить все
+ D UPD^IEXCH("IBILL",NIB_","_DTM_","_TM) ; fix update issue
+ Q
+DEL(NIB,DTM) ; Удалить запись платежа
+ N DL,TM,L,K
+ S DL=$G(^BILL(NIB)) I DL["link:" S NIB=$E(DL,6,$L(DL)) Q:NIB="" 
+ S TM=+$P(DTM,",",2),DTM=+DTM
+ Q:'$D(^BILL(NIB,DTM,TM)) 
+ S L=$G(^BILL(NIB,DTM,TM)),K=$G(^BILL(NIB,DTM,TM-1))
+ S ^BILLLOG(NIB,DTM,TM,$H)=$$USR^IUSER()_"|"_L
+ I $P(K,"|",1)="P",$P(K,"|",2,4)=$P(L,"|",2,4) K ^BILL(NIB,DTM,TM-1) D KGL^IEXCH("^BILL",NIB,DTM,TM-1)
+ K ^BILL(NIB,DTM,TM),^BILLI(DTM,TM,NIB)
+ D KGL^IEXCH("^BILL",NIB,DTM,TM),KGL^IEXCH("^BILLI",DTM,TM,NIB)
+ D UPDREF(NIB)
+ ; обновить все
+ D UPD^IEXCH("IBILL",NIB_","_DTM_","_TM) ; fix update issue
+ Q
+UPDREF(NIB) ; Обновить все интексы и резервы
+ D REFBALI(NIB) ; reindex
+ D UPDRES^IBILL(NIB)
+ S L=$$NOW^IBILL(NIB)
+ I L>0,+$G(^BILL(NIB,"R"))>0 D DORES^IBILL(NIB,L)
+ Q
+SETKV(NIB,DTM,KV) ; Установить код квитанци на платеж
+ N DT,TM
+ S DT=$P(DTM,",",1),TM=$P(DTM,",",2)
+ S $P(^BILL(NIB,DT,TM),"|",8)=KV
+ D UPD^IEXCH("IBILL",NIB_","_DT)
+ Q
+SETTP(NIB,DTM,TP,SL) ; Изменить тип
+ ; SL - логирование
+ N L,DT,TM
+ S DT=$P(DTM,",",1),TM=$P(DTM,",",2)
+ S L=$G(^BILL(NIB,DT,TM)) Q:L="" 
+ S:$G(SL) ^BILLLOG(NIB,DT,TM,$H)=$$USR^IUSER()_"|"_L
+ S $P(L,"|",3)=TP,^BILL(NIB,DT,TM)=L
+ D UPD^IEXCH("IBILL",NIB_","_DT)
+ Q
+SETPLN(NIB,DTM,NN,VAL) ; Установить данные в позиции
+ N DT,TM
+ S DT=$P(DTM,",",1),TM=$P(DTM,",",2)
+ S $P(^BILL(NIB,DT,TM),"|",NN)=VAL
+ D UPD^IEXCH("IBILL",NIB_","_DT)
+ Q
+SETLPU(NIB,DTM,LPU) ; Установить ЛПУ на платеж
+ N DT,TM,L,R
+ S DT=$P(KEY,",",1),TM=$P(KEY,",",2)
+ I '$D(^BILL(NIB,DT,TM)) Q
+ S L=^(TM),R=$P(L,"|",5)
+ S ^BILLLOG(NIB,DT,TM,$H)=$$USR^IUSER()_"|"_L
+ S $P(R,"@",2)=LPU,$P(L,"|",5)=R,^BILL(NIB,DT,TM)=L
+ S $P(^BILLI(DT,TM,NIB),"|",4)=R
+ D UPD^IEXCH("IBILL",NIB_","_DT)
+ Q
+FNDKV(NI,DT,KV) ; Найти платеж по квитанции в дне
+ N TM,R
+ S TM="" F  S TM=$O(^BILL(NI,DT,TM)) Q:TM=""  S R=^(TM) I $P(R,"|",1)="+",$P(R,"|",8)=KV Q 
+ Q TM 
+ADDSS(NIB,DTV,SUM) ; Добавить суммы факт оплаты в квитанцию
+ ; NIB - пациент
+ ; DTV - ссылка на платеж
+ N DT,TM
+ S DT=$P(DTV,",",1),TM=$P(DTV,",",2)
+ S $P(^BILL(NIB,DT,TM),"|",11)=$P($G(^BILL(NIB,DT,TM)),"|",11)+SUM
+ D UPD^IEXCH("IBILL",NIB_","_DT)
+ Q
+LOCK(NIB,SUM,COMM) ; Заблокировать сумму с комм.
+ Q:NIB="" "" S SUM=+SUM Q:'$D(^BILL(NIB))!(SUM<0)!(SUM=0) ""
+ N DT,TM,LOG
+ S DT=+$H,TM=$P($H,",",2)
+ S LOG=$$^I("ilpu"),LOG=$G(%LOG)_$S($L(LOG):"@"_LOG,1:"")
+ L +^BILL(NIB,"L")
+ F  Q:'$D(^BILL(NIB,"L",DT,TM))  S TM=TM+1
+ S ^(TM)="0|"_SUM_"|"_COMM_"|"_LOG
+ L -^BILL(NIB,"L")
+ D REFLOCK^IBILL(NIB)
+ D UPD^IEXCH("IBILL",NIB_","_DT)
+ Q DT_","_TM
+GETBRW(NIB) ; Состояние заемного счета
+ N A S A=$G(^BILL(NIB)) S:A["link:" NIB=$E(A,6,$L(A))
+ Q:$L($G(^BILL(NIB,"B"))) +$G(^BILL(^("B")))
+ Q 0
+SBRW(NI1,NI2,ONOF) ; Включить автозаем из 2 в 1 (0-выкл,1-вкл)
+ Q:NI1=""!(NI2="")  Q:'$D(^BILL(NI2)) 
+ I 'ONOF S:$D(^BILL(NI1,"B")) ^("B")="" Q 
+ S ^BILL(NI1,"B")=NI2
+ D GL^IEXCH("^BILL",NI1,"B")
+ Q
+DOBRW(NIB,SUM) ; Заем для NIB на сумму SUM
+ Q:NIB="" 0 
+ N B,K
+ S B=$G(^BILL(NIB,"B")) Q:B="" 0
+ S SUM=+$TR(SUM,",",".") 
+ S K=$$NOWI(B) S:K<SUM SUM=K Q:SUM'>0 0
+ D SUBTP(B,$H,SUM,"BILL:F:"_NIB,60)
+ N DTH,DTM,DL,PNI,LOG
+ S DTH=$H,DTM=$P(DTH,",",2),DTH=+DTH
+ S LOG=$$^I("ilpu"),LOG=$G(%LOG)_$S($L(LOG):"@"_LOG,1:"")
+ S K="+|"_SUM_"|6||"_LOG_"|BILL:T:"_B
+ S DL=$G(^BILL(NIB))
+ I DL["link:" S PNI=NIB,NIB=$E(DL,6,$L(DL)) Q:NIB="" 0
+ L +^BILL(NIB)
+ F  Q:'$D(^BILL(NIB,DTH,DTM))  S DTM=DTM+1
+ S ^(DTM)=K
+ S K=$G(^BILL(NIB))+SUM,^(NIB)=K
+ L -^BILL(NIB)
+ S ^BILLI(DTH,DTM,NIB)=K_"|"_SUM_"|P|"_LOG_$S(DL["link:":"|"_$G(PNI),1:"")
+ D UPD^IEXCH("IBILL",NIB_","_DTH)
+ Q SUM
+BORROW(NI1,NI2,SUM) ; Заем из 2 в 1
+ Q
+ADEBT(NIB,DTH,SUM,PAY,TXT,COM) ; Добавить долг 
+ Q:NIB=""  
+ N K,DTM,DL,X,LP,LOG
+ S:DTH'["," DTH=$H S DTM=$P(DTH,",",2),DTH=+DTH
+ S SUM=+$TR(SUM,",","."),LP=$$^I("ilpu") Q:SUM<0 
+ S LOG=$G(%LOG)_$S($L(LP):"@"_LP,1:"")
+ S K=PAY_"|"_SUM_"|1|1|"_LOG_$S($D(TXT):"|"_TXT,1:"")
+ S:$G(COM)'="" $P(K,"|",7)=COM
+ S DL=$G(^BILL(NIB)) I DL["link:" S NIB=$E(DL,6,$L(DL)) Q:NIB="" 
+ L +^BILL(NIB)
+ F  Q:'$D(^BILL(NIB,"D",DTH,DTM))  S DTM=DTM+1
+ S ^(DTM)=K
+ L -^BILL(NIB)
+ D GL^IEXCH("^BILL",NIB,"D",DTH,DTM)
+ Q
+ULOCK(NIB,DTM) ; Разблокировать по дате/времени
+ Q:NIB=""  Q:'$D(^BILL(NIB)) 
+ N DT,TM,SUM,A S DT=+DTM,TM=+$P(DTM,",",2)
+ Q:+$P($G(^BILL(NIB,"L",DT,TM)),"|",1) 
+ L +^BILL(NIB,"L")
+ S A=$G(^BILL(NIB,"L",DT,TM)),SUM=+$P(A,"|",2)
+ S:SUM>0 ^("L")=+$G(^BILL(NIB,"L"))-SUM,$P(A,"|",1)=1,^BILL(NIB,"L",DT,TM)=A
+ L -^BILL(NIB,"L")
+ D UPD^IEXCH("IBILL",NIB_","_DT)
+ Q
+SLOCK(NIB) ; Заблокированная сумма
+ Q:NIB="" 0
+ Q +$G(^BILL(NIB,"L"))
+ARES(NIB,DTH,SUM,EXE,IDX) ; Add reserve
+ S SUM=+SUM Q:NIB=""!(SUM'>0)!(EXE="")  
+ N DTM,DL,LOG
+ S:DTH'["," DTH=$H
+ S DTM=$P(DTH,",",2),DTH=+DTH,IDX=$G(IDX)
+ S DL=$G(^BILL(NIB)) I DL["link:" S NIB=$E(DL,6,$L(DL)) Q:NIB="" 
+ S LOG=$$USR^IUSER()
+ L +^BILL(NIB,"R")
+ F  Q:'$D(^BILL(NIB,"R",DTH,DTM))  S DTM=DTM+1
+ S ^(DTM)="0|"_SUM_"|"_LOG_"|"_EXE_$S(IDX="":"",1:"|"_IDX)
+ S ^("R")=$G(^BILL(NIB,"R"))+SUM
+ L -^BILL(NIB,"R")
+ S ^BILLI(DTH,DTM,NIB,"R")="||"_LOG ; информационный индекс
+ D GL^IEXCH("^BILLI",DTH,DTM,NIB,"R")
+ S SUM=+$G(^BILL(NIB))
+ D:SUM>0 DORES(NIB,SUM)
+ D UPD^IEXCH("IBILL",NIB_","_DTH)
+ Q
+URES(NIB,SUM,EXE) ; Delete reserve by summ and exec
+ S SUM=+SUM Q:NIB=""!(SUM=0) 
+ N DL S DL=$G(^BILL(NIB)) I DL["link:" S NIB=$E(DL,6,$L(DL)) Q:NIB="" 
+ Q:'$D(^BILL(NIB,"R")) 
+ N A,DTH,DTM,QQ
+ S QQ=0,DTH=""
+ L +^BILL(NIB,"R")
+ F  Q:QQ  S DTH=$O(^BILL(NIB,"R",DTH)) Q:DTH=""  S DTM="" F  S DTM=$O(^BILL(NIB,"R",DTH,DTM)) Q:DTM=""  S A=$G(^(DTM)) I $P(A,"|",1)="0",$P(A,"|",2)=SUM,$P(A,"|",4)=EXE D  Q 
+ .S QQ=DTM
+ .K ^(DTM) D KGL^IEXCH("^BILL",NIB,"R",DTH,DTM)
+ .K ^BILLI(DTH,DTM,NIB,"R") D KGL^IEXCH("^BILLI",DTH,DTM,NIB,"R") 
+ S:QQ ^("R")=$G(^BILL(NIB,"R"))-SUM
+ L -^BILL(NIB,"R")
+ Q:'QQ  Q:DTH="" 
+ D UPD^IEXCH("IBILL",NIB_","_DTH)
+ Q
+URESIDX(NIB,IDX,DSUM) ; Change reserver summ by IDX (remove part of summ, or full)
+ Q:NIB=""!(DSUM'>0)  
+ N DL S DL=$G(^BILL(NIB)) I DL["link:" S NIB=$E(DL,6,$L(DL)) Q:NIB="" 
+ Q:'$D(^BILL(NIB,"R")) 
+ N A,DTH,DTM,R,S,SD
+ S DTH="",SD=DSUM
+ L +^BILL(NIB,"R")
+ F  S DTH=$O(^BILL(NIB,"R",DTH)) Q:DTH=""  S DTM="" F  S DTM=$O(^BILL(NIB,"R",DTH,DTM)) Q:DTM=""  S A=$G(^(DTM)) I $P(A,"|",1)="0",$P(A,"|",5)=IDX D  Q:'DSUM
+ .S R=^(DTM),S=$P(R,"|",2)
+ .I S'>DSUM D  Q  ; No free summ
+ ..S DSUM=DSUM-S
+ ..K ^(DTM) D KGL^IEXCH("^BILL",NIB,"R",DTH,DTM)
+ ..K ^BILLI(DTH,DTM,NIB,"R") D KGL^IEXCH("^BILLI",DTH,DTM,NIB,"R")
+ ..D UPD^IEXCH("IBILL",NIB_","_DTH)
+ .S $P(^BILL(NIB,"R",DTH,DTM),"|",2)=S-DSUM
+ .S DSUM=0
+ .D GL^IEXCH("^BILL",NIB,"R",DTH,DTM)
+ .D UPD^IEXCH("IBILL",NIB_","_DTH)
+ S:SD'=DSUM ^("R")=$G(^BILL(NIB,"R"))-(SD-DSUM)
+ L -^BILL(NIB,"R")
+ Q
+URESID(NIB,IDX) ; Delete reserve by IDX (used and not used)
+ Q:NIB="" 
+ N DL S DL=$G(^BILL(NIB)) I DL["link:" S NIB=$E(DL,6,$L(DL)) Q:NIB="" 
+ Q:'$D(^BILL(NIB,"R")) 
+ N A,DTH,DTM,QQ,S
+ S (S,QQ)=0,DTH=""
+ L +^BILL(NIB,"R")
+ F  S DTH=$O(^BILL(NIB,"R",DTH)) Q:DTH=""  S DTM="" F  S DTM=$O(^BILL(NIB,"R",DTH,DTM)) Q:DTM=""  S A=$G(^(DTM)) I $P(A,"|",5)=IDX D 
+ .S:$P(A,"|",1)=0 S=S+$P(A,"|",1),QQ=1
+ .K ^(DTM) D KGL^IEXCH("^BILL",NIB,"R",DTH,DTM)
+ .K ^BILLI(DTH,DTM,NIB,"R") D KGL^IEXCH("^BILLI",DTH,DTM,NIB,"R")
+ .D UPD^IEXCH("IBILL",NIB_","_DTH)
+ S:QQ ^("R")=$G(^BILL(NIB,"R"))-S
+ L -^BILL(NIB,"R")
+ Q
+SRESID(NIB,IDX,SUM) ; Remove any summ from reserve by IDX
+ S SUM=+SUM Q:NIB=""!(SUM=0) ""
+ N DL S DL=$G(^BILL(NIB)) I DL["link:" S NIB=$E(DL,6,$L(DL)) Q:NIB="" ""
+ Q:'$D(^BILL(NIB,"R")) ""
+ N A,DTH,DTM,QQ,S
+ S (S,QQ)=0,DTH=""
+ L +^BILL(NIB,"R")
+ ; обратный цикл, с новых
+ F  Q:QQ  S DTH=$O(^BILL(NIB,"R",DTH),-1) Q:DTH=""  S DTM="" F  S DTM=$O(^BILL(NIB,"R",DTH,DTM),-1) Q:DTM=""  S A=$G(^(DTM)) I $P(A,"|",1)="0",$P(A,"|",5)=IDX,$P(A,"|",2)'<SUM D  Q:QQ 
+ .S S=$P(A,"|",2)-SUM,$P(A,"|",2)=S,QQ=1
+ .I $P(A,"|",2) S ^(DTM)=A Q 
+ .K ^(DTM) D KGL^IEXCH("^BILL",NIB,"R",DTH,DTM)
+ .K ^BILLI(DTH,DTM,NIB,"R") D KGL^IEXCH("^BILLI",DTH,DTM,NIB,"R")
+ S:QQ ^("R")=$G(^BILL(NIB,"R"))-SUM
+ L -^BILL(NIB,"R")
+ Q:'QQ "" Q:DTH="" ""
+ D UPD^IEXCH("IBILL",NIB_","_DTH)
+ Q DTH_","_DTM_"|"_S
+SRES(NIB,ARR) ; Get summ of reserve - резервированные квитанции к опл.
+ Q:NIB="" 0 Q:'$D(^BILL(NIB,"R")) 0
+ N DT,TM,S,R
+ S DT="",S=0,ARR=$G(ARR)
+ F  S DT=$O(^BILL(NIB,"R",DT)) Q:DT=""  S TM="" F  S TM=$O(^BILL(NIB,"R",DT,TM)) Q:TM=""  S R=^(TM) I '$P(R,"|",1) S S=S+$P(R,"|",2) S:ARR'="" @ARR@(DT_","_TM)=$P(R,"|",2)_"|"_$P(R,"|",5)
+ Q S
+UPDRES(NIB) ; Update reserve summ
+ N X S X=+$$SRES(NIB)
+ Q:$G(^BILL(NIB,"R"))=X
+ S ^("R")=X D GL^IEXCH("^BILL",NIB,"R")
+ Q
+DORES(NIB,BILL) ; Do apply reserve (NIB,Cur. summ) - (int func)
+ N S,A,DTH,DTM,QQ,SS,SR
+ S (S,QQ,SR)=0
+ L +^BILL(NIB,"R")
+ S DTH="" F  S DTH=$O(^BILL(NIB,"R",DTH)) Q:DTH=""  S DTM="" F  S DTM=$O(^BILL(NIB,"R",DTH,DTM)) Q:DTM=""  D  
+ .S A=$G(^(DTM)) Q:$P(A,"|",1)  S SS=$P(A,"|",2)
+ .I QQ S SR=SR+SS Q  ; calc other
+ .I SS>0,SS'>BILL S $P(A,"|",1)=1,^BILL(NIB,"R",DTH,DTM)=A D @$P(A,"|",4) S S=S+BILL-^BILL(NIB),BILL=^BILL(NIB) D UPD^IEXCH("IBILL",NIB_","_DTH) Q 
+ .S A=$G(^BILL(NIB,"R",DTH,DTM)) I $P(A,"|",1)'=1 S SR=SR+$P(A,"|",2)
+ .S QQ=1 ; quit if no summ
+ S ^BILL(NIB,"R")=SR
+ L -^BILL(NIB,"R")
+ Q
+MKI(REF) ; Make ^BILLI
+ ; REF - refresh balance
+ N NI
+ K ^BILLI
+ S REF=+$G(REF)
+ K:REF'=2 ^BILLI
+ S NI="" F  S NI=$O(^BILL(NI)) Q:NI=""!(NI="00")  D:'REF MKNI(NI) D:REF REFBALI(NI,0)
+ S NI="J" F  S NI=$O(^BILL(NI)) Q:NI=""  D:'REF MKNI(NI) D:REF REFBALI(NI,0)
+ Q
+CLRI(NI) ; Clear index
+ N DT,TM
+ S DT="" F  S DT=$O(^BILLI(DT)) Q:DT=""  S TM="" F  S TM=$O(^BILLI(DT,TM)) Q:TM=""  K ^BILLI(DT,TM,NI)
+ Q
+MKNI(NI) 
+ N DT,TM,SM,R,S,K
+ S SM=0,DT=""
+ F  S DT=$O(^BILL(NI,DT)) Q:DT=""!(+DT'=DT)  S TM="" F  S TM=$O(^BILL(NI,DT,TM)) Q:TM=""  D
+ .S R=$G(^(TM)),K=$P(R,"|",1) I $L(K),K'="+",K'="-" Q 
+ .S S=+$P(R,"|",2),SM=SM+S,^BILLI(DT,TM,NI)=SM_"|"_S_"|"_$S(K="":"S",K="-":"M",1:"A")_"|"_$P(R,"|",5)
+ Q
+REFBAL(NI) ; Refresh actual balance
+ Q:NI=""  Q:'$D(^BILL(NI))  
+ N DT,TM,S,R,O,SCL,SC,SC,X
+ S DT="",S=0
+ F  S DT=$O(^BILL(NI,DT)) Q:DT=""!(+DT'=DT)  S TM="" F  S TM=$O(^BILL(NI,DT,TM)) Q:TM=""  D
+ .S R=^(TM),O=$P(R,"|",1),SC=$P(R,"|",12),X=$P(R,"|",2)
+ .I O="+"!(O="-")!(O="") S S=S+X S:SC SCL(SC)=$G(SCL(SC))+X
+ S:^BILL(NI)'=S ^(NI)=S
+ I $D(SCL) K ^BILL(NI,"SC") M ^BILL(NI,"SC")=SCL
+ Q
+REFBALI(NI,FDT) ; Refresh actual balance and reindex ( FDT - from date )
+ ; FDT - from date
+ Q:NI=""  Q:'$D(^BILL(NI))  
+ N DT,TM,S,R,O,K,SC,SCL
+ ; последнее фактическое значение баланса
+ S DT=+$G(FDT),(S,K)=0
+ I DT F  Q:K  S DT=$O(^BILL(NI,DT),-1) Q:DT=""  S TM="" F  S TM=$O(^BILL(NI,DT,TM),-1) Q:TM=""   I $D(^BILLI(DT,TM,NI))'[0 S S=$P(^(NI),"|",1),K=1 Q 
+ ; реиндекс с подсчетом баланса
+ F  S DT=$O(^BILL(NI,DT)) Q:DT=""!(+DT'=DT)  S TM="" F  S TM=$O(^BILL(NI,DT,TM)) Q:TM=""  S R=^(TM),O=$P(R,"|",1) D:O="+"!(O="-")!(O="") 
+ .S K=$P(R,"|",2),S=S+K,O=$S(O="":"S",O="-":"M",1:"A"),SC=$P(R,"|",12)
+ .S:SC SCL(SC)=$G(SCL(SC))+K
+ .Q:$P($G(^BILLI(DT,TM,NI)),"|",1,2)=(S_"|"_K)  ; already
+ .S ^(NI)=S_"|"_K_"|"_O_"|"_$P(R,"|",5)
+ S:$G(^BILL(NI))'=S ^(NI)=S
+ I $D(SCL) K ^BILL(NI,"SC") M ^BILL(NI,"SC")=SCL
+ Q
+REFLOCK(NI) ; Обновить сумму блокированных средств
+ Q:NI=""  Q:'$D(^BILL(NI,"L")) 
+ N DT,TM,S,R
+ S S=0,DT=""
+ F  S DT=$O(^BILL(NI,"L",DT)) Q:DT=""  S TM="" F  S TM=$O(^BILL(NI,"L",DT,TM)) Q:TM=""  D
+ .S R=^(TM) Q:$P(R,"|",1) 
+ .S S=S+$P(R,"|",2)
+ S:$G(^BILL(NI,"L"))'=S ^("L")=S
+ Q
+PRESTS(LPU,DTM) ; Дата,время предыдущего остатка
+ N DT,TM,TS,FDT,FTM
+ S TS=$P(DTM,",",2),DTM=+DTM,DT=DTM+1,FTM=""
+ F  S DT=$O(^BILL("00",LPU,DT),-1) Q:DT=""  D  Q:$L(FTM) 
+ .S TM=$S(DTM=DT:TS+1,1:"") F  S TM=$O(^BILL("00",LPU,DT,TM),-1) Q:TM=""  I $D(^(TM,"st")) S FTM=TM,FDT=DT Q 
+ Q:FTM="" ""
+ Q FDT_","_FTM
+REFRESTS(LPU,FDT,DTM) ; Обновить состояние остатка
+ ; FDT- from date, DTM - on date
+ N SUMM,SUM,DT,TM,FTM,NI,L,OPE,TP,LP,R,DE,TE,VLST,FSDT
+ S SUMM=0,FTM="",DTM=$G(DTM),DE=$P(DTM,",",1),TE=$P(DTM,",",2),FSDT=FDT
+ S:DE="" DE=99999
+ ; Виртуальные оплаты
+ S R=$$IDX^ISPRAV("outkss")
+ I R S L="" F  S L=$O(^MN(R,L)) Q:L=""  S:$P(^(L),"|",3) VLST(L)=""
+ ; Сканируем назад
+ S DT=FDT F  S DT=$O(^BILL("00",LPU,DT),-1) Q:DT=""  D  Q:$L(FTM) 
+ .S TM="" F  S TM=$O(^BILL("00",LPU,DT,TM)) Q:TM=""  I $D(^(TM,"st")) S SUMM=^("st"),FTM=TM,FDT=DT Q 
+ S:FTM="" FDT=""
+ ; Подсчет с реального последнего состояния
+ S DT=FDT-1 F  S DT=$O(^BILL("00",LPU,DT)) Q:DT=""!(DT>DE)  D
+ .S TM=$S(FDT=DT:FTM,1:"")
+ .F  S TM=$O(^BILL("00",LPU,DT,TM)) Q:TM=""!$S(DT=DE:TM>TE,1:0)  D
+ ..I $D(^(TM,"ok")) S R=$P(^("ok"),"|",1) S:'$D(VLST(+$P(R,"@",3))) SUMM=SUMM-$P(R,"@",2) ; только нал
+ ..I $D(^("ik")) S SUMM=SUMM+$P($P(^("ik"),"|",1),"@",2)
+ ..I $D(^("st")) K ^("st")
+ S DT=FDT-1 F  S DT=$O(^BILLI(DT)) Q:DT=""!(DT>DE)  D
+ .S TM=$S(FDT=DT:FTM,1:"") F  S TM=$O(^BILLI(DT,TM)) Q:TM=""!$S(DT=DE:TM>TE,1:0)  D
+ ..S NI="" F  S NI=$O(^BILLI(DT,TM,NI)) Q:NI=""  D
+ ...S L=$G(^(NI)) Q:L=""
+ ...S LP=+$P($P(L,"|",4),"@",2) I LPU>0,LP>0,LP'=LPU Q 
+ ...S L=$G(^BILL(NI,DT,TM)) Q:L=""
+ ...S SUM=+$P(L,"|",2),OPE=$P(L,"|",1),TP=+$P(L,"|",3)
+ ...Q:TP=2  ; банк. карта
+ ...Q:TP>4  Q:SUM=0  I OPE'="+",OPE'="-" Q 
+ ...S SUMM=SUMM+SUM 
+ S DTM=$S(DTM="":$H,1:DTM),TM=$P(DTM,",",2)
+ S:TM="" TM=86400
+ S ^BILL("00",LPU,+DTM,TM,"st")=SUMM
+ 
+ ; Common BILL
+ ; Сканируем назад
+ S SUMM=0,FTM="",FDT=FSDT
+ S DT=FDT F  S DT=$O(^BILLC(LPU,DT),-1) Q:DT=""  D  Q:$L(FTM) 
+ .S TM="" F  S TM=$O(^BILLC(LPU,DT,"st",TM)) Q:TM=""  S SUMM=^(TM),FTM=TM,FDT=DT Q 
+ S:FTM="" FDT=""
+ ; Подсчет с реального последнего состояния
+ S DT=FDT-1 F  S DT=$O(^BILLC(LPU,DT)) Q:DT=""!(DT>DE)  D
+ .S TP="" F  S TP=$O(^BILLC(LPU,DT,TP)) Q:TP=""  D
+ ..S TM=$S(FDT=DT:FTM,1:"")
+ ..F  S TM=$O(^BILLC(LPU,DT,TP,TM)) Q:TM=""!$S(DT=DE:TM>TE,1:0)  D
+ ...I TP="ok" S R=^(TM) S:'$D(VLST(+$P(R,"|",2))) SUMM=SUMM-$P(R,"|",1) Q ; только нал
+ ...I TP="ik"!(TP="sl") S R=^(TM) S:$P(R,"|",2)<4 SUMM=SUMM+$P(R,"|",1) Q
+ ...I TP="st" K ^(TM)
+ S DTM=$S(DTM="":$H,1:DTM),TM=$P(DTM,",",2)
+ S:TM="" TM=86400
+ S ^BILLC(LPU,+DTM,"st",TM)=SUMM
+ Q
+RESTS(LPU,aDT,aTM,FDT) ; Остаток !наличных! на дату/время
+ ; FDT- from date, aDT,aTM - on date
+ N SUMM,SUM,FTM,DT,TM,FTM,FSDT,NI,L,OPE,TP,LP,R,VLST,K
+ S SUMM=0,FTM="",FDT=$G(FDT),FSDT=FDT
+ ; Виртуальные оплаты
+ S R=$$IDX^ISPRAV("outkss")
+ I R S L="" F  S L=$O(^MN(R,L)) Q:L=""  S:$P(^(L),"|",3) VLST(L)=""
+ ; Сканируем назад
+ I FDT="" S DT=aDT+1 F  S DT=$O(^BILL("00",LPU,DT),-1) Q:DT=""  D  Q:$L(FTM) 
+ .S TM=$S(aDT=DT:aTM-1,1:"") F  S TM=$O(^BILL("00",LPU,DT,TM),-1) Q:TM=""  I $D(^(TM,"st")) S SUMM=^("st"),FTM=TM,FDT=DT Q 
+ ; Подсчет с реального последнего состояния
+ S DT=FDT-1 F  S DT=$O(^BILL("00",LPU,DT)) Q:DT=""!(DT>aDT)  D
+ .S TM=$S(FDT=DT:FTM,1:"")
+ .F  S TM=$O(^BILL("00",LPU,DT,TM)) Q:TM=""!$S(DT=aDT:TM>aTM,1:0)  D
+ ..I $D(^(TM,"ok")) S R=$P(^("ok"),"|",1) S:'$D(VLST(+$P(R,"@",3))) SUMM=SUMM-$P(R,"@",2)
+ ..I $D(^("ik")) S SUMM=SUMM+$P($P(^("ik"),"|",1),"@",2)
+ S DT=FDT-1 F  S DT=$O(^BILLI(DT)) Q:DT=""!(DT>aDT)  D
+ .S TM=$S(FDT=DT:FTM,1:"")
+ .F  S TM=$O(^BILLI(DT,TM)) Q:TM=""!$S(DT=aDT:TM>aTM,1:0)  D
+ ..S NI="" F  S NI=$O(^BILLI(DT,TM,NI)) Q:NI=""  D
+ ...S L=$G(^(NI)) Q:L=""
+ ...S LP=+$P($P(L,"|",4),"@",2) I LPU>0,LP>0,LP'=LPU Q 
+ ...S L=$G(^BILL(NI,DT,TM)) Q:L=""
+ ...S SUM=+$P(L,"|",2),OPE=$P(L,"|",1),TP=+$P(L,"|",3)
+ ...Q:TP=2  ; банк. карта
+ ...Q:TP>4  Q:SUM=0  I OPE'="+",OPE'="-" Q 
+ ...S SUMM=SUMM+SUM 
+ 
+ ; ^BILLC
+ S FTM="",FDT=FSDT
+ ; Сканируем назад
+ I FDT="" S DT=aDT+1 F  S DT=$O(^BILLC(LPU,DT),-1) Q:DT=""  D  Q:$L(FTM) 
+ .S TM=$S(aDT=DT:aTM-1,1:"") F  S TM=$O(^BILLC(LPU,DT,"st",TM),-1) Q:TM=""  S SUMM=^(TM),FTM=TM,FDT=DT Q 
+ ; Подсчет с реального последнего состояния
+ S DT=FDT-1 F  S DT=$O(^BILLC(LPU,DT)) Q:DT=""!(DT>aDT)  D
+ .S TP="" F  S TP=$O(^BILLC(LPU,DT,TP)) Q:TP=""  D:TP="ik"!(TP="ok")
+ ..S TM=$S(FDT=DT:FTM,1:"")
+ ..F  S TM=$O(^BILLC(LPU,DT,TP,TM)) Q:TM=""!$S(DT=aDT:TM>aTM,1:0)  D
+ ...S R=$G(^(TM)),K=+$P(R,"|",2) Q:R=""
+ ...I TP="ok" S:'$D(VLST(K)) SUMM=SUMM-$P(R,"|",1) Q 
+ ...I TP="ik"!(TP="sl") S:K<4 SUMM=SUMM+$P(R,"|",1) Q
+ 
+ Q SUMM
+RESTSC(LPU,aDT,aTM,FDT) ; Остаток !наличных! на дату/время для ^BILLC
+ ; FDT- from date, aDT,aTM - on date
+ N SUMM,SUM,FTM,DT,TM,FTM,FSDT,NI,L,OPE,TP,LP,R,VLST
+ S SUMM=0,FTM="",FDT=$G(FDT),FSDT=FDT
+ ; Виртуальные оплаты
+ S R=$$IDX^ISPRAV("outkss")
+ I R S L="" F  S L=$O(^MN(R,L)) Q:L=""  S:$P(^(L),"|",3) VLST(L)=""
+ 
+ ; Сканируем назад
+ I FDT="" S DT=aDT+1 F  S DT=$O(^BILLC(LPU,DT),-1) Q:DT=""  D  Q:$L(FTM) 
+ .S TM=$S(aDT=DT:aTM-1,1:"") F  S TM=$O(^BILLC(LPU,DT,"st",TM),-1) Q:TM=""  S SUMM=^(TM),FTM=TM,FDT=DT Q 
+ ; Подсчет с реального последнего состояния
+ S DT=FDT-1 F  S DT=$O(^BILLC(LPU,DT)) Q:DT=""!(DT>DE)  D
+ .S TP="" F  S TP=$O(^BILLC(LPU,DT,TP)) Q:TP=""  D:TP="ik"!(TP="ok")
+ ..S TM=$S(FDT=DT:FTM,1:"")
+ ..F  S TM=$O(^BILLC(LPU,DT,TP,TM)) Q:TM=""!$S(DT=DE:TM>TE,1:0)  D
+ ...S R=^(TM)
+ ...I TP="ok" S:'$D(VLST(+$P(R,"|",2))) SUMM=SUMM-$P(R,"|",1) Q 
+ ...I TP="ik"!(TP="sl") S:$P(R,"|",2)<4 SUMM=SUMM+$P(R,"|",1) Q
+ 
+ Q SUMM
+ISNOPAY(NI,DTM) ; После не было платежей после даты/времени
+ N DT,TM,F,R
+ S DT=DTM-1,F=0,TM=""
+ F  S DT=$O(^BILL(NI,DT)) Q:DT=""!(+DT'=DT)!F  S TM=$P(DTM,",",2),DTM="" F  S TM=$O(^BILL(NI,DT,TM)) Q:TM=""  S R=$P(^(TM),"|",1) I R="+"!(R="-") S F=1 Q 
+ Q:'F 0 Q:TM="" 0 Q 1+TM
+LASTOPER(NI) ; Дата время последней транзакции по пациенту
+ N D,T,R
+ S D=$G(^BILL(NI)) I D["link:" S NI=$E(D,6,$L(D)) Q:NI="" ""
+ S (T,D)=""
+ F  Q:$L(T)  S D=$O(^BILL(NI,D),-1) Q:D=""  S T=99999 F  S T=$O(^BILL(NI,D,T),-1) Q:T=""  S R=$G(^(T)) I $L(R) S R=$P(R,"|",1) Q:R=""!(R="-")!(R="+") 
+ Q:$L(D) D_","_T
+ Q ""
+NEARPAY(NI,DTM,TP) ; Ближайший около транзакции платеж
+ ; DTM - дата, время
+ ; TP - тип платежа
+ Q:DTM="" "" Q:NI="" ""
+ N DT,TM,DI,R,X
+ S TM=$P(DTM,",",2),DT=+DTM,R="",TP=$G(TP)
+ S X=$G(^BILL(NI,DT,TM)) I $P(X,"|",1)="+" Q $P(X,"|",2)
+ Q:X="" ""
+ S DI=$P(^BILLI(DT,TM,NI),"|",1) ; баланс
+ S DI=$S(DI<0:1,1:-1)
+ F  S TM=$O(^BILL(NI,DT,TM),DI) Q:TM=""  S X=^(TM) I $P(X,"|",1)="+",$S(TP="":1,1:$P(X,"|",3)=TP) S R=$P(X,"|",2,3)_"|"_DT_","_TM Q
+ Q R
+ANYPAY(NI,DT,TP) ; Был ли платеж 
+ ; DT - дата
+ ; TP - тип платежа
+ Q:DT="" "" Q:NI="" ""
+ N TM,R,X
+ S R="",TP=$G(TP),DT=+DT
+ S TM="" F  S TM=$O(^BILL(NI,DT,TM)) Q:TM=""  S X=^(TM) I $P(X,"|",1)="+",$S(TP="":1,1:$P(X,"|",3)=TP) S R=$P(X,"|",2,3)_"|"_DT_","_TM Q
+ Q R
+CHKPAY(NIB,DTM) ; Проверить наличие платежа
+ N DL S DL=$G(^BILL(NIB)) I DL["link:" S NIB=$E(DL,6,$L(DL)) Q:NIB="" 0
+ Q:$D(^(NIB,+DTM,+$P(DTM,",",2))) 1
+ Q 0
+IsRO(NIB) ; Запрещено изменение счета
+ Q:NIB="" 0
+ Q +$P($G(^BILL(NIB,"S")),"|",1)  
+RO(NI,VAL) ; Установить/снять блокировку счета
+ S $P(^BILL(NIB,"S"),"|",1)=$S(+VAL:1,1:"")
+ D GL^IEXCH("^BILL",NIB,"S")
+ Q
+IsCLR(NIB) ; Проверить наличие записей
+ Q:'$D(^BILL(NIB)) 1
+ I $D(^BILL(NIB,"R")),+$G(^("R"))=0,$O(^BILL(NIB,"R",""))="" K ^BILL(NIB,"R")
+ I $O(^BILL(NIB,999999))'="" Q 0 ; резерв, долг
+ 
+ N D,T,F,X
+ S D="",F=1
+ F  S D=$O(^BILL(NIB,D)) Q:D=""  Q:'F  S T="" F  S T=$O(^BILL(NIB,D,T)) Q:T=""  S X=$G(^(T)) I X'="",$P(X,"|",1)'="P" S F=0 Q
+ Q F
+CLR(NIB) ; Удалить счет
+ K ^BILL(NIB) D KGL^IEXCH("^BILL",NIB)
+ Q
+CHKDEBT(NIB,DTM) ; Проверить наличие долга
+ N DL S DL=$G(^BILL(NIB)) I DL["link:" S NIB=$E(DL,6,$L(DL)) Q:NIB="" 0
+ Q:$D(^(NIB,"D",+DTM,+$P(DTM,",",2))) 1
+ Q 0
+SUBDEBT(NIB,DTM,SUM,RETXT) ; Ликвидировать часть суммы долга
+ N DL S DL=$G(^BILL(NIB)) I DL["link:" S NIB=$E(DL,6,$L(DL)) Q:NIB="" 0
+ N TM,S1,S2,A,D,AL
+ S TM=+$P(DTM,",",2),DTM=+DTM
+ Q:'$D(^(NIB,"D",DTM,TM)) 0
+ S A=^(TM),S1=$P(A,"|",1),S2=$P(A,"|",2),D=$S((S2-SUM)<S1:SUM-S2+S1,1:0)
+ S SUM=$S((S2-SUM)<S1:S2-S1,1:SUM),$P(A,"|",2)=S2-SUM
+ S AL=$P(A,"|",6) Q:$P(AL,":",1)'=$P(RETXT,":",1) 0
+ S AL=$$DELKEY(AL,RETXT),$P(A,"|",6)=AL
+ I AL="" K ^(TM) D KGL^IEXCH("^BILL",NIB,"D",DTM,TM)
+ I AL'="" S ^BILL(NIB,"D",DTM,TM)=A
+ Q D
+OUTSUM(IDK,SUM,TP,COM,SYS,REF,HH) ; Выдача средств из кассы
+ ; REF - переменная с датой/врем. записи (заполняется)
+ ; HH - списывать на указанное время
+ N I,K,H
+ S:IDK="" IDK=$$KKM^IUSER()
+ S SYS=$G(SYS),REF=$G(REF),HH=$G(HH)
+ S I=+$$^I("ilpu"),H=$S(HH="":$H,1:HH),K=$P(H,",",2),H=+H
+ S IDK=IDK_"@"_SUM
+ S:TP'="" $P(IDK,"@",3)=TP S:COM'="" $P(IDK,"@",4)=COM
+ S IDK=IDK_"|"_$$USR^IUSER()_$S($L(SYS):":"_SYS,1:"")
+ L +^BILL("00",I)
+ F  Q:'$D(^BILL("00",I,H,K,"ok"))  S K=K+1
+ S ^("ok")=IDK
+ D REFRESTS^IBILL(I,$$PRESTS^IBILL(I,$H),$H) ; fix state
+ L -^BILL("00",I)
+ S:REF'="" @REF=H_","_K
+ D GL^IEXCH("^BILL","00",I,H)
+ Q
+INSUM(IDK,SUM,TP,COM) ; Приход средств в кассу
+ N I,K,H
+ S:IDK="" IDK=$$KKM^IUSER()
+ S I=+$$^I("ilpu"),H=+$H,K=$P($H,",",2)
+ S IDK=IDK_"@"_SUM
+ S:TP'="" $P(IDK,"@",3)=TP S:COM'="" $P(IDK,"@",4)=COM
+ S IDK=IDK_"|"_$$USR^IUSER()
+ L +^BILL("00",I)
+ F  Q:'$D(^BILL("00",I,H,K,"ik"))  S K=K+1
+ S ^("ik")=IDK
+ D REFRESTS(I,$$PRESTS(I,$H),$H) ; fix state
+ L -^BILL("00",I)
+ D GL^IEXCH("^BILL","00",I,H)
+ Q
+SALE(DTH,SUM,TP,IDK,KEY,TXT,RETz) ; Продажа (анонимная)
+ ; TP - тип платежа
+ ; IDK - ID кассы
+ ; KEY - системные данные
+ ; TXT - примечание
+ ; RETz - переменная возврата
+ N K,DTM,H,PNI,X,LP,LOG,ND
+ S:DTH'["," DTH=$H S DTM=$P(DTH,",",2),H=+DTH
+ S SUM=+$TR(SUM,",","."),LP=$$^I("ilpu")
+ S:IDK="" IDK=+$$KKM^IUSER()
+ S LOG=$G(%LOG)_$S($L(LP):"@"_LP,1:"")
+ L +^BILLC(LP,H,"sl")
+ S ND=$G(^BILLC(LP,H,"idk",IDK))+1,^(IDK)=ND ; № документа
+ S K=SUM_"|"_TP_"|"_IDK_"|"_LOG_"|"_KEY_"|"_ND_$S($D(TXT):"|"_TXT,1:"")
+ F  Q:'$D(^BILLC(LP,H,"sl",DTM))  S DTM=DTM+1 ; Чтобы не затиралось
+ S ^(DTM)=K
+ L -^BILLC(LP,H,"sl")
+ I $D(RETz),RETz'="" X "S "_RETz_"=H_"",""_DTM"
+ D GL^IEXCH("^BILLC",LP,H,"sl",DTM)
+ Q ND
+SUMCC(LPU,DS,DE) ; Сумма "общих средств" за период
+ N DT,S,TM,TP,R,L
+ S DT=DS-1,S=0 F  S DT=$O(^BILLC(LPU,DT)) Q:DT=""!(DT>DE)  D
+ .S TP="" F  S TP=$O(^BILLC(LPU,DT,TP)) Q:TP=""  D
+ ..S TM="" F  S TM=$O(^BILLC(LPU,DT,"sl",TM)) Q:TM=""  D
+ ...S R=^(TM),S=S+$P(R,"|",1)
+ Q S
+ROUTSUM(LPU,DT,TM) ; Remove out summ
+ Q:LPU=""!(DT="")!(TM="") 
+ Q:'$D(^BILL("00",LPU,DT,TM,"ok")) 
+ K ^("ok")
+ D REFRESTS^IBILL(LPU,$$PRESTS^IBILL(LPU,$H),$H) ; fix state - TODO !?!
+ D KGL^IEXCH("^BILL","00",LPU,DT,TM)
+ Q
+RINSUM(LPU,DT,TM) ; Remove out summ
+ Q:LPU=""!(DT="")!(TM="") 
+ Q:'$D(^BILL("00",LPU,DT,TM,"ik")) 
+ K ^("ik")
+ D REFRESTS^IBILL(I,$$PRESTS^IBILL(LPU,$H),$H) ; fix state - TODO !?!
+ D KGL^IEXCH("^BILL","00",LPU,DT,TM)
+ Q
+CNGDTM(NIB,DT,TM,NDT,NTM) ; Изменить дату-время
+ N R,Z,KEY,KF,KT
+ S R=$G(^BILL(NIB,DT,TM))
+ M ^BILL(NIB,NDT,NTM)=^BILL(NIB,DT,TM)
+ K ^BILL(NIB,DT,TM),^BILLI(DT,TM,NIB)
+ 
+ S KEY=$P($P(R,"|",6),":",1),KF=DT_","_TM,KT=NDT_","_NTM
+ D:KEY="ZNF" CBILL^IUSL(R,KF,KT)
+ D:KEY="NAZ" CBILL^INAZN(R,KF,KT)
+ D:KEY="BTPL" CBILL^IPOLIS(NIB,R,KF,KT)
+ D:KEY="BC" CBILLBC^IBCARD(R,KF,KT)
+ ; TODO D:KEY="BILL"
+ 
+ D KGL^IEXCH("^BILL",NIB,DT,TM)
+ D KGL^IEXCH("^BILLI",DT,TM,NIB)
+ D REFBALI^IBILL(NIB,0)
+ S Z=$S(DT<NDT:DT,1:NDT)
+ D:$P(R,"|",1)'="" REFRESTS^IBILL(+$P($P(R,"|",5),"@",1),Z,$H) ; остаток нал.
+ D UPD^IEXCH("IBILL",NIB_","_DT)
+ D:DT'=NDT UPD^IEXCH("IBILL",NIB_","_NDT)
+ Q
+MOVZNF(NI,DT,TM,KEYF,KEYT) ; Изменить индексы услуги в платеже
+ ; KEY = OT_"@"_VR_"@"_DT_"@"_ID
+ N P,R,I,Z,ID,NVR,NOT,NID
+ S P=$G(^BILL(NI,DT,TM)) Q:P="" 0
+ S ID=$P(KEYF,"@",4)
+ S NVR=$P(KEYT,"@",2),NOT=$P(KEYT,"@",1),NID=$P(KEYT,"@",4)
+ S R=$P(P,"|",6),Z=$P(R,"/",1)
+ S $P(Z,":",2)=NVR,$P(Z,":",3)=NOT,$P(R,"/",1)=Z
+ F I=2:1:99 S Z=$P(R,"/",I) Q:Z=""  I $P(Z,":",3)=ID S $P(Z,":",3)=NID,$P(R,"/",I)=Z
+ S $P(P,"|",6)=R,^(TM)=P
+MOVZe 
+ D UPD^IEXCH("IBILL",NI_","_DT)
+ Q 1
+KEY(NI,DT,TM) ; Получить ключ данных
+ S:NI["@" TM=$P(NI,"@",2),DT=$P(NI,"@",2),NI=$P(NI,"@",1)
+ Q $P($G(^BILL(NI,DT,TM)),"|",6)
+SETZNFP(NI,DT,TM,USL,PRC) ; Изменить прайс в указателе услуги
+ N P,R,I,Z
+ S P=$G(^BILL(NI,DT,TM)),R=$P(P,"|",6)
+ F I=2:1:99 S Z=$P(R,"/",I) Q:Z=""  I $P(Z,":",3)=USL S $P(Z,":",1)=PRC,$P(R,"/",I)=Z
+ S $P(^BILL(NI,DT,TM),"|",6)=R
+ ; TODO - update
+ Q
+SETZNFU(NI,DT,TM,USL,NUSL) ; Изменить одну услугу на другую
+ N P,R,I,Z
+ S P=$G(^BILL(NI,DT,TM)),R=$P(P,"|",6)
+ F I=2:1:99 S Z=$P(R,"/",I) Q:Z=""  I $P(Z,":",3)=USL S $P(Z,":",3)=NUSL,$P(R,"/",I)=Z
+ S $P(^BILL(NI,DT,TM),"|",6)=R
+ Q
+SETZNFUC(NI,DT,TM,USL,NUSL) ; Изменить кол-во услуги
+ N P,R,I,Z
+ S P=$G(^BILL(NI,DT,TM)),R=$P(P,"|",6)
+ F I=2:1:99 S Z=$P(R,"/",I) Q:Z=""  I $P(Z,":",3)=USL S $P(Z,":",3)=NUSL,$P(R,"/",I)=Z
+ S $P(^BILL(NI,DT,TM),"|",6)=R
+ Q
+ADDZNF(LN,VR,OT,DT,ID,U,PRC,CNT) ; Добавить в строку ссылки ZNF
+ N I,X,L
+ S:LN="" LN="ZNF:"_VR_":"_OT_":"_DT
+ S L=$L(LN,"/") F I=2:1:L+1 S X=$P(LN,"/",I) Q:X=""  Q:$P(X,":",3)=ID 
+ S $P(LN,"/",I)=PRC_":"_U_$S(CNT=""!(CNT=1):"",1:"*"_CNT)_":"_ID
+ Q LN
+ADDKEY(LN,KEY) ; Добавить ключ у списания
+ N TP,LX,I,J,K
+ S TP=$P(LN,":",1) I TP'="",TP'=$P(KEY,":",1) Q LN
+ S:TP="" TP=$P(KEY,":",1) Q:TP="" LN
+ S LX=$P(LN,":",2,99),KEY=$P(KEY,":",2,99)
+ I TP'="ZNF" F J=1:1:$L(KEY,"/") S K=$P(KEY,"/",J),LX=$S(("/"_LX_"/")[("/"_K_"/"):LX,LX="":K,1:LX_"/"_K)
+ I TP="ZNF" F J=2:1:$L(KEY,"/") S K=$P(KEY,"/",J),LX=$S(("/"_LX_"/")[("/"_K_"/"):LX,LX="":$P(KEY,"/",1)_"/"_K,1:LX_"/"_K)
+ Q TP_":"_LX
+DELKEY(LN,KEY) ; Удалить ключ у списания 
+ N TP,LX,I,J,K,L,F
+ S TP=$P(LN,":",1) I TP'="",TP'=$P(KEY,":",1) Q LN
+ S:TP="" TP=$P(KEY,":",1) Q:TP="" LN
+ S LX=$P(LN,":",2,99),KEY=$P(KEY,":",2,99)
+ S:TP="ZNF" LX=$P(LX,"/",2,99)
+ S J=$S(TP="ZNF":2,1:1),LX="/"_LX_"/",F=0
+ F J=J:1:$L(KEY,"/") S K=$P(KEY,"/",J),I=$F(LX,"/"_K_"/") I I S L=$L(K)+1,$E(LX,I-L,I-1)="",F=1
+ Q:'F LN
+ Q:LX="/" ""
+ Q TP_":"_$S(TP="ZNF":$P(KEY,"/",1)_"/",1:"")_$E(LX,2,$L(LX)-1)
+CNGKEY(LN,KEY,NKEY) ; Изменить ключ у списания
+ ; KEY - идентификатор с !одной! записью
+ ; NKEY - новый идентификатор
+ N TP,LX,I,K,L
+ S TP=$P(LN,":",1) I TP'="",TP'=$P(KEY,":",1) Q LN
+ S:TP="" TP=$P(KEY,":",1) Q:TP="" LN
+ S LX=$P(LN,":",2,99),KEY=$P(KEY,":",2,99),K=KEY,NKEY=$P(NKEY,":",2,99)
+ I TP="ZNF" S LX=$P(LX,"/",2,99),K=$P(K,"/",2,99),NKEY=$P(NKEY,"/",2,99)
+ S LX="/"_LX_"/",I=$F(LX,"/"_K_"/")
+ Q:'I LN
+ S L=$L(K)+2,$E(LX,I-L,I-1)="/"_NKEY_"/"
+ Q TP_":"_$S(TP="ZNF":$P(KEY,"/",1)_"/",1:"")_$E(LX,2,$L(LX)-1)
+GSUMM(NI,DS,DE,TRTP,PTP,TPA) ; Получить сумму за период
+ ; DS - дата начала периода
+ ; DE - дата окончания периода
+ ; TRTP - тип транзакции
+ ; PTP - тип платежа
+ ; TPA - тип чека (аванс, кредит)
+ N DT,TM,L,S
+ S TRTP=$G(TRTP),PTP=$G(PTP),TPA=$G(TPA),S=0
+ S DT=DS-1 F  S DT=$O(^BILL(NI,DT)) Q:DT=""!(DT>DE)!(+DT'=DT)  D
+ .S TM="" F  S TM=$O(^BILL(NI,DT,TM)) Q:TM=""  D
+ ..S L=^(TM) Q:$P(L,"|",1)="P" 
+ ..I TRTP'="",TRTP'=$P(L,"|",1) Q
+ ..I PTP'="",PTP'=$P(L,"|",3) Q
+ ..I TPA'="",TPA'=$P(L,"|",13) Q 
+ ..S S=S+$P(L,"|",2)
+ Q S
+RXCH ; data exchange input
+ N NI,K,%J,R,DT,UD,A,N,D
+ D ORH^RWU
+ S (UD,DT)=""
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  D
+ .S D=$P(A,"|",3)
+ .I %J=1 S NI=$P(A,"|",1),DT=$P(A,"|",2),K=+D I $E(NI)="-" K:$O(^BILL($E(NI,2,99),""))="" ^BILL($E(NI,2,99)) 
+ .Q:%J=1
+ .I $E(A,1)="R" S ^BILL(NI,"R")=D Q 
+ .S NI=$P(A,"|",2),DT=$P(A,"|",3)
+ .S UD=$S(UD="":DT,UD>DT:DT,1:UD)
+ .I $E(A,1)="B" S ^BILL(NI,DT,$P(A,"|",4))=$P(A,"|",5,99) Q 
+ .I $E(A,1)="I" S ^BILLI(DT,$P(A,"|",4),NI)=$P(A,"|",5,99) Q 
+ .I $E(A,1)="l" S ^BILL(NI,"L",DT,$P(A,"|",4))=$P(A,"|",5,99) Q
+ .I $E(A,1)="r" S ^BILL(NI,"R",DT,$P(A,"|",4))=$P(A,"|",5,99) Q
+ D CR^RWU
+ Q:'$D(NI) 
+ S UD=$S(UD="":DT,UD>DT:DT,1:UD)
+ D:UD'="" REFBALI(NI,UD)
+ D REFLOCK(NI)
+ Q
+WXCH(NI) ; data exchange output
+ N DT S DT=$P(NI,",",2),NI=$P(NI,",",1)
+ I NI="",DT="" S ^ERLOG("IBILL",$H)="<ERR> in param:"_NI_","_DT Q 
+ D OWF^RWU("exp.nb-data")
+ I DT="",$O(^BILL(NI,""))="" D W^RWU("-"_NI) G WXCHe ; чистка если нет платежей
+ G:DT="" WXCHe
+ G:'$D(^BILL(NI)) WXCHe G:'+DT WXCHe
+ D W^RWU(NI_"|"_DT_"|"_+$G(^BILL(NI)))
+ N X,TM,TML S TM=""
+ F  S TM=$O(^BILL(NI,DT,TM)) Q:TM=""  S X=$G(^(TM)),TML(TM)="" D W^RWU(CR_"B|"_NI_"|"_DT_"|"_TM_"|"_X)
+ S TM=""
+ F  S TM=$O(TML(TM)) Q:TM=""  S X=$G(^BILLI(DT,TM,NI)) D:$L(X) W^RWU(CR_"I|"_NI_"|"_DT_"|"_TM_"|"_X)
+ D:$D(^BILL(NI,"L"))
+ .D W^RWU(CR_"L|"_NI_"|"_$G(^BILL(NI,"L")))
+ .S TM=""
+ .F  S TM=$O(^BILL(NI,"L",DT,TM)) Q:TM=""  D W^RWU(CR_"l|"_NI_"|"_DT_"|"_TM_"|"_^(TM))
+ D:$D(^BILL(NI,"R"))
+ .D W^RWU(CR_"R|"_NI_"|"_$G(^BILL(NI,"R")))
+ .S TM=""
+ .F  S TM=$O(^BILL(NI,"R",DT,TM)) Q:TM=""  D W^RWU(CR_"r|"_NI_"|"_DT_"|"_TM_"|"_^(TM))
+WXCHe D C^RWU
+ Q
+GPTYPE(X,Y,MOD) ; Get text for pay type
+ ; MOD =1 - всегда сокращенный вывод
+ N OPE S OPE=$P(X,"|",1),Y=$G(Y),MOD=$G(MOD)
+ I Y="",OPE'="+",OPE'="-",OPE'="" Q ""
+ N TP,T,E,SC
+ S TP=$P(X,"|",3),E=$P(X,"|",6),SC=$P(X,"|",12)
+ Q:OPE="+" "Внесение денег"_$S($P(X,"|",13)>1:" (аванс)",1:"")_$S(TP=1:"",1:", "_$$PAYTP(TP,E))_$S($P(X,"|",7)="":"",1:", "_$P(X,"|",7))_$S(SC:", счет:"_$$NAME^ISPRAV("payacc",SC),1:"")
+ I OPE="-" D  Q T
+ .S T=$P(E,":",1),Y=$P(X,"|",7)
+ .S T="Возврат денег"_$S(+TP<2:$S(T="RET":" по чеку "_$P(E,":",2),$P(E,":",3)="RET":" по чеку "_$P(E,":",4),1:""),1:", счет:"_$$PAYTP(TP,E,1))_$S(SC:", "_$$NAME^ISPRAV("payacc",SC),1:"")_$S(Y="":"",1:", "_Y)
+ N TXT,SUM,Z S Z=$P(X,"|",6),TP=$P($P(Z,"/",1),":",1),SUM=+$P(X,"|",2)
+ S TXT=$S(Y="D":"Задолженность",Y="R":"К оплате",SUM>0:"Возврат",TP="ZND":"Погашение долга",1:"Списание")_" за "
+ I Y="R" S X=$P(X,"|",4,9),TXT=TXT_$S(X["POLIS":"полис",X["NNAZ":"назначения",1:"услуги") Q TXT
+ I TP="BILL" S TXT="Перемещение "_$S($P(Z,":",2)="F":"из",1:"в")_" "
+ S TXT=TXT_$S(TP="ZNF"!(TP="ZND"):"услуги",TP="BTPL":"полис",TP="NAZ":"назначение",TP="BC":"карту №"_$P(E,":",2),TP="BILL":$P(E,":",3),1:Z)
+ I 'MOD,$G(^cfg("bill-exinf")),TP="ZNF"!(TP="ZND") S TP=$P($P(Z,"/",1),":",2),TXT=TXT_$S(TP="":"",1:" ("_$$FIOSH^IKADRY(TP)_")")
+ S:SC TXT=TXT_", счет:"_$$GETN^ISPRAV("payacc",SC,2)
+ Q TXT
+PAYTP(TP,X,C) ; Тип платежа
+ Q:TP=1 ""
+ N R,T
+ S T=$S(TP=5:"б/н оплата",TP=60:"заем",$$CHECK^ISPRAV("paytype",TP):$$NAME^ISPRAV("paytype",TP),TP=2:"б.карта",1:"")
+ I $G(C),$P(X,":",1)="RET" Q T_" по чеку "_$P(X,":",2)
+ I $G(C),$P(X,":",3)="RET" Q T_" по чеку "_$P(X,":",4)
+ I TP>2 S R=$$GET^ISPRAV("paytype",TP) S:$P(R,"|",6) T=T_" №"_$P(X,":",2) 
+ Q T
+BTPLST(SHORT,OUT,AREA) ; Bill typelist
+ ; todo - rights
+ N I,X,C,R,A,AL,ST
+ S I=$$IDX^ISPRAV("paytype"),(X,C)=""
+ S AL=$$LCL^IUSER("bill","types") S:AL'="" AL="|"_AL_"|"
+ S ST=$$LCL^IUSER("bill","alltypes")
+ S SHORT=$S($G(SHORT):2,1:1),OUT=+$G(OUT),AREA=$G(AREA)
+ S:AREA="" AREA="all"
+ S:AREA'="" AREA=","_AREA_","
+ F  S X=$O(^MN(I,X)) Q:X=""  D
+ .S R=^(X),A=$P(R,"|",5)
+ .I ST'=0,AREA=",alltypes," D WC^RWU(C_X_"|"_$P(R,"|",SHORT)) S C=CR Q 
+ .I AL'="",AL'[("|"_X_"|") Q  ; не разрешено
+ .I OUT,+$P(R,"|",4)=0 Q  ; out по умолчанию нельзя
+ .I 'OUT,$P(R,"|",3)=0 Q  ; in  по умолчанию можно
+ .S:A="" A="all"
+ .I AREA'="",(","_A_",")'[AREA,(","_A_",")'[",all," Q 
+ .D WC^RWU(C_X_"|"_$P(R,"|",SHORT)) S C=CR
+ Q
+BTYPE(ID,SHORT) ; Наименование типа платежа
+ Q:ID="" ""
+ S SHORT=+$G(SHORT)
+ Q $P($G(^MN($$IDX^ISPRAV("paytype"),ID)),"|",SHORT+1)
+DEP(TP,CONT,DGN,ABON,NAZ,NDS,KKM,GO) ; Получить номер секции в кассе
+ ; TP - тип платежа 
+ ; CONT - по контрагенту
+ ; ABON - тип абонемента
+ ; NAZ - шаблон назначения
+ ; KKM - код кассы
+ ; GO - продажа товара 
+ N I,X,R,DEP,NF,OK,J,T
+ S CONT=$G(CONT),DGN=$G(DGN),ABON=$G(ABON),NAZ=$G(NAZ),NDS=$G(NDS)
+ S KKM=$G(KKM),GO=$G(GO)
+ S I=$$IDX^ISPRAV("kkmdepart") Q:'I ""
+ S (DEP,NF,X)="",OK=0 F  S X=$O(^MN(I,X)) Q:X=""  D 
+ .S R=^(X),J=0
+ .I $P(R,"|",3)'="",$P(R,"|",3)'=TP Q 
+ .S:$P(R,"|",3)=TP J=J+1
+ .I $P(R,"|",4),'CONT Q 
+ .S:$P(R,"|",4)&CONT J=J+1
+ .I $P(R,"|",5)'="",$P(R,"|",5)'=DGN Q 
+ .S:$P(R,"|",5)=DGN J=J+1
+ .S T=$S($P(R,"|",6)="*":ABON="",1:$P(R,"|",6)'=ABON)
+ .I $P(R,"|",6)'="",T Q 
+ .S:'T J=J+1
+ .S T=$S($P(R,"|",7)="*":NAZ="",1:$P(R,"|",7)'=NAZ)
+ .I $P(R,"|",7)'="",T Q 
+ .S:'T J=J+1
+ .I $P(R,"|",8),'NDS Q 
+ .S:$P(R,"|",8)&NDS J=J+1
+ .I $P(R,"|",10)'="",KKM'=$P(R,"|",10) Q 
+ .S:KKM'=$P(R,"|",10) J=J+1
+ .I $P(R,"|",11),'GO Q 
+ .S:$P(R,"|",11)&GO J=J+1
+ .Q:OK'<J  
+ .S DEP=$P(R,"|",2),NF=$P(R,"|",9),OK=J
+ Q DEP_"|"_NF
+MKKM(LPU) ; На филиале используется несколько касс
+ ; LPU - филиал
+ N I,X,F,L,R,IP
+ S I=$$IDX^ISPRAV("kkm"),F=0,X=""
+ F  S X=$O(^MN(I,X)) Q:X=""  S R=^(X),L=$P(R,"|",2),IP=$P(R,"|",3) I L=""!(L=LPU),IP=""!(IP=$G(DEV1)) S F=F+1 Q:F>1 
+ Q $S(F>1:1,1:0)
+GETSC(OT,SP) ; Получить счет по отделению и специальности
+ N I,II,R,X,F
+ S OT=","_$G(OT)_",",SP=","_$G(SP)_",",F=""
+ S II=$$IDX^ISPRAV("payacc")
+ S I="" F  S I=$O(^MN(II,I)) Q:I=""  D  Q:F
+ .S R=^(I),X=$P(R,"|",3) Q:X="" 
+ .S:(","_X_",")[OT F=I
+ Q F
+REGLCL 
+ K ^LCLI("bill")
+ S ^LCLI("bill")="Счет пациента"
+ S ^LCLI("bill","types")="Разрешенные виды платежей"
+ S ^LCLI("bill","dblquest")="При нестандартном виде оплаты - повторный вопрос"
+ S ^LCLI("bill","relnolim")="Не лимитировать возвраты - 1, лимит только по типу платежа - 2, лимит по типу за день - 3, 21 и 31 - баланс положителен или 2 и 3"
+ S ^LCLI("bill","management")="Разрешено управление счетом (1-все, 2-резерв, 3-резерв и заем)"
+ S ^LCLI("bill","move")="Административное перемещение платежей"
+ S ^LCLI("bill","del")="Удаление платежей"
+ S ^LCLI("bill","cngtp")="Изменение типа платежей в кассовых операциях"
+ S ^LCLI("bill","pacmove")="Перемещение платежей между счетами"
+ S ^LCLI("bill","paywait")="Минимально разрешенное время между фин. транзакциями, сек."
+ S ^LCLI("bill","ksvperiod")="Максимальный период просмтора ведомости, в днях"
+ S ^LCLI("bill","imnoprnz")="Не печатать заявление при возврате"
+ S ^LCLI("bill","imnoprn")="Не печатать финансовые документы при возврате"
+ S ^LCLI("bill","saveretc")="Сохранять при возврате номера чеков"
+ S ^LCLI("bill","ksvprndlg")="Диалог выбора принтера при печати квитанции"
+ S ^LCLI("bill","ppvkso")="Предварительный просмотр при печати кассовых операций"
+ S ^LCLI("bill","setkkm")="Изменение текущей ККМ пользователя"
+ S ^LCLI("bill","kkmfio")="ФИО пациента в чеке запрет=0"
+ S ^LCLI("bill","kkmpassword")="Пароль пользователя на ККМ"
+ S ^LCLI("bill","selvoper")="Отображать ведомость только по текущему оператору"
+ S ^LCLI("bill","alltypes")="Разрешение на вывод всех типов платежей в системных справочниках =0 - запрет"
+ S ^LCLI("bill","outkssm")="Запрет ручной инкассации"
+ S ^LCLI("bill","outkss")="Запрет инкассации из ККМ"
+ S ^LCLI("bill","inkss")="Запрет внесения остатков в ККМ"
+ S ^LCLI("bill","nulpayv")="Разрешено зачисление нулевых платежей для типов оплаты >3"
+ S ^LCLI("bill","bnodel")="Удаление безналичных платежей"
+ S ^LCLI("bill","retcomm")="Проверять комментарий при возврате платежей 'мин. длина|тип1|тип2..'" 
+ S ^LCLI("bill","all-kkm")="Отсутствие фильтров по текущей ККМ в ведомостях"
+ S ^LCLI("bill","bvperiod")="Период просмотра платежей пациента, дни"
+ Q
+ 
+INITDB 
+ S ^MN("root","kkm")="Кассовые аппараты"
+ S ^MN("root","kkm","fname")="Наименование|ЛПУ|IP|Сер.номер|Рег.номер|Пароль|COM порт|Принадлежность"
+ S ^MN("root","kkm","ftype")="S|L:lpu|S|S|S|S|S|L:gd"
+ S ^MN("root","kkm","fcode")="name|lpu|ip|serialnum|regnum|password|com_port|affilation"
+ S ^MN("root","outkss")="Кассовые выплаты"
+ S ^MN("root","outkss","fname")="Наименование|Системный|Виртуальный"
+ S ^MN("root","outkss","ftype")="S|B|B"
+ S ^MN("root","outkss","fcode")="name|sys|virtual"
+ S ^MN("root","paytype")="Виды кассовых платежей"
+ S ^MN("root","paytype","fname")="Наименование|Краткое|Приход|Выплаты|Области|Б.карта|Виртуальный"
+ S ^MN("root","paytype","ftype")="S|S|B|B|S|B|B"
+ S ^MN("root","paytype","fcode")="name|shortname|income|outcome|area|bcard|virtual"
+ S ^MN("root","payacc")="Виды счетов пациента"
+ S ^MN("root","payacc","fname")="Наименование|Отделения"
+ S ^MN("root","payacc","ftype")="S|S"
+ S ^MN("root","payacc","fcode")="name|depart"
+ Q

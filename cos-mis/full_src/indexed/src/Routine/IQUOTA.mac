@@ -1,0 +1,85 @@
+IQUOTA ; Routines for ^QUOTA [ 08/06/2020  1:38 AM ]
+GET(GL,FROM) ; get next number
+ Q:GL="" 1
+ N N,H S N=$G(FROM)-1
+ I '$G(^cfg("quota")),'$D(^QUOTA(GL)) D SYNC
+ L +^QUOTA(GL)
+ F  S N=$O(^QUOTA(GL,N)) Q:N=""  S H=^(N)+1 K:$D(@GL@(N)) ^QUOTA(GL,N) I +$H>H,'$D(@GL@(N)) Q 
+ S:N'="" ^QUOTA(GL,N)=+$H
+ L -^QUOTA(GL)
+ Q N
+INKR(GL) ; Get next increment number
+ Q:GL="" 1
+ N X
+ L +^INKR(GL)
+ S X=$G(^INKR(GL))+1,^INKR(GL)=X
+ L -^INKR(GL)
+ Q X
+CLEARGL(LPU,GL) ; Clear used numbers
+ N I,CNT,R,RR,X,J,C9
+ S C9=$C(9),CNT=0
+ S I="" F  S I=$O(^QUOTA("R",GL,LPU,I)) Q:I=""  D
+ .S R=$G(^(I)),RR="" Q:R="" 
+ .F J=1:1:9999 S X=$P(R,C9,J) Q:X=""  S:'$D(@GL@(X)) RR=$S(RR="":"",1:RR_C9)_X,CNT=CNT+1
+ .I RR="" K ^QUOTA("R",GL,LPU,I) Q
+ .S ^QUOTA("R",GL,LPU,I)=RR
+ Q CNT ; число оставшихся
+CLRSCAN ; Clear last scan ID
+ N GL
+ S GL="" F  S GL=$O(^QUOTA("R",GL)) Q:GL=""  S ^QUOTA("R",GL)=""
+ Q
+SCANGL(LPU,GL) ; 
+ N CNT,CC,I,R,N,C9,LP,K
+ S CFG=$G(^QUOTA("C",GL,LPU)),CNT=$P(CFG,"|",2)
+ Q:'CNT  ; не требуется резерва
+ S CC=$$CLEARGL(LPU,GL) ; очистить и получить остаток
+ Q:CC'<CNT 
+ S N=$G(^QUOTA("R",GL))+1
+ S:N<$P(CFG,"|",1) N=$P(CFG,"|",1)
+ S (I,R)="",C9=$C(9),LP=+$$^I("ilpu"),K=GL_"|"_LPU_"|"
+ F N=N:1 D:'$D(@GL@(N))  Q:CC'<CNT 
+ .S:I="" I=N
+ .I LPU=LP S ^QUOTA(GL,N)=""
+ .S R=$S(R="":"",1:R_C9)_N,CC=CC+1
+ .I $L(R)>4096 S ^QUOTA("R",GL,LPU,I)=R D UPDA^IEXCH("IQUOTA",K_I,LP,LPU) S (I,R)=""
+ S ^QUOTA("R",GL)=N
+ Q:I="" 
+ Q:LPU=LP 
+ S ^QUOTA("R",GL,LPU,I)=R D UPDA^IEXCH("IQUOTA",K_I,LP,LPU)
+ Q
+SCAN ; Scan for free numbers and prepare data to update
+ ; TODO - for local server
+ Q:$G(^cfg("quota"))'=1 
+ N LP,GL
+ S GL="" F  S GL=$O(^QUOTA("C",GL)) Q:GL=""  D
+ .S LP="" F  S LP=$O(^QUOTA("C",GL,LP)) Q:LP=""  D SCANGL(LP,GL)
+ Q
+SYNC ; Request update from node server
+ D UPD^IEXCH("EXEC","D REQ^IQUOTA")
+ Q
+REQ ; Do autosync
+ Q:$G(^cfg("quota"))'=1
+ D SCAN
+ Q
+CHECK ; check and kill used
+ N GL,N
+ S GL="" F  S GL=$O(^QUOTA(GL)) Q:GL=""  D
+ .S N="" F  S N=$O(^QUOTA(GL,N)) Q:N=""  K:$D(@GL@(N)) ^QUOTA(GL,N)
+ Q
+RXCH ; Receive free numbers and generate used
+ N R,%J,A,GL,I,X,C9
+ D ORH^RWU
+ S R="" F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  S R=R_A
+ D CR^RWU
+ D CHECK
+ S GL=$P(R,"|",1),I=$P(R,"|",2),R=$P(R,"|",3),C9=$C(9)
+ Q:GL="" 
+ F A=1:1:9999 S X=$P(R,C9,A) Q:X=""  S:'$D(@GL@(X)) ^QUOTA(GL,X)=""
+ Q
+WXCH(X) ; Send free numbers no node
+ N LP,R,GL,I
+ S GL=$P(X,"|",1),LP=$P(X,"|",2),I=$P(X,"|",3)
+ D OWF^RWU("exp.nb-data")
+ D W^RWU(GL_"|"_I_"|"_$G(^QUOTA("R",GL,LP,I)))
+ D C^RWU
+ Q

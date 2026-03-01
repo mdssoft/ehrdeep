@@ -1,0 +1,99 @@
+IPROF ; Профосмотры [ 03/23/2022  7:18 PM ]
+GET(N,PL,DT) ; Получить поле 
+ I '$D(DT) S DT=$H
+ S:DT="" DT=$H
+ S DT=$O(^PROFP(N,PL,DT+1),-1) Q:DT="" "" Q $G(^(DT))
+SET(N,PL,DT,R) ; Установить поле
+ S ^PROFP(N,PL,DT)=R
+ D GL^IEXCH("^PROFP",N,PL,DT)
+ Q
+LAST(NI) ; ID последнего
+ N F,ID
+ S ID=""
+ F F="n","vf","lmk","ptp" S D=$O(^PROFP(NI,F,""),-1) S:D>ID ID=D
+ Q ID
+VADR(NI,DT) ; Адрес временной регистрации
+ N X1,X2
+ S DT=$G(DT,+$H),X1=$$GET(NI,"vregion",DT)
+ S X2=$$GET(NI,"vcity",DT)
+ I X2'="",X1'=X2 S:X1'="" X1=X1_", " S X1=X1_X2
+ S X2=$$GET(NI,"vstreet",DT) I $L(X2) S:$L(X1) X1=X1_", " S X1=X1_X2
+ S X2=$$GET(NI,"vdom",DT) I $L(X2) S:$L(X1) X1=X1_", " S X1=X1_"дом "_X2
+ S X2=$$GET(NI,"vkorp",DT) S:$L(X2) X1=X1_", корп. "_X2
+ S X2=$$GET(NI,"vstroen",DT) S:$L(X2) X1=X1_", стр. "_X2
+ S X2=$$GET(NI,"vkvart",DT) S:$L(X2) X1=X1_", кв. "_X2
+ Q X1
+PADR(NI,DT) ; Адрес пребывания
+ N X1,X2
+ S DT=$G(DT,+$H),X1=$$GET(NI,"pregion",DT)
+ S X2=$$GET(NI,"pcity",DT)
+ I X2'="",X1'=X2 S:X1'="" X1=X1_", " S X1=X1_X2
+ S X2=$$GET(NI,"pstreet",DT) I $L(X2) S:$L(X1) X1=X1_", " S X1=X1_X2
+ S X2=$$GET(NI,"pdom",DT) I $L(X2) S:$L(X1) X1=X1_", " S X1=X1_"дом "_X2
+ S X2=$$GET(NI,"pkorp",DT) S:$L(X2) X1=X1_", корп. "_X2
+ S X2=$$GET(NI,"pstroen",DT) S:$L(X2) X1=X1_", стр. "_X2
+ S X2=$$GET(NI,"pkvart",DT) S:$L(X2) X1=X1_", кв. "_X2
+ Q X1
+ 
+SETLOG(NI,DT) ; Установить пользователь+$H изменения
+ Q:NI=""  
+ S DT=$G(DT) S:DT="" DT=+$H
+ S ^PROFP(NI,"log",DT)=$$USRH^IUSER()
+ D GL^IEXCH("^PROFP",NI,"log",DT)
+ Q
+PRC(NIB,STC,DT,KSS) ; Получить прейскурант профосмотров
+ ; NIB - пациент
+ ; STC - договор
+ ; DT - дата
+ ; KSS - по кассе
+ N P
+ S:$G(DT)="" DT=+$H
+ S P=$$GET(NIB,"prc",DT)
+ I P="" S:$G(STC)="" STC=$$GET^IPAC(NIB,"stc",DT) S P=$$GET^IINSC(STC,"pprice",DT)
+ S:P="" P=$$PRC^IINSC(STC,NIB,DT,$G(KSS),"","")
+ Q P
+GETLID(NIB,DT,CUR) ; Получить коды заявок в лаборатории
+ ; NIB - пациент
+ ; DT - дата
+ ; CUR - только от текущей даты
+ N R,I,RR,X
+ S R=$S($G(CUR):$G(^PROF(NIB,"li",DT)),1:$$GET(NIB,"li",DT)) Q:R="" ""
+ S RR=""
+ F I=0:1:9 S X=$P(R,"|",(I*3)+1) S:X'="" RR=$S(RR="":"",1:RR_"|")_X
+ Q RR
+ADDLID(NIB,DT,LID) ; Добавить код лаб заявки в осмотр
+ ; NIB - пациент
+ ; DT - дата
+ ; LID - код заявки,штрихкод,номер бланка
+ N R,I,X,F,L
+ S R=$G(^PROFP(NIB,"li",DT)),F=0,L=$P(LID,"|",1) ; only from current
+ I R'="" F I=0:1:9 S X=$P(R,"|",(I*3)+1) I X=L S F=1 Q  ; поиск
+ 
+ I 'F,R="" S R=LID,F=1
+ I 'F S L=$L(R,"|"),L=((L\3)+1)*3,$P(R,"|",L+1,L+3)=LID
+ D SET(NIB,"li",DT,R)
+ Q
+REGLCLI 
+ S ^LCLI("prof")="Профосмотры"
+ S ^LCLI("prof","vtab")="Выводить в таблице профосмотров вредные факторы (=3)"
+ S ^LCLI("prof","save")="Запрет изменения (=0)"
+ S ^LCLI("prof","del")="Запрет удаления (=0)"
+ Q
+INITDB 
+ S ^MN("root","profprnfl")="Поля печатных документов профосмотров"
+ S ^MN("root","profprnfl","kname")="Имя поля",^("ktype")="S"
+ S ^("fname")="Тип|Поле|Документ",^("ftype")="S|S|S"
+ Q
+REGsys 
+ S ^STRUCT("prof","vregion")="|Регион вр.регистрации"
+ S ^STRUCT("prof","vcity")="|Город вр.регистрации"
+ S ^STRUCT("prof","vstreet")="|Улица вр.регистрации"
+ S ^STRUCT("prof","vdom")="|Дом вр.регистрации"
+ S ^STRUCT("prof","vkorp")="|Корпус вр.регистрации"
+ S ^STRUCT("prof","vkvart")="|Квартира вр.регистрации"
+ 
+ S ^STRUCT("prof","workn")="|Место работы"
+ S ^STRUCT("prof","depart")="|Цех, департамент"
+ S ^STRUCT("prof","worka")="|Адрес места работы"
+ S ^STRUCT("prof","workd")="|Должность"
+ Q

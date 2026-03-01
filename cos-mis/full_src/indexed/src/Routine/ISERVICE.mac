@@ -1,0 +1,76 @@
+ISERVICE ; Medexis services manager [ 04/29/2019  3:00 PM ]
+JOB
+	n code,msg,CR,prc,%LOG,%JOB,%ISERVIC,i,x
+	S CR=$C(13,10),%LOG="sys",%JOB=77777,i=1
+	S $ZT="ZT^ISERVICE"
+	D:$D(^$R("WWWSRV")) USRCONN^WWWSRV ; for Cache
+	D $system.Event.Create("imservice")
+	F  s code=$system.Event.WaitMsg("imservice",5),msg=$li(code,2),code=$li(code,1) D:code=1  Q:code=-1 
+	.I msg="stop" s code=-1 Q 
+	.s prc=$P(msg,"|",2),msg=$P(msg,"|",1) Q:prc="" 
+	.Q:'$D(^$R(prc))
+	.s x=$S(msg="start":"START^"_prc,1:"STOP^"_prc)
+	.S ^ISLOG("ISERVICE",+$H,$P($H,",",2)_"."_i)="x:"_x
+	.J @x
+	.S ^ISLOG("ISERVICE",+$H,$P($H,",",2)_"."_i)=msg_"|"_prc
+	.s i=i+1 s:i>1000 i=1
+	.w !,msg_" , prc="_prc
+	D $system.Event.Delete("imservice")
+	Q
+ZSTART
+	N P
+	I $ZV["Cache",$$COUNTNM^IJOBUTL("ISERVICE") D ZSTOP
+	J JOB::5
+	W !,"Runnings services.."
+	H 5
+	S P="" F  S P=$O(^IMSERVICE(P)) Q:P=""  D START(P)
+	W !,"Done"
+	Q
+ZSTOP
+ 	I $ZV["Cache" Q:'$$COUNTNM^IJOBUTL("ISERVICE")
+ 	S P="" F  S P=$O(^IMSERVICE(P)) Q:P=""  D STOP(P)
+	D $system.Event.Signal("imservice","stop")
+ 	F I=1:1:60 Q:'$$COUNTNM^IJOBUTL("ISERVICE")  H 1
+ 	W !,"Done"
+	Q
+ZT	N ZE S ZE=$ZE
+	Q:ZE["<INTERRUPT>" 
+	S ^ERLOG("ISERVICE",+$H,$P($H,",",2))=ZE
+	zw ^ERLOG("ISERVICE")
+	H 2
+	G JOB
+START(PROC) ; Start another service
+	Q:$G(PROC)="" 
+	N %ISERVIC
+	S %ISERVIC=1 ; set env. 
+	D $system.Event.Signal("imservice","start|"_PROC)
+	Q
+STOP(PROC) ; Stop another service
+	Q:$G(PROC)="" 
+	N %ISERVIC
+	S %ISERVIC=1 ; set env.
+	D $system.Event.Signal("imservice","stop|"_PROC)
+	Q
+STARTALL
+	N P
+	S P="" F  S P=$O(^IMSERVICE(P)) Q:P=""  D START(P)
+	W !,"Done"
+	Q
+STOPALL
+	N P
+	S P="" F  S P=$O(^IMSERVICE(P)) Q:P=""  D STOP(P)
+	W !,"Done"
+	Q
+ADD(PROC) ; Add service to autostart
+	Q:$G(PROC)="" 
+	S ^IMSERVICE(PROC)=""
+	Q
+DEL(PROC) ; Remove service from autostart
+	Q:$G(PROC)="" 
+	K ^IMSERVICE(PROC)
+	Q
+LIST ; List of active services
+	N P
+	S P="" F  S P=$O(^IMSERVICE(P)) Q:P=""  I $$ISNM^IJOBUTL(P) W P,!
+	W "Done"
+	Q

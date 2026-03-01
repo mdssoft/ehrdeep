@@ -1,0 +1,31 @@
+ICONNECT ; HTTP connection to clients
+LOGIN(SRV,PORT,LOGIN,PASS)
+	S SID=##class(%Net.HttpRequest).%New()
+	S SID.Server=SRV,SID.Port=PORT
+	S SID.WriteRawMode=1
+	S SID.FollowRedirect=1
+	S SID.Authorization="Basic"
+	S SID.Username=LOGIN,SID.Password=PASS
+	S SID.UserAgent="Cache NetBase client v1.0"
+	D SID.Get("/LOGIN/info_yyuser?")
+	W "Return="_SID.HttpResponse.StatusCode,!
+	I SID.HttpResponse.StatusCode=301 {
+		D SID.HttpResponse.OutputToDevice()
+		S L=$P(SID.HttpResponse.GetHeader("LOCATION"),"AUTH",2)
+		W !,"==","/AUTH"_L,!
+		D SID.Get("/AUTH"_L_"?")
+		I SID.HttpResponse.StatusCode=200 {
+		D SID.HttpResponse.OutputToDevice()
+		}
+	}
+	D SID.HttpResponse.OutputToDevice()
+	;I SID.HttpResponse.StatusCode'=200 D CLOSE(SID) Q ""
+	Q SID
+GET(SID,PROC)
+	Q
+CLOSE(SID)
+	D SID.Get("LOGOUT?")
+	D SID.Reset()
+	;D ##class(%Net.HttpRequest).%Delete(SID)
+	Q
+ 

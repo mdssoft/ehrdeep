@@ -1,0 +1,196 @@
+NDSCN ; Скидки [ 02/01/2024  2:37 PM ]
+LST ; Список
+ N I
+ D OWF^RWU(".txt")
+ S I="" F  S I=$O(^DSCN(I)) Q:I=""  D WC^RWU(CR_I_"|"_$G(^(I,"nm")))
+ D C^RWU
+ Q
+LSTTAG(TAG) ; Список по тегам
+ S TAG=$$WD^TXTU(TAG)
+ G LST2+2
+LST2 ; Список действующих, несистемных
+ N TAG
+ N I,R,C,N,L
+ S (I,C)="",TAG=$G(TAG),L=+$$^I("ilpu")
+ D OWF^RWU(".txt")
+ F  S I=$O(^DSCN(I)) Q:I=""  I $G(^(I,"use")),'$G(^("sys")),$S(TAG="":1,1:$$FLinFL^TXTU($TR($G(^("tags"))," ","|"),TAG)),$P($G(^("lpd",L)),"|",1)'=21 D WC^RWU(C_I_"|"_$G(^DSCN(I,"nm"))) S C=CR
+ D C^RWU
+ Q
+L(ID) ; Загрузить
+ N I,S,R,X,F,DT
+ S ID=+ID,DT=+$H
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<tdscn>")
+ D WTAGD^RWU("id",ID)
+ F F="nm","use","grp","sys","tp","nday","nosc","tags","kcert","rcert","dsc","fage","tage","pstatus","cday" D WTAGDC^RWU(F,$G(^DSCN(ID,F)))
+ D WC^RWU("<table1>Сумма|Процент")
+ S (R,I)="" F  S I=$O(^DSCN(ID,"cn",I)) Q:I=""  S R=R_CR_I_"|"_^(I)
+ D WC^RWU(R_"</table1><table2>Сумма|Процент")
+ S (R,I)="" F  S I=$O(^DSCN(ID,"cng",I)) Q:I=""  S R=R_CR_I_"|"_^(I)
+ D WC^RWU(R_"</table2><table3>Код|Наименование услуги|Процент|Флаг")
+ S I="",X=$$PRC^IINSC("","",DT,0,"","") ; 1-й прейскурант
+ F  S I=$O(^DSCN(ID,"usl",I)) Q:I=""  S S=^(I) D WC^RWU(CR_I_"|"_$$NAME^IPRICE(I,X)_"|"_S)
+ D WC^RWU("</table3><table4>|Разрешенное отделение")
+ S (R,I)=""
+ F  S I=$O(^DSCN(ID,"ota",I)) Q:I=""  S R=R_CR_I_"|"_$$GOTD^YISPRAV(I)
+ D WC^RWU(R_"</table4><table5>|Запрещенное отделение")
+ S (R,I)=""
+ F  S I=$O(^DSCN(ID,"otd",I)) Q:I=""  S R=R_CR_I_"|"_$$GOTD^YISPRAV(I)
+ D WC^RWU(R_"</table5><table6>|Разрешенный вид договора")
+ S (R,I)=""
+ F  S I=$O(^DSCN(ID,"dvid",I)) Q:I=""  S R=R_CR_I_"|"_$$NAME^ISPRAV("dvid",I+1)
+ D WC^RWU(R_"</table6><table12>|Запрещенный вид договора")
+ S (R,I)=""
+ F  S I=$O(^DSCN(ID,"dvidd",I)) Q:I=""  S R=R_CR_I_"|"_$$NAME^ISPRAV("dvid",I+1)
+ 
+ D WC^RWU(R_"</table12><table7>|Группа прейскуранта")
+ S (R,I)=""
+ F  S I=$O(^DSCN(ID,"grpa",I)) Q:I=""  S R=R_CR_I_"|"_$$NAME^ISPRAV("gprice",I)
+ D WC^RWU(R_"</table7><table8>|Группа прейскуранта")
+ S I=""
+ F  S I=$O(^DSCN(ID,"grpd",I)) Q:I=""  D WC^RWU(CR_I_"|"_$$NAME^ISPRAV("gprice",I))
+ D WC^RWU("</table8><table9>|Разрешенный договор")
+ S (R,I)=""
+ F  S I=$O(^DSCN(ID,"dgn",I)) Q:I=""  S R=R_CR_I_"|"_$$NAME^IINSC(I)
+ D WC^RWU(R_"</table9><table13>|Запрещенный договор")
+ S (R,I)=""
+ F  S I=$O(^DSCN(ID,"dgnd",I)) Q:I=""  S R=R_CR_I_"|"_$$NAME^IINSC(I)
+ D WC^RWU(R_"</table13><table10>|Группа прейскуранта|Процент")
+ S I="" F  S I=$O(^DSCN(ID,"grps",I)) Q:I=""  S S=^(I) D WC^RWU(CR_I_"|"_$$NAME^ISPRAV("gprice",I)_"|"_S)
+ D WC^RWU("</table10><table11>")
+ S (S,I)="" F  S I=$O(^CGA(I)) Q:I=""  D
+ .S F="|"_$$GET^ICONTR(I,"flg",DT)_"|"
+ .Q:F'["|fi|"
+ .S R=$G(^DSCN(ID,"lpd",I))
+ .S S=S_CR_I_"|"_$$NAME^ICONTR(I)_"|"_(+$P(R,"|",1))_"|"_$P(R,"|",2)
+ S S=$$TAG^TXTU(S)
+ D WC^RWU(S_"</table11></tdscn></nb_console>")
+ D C^RWU
+ Q
+S ; Save
+ K ^BUF($J)
+ D OLGL^XMLU("tdscn","table1|table2|table3|table4|table5|table6|table7|table8|table9|table10|table11|table12|table13")
+ D W
+ K ^BUF($J) 
+ Q
+W ; Write
+ N ID,FM,FL,I,R,X,Y,Z
+ S FM="tdscn"
+ S ID=$$BFL^XMLU(FM,"id")
+ I ID="",$$LCL^IUSER("dscn","new")=0 D MSG^RWU("Нет прав на создание скидки") Q  
+ I ID'="",$$LCL^IUSER("dscn","save")=0 D MSG^RWU("Нет прав на изменение скидки") Q 
+ S:ID="" ID=$O(^DSCN(""),-1)+1
+ F FL="nm","use","grp","sys","tp","nday","nosc","kcert","rcert","dsc","fage","tage","pstatus","cday" S ^DSCN(ID,FL)=$$BFL^XMLU(FM,FL)
+ S ^DSCN(ID,"tags")=$$UL^TXTU($$DBLSP^TXTU($TR($$BFL^XMLU(FM,"tags"),",.;/","    ")))
+ 
+ K ^DSCN(ID,"cn")
+ S I=0,FL="table1"
+ F  S I=$O(^BUF($J,FM,FL,I)) Q:I=""  S X=^(I),Y=$P(X,"|",1) S:Y'="" ^DSCN(ID,"cn",Y)=$P(X,"|",2)
+ 
+ K ^DSCN(ID,"cng")
+ S I=0,FL="table2"
+ F  S I=$O(^BUF($J,FM,FL,I)) Q:I=""  S X=^(I),Y=$P(X,"|",1) S:Y'="" ^DSCN(ID,"cng",Y)=$P(X,"|",2)
+ 
+ K ^DSCN(ID,"usl")
+ S I=0,FL="table3"
+ F  S I=$O(^BUF($J,FM,FL,I)) Q:I=""  S X=^(I),Y=$P(X,"|",1) S:Y'="" ^DSCN(ID,"usl",Y)=$P(X,"|",3,4)
+ 
+ K ^DSCN(ID,"ota")
+ S I=0,FL="table4"
+ F  S I=$O(^BUF($J,FM,FL,I)) Q:I=""  S X=^(I),Y=$P(X,"|",1) S:Y'="" ^DSCN(ID,"ota",Y)=""
+ 
+ K ^DSCN(ID,"otd")
+ S I=0,FL="table5"
+ F  S I=$O(^BUF($J,FM,FL,I)) Q:I=""  S X=^(I),Y=$P(X,"|",1) S:Y'="" ^DSCN(ID,"otd",Y)=""
+ 
+ K ^DSCN(ID,"dvid")
+ S I=0,FL="table6"
+ F  S I=$O(^BUF($J,FM,FL,I)) Q:I=""  S X=^(I),Y=$P(X,"|",1) S:Y'="" ^DSCN(ID,"dvid",Y)=""
+ 
+ K ^DSCN(ID,"dvidd")
+ S I=0,FL="table12"
+ F  S I=$O(^BUF($J,FM,FL,I)) Q:I=""  S X=^(I),Y=$P(X,"|",1) S:Y'="" ^DSCN(ID,"dvidd",Y)=""
+ 
+ K ^DSCN(ID,"grpa")
+ S I=0,FL="table7"
+ F  S I=$O(^BUF($J,FM,FL,I)) Q:I=""  S X=^(I),Y=$P(X,"|",1) S:Y'="" ^DSCN(ID,"grpa",Y)=""
+ 
+ K ^DSCN(ID,"grpd")
+ S I=0,FL="table8"
+ F  S I=$O(^BUF($J,FM,FL,I)) Q:I=""  S X=^(I),Y=$P(X,"|",1) S:Y'="" ^DSCN(ID,"grpd",Y)=""
+ 
+ K ^DSCN(ID,"dgn")
+ S I=0,FL="table9"
+ F  S I=$O(^BUF($J,FM,FL,I)) Q:I=""  S X=^(I),Y=$P(X,"|",1) S:Y'="" ^DSCN(ID,"dgn",Y)=""
+ 
+ K ^DSCN(ID,"dgnd")
+ S I=0,FL="table13"
+ F  S I=$O(^BUF($J,FM,FL,I)) Q:I=""  S X=^(I),Y=$P(X,"|",1) S:Y'="" ^DSCN(ID,"dgnd",Y)=""
+ 
+ K ^DSCN(ID,"grps")
+ S I=0,FL="table10"
+ F  S I=$O(^BUF($J,FM,FL,I)) Q:I=""  S X=^(I),Y=$P(X,"|",1) S:Y'="" ^DSCN(ID,"grps",Y)=$P(X,"|",3)
+ 
+ K ^DSCN(ID,"lpd")
+ S I=0,FL="table11"
+ F  S I=$O(^BUF($J,FM,FL,I)) Q:I=""  S X=^(I),Y=$P(X,"|",1) I Y'="" S Z=$P(X,"|",4) S:$P(X,"|",3) ^DSCN(ID,"lpd",Y)=1 S:Z'="" $P(^DSCN(ID,"lpd",Y),"|",2)=Z
+ 
+ S ^DSCN(ID,"log")=$$USRH^IUSER()
+ 
+ D MSG^RWU(^PP(0,1)_"<tdscn><id>"_ID_"</id></tdscn><nb_console>",".xmlb")
+ D KGL^IEXCH("^DSCN",ID),GL^IEXCH("^DSCN",ID)
+ Q
+DEL(ID) ; Delete
+ I ID="" D LST Q
+ I $$LCL^IUSER("dscn","del")=0 Q 
+ D K^ISSG("^DSCN("_ID_")")
+ K ^DSCN(ID)
+ D KGL^IEXCH("^DSCN",ID)
+ D LST
+ Q
+CHKCRT(IDS) ; Скидка как сертификат ?
+ N I,X,F
+ S IDS=$$WD^TXTU(IDS),F=0
+ F I=1:1:$L(IDS,"|") S X=$P(IDS,"|",I) I X'="",$G(^DSCN(X,"rcert")) S F=1 Q
+ D MSG^RWU(F)
+ Q
+SETFNI(NIB,ID,COM,OD,WHO,OF,ST) ; Установить скидку для пациента (если неустановлена)
+ ; COM - примечание ; OD - установить только на сегодня/N дней
+ ; WHO - кто разрешил ; OF - фин расчет в офисе
+ ; ST - статус пациента
+ S %L=0,%B=".txt"
+ Q:ID=""  Q:'$$EXIST^IPAC(NIB)  Q:'$$LCL^NUSER("patients"," setskd") 
+ N H,R
+ S COM=$G(COM),WHO=$G(WHO),OF=$G(OF),ST=$G(ST),H=$H,OD=+$G(OD)
+ I $$LCL^NUSER("patients"," oneskd"),'$G(^DSCN(ID,"nosc")),$$CSTATE^IRPAC(NIB,"setskd") Q  ; только один раз, если не указано множественное
+ I OD D  G:%L=1 SETFNI1 Q 
+ .I $$GET^IPAC(NIB,"skd",+H)=ID Q 
+ .S R=$$GET^IPAC(NIB,"skd",H+OD)
+ .D SET^IPAC(NIB,"skd",+H,ID)
+ .D SSTATE^IRPAC(NIB,"setskd")
+ .D SET^IPAC(NIB,"skd",H+OD,R,1)
+ .D MSG^RWU(1) 
+ D SET^IPAC(NIB,"skd",+H,ID,1)
+ D SSTATE^IRPAC(NIB,"setskd")
+SETFNI1 
+ S COM=$$WD^TXTU(COM)
+ D:OF SSTATE^IRPAC(NIB,"ofbill")
+ S ^BTEV(NIB,H,"DSCN")="1|"_COM_"|D|"_$$KDR^IUSER()
+ S ^BTEV(NIB,H,"DSCN","id")=ID
+ S:WHO ^BTEV(NIB,H,"DSCN","who")=WHO
+ S:OF ^BTEV(NIB,H,"DSCN","of")=OF
+ S:ST'="" ^BTEV(NIB,H,"DSCN","st")=ST
+ S:OD ^BTEV(NIB,H,"DSCN","d")=OD
+ S R=$$GET^IPAC(NIB,"text",H)
+ D:$L(COM) SET^IPAC(NIB,"text",H,$S(R="":"",1:R_CR)_COM,1)
+ S R=$$GET^IPAC(NIB,"status",H)
+ I ST'="",R=""!(ST'=R) D SET^IPAC(NIB,"status",H,ST,1)
+ D GL^IEXCH("^BTEV",NIB,H,"DSCN")
+ D MSG^RWU(1)
+ Q
+REGLCL  ;
+ K ^LCLI("dscn")
+ S ^LCLI("dscn")="Скидки"
+ S ^LCLI("dscn","new")="Создание нового"
+ S ^LCLI("dscn","save")="Сохранение существующего"
+ S ^LCLI("dscn","del")="Удаление"
+ Q

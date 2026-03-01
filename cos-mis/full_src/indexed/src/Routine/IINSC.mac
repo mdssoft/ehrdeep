@@ -1,0 +1,109 @@
+IINSC ; Договора [ 02/27/2020  7:48 PM ]
+GET(N,POLE,DT) ; Значение поля
+ Q:N="" "" S:$G(DT)="" DT=$H
+ S DT=$O(^DGN(N,POLE,DT+1),-1) Q:DT="" "" Q ^(DT)
+GETD(N,POLE) 
+ Q:N="" "" S N=$O(^DGN(N,POLE,$H+1),-1) Q:N="" "" Q ^(N)
+GETM(N,POLE,RET) 
+ K @RET M @RET=^DGN(N,POLE) Q
+GETL2(N,PL1,PL2,DT) ; Get field level 2
+ S:$G(DT)="" DT=$H Q:PL2="" ""
+ S DT=$O(^DGN(N,PL1,PL2,DT+1),-1) Q:DT="" "" Q ^(DT)
+ Q
+GETL2LN(N,PL1,PL2,DT,IDX) ; Get field level 2 w. add index
+ S:$G(DT)="" DT=$H Q:PL2="" ""
+ S DT=$O(^DGN(N,PL1,PL2,DT+1),-1) Q:DT="" "" 
+ Q:IDX="" $G(^(DT))
+ Q $G(^(DT,IDX))
+EXIST(N) ; Проверка договора на наличие
+ Q:'$D(^DGN(N)) 0
+ Q:'$D(^(N,"shortname")) 0
+ Q 1
+NEXT(N) ; Iterator wrapper
+ Q $O(^DGN(N))
+NAME(N,DT) ; Наименование договора
+ Q:N="" ""
+ S:$G(DT)="" DT=+$H
+ S N=$O(^DGN(N,"shortname",DT+1),-1) Q:N="" "" Q ^(N)
+NAMEF(N,DT) ; Полное наименование
+ Q:N="" ""
+ S:$G(DT)="" DT=+$H
+ S N=$O(^DGN(N,"oname",DT+1),-1) Q:N="" "" Q ^(N)
+FNDFL(FL,VAL,DT) ; Поиск договора по содержимому поля
+ N N
+ S:$G(DT)="" DT=+$H
+ S N="" F  S N=$O(^DGN(N)) Q:N=""  I $$GET(N,FL,DT)=VAL Q
+ Q N
+FNDNM(NM,DT) ; Найти по имени
+ S NM=$$UL^TXTU(NM)
+ S:$G(DT)="" DT=+$H
+ N N
+ S N="" F  S N=$O(^DGN(N)) Q:N=""  I $S($$UL^TXTU($$NAME(N,DT))=NM:1,1:$$UL^TXTU($$NAMEF(N,DT))=NM) Q 
+ Q N
+ISLPU(N,DT,LPU) ; Договор используется в данном ЛПУ
+ Q:'LPU 1 Q:'$D(^DGN(N)) 0
+ S DT=$O(^(N,"lpu",DT+1),-1) Q:DT="" 1
+ S DT=^(DT) Q:DT="" 1
+ Q "|"_DT_"|"[("|"_LPU_"|")
+FLCNG(N,PL,DT,POS) ; Дата изменение поля
+ S:$G(POS)="" POS=-1 Q:N="" ""
+ S DT=$S($G(DT)="":$S(POS<0:99999,1:""),1:DT+1)
+ Q $O(^DGN(N,PL,DT),POS)
+PRC(N,NIB,DT,KSS,OT,SP,VR) ; Прейскурант (взрослый/детский)
+ ; N - договор
+ ; NIB - пациент
+ ; KSS - по кассе
+ ; OT - отделение
+ ; SP - специальность
+ ; VR - сотрудник
+ N P,S
+ S P="",DT=$G(DT)
+ S:N="" N=$G(^cfg("def-stc")) S:DT="" DT=+$H
+ I $G(NIB)'="",$$AGE^IPAC(NIB,DT)<19 S P=$$GET(N,"dprice",DT)
+ I $G(VR)'="" S P=$$GET^IKADRY(VR,"price",DT) Q:P'="" P
+ S KSS=$G(KSS),OT=$G(OT),SP=$G(SP)
+ S:P="" S=$S(OT=""&(SP=""):0,1:$$STOM^IEDE(OT,SP))
+ S:P="" P=$$GET(N,$S(KSS:"cprice",S:"sprice",1:"price"),DT)
+ S:KSS&(P="") P=$$GET(N,"price",DT)
+ Q $$CORCP^IPRICET(P)
+DEFPRC(USR,DT,KSS) ; Прейскурант по умолчанию для пользователя
+ ; USR - TODO
+ N N,P
+ S KSS=$G(KSS),DT=$G(DT),N=$G(^cfg("def-stc"))
+ S:DT="" DT=+$H
+ S P=$$GET(N,$S(KSS:"cprice",1:"price"),DT)
+ S:KSS&(P="") P=$$GET(N,"price",DT)
+ Q $$CORCP^IPRICET(P)
+CSKDSUM(VAL,SUMM) ; Получить условия скидок по сумме счета
+ N R,I,S,RET
+ S RET=""
+ F I=1:1:$L(VAL,"|") S R=$P(VAL,"|",I) I $P(R,":",1)'>SUMM S RET=$P(R,":",3,5)
+ Q RET
+IsPRGS(N,DT)   ; По договору есть ограничение числа программ
+ S:$G(DT)="" DT=+$H
+ I $$GET^IINSC(N,"progs",DT)="",$$GET^IINSC(N,"progsa",DT)="" Q 0
+ Q 1
+MKIDX(N) ; Make index
+ N DT,X,FL
+ S DT=+$H-1 F  S DT=$O(^DGN(N,"internet",DT)) Q:DT=""  D  
+ .D REWWW^TXTU(^(DT),"LL")
+ .S X="" F  S X=$O(LL(X)) Q:X=""  S ^GLOIDX("www",X,"DGN:"_N)="" D GL^IEXCH("^GLOIDX","www",X,"DGN:"_N)
+ S DT=+$H-1 F  S DT=$O(^DGN(N,"email",DT)) Q:DT=""  D
+ .D REMAIL^TXTU(^(DT),"LL")
+ .S X="" F  S X=$O(LL(X)) Q:X=""  S ^GLOIDX("mail",X,"DGN:"_N)="" D GL^IEXCH("^GLOIDX","mail",X,"DGN:"_N)
+ F FL="phone","disp" S DT=+$H-1 F  S DT=$O(^DGN(N,FL,DT)) Q:DT=""  D
+ .D REPHN^TXTU(^(DT),"LL")
+ .S X="" F  S X=$O(LL(X)) Q:X=""  S ^GLOIDX("phone",X,"DGN:"_N)="" D GL^IEXCH("^GLOIDX","phone",X,"DGN:"_N)
+ Q
+RMIDX(N) ; Remove index
+ N DT,X,FL
+ S DT="" F  S DT=$O(^DGN(N,"internet",DT)) Q:DT=""  D  
+ .D REWWW^TXTU(^(DT),"LL")
+ .S X="" F  S X=$O(LL(X)) Q:X=""  K ^GLOIDX("www",X,"DGN:"_N) D KGL^IEXCH("^GLOIDX","www",X,"DGN:"_N)
+ S DT="" F  S DT=$O(^DGN(N,"email",DT)) Q:DT=""  D  
+ .D REMAIL^TXTU(^(DT),"LL")
+ .S X="" F  S X=$O(LL(X)) Q:X=""  K ^GLOIDX("mail",X,"DGN:"_N) D KGL^IEXCH("^GLOIDX","mail",X,"DGN:"_N)
+ F FL="phone","call" S DT="" F  S DT=$O(^DGN(N,FL,DT)) Q:DT=""  D
+ .D REPHN^TXTU(^(DT),"LL")
+ .S X="" F  S X=$O(LL(X)) Q:X=""  K ^GLOIDX("phone",X,"DGN:"_N) D KGL^IEXCH("^GLOIDX","phone",X,"DGN:"_N)
+ Q

@@ -1,0 +1,514 @@
+IKDL21V
+SETUP
+	S ^cfg("lab","21v",1,"server")="moscow.citisoft.ru" ; "citilab.ru"
+	S ^cfg("lab","21v",1,"port")=8095 ;443
+	S ^cfg("lab","21v",1,"service")="/websync.asmx/" ; ; "/sync/labsync.asmx/
+	S ^cfg("lab","21v",1,"ssl")=0 ; 1
+	S ^cfg("lab","21v",1,"user")="13769652" ; 59583103
+	S ^cfg("lab","21v",1,"passwd")="CBAAF676BFEAE78ABD1E27655804D18C"
+	;S ^cfg("lab","21v",1,"passwd")="CBAAF676BFEAE78ABD1E27655804D18C" ; F9F3588C11C90B4FF27BDDF139722CE8
+	S ^cfg("lab","21v",1,"pre")="21v" ; prefix
+	s ^cfg("lab","21v",1,"id")=1
+	S ^cfg("lab","21v",1,"addpac")=0 ; 1
+	S ^cfg("lab","21v",1,"debug")=0
+	; =$$MD5^IMD5("password")
+	Q
+DIRS(LAB)
+	N X,r,stream,httprequest
+	S:'$G(LAB) LAB=$O(^cfg("lab","21v",""))
+	Set httprequest=##class(%Net.HttpRequest).%New()
+	Set httprequest.Server=^cfg("lab","21v",LAB,"server")
+	Set httprequest.Port=^cfg("lab","21v",LAB,"port")
+	s X=+$G(^cfg("lab","21v",LAB,"ssl"))
+	Set:X httprequest.Https=1
+	Set:X httprequest.SSLConfiguration="default"
+	Set stream=##class(%GlobalBinaryStream).%New()
+	Set line="<?xml version=""1.0"" encoding=""windows-1251"" ?>"_$C(13,10)
+	Set line=line_"<content>"_$C(13,10)
+	Set line=line_"<e n=""labid"" v=""119"" t=""int""/>"_$C(13,10)
+	Set line=line_$$usrpas()_$C(13,10)
+	Set line=line_"</content>"
+	Set sc=stream.Write(line)
+	Set httprequest.EntityBody=stream
+	Do httprequest.Post(^cfg("lab","21v",LAB,"service")_"RC_DirectoryVersions")
+	s r=httprequest.HttpResponse.StatusCode
+	i r'=200 W !,"Err="_r Do httprequest.%Close() Q 
+	
+	While 'httprequest.HttpResponse.Data.AtEnd {
+		u 0 W !,"read"
+		w !,httprequest.HttpResponse.Data.ReadLine(32000)
+	}
+	
+	Do httprequest.%Close()
+	Q
+DIR(LAB,NAME,FN) ; Обновить справочник
+	N X,PreA,A,E,L,DEV,httprequest,stream
+	S:'$G(LAB) LAB=$O(^cfg("lab","21v",""))
+	Set httprequest=##class(%Net.HttpRequest).%New()
+	Set httprequest.Server=^cfg("lab","21v",LAB,"server")
+	Set httprequest.Port=^cfg("lab","21v",LAB,"port")
+	s X=+$G(^cfg("lab","21v",LAB,"ssl"))
+	Set:X httprequest.Https=1
+	Set:X httprequest.SSLConfiguration="default"
+	Set stream=##class(%GlobalBinaryStream).%New()
+	Set line="<?xml version=""1.0"" encoding=""windows-1251"" ?>"_$C(13,10)
+	Set line=line_"<content>"_$C(13,10)
+	Set line=line_"<e n=""labid"" v=""119"" t=""int""/>"_$C(13,10)
+	Set line=line_$$usrpas()_$C(13,10)
+	Set line=line_"<e n=""directory"" v="""_NAME_""" t=""string""/>"
+	Set line=line_"</content>"
+	Set sc=stream.Write(line)
+	Set httprequest.EntityBody=stream
+	Do httprequest.Post(^cfg("lab","21v",LAB,"service")_"RC_GetDirectory")
+	
+	u 0
+	s PreA="",Idx=1
+	K ^BUF($J,"21v","spr",NAME)
+	I FN'="" s DEV=$$OW^FIL(FN)
+	While 'httprequest.HttpResponse.Data.AtEnd {
+		s A=PreA_httprequest.HttpResponse.Data.ReadLine(16384)
+		I A["?>" S A=$P(A,"?>",2) ; <?xml version="1.0" encoding="utf-8"?>
+		I A["<string" S A=$P(A,"http://citilab.ru"">",2)
+		I A["</string>" S A=$P(A,"</string>",1)
+		S L=$L(A),E=L-(L#4)
+		S:E PreA=$E(A,E+1,L)
+		S A=$E(A,1,E)
+		S A=$system.Encryption.Base64Decode(A)
+		S:FN'="" ^BUF($J,"21v","spr",NAME,Idx)=A // bzip2
+		I FN'="" U DEV W A
+		s Idx=Idx+1
+		;w !,A
+	}
+	I FN'="" C DEV
+	
+	Do httprequest.%Close()
+	Q
+LUNIT(LAB,FN) ; Загрузить список ед. измерений из файла
+	N pre,LVL,TG,N,V,IO,R,Idx,I,LL,NN,ID
+	S:$G(LAB)="" LAB=$O(^cfg("lab","21v",""))
+	s pre=$G(^cfg("lab","21v",LAB,"pre"))
+	S IO=$$OR^FIL(FN) Q:IO=""
+	k ^BUF($J,"21v","spr","unit")
+	s Idx=0
+	D OEV^XMLR("","UNITd^IKDL21V","UNITe^IKDL21V")
+	U IO F  U IO R R#1 Q:$$ST^FIL()=0  I R'="" S:R=">" R=R_$C(13,10) D REV^XMLR(R)
+	D CEV^XMLR
+	C IO
+	k ^LABT("ME")
+	m ^LABT("ME")=^BUF($J,"21v","spr","unit")
+	Q
+UNITd
+	S LVL=$O(%XM(4,""),-1)
+	s TG=%XM(2)
+	; u 0 W !,LVL_"="_TG
+	Q:LVL'=5 
+	Q:TG'="f"
+	S N=$G(%XM(2,"p","n")),V=$G(%XM(2,"p","v"))
+	I N="removed",V="true" Q 
+	S:N="name" NN=V
+	S:N="id" ID=V
+	Q
+UNITe
+	S LVL=$O(%XM(4,""),-1)
+	q:LVL'=5 
+	s TG=%XM(2)
+	;u 0 w !,ID_"="_NN
+	s ^BUF($J,"21v","spr","unit",ID)=NN
+	Q
+LTEST(FN) ; Загрузить список тестов из файла
+	N pre,LVL,TG,N,V,IO,R,Idx,I,LAB
+	S LAB=$O(^cfg("lab","21v",""))
+	s pre=$G(^cfg("lab","21v",LAB,"pre"))
+	S IO=$$OR^FIL(FN) Q:IO=""
+	k ^BUF($J,"21v","spr","test")
+	s Idx=0
+	D OEV^XMLR("LTSTs^IKDL21V","","")
+	U IO F  U IO R R#1024 Q:$$ST^FIL()=0  I R'="" D REV^XMLR(R) ; S:R=">" R=R_$C(13,10) 
+	;.F I=1:1:$L(R) Q:R=""  D REV^XMLR($E(R,I))
+	D CEV^XMLR
+	C IO
+	d INTEST
+	Q
+LTSTs
+	S LVL=$O(%XM(4,""),-1)
+	s TG=%XM(2)
+	i LVL=5,TG="o" s Idx=Idx+1 q 
+	Q:LVL'=6 
+	I TG'="f",TG'="r" Q 
+	S N=$G(%XM(2,"p","n")),V=$G(%XM(2,"p",$S(TG="r":"i",1:"v")))
+	I N="removed",V="true" Q 
+	S:N="name" ^BUF($J,"21v","spr","test",Idx,"n")=V
+	S:N="mnemonics" ^BUF($J,"21v","spr","test",Idx,"l")=V
+	S:N="code" ^BUF($J,"21v","spr","test",Idx,"c")=V
+	S:N="id" ^BUF($J,"21v","spr","test",Idx,"i")=V
+	S:N="unit" ^BUF($J,"21v","spr","test",Idx,"m")=V
+	; "engValue"
+	; u 0 W !,N_"="_V
+	Q
+INTEST
+	N NM,NL,MM,LAB,CC,ID,PRE
+	S LAB=$O(^cfg("lab","21v",""))
+	s PRE=+$G(^cfg("lab","21v",LAB,"pre"))
+	s Idx="" F  S Idx=$O(^BUF($J,"21v","spr","test",Idx)) Q:Idx=""  D
+	.S ID=pre_$G(^(Idx,"i"))
+	.S NM=$G(^("n")),NL=$G(^("l")),CC=$G(^("c")),MM=$G(^("m"))
+	.S:MM'="" MM=$G(^BUF($J,"21v","spr","unit",MM))
+	.S ^LABT("T",ID)=NM
+	.S ^LABT("T",ID,"n")=NM_"|"_NL
+	.S ^LABT("T",ID,"m")=MM
+	.S ^LABT("T",ID,"cn",PRE)=CC
+	Q
+RESULTS(STAMP,DS,DE)
+	N D,LAB
+	S LAB="" F  S LAB=$O(^cfg("lab","21v",LAB)) Q:LAB=""  D
+	.F D=DS:1:DE D RESULT(LAB,0,D,D)
+	.Q:DS=DE
+	.H 5
+	.D RESULT(LAB,STAMP,"","") ; older, by stamp
+	Q
+RESULT(LAB,STAMP,DS,DE)
+	n X,line,A,PreA,F,L,DEV,httprequest,stream
+	S:'$G(LAB) LAB=$O(^cfg("lab","21v",""))
+	S:'STAMP STAMP=+$G(^cfg("lab","21v",LAB,"stamp"))
+	S DS=$G(DS),DE=$G(DE)
+	;S DS=$$DI^DTUTL($G(DS)),DE=$$DI^DTUTL($G(DE))
+	Set httprequest=##class(%Net.HttpRequest).%New()
+	Set httprequest.Server=^cfg("lab","21v",LAB,"server")
+	Set httprequest.Port=^cfg("lab","21v",LAB,"port")
+	s X=+$G(^cfg("lab","21v",LAB,"ssl"))
+	Set:X httprequest.Https=1
+	Set:X httprequest.SSLConfiguration="default"
+	Set stream=##class(%GlobalBinaryStream).%New()
+	Set line="<?xml version=""1.0"" encoding=""windows-1251"" ?>"_$C(13,10)
+	Set line=line_"<content>"_$C(13,10)
+	Set line=line_"<e n=""labid"" v=""119"" t=""int""/>"_$C(13,10)
+	Set line=line_$$usrpas()_$C(13,10)
+	
+	//Set line=line_"<e n=""hospital"" v=""59583103"" t=""int""/>"_$C(13,10)
+	//Set line=line_"<e n=""password"" v=""f9f3588c11c90b4ff27bddf139722ce8"" t=""string"" />"_$C(13,10)
+	
+	Set:DS'="" line=line_"<e n=""fromDate"" v="""_$TR($$DT^DTUTL(DS),".","/")_" 00:01"" t=""datetime"" />"_$C(13,10)
+	Set:DE'="" line=line_"<e n=""tillDate"" v="""_$TR($$DT^DTUTL(DE),".","/")_" 23:59"" t=""datetime"" />"_$C(13,10)
+	Set:(DS="")!(DE="") line=line_"<e n=""timestamp"" v="""_STAMP_""" t=""string"" />"_$C(13,10)
+	
+	Set line=line_"</content>"
+	; u 0 w !,"Processing..."
+	Set sc=stream.Write(line)
+	Set httprequest.ReadRawMode=1
+	Set httprequest.EntityBody=stream
+	d httprequest.SetHeader("Content-type","text/xml")
+	Do httprequest.Post(^cfg("lab","21v",LAB,"service")_"RC_GetInquiries")
+	
+	k ^BUF($J)
+	If httprequest.HttpResponse.StatusCode'=200,$G(^cfg("lab","21v",LAB,"debug")) S ^ISLOG("IKDL21V",$H)="Not connected"
+	If httprequest.HttpResponse.StatusCode=200 {
+		D RESULTp
+		D RESULTf
+		k ^BUF($J)
+		s ^cfg("lab","21v",LAB,"stamp")=STAMP
+	}
+	
+	Do httprequest.%Close()
+	Q
+RESULTp
+	N LVL,Idx,A,F,E,TG,sid,R,PreA,I,R
+	u 0
+	D OEV^XMLR("TGs^IKDL21V","","")
+	s F=0,Idx=0,PreA=""
+	While 'httprequest.HttpResponse.Data.AtEnd {
+		s A=PreA_httprequest.HttpResponse.Data.ReadLine(16384)
+		I A["?>" S A=$P(A,"?>",2) ; <?xml version="1.0" encoding="utf-8"?>
+		I A["<string" S A=$P(A,"http://citilab.ru"">",2)
+		I A["</string>" S A=$P(A,"</string>",1)
+		S L=$L(A),E=L-(L#4)
+		S:E PreA=$E(A,E+1,L)
+		S A=$E(A,1,E)
+		S A=$system.Encryption.Base64Decode(A)
+		D REV^XMLR(A)
+		; U 0 w !,A
+		s F=F+$L(A)
+	}
+	D CEV^XMLR
+	;u 0 W !,"Len="_F
+	Q
+RESsp ; start patient result
+	Q
+TGs
+	N N,V
+	S LVL=$O(%XM(4,""),-1),TG=%XM(2)
+	; U 0 W !,LVL_"-"_TG
+	; U 0 W LVL_"."
+	I LVL=2,TG="o" S Idx=Idx+1 Q 
+	S N=$G(%XM(2,"p","n")),V=$G(%XM(2,"p","v"))
+	Q:V=""  
+	; u 0 W !,TG," "_$O(%XM(2,"p",""))_" "_N
+	I N="firstName" s ^BUF($J,Idx,"fioi")=V Q
+	I N="lastName" s ^BUF($J,Idx,"fiof")=V Q
+	I N="middleName" s ^BUF($J,Idx,"fioo")=V Q
+	I N="code" s:V'="" ^BUF($J,Idx,"nib")=V Q
+	I N="value" s:V'="" ^BUF($J,Idx,"nib")=V Q
+	I N="extnumber" s:V'="" ^BUF($J,Idx,"zid")=V Q
+	I N="id" s ^BUF($J,Idx,"id")=V Q
+	I N="birthDay" s $P(^BUF($J,Idx,"born"),".",1)=V Q
+	I N="birthMonth" s $P(^BUF($J,Idx,"born"),".",2)=V Q
+	I N="birthYear" s $P(^BUF($J,Idx,"born"),".",3)=V Q
+	I N="sex" s ^BUF($J,Idx,"sex")=V Q
+	I N="notes" s ^BUF($J,Idx,"notes")=V Q
+	I N="samplingDate" s ^BUF($J,Idx,"dt")=$$DTI^DTUTL(V) Q
+	I N="timestamp" s ^BUF($J,Idx,"timestamp")=V S:STAMP<V STAMP=V Q  
+	
+	I N="sample_id" s sid=V Q // in <s n="samples">
+	
+	;I N="sample_info" S V=$system.Encryption.Base64Decode(V) s FN="C:\msm\"_sid_".bz2",DEV=$$OW^FIL(FN)	u DEV W V C DEV U 0
+	I N="sample_info" S ^BUF($J,Idx,"s",sid)=V Q  ;S V=$$DecFB64^IBZIP2(V),^BUF($J,Idx,"s",sid)=V Q
+	Q
+RESULTf ; Result's fill
+	N A,Idx,NIB,FIOf,FIOi,FIOo,BD,DT,ID,Sex,aa,sid,lab,eZID,ZID,Tpref
+	N RR,RS,LVL,TG,Fs,DTI,Tid,Lid,IO,TFN,upd,dbg
+	S aa=$G(^cfg("lab","21v",LAB,"addpac"))
+	s lab=$G(^cfg("lab","21v",LAB,"id"))
+	s Tpref=$G(^cfg("lab","21v",LAB,"pre"))
+	s dbg=$G(^cfg("lab","21v",LAB,"debug"))
+	s TFN=$ZUTIL(12,"")_"v21.bin"
+	S Idx="" F  s Idx=$O(^BUF($J,Idx)) Q:Idx=""  D
+	.S NIB=$G(^BUF($J,Idx,"nib")),DT=$G(^("dt")),Lid=$G(^("id")),eZID=$G(^("zid"))
+	.S:dbg ^LABLOG(+$H,Idx)="0|"_NIB_"||"_eZID_"|"_$G(^("fiof"))_"|"_$G(^("fioi"))_"|"_$G(^("fioo"))_"|"_LAB
+	.I NIB="",eZID="",aa=2 S NIB=$$GETNIB^YIFINDN(FIOf,FIOi,FIOo,BD,Sex,0)
+	.I NIB="",eZID="",aa D
+	..S FIOf=$G(^("fiof")),FIOi=$G(^("fioi")),FIOo=$G(^("fioo"))
+	..S BD=$G(^("born")),Sex=$G(^("sex"))
+	..S NIB=$$ADD^IPAC(FIOf,FIOi,FIOo,$$DT2^DTUTL(BD),Sex)
+	.I eZID'="" S NIB=$G(^MLABI("c",eZID))
+	.Q:NIB=""
+	.S:dbg $P(^LABLOG(+$H,Idx),"|",3)=NIB
+	.Q:'$$EXIST^IPAC(NIB)  
+	.S:DT="" DT=$H
+	.S ZID=eZID
+	.I ZID="" S ZID=$P($$GETELAB^IMLAB(lab,Lid),"|",2)
+	.I ZID="" S ZID=$$MK^IMLAB(NIB,DT,,lab,Lid),^MLAB(NIB,ZID,"s9")="0|"_DT
+	.S upd=0
+	.S sid="" F  s sid=$O(^BUF($J,Idx,"s",sid)) q:sid=""  D
+	..S A=^(sid),Fs=0
+	..D DecFB64F^IBZIP2(A,TFN)
+	..S IO=$$OR^FIL(TFN) Q:IO=""
+	..D OEV^XMLR("TGfs^IKDL21V","","TGfe^IKDL21V")
+	..U IO F  U IO R R#4096 Q:$$ST^FIL()=0  I R'="" D REV^XMLR(R)
+	..D CEV^XMLR
+	..C IO
+	..D DEL^FIL(TFN)
+	.s:upd $P(^MLAB(NIB,ZID,"s9"),"|",1)=0 ; reset subscribe
+	.S:dbg $P(^LABLOG(+$H,Idx),"|",1)=1
+	.I upd,dbg s ^ISLOG("IKDL21V",$H,ZID)=NIB_"|"_LAB
+	.D SBREZ^NMLABR(ZID,1)
+	Q
+TGfs
+	N N,V
+	S LVL=$O(%XM(4,""),-1),TG=%XM(2)
+	S N=$G(%XM(2,"p","n"))
+	I LVL=5,TG="o",N="works" s Fs=1,(DTI,RR,Tid)=""
+	Q:'Fs 
+	S V=$G(%XM(2,"p","v"))
+	I N="value" S $P(RR,"|",1)=V Q
+	I N="storedNorms" S $P(RR,"|",6)=V Q
+	I N="endDate",V'="" S DTI=$$DTI^DTUTL(V)
+	I N="test" S Tid=Tpref_$G(%XM(2,"p","i")) Q
+	; W !,N_"="_V
+	Q
+TGfe
+	Q:'Fs  Q:DTI=""  Q:Tid="" 
+	S LVL=$O(%XM(4,""),-1),TG=%XM(2)
+	Q:LVL'=5 
+	S RR=$$reNORM(RR)
+	;W !,$$NAMEPM^IMLABS(Tid)_"="_RR
+	S RS=+$P($G(^MLAB(NIB,ZID,"d",Tid,"s")),"|",1)
+	S RS=RS_"|"_DTI_"||||||"_lab
+	S:$G(^MLAB(NIB,ZID,"d",Tid))'=RR ^(Tid)=RR,^(Tid,"s")=RS,upd=1
+	;u 0 W !,"end-"_TG
+	s Fs=0
+	Q
+reNORM(RR) ; Переформатирование норм
+	N RT,X1,X2
+	S RT=$P(RR,"|",6) Q:RT'[" - " RR
+	S X1=$TR($P(RT," - ",1),",","."),X2=$TR($P(RT," - ",2),",",".")
+	Q:'X2 RR ; не числа
+	S RR=$P(RR,"|",1,5),$P(RR,"|",2)=X1,$P(RR,"|",3)=X2
+	Q RR
+CONN
+	Q
+usrpas() ; user and password string
+	N A
+	S A="<e n=""hospital"" v="""_^cfg("lab","21v",LAB,"user")_""" t=""int""/>"_$C(13,10)
+	Q A_"<e n=""password"" v="""_^cfg("lab","21v",LAB,"passwd")_""" t=""string"" />"
+dec64(X)
+	Q $system.Encryption.Base64Decode(X)
+wbzip(X)
+	s FN="C:\msm\kdl21v.bz2"
+	s DEV=$$OW^FIL(FN)
+	u DEV W $system.Encryption.Base64Decode(X)
+	C DEV
+	U 0
+	Q
+TEST
+	n httprequest
+	Set httprequest=##class(%Net.HttpRequest).%New()
+	Set httprequest.Server="moscow.citisoft.ru"
+	Set httprequest.Port=8095
+	;Set httprequest.Port=443
+	;Set httprequest.Https=1
+	;Set httprequest.SSLConfiguration="default"
+	Do httprequest.Get("/websync.asmx")
+	
+	u 0
+	While 'httprequest.HttpResponse.Data.AtEnd {
+		w !,httprequest.HttpResponse.Data.ReadLine(32000)
+	}
+	Do httprequest.%Close()
+	Q
+LBIO(LAB,FN)
+	; Биоматериалы
+	N IO,R,TARG,ID,NM,VER,T,REM
+	S VER=0
+	S IO=$$OR^FIL(FN) Q:IO=""
+	D OEV^XMLR("","LBIOd^IKDL21V","LBIOe^IKDL21V")
+	U IO F  U IO R R#1 Q:$$ST^FIL()=0  I R'="" S:R=">" R=R_$C(13,10) D REV^XMLR(R)
+	D CEV^XMLR
+	C IO
+	Q
+LBIOd
+	S LVL=$O(%XM(4,""),-1)
+	s TG=%XM(2)
+	;u 0 W " ",LVL_"="_TG
+	I LVL=3,TG="f",$G(%XM(2,"p","n"))="version" S VER=$G(%XM(2,"p","v")) Q
+	I LVL=3,TG="o" K TARG S (ID,NM)="" Q
+	I LVL=6,TG="r",$G(%XM(4,LVL))="s" S V=$G(%XM(2,"p","i")) S:V'="" TARG(V)=""
+	Q:LVL'=5 
+	Q:TG'="f"
+	S N=$G(%XM(2,"p","n")),V=$G(%XM(2,"p","v"))
+	S:N="name" NM=V
+	S:N="id" ID=V
+	S:N="removed" REM=V
+	Q
+LBIOe
+	S LVL=$O(%XM(4,""),-1)
+	q:LVL'=5
+	s TG=%XM(2)
+	Q:TG'="o" 
+	Q:'$D(TARG)  ; no targets
+	Q:REM="true" 
+	S NM=$$GT^TXTU(NM)
+	;u 0 w !,ID_"="_NM
+	S ^LABC(LAB,"M",ID)="|"_NM
+	S T="" F  S T=$O(TARG(T)) Q:T=""  S ^LABC(LAB,"CN",T,"b",ID)=""
+	K TARG
+	S (ID,NM)=""
+	Q
+LTARGET(LAB,FN)
+	; Прайс в привязке к биоматериалам
+	N IO,R,ID,NM,VER,COD,REM
+	S VER=0
+	S IO=$$OR^FIL(FN) Q:IO=""
+	D OEV^XMLR("","LTARGETd^IKDL21V","LTARGETe^IKDL21V")
+	U IO F  U IO R R#1 Q:$$ST^FIL()=0  I R'="" S:R=">" R=R_$C(13,10) D REV^XMLR(R)
+	D CEV^XMLR
+	C IO
+	Q
+LTARGETd
+	S LVL=$O(%XM(4,""),-1)
+	s TG=%XM(2)
+	;u 0 W " ",LVL_"="_TG
+	I LVL=3,TG="f",$G(%XM(2,"p","n"))="version" S VER=$G(%XM(2,"p","v")) Q
+	I LVL=3,TG="o" S (ID,NM,COD)="" Q
+	Q:LVL'=5 
+	Q:TG'="f"
+	S N=$G(%XM(2,"p","n")),V=$G(%XM(2,"p","v"))
+	S:N="name" NM=V
+	S:N="id" ID=V
+	S:N="code" COD=$TR(V,".-","")
+	S:N="removed" REM=V
+	Q
+LTARGETe
+	S LVL=$O(%XM(4,""),-1)
+	q:LVL'=5
+	s TG=%XM(2)
+	Q:TG'="o" 
+	Q:REM="true" 
+	S NM=$$GT^TXTU(NM)
+	;u 0 w !,ID_"="_NM
+	S ^LABC(LAB,"CN",ID)="|"_COD
+	S ^LABCx(ID)=NM
+	S (ID,NM,COD)=""
+	Q
+DOSEND
+	N DT,NI,ID,S3
+	S DT=$H-3 F  S DT=$O(^MLABI("d",DT)) Q:DT=""  D
+	.S ID="" F  S ID=$O(^MLABI("d",DT,ID)) Q:ID=""  D
+	..S NI=^(ID)
+	..S S3=$P($G(^MLAB(NI,ID,"s3")),"|",1) Q:'S3  
+	..Q:$P($G(^("s4")),"|",1)=2
+	..Q:$P($G(^("s9")),"|",1)
+	..Q:'$$MKSEND(NI,ID)
+	..D SETSTAT^IMLAB(NI,ID,4,2) ; у контрагента
+	Q
+MKSEND(NI,ID)
+	N A,I,R,LAB,CONT,X,r,stream,httprequest
+	S LAB=$P($G(^MLAB(NI,ID,"lab")),"|",1) Q:LAB="" 0
+	S A="<content><o><o>"
+	S A=A_"<f n=""internalNr"" v="""_^MLAB(NI,ID,"bar")_"""/>"
+	S A=A_"<f n=""priority"" v="""_$S($G(^MLAB(NI,ID,"ci")):20,1:10)_"""/>" ; “20” = СРОЧНАЯ
+	S A=A_"<f n=""delivered"" v=""false""/>" ; ВСЕГДА FALSE
+	;<r n="requestForm" i="21538265" /> // ВАЖНО ID ФОРМЫ в ЛАБОРАТОРИИ!!!!
+	S A=A_"<f n=""firstName"" v="""_$$LU^TXTU($$GET^IPAC(NI,"fioi"))_"""/>"
+	S A=A_"<f n=""middleName"" v="""_$$LU^TXTU($$GET^IPAC(NI,"fioo"))_"""/>"
+	S A=A_"<f n=""lastName"" v="""_$$LU^TXTU($$GET^IPAC(NI,"fiof"))_"""/>"
+	S R=$$GETE^IPAC(NI,"datar")
+	S A=A_"<f n=""birthDay"" v="""_$P(R,".",1)_"""/>"
+	S A=A_"<f n=""birthMonth"" v="""_$P(R,".",2)_"""/>"
+	S A=A_"<f n=""birthYear"" v="""_$P(R,".",3)_""" />"
+	S A=A_"<f n=""sex"" v="""_$$GET^IPAC(NI,"pol")_""" />"
+	S A=A_"<f n=""samplingDate"" v="""_$$DTM^DTUTL($P(^MLAB(NI,ID,"s3"),"|",2))_""" />"
+	S A=A_"<f n=""sampleDeliveryDate"" v="""_$$DTM^DTUTL($H)_""" />"
+	S A=A_"<f n=""cyclePeriod"" v="""_$G(^MLAB(NI,ID,"fl","dcl"))_"""/>" ; фаза цикла
+	S A=A_"<f n=""pregnancyDuration"" v="""_$G(^MLAB(NI,ID,"fl","ndbr"))_"""/>" ; неделя беременности
+	S A=A_"<r n=""custHospital"" i="""_$G(^LABC(LAB,"eid"))_"""/>" ;// ID ЗАКАЗЧИКА
+	S A=A_"<s n=""targets"">"
+	S R=^MLAB(NI,ID,"ul")
+	F I=1:1:$L(R,"|") S A=A_"<r i="""_^LABTI("LAB",LAB,"CN",$P($P(R,"|",I),":",1))_"""/>" ; свои услуги
+	S A=A_"</s>"
+	S A=A_"<s n=""biomaterials"">"
+	S I="" F  S I=$O(^MLAB(NI,ID,"mi",I)) Q:I=""  S A=A_"<r i="""_$$fndBIO(LAB,I)_"""/>"
+	S A=A_"</s>"
+	S A=A_"</o>"
+	S A=A_"<s/></o></content>"
+	S CONT=$$EncB64^IBZIP2(A)
+	
+	S A="<?xml version=""1.0"" encoding=""windows-1251"" ?>"
+	S A=A_CR_"<content>"
+	S A=A_"<e n=""labid"" v=""119"" t=""int"" />" ; (ID лаборатории, 21 век – 119)
+	S A=A_$$usrpas()
+	S A=A_CR_"<f n=""inquiry"" id="""_^MLAB(NI,ID,"bar")_""" v="""_CONT_""" />"
+	S A=A_CR_"</content>"
+	
+	Set httprequest=##class(%Net.HttpRequest).%New()
+	Set httprequest.Server=^cfg("lab","21v",LAB,"server")
+	Set httprequest.Port=^cfg("lab","21v",LAB,"port")
+	s X=+$G(^cfg("lab","21v",LAB,"ssl"))
+	Set:X httprequest.Https=1
+	Set:X httprequest.SSLConfiguration="default"
+	Set stream=##class(%GlobalBinaryStream).%New()
+	Set sc=stream.Write(A)
+	Set httprequest.EntityBody=stream
+	Do httprequest.Post(^cfg("lab","21v",LAB,"service")_"RC_InsertInquiries")
+	s r=httprequest.HttpResponse.StatusCode
+	
+	i r'=200 W !,"Err="_r Do httprequest.%Close() Q 
+	While 'httprequest.HttpResponse.Data.AtEnd {
+		u 0 W !,"read"
+		w !,httprequest.HttpResponse.Data.ReadLine(32000)
+	}
+	
+	Do httprequest.%Close()
+	Q 1
+fndBIO(LAB,M) ; Найти биоматериал
+	N X
+	S X="" F  S X=$O(^LABC(LAB,"M",X)) Q:X=""  Q:$P(^(X),"|",1)=M 
+	Q X

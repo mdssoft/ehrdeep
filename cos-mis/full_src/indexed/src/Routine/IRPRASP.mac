@@ -1,0 +1,88 @@
+IRPRASP ; Отчеты по расписанию [ 10/28/2015  3:06 AM ]
+ ; LPU - Филиал
+ ; OT - Отделение
+ ; VR - Врач
+ ; SP - Специальность
+ ; CSTC - Компания
+ ; PTP - Раздел  ЛПУ: п-ка/стом
+ ; NI - пациент
+MK(DS,DE,REZ,SEQ,VARS,SMR,FLT,FilRP) 
+ ; REZ - глобаль для результата
+ ; SEQ - порядок следования индексов
+ ; VARS - нужные значения, через ',', в индексе - пробел+имя
+ ;      time,use,come - в мин, ctime,cuse,ccome <c> - в штуках
+ ; SMR - подсчет итогов по индексам
+ ; FLT - выражение (функция) фильтра, var TEST=1 - не счит.
+ ; FilRP - альтернатива системной "filial-report"
+ Q:REZ="" 
+ N lvl,var,lvv,lvn,v
+ N I,R,X,L,T,V,LPU,OT,VR,SP,CSTC,NI,DT,TM,PT,TEST,PTP,FR,LP,STOTD,SCOTD
+ N iSTC
+ ; index cache
+ D PRETZR^IPAC
+ S iSTC=+$G(TZRBTN("stc"))
+ ; make vars
+ F I=1:1 S X=$P(VARS,",",I) Q:X=""  S var(X)=" "_X
+ ; make levels
+ S R=REZ
+ S:R["(" R=R_"," S:R'["(" R=R_"("
+ F I=1:1 S X=$P(SEQ,",",I) Q:X=""  D
+ .S R=R_$S(I=1:"",1:",")_X
+ .S lvl(I)=R_")",lvn(I)=X,lvv(X)=""
+ S:$D(lvv("CSTC")) lvv("NI")=""
+ S lvl=I-1
+ I $D(lvv("PTP")) S:$G(^cfg("stom-otd")) STOTD(^("stom-otd"))="" M STOTD=^cfg("stom-otd") M SCOTD=^cfg("stac-otd")
+ ; main loop
+ S:DS="" DS=+$H S:DE="" DE=+$H
+ S FR=$S($D(FilRP):FilRP,1:+$$FR^I()),LP=+$$^I("ilpu")
+ S LPU="",FLT=$G(FLT)
+ F  S LPU=$O(^DSH(LPU)) Q:LPU=""  I FR!('LP)!(LPU=LP) D
+ .S OT="" F  S OT=$O(^DSH(LPU,OT)) Q:OT=""  S VR="" F  S VR=$O(^DSH(LPU,OT,VR)) Q:VR=""  I $E(VR,1,2)'="X." S SP="" F  S SP=$O(^DSH(LPU,OT,VR,SP)) Q:SP=""  D 
+ ..S DT=DS-1 F  S DT=$O(^DSH(LPU,OT,VR,SP,DT)) Q:DT=""!(DT>DE)  S TM="",PT="" F  S PT=TM,TM=$O(^DSH(LPU,OT,VR,SP,DT,TM),-1) Q:TM=""  D
+ ...S L=$G(^(TM)) Q:L="*"  Q:PT=""
+ ...S T=$S(L="":"",1:$G(^(TM,"c")))
+ ...S:$D(lvv("NI")) NI=$P(L,"|",1)
+ ...S:$D(lvv("PTP")) PTP=$S($D(STOTD(OT)):2,$D(SCOTD(OT)):3,1:1)
+ ...I $D(lvv("CSTC")) S CSTC=0 I NI'="",$D(^BTN(NI)) S CSTC=$$GETTZ^IPAC(NI,iSTC,DT)
+ ...I FLT'="" S TEST=0 D @FLT Q:TEST 
+ ...D PROC
+ ...I SMR S TEST=LPU,LPU=-1 D PROC S LPU=TEST ; todo
+ Q
+PROC 
+ F I=1:1:lvl D:@lvn(I)'=""
+ .S R=lvl(I),V=$D(@R@(0)) ; для ускорения косвенности
+ .S V="" F  S V=$O(var(V)) Q:V=""  D
+ ..S v=" "_V
+ ..I V="time" S ^(v)=$G(^(v))+((PT-TM)/60)
+ ..I V="ctime" S ^(v)=$G(^(v))+1
+ ..Q:L=""
+ ..I V="use" S ^(v)=$G(^(v))+((PT-TM)/60)
+ ..I V="cuse" S ^(v)=$G(^(v))+1
+ ..Q:T=""
+ ..I V="come" S ^(v)=$G(^(v))+((PT-TM)/60)
+ ..I V="ccome" S ^(v)=$G(^(v))+1
+ Q
+CABS(VR,OT,DS,DE) ; Кабинеты, через | на сотрудника
+ N L,SP,D,X,LL
+ S L="" F  S L=$O(^DSH(L)) Q:L=""  D
+ .S SP="" F  S SP=$O(^DSH(L,OT,VR,SP)) Q:SP=""  D
+ ..S D=DS-1 F  S D=$O(^DSH(L,OT,VR,SP,D)) Q:D=""!(D>DE)  D
+ ...S X=$P(^(D),"|",2) Q:X=""
+ ...S LL(X)=""
+ S (X,L)="" F  S L=$O(LL(L)) Q:L=""  S X=$S(X="":"",1:X_"|")_L
+ Q X
+IsPRP(LP,OT,VR,SP,DT,TM,FF) ; Первичный пациент
+ ; FF - по филиалу
+ S FF=$G(FF)
+ I 'FF,$O(^DSHP(NI,DT),-1)'="" Q 0
+ I 'FF,$O(^DSHP(NI,DT,TM),-1)="",$O(^DSHP(NI,DT,TM,VR),-1)="" Q 1
+ Q:'FF 0
+ N F,R,D,T,V
+ S F=0,D=DT+1
+ F  D  S D=$O(^DSHP(NI,D),-1) Q:D=""   Q:F
+ .S T="" F  S T=$O(^DSHP(NI,DT,T)) Q:T=""  D  Q:F
+ ..S V="" F  S V=$O(^DSHP(NI,DT,T,V)) Q:V=""  D  Q:F
+ ...S R=$P(^(V),"|",1)
+ ...I D=DT,(T-1)>TM  Q
+ ...I R=LP S F=1 Q 
+ Q 'F

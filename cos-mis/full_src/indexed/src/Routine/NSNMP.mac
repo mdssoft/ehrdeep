@@ -1,0 +1,205 @@
+NSNMP ; Скорая помощь [ 07/31/2014  11:07 PM ]
+INITD 
+ N R
+ D OWF^RWU(".xmlb")
+ D W^RWU($G(^PP(0,2))_"<dsnmp><disp>")
+ S R=$$LCL^IUSER("snmp","anydisp")
+ D:R W^RWU(CR),LDSPs^NSNMPSP
+ I 'R S R=$$KDR^IUSER(),^JOB(%JOB,"snmp","disp")=R D WC^RWU(R_"|"_$$FIOSH^IKADRY(R))
+ D W^RWU("</disp>")
+ D:$G(^cfg("snmp","brlmode"))=1 WC^RWU("<blist default=""№ бригады:1450;№ машины:1700;Состав:4250;Изменено:2100""/>")
+ D:$G(^cfg("snmp","kvlmode"))=1 WC^RWU("<table default=""№ К.В.:450;Вызов в:650;Статус:1200;Бригада:600;Пациент:2550;Адрес:4300""/>")
+ D:$G(^cfg("snmp","kvlmode"))=2 WC^RWU("<table default=""№ К.В.:450;Вызов в:650;Статус:1100;Бригада:550;Повод:1500;Пациент:1950;Договор:950;Адрес:2700""/>")
+ D:$$LCL^IUSER("snmp","newmode") W^RWU("<btn_newcall userdata=""1""/>")
+ D W^RWU("</dsnmp></nb_console>"),C^RWU
+ Q
+KVL(DS,DE,NI,FTXT,REZ,ADR,DGN,POLIS,DIA) ; Перечень всех карт за период
+ N ID,R,A,FIO,TXTF,TXTI,ST,TM,DT,X
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S FTXT=$$LU^TXTU($$WD^TXTU(FTXT))
+ S TXTF=$P(FTXT,"|",1),TXTI=$P(FTXT,"|",2)
+ S ADR=$$LU^TXTU($$WD^TXTU($G(ADR)))
+ S POLIS=$$PLCNV^YIFINDN($$LU^TXTU($$WD^TXTU($G(POLIS))))
+ S DGN=$G(DGN) 
+ D OWF^RWU(".txt")
+ D WC^RWU("|№ К.В.|Дата|Бригада|Статус|Пациент|Адрес|Повод к вызову")
+ S ID="" F  S ID=$O(^EMKV(ID)) Q:ID=""  D
+ .S R=$G(^EMKV(ID,"dts"))
+ .Q:(+R)<DS  Q:(+R)>DE 
+ .S ST=^("stat")
+ .S DT=$G(^("kvd")) S:DT="" DT=+R
+ .S FIO=$$FIO^ISNMP(ID)
+ .I TXTF'="",$$LU^TXTU($P(FIO," ",1))'[TXTF Q
+ .I TXTI'="",$$LU^TXTU($P(FIO," ",2))'[TXTI Q
+ .I NI'="",$G(^EMKV(ID,"nib"))'=NI Q 
+ .I DGN'="",$G(^EMKV(ID,"stc"))'=DGN Q
+ .I ADR'="",$$LU^TXTU($G(^EMKV(ID,"street")))'[ADR Q 
+ .I REZ'="",$G(^EMKV(ID,"rezv"))'=REZ Q 
+ .I POLIS'="",$$PLCNV^YIFINDN($$LU^TXTU($G(^EMKV(ID,"rezv"))))'=POLIS Q 
+ .S TM=$G(^EMKV(ID,"t_priv"))
+ .S:TM="" TM=$P(R,",",2)
+ .S A=CR_ID_"|"_$G(^EMKV(ID,"nkv"))_"|"
+ .S A=A_$$DT2^DTUTL(DT)_", "_$$TM^DTUTL(TM)_"|"
+ .S X=$G(^EMKV(ID,"brig"))
+ .S A=A_$S(X="":"",1:$$GETGRP^ISNMPSP(X,"num",R))_"|"
+ .S A=A_^EMM("emkvst",ST)_"|"
+ .S A=A_FIO_"|"_$$ADDRKV^ISNMP(ID,1)
+ .S A=A_"|"_$$OWF^TXTU($$NMPV^NSNMPSP($G(^EMKV(ID,"pvv"))),99)
+ .D WC^RWU(A)
+ D C^RWU
+ Q
+DISP(ID) ; Установить текущего диспетчера
+ S:$G(ID)'="" ^JOB(%JOB,"snmp","disp")=ID
+ Q
+NNKV(DISP) ; New V.Card
+ ; DISP - текущий диспетчер
+ N ID
+ S:$G(DISP)'="" ^JOB(%JOB,"snmp","disp")=DISP
+ S ID=$$NEW^ISNMP()
+ D SET^ISNMP(ID,"t_priv",$H,$P($H,",",2))
+ D STAT(0,ID)
+ Q
+STAT(MOD,NEWID) ; Title screen
+ ; MOD=0 - всего
+ ; MOD=1 - выполнено
+ ; MOD=2 - выполняется
+ ; MOD=3 - в очереди
+ ; NEWID - newid field
+ N STAT,H,ID,A,D,R,ST,DT,TM,DTS,mG,mK,F,LST
+ S H=(+$H)_","_($P($H,",",2)+1),ID="",MOD=+$G(MOD)
+ S mG=$G(^cfg("snmp","brlmode"))
+ S mK=+$G(^cfg("snmp","kvlmode"))
+ D OWF^RWU(".xmlb")
+ D W^RWU(^PP(0,2)_"<dsnmp>")
+ D W^RWU("<blist>")
+ F  S ID=$O(^EMGRP(ID)) Q:ID=""  D
+ .Q:$$GETGRP^ISNMPSP(ID,"use",$H)=0 
+ .S D=$$CNGFGRP^ISNMPSP(ID,"kadry",$H)
+ .S A=$$GETGRP^ISNMPSP(ID,"num",$H)_"|",STAT("B",1)=$G(STAT("B",1))+1
+ .S A=A_$$GAVT^NSNMPSP($$GETGRP^ISNMPSP(ID,"auto",$H))_"|"
+ .S R=$$GETGRP^ISNMPSP(ID,"stat",$H)
+ .S:R=1 STAT("B",3)=$G(STAT("B",3))+1
+ .S:R=2!(R=3)!(R=4) STAT("B",2)=$G(STAT("B",2))+1
+ .S R=$S(mG:$TR($$FIOGRP^ISNMPSP(ID)," ",""),R="":R,1:$G(^EMM("bstat",R)))
+ .S A=A_R_"|"_$$DTM2^DTUTL(D)
+ .D WC^RWU(CR_ID_"|"_A)
+ D W^RWU("</blist>")
+ D W^RWU("<table>")
+ S ID="" F  S ID=$O(^EMKV(ID)) Q:ID=""  D
+ .S ST=$G(^(ID,"stat")),DTS=$G(^("dts"))
+ .S F=($$TMBTW^DTUTL($H,DTS)<86401)
+ .I ST>1,'F Q  ; завершенные вызовы - только сутки
+ .S DT=$G(^("kvd")) S:DT="" DT=+DTS
+ .I F S STAT("V",1)=$G(STAT("V",1))+1 S:ST=2 STAT("V",2)=$G(STAT("V",2))+1
+ .S R=+$G(^EMKV(ID,"sbsc")) Q:R=1 
+ .S:ST=1 STAT("V",3)=$G(STAT("V",3))+1
+ .S:ST=0 STAT("V",4)=$G(STAT("V",4))+1
+ .I MOD=1,ST'=2 Q
+ .I MOD=2,ST'=1 Q
+ .I MOD=3,ST'=0 Q
+ .S TM=$G(^EMKV(ID,"t_priv"))
+ .S:TM="" TM=$P(DTS,",",2)
+ .S A=CR_ID_$S('ST:"@10",1:"")
+ .S A=A_"|"_$G(^EMKV(ID,"nkv"))_"|"_$$TM^DTUTL(TM)
+ .S A=A_", "_$TR($J($$DAY^DTUTL(DT),2,0)," ",0)_"|"
+ .S A=A_$S(ST="":ST,1:$G(^EMM("emkvst",ST)))_"|"
+ .S R=$G(^EMKV(ID,"brig"))
+ .S A=A_$S(R="":"",1:$$GETGRP^ISNMPSP(R,"num",DTS))_"|"
+ .S:mK'=1 A=A_$$NMPV^NSNMPSP($G(^EMKV(ID,"pvv")),1)_"|"
+ .S A=A_$$FIO^ISNMP(ID)
+ .S:mK=2 A=A_"|"_$$NAME^IINSC($G(^EMKV(ID,"stc")))
+ .S A=A_"|"_$$ADDRKV^ISNMP(ID)
+ .S LST((+DTS)_","_$J(TM,5)_","_ID)=A
+ ; с сортировкой по дате/времени
+ S ID="" F  S ID=$O(LST(ID),-1) Q:ID=""  D WC^RWU(LST(ID))
+ 
+ D W^RWU("</table>")
+ D WTAGD^RWU("label_vzs",+$G(STAT("V",1)))
+ D WTAGD^RWU("label_vpzs",+$G(STAT("V",2)))
+ D WTAGD^RWU("label_inwork",+$G(STAT("V",3)))
+ D WTAGD^RWU("label_inchain",+$G(STAT("V",4)))
+ D WTAGD^RWU("label_bvv",+$G(STAT("B",1)))
+ D WTAGD^RWU("label_brp",+$G(STAT("B",2)))
+ D WTAGD^RWU("label_brf",+$G(STAT("B",3)))
+ D:$G(NEWID)'="" WTAGD^RWU("newid",NEWID)
+ D W^RWU("</dsnmp></nb_console>"),C^RWU
+ Q
+KVBR(ID,BID,TAB) ; Передача бригаде
+ Q:(ID="")!(BID="")  Q:'$D(^EMKV(ID))  Q:'$D(^EMGRP(BID)) 
+ S TAB=$G(TAB)
+ I 'TAB Q:$G(^EMKV(ID,"stat"))'=0 
+ N R S R=$$GETGRP^ISNMPSP(BID,"stat",$H) 
+ I 'TAB Q:R=2!(R=3)!(R=7)!(R=8) 
+ D:'TAB SBR^NSNMPSP(BID,"stat",2,1)
+ D:'TAB SET^ISNMP(ID,"stat",$H,1)
+ D SET^ISNMP(ID,"brig",$H,BID)
+ D:'TAB SET^ISNMP(ID,"t_prv",$H,$P($H,",",2))
+ D WLOG^ISNMP(ID)
+ D:'TAB STAT(0)
+ Q
+KVREJECT(ID) ; Отмена
+ Q:ID=""  Q:'$D(^EMKV(ID)) 
+ N R
+ S R=$G(^EMKV(ID,"brig"))
+ D SBR^NSNMPSP(R,"stat",6,1)
+ D SET^ISNMP(ID,"stat",$H,3)
+ D WLOG^ISNMP(ID)
+ D STAT(0)
+ Q
+KVCOME(ID) ; Прибытие
+ Q:ID=""  Q:'$D(^EMKV(ID)) 
+ N R
+ Q:'$G(^EMKV(ID,"stat"))
+ S R=$G(^EMKV(ID,"brig"))
+ D SBR^NSNMPSP(R,"stat",3,1)
+ D SET^ISNMP(ID,"t_pbv",$H,$P($H,",",2))
+ D WLOG^ISNMP(ID)
+ D STAT(0)
+ Q
+KVCALL(ID,FL,X) ; Отзвон
+ ; FL - доп поле, X - значение 
+ Q:ID=""  Q:'$D(^EMKV(ID))  
+ N R
+ Q:$G(^EMKV(ID,"stat"))>1 
+ S R=$G(^EMKV(ID,"brig"))
+ D SBR^NSNMPSP(R,"stat",4,1)
+ D SET^ISNMP(ID,"stat",$H,2)
+ D SET^ISNMP(ID,"t_ov",$H,$P($H,",",2))
+ D SET^ISNMP(ID,"t_vv",$H,$P($H,",",2))
+ D:$G(FL)'="" SET^ISNMP(ID,FL,$H,X)
+ D WLOG^ISNMP(ID)
+ D STAT(0)
+ Q
+KVRET(ID) ; Возврат
+ Q:ID=""  Q:'$D(^EMKV(ID))  
+ N R
+ Q:$G(^EMKV(ID,"stat"))>1 
+ S R=$G(^EMKV(ID,"brig"))
+ D SBR^NSNMPSP(R,"stat",1,1)
+ D SET^ISNMP(ID,"stat",$H,2)
+ D SET^ISNMP(ID,"t_vv",$H,$P($H,",",2))
+ D WLOG^ISNMP(ID)
+ D STAT(0)
+ Q
+BRLIST(DT,MOD) ; Список бригад
+ ; MOD = 1 - только свободных
+ N ID,D,H,A,M,C
+ S H=$$DI^DTUTL(DT),H=$S(H="":$H,1:H_",99999")
+ S (A,C,ID)="",MOD=+$G(MOD)
+ F  S ID=$O(^EMGRP(ID)) Q:ID=""  D
+ .S D=$O(^EMGRP(ID,"use",H),-1) Q:D=""  Q:^EMGRP(ID,"use",D)=0
+ .I MOD,$$GETGRP^ISNMPSP(ID,"stat",$H)'=1 Q 
+ .S A=A_C_ID_"|"_"№ "_$$GETGRP^ISNMPSP(ID,"num",$H)_", "
+ .S A=A_$S($$GETGRP^ISNMPSP(ID,"nauto",$H):"без А/М",1:$$GAVT^NSNMPSP($$GETGRP^ISNMPSP(ID,"auto",$H)))
+ .S C=CR
+ D MSG^RWU(A)
+ Q
+REGLCL ;
+ K ^LCLI("snmp")
+ S ^LCLI("snmp")="Скорая и неотложная медицинская помощь"
+ S ^LCLI("snmp","hide")="Скрытые контролы карты вызова через |"
+ S ^LCLI("snmp","anydisp")="Возможность выбора диспетчера"
+ S ^LCLI("snmp","newmode")="При новом вызове отображать карту=0 или мастер=1"
+ S ^LCLI("snmp","setstat")="Произвольное изменение статуса карты вызова"
+ S ^LCLI("snmp","save")="Сохранение карты вызова (=0 - запрет)"
+ Q

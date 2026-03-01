@@ -1,0 +1,162 @@
+ISNMP ; СНМП [ 01/31/2013  2:43 AM ]
+CHIFR 
+ Q:'$D(^EMM) 
+ N NM,ID,CC
+ S NM="" F  S NM=$O(^EMM(NM)) Q:NM=""  D
+ .D W^RWU("<"_NM_" type=""plain"" action=""new"">")
+ .S CC="",ID="" F  S ID=$O(^EMM(NM,ID)) Q:ID=""  D
+ ..Q:$G(^(ID,"u"))=0  
+ ..D WC^RWU(CC_$P($G(^EMM(NM,ID)),"|",1)_"|"_ID) S CC=CR
+ .D W^RWU("</"_NM_">")
+ Q
+FIOSH(ID) ; Ф.И.О. по карте вызова
+ Q:ID="" ""
+ Q $$FIOSHF^TXTU($G(^EMKV(ID,"fiof"))_" "_$G(^("fioi"))_" "_$G(^("fioo")))
+FIO(ID) ; полное ФИО по карте вызова
+ Q:ID="" ""
+ N X
+ S ID=$G(^EMKV(ID,"fiof")),X=$G(^("fioi"))
+ S:X'="" ID=ID_" "_X
+ S X=$G(^("fioo"))
+ S:X'="" ID=ID_" "_X
+ Q ID
+SET(ID,FL,DTM,R) ; Установить поле карты вызова
+ Q:$G(^EMKV(ID,FL))=R 
+ N DT
+ S ^(FL)=R
+ D GL^IEXCH("^EMKV",ID,FL)
+ S DT=$P(DTM,",",1)_","_($P(DTM,",",2)+1)
+ S DT=$O(^EMKVL(ID,FL,DT),-1)
+ I DT'="",^(DT)=R Q
+ S ^(DTM)=R
+ D GL^IEXCH("^EMKVL",ID,FL,DTM)
+ Q
+GETDTM(ID,FL,POS) ; Получить дату/время изменения поля
+ ; POS = 1/-1 - первое/последнее
+ S:$G(POS)="" POS=1
+ Q $O(^EMKVL(ID,FL,""),POS)
+NEW() ; Создать новую карту
+ N ID,H
+ S ID=$O(^EMKV(""),-1)+1,H=$H
+ S ^EMKV(ID,"sbsc")=0,^EMKV(ID,"stat")=0,^EMKV(ID,"nkv")=ID
+ S ^EMKV(ID,"kvd")=+H
+ S ^EMKV(ID,"dts")=H
+ S:$G(^JOB(%JOB,"snmp","disp"))'="" ^EMKV(ID,"disp")=^("disp")
+ Q ID
+WLOG(ID) ; сохранить изменившего пользователя
+ S ^EMKVL(ID,"log",$H)=$$USR^IUSER()_"|"_$$KDR^IUSER()
+ Q
+CHKSTAT(ID) ; Проверить соответствие статуса заполненным данным и изменить
+ N ST,X,PST,F
+ S ST=^EMKV(ID,"stat"),PST=ST,F=0
+ I ST<2,$G(^EMKV(ID,"t_ov"))!$G(^EMKV(ID,"t_vv")) S ST=2
+ I ST<1,$G(^EMKV(ID,"t_prv"))!$G(^EMKV(ID,"t_pbv")) S ST=1
+ I ST'=PST,ST'="" D SET(ID,"stat",$H,ST) S F=1
+ Q F
+ADDRKV(ID,LT) ; Адрес по карте вызова
+ ; LT - сокращенно
+ N X1,X2
+ S X1=$G(^EMKV(ID,"kplace"))
+ S:$$IsHOME^YKLADR(X1) X1=""
+ S:X1'="" X1=$$NAME^YKLADR(X1)
+ S X2=$G(^EMKV(ID,"street"))
+ S:X1'="" X1=X1_", " S X1=X1_X2
+ S X2=$G(^EMKV(ID,"dom"))
+ I X2'="" S:X1'="" X1=X1_", " S X1=X1_"дом "_X2
+ S X2=$G(^EMKV(ID,"korp")) S:X2'="" X1=X1_", корп. "_X2
+ S X2=$G(^EMKV(ID,"stroen")) S:X2'="" X1=X1_", стр. "_X2
+ S X2=$G(^EMKV(ID,"kvart")) S:X2'="" X1=X1_", кв. "_X2
+ Q:$G(LT) X1
+ S X2=$G(^EMKV(ID,"entr")) S:X2'="" X1=X1_", под. "_X2
+ S X2=$G(^EMKV(ID,"domkod")) S:X2'="" X1=X1_", код "_X2
+ S X2=$G(^EMKV(ID,"floor")) S:X2'="" X1=X1_", эт. "_X2
+ Q X1
+ADDRSH(ID,LT) ; Сокращенный формат адреса по карте вызова
+ N X1,X2
+ S X1=$G(^EMKV(ID,"kplace"))
+ S:$$IsHOME^YKLADR(X1) X1=""
+ S:X1'="" X1=$$NAME^YKLADR(X1)
+ S X2=$G(^EMKV(ID,"street"))
+ S:X1'="" X1=X1_", " S X1=X1_X2
+ S X1=X1_"/"_$G(^EMKV(ID,"dom"))
+ S X1=X1_"/"_$G(^EMKV(ID,"korp"))
+ S X1=X1_"/"_$G(^EMKV(ID,"stroen"))
+ S X1=X1_"/"_$G(^EMKV(ID,"kvart"))
+ Q X1
+MKIDX(ID) ; Создать индекс
+ N R
+ S R=$G(^EMKV(ID,"nib"))
+ S:R'="" ^EMKVI("nib",R,ID)=""
+ Q
+RMIDX(ID) ; Удалить индекс
+ N R
+ S R=$G(^EMKV(ID,"nib"))
+ K:R'="" ^EMKVI("nib",R,ID)
+ Q
+REIDX ; reindex
+ N ID
+ K ^EMKVI
+ S ID="" F  S ID=$O(^EMKV(ID)) Q:ID=""  D MKIDX(ID)
+ Q
+DEL(ID) ; Удалить карту вызова
+ D RMIDX(ID)
+ K ^EMKV(ID)
+ D KGL^IEXCH("^EMKV",ID)
+ K ^EMKVL(ID)
+ D KGL^IEXCH("^EMKVL",ID)
+ N H S H="" F  S H=$O(^EMKVI("crea",H)) Q:H=""  I $D(^EMKVI("crea",H,ID)) K ^EMKVI("crea",H,ID) Q 
+ Q
+MOVPAC(FNIB,TNIB) ; Переместить записи с одного пациента на другого
+ ; FNIB - откуда
+ ; TNIB - куда
+ N ID
+ S ID="" F  S ID=$O(^EMKVI("nib",FNIB,ID)) Q:ID=""  S ^EMKV(ID,"nib")=TNIB D GL^IEXCH("^EMKV",ID,"nib")
+ M ^EMKVI("nib",TNIB)=^EMKVI("nib",FNIB)
+ K ^EMKVI("nib",FNIB)
+ D GL^IEXCH("^EMKVI","nib",TNIB)
+ D KGL^IEXCH("^EMKVI","nib",FNIB)
+ Q
+MOVVR(FVR,TVR) ; Переместить все с врача на врача
+ N I,H,R,PL
+ S I="" F   S I=$O(^EMGRP(I)) Q:I=""  D
+ .S H="" F  S H=$O(^EMGRP(I,"kadry",H)) Q:H=""  D
+ ..S PL="" F  S PL=$O(^EMGRP(I,"kadry",H,PL)) Q:PL=""  D
+ ...Q:^(PL)'=FVR
+ ...S ^(PL)=TVR
+ ...D GL^IEXCH("^EMGRP",I,"kadry",H,PL)
+ S I="" F  S I=$O(^EMKV(I)) Q:I=""  I $G(^(I,"disp"))=FVR S ^("disp")=TVR D GL^IEXCH("^EMKV",I,"disp")
+ Q
+INITDB 
+ S ^STRUCT("snmpkv","datar")="D|Дата рождения"
+ S ^STRUCT("snmpkv","kvd")="D|Дата получения вызова"
+ S ^STRUCT("snmpkv","t_priv")="T|Время приема вызова"
+ S ^STRUCT("snmpkv","t_prv")="T|Время передачи вызова"
+ S ^STRUCT("snmpkv","t_pbv")="T|Время прибытия"
+ S ^STRUCT("snmpkv","t_ov")="T|Время окончания вызова"
+ S ^STRUCT("snmpkv","t_vv")="T|Время возврата"
+ S ^STRUCT("snmpkv","t_zb")="T|Затрачено на больного"
+ S ^STRUCT("snmpkv","t_zv")="T|Затрачено на вызов"
+ S ^STRUCT("snmpkv","stc")="P|Договор",^("stc","r")="dgn"
+ S ^STRUCT("snmpkv","pol")="P|Пол",^("pol","r")=":sex"
+ 
+ D:'$D(^EMM("emvres"))
+ .S ^EMM("emvres",1)="Оставлен на месте"
+ .S ^EMM("emvres",2)="Доставлен домой|1"
+ .S ^EMM("emvres",3)="Доставлен в поликлинику|1"
+ .S ^EMM("emvres",4)="Доставлен в больницу|1"
+ .S ^EMM("emvres",5)="Доставлен в морг|1"
+ .S ^EMM("emvres",6)="Дост. на вокзал/аэроп.|1"
+ 
+ D:'$D(^EMM("emvtra"))
+ .S ^EMM("emvtra",1)="пешком"
+ .S ^EMM("emvtra",2)="на носилках"
+ .S ^EMM("emvtra",3)="на кресле"
+ .S ^EMM("emvtra",4)="на руках"
+ .S ^EMM("emvtra",5)="другим способом"
+ 
+ D:'$D(^EMM("emkvst"))
+ .S ^EMM("emkvst",0)="В ожидании"
+ .S ^EMM("emkvst",1)="Выполняется"
+ .S ^EMM("emkvst",2)="Завершен"
+ .S ^EMM("emkvst",3)="Отменен"
+ Q

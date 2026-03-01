@@ -1,0 +1,347 @@
+ROPERRP ; Оперативная отчетность [ 09/04/2018  4:42 PM ]
+POL(DS,DE,UST) 
+ ; UST - 0-только медицина,1-вся клиника
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ ; 1-касса, 2-выручка б/н, 3-услуг ФЛ, 4-услуг СК факт, 5-услуг СК аванс
+ ; 6-услуг абон., 7-услуг проч., 8-услуг всего, 9-кол-во усл, 10-% загр.
+ ; 11-посещ.всего,12-посещ. первичных, 13-посещ. на 1 ФЛ, 14-усл.на 1 ФЛ
+ ; 15-обратилось ФЛ,16-обрат. абон,17-обр.СК предоп., 18-обрат.СК факт
+ ; 19-обрат.проч.,20-обрат.всего,21-обрат.в пред.периоде.
+ N A
+ D OWF^RWU(".txt")
+ S A="Отделение за период "_$$DT2^DTUTL(DS)_"-"_$$DT2^DTUTL(DE)_"|"
+ S A=A_"Кассовая|Выручка|Сумма|оказан.|услуг|(в|том|числе)|Кол-во||"
+ S A=A_"Кол-во|посещ.|Посещ.|Услуг|Кол|-во|обра|тив|шихся|лиц;"
+ D WC^RWU(A_CR)
+ S A="|выручка|по б.н.||Страх.|комп.||||оказанн.|Загрузка|"
+ S A=A_"||1 физ.|на одно|||Страх.|комп.|||;"
+ D WC^RWU(A_CR)
+ S A="||расчету|Розница|факт|аванс|Абон.|Иные|Всего|услуг|%|"
+ S A=A_"всего|первичн.|лицом|лицо|Розница|Абон.|аванс|факт|Иные|Всего|"
+ D WC^RWU(A_CR)
+ N SST,LP,LPU,FF,USOTD,BTPLS,OT,X,I,STAT
+ S FF='+$$FR^I()
+ K ^BUF($J)
+ I '$G(UST) M USOTD=^cfg("stom-otd") M USOTD=^cfg("stac-otd") S:$G(^cfg("stom-otd")) USOTD(^cfg("stom-otd"))=""
+ M BTPLS=^BTPLS("stc")
+ D MKALLPRC^IUSLSC(DS,DE,1,"POLPRC^ROPERRP","USLER^ROPERRP",FF)
+ D KSSPOL
+ D RASPOL
+ D POSTPOL
+ K ^BUF($J)
+ S LP="" F  S LP=$O(SST(LP)) Q:LP=""  D
+ .D WC^RWU(CR_$$NAME^ICONTR(LP))
+ .S OT="" F  S OT=$O(SST(LP,OT)) Q:OT=""  D
+ ..S A=$S(OT="-":"   Всего",1:" - "_$$GOTD^YISPRAV(OT))
+ ..F I=1:1:20 S A=A_"|"_$TR(+$G(SST(LP,OT,I)),".",",")
+ ..D WC^RWU(CR_A)
+ D C^RWU
+ Q
+POSTPOL ; Постобработка поликлиники
+ S LP="" F  S LP=$O(SST(LP)) Q:LP=""  D
+ .S OT="",A=0 F  S OT=$O(SST(LP,OT)) Q:OT=""!(OT="-")  D
+ ..S X=0 F I=3:1:7 S X=X+$G(SST(LP,OT,I))
+ ..S SST(LP,OT,8)=X
+ ..S X=0 F I=15:1:20 S X=X+$G(SST(LP,OT,I))
+ ..S SST(LP,OT,20)=X
+ ..S SST(LP,OT,13)=$FN($S(X=0:0,1:$G(SST(LP,OT,11))/X),"",2)
+ ..S SST(LP,OT,14)=$FN($S(X=0:0,1:$G(SST(LP,OT,9))/X),"",2)
+ ..F I=1:1:12 S SST(LP,"-",I)=$G(SST(LP,"-",I))+$G(SST(LP,OT,I))
+ ..S A=A+1
+ .S:A'=0 SST(LP,"-",10)=$FN($G(SST(LP,"-",10))/A,"",2)
+ ; лиц пока не считаем в итого
+ Q
+KSSPOL 
+ N TM,R,K,SUM
+ S DT=DS-1,LPU=$$^I("ilpu")
+ F  S DT=$O(^BILLI(DT)) Q:DT=""!(DT>DE)  S TM="" F  S TM=$O(^BILLI(DT,TM)) Q:TM=""  S NI="" F  S NI=$O(^BILLI(DT,TM,NI)) Q:NI=""  D
+ .S L=$G(^BILL(NI,DT,TM)) Q:L=""  S LP=$P($P(L,"|",5),"@",2)
+ .S R=$P(L,"|",1) Q:R'=""  
+ .S K=$P($P(L,"|",6),"/",1),R=$P(K,":",1),SUM=+$P(L,"|",2)
+ .Q:SUM=0  Q:R'="ZNF"&(R'="ZND") 
+ .I FF Q:LP'=LPU
+ .S OT=+$P(K,":",3) Q:$D(USOTD(OT)) 
+ .S SST(+LP,OT,1)=$G(SST(+LP,OT,1))-SUM
+ Q
+RASPOL 
+ K STAT
+ D ZOTDI^RRASP(DS,DE)
+ S LP="" F  S LP=$O(STAT(LP)) Q:LP=""  D:('FF)!(FF&(LP=$$^I("ilpu")))
+ .S OT="" F  S OT=$O(STAT(LP,OT)) Q:OT=""  D
+ ..Q:$D(USOTD(OT))  ; только поликлиника
+ ..S X=+$G(STAT(LP,OT,1))
+ ..S:X SST(LP,OT,10)=$FN((100*$G(STAT(LP,OT,3)))/X,"",2)
+ Q
+STOM(DS,DE) ; По стоматологии
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ ; 1-план, 2-выручка, 3-б/н,4-выр.всего, 5-выполн.плана всего, 6-в %
+ ; 7-оказ.усл.розница, 8-оказ.усл.СК факт, 9-оказанн.усл.СК.аванс,
+ ; 10-оказ.усл.проч,11-усл.по абонем,12-загруженность%, 13-обратилось ФЛ
+ ; 14-обратилось.абон, 15-обратилось СК предоп., 16-обр.СК факт
+ ; 17-обрат.проч., 18-обрат. всего, 19-выручка на 1 ф.лицо 
+ ; 20-посещений всего, 21-посещ. первичных, 22-ср.стоим. посещ.
+ ; 23-кол-во посещ.физ.лиц., 24-кол-во врач. ставок, 25-раб.став.в пер.
+ ; 26-раб. кресел, 27-выручк.на кресл, 28-выручк.на ставку
+ N A,SST,SSTV,LP,STOTD,BTPLS,SP,I,DGL,DTP,T,DT,FFP,NI,FF,X,Y
+ D OWF^RWU(".txt")
+ S A="Специальность за период "_$$DT2^DTUTL(DS)_"-"_$$DT2^DTUTL(DE)_"|"
+ S A=A_"План|||Выручка|Выполнение|Плана|Сумма|оказ.|услуг|(в том|"
+ S A=A_"числе)|Загру-|кол-во|обра|тив|шех|ся|лиц|Выручка|Кол-во|посещ.|"
+ S A=A_"Средн.|Кол-во|Ставок|Кол-во|Средн.|Средн.;"
+ D WC^RWU(A)
+ S A="|по выручке|выручка|Б/Н|с учетом||||СК|СК|||"
+ S A=A_"женность|физ.|по|СК|СК|||на 1|за|период|"
+ S A=A_"стоим.|посещ.|в данн.|работ.|выручка|выручка;"
+ D WC^RWU(CR_A)
+ S A="|всего|(руб.)|(руб.)|б/н (руб.)|остаток|%|Розница|факт|аванс|проч.|"
+ S A=A_"абон.|%|лица|абон.|пред.|факт|иные|всего|физ.лицо|всего|перв.|"
+ S A=A_"1 посещ|1-м ФЛ|периоде|кресел|на 1 кресло|на 1 ставку"
+ D WC^RWU(CR_A)
+ S FF='+$$FR^I()
+ K ^BUF($J)
+ M STOTD=^cfg("stom-otd")
+ S:$G(^cfg("stom-otd")) STOTD(^cfg("stom-otd"))=""
+ M BTPLS=^BTPLS("stc")
+ D MKALLPRC^IUSLSC(DS,DE,1,"STOMPRC^ROPERRP","",FF)
+ D STPIPL,STPOSS,STKASS
+ 
+ D STPOST
+ S LP="" F  S LP=$O(SST(LP)) Q:LP=""  D
+ .D WC^RWU(CR_$$NAME^ICONTR(LP))
+ .S SP="" F  S SP=$O(SST(LP,SP)) Q:SP=""  D
+ ..S A=CR_$$GSPEC^YISPRAV(SP)
+ ..S X=$G(SSTV(LP,SP))*(DE-DS+1)*$$DECFL^NFPLAN($$GETSP^NFPLAN(LP,SP,DE),"bill")
+ ..S SST(LP,SP,1)=$J(X,"",2),Y=$G(SST(LP,SP,2))
+ ..S SST(LP,SP,5)=$S(Y<X:$J(X-Y,"",2),1:0)
+ ..S SST(LP,SP,6)=$S('X:"",'Y:"",Y>X:100,1:$J(100*Y/X,"",2))
+ ..F I=1:1:27 S A=A_"|"_$TR(+$G(SST(LP,SP,I)),".",",")
+ ..D WC^RWU(A)
+ D C^RWU
+ Q
+GETDGT(DG,DT)   ; Получить тип договора
+ Q:DG="" 3 Q:$D(DGL(+DG)) DGL(+DG)
+ S DT=+$$GET^IINSC(DG,"dvid",DT),DGL(DG)=DT
+ Q DT
+STPIPL ; Обратившихся лиц по стомат.
+ S LP="" F  S LP=$O(^BUF($J,"l",LP)) Q:LP=""  D
+ .S SP="" F  S SP=$O(^BUF($J,"l",LP,SP)) Q:SP=""  D
+ ..S I="" F  S I=$O(^BUF($J,"l",LP,SP,I)) Q:I=""  D
+ ...S SST(LP,SP,18)=$G(SST(LP,SP,18))+1,T=""
+ ...F  S T=$O(^BUF($J,"l",LP,SP,I,T)) Q:T=""  S SST(LP,SP,12+T)=$G(SST(LP,SP,12+T))+1
+ K ^BUF($J,"l")
+ Q
+STPOSS ; Посещения
+ S LP="" F  S LP=$O(^BUF($J,"p",LP)) Q:LP=""  D
+ .S SP="" F  S SP=$O(^BUF($J,"p",LP,SP)) Q:SP=""  D
+ ..S I="" F  S I=$O(^BUF($J,"p",LP,SP,I)) Q:I=""  D
+ ...S SST(LP,SP,20)=$G(SST(LP,SP,20))+1,NI=$P(I,",",2),FFP=0
+ ...S DT=DS-1 F  Q:FFP  S DT=$O(^PNF(NI,DT),-1) Q:DT=""!(DT>DE)  S T="" F  S T=$O(^PNF(NI,DT,T)) Q:T=""  I $D(STOTD($P(T,"|",2))) S FFP=1 Q
+ ...S:'FFP SST(LP,SP,21)=$G(SST(LP,SP,21))+1
+ Q
+STPOST ; Постобработка
+ S LP="" F  S LP=$O(SST(LP)) Q:LP=""  D
+ .S SP=""  F  S SP=$O(SST(LP,SP)) Q:SP=""  D
+ ..S SST(LP,SP,2)=+$G(SST(LP,SP,7))
+ ..S T=+$G(SST(LP,SP,18))
+ ..S SST(LP,SP,23)=$S(T=0:T,1:$FN($G(SST(LP,SP,20))/T,"",2))
+ Q
+STKASS 
+ N TM,R,K,SUM
+ S DT=DS-1,LPU=$$^I("ilpu")
+ F  S DT=$O(^BILLI(DT)) Q:DT=""!(DT>DE)  S TM="" F  S TM=$O(^BILLI(DT,TM)) Q:TM=""  S NI="" F  S NI=$O(^BILLI(DT,TM,NI)) Q:NI=""  D
+ .S L=$G(^BILL(NI,DT,TM)) Q:L=""  S LP=$P($P(L,"|",5),"@",2)
+ .S R=$P(L,"|",1) Q:R'="" 
+ .S K=$P($P(L,"|",6),"/",1),R=$P(K,":",1),SUM=+$P(L,"|",2) Q:SUM=0
+ .Q:R'="ZNF"&(R'="ZND") 
+ .I FF,LP'=LPU Q 
+ .S OT=+$P(K,":",3),VR=+$P(K,":",2)
+ .Q:'$D(STOTD(OT)) 
+ .S SP=+$$SPEC^IKADRY(VR),SST(+LP,SP,7)=$G(SST(+LP,SP,7))-SUM
+ Q
+STOMPRC 
+ Q:'$D(STOTD(OTD)) 
+ N X,CC,Z,L
+ S L=+$G(LPU),Z=DT_","_NI,CSTC=+CSTC
+ S ^BUF($J,"p",L,SP,Z)=""
+ S:'$D(SSTV(L,SP,VR)) SSTV(L,SP,VR)="",SSTV(L,SP)=$G(SSTV(L,SP))+1 ; число врачей в спец.
+ S DTP=$$GETDGT(CSTC,DT)
+ I $D(BTPLS(CSTC)) S ^BUF($J,"l",L,SP,NI,2)="" G STPRC1
+ I DTP=0 S ^BUF($J,"l",L,SP,NI,4)="" G STPRC1
+ I DTP=1 S ^BUF($J,"l",L,SP,NI,3)="" G STPRC1
+ G:DTP=3 STOMKSS G:KASS STOMKSS
+ S ^BUF($J,"l",L,SP,NI,5)=""
+STPRC1 S CC=$G(UL(U))
+ S X=$S($D(UL(U,1)):UL(U,1),1:$$PRICEH^IPRICE(U,PRC,DT)*KSKD*CC)
+ I $D(BTPLS(CSTC)) S SST(L,SP,11)=$G(SST(L,SP,11))+X G STPRC2
+ I DTP=0 S SST(L,SP,8)=$G(SST(L,SP,8))+X G STPRC2
+ I DTP=1 S SST(L,SP,9)=$G(SST(L,SP,9))+X G STPRC2
+ S SST(L,SP,10)=$G(SST(L,SP,10))+X
+STPRC2 
+ Q
+STOMKSS 
+ S ^BUF($J,"l",L,SP,NI,1)=""
+ Q
+POLPRC 
+ Q:$D(USOTD(OTD))
+ N X,CC,Z,L
+ S L=+$G(LPU),Z=VR_","_DT_","_NI,CSTC=+CSTC
+ S CC=$G(UL(U))
+ S X=$S($D(UL(U,1)):UL(U,1),1:$$PRICEH^IPRICE(U,PRC,DT)*KSKD*CC)
+ S SST(L,OTD,9)=$G(SST(L,OTD,9))+CC
+ S:$D(^BUF($J,"p",L,OTD,VR,Z))=0 ^(Z)=0,SST(L,OTD,11)=$G(SST(L,OTD,11))+1
+ S:$$GET^IPRICE(U,"cls",PRC,DT)["|pervp|" SST(L,OTD,12)=$G(SST(L,OTD,12))+1
+ ; todo - первичные посещения, проверка предистории
+ S DTP=$$GETDGT(CSTC,DT),CC=KASS
+ S Z=$S(CC:3,$D(BTPLS(CSTC)):6,DTP=0:4,DTP=1:5,DTP=3:3,1:7)
+ S SST(L,OTD,Z)=$G(SST(L,OTD,Z))+X
+ S:DTP=0 SST(L,OTD,2)=$G(SST(L,OTD,2))+X
+ S Z=$S(CC:15,$D(BTPLS(CSTC)):16,DTP=0:18,DTP=1:17,DTP=3:15,1:19)
+ S:$D(^BUF($J,"l",L,OTD,NI,Z))=0 ^(Z)=0,SST(L,OTD,Z)=$G(SST(L,OTD,Z))+1
+ Q
+USLER 
+ Q
+LPUPP(NIB,DTT,DIAG) ; Проверка на первичное посещение
+ Q 0
+KSSRUD(DS,DE) ; Розничная выручка по кассовым услугам
+ N DT,SUMM,LP,FF,DTP,DGL,X,Y,STOTD,sum,sx,sMS,SUMX
+ S DS=$$DIH^DTUTL($G(DS)),DE=$$DIH^DTUTL($G(DE))
+ S X=$G(^cfg("stom-otd")) S:X'="" STOTD(X)="" M STOTD=^cfg("stom-otd")
+ s sMS=1
+ F DT=DS:1:DE D NALDAY^RBILL(DT,1)
+ S LP="" F  S LP=$O(SUMM(LP)) Q:LP=""  M X(LP,1)=SUMM(LP)
+ K SUMM M SUMM=X K X
+ S FF='+$$FR^I()
+ K ^BUF($J,"kp")
+ D MKALLPRC^IUSLSC(DS,DE,1,"KSRPRC^ROPERRP","",FF)
+ K ^BUF($J,"kp")
+ I FF S X="" F  S X=$O(SUMM(X)) Q:X=""  K:X'=+$$^I("ilpu") SUMM(X)
+ D OWF^RWU(".txt")
+ S X=$S(DS=DE:"на "_$$DT2^DTUTL(DS),1:"за "_$$DT2^DTUTL(DS)_"-"_$$DT2^DTUTL(DE))
+ D WC^RWU("Филиал "_X_"|План на месяц|Сумма услуг|Лиц за период|Посещений за период|Кассовая выручка|Сумма на лицо|Сумма на посещ.")
+ S LP="" F  S LP=$O(SUMM(LP)) Q:LP=""  D
+ .S FF="" F X=2,3,4,1 S DT=$G(SUMM(LP,X)),SUMM("-",X)=$G(SUMM("-",X))+DT,FF=FF_"|"_$TR(DT,".",",")
+ .S X=$G(SUMM(LP,3)),Y=$G(SUMM(LP,2))
+ .S FF=FF_"|"_$S(X:$J(Y/X,"",2),1:0)
+ .S X=$G(SUMM(LP,4))
+ .S FF=FF_"|"_$S(X:$J(Y/X,"",2),1:0)
+ .S FF=$TR(+$J((DE-DS+1)*$$DECFL^NFPLAN($$GETLP^NFPLAN(LP,DE),"sum"),"",2),".",",")_FF
+ .D WC^RWU(CR_$S(LP="-":"ИТОГО",1:$$NAMEH^ICONTR(LP,DE))_"|"_FF)
+ .s sx="" F  s sx=$O(SUMX(LP,sx)) Q:sx=""  D
+ ..S FF="" F X=2,3,4 S FF=FF_"|"_$TR($G(SUMX(LP,sx,X)),".",",")
+ ..S X=$G(SUMX(LP,sx,3)),Y=$G(SUMX(LP,sx,2))
+ ..S FF=FF_"||"_$S(X:$J(Y/X,"",2),1:0)
+ ..S X=$G(SUMX(LP,sx,4))
+ ..S FF=FF_"|"_$S(X:$J(Y/X,"",2),1:0)
+ ..D WC^RWU(CR_$S('sx:" - Поликлиника",1:" - Стоматология")_"|"_FF)
+ D C^RWU
+ Q
+KSSRU(DTT) ; Розничная выручка по кассовым услугам
+ N DS,DE,DT,SUMM,LP,FF,DTP,DGL,X,STOTD,sum,sMS,SUMX
+ S DE=$$DIH^DTUTL($G(DTT)),DTT=$$DT2^DTUTL(DE)
+ S DS=$$DI^DTUTL("01."_$P(DTT,".",2,3))
+ S sMS=0
+ ; D NALDAY^RBILL(DE,1) TODO
+ S LP="" F  S LP=$O(SUMM(LP)) Q:LP=""  M X(LP,2)=SUMM(LP)
+ F DT=DS:1:DE-1 D NALDAY^RBILL(DT,1)
+ S LP="" F  S LP=$O(SUMM(LP)) Q:LP=""  M X(LP,5)=SUMM(LP)
+ K SUMM M SUMM=X K X
+ S FF='+$$FR^I()
+ K ^BUF($J,"kp")
+ D MKALLPRC^IUSLSC(DS,DE,1,"KSRPRC^ROPERRP","",FF)
+ K ^BUF($J,"kp")
+ I FF S X="" F  S X=$O(SUMM(X)) Q:X=""  K:X'=+$$^I("ilpu") SUMM(X)
+ D OWF^RWU(".txt")
+ D WC^RWU("Филиал|План на месяц|Выручка на "_DTT_"|Лиц за период|Посещений за период|Выручка с начала месяца")
+ S LP="" F  S LP=$O(SUMM(LP)) Q:LP=""  D
+ .S FF="" F X=2:1:5 S DT=$G(SUMM(LP,X)),SUMM("-",X)=$G(SUMM("-",X))+DT,FF=FF_"|"_$TR(DT,".",",")
+ .D WC^RWU(CR_$S(LP="-":"ИТОГО",1:$$NAMEH^ICONTR(LP,DE))_"|"_FF)
+ D C^RWU
+ Q
+KSRPRC ; for MKALLPRC^IUSLSC and KSSRU
+ N Z,L
+ S L=+$G(LPU),Z=DT_","_VR_","_NI,CSTC=+CSTC
+ Q:('KASS)&($$GETDGT(CSTC,DT)'=3) 
+ S sum=$S($D(UL(U,1)):UL(U,1),1:$$PRICEH^IPRICE(U,PRC,DT)*KSKD*UL(U))
+ S SUMM(L,2)=$G(SUMM(L,2))+sum
+ I sMS s sx=+$D(STOTD(OTD)),SUMX(L,sx,2)=$G(SUMX(L,sx,2))+sum
+ 
+ S:'$D(^BUF($J,"kp",L,NI)) ^(NI)="",SUMM(L,3)=$G(SUMM(L,3))+1
+ S:$D(^(Z))=0 ^(Z)="",SUMM(L,4)=$G(SUMM(L,4))+1
+ Q:'sMS
+ I '$D(^(NI,sx)) S ^(sx)="",SUMX(L,sx,3)=$G(SUMX(L,sx,3))+1
+ I '$D(^BUF($J,"kp",L,Z,sx)) S ^(sx)="",SUMX(L,sx,4)=$G(SUMX(L,sx,4))+1
+ Q
+USD(DS,DE,SMOD) ; Услуги по договорам за период
+ ; SMOD - все/пол/стом
+ N SUMM,LP,FF,DTP,DGL,X,R,STOTD,SCOTD,CC,SUMMS
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S X=$G(^cfg("stom-otd")) S:X'="" STOTD(X)="" M STOTD=^cfg("stom-otd")
+ M SCOTD=^cfg("stac-otd")
+ S FF='+$$FR^I()
+ K ^BUF($J,"kp")
+ D MKALLPRC^IUSLSC(DS,DE,1,"USDPRC^ROPERRP","",FF)
+ K ^BUF($J,"kp")
+ I FF S X="" F  S X=$O(SUMM(X)) Q:X=""  K:X'=+$$^I("ilpu") SUMM(X)
+ D OWF^RWU(".txt")
+ D WC^RWU("|Услуг|Услуг|Услуг|Пришедших|Количество|Ср.чек по|Ср.чек по;"_CR)
+ D WC^RWU("Филиал "_$$TXTP^DTUTL(DS,DE)_"|Всего|По факту|По предоплате|лиц|посещений|факту|предоплате")
+ S LP="" F  S LP=$O(SUMM(LP)) Q:LP=""  D
+ .S SUMM(LP,0)=$G(SUMM(LP,1))+$G(SUMM(LP,2))
+ .S FF="" F X=0:1:4 S R=$G(SUMM(LP,X)),SUMM("-",X)=$G(SUMM("-",X))+R,FF=FF_"|"_$TR(+$FN(R,"",2),".",",")
+ .S X=$G(SUMM(LP,10))
+ .s FF=FF_"|"_$S(X:$J($G(SUMM(LP,1))/X,"",2),1:0)
+ .S X=$G(SUMM(LP,11))
+ .s FF=FF_"|"_$S(X:$J($G(SUMM(LP,2))/X,"",2),1:0)
+ .D WC^RWU(CR_$S(LP="-":"ИТОГО",1:$$NAMEH^ICONTR(LP,$$DIH^DTUTL($G(DTT))))_FF)
+ D C^RWU
+ Q
+USDAY(DTT,BM,SMOD) ; Услуги по договорам за день
+ ; BM - с начала месяца
+ N DT,SUMM,SUMMS,LP,FF,DTP,DGL,X,R,CC,DS
+ S DT=$$DIH^DTUTL(DTT),DTT=$$DT2^DTUTL(DT),BM=$G(BM),SMOD=$G(SMOD)
+ S FF='+$$FR^I(),DS=$S(BM:$$DI^DTUTL("01."_$P(DTT,".",2,3)),1:0)
+ K ^BUF($J,"kp")
+ S SUMMS=0
+ D MKALLPRC^IUSLSC(DT,DT,1,"USDPRC^ROPERRP","",FF)
+ k ^BUF($J)
+ I BM S SUMMS=1 D MKALLPRC^IUSLSC(DS,DT,1,"USDPRC^ROPERRP","",FF)
+ K ^BUF($J,"kp")
+ I FF S X="" F  S X=$O(SUMM(X)) Q:X=""  K:X'=+$$^I("ilpu") SUMM(X),SUMMS(X)
+ D OWF^RWU(".txt")
+ D WC^RWU($S(BM:"|С начала",1:"")_"|Услуг|Услуг|Услуг|Пришедших|Количество;"_CR)
+ D WC^RWU("Филиал (на "_DTT_")"_$S(BM:"|месяца",1:"")_"|Всего|По факту|По предоплате|лиц|посещений")
+ S LP="" F  S LP=$O(SUMM(LP)) Q:LP=""  D
+ .S SUMM(LP,0)=$G(SUMM(LP,1))+$G(SUMM(LP,2))
+ .S SUMMS(LP,0)=$G(SUMMS(LP,1))+$G(SUMMS(LP,2))
+ .S FF=$S(BM:"|"_$$fn(SUMMS(LP,0)),1:"")
+ .F X=0:1:4 S R=$G(SUMM(LP,X)),SUMM("-",X)=$G(SUMM("-",X))+R,FF=FF_"|"_$$fn(R)
+ .I BM F X=1,2 S R=$G(SUMMS(LP,X)),SUMMS("-",X)=$G(SUMMS("-",X))+R
+ .D WC^RWU(CR_$S(LP="-":"ИТОГО",1:$$NAMEH^ICONTR(LP,$$DIH^DTUTL($G(DTT))))_FF)
+ D C^RWU
+ Q
+fn(X) 
+ Q $TR(+$FN(X,"",2),".",",")
+USDPRC ; for MKALLPRC^IUSLSC and KSSRU
+ I SMOD Q:$S(SMOD=2:'$D(STOTD(OTD)),SMOD=3:'$D(SCOTD(OTD)),$D(STOTD(OTD)):1,1:$D(SCOTD(OTD)))
+ Q:KASS  
+ N Z,L,T
+ S L=+$G(LPU),Z=DT_","_VR_","_NI,CSTC=+CSTC,DTP=$$GETDGT(CSTC,DT)
+ I DTP'=0,DTP'=1 Q 
+ S T=$S(DTP=1:2,1:1)
+ I $G(SUMMS) S SUMMS(L,T)=$G(SUMMS(L,T))+$S($D(UL(U,1)):UL(U,1),1:$$PRICEH^IPRICE(U,PRC,DT)*KSKD*UL(U)) Q 
+ S:'$D(^BUF($J,"kp",L,NI)) ^(NI)="",SUMM(L,3)=$G(SUMM(L,3))+1
+ S:'$D(^(Z)) ^(Z)="",SUMM(L,4)=$G(SUMM(L,4))+1
+ S:'$D(^(Z,T)) ^(T)="",SUMM(L,9+T)=$G(SUMM(L,9+T))+1 ; посещ. по видам
+ S SUMM(L,T)=$G(SUMM(L,T))+$S($D(UL(U,1)):UL(U,1),1:$$PRICEH^IPRICE(U,PRC,DT)*KSKD*UL(U))
+ Q
+REGIPROC 
+ N T,D
+ S D="Ежемесячная отчетность"
+ S ^IPROC("Стоматология","Оперативный отчет по стоматологии")="STOM_ROPERRP,1,2,d,Дата начала периода,d,Дата окончания периода,l,8,1"
+ S ^IPROC("Отчеты ЛПУ","Оперативный отчет по поликлинике")="POL_ROPERRP,1,3,d,Дата начала периода,d,Дата окончания периода,t@string:0/Только поликлиника#1/По всем подразделениям,Вид отчета,l,8,1"
+ S T=",d,Период с,d,Период по"
+ S ^IPROC(D,"Выручка клиник по розничным услугам")="KSSRUD_ROPERRP,1,2"_T
+ S ^IPROC(D,"Оказанные услуги по договорам")="USD_ROPERRP,1,3"_T_",t@string:0/Всем подразделениям#1/Поликлинике#2/Стоматологии#3/Стационару,Расчет по"
+ ; S ^IPROC("Ежедневная отчетность","Выручка клиник по розничным услугам")="KSSRU_ROPERRP,1,1,d,Дата отчета" - TODO
+ S ^IPROC("Ежедневная отчетность","Сумма оказанных услуг по договорам")="USDAY_ROPERRP,1,3,d,Дата отчета,t@string:0/Нет#1/Да,Накопительно за месяц,t@string:0/Всем подразделениям#1/Поликлинике#2/Стоматологии#3/Стационару,Расчет по"
+ Q

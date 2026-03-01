@@ -1,0 +1,99 @@
+A ; ;[ 08/29/2021  11:22 PM ]
+F(W,NOK) ;ПРЕОБРАЗОВАНИЕ ФАМИЛИИ
+ G:$D(%YIFAM) OK1
+ S %YIFAM(1)="Ёабвгдеёжзийклмнопрстуфхцчшщьыъэюя|abcdefghijklmnopqrstuvwxyz"
+ S %YIFAM(2)="ЕАБВГДЕЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЬЫЪЭЮЯ ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+ S %YIFAM(3)="ОЕАИУЭЮЯПСТРКЛМНБВГДЖЗЙФХЦЧШЩЫЁABCDEFGHIJKLMNOPQRSTUVWXYZ"
+ S %YIFAM(4)="БЗДВГ",%YIFAM(5)="ПСТФК",%YIFAM(6)="ПСТКБВГДЖЗФХЦЧШЩ"
+ S %YIFAM(6)="ОЮЕЭЯЁЫ",%YIFAM(7)="АУИИАИА"
+ S %YIFAM(8)="ОВСКИЙ|ЕВСКИЙ|ОВСКАЯ|ЕВСКАЯ|ИЕВА|ЕЕВА|ОВА|ЕВА|ИНА|ИЕВ|ЕЕВ|НКО|ОВ|ЕВ|АЯ|ИЙ|ЫЙ|ЫХ|ИХ|ИН|ИК|ЕК|УК|ЮК"
+ S %YIFAM(9)="@|#|$|%|9|9|9|9|1|4|4|3|4|4|6|7|7|5|5|8|2|2|0|0"
+OK1 S W=$TR(W,%YIFAM(1),%YIFAM(2))
+ N W1,J,LW,LO,WO,O,LW1,V,CO
+ S W1="",V=%YIFAM(3) F J=1:1:$L(W) S:V[$E(W,J) W1=W1_$E(W,J)
+ S LW=$L(W1)
+ I '$D(NOK) S V=%YIFAM(8) F J=1:1:24 S O=$P(V,"|",J),LO=$L(O),WO=$E(W1,LW-LO+1,LW) I WO=O S W1=$E(W1,1,LW-LO)_$P(%YIFAM(9),"|",J) Q 
+ S:W1["ЙО" W1=$P(W1,"ЙО",1)_"Ё"_$P(W1,"ЙО",2,200)
+ S:W1["ЙЕ" W1=$P(W1,"ЙЕ",1)_"Е"_$P(W1,"ЙЕ",2,200)
+ S LW1=$L(W1)
+ S LW=$TR($E(W1,LW1),%YIFAM(4),%YIFAM(5)),W1=$E(W1,1,LW1-1)_LW
+ S LW=$TR($E(W1,2,LW1),%YIFAM(6),%YIFAM(7)),W1=$E(W1,1)_LW
+ S V=$E(W1) F J=2:1:LW1 S LW=$E(W1,J) I LW'=$E(W1,J-1) S V=V_LW
+ S LW1=$L(V)
+ F J=2:1:LW1 I %YIFAM(6)[$E(V,J) S:%YIFAM(4)[$E(V,J-1) V=$E(V,1,J-2)_$TR($E(V,J-1),%YIFAM(4),%YIFAM(5))_$E(V,J,255)
+ S W1=V
+ S V=$E(W1) F J=2:1:LW1 S LW=$E(W1,J) I LW'=$E(W1,J-1) S V=V_LW
+ Q V
+ 
+ S CO=" ",V="" F J=1:1:$L(W1) S LW=$E(W1,J) D
+ .I LW[%YIFAM(6) D
+ ..I CO["ИЙ" D
+ ...I LW["ОЕ" S CO="И",V=$E(V,$L(V)-1)_CO
+ ...I LW'["ОЕ" S:LW'=CO V=V_$TR(LW,%YIFAM(6),%YIFAM(7))
+ ..I CO'["ИЙ" S V=V_$TR(LW,%YIFAM(6),%YIFAM(7))
+ .I LW'[%YIFAM(6) D
+ ..I LW'=CO D
+ ...I LW[%YIFAM(6),CO[%YIFAM(4) S CO=$TR(CO,%YIFAM(4),%YIFAM(5)),V=$E(V,1,$L(V)-1)_CO
+ ...I LW'=CO S V=V_LW
+ .S CO=LW
+ Q
+SEX(F) ; Пол по окончании фамилии
+ N O,I,L
+ S F=$$LU^TXTU(F),L=$L(F)+1
+ S O="ОВ|ЕВ|ИН|ЫН|ЦКИЙ|СКИЙ|ЦКОЙ|СКОЙ|ЦКИЙ|ОВА|ЕВА|ИНА|АЯ|ЯЯ|ЕКАЯ|ЦКАЯ"
+ F I=1:1:17 I I<16,$F(F,$P(O,"|",I))=L Q 
+ Q:I>16 "" Q $P("1|1|1|1|1|1|1|1|1|2|2|2|2|2|2|2","|",I)
+SEXFIO(FIO) ; Пол по ФИО
+ N A,F
+ S F=$P(FIO," ",1)
+ S A=$$SEX(F) Q:A'="" A
+ S F=$$LU^TXTU($P(FIO," ",2))
+ I F'="" S A=$G(^ISLIB("fioi-sex",F)) Q:A'="" A
+ S F=$$LU^TXTU($P(FIO," ",3))
+ I F'="" S A=$G(^ISLIB("fioo-sex",F)) Q:A'="" A
+ Q 0
+SEXF(F,I,O) ; Пол по ФИО
+ N A
+ S A=$$SEX(F) Q:A'="" A
+ S I=$$LU^TXTU(I)
+ I I'="" S A=$G(^ISLIB("fioi-sex",I)) Q:A'="" A
+ S O=$$LU^TXTU(O)
+ I O'="" S A=$G(^ISLIB("fioo-sex",O)) Q:A'="" A
+ Q ""
+NRMFAM(X) ; Нормализация фамилии
+ I X[" " D  Q X
+ .N I,A
+ .F I=1:1:$L(X," ") S A=$P(X," ",I),$P(X," ",I)=$$LU^TXTU($E(A,1))_$$UL^TXTU($E(A,2,99))
+ Q:X'["-" $$LU^TXTU($E(X,1))_$$UL^TXTU($E(X,2,99))
+ ; Для соединенных фамилий
+ N I,A
+ F I=1:1:$L(X,"-") S A=$P(X,"-",I),$P(X,"-",I)=$$LU^TXTU($E(A,1))_$$UL^TXTU($E(A,2,99))
+ Q X
+NRMFIO(X) ; Нормализация ФИО
+ N F,I
+ S X=$$DBLSP^TXTU(X)
+ S F=$P(X," ",1),I=$P(X," ",2),X=$P(X," ",3)
+ Q $$NRMFAM(F)_$S(I="":"",1:" "_$$NRMFAM(I))_$S(X="":"",1:" "_$$NRMFAM(X))
+FILLIB ; Заполнение библиотеки ФИО
+ N N,R,P
+ K ^BUF("fiof"),^BUF("fioi"),^BUF("fioo")
+ S N="" F  S N=$$NEXT^IPAC(N) Q:N=""  D
+ .S P=$$GET^IPAC(N,"pol")
+ .S R=$$LU^TXTU($$GET^IPAC(N,"fiof"))
+ .I R'="",$L(R)<100 S ^(R)=$G(^BUF("fiof",R))+1 S:P ^(P)=$G(^BUF("fiof",R,P))+1
+ .S R=$$LU^TXTU($$GET^IPAC(N,"fioi"))
+ .I R'="",$L(R)<100 S ^(R)=$G(^BUF("fioi",R))+1 S:P ^(P)=$G(^BUF("fioi",R,P))+1
+ .S R=$$LU^TXTU($$GET^IPAC(N,"fioo"))
+ .I R'="",$L(R)<100 S ^(R)=$G(^BUF("fioo",R))+1
+ ; чистка лишних < 3
+ S N="" F  S N=$O(^BUF("fiof",N)) Q:N=""  I ^(N)<3 K ^(N)
+ S N="" F  S N=$O(^BUF("fioi",N)) Q:N=""  I ^(N)<3 K ^(N)
+ S N="" F  S N=$O(^BUF("fioo",N)) Q:N=""  I ^(N)<3 K ^(N)
+ ; Объединение со справочником
+ S N="" F  S N=$O(^BUF("fiof",N)) Q:N=""  D
+ .S:'$D(^ISLIB("fiof",N)) ^ISLIB("fiof",N)=""
+ S N="" F  S N=$O(^BUF("fioi",N)) Q:N=""  D
+ .S:'$D(^ISLIB("fioi",N)) ^ISLIB("fioi",N)=""
+ S N="" F  S N=$O(^BUF("fioo",N)) Q:N=""  D
+ .S:'$D(^ISLIB("fioo",N)) ^ISLIB("fioo",N)=""
+ Q

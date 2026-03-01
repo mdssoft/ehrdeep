@@ -1,0 +1,151 @@
+IGHEALTH ; Google health routines
+TEST
+	Q
+AUTH(LOG,PASS)
+	; https://www.google.com/accounts/DisplayUnlockCaptcha?service=health
+	N X,r,stream,httprequest,A,CR
+	k ^BUF($J,"gSID"),^("gLSID"),^("gAuth")
+	Set httprequest=##class(%Net.HttpRequest).%New()
+	Set httprequest.Server="www.google.com"
+	Set httprequest.Port=443
+	Set httprequest.Https=1
+	Set httprequest.SSLConfiguration="default"
+	Set stream=##class(%GlobalBinaryStream).%New()
+	Set line="accountType=HOSTED_OR_GOOGLE&"
+	Set line=line_"Email="_LOG
+	Set line=line_"&Passwd="_PASS
+	Set line=line_"&service=health&source=MedsoftCo-MedexisApp-1"
+	Set sc=stream.Write(line)
+	Set httprequest.EntityBody=stream
+	d httprequest.SetHeader("Content-type","application/x-www-form-urlencoded")
+	Do httprequest.Post("/accounts/ClientLogin")
+	s r=httprequest.HttpResponse.StatusCode
+	i r'=200 W !,"Err="_r Do httprequest.%Close() Q 
+	
+	S A="",CR=$C(13,10)
+	While 'httprequest.HttpResponse.Data.AtEnd {
+		S A=A_httprequest.HttpResponse.Data.ReadLine(32000)
+	}
+	S ^BUF($J,"gSID")=$P($$TRIM^TXTU($P(A,$C(10),1)),"=",2)
+	S ^("gLSID")=$P($$TRIM^TXTU($P(A,$C(10),2)),"=",2)
+	S ^("gAuth")=$P($$TRIM^TXTU($P(A,$C(10),3)),"=",2)
+	S ^("gLogin")=LOG
+	
+	Do httprequest.%Close()
+	Q
+POSTBP(sist,diast,pulse,Dtm)
+	n r,line,head,gtm,stream,httprequest,A,CR,X
+	
+	Set httprequest=##class(%Net.HttpRequest).%New()
+	Set httprequest.Server="www.google.com"
+	Set httprequest.Port=443
+	Set httprequest.Https=1
+	Set httprequest.SSLConfiguration="default"
+	Set stream=##class(%GlobalBinaryStream).%New()
+	
+	set gtm=$ZDATETIME(Dtm,3,7)
+	set line="<ContinuityOfCareRecord xmlns=""urn:astm-org:CCR"">"
+	set line=line_"<Body><Results><Result>"
+	set line=line_"<DateTime><Type><Text>Collection start date</Text></Type><ExactDateTime>"_gtm_"</ExactDateTime></DateTime>"
+	
+    set line=line_"<Test><Description><Text>Blood Pressure, Diastolic (Lower Number)</Text>"
+    set line=line_"<Code><Value>18.4248</Value><CodingSystem>Google</CodingSystem></Code></Description>"
+    set line=line_"<TestResult><Value>"_diast_"</Value><Units><Unit>mmHg</Unit></Units></TestResult></Test>"
+    
+    set line=line_"<Test><Description><Text>Blood Pressure, Systolic (Upper Number)</Text>"
+    set line=line_"<Code><Value>18.13801</Value><CodingSystem>Google</CodingSystem></Code></Description>"
+    set line=line_"<TestResult><Value>"_sist_"</Value><Units><Unit>mmHg</Unit></Units></TestResult></Test>"
+    
+    set line=line_"<Test><Description><Text>Pulse</Text>"
+    set line=line_"<Code><Value>18.6463</Value><CodingSystem>Google</CodingSystem></Code></Description>"
+    set line=line_"<TestResult><Value>"_pulse_"</Value><Units><Unit>bpm</Unit></Units></TestResult></Test>"
+    
+    set line=line_"</Result></Results></Body></ContinuityOfCareRecord>"
+    
+    set head="<?xml version=""1.0"" encoding=""utf-8""?><entry xmlns=""http://www.w3.org/2005/Atom"">"
+    set head=head_"<title type=""text"">Health Monitoring Record</title>"
+  	set head=head_"<content type=""text"">Health Monitoring at "_$$DT2^DTUTL(Dtm)_"</content>"
+  	set line=head_line_"</entry>"
+ 
+	Set sc=stream.Write(line)
+	Set httprequest.EntityBody=stream
+	d httprequest.SetHeader("Content-type","application/atom+xml")
+	d httprequest.SetHeader("GData-Version",2)
+	d httprequest.SetHeader("Authorization","GoogleLogin auth="_^BUF($J,"gAuth"))
+	Do httprequest.Post("/health/feeds/register/ui/"_^BUF($J,"gProfile"))
+	s r=httprequest.HttpResponse.StatusCode
+	i r'=200,r'=201 W !,"Err="_r Do httprequest.%Close() Q 
+	
+	S A="",CR=$C(13,10)
+	While 'httprequest.HttpResponse.Data.AtEnd {
+		S A=A_httprequest.HttpResponse.Data.ReadLine(32000)
+	}
+	
+	Do httprequest.%Close()
+	Q
+POSTHH(pulse,Dtm)
+	n r,line,head,gtm,stream,httprequest,A,CR,X
+	
+	Set httprequest=##class(%Net.HttpRequest).%New()
+	Set httprequest.Server="www.google.com"
+	Set httprequest.Port=443
+	Set httprequest.Https=1
+	Set httprequest.SSLConfiguration="default"
+	Set stream=##class(%GlobalBinaryStream).%New()
+	
+	set gtm=$ZDATETIME(Dtm,3,7)
+	set line="<ContinuityOfCareRecord xmlns=""urn:astm-org:CCR"">"
+	set line=line_"<Body><Results><Result>"
+	set line=line_"<DateTime><Type><Text>Collection start date</Text></Type><ExactDateTime>"_gtm_"</ExactDateTime></DateTime>"
+    
+    set line=line_"<Test><Description><Text>Pulse</Text>"
+    set line=line_"<Code><Value>18.6463</Value><CodingSystem>Google</CodingSystem></Code></Description>"
+    set line=line_"<TestResult><Value>"_pulse_"</Value><Units><Unit>bpm</Unit></Units></TestResult></Test>"
+    
+    set line=line_"</Result></Results></Body></ContinuityOfCareRecord>"
+    
+    set head="<?xml version=""1.0"" encoding=""utf-8""?><entry xmlns=""http://www.w3.org/2005/Atom"">"
+    set head=head_"<title type=""text"">Health Monitoring Record</title>"
+  	set head=head_"<content type=""text"">Health Monitoring at "_$$DT2^DTUTL(Dtm)_"</content>"
+  	set line=head_line_"</entry>"
+ 
+	Set sc=stream.Write(line)
+	Set httprequest.EntityBody=stream
+	d httprequest.SetHeader("Content-type","application/atom+xml")
+	d httprequest.SetHeader("GData-Version",2)
+	d httprequest.SetHeader("Authorization","GoogleLogin auth="_^BUF($J,"gAuth"))
+	Do httprequest.Post("/health/feeds/register/ui/"_^BUF($J,"gProfile"))
+	s r=httprequest.HttpResponse.StatusCode
+	i r'=200,r'=201 W !,"Err="_r Do httprequest.%Close() Q 
+	
+	S A="",CR=$C(13,10)
+	While 'httprequest.HttpResponse.Data.AtEnd {
+		S A=A_httprequest.HttpResponse.Data.ReadLine(32000)
+	}
+	
+	Do httprequest.%Close()
+	Q
+PROFILES()
+	n r,line,head,gtm,stream,httprequest,A,CR,X
+	
+	Set httprequest=##class(%Net.HttpRequest).%New()
+	Set httprequest.Server="www.google.com"
+	Set httprequest.Port=443
+	Set httprequest.Https=1
+	Set httprequest.SSLConfiguration="default"
+	//d httprequest.SetHeader("Content-type","application/atom+xml")
+	//d httprequest.SetHeader("GData-Version",2)
+	d httprequest.SetHeader("Authorization","GoogleLogin auth="_^BUF($J,"gAuth"))
+	Do httprequest.Get("/health/feeds/profile/list")
+	s r=httprequest.HttpResponse.StatusCode
+	i r'=200 W !,"Err="_r Do httprequest.%Close() Q 
+	
+	S A="",CR=$C(13,10)
+	While 'httprequest.HttpResponse.Data.AtEnd {
+		S A=A_httprequest.HttpResponse.Data.ReadLine(32000)
+	}
+	S ^BUF($J,"gProfile")=$P($P(A,^BUF($J,"gLogin")_"</title><content type='text'>",2),"</content>",1)
+	;W !,^BUF($J,"gProfile")
+	
+	Do httprequest.%Close()
+	Q

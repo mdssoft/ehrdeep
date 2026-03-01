@@ -1,0 +1,198 @@
+IUSER ; Пользователи системы [ 10/26/2020  5:57 PM ]
+SETROLE(LOG,ROLE,CLR) ; Изменить роль пользователя
+ ; CLR - очищать существующие настройки lcl
+ K:$G(CLR) ^LOG(LOG,"lcl")
+ M:ROLE="" ^LOG(LOG)=^WWW("user")
+ M:ROLE'="" ^LOG(LOG)=^WWW("roles",ROLE,"log")
+ S ^LOG(LOG,"role")=ROLE
+ D UPD(LOG)
+ Q
+UPD(LOG) ; Обновить по сети
+ N R
+ S R=$$^I("ilpu") S:R=0 R="" S:R'="" R="@"_R
+ S ^LOG(LOG,"log")=$$USR_"|"_$H
+ S ^LOG(LOG,"loga")=LOG_R
+ M ^LOGA(LOG_R)=^LOG(LOG)
+ D REGL^IEXCH("^LOGA",LOG_R)
+ Q:'+$G(^cfg("login","allsrv"))
+ D REGL^IEXCH("^LOG",LOG)
+ D GL^IEXCH("^PAS",LOG)
+ Q
+LCL(L,NM) ; Get LCL field for current user
+ Q:'$D(%LOG) ""
+ Q:$D(^LOG(%LOG,"plcl",L,NM)) ^(NM)
+ Q:$D(^LOG(%LOG,"lcl",L))[0 "" ; именно так
+ Q $G(^LCL(L,+^(L),NM))
+LCLI(L,NM) ; Get LCL index for current user
+ Q:$D(^LOG(%LOG,"lcl",L))[0 "" ; именно так
+ Q ^(L)
+RKDR() ; Реальный табельный номер пользователя
+ Q:$G(%LOG)="" ""
+ Q $G(^LOG(%LOG,"kadry"))
+KDR() ; Таб. номер по текущему %LOG
+ Q:$G(%LOG)="" ""
+ I $G(%JOB)'="",$D(^JOB(%JOB,"kadry")) Q ^("kadry")
+ Q $G(^LOG(%LOG,"kadry"))
+USR() ; Пользователь+ЛПУ
+ Q:$G(%LOG)="" ""
+ N L S L=+$$^I("ilpu")
+ Q %LOG_$S(L=0:"",1:"@"_L)
+USRH(DLM) ; Пользователь+ЛПУ+$H
+ ; DLM - delimiter
+ S:$G(DLM)="" DLM="|"
+ Q $$USR()_DLM_$H
+FIO(ID,RETVR) ; Полное ФИО или таб. номер (RETVR=1) по логину
+ Q:ID="" ""  N K
+ I ID["@" S:$P(ID,"@",2)=$$^I("ilpu") K=$G(^LOG($P(ID,"@",1),"kadry")) S:$P(ID,"@",2)'=$$^I("ilpu") K=$G(^LOGA(ID,"kadry"))
+ S RETVR=$G(RETVR)
+ S:ID'["@" K=$G(^LOG($P(ID,"@",1),"kadry"))
+ Q:K="" ID Q:RETVR=1 K
+ Q $$FIO^IKADRY(K)_$S(RETVR>1:" ("_ID_")",1:"")_$S(RETVR'=3:"",$P(ID,"@",2)="":"",1:", "_$$NAME^ICONTR($P(ID,"@",2)))
+UKDR(LOG) ; Таб. номер по пользователю
+ Q:$G(LOG)="" ""
+ I LOG["@" N K S K="" S:$P(LOG,"@",2)=$$^I("ilpu") K=$G(^LOG($P(LOG,"@",1),"kadry")) S:$P(LOG,"@",2)'=$$^I("ilpu") K=$G(^LOGA(LOG,"kadry")) Q:K'="" K
+ Q $G(^LOG($P(LOG,"@",1),"kadry"))
+USRFKDR(TN) ; User by kadry
+ Q:TN="" ""
+ N L
+ S L=$$GET^IKADRY(TN,"user") Q:L'="" L
+ S L="" F  S L=$O(^LOG(L)) Q:L=""  I $G(^(L,"kadry"))=TN Q 
+ Q L
+FUSRH(STR) ; Текстовая расшифровка USRH
+ Q:STR="" ""
+ Q $$FIO($P(STR,"|",1))_", "_$$DTM^DTUTL($P(STR,"|",2))
+SPEC(TN) ; Специальность пользователя
+ ; TN - код сотрудника, опционально
+ Q:$G(%LOG)="" ""
+ Q:$G(^JOB(%JOB,"sel-spec")) ^("sel-spec")
+ S:$G(TN)="" TN=$G(^LOG(%LOG,"kadry"))
+ Q:TN'="" $$SPEC^IKADRY(TN)
+ Q ""
+OTD(TN) ; Подразделение пользователя
+ ; TN - код сотрудника, опционально
+ I $G(%LOG)="" Q ""
+ Q:$G(^JOB(%JOB,"sel-otd")) ^("sel-otd")
+ ; TODO $$C1^I("otd") filter
+ Q:$G(^LOG(%LOG,"otd"))'="" ^("otd")
+ S:$G(TN)="" TN=$G(^LOG(%LOG,"kadry"))
+ Q:TN'="" $$OTD^IKADRY(TN)
+ Q ""
+DEL(USR) ; Удалить
+ N LA
+ S LA=$G(^LOG(USR,"loga"))
+ D K^ISSG("^LOG("""_USR_""")")
+ K ^LOG(USR)
+ K ^PAS(USR)
+ D KGL^IEXCH("^LOG",USR)
+ D KGL^IEXCH("^PAS",USR)
+ Q:LA="" 
+ K ^LOGA(LA)
+ D KGL^IEXCH("^LOGA",LA)
+ Q
+PASS(UID,P) ; Установить пароль
+ S ^PAS(UID)=P
+ S ^PAS(UID,"log")=$$USR^IUSER_"|"_$H
+ D:+$G(^cfg("login","allsrv")) GL^IEXCH("^PAS",UID)
+ Q
+SS(AREA,FL,VAL) ; Установть пользовательске данные сессии
+ S ^JOB(%JOB,AREA_"-u",FL)=VAL
+ Q
+GS(AREA,FL) ; Получить пользовательске данные сессии
+ Q $G(^JOB(%JOB,AREA_"-u",FL))
+SETUD(AREA,FL,VAL) ; Установть пользовательске данные пользователя
+ Q:$G(%LOG)=""
+ S:VAL'="" ^LOG(%LOG,AREA,FL)=VAL
+ K:VAL="" ^LOG(%LOG,AREA,FL)
+ D REGL^IEXCH("^LOG",%LOG,AREA,FL)
+ Q
+GETUD(AREA,FL) ; Получить пользовательске данные пользователя
+ Q:$G(%LOG)="" ""
+ Q $G(^LOG(%LOG,AREA,FL))
+SETSKDR(TN,OT,SP) ; Установить сотрудника в рамках сесии
+ I TN="" K ^JOB(%JOB,"kadry") Q
+ S ^JOB(%JOB,"kadry")=TN
+ S:$G(OT)'="" ^JOB(%JOB,"sel-otd")=OT
+ S:$G(SP)'="" ^JOB(%JOB,"sel-spec")=SP
+ Q
+CHKNEX(KID,USR) ; Проверка пересечения нового с существ. пользователем
+ Q:USR="" 0
+ N X S X=$$GET^IKADRY(KID,"user",+$H)
+ I X'="" Q 0
+ I X="",$G(^LOG(USR,"kadry"))=KID Q 0
+ Q:$D(^LOG(USR)) 1
+ Q 0
+KKM() ; Получить ККМ ID или 0 если нет
+ Q:$G(%LOG)="" 0
+ Q:'$D(^LOG(%LOG,"kkm")) 0
+ N X,T
+ S T=$G(^("kkm")) Q:'T 0
+ I T'=2,$L($G(%JOB)),$L($G(^JOB(%JOB,6))) S X=^(6) Q:$D(^LOG(%LOG,"kkm",X)) ^(X)
+ I $G(%IIDLCL),$D(^LCL("i",%IIDLCL,"kkmid")) Q ^("kkmid")
+ I T=2 D  Q:T T ; на базе справочника
+ .I %JOB="" S T=1 Q 
+ .N I,J,IP,R,L,A,LP,F
+ .S IP=$G(^JOB(%JOB,6)) 
+ .S I=$G(^MN("kkm")) I I="" S T=0 Q
+ .S LP=$$^I("ilpu"),F=0
+ .S (X,J)="" F  S J=$O(^MN(I,J)) Q:J=""  D  Q:F 
+ ..S R=$G(^(J)),L=$P(R,"|",2),A=$P(R,"|",3)
+ ..I L="",A="",X="" S X=J Q  ; simple choice
+ ..I L'="",L'=LP Q 
+ ..I A'="",A'=IP Q 
+ ..S X=J
+ ..I L'="",A'="" S F=1 ; final
+ .S T=$S(X="":0,1:X)
+ Q:$D(^LOG(%LOG,"kkm","*")) ^("*") ; if multiserver set
+ Q:T=2 1
+ Q T
+KKMTP() ; Тип выбора ККМ у пользователя (0/1/2=нет/фикс/авто)
+ Q:$G(%LOG)="" 0
+ Q:'$D(^LOG(%LOG,"kkm")) 0
+ Q +$G(^("kkm"))
+SETKKM(USR,IP,ID) ; Установить ККМ у пользователя
+ S USR=$G(USR) S:USR="" USR=%LOG Q:USR="" 
+ S IP=$G(IP) S:IP="" IP="*"
+ Q:$G(^LOG(USR,"kkm",IP))=ID
+ S ^(IP)=ID
+ D GL^IEXCH("^LOG",USR,"kkm",IP)
+ Q
+REN(USRF,USRT) ; Переименовать
+ Q:USRF=""  Q:USRT=""
+ Q:$D(^LOG(USRT)) 
+ N LA,K
+ S LA=$G(^LOG(USRF,"loga")),K=$G(^("kadry"))
+ M ^LOGA(USRT_"@"_$P(LA,"@",2))=^LOGA(LA)
+ M ^LOG(USRT)=^LOG(USRF)
+ M ^PAS(USRT)=^PAS(USRF)
+ S ^LOG(USRT,"loga")=USRT_"@"_$P(LA,"@",2)
+ D:K'="" SET^IKADRY(K,"user",+$H,USRT,1)
+ K ^LOG(USRF),^PAS(USRF),^LOGA(LA)
+ D KGL^IEXCH("^LOG",USRF),KGL^IEXCH("^PAS",USRF),KGL^IEXCH("^LOGA",LA)
+ D GL^IEXCH("^LOG",USRT),GL^IEXCH("^PAS",USRT)
+ D GL^IEXCH("^LOGA",USRT_"@"_$P(LA,"@",2))
+ Q
+ChkPAS(PAS) ; Check password for current user (system)
+ Q:'$D(^LOG(%LOG)) 0
+ Q $G(^PAS(%LOG))=PAS
+DENY(VR,VAL) ; Запретить/разрешить сотруднику вход
+ S VR=$$USRFKDR(VR) Q:VR="" 
+ S ^LOG(VR,"deny")=+$G(VAL)
+ D GL^IEXCH("^LOG",VR,"deny")
+ Q
+IsDENY(VR) ; Запрет вход сотруднику
+ S VR=$$USRFKDR(VR) Q:VR="" 0
+ Q:$G(^LOG(VR,"deny")) 1
+ Q 0
+REGLCL ; 
+ K ^LCLI("users")
+ S ^LCLI("users")="Пользователи"
+ S ^LCLI("users","new")="Создание (0-запрет)"
+ S ^LCLI("users","save")="Изменение (0-запрет)"
+ S ^LCLI("users","del")="Удаление (0-запрет)"
+ S ^LCLI("users","passwd")="Изменение пароля (0-запрет)"
+ S ^LCLI("users","view")="Просмотр (0-запрет)"
+ S ^LCLI("users","rename")="Переименование пользователя (0-запрет)"
+ S ^LCLI("users","roles")="Разрешенные роли через | (для view/del/save)"
+ S ^LCLI("users","roleclr")="Очищать роль при присваивании"
+ S ^LCLI("users","hidepwd")="Скрывать пароль при выводе в UI"
+ Q

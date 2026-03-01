@@ -1,0 +1,133 @@
+IFTP ; FTP routines
+DOSEND(ID) ; for IMSGHUB
+	N SRV,USR,PAS,PORT,DIR,IDX,TO,R,I,sc,ftp,fileArray,a,fn,stream
+	S SRV=$G(^MSGHUB("ftp",ID,"server"))
+	S USR=$G(^("login")),PAS=$G(^("passwd"))
+	Q:SRV=""  Q:USR=""  Q:PAS="" 
+	S DIR=$G(^("path"))
+	S PORT=$P(SRV,":",2),SRV=$P(SRV,":",1)
+	S:$G(PORT)="" PORT=21
+	S ftp=##class(%Net.FtpSession).%New()
+	s ftp.UsePASV=1,ftp.Timeout=20
+	s sc=ftp.Connect(SRV,USR,PAS,PORT)
+	If 'sc Q
+	s sc=ftp.Binary()
+	s:DIR'="" sc=ftp.SetDirectory(DIR)
+	s sc=ftp.GetDirectory(.fn)
+	s fn=$P(fn," ",1) ; fix return data
+	
+	S IDX="" F  S IDX=$O(^MSGOUT("ftp",ID,IDX)) Q:IDX=""  D
+ 	.S R=^(IDX),TO=$P(R,"|",2)
+ 	.Q:$G(^(IDX,"chkfn"))'=""  Q:$G(^("wait"))  
+ 	.Q:$$timeout^IMSGHUB("ftp",ID,IDX) 
+ 	.S stream=##class(%GlobalBinaryStream).%New()
+ 	.S I="" F  S I=$O(^MSGOUT("ftp",ID,IDX,"data",I)) Q:I=""  S sc=stream.Write(^(I))
+	.S sc=ftp.Store(TO,stream)
+    .I 'sc Q 
+ 	.d stream.%Close()
+	.k stream
+	.S R=$G(^MSGOUT("ftp",ID,IDX,"endprc"))
+	.D:R'="" @R
+ 	.K ^MSGOUT("ftp",ID,IDX)
+ 	d ftp.Logout()
+	Q
+DORECV(ID) ; for IMSGHUB
+	N SRV,USR,PAS,PORT,DIR,PP,sc,ftp,fileArray,a,fn,stream
+	S SRV=$G(^MSGHUB("ftp",ID,"server"))
+	S USR=$G(^("login")),PAS=$G(^("passwd"))
+	Q:SRV=""  Q:USR=""  Q:PAS="" 
+	S DIR=$G(^("path")),PP=$G(^("recvfn"))
+	S PORT=$P(SRV,":",2),SRV=$P(SRV,":",1)
+	S:$G(PORT)="" PORT=21
+	S ftp=##class(%Net.FtpSession).%New()
+	s ftp.UsePASV=1,ftp.Timeout=20
+	s sc=ftp.Connect(SRV,USR,PAS,PORT)
+	If 'sc Q
+	s sc=ftp.Binary()
+	s:DIR'="" sc=ftp.SetDirectory(DIR)
+	s sc=ftp.GetDirectory(.fn)
+	s fn=$P(fn," ",1) ; fix return data
+	If 'ftp.NameList(fn,.fileArray) d ftp.Logout() Q 
+	Set key=""
+	For  Do  Quit:(key="")
+	.S fn=fileArray.GetNext(.key) Q:fn="" 
+	.Set stream=##class(%GlobalBinaryStream).%New()
+	.If 'ftp.Retrieve(fn,stream) d stream.%Close() k stream Q 
+	.s sc=ftp.Delete(fn)
+	.D OWF^RWU("hpar")
+	.while 'stream.AtEnd { s a=stream.Read() D W^RWU(a) }
+	.D C^RWU
+	.d stream.%Close()
+	.k stream
+	.q:PP="" 
+	.s a="D "_PP
+	.X a
+    d ftp.Logout()
+	Q
+SEND(ADDR,PORT,USER,PASS,FN) ; Sedn by FTP
+	N filestream,sc,ftp
+	S:$G(PORT)="" PORT=21
+	S ftp=##class(%Net.FtpSession).%New()
+	Set:PORT=990 ftp.SSLConfiguration="default" ; if sftp port
+	I 'ftp.Connect(ADDR,USER,PASS,PORT) Q 
+	
+    Set filestream=##class(%FileBinaryStream).%New()
+    Set sc=filestream.LinkToFile(FN)
+    If 'sc do $System.Status.DisplayError(sc) quit
+    
+    //Uploaded file will have same name as the original
+    Set newname=$P(FN,"\",$L(FN,"\"))
+	Set sc=ftp.Binary()
+    Set sc=ftp.Store(newname,filestream)
+    If 'sc do $System.Status.DisplayError(sc) quit
+    
+    d ftp.Logout()
+	Q
+SENDS(ADDR,PORT,USER,PASS,FN) ; Send by sFTP
+	; SSL over 21 port w. AUTH TSL command (not 990 port !)
+	N filestream,sc,ftp
+	S:$G(PORT)="" PORT=21
+	S ftp=##class(%Net.FtpSession).%New()
+	s ftp.UsePASV=1
+	s ftp.Timeout=20
+	S ftp.SSLConfiguration="default"
+	s sc=ftp.Connect(ADDR,USER,PASS,PORT)
+	If 'sc do $System.Status.DisplayError(sc) Q
+ 
+    Set filestream=##class(%FileBinaryStream).%New()
+    Set sc=filestream.LinkToFile(FN)
+    If 'sc do $System.Status.DisplayError(sc) quit
+    
+    //Uploaded file will have same name as the original
+    Set newname=$P(FN,"\",$L(FN,"\"))
+    u 0 w !,newname
+	Set sc=ftp.Binary()
+    Set sc=ftp.Append(newname,filestream)
+    Write !,"Ftp server messsage:",!,ftp.ReturnMessage,!
+    If 'sc do $System.Status.DisplayError(sc) quit
+    
+    d ftp.Logout()
+	Q
+TEST(ADDR,PORT,USER,PASS) ; Send by sFTP
+	N filestream,sc,ftp,fileArray,key
+	S:$G(PORT)="" PORT=21
+	S ftp=##class(%Net.FtpSession).%New()
+	;S ftp=##class(User.FtpsSession).%New()
+	;S:PORT=990 ftp.SSLConfiguration="default"
+	s ftp.UsePASV=1
+	s ftp.Timeout=15
+	S ftp.SSLConfiguration="default"
+	s sc=ftp.Connect(ADDR,USER,PASS,PORT)
+	u 0 Write "Ftp server messsage:",!,ftp.ReturnMessage,!
+	If 'sc do $System.Status.DisplayError(sc) Q
+	u 0 Write "Ftp server messsage:",!,ftp.ReturnMessage,!
+	If 'ftp.NameList("",.fileArray) Write "Failed to get name list",!
+	u 0 Write !,"Ftp server messsage:",!,ftp.ReturnMessage,!
+	Set key=""
+	Write "List of Files:",!
+	For  Write fileArray.GetNext(.key),! Quit:(key="")
+	Write !,"Ftp server messsage:",!,ftp.ReturnMessage,!
+    U 0 W !,"Test - OK"
+    d ftp.Logout()
+	Q
+	

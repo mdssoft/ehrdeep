@@ -1,0 +1,49 @@
+IFTPS ; FTPS routines w. fixed sftp
+SEND(ADDR,PORT,USER,PASS,FN) ; Sedn by FTP
+	N filestream,sc,ftp
+	S:$G(PORT)="" PORT=21
+	S ftp=##class(User.FtpsSession).%New()
+	s ftp.Timeout=45
+	S ftp.SSLConfiguration="default"
+	
+	s sc=ftp.Connect(ADDR,USER,PASS,PORT)
+	If 'sc do $System.Status.DisplayError(sc) Q
+	
+    Set filestream=##class(%FileBinaryStream).%New()
+    Set sc=filestream.LinkToFile(FN)
+    If 'sc do $System.Status.DisplayError(sc) quit
+    
+    //Uploaded file will have same name as the original
+    S FN=$TR(FN,"/","\")
+    Set newname=$P(FN,"\",$L(FN,"\"))
+	Set sc=ftp.Binary()
+    Set sc=ftp.Store(newname,filestream)
+    If 'sc do $System.Status.DisplayError(sc) quit
+    
+    d ftp.Logout()
+	Q
+SENDS(ADDR,PORT,USER,PASS,FN) ; Send by sFTP
+	; SSL over 21 port w. AUTH TSL command (not 990 port !)
+	N filestream,sc,ftp
+	S:$G(PORT)="" PORT=21
+	S ftp=##class(User.FtpsSession).%New()
+	s ftp.Timeout=45
+	S ftp.SSLConfiguration="default"
+	s sc=ftp.Connect(ADDR,USER,PASS,PORT)
+	If 'sc do $System.Status.DisplayError(sc) Q
+ 
+    Set filestream=##class(%FileBinaryStream).%New()
+    Set sc=filestream.LinkToFile(FN)
+    If 'sc do $System.Status.DisplayError(sc) quit
+    
+    //Uploaded file will have same name as the original
+    S FN=$TR(FN,"/","\")
+    Set newname=$P(FN,"\",$L(FN,"\"))
+    u 0 w !,newname
+	Set sc=ftp.Binary()
+    Set sc=ftp.Append(newname,filestream)
+    Write !,"Ftp server messsage:",!,ftp.ReturnMessage,!
+    If 'sc do $System.Status.DisplayError(sc) quit
+    
+    d ftp.Logout()
+	Q

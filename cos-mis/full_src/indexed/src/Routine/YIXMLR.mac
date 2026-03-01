@@ -1,0 +1,60 @@
+A ;XML READ [ 08/31/2008  5:31 PM ]
+ ;
+RF R !,"ИМЯ ФАЙЛА ",FN Q:FN="."  S:FN="" FN="HHH.XML"
+ O 51:(FN:"R") U 51
+ F %J=1:1 U 51 R A  Q:$ZC  U 0 W:0 A,! D XML
+ C 51 Q
+XML(AN) ; AN - Allow null tags
+ I %J=1 S %ER=0,%A="",%XML=A,%U=0,%XA="XML(",%XR="XMLR(" K %UP,%UD,%UDD,%UI,XML,XMLR,XMLF,XMLS,XMLI S C9=$C(9),C10=$C(10),C13=$C(13) S:$G(AN) %XA(1)=1
+ S %A=%A_A I %A'[">" Q
+CON I %A["<" S %A1=$P(%A,"<",1),%A2=$P(%A,"<",2) G:$E(%A2)="/" END G:$E(%A2)="?" SYS S %A2=$P(%A2,">",1) D  G:%A88="" TEG G:%A88=1 END
+ .S %A88=""
+ .I $E(%A2,$L(%A2))="/" S %A2=$E(%A2,1,$L(%A2)-1),%A8=%A,%A9=%A1,%A="",%A3="" D TEG S %UI(%U)="",%A=">"_$P(%A8,">",2,1000),%A2="/"_%A2,%A88=1 Q 
+ .S %A=$P(%A,">",2,1000),%A3=$P(%A,"<",1),%A="<"_$P(%A,"<",2,1000) S:%A="<" %A=""
+SYS S %A2=$P($E(%A2,2,1000),">",1),%A=$P(%A,">",2,1000)
+ ;W %A2,!
+ I %A["<" G CON
+ Q
+END S %A2=$P($P($E(%A2,2,1000),">",1)," ",1),%A=$P(%A,">",2,1000)
+ I %UP(%U)'=%A2 S %ER=1 W:0 !,"@",%A2 Q
+ D A1 S %UD(%U)=$G(%UD(%U))_%A1
+ S %XA1=$E(%XA,1,$L(%XA)-1),%XA1=$TR(%XA1,">",","),%INDA=$P(%XA1,"(",2,1000),%XA2=%XA1_")="
+ I %UD(%U)'=""!$D(%UI(%U)),$G(%XA(1)) S @(%XA2_"%UD(%U)")
+ D:$D(%UDD(%U)) ; Params
+ .S:$D(%UDD(%U,0)) @(%XA1_",$C(2))=%UDD(%U,0)")
+ .S %MET=0 F  S %MET=$O(%UDD(%U,%MET)) Q:%MET=""  S @(%XA1_",$C(3)_%MET)=%UDD(%U,%MET)")
+ .K %UDD(%U)
+ S %U=%U-1,%XA=$P(%XA,">",1,%U)_">"
+ I %A["<" G CON
+ Q
+TEG D A1 S %UD(%U)=$G(%UD(%U))_%A1
+ D A3
+ S %U=%U+1,%A4=$P(%A2," ",1),%A6=%A4
+ I %A4["&" D COD
+ ; I $D(^TEZ(%A4)) S %A4=^(%A4)
+ S %A44=%A4
+ I %A4'=%A2 S %A5=$P(%A2," ",2,1000) D:%A5'=""  S:%A44="" %A44=$C(0)
+ .F %J5=1:1 S %A55=$P(%A5,""" ",%J5) Q:%A55=""  D
+ ..I %A55["value" S %A44=$P(%A55,"""",2),%UI(%U)="",%UDD(%U,0)=%A4 Q
+ ..S %UDD(%U,$P(%A55,"=",1))=$P(%A55,"""",2),%UI(%U)=""
+ S %XA=%XA_""""_%A44_""">",%UP(%U)=%A6,%UD(%U)=%A3
+ ;W !,%XA," ",%U," ",%A3
+ I %A["<" G CON
+ Q
+A3 S %AF=$E(%A3)
+ I %AF=" "!(%AF=C9)!(%AF=C10)!(%AF=C13) S %A3=$E(%A3,2,9999) G A3
+ S %AL=$E(%A3,$L(%A3))
+ I %AL=" "!(%AL=C9)!(%AL=C10)!(%AL=C13) S %A3=$E(%A3,1,$L(%A3)-1) G A3
+ Q
+A1 S %AF=$E(%A1)
+ I %AF=" "!(%AF=C9)!(%AF=C10)!(%AF=C13) S %A1=$E(%A1,2,9999) G A1
+ S %AL=$E(%A1,$L(%A1))
+ I %AL=" "!(%AL=C9)!(%AL=C10)!(%AL=C13) S %A1=$E(%A1,1,$L(%A1)-1) G A1
+ Q
+COD ;
+ S %LA=%A4,%A4=""
+CCC I %LA'["&" S %A4=%A4_%LA Q
+ S %LL=$P($P(%LA,"&",2),";",1),%L=$P($P(%LA,"&",2),";",2,1000)
+ S:%LL="amp" %LL="&" S:%LL="gt" %LL=">" S:%LL="lt" %LL="<"
+ S %A4=%A4_$P(%LA,"&",1)_%LL,%LA=%L G CCC
+ Q

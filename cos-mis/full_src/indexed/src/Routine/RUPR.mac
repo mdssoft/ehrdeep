@@ -1,0 +1,35 @@
+RUPR ; Управленческие отчеты [ 09/04/2013  2:45 AM ]
+RS4UVR(DS,DE,LPUX) ; Рекламные носители по услугам и врачам за период
+ N FF,TP,VR,R,X,RSpac,CNT
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),LPUX=$G(LPUX)
+ S FF=+$$FR^I()
+ S:'FF LPUX=$$^I("ilpu")
+ K ^BUF($J)
+ D MKAPPRC^IUSLSC(DS,DE,1,"","RS4prc^RUPR","","RS4pac^RUPR",'FF)
+ D OWF^RWU(".txt")
+ D WC^RWU("Сотрудник|Вид рекламы|Сумма|Число услуг|Число лиц")
+ S VR="" F  S VR=$O(^BUF($J,VR)) Q:VR=""  D
+ .S R=$$FIOSH^YIKADRY(VR),TP=""
+ .S TP="" F  S TP=$O(^BUF($J,VR,TP)) Q:TP=""  D
+ ..S X=$TR($G(^(TP,1)),".",",")_"|"_$TR($G(^(2)),".",",")_"|"_$G(^(3))
+ ..D WC^RWU(CR_R_"|"_$$NAME^ISPRAV("rsource",TP)_"|"_X)
+ ..S R=""
+ D C^RWU
+ Q
+RS4pac  ; patient filter
+ s RSpac=$$GET^IPAC(NIB,"rsource",DE)
+ I RSpac="" S TEST=0 Q
+ S RSpos=1
+ Q
+RS4prc 
+ I LPUX'="",LPUX'=LPU Q
+ S CNT=UL(U)
+ S SUMM=$S($L(SUMM):SUMM,1:$$PRICEH^IPRICE(U,PRC,DT)*KSKD)*CNT
+ S ^(1)=$G(^BUF($J,VR,RSpac,1))+SUMM,^(2)=$G(^(2))+CNT
+ I '$D(^BUF($J,VR,RSpac,3,NIB)) s ^(NIB)="",^(3)=$G(^BUF($J,VR,RSpac,3))+1 
+ Q
+REGIPROC 
+ N D
+ S D="Управленческая отчетность"
+ S ^IPROC(D,"Реклама","Услуги по врачам в разрезе рекламных носителей")="RS4UVR^RUPR,1,2,d,Дата начала периода,d,Дата окончания периода"
+ Q

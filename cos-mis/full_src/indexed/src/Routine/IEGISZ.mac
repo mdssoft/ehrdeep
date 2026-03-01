@@ -1,0 +1,292 @@
+IEGISZ
+EPAC(NI) ; Export -> EDATA()
+ K EDATA
+ N TZBTN,PL,PLT,DT,R
+ M TZBTN=^BTN($C(9)_"r")
+ S PL="",DT=+$H
+ S EDATA(NI,"nib")=NI
+ F  S PL=$O(^BTN(NI,PL)) Q:PL=""  D
+ .S PLT=TZBTN(PL),DT=""
+ .S R=$$GET^IPAC(NI,PLT,DT)
+ .S:$$IsDT^IPAC(PLT) R=$$DT^DTUTL(R)
+ .S EDATA(NI,PLT)=R
+ Q
+FNPAC(NI,FN)
+ N DEV,EDATA
+ D EPAC(NI)
+ S DEV=$$OW^FIL(FN)
+ U DEV
+ D W^FIL("<?xml version=""1.0"" encoding=""windows-1251""?>",DEV)
+ D W^FIL("<patients version=""1.0"">",DEV)
+ D W^FIL("<item>"_CR,DEV)
+ D LDEV^XMLU("EDATA",NI,"",DEV)
+ D W^FIL(CR_"</item>",DEV)
+ D W^FIL("</patients>",DEV)
+ D C^FIL(DEV)
+ U 0
+ Q
+WCDA(NI,ID,FN)
+ N EDATA,DEV,fx
+ s fx=NI_"_"_ID_".xml"
+ D EPRDSC(NI,ID)
+ S DEV=$$OW^FIL(FN_fx_"d")
+ U DEV
+ D W^FIL("<?xml version=""1.0"" encoding=""windows-1251""?>",DEV)
+ D W^FIL("<medrec version=""1.0"">",DEV)
+ D W^FIL("<item>"_CR,DEV)
+ D LDEV^XMLU("EDATA",NI,"",DEV)
+ D W^FIL(CR_"</item>",DEV)
+ D W^FIL("</medrec>",DEV)
+ D C^FIL(DEV)
+ U 0
+ S DEV=$$OW^FIL(FN_fx)
+ U DEV w $$WU8^TXTU($$ECDA^IEGISZ(NI,ID))
+ C DEV U 0
+ Q
+dt(X)
+ Q $TR($$DIISO^DTUTL(X),"-","")
+dtm(X)
+ Q $TR($$DTISO^DTUTL(X),"-","")_$TR($$TM^DTUTL(+$P(X,",",2)),":","")
+eofy(X)
+ Q $$DI^DTUTL("31.12."_$P($$DT^DTUTL(X),".",3))
+dfl(uid,id) ; из НСИ
+ q:id="" ""
+ Q $P($G(^EGISZM("D",uid,id)),"|",1)
+dver(uid) ; из НСИ версия справочника
+ Q $P($G(^EGISZM("D",uid)),"|",2)
+dhdr(uid) ; атрибуты справочника как поля тега
+ n x
+ s x=$G(^EGISZM("D",uid))
+ Q "codeSystem="""_uid_""" codeSystemVersion="""_$P(x,"|",2)_""" codeSystemName="""_$P(x,"|",1)_""" "
+cfl(TP,uid) ; из справочника документа
+ Q $G(^CDAMAP(TP,uid))
+eprd(NI,ID,fll) ; Текст из нескольких полей документа
+ N R,fl,i
+ s R=""
+ F i=1:1:$L(fll,";") D
+ .s fl=$P(fll,";",i)
+ .s:R'="" R=R_CR
+ .s R=R_$G(^EPRD(NI,ID,fl))
+ Q R
+EPRDSC(NI,ID) ; Создать описательный файл MedRecord
+ K EDATA
+ N VR,SP,fpos,uid,DT,TP
+ s EDATA(NI,"pid")=NI
+ s TP=$G(^EPR(NI,ID,"t"))
+ s VR=$P($G(^EPR(NI,ID,"o")),"|",2)
+ S SP=$$GET^IKADRY(VR,"spec")
+ s EDATA(NI,"doc_f")=$$GET^IKADRY(VR,"f")
+ s EDATA(NI,"doc_i")=$$GET^IKADRY(VR,"i")
+ s EDATA(NI,"doc_o")=$$GET^IKADRY(VR,"o")
+ s EDATA(NI,"doc_id")=VR
+ s EDATA(NI,"doc_sp")=$$GETPL^ISPRAV("spec",SP,"fspec")
+ s EDATA(NI,"doc_pos")=$$GETPL^ISPRAV("spec",SP,"fpos")
+ s EDATA(NI,"doc_snils")=$$GET^IKADRY(VR,"snils")
+ s uid=$G(^EPR(NI,ID,"ur")) s:uid="" uid=NI_"."_ID
+ s DT=$P($G(^EPR(NI,ID,"dt")),"|",1)
+ s EDATA(NI,"mr_id")=uid
+ s EDATA(NI,"mr_tp")=$$cfl(TP,"1.2.643.2.69.1.1.1.195")
+ s EDATA(NI,"mr_nm")="Протокол консультации" ; TODO 1.2.643.5.1.13.13.11.1522
+ s EDATA(NI,"mr_dt")=$$DTMISO24^DTUTL(DT,"03")
+ s EDATA(NI,"signer")=$$FIO^IKADRY(VR)
+ Q
+rlpu()
+ Q numorg_".100."_nmis_"."_emis
+ECDA(NI,ID) ; -> XML
+ N numorg,nmis,emis
+ s LPU=3 ; TODO
+ s LPUNM="ООО «ССМЦ №1»"
+ S numorg="1.2.643.5.1.13.13.12.2.77.16397",nmis=1,emis=1  ; TODO
+ N xml,etp,TP,X,DT,DTE,VR,SP,DL,STC,uid
+ s TP=$G(^EPR(NI,ID,"t"))
+ s VR=$P($G(^EPR(NI,ID,"o")),"|",2)
+ s uid=$G(^EPR(NI,ID,"ur")) s:uid="" uid=NI_"."_ID
+ s etp=$G(^DTYPE(TP,"cda")) Q:etp="" 
+ S xml="<?xml version=""1.0"" encoding=""UTF-8""?>"
+ s xml=xml_CR_"<ClinicalDocument xmlns=""urn:hl7-org:v3"" xmlns:xsi=""http://www.w3.org/2001/XMLSchema-instance"" xmlns:identity=""urn:hl7-ru:identity"" xmlns:address=""urn:hl7-ru:address"" xmlns:medService=""urn:hl7-ru:medService"" xmlns:fias=""urn:hl7-ru:fias"">"
+ s xml=xml_CR_"<realmCode code=""RU""/>"
+ s xml=xml_CR_"<typeId root=""2.16.840.1.113883.1.3"" extension=""POCD_MT000040""/>"
+ s xml=xml_CR_"<templateId root="""_etp_"""/>"
+ s xml=xml_CR_"<id root="""_$$rlpu()_".51"" extension="""_uid_"""/>" ; TODO - guid
+ s xml=xml_CR_"<code code=""5"" codeSystem=""1.2.643.5.1.13.13.11.1522"" codeSystemVersion=""4.45"" codeSystemName=""Виды медицинской документации"" displayName=""Протокол консультации""/>" ; TODO
+ s xml=xml_CR_"<title>"_$G(^EPR(NI,ID,"n"))_"</title>"
+ s DT=$P($G(^EPR(NI,ID,"dt")),"|",1),DTE=$P(DT,",",1)_","_($P(DT,",",2)+900) ; TODO окончание приема
+ s xml=xml_CR_"<effectiveTime value="""_$$dtm(DT)_"+0300""/>"
+ s xml=xml_CR_"<confidentialityCode code=""N"" codeSystem=""1.2.643.5.1.13.13.99.2.285"" codeSystemVersion=""1.1"" codeSystemName=""Уровень конфиденциальности медицинского документа"" displayName=""обычный""/>"
+ s xml=xml_CR_"<languageCode code=""ru-RU""/>"
+ s xml=xml_CR_"<setId root="""_$$rlpu()_".50"" extension="""_TP_"."_$G(^EPR(NI,ID,"v"))_"""/>"
+ s xml=xml_CR_"<versionNumber value=""1""/>"
+ s xml=xml_CR_"<recordTarget>"
+ s xml=xml_CR_"<patientRole>"
+ s xml=xml_CR_"<id root="""_$$rlpu()_".10"" extension="""_NI_"""/>"
+ s xml=xml_CR_"<id root=""1.2.643.100.3"" extension="""_$$GET^IPAC(NI,"snils",DT)_"""/>"
+ s xml=xml_CR_"<identity:IdentityDoc nullFlavor=""NI""/>"
+ s xml=xml_CR_"<identity:InsurancePolicy nullFlavor=""NI""/>"
+ s xml=xml_CR_"<addr>"
+ s xml=xml_CR_"<address:Type xsi:type=""CD"" code=""3"" codeSystem=""1.2.643.5.1.13.13.11.1504"" codeSystemVersion=""1.3"" codeSystemName=""Тип адреса пациента"" displayName=""Адрес фактического проживания (пребывания)""/>"
+ s xml=xml_CR_"<streetAddressLine>"_$$TAG^TXTU($$ADR^IPAC(NI,DT))_"</streetAddressLine>"
+ S X=77 ; TODO
+ s xml=xml_CR_"<address:stateCode xsi:type=""CD"" code="""_X_""" codeSystem=""1.2.643.5.1.13.13.99.2.206"" codeSystemVersion=""6.3"" codeSystemName=""Субъекты Российской Федерации"" displayName="""_$$dfl^IEGISZ("1.2.643.5.1.13.13.99.2.206",X)_"""/>"
+ S X=$$GET^IPAC(NI,"adridx",DT) S:X="" X=100000
+ s xml=xml_CR_"<postalCode>"_X_"</postalCode>"
+ s xml=xml_CR_"<fias:Address nullFlavor=""NI""/>"
+ s xml=xml_CR_"</addr>"
+ s xml=xml_CR_"<patient>"
+ s xml=xml_CR_"<name>"
+ s xml=xml_CR_"<family>"_$$GET^IPAC(NI,"fiof",DT)_"</family>"
+ s xml=xml_CR_"<given>"_$$GET^IPAC(NI,"fioi",DT)_"</given>"
+ s xml=xml_CR_"<identity:Patronymic xsi:type=""ST"">"_$$GET^IPAC(NI,"fioo",DT)_"</identity:Patronymic>"
+ s xml=xml_CR_"</name>"
+ S X=$$GET^IPAC(NI,"pol",DT)
+ s xml=xml_CR_"<administrativeGenderCode code="""_X_""" codeSystem=""1.2.643.5.1.13.13.11.1040"" codeSystemVersion=""2.1"" codeSystemName=""Пол пациента"" displayName="""_$S(X=2:"Женский",1:"Мужской")_"""/>"				
+ s xml=xml_CR_"<birthTime value="""_$$dt($$GET^IPAC(NI,"datar",DT))_"""/>"
+ s xml=xml_CR_"</patient>"
+ s xml=xml_CR_"<providerOrganization>"
+ s xml=xml_CR_"<id root="""_numorg_""" extension=""1.2.643.5.1.13.13.12.2.77.7831.0.364471""/>"
+ s X=$$GET^ICONTR(LPU,"license",DT)
+ s xml=xml_CR_"<id root=""1.2.643.5.1.13.2.1.1.1504.101"" extension="""_$P(X," ",2)_""" assigningAuthorityName="""_$P(X," ",3,99)_"""/>"
+ s xml=xml_CR_"<identity:Props nullFlavor=""NI""/>"
+ s xml=xml_CR_"<name>"_LPUNM_"</name>"
+ s xml=xml_CR_"</providerOrganization>"
+ s xml=xml_CR_"</patientRole>"
+ s xml=xml_CR_"</recordTarget>"
+ S SP=$$GET^IKADRY(VR,"spec")
+ s xml=xml_CR_"<author>"
+ s xml=xml_CR_"<time nullFlavor=""NI""/>"
+ s xml=xml_CR_"<assignedAuthor>"
+ D VRINF^IEGISZC(VR,SP)
+ s xml=xml_CR_"</assignedAuthor>"
+ s xml=xml_CR_"</author>"
+ s xml=xml_CR_"<custodian>"
+ s xml=xml_CR_"<assignedCustodian>"
+ s xml=xml_CR_"<representedCustodianOrganization classCode=""ORG"">"
+ s xml=xml_CR_"<id root="""_numorg_""" extension=""1.2.643.5.1.13.13.12.2.77.7831.0.364471""/>"
+ s xml=xml_CR_"<name>"_LPUNM_"</name>"
+ s xml=xml_CR_"<addr>"
+ s xml=xml_CR_"<streetAddressLine>"_$$GET^ICONTR(LPU,"yaddr",DT)_"</streetAddressLine>"
+ S X=$$GET^ICONTR(LPU,"yregion",DT)
+ S:$L(X)>2 X=$E(X,1,2)
+ s xml=xml_CR_"<address:stateCode xsi:type=""CD"" code="""_X_""" codeSystem=""1.2.643.5.1.13.13.99.2.206"" codeSystemVersion=""6.3"" codeSystemName=""Субъекты Российской Федерации"" displayName="""_$$dfl^IEGISZ("1.2.643.5.1.13.13.99.2.206",X)_"""/>"
+ s xml=xml_CR_"<postalCode>"_$$GET^ICONTR(LPU,"yindex",DT)_"</postalCode>"
+ s xml=xml_CR_"<fias:Address nullFlavor=""NI""/>"
+ s xml=xml_CR_"</addr>"
+ s xml=xml_CR_"</representedCustodianOrganization>"
+ s xml=xml_CR_"</assignedCustodian>"
+ s xml=xml_CR_"</custodian>"
+ s xml=xml_CR_"<informationRecipient>"
+ s xml=xml_CR_"<intendedRecipient>"
+ s xml=xml_CR_"<receivedOrganization>"
+ s xml=xml_CR_"<id root=""1.2.643.5.1.13""/>"
+ s xml=xml_CR_"<name>Министерство здравоохранения Российской Федерации</name>"
+ s xml=xml_CR_"</receivedOrganization>"
+ s xml=xml_CR_"</intendedRecipient>"
+ s xml=xml_CR_"</informationRecipient>"
+ ;	<!-- R [1..1] ИНФОРМАЦИЯ О ЛИЦЕ, ПРИДАВШЕМ ЮРИДИЧЕСКУЮ СИЛУ ДОКУМЕНТУ – ВРАЧ-КАРДИОЛОГ -->
+ s xml=xml_CR_"<legalAuthenticator>"
+ s xml=xml_CR_"<time nullFlavor=""NI""/>"
+ s xml=xml_CR_"<signatureCode nullFlavor=""NI""/>"
+ s xml=xml_CR_"<assignedEntity>"
+ D VRINF^IEGISZC(VR,SP)
+ s xml=xml_CR_"</assignedEntity>"
+ s xml=xml_CR_"</legalAuthenticator>"
+ ; оплата
+ S STC=$$GET^IPAC(NI,"stc",DT) ; TODO
+ N DV
+ S DV=$$GET^IINSC(STC,"dvid",DT)
+ D:DV=3 wcash^IEGISZC(NI,DT)
+ D:DV'=3 wdms^IEGISZC(NI,STC,DT)
+ s xml=xml_CR_"<documentationOf>"
+ s xml=xml_CR_"<serviceEvent>"
+ s X=$$cfl(TP,"1.2.643.5.1.13.13.99.2.726")
+ s xml=xml_CR_"<code code="""_X_""" codeSystem=""1.2.643.5.1.13.13.99.2.726"" codeSystemVersion=""1.1"" codeSystemName=""Типы документированных событий"" displayName="""_$$dfl("1.2.643.5.1.13.13.99.2.726",X)_"""/>"
+ s xml=xml_CR_"<effectiveTime>"
+ s xml=xml_CR_"<low value="""_$$dtm(DT)_"+0300""/>"
+ s xml=xml_CR_"<high value="""_$$dtm(DTE)_"+0300""/>"
+ s xml=xml_CR_"</effectiveTime>"
+ s xml=xml_CR_"<performer typeCode=""PPRF"">"
+ s xml=xml_CR_"<assignedEntity>"
+ D VRINF^IEGISZC(VR,SP)
+ s xml=xml_CR_"</assignedEntity>"
+ s xml=xml_CR_"</performer>"
+ s xml=xml_CR_"</serviceEvent>"
+ s xml=xml_CR_"</documentationOf>"
+ ; <!-- R [1..1] СВЕДЕНИЯ О СЛУЧАЕ ОКАЗАНИЯ МЕДИЦИНСКОЙ ПОМОЩИ -->
+ s xml=xml_CR_"<componentOf>"
+ s xml=xml_CR_"<encompassingEncounter>"
+ s xml=xml_CR_"<id root="""_$$rlpu()_".15"" extension="""_uid_"""/>" ; TODO - guid
+ ; Идентификатор случая оказания медицинской помощи:
+ s xml=xml_CR_"<id root="""_$$rlpu()_".17"" extension="""_uid_"""/>"
+ s xml=xml_CR_"<code nullFlavor=""NI""/>"
+ s xml=xml_CR_"<medService:DocType nullFlavor=""NI""/>"
+ s xml=xml_CR_"<effectiveTime>"
+ s xml=xml_CR_"<low value="""_$$dtm(DT)_"+0300""/>"
+ s xml=xml_CR_"</effectiveTime>"
+ s xml=xml_CR_"</encompassingEncounter>"
+ s xml=xml_CR_"</componentOf>"
+ s xml=xml_CR_"<component>"
+ s xml=xml_CR_"<structuredBody>"
+ n sfl,ifl,snm,xmli,sfl2,ifl2,x1,y1,x2,y2,tmp,rr,ifls,fll,fl,flnm,tmpnm,txt
+ s x1="" F  s x1=$O(^CDAMAP(TP,"fl",x1)) Q:x1=""  D
+ .s sfl=^(x1)
+ .s snm=$P(sfl,"|",2,9),sfl=$P(sfl,"|",1)
+ .s X=$$dfl^IEGISZ("1.2.643.5.1.13.13.99.2.197",sfl)
+ .s:snm="" snm=X
+ .s xml=xml_CR_"<component><section>"
+ .s xml=xml_CR_"<code code="""_sfl_""" codeSystem=""1.2.643.5.1.13.13.99.2.197"" codeSystemVersion=""4.36"" codeSystemName=""Секции электронных медицинских документов"" displayName="""_X_"""/>"
+ .s xml=xml_CR_"<title>"_snm_"</title>"
+ .s (xmli,txt)=""
+ .s y1="" F  s y1=$O(^CDAMAP(TP,"fl",x1,y1)) Q:y1=""  D
+ ..s rr=$G(^(y1))
+ ..I rr="" Q  ; без вложенных секций
+ ..d wobserv
+ .s xml=xml_CR_"<text><table><tbody>"_txt_"</tbody></table></text>"
+ .s xml=xml_CR_xmli
+ .s y1="" F  s y1=$O(^CDAMAP(TP,"fl",x1,y1)) Q:y1=""  D
+ ..s rr=$G(^(y1)) Q:rr'=""  ; только вложенные секции
+ ..s x2="" F  s x2=$O(^CDAMAP(TP,"fl",x1,y1,x2)) Q:x2=""  D
+ ...s sfl=^(x2)
+ ...s snm=$P(sfl,"|",2,9),sfl=$P(sfl,"|",1)
+ ...s X=$$dfl^IEGISZ("1.2.643.5.1.13.13.99.2.197",sfl)
+ ...s:snm="" snm=X
+ ...s xml=xml_CR_"<component><section>"
+ ...s xml=xml_CR_"<code code="""_sfl_""" codeSystem=""1.2.643.5.1.13.13.99.2.197"" codeSystemVersion=""4.36"" codeSystemName=""Секции электронных медицинских документов"" displayName="""_X_"""/>"
+ ...s xml=xml_CR_"<title>"_snm_"</title>"
+ ...s (xmli,txt)=""
+ ...s y2="" F  s y2=$O(^CDAMAP(TP,"fl",x1,y1,x2,y2)) Q:y2=""  D
+ ....s rr=$G(^(y2))
+ ....d wobserv
+ ...s xml=xml_CR_"<text><table><tbody>"_txt_"</tbody></table></text>"
+ ...s xml=xml_CR_xmli
+ ...s xml=xml_CR_"</section></component>"
+ .s xml=xml_CR_"</section></component>"
+ s xml=xml_CR_"</structuredBody>"
+ s xml=xml_CR_"</component>"
+ s xml=xml_CR_"</ClinicalDocument>"
+ Q xml
+wobserv
+ n tmp1
+ s ifl=$P(rr,"|",1),fll=$P(rr,"|",2),ifls=$P(rr,"|",3),tmp=""
+ I fll'="" s tmp=$$eprd(NI,ID,fll)
+ s tmp1=$P(rr,"|",4),tmpnm=""
+ I $E(tmp1)="=" s tmp=$E(tmp1,2,999)
+ I $E(tmp1)="!" s tmp=$$fixfl^IEGISZC(NI,ID,DT,$E(tmp1,2,999)),tmpnm=$P(tmp,"|",2),tmp=$P(tmp,"|",1)
+ I $E(tmp1)="@" s tmp=$E(tmp1,2,999)
+ s xmli=xmli_CR_"<entry>"
+ s xmli=xmli_CR_"<observation classCode=""OBS"" moodCode=""EVN"">"
+ s flnm=$$dfl^IEGISZ("1.2.643.5.1.13.13.99.2.166",ifl)
+ s xmli=xmli_CR_"<code code="""_ifl_""" codeSystem=""1.2.643.5.1.13.13.99.2.166"" codeSystemVersion=""1.34"" codeSystemName=""Кодируемые поля CDA документов"" displayName="""_flnm_"""/>"
+ I ifls="" D
+ .s xmli=xmli_CR_"<value xsi:type=""ST"">"_$$TAG^TXTU(tmp)_"</value>"
+ I ifls'="" D
+ .s:tmpnm="" tmpnm=$$dfl^IEGISZ(ifls,tmp) ; если уже есть имя - не берем из справочника, мб для диагноза
+ .I ifls="1.2.643.5.1.13.13.11.1005" s tmpnm=$$dfl^IEGISZ(ifls,tmp) ; наимен. диагноза, есть контроль имени
+ .s xmli=xmli_CR_"<value xsi:type=""CD"" code="""_tmp_""" "_$$dhdr(ifls)_" displayName="""_tmpnm_"""/>"
+ .s tmp=tmpnm
+ s txt=txt_CR_"<tr><td><content>"_$$TAG^TXTU(flnm)_"</content></td><td><content>"_$$TAG^TXTU(tmp)_"</content></td></tr>"
+ s xmli=xmli_CR_"</observation></entry>"
+ Q
+tt
+ S IO=$$OW^FIL("e:\work\cda.xml")
+ U IO w $$WU8^TXTU($$ECDA^IEGISZ(1000,11163003))
+ C IO U 0
+ Q

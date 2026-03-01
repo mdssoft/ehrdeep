@@ -1,0 +1,8 @@
+ICRM ; CRM [ 06/12/2007  10:27 PM ]
+INIT 
+ S ^CMM("tconn",1)="Лично",^CMM("tconn",2)="Телефон",^CMM("tconn",3)="Электронная почта"
+ Q
+RXCH 
+ Q
+WXCH 
+ Q

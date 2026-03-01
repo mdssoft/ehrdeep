@@ -1,0 +1,117 @@
+RLPUSYS ; Системные отчеты по ЛПУ [ 08/21/2017  10:09 PM ]
+VRP(DGN,DS,DE,DET,OTX)   ; Врачебные приемы
+ ; OTX - фильтр по отделению
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),DET=+$G(DET)
+ N CN,NI,R,ML,D,F,I,P,V,X,V1,U,J,KX,OT,ID,T
+ S DGN=$$WD^TXTU(DGN) S:DGN=999 DGN="" 
+ D OWF^RWU(".txt")
+ D WC^RWU("П.п.|Врач|Отделение|"_$S(DET:"Пациент|",1:"")_"Услуг|Неподп. услуг|Расписание|Документов ЭИБ|Неподп. документов")
+ K ^BUF($J)
+ S NI="" F  S NI=$S(DGN="":$$NEXT^IPAC(NI),1:$$NEXT^IPAC(NI,"stc",DGN)) Q:NI=""  D
+ .I DGN'="" D GETM^IPAC(NI,"stc","ML")
+ .I DGN'="" S D=$O(ML(DS+1),-1)-1,F=1
+ .I DGN'="" F  S D=$O(ML(D)) Q:D=""!(D>DE)  I ML(D)=DGN S F=0 Q 
+ .I DGN'="" Q:F  
+ .S D=DS-1 F  S D=$O(^PNF(NI,D)) Q:D>DE!(D="")  D 
+ ..S KX="" F  S KX=$O(^PNF(NI,D,KX)) Q:KX=""  D
+ ...S V=$P(KX,"|",1),OT=$P(KX,"|",2),ID=$P(KX,"|",3)
+ ...I OTX'="",OTX'=OT Q 
+ ...S R=$G(^ZNF(V,OT,D,ID,"e")) Q:R=""  D
+ ....S R=$P(R,"~",1)
+ ....S ^(1)=$G(^BUF($J,V,OT,-1,"u",1))+1
+ ....S:R="w" ^(2)=$G(^(2))+1
+ ....I DET S ^(1)=$G(^BUF($J,V,OT,NI,"u",1))+1 S:R="w" ^(2)=$G(^(2))+1
+ .S D=DS-1,I=0 F  S D=$O(^DSHP(NI,D)) Q:D=""!(D>DE)  D
+ ..S T="" F  S T=$O(^DSHP(NI,D,T)) Q:T=""  D
+ ...S V="" F  S V=$O(^DSHP(NI,D,T,V)) Q:V=""  D
+ ....S OT=$P($G(^(V)),"|",2)
+ ....I OTX'="",OTX'=OT Q 
+ ....S ^("r")=$G(^BUF($J,V,OT,-1,"r"))+1
+ ....I DET S ^("r")=$G(^BUF($J,V,OT,NI,"r"))+1
+ .S P="" F  S P=$O(^EPR(NI,P)) Q:P=""  S D=+$G(^(P,"dt")),X=$G(^("o")),V=$P(X,"|",2),(I,J)=0 I V'="",D'<DS,D'>DE S I=1 D  
+ ..S J=1,R=+$P($G(^("s")),"|",1)
+ ..S OT=$P(X,"|",5)
+ ..S:OT="" OT=$$OTD^IKADRY(V,D)
+ ..I OTX'="",OTX'=OT Q
+ ..S ^(1)=$G(^BUF($J,V,OT,-1,"i",1))+I S:R=0 ^(2)=$G(^(2))+J
+ ..I DET S ^(1)=$G(^BUF($J,V,OT,NI,"i",1))+I S:R=0 ^(2)=$G(^(2))+J
+ 
+ S V="",I=1 F  S V=$O(^BUF($J,V)) Q:V=""  D
+ .S OT="" F  S OT=$O(^BUF($J,V,OT)) Q:OT=""  D
+ ..S R=$G(^BUF($J,V,OT,-1,"u",1))_"|"_$G(^(2))_"|"_$G(^BUF($J,V,OT,-1,"r"))_"|"_$G(^BUF($J,V,OT,-1,"i",1))_"|"_$G(^(2))
+ ..D WC^RWU(CR_I_"|"_$$FIO^IKADRY(V)_"|"_$$GOTD^YISPRAV(OT)_"|"_$S(DET:"|",1:"")_R)
+ ..I DET S NI=-1 F  S NI=$O(^BUF($J,V,OT,NI)) Q:NI=""  D
+ ...S R=$G(^BUF($J,V,OT,NI,"u",1))_"|"_$G(^(2))_"|"_$G(^BUF($J,V,OT,NI,"r"))_"|"_$G(^BUF($J,V,OT,NI,"i",1))_"|"_$G(^(2))
+ ...D WC^RWU(CR_"||"_NI_" "_$$FIO^IPAC(NI,DE)_"|"_R)
+ ..S I=I+1
+ K ^BUF($J)
+CTRLSTE D C^RWU
+ Q
+CTRLPROC ; todo
+ N K
+ S U="" F  S U=$O(UL(U)) Q:U=""  D
+ .S CNT=$G(UL(U))
+ .S K=$G(^BUF($J,"vrf",NI,U)) Q:K&NAZ 
+ .S ^(U)=$S($G(^BUF($J,"vrf",NI,U))<3:2,1:3)_"|"_DT_"|"_CNT
+ Q
+UNDsys(DS,DE,LPU) ; Услуги без документов -> STATE
+ N OT,VR,DT,ID,R,NI,LI
+ K STATE
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .I LPU'="",'$D(^ZNFI("l",LPU,VR)) Q
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ..K LI
+ ..S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ...S R=$G(^(ID,"e")) Q:R="" 
+ ...Q:"wd"[$P(R,"~",1) 
+ ...I LPU'="",$G(^("l"))'=LPU Q 
+ ...S NI=$P(R,"~",2) Q:NI="" 
+ ...S LI(NI)=""
+ ..S NI="" F  S NI=$O(LI(NI)) Q:NI=""  D
+ ...Q:$$FNDFDOC^RMHS(NI,DT,VR)'="" 
+ ...S STATE(VR)=$G(STATE(VR))+1
+ Q
+VRCTL(DS,DE,OTX,LPU) ; Списки контроля сотрудников
+ N VR,OT,SP,DT,ID,LP,NI,KX,TM,R,X1,X2,X3
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ K ^BUF($J)
+ S NI="" F  S NI=$O(^PNF(NI)) Q:NI=""  S DT=DS-1 F  S DT=$O(^PNF(NI,DT)) Q:DT>DE!(DT="")  D 
+ .S KX="" F  S KX=$O(^PNF(NI,DT,KX)) Q:KX=""  D
+ ..S VR=$P(KX,"|",1),OT=$P(KX,"|",2),ID=$P(KX,"|",3)
+ ..I OTX'="",OTX'=OT Q 
+ ..S R=$G(^ZNF(VR,OT,DT,ID,"e")) Q:R=""
+ ..I LPU'="",$G(^("l"))'=LPU Q 
+ ..Q:"wd"[$P(R,"~",1)
+ ..S NI=$P(R,"~",2) Q:NI="" 
+ ..S:'$D(^BUF($J,VR,NI,DT,1)) ^(1)=""
+ S LP="" F  S LP=$O(^DSH(LP)) Q:LP=""  D:LPU=""!(LPU=LP)
+ .S OT="" F  S OT=$O(^DSH(LP,OT)) Q:OT=""  D:OTX=""!(OTX=OT)
+ ..S VR="" F  S VR=$O(^DSH(LP,OT,VR)) Q:VR=""  S SP="" F  S SP=$O(^DSH(LP,OT,VR,SP)) Q:SP=""  D
+ ...S DT=DS-1 F  S DT=$O(^DSH(LP,OT,VR,SP,DT)) Q:DT=""!(DT>DE)  D
+ ....S TM="" F  S TM=$O(^DSH(LP,OT,VR,SP,DT,TM)) Q:TM=""  D
+ .....S R=$G(^(TM)) Q:R="" 
+ .....S NI=$P(R,"|",1) Q:'$$EXIST^IPAC(NI) 
+ .....S:'$D(^BUF($J,VR,NI,DT,2)) ^(2)=""
+ S DT=DS-1 F  S DT=$O(^EPRI("dt",DT)) Q:DT=""!(DT>DE)  D
+ .S NI="" F  S NI=$O(^EPRI("dt",DT,NI)) Q:NI=""  D
+ ..S ID="" F  S ID=$O(^EPRI("nd",NI,DT,ID)) Q:ID=""  D
+ ...S VR=$P(^(ID),"|",2) Q:VR="" 
+ ...I OTX'="",$$OTD^IKADRY(VR)'=OTX Q
+ ...I LPU'="",$P($G(^EPRI("dt",DT,NI,ID)),"|",1)'=LPU Q 
+ ...S:'$D(^BUF($J,VR,NI,DT,3)) ^(3)=""
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|Врач|Пациент|Дата|Расписание|Услуги|ЭМК")
+ S VR="" F  S VR=$O(^BUF($J,VR)) Q:VR=""  D
+ .S NI="" F  S NI=$O(^BUF($J,VR,NI)) Q:NI=""  D
+ ..S DT="" F  S DT=$O(^BUF($J,VR,NI,DT)) Q:DT=""  D
+ ...S X1=$D(^(DT,1)),X3=$D(^(3))
+ ...I X1,X3 Q 
+ ...S X2=$D(^(2))
+ ...D WC^RWU(CR_NI_"|"_$$FIO^IKADRY(VR)_"|"_$$FIO^IPAC(NI)_"|"_$$DT^DTUTL(DT)_"|"_$S(X2:"+",1:"нет")_"|"_$S(X1:"+",1:"нет")_"|"_$S(X3:"+",1:"нет"))
+ K ^BUF($J)
+ D C^RWU
+ Q
+REGIPROC 
+ S ^IPROC("Система","Контроль работы сотрудников")="VRP_RLPUSYS,1,5,t@storage:dog,Договор,d,Период приемов с,d,Период приемов по,t@string:0/Нет#1/Да,Подробно,te@storage:otd@1,Отделение"
+ S ^IPROC("Система","Списки по контролю ввода данных")="VRCTL_RLPUSYS,100,4,d,Период приемов с,d,Период приемов по,te@storage:otd@1,Отделение,t@storage:lpu,Филиал"
+ Q

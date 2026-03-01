@@ -1,0 +1,308 @@
+NKFUND ; Коечный фонд [ 06/28/2024  2:57 PM ]
+INIT ;
+ N I,J,LP
+ S LP=+$$^I("ilpu"),I=""
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<kfund><korp>|")
+ F  S I=$O(^PLPU(LP,I)) Q:I=""  D WC^RWU(CR_I_"|"_$P($G(^(I)),"|",1))
+ D WC^RWU("</korp><prof>0|Все")
+ S J=+$G(^MN("uboxprof")),I=""
+ S I="" F  S I=$O(^MN(J,I)) Q:I=""  D WC^RWU(CR_I_"|"_$P(^(I),"|",1))
+ D W^RWU("</prof><otd>")
+ D LSTOTDAs^YISPRAV(1,"stac")
+ D W^RWU("</otd></kfund></nb_console>"),C^RWU
+ Q
+INITI ; Инициализация формы размещения
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<kfundin><vid>")
+ D LSTs^NSPRAV("kfundti")
+ D W^RWU("</vid></kfundin></nb_console>"),C^RWU
+ Q
+TAB(DS,DE,ST,KTP,OTD,KOR) ; Список
+ N DT,LP,KR,FL,CAB,R,RR,CNK,K,KEY,HKEY,T,F,CD,X,S,NI,PDT,NDT,ODT,FW,DCNT,DTX,lus
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S:DE<DS DE=DS
+ S LP=+$$^I("ilpu")
+ S lus=$$LCL^IUSER("kfund","swush")
+ D MINHDR^IHTML("Коечный фонд")
+ D CSS^IHTML
+ D W^RWU(CR_".tit { font-size: 14px; background-color: #DDDDDD; font-weight: bold; text-align: center; }")
+ D W^RWU(CR_"span { display: inline-block; font-size: 14px; overflow: hidden; }")
+ D W^RWU(CR_".k1 { font-size: 14px; background-color: #FFFFCC; text-align: center; }")
+ D W^RWU(CR_".k2 { font-size: 14px; background-color: #CCFFFF; text-align: center; }")
+ D W^RWU(CR_".k3 { font-size: 14px; background-color: #CCCCCC; text-align: center; }")
+ D W^RWU(CR_".i1 { background-color: #99FF99; text-align: center; ; text-overflow: clip; }")
+ D W^RWU(CR_".i2 { background-color: #6699FF; text-align: center; }")
+ D W^RWU(CR_".i3 { background-color: #FF6666; text-align: center; }")
+ 
+ D W^RWU("--></style></head><body bgcolor=""#8CADD5"" text=""#000000""><table width=""100%"">")
+ S R="<tr class=""tit""><td><b>Размещение</b></td>"
+ S DCNT=DE-DS+1
+ F DT=DS:1:DE S T=$$DT2^DTUTL(DT),R=R_"<td><b>"_$S(DCNT>14:$P(T,".",1,2),1:T)_"</b></td>"
+ D WC^RWU(CR_R_"</tr>")
+ S KR="" F  S KR=$O(^PLPU(LP,KR)) Q:KR=""  S FL="" F  S FL=$O(^PLPU(LP,KR,FL)) Q:FL=""  S CAB="" F  S CAB=$O(^PLPU(LP,KR,FL,"cab",CAB)) Q:CAB=""  D
+ .S R=$G(^(CAB)) Q:$P(R,"|",1)'=2  
+ .S CNK=$P($G(^(CAB,"p")),"|",1) S:CNK="" CNK=1
+ .S KEY=KR_"."_FL_"."_CAB,HKEY=KR_"~"_FL_"~"_CAB
+ .S T=$P(R,"|",3) S:T="" T="палата "_$P(R,"|",2)
+ .F K=1:1:CNK D
+ ..S DT=$O(^UBOX(LP,KEY,K,DS_",0"),-1),PDT=0,F=0,RR=""
+ ..F  D TABprc S PDT=DT,DT=$O(^UBOX(LP,KEY,K,DT)) Q:+DT>DE!(DT="") 
+ ..S RR="<td colspan="""_DCNT_""">"_RR_"</td>"
+ ..S R="<td class="""_$S('F:"k1",F=1:"k2",1:"k3")_"""><a href=""int:kfund_box?"_LP_"~"_HKEY_"~"_K_""">"_$$TAG^TXTU(T)_", койка "_K_"</a></td>"
+ ..D WC^RWU(CR_"<tr>"_R_RR_"</tr>")
+ D W^RWU("</table></body></html>")
+ D C^RWU
+ Q
+cprcd(DTS,DTE) ; calc procent of length
+ S:$P(DTS,",",2)=99999 $P(DTS,",",2)=86340
+ S:$P(DTE,",",2)=99999 $P(DTE,",",2)=86340
+ S DTS=$P(DTS,",",1)+$J($P(DTS,",",2)/86340,"",2)
+ S DTE=$P(DTE,",",1)+$J($P(DTE,",",2)/86340,"",2)
+ Q +$J(100*(DTE-DTS)/DCNT,"",1)+8
+TABprc 
+ Q:DT=""
+ S X=^(DT),NDT=$O(^(DT)) Q:+NDT<DS  Q:NDT=(DS_",1") 
+ S DTX=DT
+ I 'PDT,(+DT)'<(+DS),DT'=(DS_",1") S RR=RR_"<span style=""width: "_$$cprcd(DS_",0",DT)_"%""> </span>" ; если в начале нет записей
+ S:+NDT>DE NDT=DE_",99999"
+ S:+DT<DS DT=DS_",0"
+ S S=$P(X,"|",1),NI=$P(X,"|",2)
+ S:S>6 F=2 ; closed
+ S:S="" S=99
+ 
+ S RR=RR_"<span style=""width: "_$$cprcd(DT,NDT)_"%"""
+ S:S<99 RR=RR_" class="""_$S(S>6:"i3",S=2:"i2",1:"i1")_""""
+ S RR=RR_">"
+ ;S:'FW RR=RR_" -&gt; "
+ S:S<5 RR=RR_"<a href=""int:kfund_tm?"_LP_"~"_HKEY_"~"_K_"~"_DTX_""">"
+ S RR=RR_$S(S=99:" ",S=6:"Резерв",S=7:"Закрыта",S=8:"Ремонт",1:NI_" "_$$FIOSH^IPAC(NI)_$S(lus:" "_$$GETE^IPAC(NI,"ush",DT),1:""))
+ S:S<5 RR=RR_"</a>"
+ S RR=RR_"</span>"
+ Q
+TREELST ; Древовидный список коек
+ N LP,KR,FL,CAB,CNK,R,C,I,K,T
+ S C="",LP=+$$^I("ilpu")
+ D OWF^RWU(".txt")
+ S KR="" F  S KR=$O(^PLPU(LP,KR)) Q:KR=""  D
+ .S R=$P($G(^(KR)),"|",1),R=$S(R="":"Основной корпус",1:R)
+ .D WC^RWU(C_$C(9)_R_"|"_LP_"."_KR_"|2") S C=CR
+ .S FL="" F  S FL=$O(^PLPU(LP,KR,FL)) Q:FL=""  D
+ ..S R=$G(^(FL)),R=$S(R="":"Основной этаж",1:R)
+ ..D WC^RWU(CR_$C(9,9)_R_"|"_LP_"."_KR_"."_FL_"|3")
+ ..S CAB="" F  S CAB=$O(^PLPU(LP,KR,FL,"cab",CAB)) Q:CAB=""  D
+ ...S R=$G(^(CAB)) Q:$P(R,"|",1)'=2
+ ...S CNK=$P($G(^(CAB,"p")),"|",1) S:CNK="" CNK=1
+ ...S T=$P(R,"|",3) S:T="" T="палата "_$P(R,"|",2)
+ ...F K=1:1:CNK D WC^RWU(CR_$C(9,9,9)_T_", койка "_K_"|"_LP_"~"_KR_"~"_FL_"~"_CAB_"~"_K_"~"_K_"|4")
+ D C^RWU
+ Q
+BOXNM(KEY) ; Наименование койки
+ N K,R,LP,T
+ S K=$P(KEY,"~",5)
+ S R=$G(^PLPU($P(KEY,"~",1),$P(KEY,"~",2),$P(KEY,"~",3),"cab",$P(KEY,"~",4)))
+ S T=$P(R,"|",3) S:T="" T="палата "_$P(R,"|",2)
+ D MSG^RWU(KEY_"|"_T_", койка "_K)
+ Q
+boxnm(KEY) ; SYS
+ Q
+FREE(DT,TM,QFR) ; Список свободных на дату/время
+ ; QFR - выводить и занятые
+ N LP,KR,FL,CAB,CNK,R,C,I,K,T,KEY,HKEY,DTM,F,TT
+ S DT=$$DIH^DTUTL(DT),TM=+$$TI^DTUTL(TM),QFR=$G(QFR)
+ S C="",LP=+$$^I("ilpu")
+ D OWF^RWU(".txt")
+ S KR="" F  S KR=$O(^PLPU(LP,KR)) Q:KR=""  D
+ .S R=$P($G(^(KR)),"|",1),R=$S(R="":"Основной корпус",1:R)
+ .D WC^RWU(C_$C(9)_R_"|"_LP_"."_KR_"|2") S C=CR
+ .S FL="" F  S FL=$O(^PLPU(LP,KR,FL)) Q:FL=""  D
+ ..S R=$G(^(FL)),R=$S(R="":"Основной этаж",1:R)
+ ..D WC^RWU(CR_$C(9,9)_R_"|"_LP_"."_KR_"."_FL_"|3")
+ ..S CAB="" F  S CAB=$O(^PLPU(LP,KR,FL,"cab",CAB)) Q:CAB=""  D
+ ...S R=$G(^(CAB)) Q:$P(R,"|",1)'=2
+ ...S CNK=$P($G(^(CAB,"p")),"|",1) S:CNK="" CNK=1
+ ...S T=$P(R,"|",3) S:T="" T="палата "_$P(R,"|",2)
+ ...F K=1:1:CNK D
+ ....S KEY=KR_"."_FL_"."_CAB,HKEY=KR_"~"_FL_"~"_CAB
+ ....S DTM=$O(^UBOX(LP,KEY,K,DT_","_(TM+1)),-1),F=0
+ ....I DTM'="",$G(^(DTM))'="" S F=1 Q:'QFR  ; занята
+ ....S TT=$S(F:"",DTM="":" свободна",1:$S(QFR:" своб.",1:"")_" c "_$$DTM^DTUTL(DTM))
+ ....D WC^RWU(CR_$C(9,9,9)_T_", койка "_K_DTM_"|"_LP_"~"_HKEY_"~"_K_"~"_DTM_"|4")
+ D C^RWU
+ Q
+LSTST 
+ D MSG^RWU("0|Нет"_CR_"6|Резерв"_CR_"7|Закрыта"_CR_"8|Ремонт")
+ Q
+KSTAT(KEY,DS,DE,ST) ; Установить статус палаты/койки
+ N LP,DT,K
+ I $$LCL^IUSER("kfund","setstat")=0 D MSG^RWU("Недостаточно прав.") Q 
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),LP=+$$^I("ilpu")
+ S:DS>DE DE=DS
+ S LP=$P(KEY,"~",1),K=$P(KEY,"~",5),KEY=$TR($P(KEY,"~",2,4),"~",".")
+ Q:K=""!($TR(KEY,".","")="")  
+ S DT=(DS-1)_",99999"
+ I 'ST,$O(^UBOX(LP,KEY,K,DT),-1)'="" S ^(DS_",1")="" D GL^IEXCH("^UBOX",LP,KEY,K,DS_",1")
+ F  S DT=$O(^UBOX(LP,KEY,K,DT)) Q:+DT>DE!(DT="")  K ^(DT) D KGL^IEXCH("^UBOX",LP,KEY,K,DT) ; clear
+ I ST S ^UBOX(LP,KEY,K,DS_",1")=ST,^(DE_",99999")="" D GL^IEXCH("^UBOX",LP,KEY,K,DS_",1"),GL^IEXCH("^UBOX",LP,KEY,K,DE_",99999")
+ Q
+GETNIB(KEY) ; Получить номер истории госпитализированного
+ N NI,K,DT,LP
+ S LP=$P(KEY,"~",1),K=$P(KEY,"~",5),DT=$P(KEY,"~",6),KEY=$TR($P(KEY,"~",2,4),"~",".")
+ Q:K="" 
+ S NI=$P($G(^UBOX(LP,KEY,K,DT)),"|",2)
+ D MSG^RWU(NI)
+ Q
+LPAC(NI) 
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<kfundin>")
+ D WTAGDC^RWU("fiof",$$GET^IPAC(NI,"fiof"))
+ D WTAGDC^RWU("fioi",$$GET^IPAC(NI,"fioi"))
+ D WTAGDC^RWU("fioo",$$GET^IPAC(NI,"fioo"))
+ D W^RWU("</kfundin></nb_console>"),C^RWU
+ Q
+INS ; Госпитализация
+ N R,NBC,DT,DS,DE,NI,T,KEY,K,LP,TS,TE,ODT,HID,UH
+ I $$LCL^IUSER("kfund","isave")=0 D MSG^RWU("Нет прав на изменение.") Q
+ D RBUFH^YIXMLRR(1)
+ S H=+$H,NBC="nb_console",LP=+$$^I("ilpu")
+ S DS=$$DIH^DTUTL($G(XML(NBC,"kfundin","df")))
+ S DE=$$DIH^DTUTL($G(XML(NBC,"kfundin","dt")))
+ S TS=$$TI^DTUTL($G(XML(NBC,"kfundin","tmf"))) S:'TS TS=1
+ S TE=$$TI^DTUTL($G(XML(NBC,"kfundin","tmt")))
+ S:'TE TE=99999 S:TE>86339 TE=99999
+ S NI=$G(XML(NBC,"kfundin","pac")) Q:'$$EXIST^IPAC(NI) 
+ S T=$G(XML(NBC,"kfundin","vid")) S:T=""!(T<0) T=1
+ S KEY=$G(XML(NBC,"kfundin","box"))
+ S HID=$G(XML(NBC,"kfundin","hid"))
+ S LP=$P(KEY,"~",1),K=$P(KEY,"~",5),ODT=$P(KEY,"~",6),KEY=$TR($P(KEY,"~",2,4),"~",".")
+ I $TR(KEY,".","")=""!(K="") Q 
+ S DT=DS_","_(TS-1)
+ D RMIDX(LP,KEY,K,DS_","_TS)
+ S R=$O(^UBOX(LP,KEY,K,DT))
+ S UH=$G(^UBOX(LP,KEY,K,DS_","_TS,"u"))
+ I R'="",$G(^(R))="" K ^(R) D KGL^IEXCH("^UBOX",LP,KEY,K,R)
+ I DT'=ODT,ODT'="" K ^UBOX(LP,KEY,K,ODT) D KGL^IEXCH("^UBOX",LP,KEY,K,ODT)
+ F  S DT=$O(^UBOX(LP,KEY,K,DT)) Q:$S(DT="":1,+DT>DE:1,+DT'=DE:0,1:$P(DT,",",2)>TE)  K ^(DT) D KGL^IEXCH("^UBOX",LP,KEY,K,DT) ; clear
+ S R=T_"|"_NI_"|"_HID_"|"_$G(XML(NBC,"kfundin","comm"))_"|"_$$USRH^IUSER()
+ S ^UBOX(LP,KEY,K,DS_","_TS)=R,^(DE_","_TE)=""
+ S:UH'="" ^(DE_","_TE,"u")=UH
+ D GL^IEXCH("^UBOX",LP,KEY,K,DS_","_TS)
+ D REGL^IEXCH("^UBOX",LP,KEY,K,DE_","_TE)
+ D MKIDX(LP,KEY,K,DS_","_TS)
+ 
+ Q:UH'="" 
+ N U,V,O,ID,C
+ S U=$G(^KKCN("box")) Q:U="" 
+ S V=$$KDR^IUSER(),O=$$OTD^IKADRY(V)
+ S C=DE-DS+1 S:C<1 C=1
+ S ID=$$ADD^IUSL(V,DS,O,NI,U_"*"_C,"","","","","","")
+ S R=$$SETSTAT^IUSL(V,DS,O,ID,"w")
+ s ^UBOX(LP,KEY,K,DS_","_TS,"u")=V_"@"_DS_"@"_O_"@"_ID
+ D GL^IEXCH("^UBOX",LP,KEY,K,DS_","_TS,"u")
+ D SBSYS^YNED(NI,V,O,$$DT^DTUTL(DS),1) ; allow credit
+ Q
+LIN(KEY) ; Загрузить информацию
+ N K,DT,NI,R,X,T,LP
+ S X=KEY
+ S LP=$P(KEY,"~",1),K=$P(KEY,"~",5),DT=$P(KEY,"~",6),KEY=$TR($P(KEY,"~",2,4),"~",".")
+ Q:K=""!(DT="")  
+ S R=$G(^UBOX(LP,KEY,K,DT))
+ S NI=$P(R,"|",2)
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<kfundin>")
+ D WTAGDC^RWU("pac",NI)
+ D WTAGDC^RWU("box",X)
+ D WTAGDC^RWU("fiof",$$GET^IPAC(NI,"fiof"))
+ D WTAGDC^RWU("fioi",$$GET^IPAC(NI,"fioi"))
+ D WTAGDC^RWU("fioo",$$GET^IPAC(NI,"fioo"))
+ D WTAGDC^RWU("vid",$P(R,"|",2))
+ D WTAGDC^RWU("comm",$P(R,"|",4))
+ D WTAGDC^RWU("hid",$P(R,"|",3))
+ D WTAGD^RWU("df",$$DT^DTUTL(+DT))
+ D WTAGD^RWU("tmf",$$TM^DTUTL(DT))
+ D WTAGDC^RWU("log",$$FUSRH^IUSER($P(R,"|",5,6)))
+ S D=$O(^UBOX(LP,KEY,K,DT))
+ D WTAGD^RWU("dt",$$DT^DTUTL(+D))
+ S T=$P(D,",",2) S:T="" T=86399 S:T=99999 T=86399
+ D WTAGD^RWU("tmt",$$TM^DTUTL(T))
+ S X=KEY
+ S X=$G(^PLPU(LP,$P(X,".",1),$P(X,".",2),"cab",$P(X,".",3,9)))
+ S T=$P(X,"|",3) S:T="" T="палата "_$P(X,"|",2)
+ D WTAGDC^RWU("box_name",T)
+ D W^RWU("</kfundin></nb_console>"),C^RWU
+ Q
+DIN(KEY) ; Удалить размещение
+ I $$LCL^IUSER("kfund","idel")=0 D MSG^RWU("Нет прав на удаление.") Q
+ N K,DT,X,LP
+ S LP=$P(KEY,"~",1),K=$P(KEY,"~",5),DT=$P(KEY,"~",6),KEY=$TR($P(KEY,"~",2,4),"~",".")
+ I $TR(KEY,".","")=""!(K="") Q 
+ D RMIDX(LP,KEY,K,DT)
+ K ^UBOX(LP,KEY,K,DT)
+ D KGL^IEXCH("^UBOX",LP,KEY,K,DT)
+ Q
+OUTS ; Выписка
+ Q
+IsNIB(NI,DT) ; Пациент есть в указанном дне
+ N LP,KEY,K,F,D
+ S LP=+$$^I("ilpu"),F=0
+ S KEY="" F  S KEY=$O(^UBOX(LP,KEY)) Q:KEY=""  D  Q:F
+ .S K="" F  S K=$O(^UBOX(LP,KEY,K)) Q:K=""  D  Q:F
+ ..S D=$O(^(K,DT_",99999"),-1)
+ ..I D'="",$P(^(D),"|",2)=NI S F=1 Q
+ ..S D=$O(^UBOX(LP,KEY,K,DT_","),-1)
+ ..F  D:D'=""  Q:F  S D=$O(^UBOX(LP,KEY,K,D)) Q:+D>DT!(D="")  
+ ...S:$P(^(D),"|",2)=NI F=1
+ Q F
+BbNIB(NI,DT) ; № палаты по пациенту и дате
+ S DT=$O(^UBOXI("nd",NI,DT_".")) Q:DT="" ""
+ Q $P($P(^(DT),"|",2),".",3)
+MKIDX(LP,KEY,K,DTMS,DTME) ; Создать индексы
+ N NI
+ S NI=$P($G(^UBOX(LP,KEY,K,DTMS)),"|",2) Q:NI=""
+ S ^UBOXI("nd",NI,DTMS)=LP_"|"_KEY_"|"_K
+ D GL^IEXCH("^UBOXI","nd",NI,DTMS)
+ Q
+RMIDX(LP,KEY,K,DTMS,DTME) ; Удалить индексы
+ N NI
+ S NI=$P($G(^UBOX(LP,KEY,K,DTMS)),"|",2) Q:NI=""
+ K ^UBOXI("nd",NI,DTMS)
+ D KGL^IEXCH("^UBOXI","nd",NI,DTMS)
+ Q
+REIDX 
+ N L,K,X,D
+ K ^UBOXI
+ S L="" F  S L=$O(^UBOX(L)) Q:L=""  S K="" F  S K=$O(^UBOX(L,K)) Q:K=""  S X="" F  S X=$O(^UBOX(L,K,X)) Q:X=""  D
+ .S D="" F  S D=$O(^UBOX(L,K,X,D)) Q:D=""  D
+ ..Q:$P($G(^(D)),"|",2)=""
+ ..D MKIDX(L,K,X,D)
+ Q
+REGLCL 
+ K ^LCLI("kfund")
+ S ^LCLI("kfund")="Коечный фонд"
+ S ^LCLI("kfund","idel")="Удаление размещения"
+ S ^LCLI("kfund","isave")="Изменение размещения"
+ S ^LCLI("kfund","setstat")="Изменение статуса койки"
+ S ^LCLI("kfund","swush")="Показывать личного врача в записи"
+ Q
+INITDB ;
+ N I
+ S ^MN("root","uboxprof")="Профили коек"
+ S ^MN("root","kfundti")="Вид размещения при госпитализации"
+ D:'$$CHKSPR^ISPRAV("uboxprof") 
+ .S I=$$NEWIDX^YISPRAV("uboxprof")
+ .S ^MN(I,1)="Терапевтический"
+ .S ^MN(I,3)="Кардиологический"
+ .S ^MN(I,5)="Ревматологический"
+ .S ^MN(I,7)="Гастроэнтерологический"
+ .S ^MN(I,9)="Неврологический"
+ .S ^MN(I,11)="Чистый хирургический"
+ .S ^MN(I,13)="Гнойный хирургический"
+ .S ^MN(I,15)="Кардиохирургический"
+ .S ^MN(I,17)="Травматологический"
+ .S ^MN(I,19)="Отоларингологический"
+ .S ^MN(I,21)="Гинекологический"
+ .S ^MN(I,23)="Инфекционный"
+ .S ^MN(I,25)="Реанимационный"
+ .S ^MN(I,50)="Дневной стационар"
+ D:'$$CHKSPR^ISPRAV("kfundti") 
+ .S I=$$NEWIDX^YISPRAV("kfundti")
+ .S ^MN(I,1)="Размещение"
+ .S ^MN(I,2)="Резервирование"
+ .S ^MN(I,3)="Перевод в другое отделение"
+ Q

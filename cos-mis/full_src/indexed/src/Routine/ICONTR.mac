@@ -1,0 +1,169 @@
+ICONTR ; Юридические лица [ 12/06/2019  11:11 AM ]
+NAME(N) ; Наименование
+ Q:N="" ""
+ I N=0,'$D(^CGA(N)) Q $$^I("iname") ; default
+ S N=$O(^CGA(N,"shortname",$H+1),-1)
+ Q:N="" "" Q ^(N)
+NAMEH(N,DT) ; Наименование по дате
+ Q:N="" ""
+ I N=0,'$D(^CGA(N)) Q $$^I("iname") ; default
+ S DT=$O(^CGA(N,"shortname",DT+1),-1) Q:DT="" "" Q ^(DT)
+NAMEF(N) ; Полное наименование
+ Q:N="" ""
+ I N=0,'$D(^CGA(N)) Q $$^I("ifname") ; default
+ S N=$O(^CGA(N,"oname",$H+1),-1) Q:N="" "" Q ^(N)
+NAMEFH(N,DT) ; Полное наименование по дате
+ Q:N="" ""
+ I N=0,'$D(^CGA(N)) Q $$^I("ifname") ; default
+ S DT=$O(^CGA(N,"oname",DT+1),-1) Q:DT="" "" Q ^(DT)
+GET(N,POLE,DT) ; Значение поля
+ S:$G(DT)="" DT=+$H
+ S DT=$O(^CGA(N,POLE,DT+1),-1) Q:DT="" "" Q $G(^(DT))
+GETD(N,POLE) 
+ S POLE=$O(^CGA(N,POLE,$H+1),-1) Q:POLE="" "" Q $G(^(POLE))
+GETM(N,POLE,RET) 
+ K @RET M @RET=^CGA(N,POLE) Q
+SET(N,POLE,DT,R) 
+ S:DT="" DT=$H
+ N PR,DTPV
+ S:POLE="init_date" R=$$DI^DTUTL(R)
+ S DTPV=$O(^CGA(N,POLE,DT+1),-1),PR=""
+ S:DTPV'="" PR=^(DTPV) S:R'=PR ^(DT)=R
+ D UPD^IEXCH("YCONTR",N)
+ S ^CGA=$H
+ Q
+ADD(NM,NMF,DT,FLG,ID) ; Добавить
+ ; NM - наименование
+ ; NMF - полное наименование
+ ; FLG - флаги
+ ; ID - принудительный код
+ S NMF=$G(NMF),DT=$G(DT),FLG=$G(FLG),ID=$G(ID)
+ S:DT="" DT=+$H
+ L +^CGA
+ I ID="" F ID=1:1 Q:'$D(^CGA(ID))
+ S ^CGA(ID,"shortname",DT)=NM
+ L -^CGA
+ S:NMF'="" ^CGA(ID,"oname",DT)=NMF
+ S:FLG'="" ^CGA(ID,"flg",DT)=FLG
+ S ^CGA(ID,"LOG",DT)=$$USRH^IUSER()
+ D MKIDX(ID)
+ D GL^IEXCH("^CGA",ID)
+ Q ID
+FIND(NM,NMF) ; Найти
+ N ID,R,H
+ S NM=$$LU^TXTU(NM),NMF=$$LU^TXTU(NMF),H=+$H
+ S ID="" F  S ID=$O(^CGA(ID)) Q:ID=""  Q:$$LU^TXTU($$GET(ID,"shortname",H))=NM  Q:$$LU^TXTU($$GET(ID,"oname",H))=NMF 
+ Q ID
+DEL(N) ; Удалить
+ Q:N="" 
+ D K^ISSG("^CGA("_N_")")
+ D RMIDX(N,1)
+ K ^CGA(N)
+ D KGL^IEXCH("^CGA",N)
+ Q
+EXIST(N) ; Код существует
+ Q:N="" 0
+ Q $D(^CGA(N))
+CHECK(N,DT) ; Проверка на наличие
+ Q:N="" 0 Q:'$D(^CGA(N)) 0
+ S:$G(DT)="" DT=+$H
+ S DT=$O(^CGA(N,"use",DT+1),-1) Q:DT="" 0 Q +$G(^(DT))
+IsFI(N,DT) ; Является филиалом
+ Q:N="" 0 Q:'$D(^CGA(N)) 0
+ S:$G(DT)="" DT=+$H
+ I ("|"_$$GET(N,"flg",DT)_"|")["|fi|" Q 1
+ Q 0
+ANYDTV(ID,FL,VAL,DS,DE) ; Значение есть хоть в каком значении поля на дату
+ N D
+ S DE=$G(DE)
+ S D=$G(DS)-1 F  S D=$O(^CGA(ID,FL,D)) Q:D=""!(DE&(D>DE))  Q:^(D)=VAL
+ Q D'=""
+ANYFDTV(ID,FL,VAL,DS,DE) ; Значение флага есть хоть в каком значении поля на дату
+ Q:VAL="" 0
+ N D
+ S DE=$G(DE),VAL="|"_VAL_"|"
+ S D=$G(DS)-1 F  S D=$O(^CGA(ID,FL,D)) Q:D=""!(DE&(D>DE))  Q:("|"_^(D)_"|")[VAL
+ Q D'=""
+ADDR(N,DT,LT) ; Полный адрес
+ ; LT - сокращенная нотация
+ N D,R,X
+ S:$G(DT)="" DT=+$H
+ S (R,D)="",LT=+$G(LT)
+ S:'LT D=$O(^CGA(N,"index",DT+1),-1),R=$S(D="":"",1:^(D))
+ S:'LT D=$O(^CGA(N,"aregion",DT+1),-1)
+ S:'LT X=$S(D="":"",1:$$NMTPLT^YKLADR(^(D)))
+ S:'LT R=$S($L(R)&$L(X):R_" "_X,$L(X):X,1:"")
+ S D=$O(^CGA(N,"addr",DT+1),-1),X=$S(D="":"",1:^(D))
+ S R=$S($L(R)&$L(X):R_" "_X,$L(X):X,1:"")
+ Q R
+ADDRY(N,DT) ; Полный Юр. адрес
+ N D,R,X
+ S:$G(DT)="" DT=+$H
+ S D=$O(^CGA(N,"yindex",DT+1),-1),R=$S(D="":"",1:^(D))
+ S D=$O(^CGA(N,"yregion",DT+1),-1)
+ S X=$S(D="":"",1:$$NMTPLT^YKLADR(^(D)))
+ S R=$S($L(R)&$L(X):R_" "_X,$L(X):X,1:"")
+ S D=$O(^CGA(N,"yaddr",DT+1),-1),X=$S(D="":"",1:^(D))
+ S R=$S($L(R)&$L(X):R_" "_X,$L(X):X,1:"")
+ Q R
+MKFIA(VAR) ; Make filial array
+ N N
+ S N="" F  S N=$O(^CGAI("flg","fi",N)) Q:N=""  I ("|"_$$GET(N,"flg",+$H)_"|")["|fi|" S @VAR@(N)=""
+ Q
+MKIDX(N) ; Create index
+ N DT,R,I,X,LL,FL
+ S DT="" F  S DT=$O(^CGA(N,"flg",DT)) Q:DT=""  D
+ .S R=^(DT) F I=1:1:99 S X=$P(R,"|",I) Q:X=""  S ^CGAI("flg",X,N)=""
+ S DT=+$H-1 F  S DT=$O(^CGA(N,"internet",DT)) Q:DT=""  D  
+ .D REWWW^TXTU(^(DT),"LL")
+ .S X="" F  S X=$O(LL(X)) Q:X=""  S ^GLOIDX("www",X,"CGA:"_N)="" D GL^IEXCH("^GLOIDX","www",X,"CGA:"_N)
+ S DT=+$H-1 F  S DT=$O(^CGA(N,"email",DT)) Q:DT=""  D
+ .D REMAIL^TXTU(^(DT),"LL")
+ .S X="" F  S X=$O(LL(X)) Q:X=""  S ^GLOIDX("mail",X,"CGA:"_N)="" D GL^IEXCH("^GLOIDX","mail",X,"CGA:"_N)
+ F FL="phone","call" S DT=+$H-1 F  S DT=$O(^CGA(N,FL,DT)) Q:DT=""  D
+ .D REPHN^TXTU(^(DT),"LL")
+ .S X="" F  S X=$O(LL(X)) Q:X=""  S ^GLOIDX("phone",X,"CGA:"_N)="" D GL^IEXCH("^GLOIDX","phone",X,"CGA:"_N)
+ Q
+RMIDX(N,UPD) ; Delete index
+ N DT,R,I,X,LL,FL
+ S DT="" F  S DT=$O(^CGA(N,"flg",DT)) Q:DT=""  D
+ .S R=^(DT) F I=1:1:99 S X=$P(R,"|",I) Q:X=""  K ^CGAI("flg",X,N) D:$G(UPD) KGL^IEXCH("^CGAI","flg",X,N)
+ S DT=+$H-1 F  S DT=$O(^CGA(N,"internet",DT)) Q:DT=""  D   
+ .D REWWW^TXTU(^(DT),"LL")
+ .S X="" F  S X=$O(LL(X)) Q:X=""  K ^GLOIDX("www",X,"CGA:"_N) D KGL^IEXCH("^GLOIDX","www",X,"CGA:"_N)
+ S DT=+$H-1 F  S DT=$O(^CGA(N,"email",DT)) Q:DT=""  D   
+ .D REMAIL^TXTU(^(DT),"LL")
+ .S X="" F  S X=$O(LL(X)) Q:X=""  K ^GLOIDX("mail",X,"CGA:"_N) D KGL^IEXCH("^GLOIDX","mail",X,"CGA:"_N) 
+ F FL="phone","call" S DT=+$H-1 F  S DT=$O(^CGA(N,FL,DT)) Q:DT=""  D
+ .D REPHN^TXTU(^(DT),"LL")
+ .S X="" F  S X=$O(LL(X)) Q:X=""  K ^GLOIDX("phone",X,"CGA:"_N) D KGL^IEXCH("^GLOIDX","phone",X,"CGA:"_N)
+ Q
+LSTSTAF(ID,DT,OTD) ; Список сотрудников по юрлицу
+ N F
+ S:$G(DT)="" DT=+$H
+ S F=(("|"_$$GET(ID,"flg",DT)_"|")["|fi|")
+ D:'F LSTsys^NPEOPL(ID,1)
+ D:F FLST^NVFIND("",1,0,0,0,1,ID)
+ Q
+GSTAFF(KEY) ; Получить филиал-сотрудник
+ N ID,PP,R
+ S ID=$P(KEY,"@",1),PP=$P(KEY,"@",2)
+ S R=$$NAME(ID)
+ S:PP'="" R=$S(R="":"",1:R_", ")_$$FIO^IPEOPL(PP)
+ Q R
+USEDTXT(N) ; Юрлицо используется в 
+ ; TODO
+ Q ""
+INITDB ;
+ S ^MN("root","contrflg")="Флаги контрагентов (юр.лиц)"
+ S ^MN("root","contrflg","kname")="Флаг",^("ktype")="S"
+ Q
+REGLCL ;
+ K ^LCLI("contr")
+ S ^LCLI("contr")="Юридические лица"
+ S ^LCLI("contr","new")="Создание нового (=0 - запрет)"
+ S ^LCLI("contr","save")="Сохранение (=0 - запрет)"
+ S ^LCLI("contr","del")="Удаление (=0 - запрет)"
+ S ^LCLI("contr","hide")="Скрывать контролы (имена через |)"
+ Q
+ 

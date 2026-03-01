@@ -1,0 +1,211 @@
+RRASPU ; Служебные отчеты расписания [ 09/12/2024  1:20 PM ]
+CNGNIB(NIB,DS,DE) ; Изменение по пациенту на дату
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),NIB=$P(NIB," ",1)
+ N DT,LP,VR,OT,SP,TM,R,I,A,L,NI,F,T,LOG,TL,FI
+ D OWF^RWU(".txt")
+ K ^BUF($J,"cng")
+ S I="^DSHW("""_DS_",0"",0,0,0,0,0,0)",L=+$$^I("ilpu")
+ D WC^RWU("Изменено|Врач|Специальность|Дата, время|Длит.|Операция|Кто"_$S(L>0:"|Филиал",1:""))
+ F  S I=$Q(@I) Q:I=""  Q:$P($QS(I,1),",",1)>DE  D
+ .S R=$G(@I) Q:R=""  
+ .S LP=$QS(I,2),OT=$QS(I,3),VR=$QS(I,4),SP=$QS(I,5)
+ .S DT=$QS(I,6),TM=$QS(I,7)
+ .I $QL(I)>6,$S(NIB="":0,1:$P(R,"|",1)'=NIB),'$D(^BUF($J,"cng",LP,OT,VR,SP,DT,TM)) Q 
+ .S ^BUF($J,"cng",LP,OT,VR,SP,DT,TM)="",NI=$P(R,"|",1),TL=$P(R,"|",4)
+ .S A=$$DTM^DTUTL($QS(I,1))_"|"_$$FIOSH^IKADRY(VR,DT)_"|"
+ .S A=A_$$GSPEC^YISPRAV(SP)_"|"
+ .S A=A_$$DT^DTUTL(DT)_" "_$$TIME^IRASP2(TM)_"|"_$$TiMIN^NRASP(TL)_"|"
+ .S FI=$$fio(NI),T=$P(R,"|",3)
+ .S A=A_$S(T="K":"Удалено: "_FI,T="M":"Перемещено: "_FI,T="L":"Длительность: "_FI,NIB="":"Запись: "_FI,NI'=NIB:"Перезапись: "_FI,1:"Запись")_"|"
+ .S LOG=$P(R,"|",2),F=$G(^LOG($P(LOG,"@",1),"kadry"))
+ .S:$$CHECK^IKADRY(F) LOG=LOG_" ("_$$FIOSH^IKADRY(F)_")"
+ .S A=A_LOG_$S(L>0:"|"_$$NAME^ICONTR(LP),1:"")
+ .D WC^RWU(CR_A)
+ D C^RWU
+ K ^BUF($J,"cng")
+ Q
+CNGVR(VRX,DS,DE) ; Изменение по врачу за период
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N DT,LP,VR,OT,SP,TM,R,I,A,L,NI,NI2,F,LOG,Z,TL
+ D OWF^RWU(".txt")
+ K ^BUF($J,"cng")
+ S I="^DSHW("""_DS_",0"",0,0,0,0,0,0)",L=+$$^I("ilpu")
+ D WC^RWU("Изменено|"_$$FIOSH^IKADRY(VRX)_"|Пациент|Дата, время|Длит.|Операция|Кто"_$S(L>0:"|Филиал",1:""))
+ ; TODO - ^DSHWI
+ F  S I=$Q(@I) Q:I=""  Q:$P($QS(I,1),",",1)>DE  D
+ .S VR=$QS(I,4) 
+ .Q:VR'=VRX 
+ .S R=$G(@I) Q:R=""  S NI=$P(R,"|",1),F=$P(R,"|",3),TL=$P(R,"|",4)
+ .S LP=$QS(I,2),OT=$QS(I,3),SP=$QS(I,5),DT=$QS(I,6),TM=$QS(I,7),NI2=""
+ .S A=$$DTM^DTUTL($QS(I,1))_"|"_$$GSPEC^YISPRAV(SP)_"|"
+ .S Z=$S($$EXIST^IPAC(NI):NI_" "_$$FIO^YIPACN(NI),1:NI)
+ .S A=A_Z_"|"_$$DT^DTUTL(DT)_" "_$$TIME^IRASP2(TM)_"|"_$$TiMIN^NRASP(TL)_"|"
+ .S:F'="K"&(F'="M") NI2=$G(^BUF($J,"cng",LP,OT,VR,SP,DT,TM))
+ .K:F="K"!(F="M") ^BUF($J,"cng",LP,OT,VR,SP,DT,TM)
+ .S A=A_$$txttp(F,NI,NI2)_"|"
+ .S:F'="K"&(F'="M") ^BUF($J,"cng",LP,OT,VR,SP,DT,TM)=NI
+ .S LOG=$P(R,"|",2),F=$G(^LOG($P(LOG,"@",1),"kadry"))
+ .S:$$CHECK^IKADRY(F) LOG=LOG_" ("_$$FIOSH^IKADRY(F)_")"
+ .S A=A_LOG_$S(L>0:"|"_$$NAME^ICONTR(LP),1:"")
+ .D WC^RWU(CR_A)
+ D C^RWU
+ K ^BUF($J,"cng")
+ Q
+CNGUSR(USR,DS,DE) ; Изменение по пользователю за период
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N DT,LP,VR,OT,SP,TM,R,I,A,L,NI,NI2,F,LOG,Z,TL
+ Q:USR="" 
+ D OWF^RWU(".txt")
+ K ^BUF($J,"cng")
+ S I="^DSHW("""_DS_",0"",0,0,0,0,0,0)",L=+$$^I("ilpu")
+ D WC^RWU("Изменено|Врач|Специальность|Пациент|Дата, время|Длит.|Операция|Кто"_$S(L>0:"|Филиал",1:""))
+ F  S I=$Q(@I) Q:I=""  Q:$P($QS(I,1),",",1)>DE  D
+ .S R=$G(@I) Q:R=""  
+ .S LOG=$P(R,"|",2) Q:$P(LOG,"@",1)'=USR 
+ .S VR=$QS(I,4),NI=$P(R,"|",1),F=$P(R,"|",3),TL=$P(R,"|",4)
+ .S LP=$QS(I,2),OT=$QS(I,3),SP=$QS(I,5),DT=$QS(I,6),TM=$QS(I,7),NI2=""
+ .S A=$$DTM^DTUTL($QS(I,1))_"|"_$$FIOSH^IKADRY(VR,DT)_"|"_$$GSPEC^YISPRAV(SP)_"|"
+ .S Z=$S($$EXIST^IPAC(NI):NI_" "_$$FIO^YIPACN(NI),1:NI)
+ .S A=A_Z_"|"_$$DT^DTUTL(DT)_" "_$$TIME^IRASP2(TM)_"|"_$$TiMIN^NRASP(TL)_"|"
+ .S:F'="K"&(F'="M") NI2=$G(^BUF($J,"cng",LP,OT,VR,SP,DT,TM))
+ .K:F="K"!(F="M") ^BUF($J,"cng",LP,OT,VR,SP,DT,TM)
+ .S A=A_$$txttp(F,NI,NI2)_"|"
+ .S:F'="K"&(F'="M") ^BUF($J,"cng",LP,OT,VR,SP,DT,TM)=NI
+ .S F=$G(^LOG($P(LOG,"@",1),"kadry"))
+ .S:$$CHECK^IKADRY(F) LOG=LOG_" ("_$$FIOSH^IKADRY(F)_")"
+ .S A=A_LOG_$S(L>0:"|"_$$NAME^ICONTR(LP),1:"")
+ .D WC^RWU(CR_A)
+ D C^RWU
+ K ^BUF($J,"cng")
+ Q
+OPSTAT(DS,DE,LPUX) ; Статистика по операторам
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),LPUX=$G(LPUX)
+ N DT,LP,VR,OT,SP,TM,R,I,A,L,NI,NI2,F,LOG,Z,STAT
+ S:'$$FR^I() LPUX=$$^I("ilpu")
+ D OWF^RWU(".txt")
+ K ^BUF($J,"cng")
+ S I="^DSHW("""_DS_",0"",0,0,0,0,0,0)",L=+$$^I("ilpu")
+ D WC^RWU("Оператор "_$$TXTP^DTUTL(DS,DE)_"|Всего|Записано|Удалено|Перемещено|Перезапись")
+ F  S I=$Q(@I) Q:I=""  Q:$P($QS(I,1),",",1)>DE  D
+ .S LP=$QS(I,2)
+ .I LPUX'="",LP'=LPUX Q 
+ .S R=$G(@I) Q:R=""  S NI=$P(R,"|",1),F=$P(R,"|",3),TL=$P(R,"|",4)
+ .S VR=$QS(I,4),OT=$QS(I,3),SP=$QS(I,5),DT=$QS(I,6),TM=$QS(I,7)
+ .S:F'="K"&(F'="M") NI2=$G(^BUF($J,"cng",LP,OT,VR,SP,DT,TM))
+ .K:F="K"!(F="M") ^BUF($J,"cng",LP,OT,VR,SP,DT,TM)
+ .S Z=$S(F="K":3,$P(R,"|",3)="M":4,NI2'=""&(NI'=NI2):5,1:2)
+ .S:F'="K"&(F'="M") ^BUF($J,"cng",LP,OT,VR,SP,DT,TM)=NI
+ .S LOG=$P(R,"|",2)
+ .S STAT(LOG,1)=$G(STAT(LOG,1))+1
+ .S STAT(LOG,Z)=$G(STAT(LOG,Z))+1
+ S LOG="" F  S LOG=$O(STAT(LOG)) Q:LOG=""  D
+ .S A=$$FIO^IUSER(LOG)
+ .F K=1:1:5 S A=A_"|"_(+$G(STAT(LOG,K)))
+ .D WC^RWU(CR_A)
+ D C^RWU
+ K ^BUF($J,"cng")
+ Q
+OPZSTAT(DS,DE,LPUX) ; Статистика записи по операторам
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),LPUX=$G(LPUX)
+ N DT,LP,VR,OT,SP,TM,R,I,A,L,NI,NI2,F,LOG,Z,STAT
+ S:'$$FR^I() LPUX=$$^I("ilpu")
+ D OWF^RWU(".txt")
+ K ^BUF($J,"cng")
+ S I="^DSHW("""_DS_",0"",0,0,0,0,0,0)",L=+$$^I("ilpu")
+ D WC^RWU("Оператор "_$$TXTP^DTUTL(DS,DE)_"|Записано|Пришло")
+ F  S I=$Q(@I) Q:I=""  Q:$P($QS(I,1),",",1)>DE  D
+ .S LP=$QS(I,2)
+ .I LPUX'="",LP'=LPUX Q 
+ .S R=$G(@I) Q:R=""  S NI=$P(R,"|",1),F=$P(R,"|",3),TL=$P(R,"|",4)
+ .S VR=$QS(I,4),OT=$QS(I,3),SP=$QS(I,5),DT=$QS(I,6),TM=$QS(I,7)
+ .S:F'="K"&(F'="M") NI2=$G(^BUF($J,"cng",LP,OT,VR,SP,DT,TM))
+ .K:F="K"!(F="M") ^BUF($J,"cng",LP,OT,VR,SP,DT,TM)
+ .S Z=$S(F="K":3,$P(R,"|",3)="M":4,NI2'=""&(NI'=NI2):5,1:2)
+ .S:F'="K"&(F'="M") ^BUF($J,"cng",LP,OT,VR,SP,DT,TM)=NI
+ .S LOG=$P(R,"|",2)
+ .Q:Z'=2  ; не запись
+ .S STAT(LOG,1)=$G(STAT(LOG,1))+1
+ .Q:$P($G(^DSH(LP,OT,VR,SP,DT,TM)),"|",1)="" 
+ .S STAT(LOG,2)=$G(STAT(LOG,2))+1
+ 
+ S LOG="" F  S LOG=$O(STAT(LOG)) Q:LOG=""  D
+ .S A=$$FIO^IUSER(LOG) 
+ .F K=1:1:2 S A=A_"|"_(+$G(STAT(LOG,K)))
+ .D WC^RWU(CR_A)
+ D C^RWU
+ K ^BUF($J,"cng")
+ Q
+ 
+fio(NI) 
+ Q:'$$EXIST^IPAC(NI) NI
+ Q NI_" "_$$FIO^IPAC(NI)
+txttp(F,NI,NI2) 
+ Q $S(F="K":"Удалено: "_$$fio(NI),F="M":"Перемещено:"_$$fio(NI),NI2'=""&(NI'=NI2):"Перезапись: "_$$fio(NI2),F="L":"Длительность",1:"Запись")
+GRSP(DS,DE,VMOD,LPUX) ; График работы по специалистам
+ ; VMOD - Все/Поликлиника(пол+стом)/Стоматология/Стационар
+ N DT,LPU,OT,SP,VR,TS,TE,R,F,STOM,STAC
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),LPUX=$G(LPUX)
+ S:'$$FR^I() LPU=$$^I("ilpu")
+ M STOM=^cfg("stom-otd"),STAC=^cfg("stac-otd")
+ K ^BUF($J)
+ S LPU="" F  S LPU=$O(^DSH(LPU)) Q:LPU=""  D:LPUX=""!(LPUX=LPU)
+ .S OT="" F  S OT=$O(^DSH(LPU,OT)) Q:OT=""  D
+ ..I VMOD,$S(VMOD=1:'$D(STOM(OT)),VMOD=3:'$D(STAC(OT)),$D(STOM(OT)):1,1:$D(STAC(OT))) Q 
+ ..S VR="" F  S VR=$O(^DSH(LPU,OT,VR)) Q:VR=""  S SP="" F  S SP=$O(^DSH(LPU,OT,VR,SP)) Q:SP=""  D
+ ...S DT=DS-1 F  S DT=$O(^DSH(LPU,OT,VR,SP,DT)) Q:DT=""!(DT>DE)  D
+ ....S TS=$O(^(DT,"")),TE=$O(^(86340),-1)
+ ....S R=$G(^BUF($J,LPU,SP,DT)),F=0
+ ....S:$P(R,"|",1)>TS!($P(R,"|",1)="") $P(R,"|",1)=TS,F=1
+ ....S:$P(R,"|",2)<TE $P(R,"|",2)=TE,F=1
+ ....S:F ^BUF($J,LPU,SP,DT)=R
+ D OWF^RWU(".txt")
+ S R="Филиал|Специальность"
+ F DT=DS:1:DE S R=R_"|"_$P($$DT^DTUTL(DT),".",1,2)
+ D WC^RWU(R)
+ S LPU="" F  S LPU=$O(^BUF($J,LPU)) Q:LPU=""  D
+ .S SP="" F  S SP=$O(^BUF($J,LPU,SP)) Q:SP=""  D
+ ..S R=$$NAME^ICONTR(LPU)_"|"_$$GSPEC^YISPRAV(SP)
+ ..F DT=DS:1:DE D
+ ...S F=$G(^BUF($J,LPU,SP,DT)) Q:F=""
+ ...S $P(R,"|",DT-DS+3)=(+$P($$TM^DTUTL($P(F,"|",1)),":",1))_"-"_(+$P($$TM^DTUTL($P(F,"|",2)),":",1))
+ ..D WC^RWU(CR_R)
+ D C^RWU
+ K ^BUF($J)
+ Q
+CNGST(DS,DE,OTX,VRX,KEY) ; Изменения в структуре расписания
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N LP,OT,VR,SP,DT,R,HH,U,K
+ D OWF^RWU(".txt")
+ D WC^RWU("Дата, время|Отделение|Врач|Специальность|Тип|Пользователь")
+ S LP="" F  S LP=$O(^DSHWC(LP)) Q:LP=""  D
+ .S OT="" F  S OT=$O(^DSHWC(LP,OT)) Q:OT=""  D:OTX=""!(OTX=OT)
+ ..S VR="" F  S VR=$O(^DSHWC(LP,OT,VR)) Q:VR=""  D:VRX=""!(VRX=VR)
+ ...S SP="" F  S SP=$O(^DSHWC(LP,OT,VR,SP)) Q:SP=""  D
+ ....S DT=DS-1 F  S DT=$O(^DSHWC(LP,OT,VR,SP,DT)) Q:DT=""!(DT>DE)  D
+ .....S HH="" F  S HH=$O(^DSHWC(LP,OT,VR,SP,DT,HH)) Q:HH=""  D
+ ......S R=^(HH),K=$P(R,"|",2)
+ ......I KEY'="",KEY'=K Q 
+ ......S U=$P(R,"|",1)
+ ......D WC^RWU(CR_$$DTM^DTUTL(HH)_"|"_$$OTD^ISPRAV(OT)_"|"_$$FIO^IKADRY(VR)_"|"_$$SPEC^ISPRAV(SP)_"|"_$$stt(K)_"|"_$$FIO^IUSER(U,2))
+ D C^RWU
+ Q
+stt(X) 
+ Q:X="W" "Изменение"
+ Q:X="K" "Удаление"
+ Q:X="L" "Блокировка"
+ Q:X="U" "Разблокировка"
+ Q:X="T" "Тип времени"
+ Q:X="R" "Реквизиты" ; кабинет, телефон.. 
+ Q ""
+REGIPROC 
+ N D,S,F
+ S D="Расписание приемов",S="Служебные"
+ S F=$S($$FR^I():",t@storage:lpu,Филиал",1:"")
+ S ^IPROC(D,S,"Изменения по пациенту")="CNGNIB_RRASPU,1,3,e@pac,Номер истории,d,Начальная дата,d,Конечная дата"
+ S ^IPROC(D,S,"Изменения по врачу")="CNGVR_RRASPU,1,3,te@net:FLST_NVFIND(""""),Врач,d,Начальная дата,d,Конечная дата"
+ S ^IPROC(D,S,"Изменения по пользователю")="CNGUSR_RRASPU,1,3,s,Имя пользователя,d,Начальная дата,d,Конечная дата"
+ S ^IPROC("Расписание приемов","График работы","График работы по специалистам")="GRSP_RRASPU,1,"_$S(F:4,1:3)_",d,Период с,d,Период по,t@string:0/Всем подразделениям#2/Поликлинике#1/Стоматологии#3/Стационару,Отчет по"_F
+ S ^IPROC("Расписание приемов","Статистика","Статистика нагрузки по операторам")="OPSTAT_RRASPU,1,"_$S(F:3,1:2)_",d,Период с,d,Период по"_F
+ S ^IPROC("Расписание приемов","Статистика","Статистика записи по операторам")="OPZSTAT_RRASPU,1,"_$S(F:3,1:2)_",d,Период с,d,Период по"_F
+ S ^IPROC(D,S,"Изменение графика")="CNGST_RRASPU,1,5,d,График с,d,График по,te@storage:otd@1,Отделение,te@net:FLST_NVFIND(""""),Врач,t@string:/Все#W/Изменение#K/Удаление#L/Блокировка#U/Разблокировка#T/Тип времени#R/Реквизиты,Тип правок"
+ Q

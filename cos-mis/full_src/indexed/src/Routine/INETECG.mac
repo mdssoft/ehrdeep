@@ -1,0 +1,55 @@
+INETECG ; Сетевой сервер ЭКГ [ 10/28/2013  2:04 AM ]
+SENDECG(FIL) ; Отсылка ЭКГ на сервер обработки
+ N NET,I,C,R,X,L
+ S NET=$$OPEN^WWWCLI($$ip(),5115)
+ Q:NET="" ""
+ ; Q:$D(^BUF("ecgnet",FIL)) $P(^(FIL),"|",1) TODO
+ 
+ D OWBUF^WWWCLI(NET)
+ S I=$$OR^NFILES(FIL),L=0
+ F  S R=$$R^NFILES() Q:R=""  D WBUF^WWWCLI(NET,R) s L=L+$L(R)
+ D CR^NFILES,CBUF^WWWCLI(NET)
+ 
+ S X=$$POST^WWWCLI(NET,"/send?")
+ D OBUF^WWWCLI(NET)
+ S C=$$BUFCNT^WWWCLI(NET),R=""
+ F I=1:1:C S R=R_$$RBUF^WWWCLI(NET)
+ D CBUF^WWWCLI(NET)
+ D CLOSE^WWWCLI(NET)
+ S:R'="" ^BUF("ecgnet",FIL)=R_"|"_$H
+ Q R
+CLOSE(ID) 
+ N NET,X
+ S NET=$$OPEN^WWWCLI($$ip(),5115)
+ Q:NET="" ""
+ S X=$$GET^WWWCLI(NET,"/close?k="_ID)
+ D CLOSE^WWWCLI(NET)
+ Q
+IMGW(ID,IO,STEP) ; Получить изображение на устройство
+ ; IO - устройство
+ ; STEP - шаг вывода
+ N NET,I,C,X
+ S NET=$$OPEN^WWWCLI($$ip(),5115)
+ Q:NET="" ""
+ S X=$$GET^WWWCLI(NET,"/image?k="_ID_"&step="_STEP)
+ D OBUF^WWWCLI(NET)
+ S C=$$BUFCNT^WWWCLI(NET)
+ U IO F I=1:1:C W $$RBUF^WWWCLI(NET)
+ D CBUF^WWWCLI(NET)
+ D CLOSE^WWWCLI(NET)
+ Q
+PDFW(ID,IO,TXT) ; Получить PDF на устройство
+ ; IO - устройство
+ N NET,I,C,X
+ S NET=$$OPEN^WWWCLI($$ip(),5115),TXT=$G(TXT)
+ Q:NET="" ""
+ S X=$$GET^WWWCLI(NET,"/pdf?k="_ID_$S(TXT="":"",1:"&dtm="_$$TURL^TXTU(TXT)))
+ D OBUF^WWWCLI(NET)
+ S C=$$BUFCNT^WWWCLI(NET)
+ U IO F I=1:1:C W $$RBUF^WWWCLI(NET)
+ D CBUF^WWWCLI(NET)
+ D CLOSE^WWWCLI(NET)
+ Q
+ip() 
+ Q:$D(^cfg("mhealth","netecgip")) ^("netecgip")
+ Q "127.0.0.1"

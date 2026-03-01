@@ -1,0 +1,360 @@
+NMLABJ ; Лабораторный журнал [ 09/27/2021  5:55 PM ]
+INIT ; Начальная инициализация формы
+ N I,C,X
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<jlab><zname>")
+ D LSTNFs^YCONTR("prt")
+ D W^RWU("</zname><state>")
+ S C=$S(+$G(^cfg("lab","anl-pgrp")):"",1:CR_"1r|раздел готов"_CR_"0r|раздел в работе") ; только по группе тестов
+ D WC^RWU("1|направление"_CR_"2|материал взят"_CR_"3|в работе"_CR_"3a|в т.ч. работе"_CR_"90|заполнена"_CR_"9|готова"_CR_"91|одобрена"_CR_"oz|просрочена"_CR_"or|ожидание готовности"_CR_"cn|отменена"_CR_"re|перезабор"_C)
+ D W^RWU("</state><anl>")
+ S X=+$G(^cfg("lab","anl-pgrp"))
+ I 'X S (I,C)="" F  S I=$O(^LABT("G",I)) Q:I=""  D WC^RWU(C_I_"|"_^(I)) S C=CR
+ D:X LSTsys^NPRICEG("lab")
+ ; D ANLW^NMLABU
+ D W^RWU("</anl><stcl>")
+ D LSTsys^YNDOG(0) ; TODO
+ D W^RWU("</stcl><mat>")
+ S (C,I)=""
+ F  S I=$O(^LABT("M",I)) Q:I=""  D WC^RWU(C_I_"|"_^(I)) S C=CR
+ D W^RWU("</mat>")
+ S C=" visible=""no""/>"
+ D:$$LCL^IUSER("lab","dowrk")=0 W^RWU("<bt_out"_C)
+ D:$$LCL^IUSER("lab","sbsr")=0 W^RWU("<bt_zok"_C)
+ D:$$LCL^IUSER("lab","del")=0 W^RWU("<bt_del"_C)
+ D W^RWU("<menuctrl name=""tab"">")
+ D:'$$LCL^IUSER("lab","unsbsr") W^RWU("<item id=""unsbs"""_C)
+ D:'$$LCL^IUSER("lab","unbio") W^RWU("<item id=""unbio"""_C)
+ D:$$LCL^IUSER("lab","mkout")=0 W^RWU("<item id=""notout"""_C)
+ D:$$LCL^IUSER("lab","del")=0 W^RWU("<item id=""del"""_C)
+ D:'$$LCL^IUSER("lab","movpac") W^RWU("<item id=""movpac"""_C)
+ D:'$$LCL^IUSER("lab","moveid") W^RWU("<item id=""mov"""_C)
+ D W^RWU("</menuctrl></jlab></nb_console>"),C^RWU
+ Q
+GBAR(BAR,MOD) ; № по баркоду
+ S %L=$S(BAR="":"",1:$O(^MLABI("bar",BAR,""),-1)),%B=".txt"
+ K:'$G(MOD) ^JOB(%JOB,"jlab")
+ I %L'="",$$LCL^IUSER("lab","vowner") D
+ .N OW,NI,R
+ .s OW=$$USR^IUSER(),NI=$G(^MLABI("c",%L))
+ .S R=$P($G(^MLAB(NI,%L,"s1")),"|",3)
+ .S:R'=OW %L=""
+ Q
+TABIDX(IDX) ; Таблица по единичной записи
+ N DS,DE,NIB,DGN,ZAK,AN,MT,ST,CI
+ S IDX=$E(IDX,1,32),(DS,DE,NIB,DGN,ZAK,AN,MT,ST,CI)=""
+ S R=$$LCL^IUSER("lab","seldgn")
+ S:R'="" DGN=R
+ I IDX'="",$G(^MLABI("c",IDX))="" K ^BUF($J) G TABe
+ I IDX="" K ^BUF($J) G TABe
+ G TAB0
+TAB(DS,DE,NIB,DGN,ZAK,AN,MT,ST,CI) ; Вывод таблицы
+ ; ZAK - заказчик
+ ; AN - вид исследования (раздел)
+ ; ST - статус
+ ; CI - cito
+ ; MT - материал
+ N IDX
+TAB0 N NI,ID,DT,R,A,S1,S2,S3,S9,S91,FIO,STAT,ZI,DT,UL,I,II,IC,IM,ANS,NN
+ N K,T,Z,U,B,CON,STT,mG,vO,cLP,PRC,STID,OW,iNI,zSC,DPRC,CLPU,RTL
+ N CUU,CUL,KX ; TODO
+ K ^JOB(%JOB,"jlab")
+ S DS=$$DI^DTUTL(DS),DE=$$DI^DTUTL(DE)
+ S mG=+$G(^cfg("lab","anl-pgrp"))
+ S zSC=$$LCL^IUSER("lab","j-con-sw")
+ S:zSC="" zSC=+$G(^cfg("lab","j-con-sw"))
+ S R=$$LCL^IUSER("lab","seldgn")
+ S:R'="" DGN=R
+ S R=$$LCL^IUSER("lab","selanl")
+ S:R'="" AN=R
+ S ANS=""
+ S:ST="0r" ANS=0,ST=""
+ S:ST="1r" ANS=1,ST=""
+ s vO=$$LCL^IUSER("lab","vowner")
+ s cLP=$$LCL^IUSER("lab","clpu")
+ s OW=$$USR^IUSER()
+ S CLPU=$$^I("ilpu")
+ ; есть краткие статусы
+ S Z="" F  S Z=$O(^LABT("RT",Z)) Q:Z=""  S:$P(^(Z),"|",2)'="" RTL(Z)=""
+ 
+ S IDX=$G(IDX)
+ S NIB=$$LU^TXTU($$WD^TXTU(NIB)),iNI=$$EXIST^IPAC(NIB)
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<jlab><table>")
+ S A="",II="</item><item>",IC="</item><item class=""",IM="</item><item img="""
+ F I="Отм.","Код","Создана","Пациент","Пол","Статус","Тесты","Отметки","Заказчик","Сумма","Выполнено" S A=A_"<item>"_I_"</item>"
+ D WC^RWU("<titles><key></key>"_A_"</titles>")
+ S:AN=-1 AN="" S:MT=-1 MT="" S:ZAK=-1 ZAK=""
+ S:DS>DE DS=DE
+ S DPRC=$$CORCP^IPRICET(1)
+ S NN=0
+ K ^BUF($J)
+ I IDX'="" S NIB=^MLABI("c",IDX),iNI=1 D TABPRC(NIB,IDX,+^MLAB(NIB,IDX)) G TABe
+ I iNI,NIB'="" D TABPRCN(NIB) G TABe
+ I NIB="",DS="",DE="" F  S NIB=$O(^MLAB(NIB)) Q:NIB=""  D TABPRCN(NIB) Q:NN>1000 
+ I DS="",DE="" G TABe
+ ; вывод по индексу дат
+ S DT=DS-1 S:DE="" DE=99999
+ F  S DT=$O(^MLABI("d",DT)) Q:DT=""!(DT>DE)  S ID="" F  S ID=$O(^MLABI("d",DT,ID)) Q:ID=""   D TABPRC(^(ID),ID,DT) Q:NN>10000 
+TABe 
+ I '$D(^BUF($J)) D  G TABe2
+ .D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<jlab><table>")
+ .D WC^RWU(CR_"<row><key></key></row>")
+ S R="" F  S R=$O(^BUF($J,R)) Q:R=""  D WC^RWU(CR_"<row><key>"_^(R)_"</item></row>")
+ K ^BUF($J)
+TABe2 D W^RWU("</table></jlab></nb_console>")
+ D C^RWU
+ Q
+TABPRCN(NI) 
+ I DGN'="" Q:'$D(^BTI(" s",DGN,NI))  Q:$$GET^IPAC(NI,"stc")'=DGN Q  ; TODO - разн. даты
+ S B=$$NOW^IBILL(NI)
+ S FIO=$S(B<0:IC_3_""">",1:II)_$$FIO^IPAC(NI)_II_$$GETE^IPAC(NI,"pol")
+ S ID="" F  S ID=$O(^MLAB(NI,ID)) Q:ID=""  D
+ .S S1=$G(^(ID,"s1")) Q:S1="" 
+ .I cLP,CLPU'="",CLPU'=$P(S1,"|",4) Q 
+ .S DT=+$P(S1,"|",2),K=""
+ .I DS'="" Q:DS>DT 
+ .I DE'="" Q:DE<DT
+ .S S9=$G(^("s9"))
+ .D TABln(0)
+ Q
+TABPRC(NI,ID,DT) ; Вывод по единичной записи 
+ S S1=$G(^MLAB(NI,ID,"s1")),S9=$G(^("s9")) Q:S1="" 
+ I cLP,CLPU'="",CLPU'=$P(S1,"|",4) Q 
+ S K=""
+ D TABln(1)
+ Q
+TABln(PAC) ; Запись строки таблицы, PAC - фильтр таблицы
+ I vO,$P(S1,"|",3)'=OW Q  ; личн.
+ I CI,'$G(^("ci")) Q  ; cito
+ I MT,'$D(^("mi",MT)) Q  ; материал
+ S S2=$G(^MLAB(NI,ID,"s2")),S3=$G(^("s3"))
+ I ANS'="",'$P(S2,"|",1),'$P(S3,"|",1) Q  ; по исследованиям "в работе"
+ S S91=$G(^("s91"))
+ I ST'="",ST'="oz",ST'="or",$S(ST="3a":$P(S3,"|",1)'=1,1:$$STID^NMLAB(S1,S2,S3,S9,S91)'=ST) Q 
+ I ST="oz" S RT=$G(^("tl")),RT=$S($P(RT,"|",2):$P(RT,"|",2),1:$P(RT,"|",1)) Q:RT=""  Q:$$CMPDTM^DTUTL(RT,$H)=-1 
+ I ST="or" S RT=$G(^("tl")) Q:RT=""  I $$CMPDTM^DTUTL($P(RT,"|",1),$H)=1!($$CMPDTM^DTUTL($P(RT,"|",2),$H)=-1) Q 
+ S RT=$G(^("rt"))
+ S:RT'="" RT="|"_RT_"|"
+ S K=$S($G(^("ci")):"CITO",1:"")
+ S:$P($G(^("s31")),"|",1)=1 K=$S(K="":"BC",1:K_",BC")
+ S PRC=$G(^("prc")) 
+ I 'mG,AN'="",'$$IsAN($G(^("pr")),AN,ANS) Q  
+ I mG,AN'="",'$$IsANG(NI,$P(PRC,"|",1),DT,$G(^("ul")),AN) Q
+ G:'PAC TABln1
+ I DGN'="" Q:'$D(^BTI(" s",DGN,NI))  Q:$$GET^IPAC(NI,"stc",DT)'=DGN 
+ S FIO=$$FIO^IPAC(NI)
+ I 'iNI,NIB'="",$$LU^TXTU($P(FIO," ",1))'[NIB Q 
+ S B=$$NOW^IBILL(NI)
+ S FIO=$S(B<0:IC_3_""">",1:II)_FIO_II_$$GETE^IPAC(NI,"pol")
+TABln1 
+ S STAT=$$STXT^NMLAB(S1,S2,S3,S9,"",S91),STID=$$STID^NMLAB(S1,S2,S3,S9,S91)
+ S A=NI_"@"_ID_$S(STID=3:"@r",STID=9:"@r",1:"")_"</key><item>"_II_ID
+ S ZI=$G(^MLAB(NI,ID,"zi")),ZV=$P(ZI,"|",3),ZI=$P(ZI,"|",1)
+ I ZAK'="",ZAK'=ZI Q 
+ S A=A_II_$$DTM2^DTUTL($P(S1,"|",2))_FIO
+ S A=A_IC_$S($P(S9,"|",1):8,RT["1:1|":12,$P(S3,"|",1):9,$P(S2,"|",1):5,1:11)_""">"_STAT
+ 
+ S R=$$TCNT^IMLAB(NI,ID)
+ S A=A_II_$S($P(R,"|",2)'="":$P(R,"|",2)_"/",1:"")_$P(R,"|",1)
+ S STT=""
+ ; перечень используемых контрагентов
+ D:zSC
+ .K CON
+ .S UL=$G(^MLAB(NI,ID,"ul")),(CUU,CUL)=0 ; TODO
+ .F Z=1:1 S U=$P(UL,"|",Z) Q:U=""  S U=$$GET2IDX^YNPRICE($P(U,":",1),"con",DPRC,DT),CUU=CUU+1 I U'="",'$D(CON(U)) S CON(U)="",STT=$S(STT="":"",1:STT_",")_$E($$NAME^ICONTR(U),1,2)
+ .Q:(+$H-7)>DT
+ .S KX="" F  S KX=$O(^PNF(NI,DT,KX)) Q:KX=""  S CUL=CUL+1
+ .Q:CUL<CUU 
+ .S STT=$S(STT="":"",1:STT_",")_"OK" ; TODO
+ ; Краткие имена статусов
+ I RT'="",$D(RTL) F Z=2:1:$L(RT,"|")-1 S U=$P(RT,"|",Z),T=$P(U,":",1) I $P(U,":",2),$D(RTL(T)) S U=$P(^LABT("RT",T),"|",2),STT=$S(STT="":"",1:STT_",")_U
+ 
+ S A=A_$S(RT["|1:1":IM_"print16.bmp"">",K["CITO":IC_"13"">",1:II)_K_STT
+ S A=A_II_$S(ZI="":"",1:$$NAME^ICONTR(ZI))
+ S A=A_II_$TR($$SUMM^IMLAB(NI,ID,DT),".",",")
+ S ^BUF($J,ID)=A_II_$$DTM2^DTUTL($P(S9,"|",2))
+ S ^JOB(%JOB,"jlab",ID)=""
+ S NN=NN+1
+ Q
+IsAN(PRMS,AN,ANS) ; Параметр входит в раздел
+ ; ANS - статус результата по разделу
+ N I,X,F,P,PD
+ S F=0
+ F I=1:1:$L(PRMS,"|") S X=$P($P(PRMS,"|",I),"@",1) I X'="",$G(^LABT("T",X,"r"))=AN S F=1 Q  
+ Q:'F 0
+ Q:ANS="" 1
+ S F=1,PD=$$DBLPRMS^IMLAB(PRMS)
+ S:PD'="" PD="|"_PD_"|"
+ F I=1:1:$L(PRMS,"|") S X=$P(PRMS,"|",I),P=$P(X,"@",1),P=$S(PD[("|"_P_"|"):X,1:P) I X'="",$G(^LABT("T",P,"r"))=AN,$P($G(^MLAB(NI,ID,"d",X,"s")),"|",1)'=1 S F=0 Q 
+ Q:ANS&F 1
+ Q:('ANS)&('F) 1 
+ Q 0
+IsANG(NI,PRC,DT,USL,GRP) ; Услуга входит в группу
+ S:PRC="" PRC=$$CORCP^IPRICET($$GET^YNDOG($$GET^IPAC(NI,"stc",DT),"price",DT))
+ N I,X,F
+ S F=0
+ F I=1:1:$L(USL,"|") S X=$P($P(USL,"|",I),":",1) I X'="",$$GET^IPRICE(X,"grp",PRC,DT)=GRP S F=1 Q  
+ Q F
+SBS(KEY) ; Подпись результатов
+ I $$LCL^IUSER("lab","sbsr")=0 D MSG^RWU("Недостаточно прав") Q 
+ N NI,ID
+ S NI=$P(KEY,"@",1),ID=$P(KEY,"@",2)
+ I NI=""!(ID="") D MSG^RWU("Ошибка кода заявки") Q
+ I '$P($G(^MLAB(NI,ID,"s3")),"|",1) D MSG^RWU("Заявка "_ID_" не отправлена в ЛИС") Q
+ I $P($G(^MLAB(NI,ID,"s9")),"|",1) D MSG^RWU("Заявка "_ID_" уже завершена") Q
+ D SETSTAT^IMLAB(NI,ID,9,0)
+ D SBREZ^NMLABR(ID,1)
+ Q
+UNSBS(KEY) ; Отменить подпись
+ I $$LCL^IUSER("lab","unsbsr")'=1 D MSG^RWU("Недостаточно прав") Q
+ N NI,ID
+ S NI=$P(KEY,"@",1),ID=$P(KEY,"@",2)
+ I NI=""!(ID="") D MSG^RWU("Ошибка кода заявки") Q
+ I '$P($G(^MLAB(NI,ID,"s9")),"|",1) D MSG^RWU("Заявка "_ID_" не подписана") Q
+ D SETSTAT^IMLAB(NI,ID,9,0)
+ Q
+UNBIO(KEY) ; Отменить взятие биоматериала
+ I $$LCL^IUSER("lab","unbio")'=1 D MSG^RWU("Недостаточно прав") Q
+ N NI,ID
+ S NI=$P(KEY,"@",1),ID=$P(KEY,"@",2)
+ I NI=""!(ID="") D MSG^RWU("Ошибка кода заявки") Q
+ I '$P($G(^MLAB(NI,ID,"s2")),"|",1) D MSG^RWU("Материал по заявке "_ID_" еще не взят") Q
+ D SETSTAT^IMLAB(NI,ID,2,0)
+ Q
+OUT(KEY) ; Отправить в работу
+ N NI,ID
+ S NI=$P(KEY,"@",1),ID=$P(KEY,"@",2)
+ I NI=""!(ID="") D MSG^RWU("Ошибка кода заявки") Q
+ I $$LCL^IUSER("lab","mkout")=0 D MSG^RWU("Недостаточно прав") Q
+ I '$P($G(^MLAB(NI,ID,"s2")),"|",1) D MSG^RWU("Заявка "_ID_" не подписана") Q
+ I $P($G(^MLAB(NI,ID,"s3")),"|",1) D MSG^RWU("Заявка "_ID_" уже отправлена") Q
+ I $$LCL^IUSER("lab","twlbar"),'$$IsBAR^IMLAB(NI,ID,"*") D MSG^RWU("Отсутствует штрихкод заявки") Q 
+ D SETSTAT^IMLAB(NI,ID,3,1)
+ D SETSTAT^IMLAB(NI,ID,4,0) ; Обнулить статус отправки
+ Q:$$RUNNING^IKDLOUT()
+ D START^IKDLOUT
+ Q
+MOVE(KEY,TO) ; Переместить заявку на другой номер
+ N ID
+ I '$$LCL^IUSER("lab","moveid") D MSG^RWU("Недостаточно прав") Q 
+ S ID=$P(KEY,"@",2) Q:TO="" 
+ D MOV^IMLAB(ID,TO)
+ Q
+MOVENI(KEY,NNIB) ; Переместить заявку на другого пациента
+ ; NNIB - новый пациент
+ N ID,NI
+ I '$$LCL^IUSER("lab","movpac") D MSG^RWU("Недостаточно прав") Q 
+ Q:NNIB="" 
+ S ID=$P(KEY,"@",2),NI=$P(KEY,"@",1)
+ D MOVPAC^IMLAB(NI,NNIB,ID)
+ Q
+CPYENI(KEY,NNIB) ; Скопировать заявку на другого пациента
+ ; NNIB - новый пациент
+ N ID,NI
+ I '$$LCL^IUSER("lab","cpypac") D MSG^RWU("Недостаточно прав") Q 
+ Q:NNIB="" 
+ S ID=$P(KEY,"@",2),NI=$P(KEY,"@",1)
+ D CPYPAC^IMLAB(NI,NNIB,ID)
+ Q
+GETZAK(KEY) ; Получить ID заказчика по заявке
+ N ID,NI
+ S ID=$P(KEY,"@",2)
+ S NI=^MLABI("c",ID)
+ D MSG^RWU($P($G(^MLAB(NI,ID,"zi")),"|",1))
+ Q
+GETSTC(KEY) ; Получить договор по заявке
+ N ID,NI
+ S ID=$P(KEY,"@",2)
+ S NI=^MLABI("c",ID)
+ D MSG^RWU($$STC^IMLAB(NI,ID))
+ Q
+GETBAR(KEY,BIO) ; Получить штрихкод, установить статус в работе
+ N ID,NI
+ S ID=$P(KEY,"@",2)
+ S NI=^MLABI("c",ID)
+ D MSG^RWU($$getbar(NI,ID,BIO))
+ Q
+getbar(NI,ID,BIO) ; Сформировать штрихкод (системная процедура)
+ N A,F,CNT
+ S A=$$GETBAR^IMLAB(NI,ID,$P(BIO,"@",1),$P(BIO,"@",2))
+ Q:A="" ""
+ S CNT=0
+ I BIO="" S F="" F  S F=$O(^MLAB(NI,ID,"m",F)) Q:F=""  S CNT=CNT+1
+ S F=$$LCL^IUSER("lab","noprnbar")
+ D SETSTAT^IMLAB(NI,ID,31,1) ; отпечатан
+ D:BIO'="" SETSTFL^IMLAB(NI,ID,31,"mi",BIO,1) ;отпечатан по биоматериалу
+ I F=2 D SETSTAT^IMLAB(NI,ID,3,1) ; в работе
+ S A=A_"@"_$G(^cfg("lab","barpprn"))
+ S A=A_"@"_$E($S($G(^cfg("lab","barfio")):$TR($$FIOSH^IPAC(NI),".",""),1:NI_" "_$$GET^IPAC(NI,"fiof")),1,14)
+ S:CNT A=A_"@"_CNT
+ Q A
+UNWORK(KEY) ; Убрать статус "в работе"
+ N ID,NI,A,F
+ I '$$LCL^IUSER("lab","unwork") D MSG^RWU("Недостаточно прав") Q
+ S ID=$P(KEY,"@",2)
+ S NI=^MLABI("c",ID)
+ D SETSTAT^IMLAB(NI,ID,3,0) ; не в работе
+ D SETSTAT^IMLAB(NI,ID,4,0) ; Обнулить статус отправки
+ Q
+BIOLIST(KEY,DTP) ; Перечень биоматериалов
+ ; DTP - с датой печати
+ N A,M,NI,ID,BAR,X,D,B,J
+ S ID=$P(KEY,"@",2),NI=^MLABI("c",ID),A=""
+ S M="" F  S M=$O(^MLAB(NI,ID,"mi",M)) Q:M=""  D
+ .S BAR=$P(^(M),"|",2)
+ .F J=1:1:$L(BAR,"@") D
+ ..S B=$P(BAR,"@",J)
+ ..S X=^LABT("M",M)_$S(BAR="":"",1:" - "_BAR)
+ ..I DTP S D=$$GETSTFLH^IMLAB(NI,ID,31,"mi",M) S:D'="" X=X_" ("_$$DTM^DTUTL(D)_")"
+ ..S A=$S(A="":"",1:A_CR)_M_"|"_X
+ D MSG^RWU(A)
+ Q
+RTLST(KEY) ; Список статусов отправки
+ N NI,ID,R,I,X,A
+ S ID=$P(KEY,"@",2),NI=^MLABI("c",ID)
+ S R=$G(^MLAB(NI,ID,"rt")),A=""
+ I R'="" F I=1:1:$L(R,"|") S X=$P(R,"|",I) I $P(X,":",2) S A=$S(A="":"",1:A_"|")_$P(X,":",1)
+ S I="" F  S I=$O(^LABT("RT",I)) Q:I=""  S A=A_CR_I_"|"_$P(^(I),"|",1),R=$O(^MLABE(NI,ID,"rt",I,""),-1) S:R'="" A=A_", "_$$DTM^DTUTL(R)_" "_$$FIO^IUSER(^(R))
+ D MSG^RWU(A) ; статус + список
+ Q
+SRTLST(KEY,STATE) ; Установить\снять статус отправки
+ I '$$LCL^IUSER("lab","setrt") D MSG^RWU("Недостаточно прав.") Q 
+ N ID,NI,I,X,R,ST
+ S ID=$P(KEY,"@",2),NI=^MLABI("c",ID)
+ ; Сброс статусов
+ S R=$G(^MLAB(NI,ID,"rt")),ST="|"_STATE_"|"
+ I R'="" F I=1:1:$L(R,"|") S X=$P(R,"|",I) I $P(X,":",2),ST'[("|"_$P(X,":",1)_"|") D SETRT^IMLAB(NI,ID,$P(X,":",1),0)
+ ; Установка статусов
+ I STATE'="" F I=1:1:$L(STATE,"|") S X=$P(STATE,"|",I) D SETRT^IMLAB(NI,ID,X,1)
+ Q
+LSTRES ; Список зарезервированных периодов номеров
+ N I,C,E,S,A
+ S I=$O(^QUOTA("^MLAB","")),E=$O(^(""),-1),S=I,A=""
+ F I=I:1:E D
+ .I '$D(^QUOTA("^MLAB",I)) Q:S=""  S A=$S(A="":"",1:A_CR)_S_"-"_(I-1)_" ("_(I-S)_")",S="" Q 
+ .S:S="" S=I
+ S:S'="" A=$S(A="":"",1:A_CR)_S_"-"_I_" ("_(I-S+1)_")"
+ D MSG^RWU(A)
+ Q
+MKRES(CNT) ; Зарезервировать номера
+ N I,J,Z
+ S Z=$S($$LCL^IUSER("lab","reztype")=1:"",1:$$USR^IUSER())
+ L +^MLABI("c") ; TODO - "gid"/"ilpu"
+ S I=$O(^MLABI("c",""),-1)
+ S J=$O(^QUOTA("^MLAB",""),-1)
+ S I=$S(I>J:I,1:J)
+ F J=1:1:CNT S ^MLABI("c",I+J)="",^QUOTA("^MLAB",I+J)=Z
+ L -^MLABI("c")
+ D MSG^RWU(I+1_"|"_(I+CNT))
+ Q
+DELRES(KEY) ; Удалить зарезервированные номера
+ N K1,K2,I
+ S KEY=$TR($P(KEY,"(",1)," ","")
+ S K1=$P(KEY,"-",1),K2=$P(KEY,"-",2)
+ F I=K1:1:K2 I $G(^MLABI("c",I))="" K ^(I),^QUOTA("^MLAB",I)
+ D LSTRES
+ Q
+FIO(NI) ;
+ S NI=$E(NI,1,99)
+ I '$$EXIST^IPAC($$WD^TXTU(NI)) D MSG^RWU("") Q
+ D FIO^YIFINDN(NI)
+ Q

@@ -1,0 +1,1067 @@
+A ; Прейскурант (новый) [ 07/02/2024  1:10 PM ]
+TAB(FF,DT,TIP) ; Вывод таблицы
+ N GRP,USE
+ G TAB1
+TABE(FF,DT,TIP,GRP,USE) ; Вывод таблицы с доп поиском
+ N GLST D MKLST^NPRICEG("GLST")
+TAB1 N I,FLG,CD1,CD2,CD,NM,PL,D,DMX,VT,FFL,ORIG
+ S DT=$$DIH^DTUTL(DT),ORIG=FF,FF=$$LU^TXTU($$WD^TXTU(FF)),I="|"
+ S VT=+$G(^cfg("oprice-vcne"))
+ S GRP=$G(GRP),USE=+$G(USE)
+ S:$L(GRP) GRP="~"_GRP_"~"
+ D OWF^RWU(".txt")
+ D WC^RWU("Код|Наименование|Изменено"_$S(VT:"|Цена",1:""))
+ S (CD1,CD2,FFL)="",FLG=1
+ I FF["-" S CD1=$P(FF,"-",1),CD2=$P(FF,"-",2),FLG=0
+ I FF'="",'$G(^cfg("ed","no-cna")),'$D(^CN(FF))!$G(^cfg("ed","cna-prio")) S:FF'="" D=$G(^CNA(FF)) S:$L(D) FF=D ; псевдоним
+ I FF'="",$D(^CN(FF)) S (CD1,CD2)=FF,FLG=0
+ I FF["=" S FFL=$P(ORIG,"=",1),FF=$P(FF,"=",2,9),FLG=0 ; by field
+ S CD=$S(CD1="":"",1:$O(^CN(CD1),-1))
+ S CD2=$S(CD2="":"",1:$O(^($O(^CN(CD2))),-1))
+ F  S CD=$O(^CN(CD)) Q:CD=""  D:$D(^(CD,TIP))  Q:CD=CD2 
+ .S D=$O(^(TIP,DT+1),-1) I USE,D="" ; еще не действует
+ .I USE S PL=$O(^("use",DT+1),-1) I $L(PL),'+^(PL) Q 
+ .I $L(GRP) S PL=$O(^CNE(CD,TIP,"grp",DT+1),-1) Q:PL=""  S PL=^(PL) Q:PL=""  Q:("~"_$G(GLST(PL))_"~")'[GRP 
+ .I FFL'="",$$LU^TXTU($$GET^IPRICE(CD,FFL,TIP,DT))'=FF Q 
+ .S NM=$$NAMEH^IPRICE(CD,TIP,DT) I FLG,$L(FF) Q:$$LU^TXTU(NM)'[FF 
+ .S PL=99999,DMX=1
+ .F  S PL=$O(^CN(CD,TIP,PL)) Q:PL=""  S D=$O(^(PL,""),-1) S:D>DMX DMX=D
+ .F  S PL=$O(^CNE(CD,TIP,PL)) Q:PL=""  S D=$O(^(PL,""),-1) S:D>DMX DMX=D
+ .S D=$O(^CN(CD,TIP,99999),-1) S:D>DMX DMX=D
+ .D WC^RWU(CR_CD_I_NM_I_$$DT^DTUTL(DMX)_$S(VT:I_$$PRICE^IPRICE(CD,TIP),1:""))
+ D C^RWU
+ Q
+LF(VID,ND,OT,DT,TXT,NCN) ; Просмотр+поиск
+ S TXT=$$LU^TXTU($$WD^TXTU(TXT)) G l2
+L(VID,ND,OT,DT,NCN) ; Просмотр
+ ; ND - договор
+ ; OT - отделение
+ ; DT - дата
+ ; TXT - текстовый фильтр
+ ; NCN - скрывать цену
+ N TXT S TXT=""
+l2 S:ND="A"!(ND="") ND=9999 S:OT="A" OT=""
+ S DT=$$DIH^DTUTL(DT),NCN=+$G(NCN)
+ N A,VI,CD,NM,OTF,SPF,CD1,CD2,X,FG,F,LPU,FGr,G,AGL,FF,swm,SKU
+ S F=+$G(^cfg("price-find-type")),FG=+$G(^cfg("view-price-tree"))
+ S swo=$G(^cfg("price","swoms"))
+ S LPU=$S($$FR^I():"",1:$$^I("ilpu"))
+ S NM=$$IDX^ISPRAV("tprice")
+ S FF="0000000000"
+ 
+ I (OT=""&F)!('F) D 
+ .S X=$$LCL^IUSER("price","grp-flg")
+ .S:X="" X=$G(^cfg("price","grp-flg"))
+ .S A=$$LCL^IUSER("price","grp-nflg")
+ .S:A="" A=$G(^cfg("price","grp-nflg"))
+ .I A="",X="" Q
+ .D MKLLST^NPRICEG("AGL",X,A)
+ 
+ D OWF^RWU(".txt")
+ S OTF=$S(F:"~"_$TR($J(OT,4)," ",0)_"~",1:"|"_OT_"|") ; otd or grp
+ S:ND="" ND=9999
+ S VI=$S(ND=9999:$S(+VID=0:1,1:VID),1:+$$GET^IINSC(ND,"price",DT))
+ S:VI=0!('$D(^MN(NM,VI))) VI=1
+ I F!FG K ^BUF($J,"prc") N TL,TLL D MKLST^NPRICEG("TL",1)
+ S (CD1,CD2)=""
+ I TXT["-" S CD1=$P(TXT,"-",1),CD2=$P(TXT,"-",2),TXT=""
+ I $L(TXT),'$G(^cfg("ed","no-cna")),'$D(^CN(TXT))!$G(^cfg("ed","cna-prio")) S X=$G(^CNA(TXT)) S:$L(X) TXT=X ; псевдоним
+ I $L(TXT),$D(^CN(TXT)) S (CD1,CD2)=TXT,TXT=""
+ S CD=$S(CD1="":"",1:$O(^CN(CD1),-1))
+ S CD2=$S(CD2="":"",1:$O(^($O(^CN(CD2))),-1))
+ S FGr=0
+ F  S CD=$O(^CN(CD)) Q:CD=""  D:$D(^(CD,VI))  Q:CD=CD2 
+ .Q:$O(^(VI,DT+1),-1)=""  ; еще не действует
+ .S X=$O(^("use",DT+1),-1) I $L(X) Q:'+^(X) 
+ .I $L(OT),'F S OTD=$$GET(CD,"otd",VI,DT) Q:OTD'[OTF 
+ .S G=$$GET(CD,"grp",VI,DT)
+ .I $L(OT),F Q:G=""  Q:("~"_$G(TL(G))_"~")'[OTF 
+ .I $D(AGL) Q:G=""  Q:'$D(AGL(G))  ; default grp.
+ .S SKU=""
+ .I (+LPU)>0 S SKU=$$GET2(CD,"lpu",LPU,VI,DT) Q:SKU="d" 
+ .S NM=$$NAMEH^IPRICE(CD,VI,DT) Q:NM="" 
+ .I TXT'="",$$LU^TXTU(NM)'[TXT Q 
+ .Q:$$GET^IPRICE(CD,"sys",VI,DT) 
+ .S A=NM_$S(NCN:"",1:"|"_$S($E(SKU)="S":$E(SKU,2,99),1:$$PRICEH^IPRICE(CD,VI,DT))) ; TODO - prc SKU
+ .I FG D  Q
+ ..S X=$$GET^IPRICE(CD,"grp",VI,DT),X=$S(X="":"z",1:$G(TL(X)))
+ ..S:'FGr&(X'="z") FGr=1
+ ..S ^BUF($J,"prc",X_"|"_$E(FF,1,9-$L(CD))_CD)=$S(swo:$$GET^IPRICE(CD,"oms",VI,DT)_"|",1:"")_CD_"|"_A
+ ..F I=1:1:99 S R=+$P(X,"~",I) Q:'R  S R=$S(R="":"z",1:$G(TL(R))) I $L(R) S:'$D(TLL(R)) TLL(R)="",^BUF($J,"prc",R_"|")=$S(swo:"|",1:"")_"|"_$S(R="z":"",1:$$NAME^NPRICEG(+$P(R,"~",$L(R,"~"))))
+ .D WC^RWU(CR_$S(swo:$$GET^IPRICE(CD,"oms",VI,DT)_"|",1:"")_CD_"|"_A)
+ D:FG Lgrp
+ D C^RWU
+ Q
+Lgrp 
+ S X=""
+ S:FGr ^BUF($J,"prc","z|")=""
+ F  S X=$O(^BUF($J,"prc",X)) Q:X=""  D WC^RWU(CR_^(X))
+ K ^BUF($J,"prc")
+ Q
+INITF(FRM,BRK) ; Инициализировать формы поиска
+ ; FRM - имя формы
+ ; BRK - наличие пустого элемента в otd/spec 
+ N F
+ S F=+$G(^cfg("price-find-type")),BRK=$G(BRK)
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<"_FRM_">")
+ D WTAGD^RWU("vprice",$$PRC^IINSC("","",+$H,0,"",""))
+ D WC^RWU("<otd UserData="""_$S(F:"Группа",1:"Отделение")_""""_$S(F&(FRM="selprice"):" style=""49""",1:"")_">"_$S(BRK:CR,1:""))
+ I 'F!(FRM'="selprice") D:F LSTsys^NPRICEG() D:'F LSTs^NSPRAV("otd")
+ D:F&(FRM="selprice") TREEsys^NPRICEG(1)
+ D W^RWU("</otd><spec>"_$S(BRK:CR,1:""))
+ D LSTs^NSPRAV("spec")
+ D WC^RWU($S('BRK:CR_"|Все",1:"")_"</spec></"_FRM_"></nb_console>")
+ D C^RWU
+ Q
+INITUNP 
+ N F
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<unprice>")
+ D:$$LCL^IUSER("price","ucalc-scost") WTAGU^RWU("summ","scost")
+ S F=$$LCL^IUSER("price","ucalc-prn")
+ D:F'="" WTAGD^RWU("prn",F)
+ S F=+$G(^cfg("price-find-type"))
+ D inits
+ D W^RWU("</spec></unprice></nb_console>"),C^RWU
+ Q
+INITSS 
+ N F
+ S F=+$G(^cfg("price-find-type"))
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<selservs>")
+ D inits
+ D W^RWU("</spec></selservs></nb_console>"),C^RWU
+ Q
+INITLT 
+ N F
+ S F=+$G(^cfg("price-find-type"))
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<price_lite>")
+ D WTAG^RWU("selprc",$$PRC^IINSC("","",+$H,1))
+ D:$G(^cfg("price","swoms")) WC^RWU("<table default=""Шифр услуги:1100;Код:800;Наименование:6900;Цена:900""/>")
+ D WC^RWU("<otd title="""_$S(F:"Группа",1:"Отделение")_""" LabelLink="""_$S(F:"price_lite_grp_tree",1:"")_""">|"_CR)
+ D:'F LSTs^NSPRAV("otd")
+ D:F TREEsys^NPRICEG(1)
+ D W^RWU("</otd></price_lite></nb_console>"),C^RWU
+ Q
+inits ; common proc
+ D WTAGDC^RWU("stitle",$S(F:"Группа",1:"Специальность"))
+ D WC^RWU("<spec>|Все"_CR)
+ D:'F LSTs^NSPRAV("spec")
+ D:F TREEsys^NPRICEG(0)
+ Q
+LFLT(VID,OT,SP,DT,TXT,NUSED) ; Просмотр+поиск (сокращенный)
+ S TXT=$$LU^TXTU($$WD^TXTU(TXT)) G l3
+LLT(VID,OT,SP,DT,NUSED) ; Просмотр
+ N TXT S TXT="",DT=$G(DT)
+l3 N OTL,SPL,CD,VI,R,F,I,X,CS,CE,TF,LST,FF
+ S TF=+$G(^cfg("price-find-type"))
+ S OT=$S(OT="A":"",OT=999:"",1:OT)
+ S SP=$S(SP="A":"",SP=999:"",SP=0:"",1:SP)
+ S NUSED=$G(NUSED)
+ F I=1:1 S R=$P(OT,"|",I) Q:R=""  S OTL(R)=""
+ F I=1:1 S R=$P(SP,"|",I) Q:R=""  S SPL(R)=""
+ I TF N GLST D MKLST^NPRICEG("GLST")
+ S DT=$$DIH^DTUTL(DT),FF="0000000000"
+ D OWF^RWU(".txt"),WC^RWU("Шифр|Наименование|Цена")
+ S X=$$IDX^ISPRAV("tprice"),VID=$S(VID'=""&$D(^MN(X,VID)):VID,1:$$PRC^IINSC("","",DT))
+ S (CS,CE)=""
+ I TXT["-" S CS=$P(TXT,"-",1),CE=$P(TXT,"-",2),TXT=""
+ S I=$G(^cfg("ed","cna-prio"))
+ I $L(TXT),'$G(^cfg("ed","no-cna")),'$D(^CN(TXT))!I,$D(^CNA(TXT)) S TXT=^(TXT) ; псевдоним
+ I $L(CS),'$G(^cfg("ed","no-cna")),'$D(^CN(CS))!I,$D(^CNA(CS)) S CS=^(CS) ; псевдоним
+ I $L(CE),'$G(^cfg("ed","no-cna")),'$D(^CN(CE))!I,$D(^CNA(CE)) S CS=^(CE) ; псевдоним
+ I $L(TXT),CS="",CE="",$D(^CN(TXT)) S (CS,CE)=TXT,TXT=""
+ S CD=$S(CS="":"",1:$O(^CN(CS),-1))
+ S CE=$S(CE="":"",1:$O(^($O(^CN(CE))),-1))
+ F  S CD=$O(^CN(CD)) Q:CD=""  D:$D(^(CD,VID))  Q:CD=CE 
+ .Q:$O(^(VID,DT+1),-1)="" 
+ .I 'NUSED S I=$O(^("use",DT+1),-1) I $L(I) Q:'+^(I)
+ .S F=0
+ .I TF,$D(OTL) S R=$$GET(CD,"grp",VID,DT),F=1 I $L(R)  S R="~"_$G(GLST(R))_"~",X="" F  S X=$O(OTL(X)) Q:X=""  I R[("~"_X_"~") S F=0 Q 
+ .Q:F 
+ .I 'TF,$D(OTL) S R=$$GET(CD,"otd",VID,DT) I $L(R) S F=1 F I=2:1 S X=$P(R,"|",I) Q:X=""  I $D(OTL(X)) S F=0 Q  
+ .Q:F 
+ .I $D(SPL) S R=$$GET(CD,"spec",VID,DT) I $L(R) S F=1 F I=2:1 S X=$P(R,"|",I) Q:X=""  I $D(SPL(X)) S F=0 Q 
+ .Q:F 
+ .S LST($E(FF,1,9-$L(CD))_CD_"~"_CD)=""
+ ; строковая сортировка
+ S F="" F  S F=$O(LST(F)) Q:F=""  D
+ .S CD=$P(F,"~",2,9)
+ .S R=$$NAMEH^IPRICE(CD,VID,DT) I $L(TXT) Q:$$LU^TXTU(R)'[TXT 
+ .D WC^RWU(CR_CD_"|"_R_"|"_$$PRICEH^IPRICE(CD,VID,DT))
+ D C^RWU
+ Q
+LDTXT(NIB,SP,USL) ; Примечания к услугам
+ ; todo - pmhn.frm
+ Q
+LPTREE(NIB,SP,FRM,DGN,LPU,PROC,KSS,TXT) ; Вывод с "деревом" групп
+ N WP,DN,VI,SPF,OTF,COD,SPC,NM,OT,F,Vm,GLST,GTREE,CEN,AFL,ORD,SKD,fUU,FGFLG
+ S TXT=$$LU^TXTU($$WD^TXTU($G(TXT))),(WP,F)=0,Vm=1,ORD=0
+ S SP=$S(SP="A":"",SP=999:"",SP=0:"",1:SP),DT=+$H
+ D MKLST^NPRICEG("GLST",,,,1)
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<"_FRM_"><ulst>")
+ G LPO5
+LPSPG(NIB,SP,G,DGN,CEN,LPU,PROC,TXT,KSS,ORD,SKD,SGR,VI,FGFLG) ; Вывод по номеру и.б,спец. и группе, без цены
+ ; CEN - разделитель перед ценой + конфигурация вывода цены через |
+ ; ORD - сортировка 0-код, 1-код+рейтинг
+ ; SKD - альтернативная скидка (отлич. от пациента)
+ ; SGR - строгое соответствие группе (без нижестоящих)
+ ; VI - прейскурант
+ ; FGFLG - флаг фильтра по группе
+ N WP,DN,SPF,OTF,COD,SPC,NM,OT,F,Vm,DT,GLST,AFL,fUU
+ S TXT=$$LU^TXTU($$WD^TXTU($G(TXT))),F=0,Vm=2,ORD=+$G(ORD)
+ S VI=$G(VI),CEN=$G(CEN),WP=+$P(CEN,"|",2),CEN=$P(CEN,"|",1)
+ S SP=$S(SP="A":"",SP=999:"",SP=0:"",1:SP),DT=+$H
+ I $G(SGR) S Vm=3
+ E  S:G'="" G="~"_G_"~"
+ D MKLST^NPRICEG("GLST")
+ D OWF^RWU(".txt")
+ G LPO5
+LPTXT(NIB,SP) ; Вывод по номеру ист. и спец. , без цены
+ N WP,TXT,DN,VI,SPF,OTF,COD,SPC,NM,OT,F,Vm,CEN,LPU,PROC,KSS,AFL,ORD,SKD,fUU,FGFLG
+ S TXT="",(WP,F)=0,ORD=0
+ S SP=$S(SP="A":"",SP=999:"",SP=0:"",1:SP),DT=+$H
+ D OWF^RWU(".txt")
+ G LPO5
+LPT(NIB,SP,TXT,DGN,LPU,PROC,KSS,AFL) ; Вид по номеру истории, спец. , строка
+ N WP,DN,VI,SPF,OTF,COD,SPC,NM,OT,Vm,CEN,F,ORD,SKD,fUU,FGFLG
+ S WP=1,SP=$S(SP="A":"",SP=999:"",SP=0:"",1:SP)
+ S TXT=$$LU^TXTU($$WD^TXTU(TXT)),ORD=0,fUU=1
+ S:$G(LPU)="" LPU=$$^I("ilpu") ; TODO вызов с ценами, значит используем условия
+ G LPO4
+LOTXT(NIB,OT,TXT,WP) ; Вывод по номеру ист. и отд., WP - цена
+ N DN,VI,SPF,OTF,COD,SPC,NM,SP,F,Vm,CEN,LPU,PROC,KSS,AFL,ORD,SKD,fUU,FGFLG
+ S SP="",DT=+$H,TXT=$$LU^TXTU($$WD^TXTU(TXT)),F=0,ORD=0
+ D OWF^RWU(".txt")
+ G LPO5
+LPOG(NIB,XX,DGN,LPU,PROC,KSS,AFL) ; Вместе с группами
+ ; KSS - по кассе, AFL - доб. в код данные поля
+ N WP,TXT,DN,VI,SPF,OTF,COD,SPC,NM,OT,SP,F,Vm,CEN,ORD,SKD,fUU,FGFLG
+ S F=+$G(^cfg("price-find-type"))
+ I F N GLST D MKLST^NPRICEG("GLST")
+ S TXT="",WP=1,SP=XX,ORD=0,fUU=1
+ G LPO4
+LPO(NIB,SP) ; Вид по номеру ист., специальность (для назначений)
+ N WP,TXT,DN,VI,SPF,OTF,COD,SPC,NM,OT,F,CEN,LPU,PROC,KSS,ORD,SKD,fUU,FGFLG
+ S TXT="",WP=1,F=0,SP=$S(SP="A":"",SP=999:"",SP=0:"",1:SP)
+ s ORD=0
+LPO4 S DT=+$H
+ D OWF^RWU(".txt"),WC^RWU("Шифр|Наименование|Цена"_CR)
+LPO5 S DN=$G(DGN),KSS=+$G(KSS),AFL=$G(AFL),fUU=+$G(fUU)
+ S:DN="" DN=$$GET^IPAC(NIB,"stc",DT)
+ S:$G(VI)="" VI=+$$PRC^IINSC(DN,NIB,DT,KSS)
+ S Vm=+$G(Vm),CEN=$G(CEN),F=+$G(F),LPU=$G(LPU),PROC=$G(PROC),SKD=$G(SKD),FGFLG=$G(FGFLG)
+ N SEX,PSEX,FF,Vt,CS,CE,I,A,Ma,iSK,SK,SUM,AGL,GG,SNM,ENM,SKDK,VRE,fEC,EX
+ S (CS,CE,Ma)=""
+ S LPU=$S(LPU:LPU,$$FR^I():LPU,1:$$^I("ilpu"))
+ S VRE=$S($G(^cfg("ed","env-vrk")):$$KDR^IUSER(),1:"")
+ S fEC=$G(^cfg("price","ecode-search"))
+ ; ограничение по дефолтным группам
+ S I=$G(^cfg("price-find-type"))
+ I (SP=""&I)!('I) D 
+ .S I=FGFLG
+ .S:I="" I=$$LCL^IUSER("price","grp-flg")
+ .S:I="" I=$G(^cfg("price","grp-flg"))
+ .S A=$$LCL^IUSER("price","grp-nflg")
+ .S:A="" A=$G(^cfg("price","grp-nflg"))
+ .I A="",I="" Q
+ .D MKLLST^NPRICEG("AGL",I,A)
+ 
+ S PSEX=$$GET^IPAC(NIB,"pol"),Vt=+$G(^cfg("price-lpo-cod"))
+ I $L(TXT),$D(^CN(TXT)) S CS=TXT,CE=TXT,TXT=""
+ I TXT["-",$P(TXT,"-",3)="" S CS=$P(TXT,"-",1),CE=$P(TXT,"-",2),TXT=""
+ S A=$G(^cfg("ed","cna-prio"))
+ I $L(TXT),'$G(^cfg("ed","no-cna")),'$D(^CN(TXT))!A,$D(^CNA(TXT)) S I=TXT,Ma=$L($D(^(I)))-1,TXT=^(I) ; псевдоним
+ I $L(CS),'$G(^cfg("ed","no-cna")),'$D(^CN(CS))!A,$D(^CNA(CS)) S CS=^(CS) ; псевдоним
+ I $L(CE),'$G(^cfg("ed","no-cna")),'$D(^CN(CE))!A,$D(^CNA(CE)) S CS=^(CE) ; псевдоним
+ I $L(TXT),'$D(^CN(TXT))!A,$D(^CN(TXT)) S (CS,CE)=TXT,TXT=""
+ I $G(VRE)'="" S A=$$GET^IKADRY(VRE,"price",DT) S:A'="" VI=A
+ S VI=$$CORCP^IPRICET(VI)
+ S SPF="|"_SP_"|",OTF="|"_$G(OT)_"|"
+ I Ma S Ma=I,COD="" F  S COD=$O(^CNA(Ma,COD)) Q:COD=""  D:$D(^CN(COD,VI)) LPOprc
+ S Ma=""
+ S iSK=$S(SKD="":$$CHECK^IDSCN(NIB,"","",DN,VI,DT,$S(KSS:0,$$GET^IINSC(DGN,"dvid",DT)'=3:1,1:0)),1:SKD)
+ S COD=$S(CS="":"",1:$O(^CN(CS),-1))
+ S CE=$S(CE="":"",1:$O(^($O(^CN(CE))),-1))
+ ; сортировка и вывод
+ K ^BUF($J,"prc")
+ S FF="00000000000"
+ F  S COD=$O(^CN(COD)) Q:COD=""  D:$D(^(COD,VI)) LPOprc Q:COD=CE 
+ S (FF,COD)=""
+ F  S COD=$O(^BUF($J,"prc",COD)) Q:COD=""  D WC^RWU(FF_^(COD)) S FF=CR
+ K ^BUF($J,"prc")
+ 
+ D:Vm=1
+ .D W^RWU("</ulst><grp>")
+ .N NN,IX
+ .S FF="",NN=1
+ .I $D(GTREE(0)) K GTREE(0) D WC^RWU("Все") S FF=CR,NN=0
+ .S I=0 F  S I=$O(GTREE(I)) Q:I=""  D
+ ..S A=GTREE(I)
+ ..F F=1:1:99 S CS=$P(I,"~",F) Q:CS=""  S CE=$G(GLST(CS)) I $L(CE) S:CE'["~" CE=CE_"~" S:'$D(GTREE(CE)) GTREE(CE)=CS
+ .S I="" F  S I=$O(GTREE(I)) Q:I=""  D
+ ..S A=GTREE(I),IX=I
+ ..S:$E(I,$L(I))="~" $E(IX,$L(I))="" ; убираем сортировочный символ 
+ ..S A=$TR(IX,"~1234567890z",$C(9))_$$NAME^NPRICEG(A)_"|"_A
+ ..D WC^RWU(FF_A) S FF=CR
+ .D WC^RWU($S(NN:CR_"Все",1:"")_"</grp></"_FRM_"></nb_console>")
+ D C^RWU
+ Q
+LPOprc 
+ Q:$O(^(VI,DT+1),-1)="" 
+ S I=$O(^("use",DT+1),-1) I I'="",'+^(I) Q 
+ I fUU,$D(^CN(COD,VI,"sys")),$$GET^IPRICE(COD,"sys",VI,DT) Q 
+ I 'F!(Vm=2),$L(SP) S SPC=$$GET(COD,"spec",VI,DT) I $L(SPC),SPC'[SPF Q 
+ S GG=$$GET^IPRICE(COD,"grp",VI,DT)
+ I F,$L(SP) S SPC=GG Q:SPC=""  S SPC="~"_$G(GLST(SPC))_"~" Q:SPC'[("~"_SP_"~") 
+ I Vm=2,$L(G) S SPC=GG Q:SPC=""  S SPC="~"_$G(GLST(SPC))_"~" Q:SPC'[G 
+ I Vm=3,$L(G),GG'=G Q  ; строгое соответствие группе 
+ I $D(AGL) Q:GG=""  Q:'$D(AGL(GG))  ; не по дефолтным группам 
+ I Vm=1 S SPC=GG S:GG="" GTREE(0)="" I $L(GG) S A=$G(GLST(GG)) S:$L(A) GTREE(A)=GG
+ I $D(OT) S SPC=$$GET^IPRICE(COD,"otd",VI,DT) I SPC'="",SPC'[OTF Q 
+ I $L(PSEX) S SEX=$$GET^IPRICE(COD,"dsex",VI,DT) I SEX'="",SEX'=PSEX Q 
+ S (SNM,ENM,SKDK)=""
+ I $L(LPU) S SKDK=$$GET2(COD,"lpu",LPU,VI,DT) Q:SKDK="d"  S:SKDK=100 SKDK=""
+ I $L(PROC),@PROC Q  ; ф-ция проверки
+ S NM=SNM_$$NAMEH^IPRICE(COD,VI,DT)_ENM ; prefix_name_postfix
+ S EX=0
+ I $L(TXT),$$LU^TXTU(NM)'[TXT S EX=1
+ I fEC,$$LU^TXTU($$GET^IPRICE(COD,"ecode",VI,DT))=TXT S EX=0 ; no exit
+ Q:EX  
+ S:Vt NM=COD_" "_NM
+ S SUM=$$PRICEH^IPRICE(COD,VI,DT)
+ I SKDK'="" S SUM=$S($E(SKDK)="S":$E(SKDK,2,99),SKDK=100:SUM,1:+$J(100-SKDK*SUM/100,"",2)) S SKDK=""
+ S:iSK SUM=$$SUMSKD^IPRICE(SUM,NIB,SKD,COD,DN,VI,DT,,KSS)
+ ; Коэффициенты по врачу + произвольные
+ I VRE'="" S SKDK=$$GETVRK^IPRICE(COD,VRE,DT,VI,"","",SKDK)
+ S:SKDK'="" SUM=+$J(100-SKDK*SUM/100,"",2)
+ S A=$S(CEN="":"",1:CEN_SUM)
+ I AFL'="" S I=$$GET^IPRICE(COD,AFL,VI,DT) S:I'="" A=A_"@"_I
+ S NM=$$TAG^TXTU(NM)
+ S:$L(Ma) NM="("_Ma_") "_NM ; повторяем альтернативный код
+ S I=""
+ S:ORD=1 I=$$GET^IPRICE(COD,"rating",VI,DT),I=$S(I="":I,I<10:9-I,1:I)_"|"
+ S ^BUF($J,"prc",I_$E(FF,1,10-$L(COD))_COD)=COD_A_"|"_NM_$S(WP=1:"|"_SUM,1:"")
+ Q
+LP(N,DT,TIP) ; Загрузка полей
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<oprice>")
+ S DT=$$DIH^DTUTL(DT)+1
+ N PL,POLE,A,DD,R,I
+ S PL=99999,DD="" F  S PL=$O(^CN(N,TIP,PL)) Q:PL=""  D
+ .S POLE=PL S:PL="name" POLE="pname"
+ .S DD=$O(^(PL,DT),-1),R=""
+ .I PL="exps" S R=$$LEXPS() D WTAGC^RWU(PL,R) Q
+ .S:$L(DD) R=^(DD)
+ .I PL="otd"!(PL="spec") S R=$$LLST(R) D:R'="" WTAGC^RWU(POLE,R) Q
+ .I PL="mat" S R=$$LMATER(R) D:R'="" WTAGC^RWU(POLE,R) Q 
+ .I PL="lnk" S R=$$LLNK(R) D:R'="" WTAGC^RWU(POLE,R) Q
+ .I PL="cls" D WTAG^RWU(POLE,R) Q 
+ .D WTAGDC^RWU(POLE,R)
+ S PL=99999 F  S PL=$O(^CNE(N,TIP,PL)) Q:PL=""  D
+ .S DD=$O(^(PL,DT),-1),R=""
+ .Q:PL="hash" 
+ .I PL="lpu" S R=$$LLPU() D WTAGC^RWU(PL,R) Q
+ .I PL="con" S R=$$LCON() D:R'="" WTAGC^RWU(PL,R) Q 
+ .S:$L(DD) R=$G(^(DD))
+ .I PL="cowrk" S R=$$LCWRK(R) D:$L(R) WTAGC^RWU(PL,R) Q
+ .D WTAGDC^RWU(PL,R)
+ S PL="lpu" D:'$D(^CNE(N,TIP,PL)) WTAGC^RWU(PL,$$LLPU())
+ S DD=$O(^CN(N,TIP,DT),-1) D:DD'="" WTAGD^RWU("price",^(DD))
+ D W^RWU("</oprice></nb_console>"),C^RWU
+ Q
+LLST(X) ; Загрузка отд., спец.
+ S A="",X=$E(X,2,$L(X)) F JR=1:1 S LR=$P(X,"|",JR) Q:LR=""  S:A'="" A=A_CR S A=A_LR_"|" S:PL="otd" A=A_$$GOTD^YISPRAV(LR) S:PL="spec" A=A_$$GSPEC^YISPRAV(LR)
+ S:A="" A="|Нет"
+ Q A
+LMATER(X) ; Загрузка материалов
+ N K,P S A=""
+ F I=1:1 S K=$P(R,"|",I) Q:K=""  S P=$P(K,"@",1),A=A_CR_P_"|"_$$NAMENM^IWRHS(P)_"|"_$P(K,"@",2)_"|"_$$MEANNM^IWRHS(P)_"|"_$P(K,"@",3)_"|"_$P(K,"@",4)
+ Q A
+LLNK(X) ; Загрузка списка комплексной услуги
+ N K S A=""
+ F I=1:1 S K=$P(R,"|",I) Q:K=""  S A=A_$S(A="":A,1:CR)_K_"|"_$$NAMEH^IPRICE(K,TIP,DD)
+ Q A
+LCON() ; Контрагенты
+ S (A,I)=""
+ F  S I=$O(^CNE(N,TIP,PL,DD,I)) Q:I=""  S R=^(I),A=A_CR_I_"|"_$$NAME^ICONTR(I)_"|"_$P(R,"|",2)_"|"_$P(R,"|",1)
+ Q A
+LCWRK(R) ; Соисполнители
+ N K,X S A=""
+ F I=1:1 S K=$P(R,"|",I) Q:K=""  S X=$P(K,":",1),A=A_CR_X_"|"_$P(K,":",4,99)_"|"_$S(X="+":"Основной сотрудник",1:$$GSPEC^YISPRAV(X))_"|"_$TR($P(K,":",2,3),":","|")_"|"_$P(K,":",5)
+ Q A
+LLPU() ; Филиалы
+ N F S A=""
+ S I="" F  S I=$O(^CGA(I)) Q:I=""  D
+ .S F="|"_$$GET^ICONTR(I,"flg",DT)_"|"
+ .I F'["|fi|" Q  
+ .S R=$G(^CNE(N,TIP,PL,DD,I))
+ .S A=A_CR_I_"|"_$$GET^ICONTR(I,"shortname",DT)_"|"_$S(R="d":"*|",R="":"|100",1:"|"_R)
+ Q A
+LSTLPU() ; Список филиалов
+ N F S A=""
+ S I="" F  S I=$O(^CGA(I)) Q:I=""  D
+ .S F="|"_$$GET^ICONTR(I,"flg",+$H)_"|"
+ .Q:F'["|fi|"  
+ .S A=A_CR_I_"|"_$$GET^ICONTR(I,"shortname",+$H)_"||100"
+ Q A
+LEXPS() ; Статьи расходов
+ N L S A="|"
+ D MERGENM^ISPRAV("priceexs","L")
+ S I="" F  S I=$O(L(I)) Q:I=""  D
+ .S R=$G(^CN(N,TIP,PL,DD,I))
+ .S A=A_CR_I_"|"_L(I)_"|"_R
+ Q A
+S ; СОХРАНЕНИЕ 
+ Q:$$LCL^IUSER("price","save")=0 
+ D RBUFH^YIXMLRR(0)
+ S ^CN=$H
+ D W
+ D CLOSE^YIXMLRR
+ Q
+W ; Запись
+ N N,DT,TIP,PL,DTPV,PR,DTS,R,A,LF,PR,RF,TCP
+ S NBC="nb_console",OPR="oprice"
+ S N=$E($$LU^TXTU($G(XML(NBC,OPR,"kod"))),1,32) ; always upper !
+ S DT=$G(XML(NBC,OPR,"date")),DTS=$$DIH^DTUTL(DT)
+ S TIP=+$G(XML(NBC,OPR,"tprice"))
+ S RF=$G(^cfg("price-round"))
+ S TCP=$$GETN^ISPRAV("tprice",TIP,3)
+ I N="" L +^CN S N=$O(^CN(999999),-1)+1,^CN(N,TIP,DTS)=0 L -^CN
+ S A=$G(XML(NBC,OPR,"pname"))
+ S XML(NBC,OPR,"name")=A
+ S XML(NBC,OPR,"hash")=$$CRC16^IHASH(A)
+ 
+ F A="kod","date","tprice","pname" K XML(NBC,OPR,A)
+ F A="rating","debt","dsex","cnt","grp","rdia","nosp","nosn","hcen","cowrko","msale" I $D(XML(NBC,OPR,A)),+$G(XML(NBC,OPR,A))=0 S XML(NBC,OPR,A)=""
+ 
+ S PL="",LF=1 F  S PL=$O(XML(NBC,OPR,PL)) Q:PL=""  D
+ .S R=$$WD^TXTU(XML(NBC,OPR,PL))
+ .I PL="mat" D WMATT K XML(NBC,OPR,PL) Q
+ .I PL="eqip" D WMATT K XML(NBC,OPR,PL) Q
+ .I PL="lnk" D WLNK K XML(NBC,OPR,PL) Q
+ .I PL="price" Q:'LF  S R=$S('RF:R,RF=1:$J(R,0,0),RF=2:$J(R/10,0,0)*10,1:R),DTPV=+$O(^CN(N,TIP,DTS),-1),PR=$G(^(DTPV)) K ^(DTS) S:R'=PR ^(DTS)=R S ^CNW(N,TIP,$H,DTS)=R Q
+ .S:PL="otd"!(PL="spec") R=$$WLST(R)
+ .S:PL="acu"&$L(R) R=$$DBLSP^TXTU($TR(R,",/;:","    ")),R=$TR(R," ","|")
+ .I PL="exps" D WEXPS K XML(NBC,OPR,PL) Q
+ .I PL="name"!(PL="cname")!(PL="aname") S R=$TR(R,CR_"|"," I")
+ .I '$$IsCNE(PL) D WPL(PL="spec"!(PL="otd")!(PL="rating")!(PL="cls")!(PL="grp")!(PL="dsex")!(PL="ages")!(PL="agee")) Q
+ .I PL="lpu" D WLPU K XML(NBC,OPR,PL) Q
+ .I PL="con" D WCON K XML(NBC,OPR,PL) Q
+ .I PL="cowrk" D WCWRK K XML(NBC,OPR,PL) Q
+ .D WPLE(PL="cnt")
+ S R=$$USR^IUSER()_"|"_$H
+ S ^CNE(N,TIP,"log",DTS)=R
+ S ^CNW(N,TIP,$H,"log",DTS)=R
+ 
+ ; Копия суммы с преобразованием валют
+ D:TCP'=""
+ .N K1,K2
+ .S K1=$$CRNCV^IPRICET(TIP,DTS),K2=$$CRNCV^IPRICET(TCP,DTS)
+ .S R=($$PRICEH^IPRICE(N,TIP,DTS)*K1)/K2
+ .D SETPRICE^IPRICE(N,TCP,DTS,R)
+ .Q:'$G(^cfg("price","scostcpy"))
+ .S R=+$J(($$GET^IPRICE(N,"scost",TIP,DTS)*K1)/K2,"",2)
+ .D SET^IPRICE(N,"scost",TCP,DTS,R)
+ 
+ D:$G(^cfg("price-ufields"))
+ .S TIP=$O(^CN(N,"")) Q:TIP=""  S PL=199999
+ .F  S PL=$O(^CN(N,TIP,PL)) Q:PL=""  I PL="spec"!(PL="otd")!(PL="rating")!(PL="cls")!(PL="grp")!(PL="dsex")!(PL="ages")!(PL="agee") S R="" F  S R=$O(^CN(N,R)) Q:R=""  I R'=TIP K ^(R,PL) M ^CN(N,R,PL)=^CN(N,TIP,PL)
+ .F  S PL=$O(^CNE(N,TIP,PL)) Q:PL=""  I PL="cnt"!(PL="lpu") S R="" F  S R=$O(^CNE(N,R)) Q:R=""  I R'=TIP K ^(R,PL) M ^CNE(N,R,PL)=^CNE(N,TIP,PL)
+ K XML
+ 
+ D W^ISSG("^CN("""_N_""","_TIP_")"),W^ISSG("^CNE("""_N_""","_TIP_")")
+ D UPD^IEXCH("YNPRICE",N)
+ Q
+TT() 
+ W !
+ S N=100,TIP=1,PL="test",DTS=+$H,H=$P($H,",",2),R="wep"
+ F I=1:1:5999999 D WPL(0)
+ W $P($H,",",2)-H
+ Q
+WPL(CP) ; CP - copy to first
+ S DTPV=$O(^CN(N,TIP,PL,DTS),-1),PR=""
+ S:DTPV'="" PR=$G(^(DTPV))
+ I $D(^(DTS)) K:^(DTS)'=R ^(DTS)
+ S:PR'=R ^(DTS)=R
+ S DTPV=$O(^(DTS)) I DTPV'="" K:R=^(DTPV) ^(DTPV)
+ Q:'+$G(^cfg("price-ufields")) 
+ S PR=$O(^CN(N,"")) Q:PR=""!(PR=TIP)  ; first price
+ S DTPV=$O(^CN(N,PR,PL,DTS),-1),PR=""
+ S:DTPV'="" PR=$G(^(DTPV))
+ I $D(^(DTS)) K:^(DTS)'=R ^(DTS)
+ S:PR'=R ^(DTS)=R
+ S DTPV=$O(^(DTS)) I DTPV'="" K:R=^(DTPV) ^(DTPV)
+ Q
+WPLE(CP) ; CP - copy to first
+ S DTPV=$O(^CNE(N,TIP,PL,DTS),-1),PR=""
+ S:DTPV'="" PR=$G(^(DTPV))
+ I $D(^(DTS)) K:^(DTS)'=R ^(DTS)
+ S:PR'=R ^(DTS)=R
+ S DTPV=$O(^(DTS)) I DTPV'="" K:R=^(DTPV) ^(DTPV)
+ Q:'+$G(^cfg("price-ufields")) 
+ S PR=$O(^CNE(N,"")) Q:PR=""!(PR=TIP)  ; first price
+ S DTPV=$O(^CNE(N,PR,PL,DTS),-1),PR=""
+ S:DTPV'="" PR=$G(^(DTPV))
+ I $D(^(DTS)) K:^(DTS)'=R ^(DTS)
+ S:PR'=R ^(DTS)=R
+ S DTPV=$O(^(DTS)) I DTPV'="" K:R=^(DTPV) ^(DTPV)
+ Q
+WMATT ; Декодирование материалов/обрудования
+ N A,J,K,P,C,T,G
+ S A="" F J=2:1 S K=$P(R,CR,J) Q:K=""  D
+ .S P=$P(K,"|",1)
+ .Q:P="" 
+ .S C=$$NNUM^TXTU($P(K,"|",3)),T=$P(K,"|",5),G=$$NNUM^TXTU($P(K,"|",6))
+ .S P=P_"@"_C
+ .S:+T $P(P,"@",3)=T
+ .S:+G $P(P,"@",4)=G
+ .S:+C'=C C=1 S A=A_$S(A="":"",1:"|")_P
+ S R=A D WPL(1) 
+ Q
+WLNK ; Декодирование комплексной услуги
+ N A,LST,K,X,J,C
+ S A="" F J=1:1 S K=$P($P(R,CR,J),"|",1) Q:K=""  S A=A_$S(A="":A,1:"|")_K,LST(K)=""
+ S DTPV=$O(^CN(N,TIP,PL,DTS),-1),PR=""
+ S:DTPV'="" PR=$G(^(DTPV))
+ I $D(^(DTS)) K:^(DTS)'=A ^(DTS)
+ S:PR'=A ^(DTS)=A
+ S DTPV=$O(^(DTS)) I DTPV'="" K:A=^(DTPV) ^(DTPV)
+ Q:R="" 
+ S J="",C=0 F  S J=$O(LST(J)) Q:J=""  D
+ .S C=C+$$PRICEH^IPRICE(J,TIP,DTS)
+ .S DTPV=$O(^CNE(J,TIP,PL,DTS),-1) K X M:DTPV'="" X=^(DTPV)
+ .I '$D(X(N)) S X(N)="" M ^CNE(J,TIP,PL,DTS)=X D UPD^IEXCH("YNPRICE",J)
+ ; todo - удаление из J, пересчет цен пр изменении базовой
+ ; пересчет цены
+ S DTPV=$O(^CN(N,TIP,DTS),-1),PR=""
+ S:DTPV'="" PR=$G(^(DTPV))
+ I $D(^(DTS)) K:^(DTS)'=C ^(DTS)
+ S:PR'=C ^(DTS)=C
+ S DTPV=$O(^(DTS)) I DTPV'="" K:C=$G(^(DTPV)) ^(DTPV)
+ S LF=0
+ Q
+WCON ; Контрагенты
+ N I,X,K,LST
+ F I=2:1 S X=$P(R,CR,I) Q:X=""  S K=$P(X,"|",1) Q:K=""  D
+ .S LST(K)=$P(X,"|",4)_"|"_$P(X,"|",3)
+ D WSYSCON
+ Q
+WCWRK ; Соисполнители
+ N I,X,A,Z,T
+ S A=""
+ F I=2:1 S X=$P(R,CR,I) Q:X=""  D:$P(X,"|",1)'=""!($P(X,"|",2)'="")
+ .S T=$P(X,"|",1)
+ .S Z=$TR($P(X,"|",4),",",".") S:Z'="" $P(T,":",2)=Z ; summ
+ .S Z=$TR($P(X,"|",5),",",".") S:Z'="" $P(T,":",3)=Z ; %
+ .S Z=$P(X,"|",2) S:Z'="" $P(T,":",4)=Z ; name
+ .S Z=$P(X,"|",6) S:Z'="" $P(T,":",5)=Z ; subcode
+ .S A=A_$S(A="":"",1:"|")_T
+ S R=A
+ D WPLE(0)
+ Q
+WLPU ; Условия по филиалам
+ N I,X,K,LST
+ F I=2:1 S X=$P(R,CR,I),K=$P(X,"|",1) Q:K=""  S X=$S($P(X,"|",3)="*":"d",$P(X,"|",4)=100:"100",1:$P(X,"|",4)) S:X'="" LST(K)=X ; todo - "100"
+ D WSYSCON
+ Q
+WEXPS ; Статьи расходов
+ N I,X,K,LST
+ F I=2:1 S X=$P(R,CR,I),K=$P(X,"|",1) Q:K=""  S X=$P(X,"|",3) S:X'="" LST(K)=X
+ D WSYSCONC
+ Q
+WSYSCON 
+ S DTPV=$O(^CNE(N,TIP,PL,DTS),-1)
+ I DTPV="" K ^CNE(N,TIP,PL,DTS) M ^CNE(N,TIP,PL,DTS)=LST Q 
+ S X=0,I=""
+ F  S I=$O(LST(I)) Q:I=""  I $G(^CNE(N,TIP,PL,DTPV,I))'=LST(I) S X=1 Q 
+ S I=""
+ F  S I=$O(^CNE(N,TIP,PL,DTPV,I)) Q:I=""  I $G(^(I))'=$G(LST(I)) S X=1 Q
+ I 'X,$D(^CNE(N,TIP,PL,DTS)) K ^(DTS) ; prev=now, kill now
+ Q:'X 
+ K ^CNE(N,TIP,PL,DTS)
+ M ^CNE(N,TIP,PL,DTS)=LST S:'$D(LST) ^CNE(N,TIP,PL,DTS)=""
+ Q
+WSYSCONC 
+ S DTPV=$O(^CN(N,TIP,PL,DTS),-1)
+ I DTPV="" K ^CN(N,TIP,PL,DTS) M ^CN(N,TIP,PL,DTS)=LST Q 
+ S X=0,I=""
+ F  S I=$O(LST(I)) Q:I=""  I $G(^CN(N,TIP,PL,DTPV,I))'=LST(I) S X=1 Q 
+ S I=""
+ F  S I=$O(^CN(N,TIP,PL,DTPV,I)) Q:I=""  I $G(^(I))'=$G(LST(I)) S X=1 Q
+ I 'X,$D(^CNE(N,TIP,PL,DTS)) K ^(DTS)
+ Q:'X 
+ K ^CN(N,TIP,PL,DTS)
+ M ^CN(N,TIP,PL,DTS)=LST S:'$D(LST) ^CN(N,TIP,PL,DTS)=""
+ Q
+WLST(X) ; что списком приходит
+ S A="|" F J=1:1 S K=$P($P(X,CR,J),"|",1) Q:K=""  S:K'=999 A=A_K_"|"
+ Q:A="|0|" "" Q:A="|" "" Q A
+IsCNE(PL) ; Вторичное поле
+ I $E(PL)="c" Q:PL="cnt"!(PL="con")!(PL="cowrk")!(PL="cowrko")!(PL="cdsc") 1 Q 0
+ I $E(PL)="n" Q:PL="nds"!(PL="ndss")!(PL="nosp")!(PL="nosn")!(PL="ncrnc") 1 Q 0
+ I $E(PL)="s" Q:PL="scost"!(PL="swall")!(PL="stof") 1 Q 0
+ Q:PL="lpu"!(PL="grp")!(PL="rdia")!(PL="debt")!(PL="hcen")!(PL="tmat")!(PL="msale")!(PL="minput")!(PL="aname")!(PL="onaz")!(PL="log")!(PL="znu")!(PL="rzub")!(PL="hash")!(PL="kctr")!(PL="tdsc")!(PL="pdsc")!(PL="goods") 1
+ Q 0
+Is2IDX(PL) ; У поля есть вторичный индекс
+ Q:PL="exps"!(PL="con")!(PL="lpu") 1
+ Q 0
+GET(N,PL,TIP,DT) ; Значение поля
+ Q:N="" "" G:$$IsCNE(PL) GETe
+ S DT=$O(^CN(N,TIP,PL,DT+1),-1) Q:DT="" "" Q ^(DT)
+GETe S DT=$O(^CNE(N,TIP,PL,DT+1),-1) Q:DT="" "" Q ^(DT)
+GET2(N,PL,X,TIP,DT) ; Значение поля (с индексом)
+ G GET2+1^IPRICE
+GET2IDX(N,PL,TIP,DT,FROM) ; Получить индекс сложного поля (1-й по умолч)
+ S FROM=$G(FROM)
+ Q:N="" "" G:$$IsCNE(PL) GET2IDXe
+ S DT=$O(^CN(N,TIP,PL,DT+1),-1)
+ Q:DT="" "" Q $O(^(DT,FROM))
+GET2IDXe 
+ S DT=$O(^CNE(N,TIP,PL,DT+1),-1)
+ Q:DT="" "" Q $O(^(DT,FROM))
+GET2CNT(N,PL,TIP,DT) ; Получить число индексов
+ N C,I
+ Q:N="" ""
+ S C=0,I=""
+ G:$$IsCNE(PL) GET2CNTe
+ S DT=$O(^CN(N,TIP,PL,DT+1),-1) Q:DT="" ""
+ F  S I=$O(^CN(N,TIP,PL,DT,I)) Q:I=""  S C=C+1
+ Q C
+GET2CNTe 
+ S DT=$O(^CNE(N,TIP,PL,DT+1),-1) Q:DT="" ""
+ F  S I=$O(^CNE(N,TIP,PL,DT,I)) Q:I=""  S C=C+1
+ Q C
+IS2(N,PL,TIP,DT,IDX) ; Проверить индекс сложного поля (1-й по умолч)
+ S IDX=$G(IDX)
+ Q:N="" "" G:$$IsCNE(PL) IS2e
+ S DT=$O(^CN(N,TIP,PL,DT+1),-1)
+ Q:DT="" "" Q $D(^(DT,IDX))
+IS2e 
+ S DT=$O(^CNE(N,TIP,PL,DT+1),-1)
+ Q:DT="" "" Q $D(^(DT,IDX))
+GETD(N,POLE,TIP,DT) ; Получить по текстовой дате
+ Q:N="" "" S DT=$$DIH^DTUTL($G(DT))+1
+ G:$$IsCNE(PL) GETd
+ S DT=$O(^CN(N,TIP,PL,DT),-1) Q:DT="" "" Q ^(DT)
+GETd S DT=$O(^CNE(N,TIP,PL,DT),-1) Q:DT="" "" Q ^(DT)
+CREATED(N,TP) ; Самая ранняя дата создания
+ N P,D,X
+ S D=99999,X=$O(^CN(N,TP,0)) I X'="",+X=X S:X<D D=X ; цена
+ S P=999999
+ F  S P=$O(^CN(N,TP,P)) Q:P=""  S X=$O(^(P,0)) I X'="" S:X<D D=X
+ S P=999999
+ F  S P=$O(^CNE(N,TP,P)) Q:P=""  S X=$O(^(P,0)) I X'="" S:X<D D=X
+ S:D=99999 D=""
+ Q D
+UNAME(U,NIB,DGN,CEN,MA,SKD,KSS,DT) ; Расшифровка имени услуги
+ ; CEN - разделитель для указания цены
+ ; MA - только свои (символ @)
+ ; SKD - ID скидки
+ ; KSS - по кассе
+ ; SKK - процент скидки
+ S U=$$LU^TXTU($$WD^TXTU($$TRIM^TXTU($E(U,1,64))))
+ Q:U="" 
+ N PRC,H,MI,A
+ S CEN=$G(CEN),MA=$G(MA),NIB=$G(NIB),SKD=$G(SKD),KSS=+$G(KSS),SKK=$G(SKK)
+ S:$G(DT)="" DT=+$H
+ S MI=$$LCL^IUSER("ed","nminput")
+ S:MI="" MI='$G(^cfg("price","minput"))
+ S:MA="" MA="@"
+ S:$G(DGN)="" DGN=$$GET^IPAC(NIB,"stc",DT)
+ S PRC=+$$PRC^IINSC(DGN,NIB,DT,KSS)
+ S PRC=$$CORCP^IPRICET(PRC),CEN=$G(CEN)
+ S SKD=$S($G(SKD)="":$$CHECK^IDSCN(NIB,"","",DGN,PRC,DT,$S(KSS:0,$$GET^IINSC(DGN,"dvid",DT)'=3:1,1:0)),1:SKD)
+ S A=$$UNAMEp(U) I A'="" D MSG^RWU(A) Q 
+ I '$G(^cfg("ed","no-cna"))!('$D(^CNA(U))) D MSG^RWU(A) Q  
+ N R,X S R=^CNA(U)
+ S A=$$UNAMEp(R)
+ I $L($D(^CNA(U)))=1 D MSG^RWU(A) Q
+ S R="" F  S R=$O(^CNA(U,R)) Q:R=""  S X=$$UNAMEp(R) S:R'="" A=A_CR_X
+ D MSG^RWU(A)
+ Q
+UNAMEp(U) 
+ Q:U="" ""
+ I '$$CHECKH^IPRICE(U,PRC,DT) Q ""
+ Q U_$S(CEN="":"",1:CEN_$$UNAMEs(NIB,SKD,U,DGN,PRC,DT,SKK))_$S(MA="":"",'MI:MA_1,1:MA_(+$$GET(U,"minput",PRC,DT)))_"|"_$$UNAMEn(U,PRC,DT)
+UNAMEs(NIB,SKD,U,DGN,PRC,H,SK) ; for UNAME
+ Q $$SUMSKD^IPRICE($$PRICE^IPRICE(U,PRC),NIB,SKD,U,DGN,PRC,H,$G(SKK))
+UNAMEn(U,PRC,DT) 
+ S:$G(DT)="" DT=+$H
+ Q U_" "_$$NAMEH^IPRICE(U,PRC,DT)
+PRDT(TP,COD,DT) ; prev date
+ N P,PD,CD
+ S DT=$$DIH^DTUTL($G(DT)),P=100000,PD=0
+ F  S P=$O(^CN(COD,TP,P)) Q:P=""  S CD=$O(^(P,DT),-1) I $L(CD),CD>PD S PD=CD
+ S P="" F  S P=$O(^CNE(COD,TP,P)) Q:P=""  S CD=$O(^(P,DT),-1) I $L(CD),CD>PD S PD=CD
+ S CD=$O(^CN(COD,TP,DT),-1) I $L(CD),CD>PD S PD=CD
+ S:+PD=0 PD=DT
+ D MSG^RWU($$DT^DTUTL(PD))
+ Q
+NXDT(TP,COD,DT) ; next date
+ N P,PD,CD
+ S DT=$$DIH^DTUTL($G(DT)),P=100000,PD=99999
+ F  S P=$O(^CN(COD,TP,P)) Q:P=""  S CD=$O(^(P,DT)) I $L(CD),CD<PD S PD=CD
+ S P="" F  S P=$O(^CNE(COD,TP,P)) Q:P=""  S CD=$O(^(P,DT)) I $L(CD),CD<PD S PD=CD
+ S CD=$O(^CN(COD,TP,DT)) I CD?1.N,CD<PD S PD=CD
+ S:PD=99999 PD=DT S:+PD=0 PD=DT
+ D MSG^RWU($$DT^DTUTL(PD))
+ Q
+LSTDT(TP,COD) ; Список измененных дат
+ N A,L,P,D
+ S P=100000
+ F  S P=$O(^CN(COD,TP,P)) Q:P=""  S D="" F  S D=$O(^CN(COD,TP,P,D)) Q:D=""  S L(D)=""
+ S P=100000 F  S P=$O(^CNE(COD,TP,P)) Q:P=""  S D="" F  S D=$O(^CNE(COD,TP,P,D)) Q:D=""  S L(D)=""
+ S D=100000 F  S D=$O(^CN(COD,TP,D),-1) Q:D=""  S L(D)=""
+ S (A,D)="" F  S D=$O(L(D)) Q:D=""  D
+ .S A=$S(A="":"",1:A_CR)_$$DT^DTUTL(D)
+ .S L=$G(^CNE(COD,TP,"log",D)) Q:L=""  
+ .S A=A_", "_$$FIOSH^NUSER($P(L,"|",1))_" "_$$DTM^DTUTL($P(L,"|",2))
+ D MSG^RWU(A)
+ Q
+CHKLNK(USL,LUSL,TP) ; Проверка что услуга LUSL может входить в состав USL
+ ; TP- type of price 
+ Q:LUSL=""!(USL="") 
+ I USL=LUSL D MSG^RWU("ER") Q
+ S TP=$O(^CNE(USL,TP,"lnk",$H+1),-1)
+ I TP'="",$D(^(TP,LUSL)) D MSG^RWU("ER") Q
+ D MSG^RWU("OK")
+ Q
+MERGE(COD,TP,DT) ; Объединить все поля кроме цены по всем прайсам
+ N T
+ S COD=$$DW^TXTU(COD),DT=$$DIH^DTUTL(DT)
+ S T="" F  S T=$O(^CN(COD,T)) Q:T=""  D:T'=TP MERGE^IPRICEU(COD,T,TP,DT)
+ Q
+UCOPY(COD,FTP,TTP,DT,TDT,TCOD,FLST) ; Копировать услугу на другой прайс
+ ; TCOD - на какой код
+ ; FLST - перечень полей через |
+ N P,D
+ S COD=$$DW^TXTU(COD),DT=$$DIH^DTUTL(DT)
+ S TDT=$$DI^DTUTL($G(TDT)) S:TDT="" TDT=DT
+ S FLST=$G(FLST),TCOD=$G(TCOD)
+ S:TTP="" TTP=FTP
+ S:TCOD="" TCOD=COD
+ I TCOD'=COD,'$D(^CN(TCOD,TTP)) Q 
+ ; поля
+ S P=99999 F  S P=$O(^CN(COD,FTP,P)) Q:P=""  D
+ .I FLST'="",'$$FLinFL^TXTU(FLST,P) Q 
+ .S D=$O(^(P,DT+1),-1) Q:D="" 
+ .M ^CN(TCOD,TTP,P,TDT)=^CN(COD,FTP,P,D)
+ ; цена
+ D:FLST=""
+ .S D=$O(^CN(COD,FTP,DT+1),-1)
+ .I D'="" S ^CN(TCOD,TTP,TDT)=^(D)
+ ; доп. инф.
+ S P="" F  S P=$O(^CNE(COD,FTP,P)) Q:P=""  D
+ .I FLST'="",'$$FLinFL^TXTU(FLST,P) Q 
+ .S D=$O(^(P,DT+1),-1) Q:D="" 
+ .M ^CNE(TCOD,TTP,P,TDT)=^CNE(COD,FTP,P,D)
+ D GL^IEXCH("^CN",TCOD,TTP),GL^IEXCH("^CNE",TCOD,TTP)
+ Q
+UAMERGE ; Копировать свойства нескольких услуг
+ N A,I,FTP,TTP,DT,TDT
+ D ORH^RWU
+ F I=1:1 S A=$$R^RWU Q:%IFN["Z"  D
+ .I I=1 S FTP=$P(A,"|",1),TTP=$P(A,"|",2),DT=$$DIH^DTUTL($P(A,"|",3)),TDT=$$DI^DTUTL($P(A,"|",4)) S:TDT="" TDT=DT Q 
+ .D MERGE^IPRICEU(A,FTP,TTP,DT,TDT)
+ D CR^RWU
+ Q
+UACOPY ; Копировать несколько услуг
+ ; Заголовок: с прайса|на прайс|с даты|на дату
+ ; строки: код услуги 
+ N A,I,FTP,TTP,DT,TDT
+ D ORH^RWU
+ F I=1:1 S A=$$R^RWU Q:%IFN["Z"  D
+ .I I=1 S FTP=$P(A,"|",1),TTP=$P(A,"|",2),DT=$P(A,"|",3),TDT=$P(A,"|",4) Q 
+ .Q:FTP=TTP  
+ .D UCOPY($P(A,"|",1),FTP,TTP,DT,TDT)
+ D CR^RWU
+ Q
+SETGRP ; Установить группу на несколько услуг
+ D setval("grp")
+ Q
+SETOTD ; Установить отделения на несколько услуг
+ D setval("otd","|","|")
+ Q
+SETSP ; Установить специальности на несколько услуг
+ D setval("spec","|","|")
+ Q
+setval(FL,S,E) 
+ ; S,E - начальные и конечные символы значения
+ N I,A,PR,DT,V
+ S S=$G(S),E=$G(E)
+ D ORH^RWU
+ F I=1:1 S A=$$R^RWU Q:%IFN["Z"  D  Q:V="" 
+ .I I=1 S PR=$P(A,"|",1),DT=$$DIH^DTUTL($P(A,"|",2)),V=$P(A,"|",3,99) S:V'="" V=S_V_E Q 
+ .D SET^IPRICE(A,FL,PR,DT,V)
+ .D SETLOG^IPRICE(A,PR,DT)
+ D CR^RWU
+ Q
+INIT ; Initialize form
+ N R,V
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<oprice>")
+ D:+$G(^cfg("oprice-vcne")) WC^RWU("<nprice default=""Код:1400;Наименование:5300;Изменено:1500;Цена:1300""/>")
+ D:$D(^LOG(%LOG,"lcl","price"))
+ .S R=+^("price"),V=" visible=""no""/>"
+ .D:$G(^LCL("price",R,"mklimit"))=0 W^RWU("<btn_p1"_V)
+ .D:$G(^LCL("price",R,"mkmatt"))=0 W^RWU("<btn_p2"_V)
+ .D:$G(^LCL("price",R,"mklist"))=0 W^RWU("<btn_p3"_V)
+ .D:$G(^LCL("price",R,"mkcontr"))=0 W^RWU("<btn_p4"_V)
+ .D:$G(^LCL("price",R,"mklpu"))=0 W^RWU("<btn_p5"_V)
+ .D:$G(^LCL("price",R,"new"))=0 W^RWU("<create_btn"_V)
+ .D:$G(^LCL("price",R,"delpr"))=0 W^RWU("<del_pr_btn"_V)
+ .D:$G(^LCL("price",R,"newpr"))=0 W^RWU("<add_pr_btn"_V)
+ ;S R=$$IDX^ISPRAV("cowrk")
+ ;D W^RWU("<cowrk>")
+ ;S V="" F  S V=$O(^MN(R,V)) Q:V=""  D WC^RWU(CR_V_"|"_^(V))
+ D WTAGC^RWU("lpu",$$LSTLPU())
+ D WTAGC^RWU("exps",CR_$$VARNM^ISPRAV("priceexs"))
+ D W^RWU("</oprice></nb_console>"),C^RWU
+ Q
+DELCP(DT,N)     ; УДАЛИТЬ ПРЕЙСКУРАНТ
+ G:$$LCL^IUSER("price","delpr")=0 CPV
+ N IDX,C
+ S IDX=$$IDX^ISPRAV("tprice") G:'$D(^MN(IDX,N)) CPV
+ D CLRPRC^IPRICEU(N)
+ K ^MN(IDX,N)
+ S ^MN(IDX)=$H
+ G CPV
+CDELCP(DT,N) ; Проверка удаления прейскуранта
+ N X
+ S X=$$PrcIn^YNDOG(N)
+ I X'="" D MSG^RWU("Прейскурант используется в """_$$NAME^IINSC(X)_""".") Q 
+ Q
+CLRCP(DT,N) ; Очистить прейскурант
+ Q:$$LCL^IUSER("price","delpr")=0 
+ D CLRPRC^IPRICEU(N)
+ Q
+ADDCP(DT,NAME,FROM,KK,CUR)     ; ДОБАВИТЬ ПРЕЙСКУРАНТ
+ N IDX,N,C
+ S IDX=$G(^MN("tprice")),CUR=$G(CUR)
+ S:IDX="" IDX=$$NEWIDX^YISPRAV("tprice")
+ S N=$O(^MN(IDX,""),-1)+1
+ S ^MN(IDX,N)=$$WD^TXTU(NAME)_$S($L(CUR):"|"_CUR,1:""),^MN(IDX)=$H
+ S DT=$$DIH^DTUTL(DT)
+ D:+FROM CREATEPR^IPRICET(FROM,N,KK,DT)
+CPV Q:'$D(%JOB)  
+ D OWF^RWU(".txt")
+ S (N,C)=""
+ F  S N=$O(^MN(IDX,N)) Q:N=""  D WC^RWU(C_N_"|"_$P(^(N),"|",1)) S C=CR
+ D UPD^IEXCH("YISPRAV","tprice")
+ D C^RWU
+ Q
+LSTCP ; Список прейскурантов
+ N IDX,COD,C S IDX=$$IDX^ISPRAV("tprice")
+ D OWF^RWU(".txt")
+ S (N,C)="" F  S N=$O(^MN(IDX,N)) Q:N=""  D WC^RWU(C_N_"|"_$P(^(N),"|",1)) S C=CR
+ D C^RWU
+ Q
+LCP(ID) ; Получить данные для изменения прейскуранта
+ Q:ID=""  
+ N IDX S IDX=$$IDX^ISPRAV("tprice")
+ S IDX=^MN(IDX,ID)
+ S:$P(IDX,"|",4)'=0 $P(IDX,"|",4)=1
+ D MSG^RWU(IDX)
+ Q
+CNGCP(DT,N,NM,CUR,CPT,USE) ; Переименовать прайс
+ ; CUR - валюта
+ ; CPT - копировать изменяемые услуги на price
+ ; USE - прейскурант используется
+ Q:N=""  
+ N IDX,R
+ S IDX=$$IDX^ISPRAV("tprice"),CUR=$G(CUR),CPT=$G(CPT)
+ S:CPT=N CPT=""
+ S R=$$WD^TXTU(NM)
+ S:CUR'="" $P(R,"|",2)=CUR
+ S:CPT'="" $P(R,"|",3)=CPT
+ S:$G(USE)=0 $P(R,"|",4)=0
+ S ^MN(IDX,N)=R,^MN(IDX)=$H
+ G CPV
+NDEL(TIP,N) ; УДАЛИТЬ КОД
+ I N=""!(TIP="") D MSG^RWU("Ошибка кода.") Q
+ I $$LCL^IUSER("price","del")'=1 D MSG^RWU("Нет прав.") Q
+ I $$IsUSL^YMPRP(N,TIP)'="" D MSG^RWU("Используется в программах обслуживания.") Q 
+ ; TODO - проверка по вып услугам+лаб
+ K ^CN(N,TIP),^CNE(N,TIP)
+ S ^CN=$H
+ D K^ISSG("^CN("""_N_""","_TIP_")"),K^ISSG("^CNE("""_N_""","_TIP_")")
+ D KGL^IEXCH("^CN",N,TIP),KGL^IEXCH("^CNE",N,TIP)
+ Q
+NMOV(TIP,N,NN) ; Переместить код
+ ; TIP - прайс (опционально)
+ ; N - откуда
+ ; NN - куда
+ Q:NN=""  Q:N=""  
+ I TIP="" D  Q
+ .M ^CN(NN)=^CN(N),^CNE(NN)=^CNE(N)
+ .K ^CN(N),^CNE(N)
+ .D K^ISSG("^CN("""_N_""")"),K^ISSG("^CNE("""_N_""")")
+ .D KGL^IEXCH("^CN",N),KGL^IEXCH("^CNE",N)
+ .D GL^IEXCH("^CN",NN),KGL^IEXCH("^CNE",NN)
+ M ^CN(NN,TIP)=^CN(N,TIP),^CNE(NN,TIP)=^CNE(N,TIP)
+ K ^CN(N,TIP),^CNE(N,TIP)
+ D K^ISSG("^CN("""_N_""","_TIP_")"),K^ISSG("^CNE("""_N_""","_TIP_")")
+ D KGL^IEXCH("^CN",N,TIP),KGL^IEXCH("^CNE",N,TIP)
+ D GL^IEXCH("^CN",NN,TIP),KGL^IEXCH("^CNE",NN,TIP)
+ Q
+NNUM(TIP)     ; ВЫДАТЬ НОВЫЙ КОД
+ D MSG^RWU($$NNUM^IPRICE(TIP))
+ Q
+NCHK(TIP,COD) ; Проверить код
+ ; TIP="" по всем
+ D MSG^RWU("OK")
+ I TIP="" Q:$D(^CN(COD))  D MSG^RWU("ERR") Q 
+ D:'$D(^CN(COD,TIP)) MSG^RWU("ERR")
+ Q
+REPRC(SS,SE,K,DT,TYP,PL,RND) ; Изменить прейскурант (или поле) на процент
+ ; RND - округление
+ I K=100 D TAB(SS_"-"_SE,DTT,TYP) Q 
+ N DTT,N,R,X,RN
+ S DTT=DT,DT=$$DIH^DTUTL(DT),RND=+$G(RND)
+ S X=$G(^cfg("price-round"))
+ S RN=X S:RND RN=RND
+ S N=$S(SS="":"",1:$O(^CN(SS),-1))
+ S CE=$S(SE="":"",1:$O(^($O(^CN(SE))),-1))
+ G:$L($G(PL)) REPRCf
+ F  S N=$O(^CN(N)) Q:N=""  D  Q:N=CE
+ .Q:'$$CHECK^IPRICE(N,TYP) 
+ .S R=$$PRICEH^IPRICE(N,TYP,DT)
+ .S R=+$FN(R*K/100,"",2)
+ .S ^CN(N,TYP,DT)=$S(RN=1:$J(R,0,0),RN=2:$J(R/10,0,0)*10,1:R)
+ .D GL^IEXCH("^CN",N,TYP)
+ D TAB(SS_"-"_SE,DTT,TYP)
+ Q
+REPRCf ; Изменить поле на процент
+ F  S N=$O(^CN(N)) Q:N=""  D  Q:N=CE
+ .Q:'$$CHECK^IPRICE(N,TYP) 
+ .S R=$$GET(N,PL,TYP,DT)
+ .S R=+$FN(R*K/100,"",2)
+ .S ^CN(N,TYP,PL,DT)=$S(RN=1:$J(R,0,0),RN=2:$J(R/10,0,0)*10,1:R)
+ .D GL^IEXCH("^CN",N,TYP,PL)
+ D TAB(SS_"-"_SE,DTT,TYP)
+ Q
+LSTOTD(OT,DT,TYP) ; вывод списка по отделению
+ N OTD,COD,OTF
+ S OT=$S(OT="A":999,OT="":999,1:OT),OTF="|"_OT_"|"
+ S DT=$$DIH^DTUTL(DT)
+ D OWF^RWU(".txt")
+ S:TYP=0!($D(^($G(^MN("tprice")),TYP))=0) TYP=1
+ S COD="" F  S COD=$O(^CN(COD)) Q:COD=""  D:$D(^(COD,TYP))
+ .I OT'=999 S OTD=$$GET(COD,"otd",TYP,DT) I OTD'="" Q:OTD'[OTF 
+ .D WC^RWU(CR_$$NAMEH^IPRICE(COD,TYP,DT)_"|"_$$PRICEH^IPRICE(COD,TYP,DT))
+ D C^RWU
+ Q
+LSTSPC(SP,DT,TYP) ; вывод списка по специальности
+ N SPC,COD,SPF
+ S SP=$S(SP="A":999,SP="":999,1:SP),SPF="|"_SP_"|"
+ S DT=$$DIH^DTUTL(DT)
+ D OWF^RWU(".txt")
+ S:TYP=0!($D(^($G(^MN("tprice")),TYP))=0) TYP=1
+ S COD="" F  S COD=$O(^CN(COD)) Q:COD=""  D:$D(^(COD,TYP))
+ .I SP'=999 S SPC=$$GET(COD,"spec",TYP,DT) Q:SPC'=""&(SPC'[SPF) 
+ .Q:'$$CHECKH^IPRICE(COD,DT,TYP) 
+ .D WC^RWU(CR_$$NAMEH^IPRICE(COD,TYP,DT)_"|"_$$PRICEH^IPRICE(COD,TYP,DT))
+ D C^RWU
+ Q
+PRPTOALL(N,PFROM) ; properties from price N PFROM to others
+ N I,P S I=""
+ F  S I=$O(^CN(N,I)) Q:I=""  I I'=PFROM S P="" F  S P=$O(^CN(N,PFROM,P)) Q:P=""  M:'(+P=P!(P="name")) ^CN(N,I,P)=^CN(N,PFROM,P)
+ Q
+UVLST(USL,PRC,DT) ; Список сотрудников по услуге
+ N VR,A
+ S (VR,A)=""
+ S A="|Сотрудник|Тип"
+ F  S VR=$O(^CNCL("vr",VR)) Q:VR=""  I $D(^(VR,USL)) S A=$S(A="":"",1:A_CR)_VR_"|"_$$FIO^IKADRY(VR)_"|"_$G(^CNCL("vr",VR,USL))
+ D MSG^RWU(A)
+ Q
+UVADD(VR,USL,PRC,DT) ; Добавить сотрудника к услуге
+ S ^CNCL("vr",VR,USL)=1 ; 2,3 - через загрузку глобали
+ D GL^IEXCH("^CNCL","vr",VR,USL)
+ D W^ISSG("^CNCL(""vr"","_VR_","""_USL_""")")
+ Q
+UVSET(VR,USL,PRC,DT,TP) ; Добавить сотрудника к услуге
+ S ^CNCL("vr",VR,USL)=TP ; 2,3 - через загрузку глобали
+ D GL^IEXCH("^CNCL","vr",VR,USL)
+ D W^ISSG("^CNCL(""vr"","_VR_","""_USL_""")")
+ Q
+UVDEL(VR,USL,PRC,DT) ; Удалить сотрудника из услуги
+ K ^CNCL("vr",VR,USL)
+ D KGL^IEXCH("^CNCL","vr",VR,USL)
+ D K^ISSG("^CNCL(""vr"","_VR_","""_USL_""")")
+ Q
+DECLST(DGN,NI,DT,LST,KSS) ; Расшифровать список кодов услуг
+ N VI,I,U,L
+ S DT=$$DIH^DTUTL(DT)
+ S VI=+$$PRC^IINSC(DGN,NI,DT,$G(KSS))
+ S LST=$$WD^TXTU(LST),C=""
+ D OWF^RWU(".txt")
+ F I=1:1:$L(LST,"|") S U=$P(LST,"|",I) D:U'=""
+ .D WC^RWU(CR_U_"|"_U_" "_$$NAMEH^IPRICE(U,VI,DT)_"|"_$$PRICEH^IPRICE(U,VI,DT))
+ D C^RWU
+ Q
+RXCH 
+ D R^XGUNET("hpar")
+ Q
+WXCH(ID) 
+ N GL
+ S ID="("""_ID_""""
+ ; clear and write
+ S GL(0)="-^CN"_ID,GL(1)="-^CNE"_ID,GL(2)="^CN"_ID,GL(3)="^CNE"_ID
+ D S^XGUNET("GL","exp.nb-data")
+ Q
+JSON(DT,PRC,OTDL) ; Выгрузка в формате JSON
+ ; OTDL - перечень отделений через |
+ N COD,F,X,CNVR,V,LPUL,OT,CLS
+ ; TODO - first used price
+ S DT=$$DIH^DTUTL(DT)
+ S:'$G(PRC) PRC=$$PRC^IINSC("","",DT,1,"","") ; w. kss, default
+ S PRC=$$CORCP^IPRICET(PRC)
+ S OTDL=$TR($G(OTDL),";,/ ","|||")
+ D OWF^RWU(".txt"),W^RWU("[")
+ ; Reverse VR->COD
+ S X="" F  S X=$O(^CNCL("vr",X)) Q:X=""  S F="" F  S F=$O(^CNCL("vr",X,F)) Q:F=""  S:F CNVR(F,X)=""
+ ; LPU list
+ D MKFIA^ICONTR("LPUL")
+ 
+ S COD="",F=0 F  S COD=$O(^CN(COD)) Q:COD=""  D:$D(^CN(COD,PRC))
+ .Q:$O(^(PRC,DT+1),-1)=""  ; еще не действует
+ .Q:'$$CHECKH^IPRICE(COD,PRC,DT)  Q:$$GET^IPRICE(COD,"sys",PRC,DT) 
+ .S CLS=$$GET^IPRICE(COD,"cls",PRC,DT)
+ .Q:$$FLinFL^TXTU(CLS,"nwww") 
+ .I OTDL'="" S OT=$$reLL($$GET^IPRICE(COD,"otd",PRC,DT)) I OT'="",'$$FLinFL^TXTU(OT,OTDL) Q 
+ .D B^IJSON()
+ .D W^IJSON("code",COD)
+ .D W^IJSON("name",$$GET^IPRICE(COD,"name",PRC,DT))
+ .D W^IJSON("shortname",$$GET^IPRICE(COD,"cname",PRC,DT))
+ .S X=$$GET^IPRICE(COD,"grp",PRC,DT)
+ .D:X W^IJSON("grp",X)
+ .S X=$$toArr($$GET^IPRICE(COD,"spec",PRC,DT))
+ .D:X'="" WR^IJSON("spec","["_X_"]")
+ .S X=$$toArr($$GET^IPRICE(COD,"otd",PRC,DT))
+ .D:X'="" WR^IJSON("depart","["_X_"]")
+ .S X=$$toJLPU(COD,PRC,DT)
+ .D:X'="" WR^IJSON("branch","["_X_"]")
+ .S (X,V)="" F  S V=$O(CNVR(COD,V)) Q:V=""  S X=$S(X="":"",1:X_",")_V
+ .D:X'="" WR^IJSON("staff","["_X_"]")
+ .S X=$$GET^IPRICE(COD,"cdsc",PRC,DT)
+ .D:X'="" W^IJSON("description",X)
+ .S X=$$GET^IPRICE(COD,"pdsc",PRC,DT)
+ .D:X'="" W^IJSON("prepare",X)
+ .D W^IJSON("price",$$PRICEH^IPRICE(COD,PRC,DT))
+ .D WBL^IJSON("paid",$$FLinFL^TXTU(CLS,"epay"))
+ .D WC^RWU($S(F:",",1:"")_$$E^IJSON())
+ .S F=1
+ D W^RWU("]"),C^RWU
+ Q
+toArr(X) 
+ I $E(X)="|",$E(X,$L(X))="|" S X=$E(X,2,$L(X)-1)
+ Q:X="" ""
+ N I,K S K="" F I=1:1:$L(X,"|") S K=$P(X,"|",I) S:+K'=K $P(X,"|",I)=""""_K_""""
+ Q $TR(X,"|",",")
+toJLPU(COD,PRC,DT) ; Массив разрешенных по ЛПУ
+ Q:'$D(^CNE(COD,PRC,"lpu")) ""
+ S DT=$O(^("lpu",DT+1),-1) Q:DT="" ""
+ N X,L
+ S (X,L)="" F  S L=$O(LPUL(L)) Q:L=""  I $G(^CNE(COD,PRC,"lpu",DT,L))'="d" S X=$S(X="":"",1:X_",")_L
+ Q X
+reLL(X) ; Убрать крайние символы |
+ S:$E(X)="|" $E(X,1)=""
+ S:$E(X,$L(X))="|" $E(X,$L(X))=""
+ Q X

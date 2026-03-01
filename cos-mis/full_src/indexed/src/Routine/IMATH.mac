@@ -1,0 +1,16 @@
+IMATH ; Математические ф-ции [ 09/24/2010  0:34 AM ]
+MAX3(X1,X2,X3) 
+ I X1>X2 Q:X1>X3 X1 Q X3
+ Q:X3>X2 X3
+ Q X2
+MIN3(X1,X2,X3) 
+ I X1<X2 Q:X1<X3 X1 Q X3
+ Q:X3<X2 X3
+ Q X2
+MIN3Z(X1,X2,X3) ; Минимум из значащих
+ S:'X1 X1=$S(X2:X2,1:X3)
+ S:'X2 X2=$S(X1:X1,1:X3)
+ S:'X3 X3=$S(X1:X1,1:X2)
+ I X1<X2 Q:X1<X3 X1 Q X3
+ Q:X3<X2 X3
+ Q X2

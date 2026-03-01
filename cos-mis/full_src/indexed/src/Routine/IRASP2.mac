@@ -1,0 +1,835 @@
+IRASP2 ; Внутренние процедуры расписания v.2 [ 10/16/2024  4:03 PM ]
+SETL(OT,TN,SP,DT,TIME,TML,NI,NCHK,LPU,NUPD,PID) ; запись на время
+ N TMF
+ S TMF=$S($P(TML,"|",2):2,1:1) ; len or len+time
+ S TIME=$P(TML,"|",2)*60+TIME,TML=$P(TML,"|",1)*60 ; minutes
+ S:TML<1 TML=""
+ G SET1
+SET(OT,TN,SP,DT,TIME,NI,NCHK,LPU,EID,NUPD) ; write record
+ ; NI - NIB:1|comment:2|pin:3|phones:4|PID:5|rec.type:6|rsource:7|waitlist:8|bdate:9|gender:10
+ ; EID=0 - как флаг что запись внешняя, или реальный ID
+ ; NUPD - no network update
+ N TML,TMF S TML="",TMF=0
+SET1 K REZ
+ N K,P,LOG,NIB,PR,COM,Q,PID,TTP,RS,X,Z,MX,TMLX,TO,BD,SX,KDR
+ S:'$D(LPU) LPU=+$$^I("ilpu")
+ I DT=""!(TIME="")!(NI="") S REZ="Ошибка в параметрах ("_$S(DT="":"DT",TIME="":"TM",1:"PID")_")" Q
+ I $G(^cfg("rasp-aohour")),$S(+$H>DT:1,+$H'=DT:0,1:TIME<($P($H,",",2)-$S(^cfg("rasp-aohour")=2:3600,1:60))) S REZ="Запись на прошедшее время запрещена" Q 
+ S K=$G(^cfg("rasp","todate"))
+ I K,K'<DT S REZ="Запись на эту дату запрещена" Q 
+ S:'$D(^DSH(LPU,OT,TN,SP)) SP=$G(^DSHI("sp",LPU,SP,OT_"|"_TN))
+ I SP="" S REZ="Специальность в расписании отсутствует." Q
+ S KDR=$$KDR^IUSER()
+ I $$LCL^IUSER("rasp","owset"),$S($E(TN)="X":'$$VRINCAB^NPLPU(TN,KDR),1:KDR'=TN) S REZ="Изменение чужого расписания запрещено." Q 
+ I $$LCL^IUSER("rasp","ownset"),$S($E(TN)="X":$$VRINCAB^NPLPU(TN,KDR),1:KDR=TN) S REZ="Изменение своего расписания запрещено." Q
+ S NUPD=+$G(NUPD),EID=$G(EID)
+ S K=$G(^DSH(LPU,OT,TN,SP,DT)) Q:K="" 
+ I +$P(K,"|",5)=1 S REZ="Запись ""заморожена""" Q 
+ S MX=$P(K,"|",6)
+ I MX>1,$$FLinFL^TXTU($$CABFL^IPLPU(LPU,$P(K,"|",2),"cls"),"nmdsh") S MX=1 ; Только одна запись на график
+ I MX>1,TMF=2,'$G(^cfg("rasp","slen-multi")) S REZ="Для данного графика изменение начала и длительности записи запрещено" Q
+ I MX>1,TMF=1 S REZ="Для данного графика изменение длительности записи запрещено" Q
+ I TIME<90000,'$D(^(DT,TIME)),$$LCL^IUSER("sprasp","timesel") S REZ="Время отсутствует." Q 
+ S P=$P($G(^DSH(LPU,OT,TN,SP,DT,TIME,"t")),"|",1)
+ I P'="",$P($G(^MN(+$G(^MN("raspzt")),P)),"|",3)=1 S REZ="Запись запрещена, время зарезервировано." Q
+ I MX<2,$$IsBUSY(LPU,OT,TN,SP,DT,TIME,TML) S REZ="Запись запрещена, время занято." Q 
+ ; I +$P(K,"|",6),$D(^DSH(LPU,OT,TN,SP,DT,TIME))'[0 F PR=TIME+1:1:TIME+$P(K,"|",6) I '$D(^(PR)) S TIME=PR Q  ; несколько записей в рамках одного времени
+ S PID=$P(NI,"|",5),NI=$TR(NI,"<>/","{}\")
+ S NI=$$DBLSP^TXTU($$WD^TXTU(NI))
+ ; TTP - тип записи
+ S NIB=$P(NI,"|",1),COM=$P(NI,"|",4),TTP=$P(NI,"|",6),RS=$P(NI,"|",7),BD=$P(NI,"|",9),SX=$P(NI,"|",10),NI=$P(NI,"|",1,3)
+ S TMLX=$S(TIME>89999:"",TML="":$O(^DSH(LPU,OT,TN,SP,DT,TIME))-TIME,1:TML)
+ I NIB'="",'$$EXIST^IPAC(NIB) S NIB="",$P(NI,"|",1)=$$NRMFIO^YIFAM($P(NI,"|",1)) G SET2
+ S PID="" ; только NIB
+ ; Проверка программ (хоть какая проходит)
+ G:NCHK SETpe
+ S PR=$$GET^IPAC(NIB,"prog",DT),Q=0
+ I PR'="",$$CHKDWA^YMPRP(PR,DT,TIME)<0 S Q=1
+ D:Q
+ .S K=$$CNTSTC^IPAC(NIB,DT)
+ .F K="",1:1:K-1 S PR=$$GET^IPAC(NIB,"prog"_K,DT) I $L(PR) S Q=0 S:$$CHKDWA^YMPRP(PR,DT,TIME)<0 Q=1 Q:'Q 
+ I Q S REZ="Запрещено программой обслуживания." Q 
+ ; проверяем минутные интервалы
+SETpe 
+ I NCHK<2,TIME<90000,$D(^DSHP(NIB,DT)) D  I Q S Q=$G(^cfg("rasp","cotime")),REZ=$S(Q:"#2",1:"")_"Пациент уже записан на это время к другому врачу."_$S(Q:CR_"Вы уверены, что хотите записать ?",1:"") Q
+ .S Q=0
+ .S K=$$PACInT(NIB,DT,TIME,TMLX) Q:K="" 
+ .S Q=1
+ .S K=$P($P(K,"|",4),"@",1)
+ .I $D(^DSHM("cosp",$P(SP,"@",1),K)) S Q=0 ; допуст. ко-специальности
+SET2 I $G(^cfg("rasp","zpocab")),$$TMINCAB(LPU,OT,TN,SP,DT,TIME) S REZ="В указанном кабинете уже записан пациент." Q 
+ I TML>0 D  Q:$D(REZ) 
+ .S P=TIME+TML,K=0
+ .F  S P=$O(^DSH(LPU,OT,TN,SP,DT,P),-1) Q:P=""!K!(P'>TIME)  D
+ ..I ^(P)="*" S K=2 Q
+ ..I $L(^(P)) S K=1 Q 
+ .S:K=1 REZ="В указанном периоде уже записаны пациенты."
+ .S:K=2 REZ="Длительность записи больше времени работы врача."
+ S P=$$^I("ilpu"),LOG=$G(%LOG)_$S(P="":P,1:"@"_P)
+ 
+ D DO^ITRIG("rasp","check")
+ I $G(REZ)'="" Q 
+ 
+ L +^DSH(LPU,OT,TN,SP,DT,TIME)
+ 
+ S P=$G(^DSH(LPU,OT,TN,SP,DT,TIME))
+ S K=$P(P,"|",7) I K="" S K=$P(P,"|",1) S:'$$EXIST^IPAC(K) K=""
+ I K'="" K ^DSHP(K,DT,TIME,TN) D KGL^IEXCH("^DSHP",K,DT,TIME,TN)
+ K:$D(^DSH(LPU,OT,TN,SP,DT,TIME))=11 ^(TIME)
+ 
+ I TIME<90000,NIB'="",+$G(^cfg("rasp","split-top")),(TIME#60)=0,MX<2 S TO=$O(^DSH(LPU,OT,TN,SP,DT,TIME),-1) I TO'="",$P(^(TO),"|",1)=NIB D  Q  ; пациент уже записан выше (не для мультизаписей)
+ .K ^(TIME)
+ .S K=$G(^(TO)),TMLL=$G(^(TO,"z"))
+ .S TMLL=$S(TMLL="":"",1:TMLL_"|")_(TIME/60)
+ .I TML'="" S P=$$chkset(LPU,OT,TN,SP,DT,TIME+TML,TIME) S:P'="" TMLL=TMLL_"|"_P S $P(^DSH(LPU,OT,TN,SP,DT,TO),"|",5)=TIME-TO+TML ; old+curr len
+ .S ^DSH(LPU,OT,TN,SP,DT,TO,"z")=TMLL
+ .D WLOG($H,LPU,OT,TN,SP,DT,TIME,NIB_"|"_LOG_"|K")
+ .D KGL^IEXCH("^DSH",LPU,OT,TN,SP,DT,TIME)
+ .D GL^IEXCH("^DSH",LPU,OT,TN,SP,DT,TO)
+ .D CNG^IRASP2(DT,LPU,OT,SP,TN)
+ .L -^DSH(LPU,OT,TN,SP,DT,TIME)
+ 
+ I NIB="",PID="" S PID=$$MKPID(LPU)
+ S K=$H,$P(NI,"|",4)=K
+ S:TML'="" $P(NI,"|",5)=TML
+ S:PID'="" $P(NI,"|",7)=PID
+ S ^DSH(LPU,OT,TN,SP,DT,TIME)=NI
+ L -^DSH(LPU,OT,TN,SP,DT,TIME)
+ S P=$P(NI,"|",1)_"|"_LOG_"||"_TMLX
+ S:$P(NI,"|",2)'="" $P(P,"|",5)=$P(NI,"|",2)
+ S:COM'="" $P(P,"|",6)=COM
+ D WLOG(K,LPU,OT,TN,SP,DT,TIME,P)
+ 
+ S:PID="" PID=NIB
+ S:PID'="" ^DSHP(PID,DT,TIME,TN)=LPU_"|"_OT_"|"_$TR(SP,"|","@")_"|"_LOG
+ S K=LPU_"~"_OT_"~"_TN_"~"_SP_"~"_DT_"~"
+ D:TML>0 
+ .N TMLL
+ .S P=TIME+TML,TMLL=$S($D(^DSH(LPU,OT,TN,SP,DT,TIME)):TIME/60,1:"")
+ .S TO=$$chkset(LPU,OT,TN,SP,DT,P,TIME) S:TO'="" TMLL=TMLL_"|"_TO
+ .S:TMLL'="" ^DSH(LPU,OT,TN,SP,DT,TIME,"z")=TMLL
+ S:TTP ^DSH(LPU,OT,TN,SP,DT,TIME,"u")=OT_","_SP_","_TTP
+ D:$L(COM)!$L(RS)!$L(EID) 
+ .S NI=$P(NI,"|",1)
+ .S P=COM_"|"_RS_"|||"_$P(NI," ",1)_"|"_$P(NI," ",2)_"|"_$P(NI," ",3)_"|"_BD_"|"_SX_"|"_LOG
+ .S:EID'="" $P(P,"|",11)=1
+ .S ^DSH(LPU,OT,TN,SP,DT,TIME,"i")=P
+ .Q:NIB="" 
+ .I COM'="" D SETPHN(NIB,COM) ; присваивание телефона
+ .I RS'="",$$GET^IPAC(NIB,"rsource",DT)="" D SET^IPAC(NIB,"rsource",DT,RS,1)
+ D:EID'=""&(EID'=0)
+ .S ^DSH(LPU,OT,TN,SP,DT,TIME,"l")=EID ; EID=0 - только как флаг
+ .Q:PID=""
+ .S ^DSHE("eid",EID,PID)=""
+ .D GL^IEXCH("^DSHE","eid",EID,PID)
+ I 'NUPD D UPD^IEXCH("IRASP2",K_TIME_"~"_PID),fastio
+ D CNG^IRASP2(DT,LPU,OT,SP,TN)
+ D DO^ITRIG("rasp","set")
+ Q
+chkset(LPU,OT,TN,SP,DT,TM,TS) ; проверить и вставить пустое значение + пустые записи в периоде
+ N TML
+ Q:$D(^DSH(LPU,OT,TN,SP,DT,TM)) ""
+ S ^(TM)=""
+ D GL^IEXCH("^DSH",LPU,OT,TN,SP,DT,TM)
+ S TML=""
+ F  S TM=$O(^DSH(LPU,OT,TN,SP,DT,TM),-1) Q:TM=""!(TM'>TS)  K ^(TM) D KGL^IEXCH("^DSH",LPU,OT,TN,SP,DT,TM) S TML=$S(TML="":"",1:TML_"|")_(TM/60)
+ Q TML
+EXIST(OT,TN,SP,DT,TIME,LPU) ; Проверить наличие записи
+ S:$G(LPU)="" LPU=+$$^I("ilpu")
+ Q:$P($G(^DSH(LPU,OT,TN,SP,DT,TIME)),"|",1)'="" 1
+ Q 0
+IsBUSY(LPU,OT,TN,SP,DT,TIME,TL) ; Время занято записями
+ ; TL - длительность записи, мин.
+ S TL=$G(TL)*60
+ I $P($G(^DSH(LPU,OT,TN,SP,DT,TIME)),"|",1)'="" Q 1
+ Q:TIME>89999 0
+ Q:'$D(^DSH(LPU,OT,TN,SP,DT,TIME)) 1
+ N P,L
+ ; проверка вниз
+ G:TL="" isb1
+ S P=$O(^DSH(LPU,OT,TN,SP,DT,TIME))
+ I P'="",P<(TIME+TL),$P(^(P),"|",1)'="" Q 1
+isb1 
+ ; проверка наверх
+ S P=$O(^DSH(LPU,OT,TN,SP,DT,TIME),-1)
+ Q:P="" 0
+ S L=$G(^(P))
+ Q:$P(L,"|",1)="" 0
+ S L=$P(L,"|",5)
+ I L,(P+L)>TIME Q 1
+ Q 0
+CHKW(NIB,LPU,OT,TN,SP,DT,TIME,TML) ; Проверить наличие записи пациента на это время в других местах
+ Q:TIME>89999 0 Q:'$D(^DSHP(NIB,DT)) 0
+ N P,K
+ S P=$S(TML="":$O(^DSH(LPU,OT,TN,SP,DT,TIME))-TIME,1:TML)
+ S K=$$PACInT(NIB,DT,TIME,P) 
+ Q:K="" 0
+ S K=$P($P(K,"|",4),"@",1)
+ I $D(^DSHM("cosp",$P(SP,"@",1),K)) Q 0 ; допуст. ко-специальности
+ Q 1
+REREG(OT,TN,SP,DT,TIME,LPU,OLD) ; reindex changed record and linked records
+ N K,NI,P,PID,EID
+ S PID=$P(OLD,"|",7),P=""
+ S NI=$P(^DSH(LPU,OT,VR,SP,DT,TIME),"|",1)
+ S EID=$G(^(TIME,"l"))
+ I PID'="",$D(^DSHP(PID)) S P=$G(^(PID,DT,TIME,TN)) K ^(TN) D KGL^IEXCH("^DSHP",PID,DT,TIME,TN)
+ S:P="" P=LPU_"|"_OT_"|"_$TR(SP,"|","@")_"|"_$$USR^IUSER()
+ S ^DSHP(NI,DT,TIME,TN)=P
+ D:EID'="" 
+ .I PID'="" K ^DSHE("eid",EID,PID) D KGL^IEXCH("^DSHE","eid",EID,PID)
+ .S ^DSHE("eid",EID,NI)=""
+ .D GL^IEXCH("^DSHE","eid",EID,NI)
+ 
+ S ^DSH(LPU,OT,TN,SP,DT,TIME,"h",$H)="REG|"_$$USR^IUSER()
+ D UPD^IEXCH("IRASP2",LPU_"~"_OT_"~"_TN_"~"_SP_"~"_DT_"~"_TIME_"~"_NI)
+ D CNG^IRASP2(DT,LPU,OT,SP,TN)
+ Q:PID=""
+ ; изменение всех прочих предварительных записей
+ S DT="" F  S DT=$O(^DSHP(PID,DT)) Q:DT=""  S TIME="" F  S TIME=$O(^DSHP(PID,DT,TIME)) Q:TIME=""  S TN="" F  S TN=$O(^DSHP(PID,DT,TIME,TN)) Q:TN=""  D
+ .S P=^(TN)
+ .S ^DSHP(NI,DT,TIME,TN)=P
+ .K ^DSHP(PID,DT,TIME,TN)
+ .D KGL^IEXCH("^DSHP",PID,DT,TIME,TN)
+ .S LPU=$P(P,"|",1),OT=$P(P,"|",2),SP=$TR($P(P,"|",3),"@","|")
+ .S K=$P(^DSH(LPU,OT,TN,SP,DT,TIME),"|",1,6)
+ .S $P(K,"|",1)=NI,^(TIME)=K
+ .S ^DSH(LPU,OT,TN,SP,DT,TIME,"h",$H)="REG|"_$$USR^IUSER()
+ .D UPD^IEXCH("IRASP2",LPU_"~"_OT_"~"_TN_"~"_SP_"~"_DT_"~"_TIME_"~"_NI)
+ .D CNG^IRASP2(DT,LPU,OT,SP,TN)
+ Q
+SETLEN(OT,TN,SP,DT,TIME,TML,LPU,NUPD) ; set time length
+ ; TML - new time length
+ ; NUPD - don't update
+ Q:TML<1  K REZ
+ Q:TIME>89999  
+ N K,P,NIB,R,TMLL,L,TL,OTM,BK,MX,X,KDR
+ S OTM=TIME,L=$P(TML,"|",2),TIME=$S(L="":TIME,1:L),TML=$P(TML,"|",1)*60 ; minutes
+ S:$G(LPU)="" LPU=+$$^I("ilpu")
+ S NUPD=$G(NUPD)
+ S:'$D(^DSH(LPU,OT,TN,SP)) SP=$G(^DSHI("sp",LPU,SP,OT_"|"_TN))
+ S K=$G(^DSH(LPU,OT,TN,SP,DT)),MX=$P(K,"|",6)
+ I MX>1,$$FLinFL^TXTU($$CABFL^IPLPU(LPU,$P(K,"|",2),"cls"),"nmdsh") S MX=1
+ I MX>1,L=OTM,'$G(^cfg("rasp","slen-multi")) S REZ="Для данного графика изменение начала и длительности записи запрещено" Q
+ I MX>1,L'=OTM S REZ="Для данного графика изменение времени начала записи запрещено" Q
+ S OTM=OTM-(OTM#60) ; для multi записей - первую
+ Q:'$D(^DSH(LPU,OT,TN,SP,DT,OTM)) 
+ I $P($G(^(OTM)),"|",1)="" S REZ="На это время нет записи" Q 
+ S KDR=$$KDR^IUSER()
+ I $$LCL^IUSER("rasp","owset"),$S($E(TN)="X":'$$VRINCAB^NPLPU(TN,KDR),1:KDR'=TN) S REZ="Изменение чужого расписания запрещено." Q 
+ I $$LCL^IUSER("rasp","ownset"),$S($E(TN)="X":$$VRINCAB^NPLPU(TN,KDR),1:KDR=TN) S REZ="Изменение своего расписания запрещено." Q
+ D  Q:$D(REZ) 
+ .S P=TIME+TML,K=0
+ .F  S P=$O(^DSH(LPU,OT,TN,SP,DT,P),-1) Q:P=""!K!(P'>(TIME+59))  D
+ ..Q:P=OTM  ; пропускаем текущий
+ ..I ^(P)="*" S K=2 Q
+ ..I $L(^(P)) S K=1 Q 
+ ..S X=$P($G(^(P,"t")),"|",1)
+ ..I X'="",$P($G(^MN(+$G(^MN("raspzt")),X)),"|",3)=1 S K=3 Q 
+ .S:K=1 REZ="В указанном периоде уже записаны пациенты."
+ .S:K=2 REZ="Длительность записи больше времени работы врача."
+ .S:K=3 REZ="В указанном периоде зарезервировано время."
+ 
+ L +^DSH(LPU,OT,TN,SP,DT,OTM)
+ M BK=^DSH(LPU,OT,TN,SP,DT,OTM)
+ S TL=$G(BK("z"))
+ I TL'="" F L=1:1:$L(TL,"|") S K=$P(TL,"|",L)*60 I '$D(^DSH(LPU,OT,TN,SP,DT,K)) K ^(K) D:'NUPD KGL^IEXCH("^DSH",LPU,OT,TN,SP,DT,K)
+ 
+ S P=TIME+TML
+ S R=$G(BK),$P(R,"|",5)=TML,$P(R,"|",6)=$$USRH^IUSER(","),BK=R
+ S NIB=$P(R,"|",1)
+ S:'$$EXIST^IPAC(NIB) NIB=$P(R,"|",7)
+ 
+ D:OTM'=TIME ; если перемещение вниз
+ .K ^DSH(LPU,OT,TN,SP,DT,OTM) S ^(OTM)=""
+ .M ^DSHP(NIB,DT,TIME,TN)=^DSHP(NIB,DT,OTM,TN) K ^DSHP(NIB,DT,OTM,TN)
+ .Q:NUPD
+ .D REGL^IEXCH("^DSH",LPU,OT,TN,SP,DT,OTM)
+ .D GL^IEXCH("^DSHP",NIB,DT,TIME,TN)
+ .D KGL^IEXCH("^DSHP",NIB,DT,OTM,TN)
+ 
+ M ^DSH(LPU,OT,TN,SP,DT,TIME)=BK
+ 
+ ; последующее время
+ I '$D(^DSH(LPU,OT,TN,SP,DT,P)) S L=$O(^(P-1)),^(P)=$S(L="":"*",1:"") D:'NUPD GL^IEXCH("^DSH",LPU,OT,TN,SP,DT,P)
+ ; затираемые времена
+ S TMLL=TL
+ F  S P=$O(^DSH(LPU,OT,TN,SP,DT,P),-1) Q:P=""!(P'>(TIME+59))  K ^(P) S TMLL=$S(TMLL="":"",1:TMLL_"|")_(P/60) D:'NUPD KGL^IEXCH("^DSH",LPU,OT,TN,SP,DT,P)
+ S:$L(TMLL) ^DSH(LPU,OT,TN,SP,DT,TIME,"z")=TMLL
+ L -^DSH(LPU,OT,TN,SP,DT,OTM)
+ D WLOG($H,LPU,OT,TN,SP,DT,TIME,$P(R,"|",1)_"|"_$$USR^IUSER_"|L||"_TML)
+ ; update
+ I 'NUPD D UPD^IEXCH("IRASP2",LPU_"~"_OT_"~"_TN_"~"_SP_"~"_DT_"~"_TIME_"~"_NIB),fastio
+ D CNG^IRASP2(DT,LPU,OT,SP,TN)
+ Q
+SETZTP(OT,TN,SP,DT,TIME,TP,LPU,ALL,TXT,TML) ; set time type
+ ; TXT - примечание
+ ; TML - длительность
+ K REZ
+ ; тип|коммент||
+ N P,NIB,TT,F,IX,RD,RW,OTP,ZWW,X
+ S ALL=+$G(ALL),TXT=$G(TXT),TML=+$G(TML),TT=TP
+ S:TP TT=TT_"|"_TXT_"|"_$$USRH^IUSER()
+ S:ALL TML=0
+ S:$G(LPU)="" LPU=+$$^I("ilpu")
+ S RW=+$$LCL^IUSER("rasp","zt-set")
+ S RD=+$$LCL^IUSER("rasp","zt-del")
+ S IX=+$G(^MN("raspzt"))
+ I TP,RW,$P(^MN(IX,TP),"|",7)>RW S REZ="Нет прав на установку типа времени" Q
+ S:'$D(^DSH(LPU,OT,TN,SP)) SP=$G(^DSHI("sp",LPU,SP,OT_"|"_TN))
+ G:ALL SETZTP1
+ Q:'$D(^DSH(LPU,OT,TN,SP,DT,TIME))  Q:^(TIME)'=""  
+ S OTP=$P($G(^(TIME,"t")),"|",1)
+ I OTP,RD,$P(^MN(IX,OTP),"|",7)>RD S REZ="Нет прав на изменение типа времени" Q
+ D WLOG^IMRASP(LPU,OT,TN,SP,DT,"T")
+ 
+ ; $P(,,5)=время, после которого есть время для записи
+ D:TP  ; установить тип
+ .S F=0
+ .D:TML>0
+ ..S P=TIME+TML,$P(TT,"|",5)=TML
+ ..I '$D(^DSH(LPU,OT,TN,SP,DT,P)) S ^(P)="",F=1,$P(TT,"|",6)=1 d GL^IEXCH("^DSH",LPU,OT,TN,SP,DT,P)
+ ..S X=TIME F  S X=$O(^DSH(LPU,OT,TN,SP,DT,X)) Q:X=""!(X'<P)  S ^(X,"t")=TP d GL^IEXCH("^DSH",LPU,OT,TN,SP,DT,X,"t")
+ .S ^DSH(LPU,OT,TN,SP,DT,TIME,"t")=TT
+ 
+ ; сбросить
+ I '+TP,$D(^DSH(LPU,OT,TN,SP,DT,TIME,"t")) D
+ .S TT=^("t"),F=$P(TT,"|",5),P=TIME+F K ^("t")
+ .I $P(TT,"|",6),$D(^DSH(LPU,OT,TN,SP,DT,P)),$G(^(P))="" K ^(P) D KGL^IEXCH("^DSH",LPU,OT,TN,SP,DT,P)
+ .S X=TIME F  S X=$O(^DSH(LPU,OT,TN,SP,DT,X)) Q:X=""!(X'<P)  I $D(^(X,"t")) K ^("t") d KGL^IEXCH("^DSH",LPU,OT,TN,SP,DT,X,"t")
+ D UPD^IEXCH("IRASP2",LPU_"~"_OT_"~"_TN_"~"_SP_"~"_DT_"~"_TIME),fastio
+ G SETZTPE
+SETZTP1 
+ N TM,TF,N S (TE,TM)="",N=1
+ D WLOG^IMRASP(LPU,OT,TN,SP,DT,"T")
+ F  S TM=$O(^DSH(LPU,OT,TN,SP,DT,TM)) Q:TM=""!(TM>86400)  S F=$G(^(TM)) D:F=""  S:F'=""&(F'="*") N=0
+ .S:TP ^(TM,"t")=TT K:+'TP ^(TM,"t")
+ .D UPD^IEXCH("IRASP2",LPU_"~"_OT_"~"_TN_"~"_SP_"~"_DT_"~"_TM)
+ ; если никаких записей в середине - сворачиваем до 1-й записи
+ I N,TP S TM=$O(^DSH(LPU,OT,TN,SP,DT,"")),TE=$O(^(80000),-1) I TM'="",TE>TM S $P(^(TM,"t"),"|",5)=TE-TM-1
+SETZTPE D CNG^IRASP2(DT,LPU,OT,SP,TN)
+ Q
+INFO(LPU,OT,VR,SP,DT,TM,CONT,SRC,FLPU,NNAPR,PAC,CME,NUPD) ; set info (SP-all)
+ ; CONT - contacts, SRC - rsource, FLPU - from LPU, 
+ ; NNAPR - number 'napravlenia', PAC - f|i|o|born|sex(1/2)
+ ; CME - link to event
+ I TM<90000 Q:'$D(^DSH(LPU,OT,VR,SP,DT,TM)) 
+ I CONT="",SRC="",FLPU="",NNAPR="",PAC="" Q 
+ N LOG,NI,R
+ S LOG=$$USR^IUSER(),NUPD=+$G(NUPD),CME=$G(CME)
+ S NI=$P($G(^DSH(LPU,OT,VR,SP,DT,TM)),"|",1)
+ S R=CONT_"|"_SRC_"|"_FLPU_"|"_NNAPR_"|"_PAC_"|"_LOG
+ S:CME'="" $P(R,"|",12)=CME
+ S ^(TM,"i")=R
+ I $$EXIST^IPAC(NI),$$GET^IPAC(NI,"tel1")="" D SET^IPAC(NI,"tel1",DT,CONT,1)
+ D:'NUPD UPD^IEXCH("IRASP2",LPU_"~"_OT_"~"_VR_"~"_SP_"~"_DT_"~"_TM)
+ Q
+DEL(OT,TN,SP,DT,TIME,LPU,NUPD,FN) 
+ ; NUPD - без обновления по сети
+ ; FN - как функция
+ S:'$G(LPU) LPU=+$$^I("ilpu")
+ N K,PK,NI,L,TL,TLZ,LOG,Nii,LN,PID,TE,EID,X
+ K REZ
+ S K=$G(^LOG(%LOG,"lcl","rasp")),FN=+$G(FN),(L,TL)=""
+ S:$L(K) L=$G(^LCL("rasp",K,"del")),TL=$G(^("deltime")),TLZ=$G(^("deltimez"))
+ I L=0 S REZ="Недостаточно прав" Q:FN 0 Q 
+ S K=$G(^DSH(LPU,OT,TN,SP,DT)) I K="" Q:FN 0 Q 
+ I L'=2,+$P(K,"|",5)=1 S REZ="Запись ""заморожена""" Q:FN 0 Q
+ S LN=$G(^(DT,TIME))
+ S PK=$O(^(TIME),-1) S:PK'="" PK=$P(^(PK),"|",1) ; верхняя запись
+ S X=$P(LN,"|",4)
+ I TL'="",$$MNBTW^DTUTL($H,X)>TL S REZ="Превышен период удаления" Q:FN 0 Q 
+ I TL'="",+$H=+X,TL*60+$P(X,",",2)<$P($H,",",2) S REZ="Превышен период удаления" Q:FN 0 Q 
+ I TL'="",+$H>(+X) S REZ="Превышен период удаления" Q:FN 0 Q
+ I TLZ'="",$$MNBTW^DTUTL($H,DT_","_TIME)>TLZ S REZ="Превышен период удаления" Q:FN 0 Q 
+ S NI=$P(LN,"|",1),PID=$P(LN,"|",7),TL=$G(^(TIME,"z")),EID=$G(^("l"))
+ I +$G(^("b")),$G(^LCL("rasp",K,"cbdel"))=0 S REZ="Пациент отзвонен, удаление запрещено" Q:FN 0 Q  
+ S K=$P($P(K,"|",1),"@",1),NUPD=+$G(NUPD),Nii=0
+ I NI'="",$$EXIST^IPAC(NI) S Nii=1,PID=NI
+ I L'=2,$P($G(^DSH(LPU,OT,TN,SP,DT,TIME,"c")),"|",3)'="" S REZ="Прием выполнен - удаление невозможно" Q:FN 0 Q
+ K ^DSH(LPU,OT,TN,SP,DT,TIME) ; w. subnodes
+ S LOG=$$USR^IUSER()
+ D WLOG($H,LPU,OT,TN,SP,DT,TIME,NI_"|"_LOG_"|K")
+ K:PID'=""!Nii ^DSHP(PID,DT,TIME,TN)
+ ; доп. индексы
+ I EID'="",PID'=""!Nii D
+ .K ^DSHE("eid",EID,PID)
+ .D KGL^IEXCH("^DSHE","eid",EID,PID)
+ S LOG=LPU_"~"_OT_"~"_TN_"~"_SP_"~"_DT_"~"
+ ; восстановление затертых времен
+ I K'="",K'="*",'$D(^M(141,K,"t")) S ^DSH(LPU,OT,TN,SP,DT,TIME)=""
+ I TL="",K="*" S ^DSH(LPU,OT,TN,SP,DT,TIME)=""
+ I TL'="",K="*" S ^DSH(LPU,OT,TN,SP,DT,TIME)="" ; TODO - temporary
+ I K'="",TL'="",PK'="" S ^DSH(LPU,OT,TN,SP,DT,TIME)="" ; ограничение верхн. записи
+ I K'="",$D(^M(141,K,"t")) S L=TIME-1,TE=$O(^DSH(LPU,OT,TN,SP,DT,TIME)) F  S L=$O(^M(141,K,"t",L)) Q:L=""!(L>TE)  I '$D(^DSH(LPU,OT,TN,SP,DT,L))  S ^(L)="" D:'NUPD UPD^IEXCH("IRASP2",LOG_L)
+ I $L(TL) F L=1:1:$L(TL,"|") S K=$P(TL,"|",L)*60 I '$D(^DSH(LPU,OT,TN,SP,DT,K)) S ^(K)="" D:'NUPD UPD^IEXCH("IRASP2",LOG_L)
+ I 'NUPD D UPD^IEXCH("IRASP2",LOG_TIME_"~"_PID),fastio
+ D CNG^IRASP2(DT,LPU,OT,SP,TN)
+ Q:FN 1
+ Q
+SETNIB(LPU,OT,TN,SP,DT,TM,NNIB,NUPD) ; Изменить пациента
+ N R,R1,PNI,NI,LOG
+ S:'$G(LPU) LPU=+$$^I("ilpu")
+ S R=$G(^DSH(LPU,OT,VR,SP,DT,TM))
+ S NI=$P(R,"|",1),PID=$P(R,"|",7)
+ S:'$$EXIST^IPAC(NI) NI=PID
+ Q:NI=NIB 
+ S LOG=$$USR^IUSER()
+ ; delete prev. pac.
+ K ^DSHP(NI,DT,TM,VR)
+ D WLOG($H,LPU,OT,VR,SP,DT,TM,NI_"|"_LOG_"|K")
+ D KGL^IEXCH("^DSHP",NI,DT,TM,VR)
+ ; set new
+ S R1=$P(R,"|",5)
+ S ^DSHP(NNIB,DT,TM,VR)=LPU_"|"_OT_"|"_$TR(SP,"|","@")_"|"_LOG
+ D WLOG($H,LPU,OT,VR,SP,DT,TM,NNIB_"|"_LOG_$S(R1'="":"||"_R1,1:""))
+ S $P(R,"|",1)=NNIB
+ S $P(R,"|",4)=$H
+ S:$P(R,"|",7)'="" $P(R,"|",7)=""
+ S ^DSH(LPU,OT,VR,SP,DT,TM)=R
+ S:$G(^(TM,"i"))'="" ^("i")=""
+ I '$G(NUPD) D UPD^IEXCH("IRASP2",LPU_"~"_OT_"~"_VR_"~"_SP_"~"_DT_"~"_TM),fastio
+ Q
+MOV(OT,TN,SP,DT,TIME,LPU,OT1,TN1,SP1,DT1,TIME1,LPU1,WOC) ; Переместить запись
+ ; NWC - без комментария
+ Q:DT=""  Q:DT1=""  Q:TM=""  Q:TM1=""  
+ S:'$D(LPU) LPU=+$$^I("ilpu")
+ N L,K,NI,NIt,TL,LOG,PID,TML,P,K,K0,TMLL,H,KDR
+ Q:'$D(^DSH(LPU1,OT1,TN1,SP1,DT1)) 
+ S K=$G(^DSH(LPU,OT,TN,SP,DT)) Q:K=""
+ K REZ I +$P(K,"|",5)=1 S REZ="Запись ""заморожена""" Q
+ S K=$P($P(K,"|",1),"@",1),NI=$G(^DSH(LPU,OT,TN,SP,DT,TIME))
+ S PID=$P(NI,"|",7),TML=$P(NI,"|",5),NI=$P(NI,"|",1),NIt=NI
+ S K=$$KDR^IUSER()
+ I $$LCL^IUSER("rasp","owset"),$S($E(TN)="X":'$$VRINCAB^NPLPU(TN,K),1:K'=TN)!$S($E(TN)="X":'$$VRINCAB^NPLPU(TN1,K),1:K'=TN1) S REZ="Изменение чужого расписания запрещено." Q 
+ I $$LCL^IUSER("rasp","ownset"),$S($E(TN)="X":$$VRINCAB^NPLPU(TN,K),1:K=TN)!$S($E(TN)="X":$$VRINCAB^NPLPU(TN1,K),1:K=TN1) S REZ="Изменение своего расписания запрещено." Q
+ I $G(^DSH(LPU1,OT1,TN1,SP1,DT1,TIME1))'="" S REZ="Переместить невозможно - время занято." Q 
+ S:$$EXIST^IPAC(NI) PID=NI
+ I $L(NI),DT'=DT1!(TIME'=TIME1),$D(^DSHP(PID,DT1,-TIME1#60+TIME1)) S REZ="Пациент уже записан на это время к другому врачу." Q
+ D  Q:$D(REZ) 
+ .S P=TIME1+TML,K=0
+ .F  S P=$O(^DSH(LPU1,OT1,TN1,SP1,DT1,P),-1) Q:P=""!K!(P'>TIME1)  D
+ ..I ^(P)="*" S K=2 Q
+ ..I $L(^(P)) S K=1 Q 
+ .S:K=1 REZ="В указанном периоде уже записаны пациенты."
+ .S:K=2 REZ="Длительность записи больше времени работы врача."
+ 
+ L +^DSH(LPU1,OT1,TN1,SP1,DT1,TIME1)
+ S LOG=$$USR^IUSER()
+ S K0=LPU_"~"_OT_"~"_TN_"~"_SP_"~"_DT_"~"
+ ; move
+ G:NI=""&(PID="") MOV1
+ S K=LOG
+ I PID'="",$G(^cfg("rasp","fix-move-log")) S K=$P($G(^DSHP(PID,DT,TIME,TN)),"|",4)
+ S:K="" K=LOG
+ S:PID="" PID=$$MKPID(LPU1),$P(^DSH(LPU,OT,TN,SP,DT,TIME),"|",7)=PID
+ S ^DSHP(PID,DT1,TIME1,TN1)=LPU1_"|"_OT1_"|"_$TR(SP1,"|","@")_"|"_K
+ I DT'=DT1!(TIME'=TIME1)!(TN'=TN1) K ^DSHP(PID,DT,TIME,TN)
+MOV1 
+ S TL=$G(^DSH(LPU,OT,TN,SP,DT,TIME,"z"))
+ K ^DSH(LPU,OT,TN,SP,DT,TIME,"z")
+ M ^DSH(LPU1,OT1,TN1,SP1,DT1,TIME1)=^DSH(LPU,OT,TN,SP,DT,TIME)
+ S:$G(WOC) $P(^DSH(LPU1,OT1,TN1,SP1,DT1,TIME1),"|",2)=""
+ S H=$H
+ D WLOG(H,LPU,OT,TN,SP,DT,TIME,NI_"|"_LOG_"|M")
+ D WLOG(H,LPU1,OT1,TN1,SP1,DT1,TIME1,NIt_"|"_LOG_$S(TL'="":"||"_TL,1:""))
+ ; delete
+ K ^DSH(LPU,OT,TN,SP,DT,TIME) ; w. subnodes
+ S:TIME<90000 ^(TIME)=""
+ ; clear
+ I $L(K),$D(^M(141,K,"t")) N T S T=TIME F  S T=$O(^M(141,K,"t",T)) Q:T=""!$D(^DSH(LPU,OT,TN,SP,DT,T))  S ^(T)="" D UPD^IEXCH("IRASP2",K0_T)
+ I $L(TL) F L=1:1:$L(TL,"|") S K=$P(TL,"|",L)*60 I '$D(^DSH(LPU,OT,TN,SP,DT,K)) S ^(K)=""
+ G:TML="" MOV2
+ ; затираем времена в новом месте
+ S TMLL="",P=TIME1+TML
+ F  S P=$O(^DSH(LPU1,OT1,TN1,SP1,DT1,P),-1) Q:P=""!(P'>TIME1)  K ^(P) D KGL^IEXCH("^DSH",LPU1,OT1,TN1,SP1,DT1,P) S TMLL=$S(TMLL="":"",1:TMLL_"|")_(P/60)
+ S:TMLL'="" ^DSH(LPU1,OT1,TN1,SP1,DT1,TIME1,"z")=TMLL
+MOV2 
+ L -^DSH(LPU1,OT1,TN1,SP1,DT1,TIME1)
+ D UPD^IEXCH("IRASP2",K0_TIME_"~"_PID)
+ D CNG^IRASP2(DT,LPU,OT,SP,TN)
+ S K=LPU1_"~"_OT1_"~"_TN1_"~"_$S(SP1["|":""""_SP1_"""",1:SP1)_"~"_DT1
+ D UPD^IEXCH("IRASP2",K_"~"_TIME1_"~"_PID),fastio
+ D CNG^IRASP2(DT1,LPU1,OT1,SP1,TN1)
+ Q
+GETLOG(LPU,OT,VR,SP,DT,TM) ; Кто записывал (LOG)
+ N O,I,N,P
+ S O=$G(^DSH(LPU,OT,VR,SP,DT,TM)),I=$G(^(TM,"i"))
+ S N=$P(O,"|",1),P=$P(O,"|",7),O=$P(O,"|",4)
+ S O=$P($G(^DSHW(O,LPU,OT,VR,SP,DT,TM)),"|",2)
+ S:O="" O=$P(I,"|",10)
+ S:O="" O=$P($G(^DSHP($S(P'="":P,N'="":N,1:0),DT,TM,VR)),"|",4)
+ Q O
+GETVR(LPU,VR,DT,TM) ; Get ^DSH indexes - OT~SP
+ Q:LPU=""!(VR="") ""
+ N R,OT,SP S R=""
+ S OT="" F  S OT=$O(^DSH(LPU,OT)) Q:OT=""  D:$D(^(OT,VR))  Q:$L(R) 
+ .S SP=""
+ .F  S SP=$O(^DSH(LPU,OT,VR,SP)) Q:SP=""  D:$D(^(SP,DT))  Q:$L(R)
+ ..I $O(^(DT,TM))="",$O(^(TM+1),-1)="" Q 
+ ..S R=OT_"~"_SP
+ Q R
+GETOTL(LPU,VR) ; Получить список отделений для выбора врача в расписании
+ N L,OT
+ S (OT,L)="",LPU=+LPU
+ F  S OT=$O(^DSH(LPU,OT)) Q:OT=""  S:$D(^(OT,VR)) L=$S(L="":"",1:L_"|")_OT
+ Q L
+FNDNITM(LPU,OT,VR,SP,DT,NI) ; Найти время записи пациента
+ N TM
+ S TM="" F  S TM=$O(^DSH(LPU,OT,VR,SP,DT,TM)) Q:TM=""  I $P($G(^(TM)),"|",1)=NI Q
+ Q TM
+GETNIB(LPU,OT,VR,SP,DT,TM) ; Получить пациента из записи
+ S TM=$P($G(^DSH(LPU,OT,VR,SP,DT,TM)),"|",1)
+ Q:TM="" ""
+ Q:$$EXIST^IPAC(TM) TM
+ Q ""
+GETFIOD(LPU,OT,VR,SP,DT,TM) ; Получить ФИО+дату рожд.+пол
+ Q $P($G(^DSH(LPU,OT,VR,SP,DT,TM,"i")),"|",5,9)
+GETCOM(LPU,OT,VR,SP,DT,TM) 
+ Q $P($G(^DSH(LPU,OT,VR,SP,DT,TM)),"|",2)
+SETCOM(LPU,OT,VR,SP,DT,TM,TXT) 
+ N R,K
+ S K=$$KDR^IUSER()
+ I $$LCL^IUSER("rasp","owset"),$S($E(VR)="X":'$$VRINCAB^NPLPU(VR,K),1:K'=VR) Q "Изменение чужого расписания запрещено."
+ I $$LCL^IUSER("rasp","ownset"),$S($E(VR)="X":$$VRINCAB^NPLPU(VR,K),1:K=VR) Q "Изменение своего расписания запрещено."
+ S R=$G(^DSH(LPU,OT,VR,SP,DT,TM)) Q:R="" ""
+ S $P(R,"|",2)=TXT,^(TM)=R
+ S ^DSH(LPU,OT,VR,SP,DT,TM,"h",$H)="CM|"_$$USR^IUSER()
+ D UPD^IEXCH("IRASP2",LPU_"~"_OT_"~"_VR_"~"_SP_"~"_DT_"~"_TM_"~"_$$getPID(R))
+ D CNG^IRASP2(DT,LPU,OT,SP,VR)
+ D DO^ITRIG("rasp","setcomm")
+ Q ""
+GETCON(LPU,OT,VR,SP,DT,TM) ; Получить контакты
+ Q $P($G(^DSH(LPU,OT,VR,SP,DT,TM,"i")),"|",1)
+SETCON(LPU,OT,VR,SP,DT,TM,TXT) ; Изменить контакты
+ N R,B
+ S B=$G(^DSH(LPU,OT,VR,SP,DT,TM)) Q:B=""  
+ S R=$G(^(TM,"i")),$P(R,"|",1)=TXT,^("i")=R
+ S ^DSH(LPU,OT,VR,SP,DT,TM,"h",$H)="PH|"_$$USR^IUSER()
+ D UPD^IEXCH("IRASP2",LPU_"~"_OT_"~"_VR_"~"_SP_"~"_DT_"~"_TM_"~"_$$getPID(B))
+ D CNG^IRASP2(DT,LPU,OT,SP,VR)
+ D DO^ITRIG("rasp","setcont")
+ Q
+GETRSC(LPU,OT,VR,SP,DT,TM) ; Получить контакты
+ Q $P($G(^DSH(LPU,OT,VR,SP,DT,TM,"i")),"|",2)
+SETRSC(LPU,OT,VR,SP,DT,TM,TXT) ; Изменить источник рекламы
+ N R,B
+ S B=$G(^DSH(LPU,OT,VR,SP,DT,TM)) Q:B=""  
+ S R=$G(^(TM,"i")),$P(R,"|",2)=TXT,^("i")=R
+ S ^DSH(LPU,OT,VR,SP,DT,TM,"h",$H)="RSC|"_$$USR^IUSER()
+ D UPD^IEXCH("IRASP2",LPU_"~"_OT_"~"_VR_"~"_SP_"~"_DT_"~"_TM_"~"_$$getPID(B))
+ D CNG^IRASP2(DT,LPU,OT,SP,VR)
+ Q
+getPID(VAL) ; Получить идентификатор пациента из строки
+ N N
+ S N=$P(VAL,"|",1)
+ S:'$$EXIST^IPAC(N) N=$P(VAL,"|",7)
+ Q N
+MKPID(LPU) ; Создать уникальный ID для незарег. пациента
+ Q "T."_LPU_"."_$$GET^IINKR("^DSHP")
+PACVRCOM(NIB,LPU,VR,DT) ; Комментариии к записям по врачу
+ N TM,R,F,C
+ S (F,TM)=""
+ F  S TM=$O(^DSHP(NIB,DT,TM)) Q:TM=""  I $D(^(TM,VR)) S R=^(VR) I $P(R,"|",1)=LPU S C=$P($G(^DSH(LPU,$P(R,"|",2),VR,$P(R,"|",3),DT,TM)),"|",2) S:C'="" F=$S(F="":"",1:F_", ")_C 
+ Q F
+PACINV(NIB,LPU,OT,VR,SP,DT,WT) ; Пациент записан к врачу
+ ; WT - возврат времени (1-начало, 2-конец)
+ N TM,R,F
+ S F=0,WT=$G(WT),(TM,R)=""
+ F  S TM=$O(^DSHP(NIB,DT,TM)) Q:TM=""  I $D(^(TM,VR)) S R=^(VR) I $P(R,"|",1)=LPU,OT=""!($P(R,"|",2)=OT),SP=""!($P(R,"|",3)=SP) S F=$S(WT:TM,1:1) Q 
+ Q:TM="" F
+ I WT=2 Q:R="" "" S OT=$P(R,"|",2),SP=$P(R,"|",3),R=$P(^DSH(LPU,OT,VR,SP,DT,TM),"|",5) S F=F_"|"_$S(R="":$O(^DSH(LPU,OT,VR,SP,DT,TM)),1:R) 
+ Q F
+TELINV(NF,PH,LPU,OT,VR,SP,DT) ; Пациент записан к врачу
+ ; NF - NIB or FIO
+ ; PH - phone
+ N TM,R,F
+ S F=0,PH=$$MPHN^TXTU(PH)
+ S TM="" F  S TM=$O(^DSH(LPU,OT,VR,SP,DT,TM)) Q:TM=""  D  Q:F
+ .S R=$G(^(TM)) Q:R="" 
+ .I $P(R,"|",1)'=NF Q 
+ .S R=$$MPHN^TXTU($P($G(^(TM,"i")),"|",1)) Q:R="" 
+ .S:R=PH F=1
+ Q F
+PACRCNT(NIB,DT,LPU,SP,DE,USR) ; Число записей у пациента за день/период
+ ; LPU - филиал (опционально)
+ ; SP - специальность
+ ; DE - дата окончания периода (если не указано - день)
+ N TM,I,V,R
+ S I=0,LPU=$G(LPU),SP=$G(SP),DE=$G(DE)
+ S:DE="" DE=DT
+ S DT=DT-1 F  S DT=$O(^DSHP(NIB,DT)) Q:DT=""!(DT>DE)  D
+ .S TM="" F  S TM=$O(^DSHP(NIB,DT,TM)) Q:TM=""  S V="" F  S V=$O(^DSHP(NIB,DT,TM,V)) Q:V=""  S R=^(V) I LPU=""!($P(R,"|",1)=LPU),SP=""!($P(R,"|",3)=SP),$S(USR="":1,$P($P(R,"|",4),"@",1)=USR:1,1:0) S I=I+1
+ Q I
+PACInT(NIB,DT,TM,TML) ; Пациент записан во времени
+ ; TML - длительность записи
+ ; RET = VR|LPU|OT|SP|log
+ Q:TM>86400 "" ; overtime
+ N T,K,L
+ S TM=-TM#60+TM ; to minutes
+ I '$D(^DSHP(NIB,DT)) Q ""
+ I $D(^DSHP(NIB,DT,TM)) S T=$O(^DSHP(NIB,DT,TM,"")) Q T_"|"_^(T)
+ S T=$O(^DSHP(NIB,DT,TM))
+ I T'="",TM+TML>T S T=$O(^DSHP(NIB,DT,T,"")) Q T_"|"_^(T)
+ S T=$O(^DSHP(NIB,DT,TM),-1)
+ Q:T="" ""
+ S K=$O(^DSHP(NIB,DT,T,"")) Q:K="" ""
+ S L=^(K),TML=$O(^DSH($P(L,"|",1),$P(L,"|",2),K,$P(L,"|",3),DT,T))
+ Q:TML="" ""
+ I TM<TML Q K_"|"_L
+ Q ""
+PACFTM(NIB,LPU,DT) ; Первое в день время прихода к любому врачу
+ I LPU="" Q $O(^DSHP(NIB,DT,""))
+ N TM,F,VR
+ S TM="",F=0
+ F  Q:F  S TM=$O(^DSHP(NIB,DT,TM)) Q:TM=""  S VR="" F  S VR=$O(^DSHP(NIB,DT,TM,VR)) Q:VR=""  I $P(^(VR),"|",1)=LPU S F=1 Q 
+ Q TM
+PACLTM(NIB,LPU,DT) ; Последнее в день время прихода к любому врачу
+ I LPU="" Q $O(^DSHP(NIB,DT,""),-1)
+ N TM,F,VR S TM="",F=0
+ F  Q:F  S TM=$O(^DSHP(NIB,DT,TM),-1) Q:TM=""  S VR="" F  S VR=$O(^DSHP(NIB,DT,TM,VR)) Q:VR=""  I $P(^(VR),"|",1)=LPU S F=1 Q
+ Q TM
+IsFULL(LPU,OT,VR,SP,DT) ; Расписание заполнено/нет
+ N TM,R,F
+ S TM=90000,F=1
+ F  S TM=$O(^DSH(LPU,OT,VR,SP,DT,TM),-1) Q:TM=""  S R=$G(^(TM)) I R'="*",R="" S F=0 Q
+ Q F
+KEYinDT(LPU,VR,DS,DE) ; Первое местонахождение врача в периоде
+ N O,S,D,K
+ S (O,K)=""
+ F  Q:K'=""  S O=$O(^DSH(LPU,O)) Q:O=""  S S="" F  S S=$O(^DSH(LPU,O,VR,S)) Q:S=""  S D=$O(^DSH(LPU,O,VR,S,DS-1)) I D'="",D'>DE S K=O_"|"_VR_"|"_S_"|"_$P($G(^(D)),"|",2)_"|"_D Q 
+ Q K ; OTD VR SP CAB DT
+CHKEQC(NIB,DT,TM,LPU,CAB) ; Есть указанный кабинет в периоде
+ Q:CAB="" 0
+ N KX
+ ; S KX="" F  S KX=$O(^DSHI("cab",LPU,CAB,DT TODO
+ Q
+TMINCAB(LPU,OT,TN,SP,DT,TM) ; Проверить занятость времени в кабинете где вр
+ Q:TM>89999 0
+ N CAB,KX,X,CNT,TS,TE,F
+ S CAB=$P($G(^DSH(LPU,OT,TN,SP,DT)),"|",2) Q:CAB="" 0
+ S KX="",F=0,CNT=0,TS=TM-(TM#60)-1,TE=TS+59
+ ; считаем и доп. времена
+ F  S KX=$O(^DSHI("cab",LPU,CAB,DT,KX)) Q:KX=""  D  
+ .S TM=TS F  S TM=$O(^DSH(LPU,$P(KX,"@",1),$P(KX,"@",2),$P(KX,"@",3),DT,TM)) Q:TM=""!(TM>TE)  S X=$G(^(TM)) I X'="",X'="*" S CNT=CNT+1
+ Q:'CNT 0
+ ; CNT - число !доп.! записей к текущей
+ S X=$P($$CABFL^IPLPU(LPU,CAB,"p"),"|",2) Q:X=1 1 Q:X>CNT 0
+ Q 1
+TMCCAB(CAB,LPU,OT,TN,SP,DT,TM) ; Число записей в каб. на время
+ Q:TM>89999 0
+ N KX,X,CNT,TS,TE,F
+ S KX="",F=0,CNT=0,TS=TM-(TM#60)-1,TE=TS+59
+ F  S KX=$O(^DSHI("cab",LPU,CAB,DT,KX)) Q:KX=""  D  
+ .S TM=TS F  S TM=$O(^DSH(LPU,$P(KX,"@",1),$P(KX,"@",2),$P(KX,"@",3),DT,TM)) Q:TM=""!(TM>TE)  S X=$G(^(TM)) I X'="",X'="*" S CNT=CNT+1
+ Q CNT
+PACGONE(LPU,VR,DT,NIB) ; Пациент ушел (из клиники) 
+ N TM,F,SP,OT,R
+ S TM="",F=0
+ F  Q:F  S TM=$O(^DSHP(NIB,DT,TM),-1) Q:TM=""  D:$D(^(TM,VR))
+ .S R=^(VR)
+ .Q:$P(R,"|",1)'=LPU 
+ .S OT=$P(R,"|",2),SP=$P(R,"|",3)
+ .S:$D(^DSH(LPU,OT,VR,SP,DT,TM,"e")) F=1
+ Q F
+TIME(X) I X>89999 Q "++"_$S(X<90600:0,1:"")_$J(X-90000/60,"",0)
+ Q $$TM^DTUTL(X)_$S(X#60:"+"_(X#60),1:"")
+TIMET(X) ; Текст по доп. времени
+ I X>89999 Q "Доп "_($J(X-90000/60,"",0)+1)
+ Q $$TM^DTUTL(X)_$S(X#60:"+"_(X#60),1:"")
+TI(X) ; Input time
+ I $E(X)="+" Q $E(X,3,4)*60+90000
+ Q $$TI^DTUTL($TR(X,"+",":"))
+COME(LPU,OT,VR,SP,DT,TM,NIB,V,SUB) ; Пациент пришел/ушел (V=0/1)
+ ; SUB - доп. статус (от врача)
+ N TT,R,LOG,NI
+ S LOG=$$USR^IUSER(),SUB=$G(SUB)
+ S NI=$S($$EXIST^IPAC(NIB):NIB,1:"") ; TODO - PID
+ G:V COMEE
+ S TT="" F  S TT=$O(^DSH(LPU,OT,VR,SP,DT,TT)) Q:TT=""  D
+ .S R=$G(^(TT)) Q:$P(R,"|",1)'=NIB  
+ .S R=$G(^(TT,"c")) I R=""  S ^("c")=$H_"|"_LOG_$S(SUB'="":"||"_SUB,1:""),TT=999999
+ .D UPD^IEXCH("IRASP2",LPU_"~"_OT_"~"_VR_"~"_SP_"~"_DT_"~"_TT_"~"_NI)
+ .D DO^ITRIG("rasp","come")
+ Q
+COMEE 
+ S TT="" F  S TT=$O(^DSH(LPU,OT,VR,SP,DT,TT)) Q:TT=""  D
+ .S R=$G(^(TT)) Q:$P(R,"|",1)'=NIB  
+ .S R=$G(^(TT,"c")) Q:R=""  
+ .S $P(R,"|",3)=$H,^("c")=R,TT=999999 ; todo multiple rec. on 1 doct.
+ .D UPD^IEXCH("IRASP2",LPU_"~"_OT_"~"_VR_"~"_SP_"~"_DT_"~"_TT_"~"_NI)
+ .D DO^ITRIG("rasp","come")
+ Q
+COMEALL(LPU,OT,VR,SP,DT,TM) ; Пациент пришел (все записи)
+ N TT,R,LOG,NIB,K
+ S NIB=$$GETNIB(LPU,OT,VR,SP,DT,TM)
+ I NIB="" Q  ; незарегистрирован
+ S LOG=$$USR^IUSER(),TM=""
+ F  S TM=$O(^DSHP(NIB,DT,TM)) Q:TM=""  S VR="" F  S VR=$O(^DSHP(NIB,DT,TM,VR)) Q:VR=""  D
+ .S K=^(VR) Q:$P(K,"|",1)'=LPU 
+ .S OT=$P(K,"|",2),SP=$P(K,"|",3)
+ .Q:$D(^DSH(LPU,OT,VR,SP,DT,TM,"c"))  ; уже есть
+ .S ^("c")=$H_"|"_LOG
+ .D CNG^IRASP2(DT,LPU,OT,SP,VR)
+ .D UPD^IEXCH("IRASP2",LPU_"~"_OT_"~"_VR_"~"_SP_"~"_DT_"~"_TM_"~"_+NIB)
+ Q
+IsCOME(NIB,LPU,VRX,DT) ; Пришел или нет пациент
+ N TM,F,K,VR,L,OT,SP
+ S TM="",F=0,LPU=$G(LPU),VRX=$G(VRX)
+ F  S TM=$O(^DSHP(NIB,DT,TM)) Q:TM=""!F  S VR="" F  S VR=$O(^DSHP(NIB,DT,TM,VR)) Q:VR=""  D:VRX=""!(VRX=VR)  Q:F
+ .S K=^(VR),L=$P(K,"|",1)
+ .I L'="",LPU'="",L'=LPU Q 
+ .S OT=$P(K,"|",2),SP=$TR($P(K,"|",3),"@","|")
+ .S:$D(^DSH(LPU,OT,VR,SP,DT,TM,"c")) F=1
+ Q F
+REGU(LPU,OT,SP,TN,DT,PROC) ; Register update acceptor
+ S PROC="("""_$$DKAV^TXTU(PROC)_""")"
+ D REGID^YISYNC("DUP^IRASP2",PROC,LPU_"~"_OT_"~"_SP_"~"_TN_"~"_DT)
+ Q
+REGULT(LPU,OT,SP,TN,PROC) ; Register update acceptor (lite version)
+ S PROC="("""_$$DKAV^TXTU(PROC)_""")"
+ D REGID^YISYNC("DUP^IRASP2",PROC,LPU_"~"_OT_"~"_SP_"~"_TN)
+ Q
+REGUVR(LPU,TN,DT,PROC) ; Register update acceptor (doctor version)
+ S PROC="("""_$$DKAV^TXTU(PROC)_""")"
+ D REGID^YISYNC("DUP^IRASP2",PROC,LPU_"~"_TN_"~"_DT)
+ Q
+UREGU 
+ D UREG^YISYNC("DUP^IRASP2")
+ Q
+UREGID(LPU,OT,SP,TN) 
+ D UREGID^YISYNC("DUP^IRASP2",LPU_"~"_OT_"~"_SP_"~"_TN)
+ Q
+CNG(DT,LPU,OT,SP,TN) ; If data changed
+ D UPDI^YISYNC("DUP^IRASP2",LPU_"~"_OT_"~"_SP_"~"_TN_"~"_DT)
+ D UPDI^YISYNC("DUP^IRASP2",LPU_"~"_OT_"~"_SP_"~"_TN) ; w.o. date
+ D UPDI^YISYNC("DUP^IRASP2",LPU_"~"_TN_"~"_DT) ; only doctor on date
+ Q
+DUP(PROC) ; Do update procedures
+ D:PROC'="" @PROC
+ Q
+UPD(LPU,OT,VR,SP,DT,TM,NI) ; Update wrapper
+ Q:LPU="" 
+ S:$G(NI)="" NI=$$GETNIB(LPU,OT,VR,SP,DT,TM)
+ D UPD^IEXCH("IRASP2",LPU_"~"_OT_"~"_VR_"~"_SP_"~"_DT_"~"_TM_"~"_NI)
+ Q
+WXCH(ID) ; ID - LPU~OT~VR~SP~DT~TM~PID
+ N GL,LPU,OT,VR,SP,DT,TM,NI,R
+ S LPU=$P(ID,"~",1),OT=$P(ID,"~",2),VR=$P(ID,"~",3)
+ S SP=$P(ID,"~",4) S:SP["|" SP=""""_SP_""""
+ S DT=$P(ID,"~",5),TM=$P(ID,"~",6),NI=$P(ID,"~",7)
+ S R="^DSH("_LPU_","_OT_","""_VR_""","_$S(+SP=SP:SP,1:""""_SP_"""")_","_DT_","_TM
+ S GL("-R")="-"_R_")" ; В начале очистить
+ S:$D(^DSH(LPU,OT,VR,SP,DT,TM)) GL("R")=R
+ G:NI="" WXCH1
+ S R="^DSHP("_$S(+NI=NI:NI,1:""""_NI_"""")_","_DT_","_TM_","""_VR_""")"
+ S:'$D(^DSHP(NI,DT,TM,VR)) R="-"_R S GL("P")=R
+ ; todo - update local clients
+WXCH1 D S^XGUNET("GL","exp.nb-data")
+ Q
+RXCH 
+ D R^XGUNET("hpar")
+ Q
+CORRECT 
+ S LPU=+$$^I("ilpu")
+ S OT="" F  S OT=$O(^DSH(LPU,OT)) Q:OT=""  S TN="" F  S TN=$O(^DSH(LPU,OT,TN)) Q:TN=""  S SP="" F  S SP=$O(^DSH(LPU,OT,TN,SP)) Q:SP=""  S DT="" F  S DT=$O(^DSH(LPU,OT,TN,SP,DT)) Q:DT=""  D
+ .S L=^DSH(LPU,OT,TN,SP,DT),Z=$P(L,"|",1) Q:Z'["@" 
+ .S K=$P(Z,"@",1)_"|"_$S($P(Z,"@",2)["~":$E($P(Z,"@",2),2,99),1:$P(Z,"@",2))_"|"_$P(L,"|",2,3)_"|"_$S($P(Z,"@",2)["~":1,1:"")
+ .S ^DSH(LPU,OT,TN,SP,DT)=K
+ Q
+VRTMS(LPU,VR,DT) ; Наиболее раннее время начала работы врача
+ N OT,SP,S,X
+ S OT="",S=999999 F  S OT=$O(^DSH(LPU,OT)) Q:OT=""  S SP="" F  S SP=$O(^DSH(LPU,OT,VR,SP)) Q:SP=""  S X=$O(^(SP,DT,"")) I X'="",X<S S S=X
+ Q:S=999999 0 Q S
+VRTME(LPU,VR,DT) ; Время окончания работы врача (позднее)
+ N OT,SP,S,X
+ S OT="",S=0 F  S OT=$O(^DSH(LPU,OT)) Q:OT=""  S SP="" F  S SP=$O(^DSH(LPU,OT,VR,SP)) Q:SP=""  S X=$O(^(SP,DT,""),-1) I X'="",X>S S S=X
+ Q S
+VRInDT(LPU,VR,DT) ; Врач присутствует в этот день в расписании
+ N OT,SP,F
+ S OT="",F=0 F  S OT=$O(^DSH(LPU,OT)) Q:OT=""!F  S SP="" F  S SP=$O(^DSH(LPU,OT,VR,SP)) Q:SP=""!F  I $D(^(SP,DT)) S F=1 Q 
+ Q F
+TIMEST(LPU,OT,VR,SP,DT) ; Текстовое время работы врача
+ N T1,T2
+ S T1=$O(^DSH(LPU,OT,VR,SP,DT,"")),T2=$O(^(90000),-1)
+ Q $S(T1="":"",1:$$TM^DTUTL(T1)_"-"_$$TM^DTUTL(T2))
+VFIO(VR,MOD) ; Фамилия врача/ имя кабинета
+ ; MOD - 0/1/2 - нет/табельный/кадровый
+ I $P(VR,".",1)="X" Q $$NMLTF^NPLPU(VR)
+ Q $$FIO^IKADRY(VR)_$S('$D(MOD):"",MOD=1:" ("_VR_")",MOD=2:" ("_$$GET^IKADRY(VR,"knum")_")",1:"")
+VFIOSH(VR,MOD) ; Ф.И.О. врача/ имя кабинета
+ ; MOD - 0/1/2 - нет/табельный/кадровый
+ I $P(VR,".",1)="X" Q $$NMLTF^NPLPU(VR)
+ Q $$FIOSH^IKADRY(VR)_$S('$D(MOD):"",MOD=1:" ("_VR_")",MOD=2:" ("_$$GET^IKADRY(VR,"knum")_")",1:"")
+VFIOSHD(VR,DT) ; Ф.И.О. врача/ имя кабинета
+ I $P(VR,".",1)="X" Q $$NMLTF^NPLPU(VR)
+ Q $$FIOSH^IKADRY(VR,$$DIH^DTUTL($G(DT)))
+VCHK(VR,DT) ; Проверка врача/кабинета
+ I $P(VR,".",1)="X" Q 1
+ Q $$USED^IKADRY(VR,$G(DT))
+SETPHN(NI,STR) ; Установить номер телефона у пациента
+ N F,I
+ S F=$G(^cfg("rasp-regpac-tel"))
+ S:F="" F="tel1"
+ S STR=$TR(STR," ",""),I=$E(STR,1)
+ I I="д" S F="tel1",STR=$E(STR,2,99)
+ I I="р" S F="tel2",STR=$E(STR,2,99)
+ I I="м" S F="pager",STR=$E(STR,2,99)
+ S STR=$$TRIM^TXTU(STR)
+ Q:STR="" 
+ D:$$GET^IPAC(NI,F,+$H)="" SET^IPAC(NI,F,+$H,STR,1)
+ Q
+GETCAB(KEY,DT,PKEY) ; Получить кабинет по "свертке" ключа
+ ; KEY - врач или полный ключ
+ ; PKEY - ^DSHP
+ Q:KEY="" ""
+ I $G(PKEY)'="" S KEY=$P(PKEY,"|",1)_","_$P(PKEY,"|",2)_","_KEY_","_$TR($P(PKEY,"|",3),"@","|")_","_DT
+ Q $P($G(^DSH($P(KEY,",",1),$P(KEY,",",2),$P(KEY,",",3),$P(KEY,",",4),$P(KEY,",",5))),"|",2)
+WLOG(HH,LPU,OT,TN,SP,DT,TIME,STR) ; Запись DSHW
+ S ^DSHW(HH,LPU,OT,TN,SP,DT,TIME)=STR
+ S ^DSHWI(LPU,TN,HH)=""
+ Q:'$G(^cfg("rasp","net-dshw"))
+ D GL^IEXCH("^DSHW",HH,LPU,OT,TN,SP,DT,TIME)
+ D GL^IEXCH("^DSHWI",LPU,TN,HH)
+ Q
+NWP(ID) ; ID шаблона нового пациента для расписания
+ S ID=$G(ID)
+ S:ID="" ID=$$LCL^IUSER("sprasp","nwp")
+ S:ID="" ID=$G(^cfg("rasp","nwp"))
+ S:ID="" ID=$$NEXT^ISPRAV("newpac","")
+ Q ID
+fastio 
+ D:$G(^cfg("rasp","fastio")) DONOW^IEXCH
+ Q
+MOVKEY(LPU,OT,VR,SP,DT,TM,TNIB) ; Переместить запись на пацента
+ N L,NI
+ S L=$G(^DSH(LPU,OT,VR,SP,DT,TM))
+ Q:L=""
+ S NI=$P(L,"|",1) Q:NI="" 
+ S $P(L,"|",1)=TNIB,^(TM)=L
+ D GL^IEXCH("^DSH",LPU,OT,VR,SP,DT,TM)
+ M ^DSHP(TNIB,DT,TM,VR)=^DSHP(NI,DT,TM,VR)
+ K ^DSHP(NI,DT,TM,VR)
+ D KGL^IEXCH("^DSHP",NI,DT,TM,VR)
+ D GL^IEXCH("^DSHP",TNIB,DT,TM,VR)
+ Q
+REGLCL ; Register rights
+ K ^LCLI("rasp")
+ S ^LCLI("rasp")="Расписание приемов"
+ S ^LCLI("rasp","del")="Удаление записей 0-нельзя/1-можно/2-можно все"
+ S ^LCLI("rasp","deltime")="Время, в течении которого доступно удаление (мин.)"
+ S ^LCLI("rasp","cbdel")="Запрет удаления отзвоненных пациентов"
+ S ^LCLI("rasp","owset")="Изменение только своих записей"
+ S ^LCLI("rasp","ownset")="Изменение только чужих записей"
+ S ^LCLI("rasp","zt-set")="Уровень доступа на установку типа времени"
+ S ^LCLI("rasp","zt-del")="Уровень доступа на удаление типа времени"
+ S ^LCLI("rasp","show-comm")="Показывать комментарий у записи"
+ S ^LCLI("rasp","show-knum")="Показывать табельный (1) или кадровый (2) номер рядом с сотрудником"
+ S ^LCLI("rasp","aotimer")="Запрет записи на прошедшие дни"
+ Q
+INITDB 
+ s ^MN("root","rsource")="Источники рекламы"
+ s ^("rsource","fname")="Наименование|Раздел|Архив"
+ s ^("ftype")="S|L:rsourcegrp",^("arch")=3
+ s ^("fcode")="name|section|arch"
+ s ^MN("root","rastxt")="Примечание к записи расписания"
+ Q

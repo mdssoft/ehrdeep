@@ -1,0 +1,159 @@
+NPRASP ; Doctor's shedule pattern [ 12/09/2020  1:20 AM ]
+MK 
+ I $$LCL^IUSER("mkrasp","master")=0 D MSG^RWU("Нет прав") Q 
+ N %J,DS,DE,LPU,KEY,TP,I,R,DT,OT,VR,SP,TML,EXL,CLR,Wo
+ S LPU=+$$^I("ilpu")
+ N @$$NEWVAR^YIXMLRR()
+ D RBUFH^YIXMLRR(1)
+ S KEY=$G(XML("nb_console","mkrasp","key"))
+ I KEY="" D MSG^RWU("ERR") G MKEND
+ S DS=$$DI^DTUTL($G(XML("nb_console","mkrasp","df")))
+ S DE=$$DI^DTUTL($G(XML("nb_console","mkrasp","dt")))
+ S I=+$G(^cfg("rasp-mk-aotimer"))
+ I I,+$H<DS S DS=+$H
+ I I,+$H>DE D MSG^RWU("Вы не вправе менять предыдущий период") Q  ; Запрет изменения прошедшего периода 
+ I DS=""!(DE="") D MSG^RWU("ERR") G MKEND
+ S TP=$G(XML("nb_console","mkrasp","tp"))
+ S CLR=$G(XML("nb_console","mkrasp","clr"))
+ D:TP=1 MKDAY
+ D:TP=2 MKWEEK
+ D:TP=3 MKPRTY
+MKEND K XML
+ Q
+MKDAY ; By day
+ N TM,KAB,WK,TS,TE,TI
+ S TM=$G(XML("nb_console","mkrasp","p1time")) 
+ S KAB=$G(XML("nb_console","mkrasp","p1kab"))
+ S TS=$$TI($G(XML("nb_console","mkrasp","p1ts")))
+ S X=$$C^I("mkrasp","mintm")
+ I X,TS<X D errMIN Q 
+ S TE=$$TI($G(XML("nb_console","mkrasp","p1te")))
+ S X=$$C^I("mkrasp","maxtm")
+ I X,TE>X D errMAX Q 
+ S:'TS TS="" S:'TE TE=""
+ S TI=$G(XML("nb_console","mkrasp","p1ti"))
+ S WK="|"_$G(XML("nb_console","mkrasp","p1week"))_"|"
+ I '$L(TM),'$L(TS)!'$L(TE)!'$L(TI) Q 
+ F DT=DS:1:DE D
+ .F X=1:1 S R=$P(KEY,"|",X) Q:R=""  D
+ ..S OT=$P(R,"@",1),VR=$P(R,"@",2),SP=$P(R,"@",3)
+ ..I WK'[("|"_$$DWEEK^DTUTL(DT)_"|") D:CLR CLRDSH(LPU,OT,VR,SP,DT) Q 
+ ..K TML
+ ..D MKFTL(TS,TE,TI) ; free time
+ ..D MKDSH(LPU,OT,VR,SP,DT,TM,KAB,"")
+ S I="" F  S I=$O(EXL(I)) Q:I=""  D UPD^IEXCH("NMRASP",LPU_","_I_","_EXL(I,1)_","_EXL(I,2))
+ Q
+MKWEEK ; By week
+ N TM,KAB,KB,TS,TE,TI,T,F,X1,X2
+ S X="nb_console",OT="mkrasp",VR="p2time",SP="p2kab"
+ S KB=$G(XML("nb_console","mkrasp","p2kab1"))
+ S F=0,X1=$$C^I("mkrasp","mintm"),X2=$$C^I("mkrasp","maxtm")
+ F I=1:1:7 D  Q:F
+ .S TM(I)=$G(XML(X,OT,VR_I))
+ .S KAB(I)=$G(XML(X,OT,SP_I))
+ .S T=$$TI($G(XML(X,OT,"p2ts"_I)))
+ .I X1,T,T<X1 D errMIN S F=1 Q
+ .S:'T T="" S TS(I)=T
+ .S T=$$TI($G(XML(X,OT,"p2te"_I)))
+ .I T,X2,T>X2 D errMAX S F=1 Q
+ .S:'T T="" S TE(I)=T
+ .S TI(I)=$G(XML(X,OT,"p2ti"_I))
+ S R=1 F I=1:1:7 S:$L(TM(I))!$L(TI(I)) R=0 S:KAB(I)="" KAB(I)=KB
+ Q:R ; exit if all times is clear
+ F DT=DS:1:DE D
+ .S I=$$DWEEK^DTUTL(DT)
+ .F X=1:1 S R=$P(KEY,"|",X) Q:R=""  D
+ ..S OT=$P(R,"@",1),VR=$P(R,"@",2),SP=$P(R,"@",3)
+ ..K TML
+ ..D MKFTL(TS(I),TE(I),TI(I)) ; free time
+ ..D MKDSH(LPU,OT,VR,SP,DT,TM(I),KAB(I),"") 
+ S I="" F  S I=$O(EXL(I)) Q:I=""  D UPD^IEXCH("NMRASP",LPU_","_I_","_EXL(I,1)_","_EXL(I,2))
+ Q
+MKPRTY ; By parity
+ N TM1,TM2,K1,K2,WK,TS1,TS2,TE1,TE2,TI1,TI2,TS,TE,TI,X1,X2
+ S X1=$$C^I("mkrasp","mintm"),X2=$$C^I("mkrasp","maxtm")
+ S TM1=$G(XML("nb_console","mkrasp","p3time1"))
+ S TM2=$G(XML("nb_console","mkrasp","p3time2")) 
+ S K1=$G(XML("nb_console","mkrasp","p3kab1"))
+ S K2=$G(XML("nb_console","mkrasp","p3kab2"))
+ S:K2="" K2=K1
+ S TS1=$$TI($G(XML("nb_console","mkrasp","p3ts1")))
+ I TS1,X1,TS1<X1 D errMIN Q 
+ S TS2=$$TI($G(XML("nb_console","mkrasp","p3ts2")))
+ I TS2,X1,TS2<X1 D errMIN Q
+ S TE1=$$TI($G(XML("nb_console","mkrasp","p3te1")))
+ I TE1,X2,TE1>X2 D errMAX Q 
+ S TE2=$$TI($G(XML("nb_console","mkrasp","p3te2")))
+ I TE2,X2,TE2>X2 D errMAX Q 
+ S:'TS1 TS1="" S:'TS2 TS2=""
+ S:'TE1 TE1="" S:'TE2 TE2=""
+ S TI1=$G(XML("nb_console","mkrasp","p3ti1"))
+ S TI2=$G(XML("nb_console","mkrasp","p3ti2"))
+ I '$L(TM1),'$L(TM2),'$L(TS1)!'$L(TE1)!'$L(TI1),'$L(TS2)!'$L(TE2)!'$L(TI2) Q 
+ S WK="|"_$G(XML("nb_console","mkrasp","p3week"))_"|"
+ F DT=DS:1:DE D
+ .S I=$$DAY^DTUTL(DT)#2
+ .F X=1:1 S R=$P(KEY,"|",X) Q:R=""  D
+ ..S OT=$P(R,"@",1),VR=$P(R,"@",2),SP=$P(R,"@",3)
+ ..I WK'[("|"_$$DWEEK^DTUTL(DT)_"|") D:CLR CLRDSH(LPU,OT,VR,SP,DT) Q 
+ ..S TS=$S(I=1:TS2,1:TS1),TE=$S(I=1:TE2,1:TE1),TI=$S(I=1:TI2,1:TI1)
+ ..K TML
+ ..D MKFTL(TS,TE,TI) ; free time
+ ..D MKDSH(LPU,OT,VR,SP,DT,$S(I=1:TM2,1:TM1),$S(I=1:K2,1:K1),"")
+ S I="" F  S I=$O(EXL(I)) Q:I=""  D UPD^IEXCH("NMRASP",LPU_","_I_","_EXL(I,1)_","_EXL(I,2))
+ Q
+errMIN 
+ D MSG^RWU("Время начала графика раньше допустимого")
+ Q
+errMAX 
+ D MSG^RWU("Время окончания графика позже допустимого")
+ Q
+MKDSH(LPU,OT,VR,SP,DT,TM,KAB,TEL) ; Internal proc
+ N H,R,F,YY,TMM,V,T,E
+ S H="|"_KAB_"|"_TEL
+ I '+CLR,'$L(TM),'$L(%J) Q 
+ S R=$G(^DSH(LPU,OT,VR,SP,DT))
+ S V=+$S(TM="":0,1:$G(^M(141,TM,"v"))),TMM=$S(TM="":"*@"_%J,1:TM_"@"_V)
+ ; резервная копия
+ I +$G(^cfg("bk-shedule"))=1 S F=$H S ^DSHBK(F)=LPU_","_OT_","_VR_","_SP_","_DT M ^DSHBK(F,LPU,OT,VR,SP,DT)=^DSH(LPU,OT,VR,SP,DT)
+ ; Если то же время
+ I $L(TMM),$P(R,"|",1)=TMM D:$P(R,"|",2,3)'=(KAB_"|"_TEL)  Q 
+ .S ^(DT)=TMM_H_"|"_$P(R,4,99) D GL^IEXCH("^DSH",LPU,OT,VR,SP,DT)
+ D:$L(TM) MKTML^IMRASP(TM,"TML")
+ S R="",F=1 F  S R=$O(^DSH(LPU,OT,VR,SP,DT,R)) Q:R=""  D
+ .S YY=$G(^(R))
+ .K:(YY="")!(YY="*") ^DSH(LPU,OT,VR,SP,DT,R)
+ .I YY'="",YY'="*" S ERL(OT_"|"_VR_"|"_SP_"|"_DT_"|"_R)="",F=0 K TML(R)
+ .S T=$P(YY,"|",5) ; для нестанд. длительности
+ .I T<0,(R+T)=0 S T=""
+ .Q:T=""  Q:R>89999 
+ .S E=R+T,TML(E)=$S($O(TML(E))="":"*",1:"")
+ .S T=R-1 F  S T=$O(TML(T)) Q:T=""!(T'<E)  K TML(T)
+ I F K:$D(^DSH(LPU,OT,VR,SP,DT))=1 ^DSH(LPU,OT,VR,SP,DT) ; no subnodes
+ Q:'$D(TML) 
+ S ^DSH(LPU,OT,VR,SP,DT)=TMM_H M ^DSH(LPU,OT,VR,SP,DT)=TML
+ S EXL(OT,1)=DS,EXL(OT,2)=DE
+ Q
+CLRDSH(LPU,OT,VR,SP,DT) ; Internal proc
+ N H,R,F,YY
+ I +$G(^cfg("bk-shedule"))=1 N HT S HT=$H S ^DSHBK(HT)=LPU_","_OT_","_VR_","_SP_","_DT M ^DSHBK(HT,LPU,OT,VR,SP,DT)=^DSH(LPU,OT,VR,SP,DT)
+ S R="",F=1 F  S R=$O(^DSH(LPU,OT,VR,SP,DT,R)) Q:R=""  S YY=$G(^(R)) K:(YY="")!(YY="*") ^DSH(LPU,OT,VR,SP,DT,R) I $L(YY),YY'="*" S ERL(OT_"|"_VR_"|"_SP_"|"_DT_"|"_R)="",F=0
+ I F K:$D(^DSH(LPU,OT,VR,SP,DT))=1 ^DSH(LPU,OT,VR,SP,DT) ; no subnodes
+ S EXL(OT,1)=DS,EXL(OT,2)=DE
+ Q
+MKFTL(TS,TE,TI) ; Создать свободный график расписания
+ S %J=""
+ Q:TS=""  Q:TE=""  Q:TI="" 
+ N R K TML
+ S R=$$C^I("mkrasp","mintm") S:TS<R TS=R
+ S R=$$C^I("mkrasp","maxtm") S:TE>R TE=R
+ S R="",TI=TI*60
+ F TS=TS:TI:TE S TML(TS)="",R=$S($L(R):R_"|",1:"")_(TS/60)
+ S:'$D(TML(TE)) R=R_"|"_(TE/60)_"*"
+ S TML(TE)="*",%J=$$MKTIDX^NMIRASP(R)
+ Q
+TI(X) ; Decode time
+ S X=$$TRIM^TXTU(X) Q:X=":" ""
+ S X=$$TI^DTUTL(X)
+ Q:X>86399 ""
+ Q X

@@ -1,0 +1,117 @@
+NPACEV ; События пациента [ 07/10/2020  1:07 PM ]
+TP(X) ;
+ Q:X="PCLS" "Изменение класса"
+ Q:X="DSCN" "Изменение скидки"
+ Q:X?1.N $$GET^ISPRAV("pacev",X)
+ Q ""
+LSTTP(NIB) ; Перечень видов событий пациента
+ D OWF^RWU(".txt")
+ D LSTTPs
+ D C^RWU
+ Q
+LSTTPs 
+ N H,LST,X
+ S H="" F  S H=$O(^BTEV(NIB,H)) Q:H=""  S X="" F  S X=$O(^BTEV(NIB,H,X)) Q:X=""  S:'$D(LST(X)) LST(X)=""
+ S (H,X)=""
+ F  S X=$O(LST(X)) Q:X=""  D WC^RWU(H_$$TP(X)_"|"_X) S H=CR
+ Q
+LSTTPU ; Список пользовательских типов событий
+ D NMLST^NSPRAV("pacev",0,1)
+ Q
+ADDTPU(TXT) ; Добавить новый тип пользовательского события
+ D MSG^RWU($$AITEMs^NSPRAV("pacev",TXT))
+ Q
+ADD(NIB,TP,TXT) ; Добавить пользовательское событие
+ Q:NIB=""  Q:TP=""  Q:TP'?1.N  
+ N H,U
+ ; Существование пред. событий
+ S H="",U=1 F  S H=$O(^BTEV(NIB,H)) Q:H=""  I $D(^(H,TP)) S U=0 Q 
+ 
+ S TXT=$$WD^TXTU(TXT),H=$H
+ S ^BTEV(NIB,H,TP)="1|"_TXT_"|D|"_$$KDR^IUSER()
+ D GL^IEXCH("^BTEV",NIB,H,TP)
+ Q:'U 
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<pacevent><dates>")
+ D LSTTPs
+ D W^RWU("</dates></pacevent></nb_console>"),C^RWU
+ Q
+DEL(NIB,TP,ID) ; Удалить пользовательское событие
+ N TM
+ S TM=$G(^cfg("pacev","deltm")) S:TM="" TM=600
+ I +ID'=(+$H)!($P(ID,",",2)-$P($H,",",2)>TM) D MSG^RWU("Удаление невозможно") Q 
+ D KD^ISSG("^BTEV("_NIB_","""_ID_""","_TP_")")
+ K ^BTEV(NIB,ID,TP)
+ D GL^IEXCH("^BTEV",NIB,ID,TP)
+ Q
+TAB(NIB,ID) ; Таблица событий
+ N H,R
+ S H=""
+ D OWF^RWU(".txt")
+ F  S H=$O(^BTEV(NIB,H),-1) Q:H=""  I $D(^(H,ID)) S R=^(ID) D WC^RWU(CR_$S(ID?1.N:H,1:"")_"|"_$$DTM^DTUTL(H)_"|"_$$FIO^IKADRY($P(R,"|",4))_"|"_$P(R,"|",2))
+ D C^RWU
+ Q
+LAST(NIB,ID,DT) ; Последнее событие определенного типа
+ N H
+ S H=DT_",999999" F  S H=$O(^BTEV(NIB,H),-1) Q:H=""!(+H'=DT)  Q:$D(^(H,ID)) 
+ Q:+H'=DT ""  
+ Q H
+LASTT(NIB,ID,DT) ; Текст с последнего события определенного типа
+ N R S R=$$LAST(NIB,ID,DT) Q:R="" ""
+ Q $G(^BTEV(NIB,R,ID))
+LASTC(NIB,ID,DT) ; Комм. с последнего события определенного типа
+ N R S R=$$LAST(NIB,ID,DT) Q:R="" ""
+ Q $P($G(^BTEV(NIB,R,ID)),"|",2)
+CLS(DS,DE) ; Изменение классов пациента
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N NI,H,A,R,T
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|Дата, время|№ И.Б.|Пациент|Класс|Примечание|Оператор")
+ S NI="" F  S NI=$O(^BTEV(NI)) Q:NI=""  S H=DS_",0" F  S H=$O(^BTEV(NI,H)) Q:H=""!(+H>DE)  D:$D(^(H,"PCLS"))
+ .S R=^("PCLS"),T=$G(^("PCLS","id"))
+ .S A=$$DTM^DTUTL(H)_"|"_NI_"|"_$$FIO^IPAC(NI,+H)_"|"_$$GETPL^ISPRAV("newpac",T,"name")_"|"_$P(R,"|",2)_"|"_$$FIO^IKADRY($P(R,"|",4))
+ .D WC^RWU(CR_NI_"|"_A)
+ D C^RWU
+ Q
+SKD(DS,DE) ; Отчет по скидкам
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N NI,H,A,R,D,T,OF,ST,C
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|Дата, время|№ И.Б.|Пациент|Скидка|Кто разрешил|Дней|Примечание|Статусы|Оператор")
+ S NI="" F  S NI=$O(^BTEV(NI)) Q:NI=""  S H=DS_",0" F  S H=$O(^BTEV(NI,H)) Q:H=""!(+H>DE)  D:$D(^(H,"DSCN"))
+ .S R=^("DSCN"),T=$G(^("DSCN","id")),A=$G(^("who")),D=$G(^("d"))
+ .S OF=$G(^("of")),ST=$G(^("st"))
+ .S:T="" T=$$GET^IPAC(NI,"skd",+H)
+ .S A=$$DTM^DTUTL(H)_"|"_NI_"|"_$$FIO^IPAC(NI,+H)_"|"_$$NAME^IDSCN(T)_"|"_$$NAME^ISPRAV("allowskd",A)_"|"
+ .S T=$S(OF="":"",1:"Расчет в офисе "),T=$S($P(R,"|",2)="":"",T="":"",1:T_", ")_$P(R,"|",2)
+ .S C=$TR($E($$GET^IPAC(NI,"text",+H),1,255),$C(9)_CR," ")
+ .S:$L(C) T=$S(T="":"",1:T_" ")_C
+ .S A=A_D_"|"_T_"|"_ST_"|"_$$FIO^IKADRY($P(R,"|",4))
+ .D WC^RWU(CR_NI_"|"_A)
+ D C^RWU
+ Q
+JRN(DS,DE,TPX) ; Журнал событий
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N NI,H,A,R,T,TP
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|Дата, время|№ И.Б.|Пациент|Событие|Примечание|Оператор")
+ S NI="" F  S NI=$O(^BTEV(NI)) Q:NI=""  S H=DS_",0" F  S H=$O(^BTEV(NI,H)) Q:H=""!(+H>DE)  D
+ .I TPX'="" S TP=TPX D:$D(^(H,TP)) JRNp Q 
+ .S TP="" F  S TP=$O(^BTEV(NI,H,TP)) Q:TP=""  D JRNp
+ D C^RWU
+ Q
+JRNp 
+ S R=^(TP)
+ S A=$$FIO^IPAC(NI,+H)_"|"_$$NAME^ISPRAV("pacev",TP)_"|"_$P(R,"|",2)_"|"_$$FIO^IKADRY($P(R,"|",4))
+ D WC^RWU(CR_NI_"|"_$$DTM^DTUTL(H)_"|"_NI_"|"_A)
+ Q
+REGIPROC 
+ N D,S
+ S D="Отчеты по пациентам",S="Журналы событий"
+ S ^IPROC(D,S,"Класс пациента")="CLS_NPACEV,100,2,d,Начальная дата,d,Конечная дата"
+ S ^IPROC(D,S,"Скидки")="SKD_NPACEV,100,2,d,Начальная дата,d,Конечная дата"
+ S ^IPROC(D,S,"События пациента")="JRN^NPACEV,100,3,d,Начальная дата,d,Конечная дата,t@net:NMLCR_NSPRAV(""pacev""),Вид события"
+ Q
+INITDB 
+ S ^MN("root","allowskd")="Лицо, разрешившее скидку"
+ S ^MN("root","pacev")="Виды событий по пациенту"
+ Q

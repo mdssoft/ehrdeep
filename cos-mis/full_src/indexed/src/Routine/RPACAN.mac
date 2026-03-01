@@ -1,0 +1,50 @@
+RPACAN ; Аналитика по пациенту [ 06/29/2015  11:39 PM ]
+LSTS(NIB,DS,DE) ; Анализ услуг по пациенту
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),NIB=$P(NIB," ",1)
+ N LNRUN,UER,U,CNT,CEN,TAB,Z,X1,A,X2
+ S LNRUN="LSTSp^RPACAN",UER=1
+ D DOSC^NPACSC(NIB,DS,DE)
+ D OWF^RWU(".txt")
+ S (Z,A)="" F  S Z=$$NEXT^ISPRAV("priceexs",Z) Q:Z=""  S A=A_"|"_$$NAME^ISPRAV("priceexs",Z)
+ D WC^RWU("Код|Наименование|Кол-во|Цена|Внешняя|Материалы|Зарплата|Себестоимость|Факт.себестоимость"_A)
+ S X1="" F  S X1=$O(TAB(X1)) Q:X1=""  D
+ .S U=$P(X1,"|",1),Z=$P(X1,"|",2)
+ .S A=U_"|"_$$NAMEH^IPRICE(U,Z,DE)
+ .S A=A_"|"_$$FN($G(TAB(X1,1)))
+ .S A=A_"|"_$$FN($G(TAB(X1,2)))
+ .S A=A_"|"_$$FN($G(TAB(X1,3)))
+ .S A=A_"|"_$$FN($G(TAB(X1,4)))
+ .S A=A_"|"_$$FN($G(TAB(X1,5)))
+ .S A=A_"|"_$$FN($$GET^IPRICE(U,"scost",Z,DE)*$G(TAB(X1,1)))
+ .S A=A_"|"_$$FN($G(TAB(X1,3))+$G(TAB(X1,4))+$G(TAB(X1,5)))
+ .S X2="" F  S X2=$$GNEXT^IPRICE(U,"exps",X2,Z,DE) Q:X2=""  S $P(A,"|",X2+9)=$$GET2^IPRICE(U,"exps",X2,Z,DE)
+ .D WC^RWU(CR_A)
+ D C^RWU
+ Q
+LSTSp 
+ N K,II,S,CON,Z
+ S PRC=+$G(PRC),II=$P(KX,"|",3)
+ S:'PRC PRC=$$CORCP^IPRICET(PRC)
+ S U="" F  S U=$O(UL(U)) Q:U=""  D
+ .S Z=U_"|"_PRC
+ .S CNT=$G(UL(U))
+ .S CEN=$S($D(UL(U,1)):UL(U,1)/CNT,1:$$PRICEH^IPRICE(U,$G(PRC),DT)*KSKD)
+ .S SUM=CNT*CEN
+ .S TAB(Z,1)=$G(TAB(Z,1))+CNT
+ .S TAB(Z,2)=$G(TAB(Z,2))+SUM
+ .S Z=$$GETPLE^IUSL(VR,DT,OT,II,"mt")
+ .S K=$$mtSUM^RRMATT(K,M)
+ .S K=$$CENNALL^IWRHS(K,DT)
+ .S:K TAB(Z,4)=$G(TAB(Z,4))+K
+ .S S=0,K=""
+ .F  S K=$O(^ZNFE(VR,OT,DT,II,"zrp",K)) Q:K=""  S S=S+$P(^(K),"|",1)
+ .S:S TAB(Z,5)=$G(TAB(Z,5))+S
+ .S CON=$$GETPL^IUSL(VR,DT,OT,ID,"c")
+ .S S=$P(CON,"|",1)
+ .I S S TAB(Z,3)=$G(TAB(Z,3))+S Q
+ Q
+FN(X) 
+ Q $TR(X,".",",")
+REGIPROC ;
+ S ^IPROC("Отчеты по пациентам","Аналитика","Анализ себестоимости услуг по пациенту")="LSTS_RPACAN,1,3,e@pac,Номер И.Б. пациента,d,Дата услуг с,d,Дата услуг по"
+ Q

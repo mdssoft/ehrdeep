@@ -1,0 +1,197 @@
+IPACUTL ; Утилиты контингента [ 03/15/2022  3:25 PM ]
+PACK ; Оптимизировать базу, убрать повторяющиеся
+ N N,D,PL,R,RR,DD,J
+ S J=0
+ S N="" F  S N=$$NEXT^IPAC(N) Q:N=""  D
+ .S PL="" F  S PL=$O(^BTN(N,PL)) Q:PL=""  D
+ ..S D="" F  S D=$O(^BTN(N,PL,D)) Q:D=""  D
+ ...S R=^(D),DD=D
+ ...; совпадение с последующими
+ ...F  S DD=$O(^BTN(N,PL,DD)) Q:DD=""  S RR=^(DD) Q:RR'=R  K ^(DD) S J=J+1
+ ...W:J#1000=1 "."
+ W !,"Updated "_J_" records"
+ Q
+NORMDT ; Нормализовать по датам прикрепления
+ N N,DGN,DV,DF,DC,PL,J
+ S J=0
+ S N="" F  S N=$$NEXT^IPAC(N) Q:N=""  D
+ .S DGN=$$GET^IPAC(N,"stc") Q:DGN=""
+ .S DV=$$GET^YNDOG(DGN,"dvid") I DV'=0,DV'=1 Q  ; only SK
+ .S DF=$$GET^IPAC(N,"dog_from") Q:'DF
+ .S DC=$$CREATED^IPAC(N) Q:'DC 
+ .I DC>DF D  Q 
+ ..S PL="" F  S PL=$O(^BTN(N,PL)) Q:PL=""  M ^BTN(N,PL,DF)=^BTN(N,PL,DC)
+ ..W "." S J=J+1
+ .I DF=$$GET^IPAC(N,"dog_from",DF) Q
+ .D SET^IPAC(N,"stc",DF,$$GET^IPAC(N,"stc"))
+ .D SET^IPAC(N,"dog_from",DF,DF)
+ .D SET^IPAC(N,"dog_to",DF,$$GET^IPAC(N,"dog_to"))
+ .D SET^IPAC(N,"polis",DF,$$GET^IPAC(N,"polis"),1)
+ .W "." S J=J+1
+ W !,"Updated "_J_" records"
+ Q
+MOVWRK(WRK,TO) ; Переместить пациентов с одного места работы на другое
+ N N,MM,D,F
+ S N="" F  S N=$O(^BTI(" w",WRK,N)) Q:N=""  D
+ .D GETM^IPAC(N,"work","MM")
+ .S F=0,D="" F  S D=$O(MM(D)) Q:D=""  I MM(D)=WRK D SET^IPAC(N,"work",D,TO,1) S F=1
+ .D:F REIDX^IPAC(N,D)
+ .K ^BTI(" w",WRK,N)
+ Q
+CLRWRK ; Очистить ошибочные записи
+ N W
+ S W="" F  S W=$O(^BTI(" w",W)) Q:W=""  D:'$D(^M(5,W)) MOVWRK(W,"")
+ Q
+RECNTS(ALL,NUPD)     ; Проставить cntstc
+ ; ALL - пересчитать для всех
+ ; NUPD - без обновления
+ N N,X,H
+ s ALL=+$G(ALL),H=+$H,NUPD=+$G(NUPD)
+ S N="" F  S N=$$NEXT^IPAC(N) Q:N=""  D
+ .I 'ALL,$$GET^IPAC(N,"cntstc")'="" Q
+ .D RECNTSTC^IPAC(N,H,NUPD)
+ Q
+RELOG(NI,ONI,DTM) ; Восстановить из ^BTNL
+ ; DTM - на дату время изменения
+ N P,D,TT,F
+ S F=0
+ S:$G(ONI)="" ONI=NI
+ S P="" F  S P=$O(^BTNL(ONI,P)) Q:P=""  D
+ .S D="" F  S D=$O(^BTNL(ONI,P,D)) Q:D=""  D:$D(^(D,DTM))
+ ..M ^BTN(NI,P,D)=^BTNL(ONI,P,D,DTM)
+ ..S F=1
+ D:F UPD^IEXCH("IPACEX",NI)
+ Q
+CLRNPL ; Удалить ошибочно сохраненные поля (служебные)
+ N PLL,PL,PLE,N,I
+ F PL="hist","savedate","deposit","newpac","saveexec","exchange","hist_old" S PLE=$$PLIDX^IPAC(PL) S:PLE'="" PLL(PLE)=PL
+ I '$D(PLL) W !,"No errors" Q
+ S I=0
+ S N="" F  S N=$$NEXT^IPAC(N) Q:N=""  D
+ .S PL="" F  S PL=$O(PLL(PL)) Q:PL=""  K:$D(^BTN(N,PL)) ^(PL)
+ .S I=I+1
+ W !,"Processed "_I_" patients"
+ ; Очистка индексов
+ S I=0,PL=""
+ F  S PL=$O(PLL(PL)) Q:PL=""  K ^BTN($C(9)_"r",PL),^BTN($C(9)_"t",PLL(PL)) S I=I+1
+ W !,"Processed "_I_" fields"
+ W
+ Q
+UPDNET(DS,DE,LPU) ; Обновление всех, кто изменялся за период на филиале
+ N N,MM,I,X,D,F
+ S LPU=$G(LPU)
+ S N="" F  S N=$$NEXT^IPAC(N) Q:N=""  D
+ .D GETM^IPAC(N,"opfio","MM")
+ .Q:'$D(MM)
+ .S I="",F=0 F  S I=$O(MM(I)) Q:I=""  D  Q:F
+ ..S R=MM(I),D=+$P(R,"|",2)
+ ..I LPU'="",$P($P(R,"|",1),"@",2)'=LPU Q 
+ ..Q:D<DS  Q:D>DE
+ ..S F=1
+ .Q:'F
+ .D UPD^IEXCH("IPACEX",N) w "."
+ Q
+RMSTAT(WW,STAT) ; Удалить ошибочные статусы
+ ; WW=0 - только вывести ошибочные
+ N NI,I,DT,R,J,X,F,ELST
+ S WW=+$G(WW),STAT=$G(STAT)
+ D PRETZR^IPAC
+ S I=$G(TZRBTN("status")) Q:I="" 
+ S NI="" F  S NI=$$NEXT^IPAC(NI) Q:NI=""  D
+ .S DT="" F  S DT=$O(^BTN(NI,I,DT)) Q:DT=""  D
+ ..S R=^(DT),F=1
+ ..F J=1:1:$L(R,"|") S X=$P(R,"|",J) I X'="",'$D(^M(1,X)) D
+ ...I WW,$L(X)>12 S F=0,R=$$EXFLG^TXTU(R,X) Q 
+ ...S ELST(X)=""
+ ...I WW,STAT'="",X=STAT S F=0,R=$$EXFLG^TXTU(R,STAT)
+ ..Q:F 
+ ..S ^BTN(NI,I,DT)=R
+ ..D UPD^IEXCH("IPACEX",NI)
+ ..W "."
+ ZW ELST
+ Q
+MVDGN(DG1,DG2) ; Change first stc from DG1 to DG2
+ N SI,SI1,SI2,NI,DT,F,DS
+ S SI=^BTN($c(9)_"t","stc"),SI1=$G(^("stc1")),SI2=$G(^("stc2"))
+ S NI="" F  S NI=$$NEXT^IPAC(NI,"stc",DG1) Q:NI=""  D
+ .S F=0,DS=""
+ .S DT="" F  S DT=$O(^BTN(NI,SI,DT)) Q:DT=""  D
+ ..I ^(DT)=DG1 S ^(DT)=DG2,F=1,DS=DT w "."
+ .I SI1'="" S DT="" F  S DT=$O(^BTN(NI,SI1,DT)) Q:DT=""  D 
+ ..I ^(DT)=DG1 S ^(DT)=DG2,F=1,DS=DT w "."
+ .I SI2'="" S DT="" F  S DT=$O(^BTN(NI,SI2,DT)) Q:DT=""  D 
+ ..I ^(DT)=DG1 S ^(DT)=DG2,F=1,DS=DT w "."
+ .Q:'F
+ .D MKIDX^YIPACN(DTS)
+ Q
+TRIMFIO ; Обрезать пробельные символы у существующих ФИО
+ N N,F,D,R,R1,iF,iI,iO,JJ
+ S iF=$$PLIDX^IPAC("fiof"),iI=$$PLIDX^IPAC("fioi"),iO=$$PLIDX^IPAC("fioo")
+ 
+ S JJ=0
+ S N="" F  S N=$$NEXT^IPAC(N) Q:N=""  D
+ .S F=0
+ .S D="" F  S D=$O(^BTN(N,iF,D)) Q:D=""  S R=^(D),R1=$$TRIM^TXTU(R) I R'=R1 S ^BTN(N,iF,D)=R1,F=1
+ .S D="" F  S D=$O(^BTN(N,iI,D)) Q:D=""  S R=^(D),R1=$$TRIM^TXTU(R) I R'=R1 S ^BTN(N,iI,D)=R1,F=1
+ .S D="" F  S D=$O(^BTN(N,iO,D)) Q:D=""  S R=^(D),R1=$$TRIM^TXTU(R) I R'=R1 S ^BTN(N,iO,D)=R1,F=1
+ .Q:'F
+ .S JJ=JJ+1
+ .w "."
+ .D UPD^IEXCH("IPACEX",N)
+ w:JJ !,"Total: "_JJ
+ Q
+NULCNT(DT) ; Число пациентов без каких либо данных
+ ; DT - минимальный срок
+ N N,JJ
+ S JJ=0
+ S iD1=$$PLIDX^IPAC("dog_to"),iD2=$$PLIDX^IPAC("dog_to1"),iD3=$$PLIDX^IPAC("dog_to2")
+ S N="" F  S N=$$NEXT^IPAC(N) Q:N=""  D
+ .S F=0
+ .S D="" F  S D=$O(^BTN(N,iD1,D)) Q:D=""  S R=^(D) I R'="",R<DT S F=1
+ .I 'F S D="" F  S D=$O(^BTN(N,iD2,D)) Q:D=""  S R=^(D) I R'="",R<DT S F=1
+ .I 'F S D="" F  S D=$O(^BTN(N,iD3,D)) Q:D=""  S R=^(D) I R'="",R<DT S F=1
+ .Q:'F 
+ .Q:'$$CHKNUL^IPAC(N) 
+ .S JJ=JJ+1
+ w !,"Total: "_JJ
+ Q
+CLRNUL ; Очистить пациентов без ФИО и данных
+ N N,fF,fI,fO,DT
+ D PRETZR^IPAC
+ S DT=+$H
+ S fF=+$G(TZRBTN("fiof")),fI=+$G(TZRBTN("fioi")),fO=+$G(TZRBTN("fioo"))
+ S N="" F  S N=$$NEXT^IPAC(N) Q:N=""  D
+ .Q:$$GETTZ^IPAC(N,fF,DT)'=""  
+ .Q:$$GETTZ^IPAC(N,fI,DT)'="" 
+ .Q:$$GETTZ^IPAC(N,fO,DT)'="" 
+ .Q:'$$CHKNUL^IPAC(N) 
+ .W "." 
+ .D DEL^IPAC(N)
+ Q
+FAPHN(TXT) ; Поиск по шаблону номера телефона
+ N I,NI,X,PT,P,t,ix,it,DT,H
+ S TXT=$TR(TXT,"? ","*"),H=+$H+1
+ S TXT=$$phnx(TXT)
+ S (P,PT)="",ix=0,it=0 F I=1:1:$L(TXT) D
+ .s t=$E(TXT,I)
+ .I 'ix,t="*" s ix=I s:it PT=PT_$S(PT="":"1.",1:"")_""""_$E(TXT,it,I-1)_"""",it=0 Q 
+ .I ix,t'="*" s PT=PT_(I-ix)_"N.",it=I,ix=0 
+ .I 'ix,'it s it=I
+ 
+ I 'ix,t="*" s:it PT=PT_$S(PT="":"1.",1:"")_""""_$E(TXT,it,I-1)_""""
+ I ix s PT=PT_(I-ix+1)_"N."
+ I it,t'="*" s PT=PT_$S(PT="":"1.",1:"")_""""_$E(TXT,it,I)_""""
+ 
+ S I=$$PLIDX^IPAC("pager")
+ S NI="" F  S NI=$$NEXT^IPAC(NI) Q:NI=""  D  q:NI>1010 
+ .S DT=$O(^BTN(NI,I,H),-1) Q:DT="" 
+ .S R=$G(^(DT)) Q:DT="" 
+ .S R=$$MPHN^TXTU(R,8) Q:R="" 
+ .S R=$$phnx(R)
+ .Q:'(R?@PT) 
+ .w !,NI_" "_$$FIO^IPAC(NI)_" "_$G(^BTN(NI,I,DT))
+ Q
+phnx(V) 
+ Q:$E(V)="8" $E(V,2,99)
+ Q:$E(V,1,2)="+7" $E(V,3,99)
+ Q V

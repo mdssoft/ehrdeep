@@ -1,0 +1,91 @@
+NSTAFFU ; Кадровые утилиты [ 10/30/2017  0:58 AM ]
+LOAD 
+ N %J,A,DT,CN,CT,PL,V,X,TN,I
+ D ORH^RWU
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU()) Q:%IFN["Z"  D:%J>1
+ .S TN=$P(A,"|",1) Q:TN=""
+ .D SET^IKADRY(TN,"f",+$H,$P(A,"|",2))
+ .D SET^IKADRY(TN,"i",+$H,$P(A,"|",3))
+ .D SET^IKADRY(TN,"o",+$H,$P(A,"|",4))
+ .D SET^IKADRY(TN,"pol",+$H,$P(A,"|",5))
+ .D SET^IKADRY(TN,"bdate",+$H,$P(A,"|",6))
+ .D SET^IKADRY(TN,"otd",+$H,$P(A,"|",7))
+ .D SET^IKADRY(TN,"spec",+$H,$P(A,"|",8))
+ .D SET^IKADRY(TN,"doljn",+$H,$P(A,"|",9))
+ .D SET^IKADRY(TN,"otd2",+$H,$P(A,"|",10))
+ .D SET^IKADRY(TN,"spec2",+$H,$P(A,"|",11))
+ .D SET^IKADRY(TN,"doljn2",+$H,$P(A,"|",12))
+ .D SET^IKADRY(TN,"lpu",+$H,$$IWCNV^YUPRICE($P(A,"|",13)))
+ .D SET^IKADRY(TN,"otd3",+$H,$P(A,"|",14))
+ .D SET^IKADRY(TN,"spec3",+$H,$P(A,"|",15))
+ .D SET^IKADRY(TN,"addr",+$H,$P(A,"|",16))
+ .D SET^IKADRY(TN,"tel",+$H,$P(A,"|",17))
+ .D SET^IKADRY(TN,"add_text",+$H,$P(A,"|",18))
+ D CR^RWU
+ Q
+LOADT ; В текстовом виде
+ ; TN|ФИО|Дата р.|Спец.|Отд|Долж.|Сотовый тел.|Дом.тел.
+ N I,R,A,TN,FIO,DTR,SP,OT,DL,DT,X
+ S DT=+$H
+ K ^BUF($J)
+ 
+ S A=+$G(^MN("otd"))
+ S I="" F  S I=$O(^MN(A,I)) Q:I=""  D
+ .S R=$G(^(I,"sname")) S:R'="" ^BUF($J,"ot",$$UL^TXTU(R))=I
+ .S R=$G(^MN(A,I,"fname")) S:R'="" ^BUF($J,"ot",$$UL^TXTU(R))=I
+ 
+ S A=+$G(^MN("spec"))
+ S I="" F  S I=$O(^MN(A,I)) Q:I=""  D
+ .S R=$G(^(I,"sname")) S:R'="" ^BUF($J,"sp",$$UL^TXTU(R))=I
+ .S R=$G(^MN(A,I,"fname")) S:R'="" ^BUF($J,"sp",$$UL^TXTU(R))=I
+ 
+ S A=+$G(^MN("doljn"))
+ S I="" F  S I=$O(^MN(A,I)) Q:I=""  D
+ .S R=$P($G(^(I)),"|",1) S:R'="" ^BUF($J,"dl",$$UL^TXTU(R))=I
+ 
+ D ORH^RWU
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU()) Q:%IFN["Z"  D:%J>1
+ .S A=$$DBLSP^TXTU(A)
+ .S TN=$P(A,"|",1),FIO=$$TRIM^TXTU($P(A,"|",2)),DTR=$P(A,"|",3)
+ .S SP=$$TRIM^TXTU($P(A,"|",4)),OT=$$TRIM^TXTU($P(A,"|",5))
+ .S DL=$$TRIM^TXTU($P(A,"|",6))
+ .S FIO=$$NRMFIO^YIFAM(FIO)
+ .S X=$$SEXFIO^YIFAM(FIO)
+ .S:DTR'="" DTR=$$DI^DTUTL(DTR)
+ .I SP'="" S:'$$CHECK^ISPRAV("spec",SP) R=$$UL^TXTU(SP),SP=$S($D(^BUF($J,"sp",R)):^(R),1:$$ADDSP^YISPRAV(SP)),^BUF($J,"sp",R)=SP
+ .I OT'="" S:'$$CHECK^ISPRAV("otd",OT) R=$$UL^TXTU(OT),OT=$S($D(^BUF($J,"ot",R)):^(R),1:$$ADDOT^YISPRAV(OT,1)),^BUF($J,"ot",R)=OT
+ .I DL'="" S:'$$CHECK^ISPRAV("doljn",DL) R=$$UL^TXTU(DL),DL=$S($D(^BUF($J,"dl",R)):^(R),1:$$ADDFN^ISPRAV("doljn",DL)),^BUF($J,"dl",R)=DL
+ .S:TN="" TN=$O(^KDR(""),-1)+1
+ .D SET^IKADRY(TN,"f",DT,$P(FIO," ",1))
+ .D SET^IKADRY(TN,"i",DT,$P(FIO," ",2))
+ .D SET^IKADRY(TN,"o",DT,$P(FIO," ",3))
+ .D SET^IKADRY(TN,"pol",DT,X)
+ .D:DTR SET^IKADRY(TN,"bdate",DT,DTR)
+ .I OT D SET^IKADRY(TN,"otd",DT,OT) s ^BUF($J,"otx",OT)=""
+ .I SP D SET^IKADRY(TN,"spec",DT,SP) s ^BUF($J,"spx",SP)=""
+ .I DL D SET^IKADRY(TN,"doljn",DT,DL) s ^BUF($J,"dlx",DL)=""
+ .S X=$P(A,"|",7)
+ .D:X'="" SET^IKADRY(TN,"mphone",DT,X)
+ .S X=$P(A,"|",8)
+ .D:X'="" SET^IKADRY(TN,"tel",DT,X)
+ D CR^RWU
+ S A=+$G(^MN("spec"))
+ S SP="" F  S SP=$O(^BUF($J,"spx",SP)) Q:SP=""  S ^MN(A,SP,"use")=1
+ S A=+$G(^MN("otd"))
+ S OT="" F  S OT=$O(^BUF($J,"otx",OT)) Q:OT=""  S ^MN(A,OT,"use")=1
+ k ^BUF($J,"sp"),^("ot"),^("spx"),^("otx")
+ Q
+CONVERT ; ^PKD -> ^KDR
+ N TN,PL,DT,R,SP,OT,X
+ S DT=$$DI^DTUTL("010110")
+ S TN="" F  S TN=$O(^P(TN)) Q:TN=""  D
+ .S X=$G(^P(TN,"V")) Q:X="" 
+ .S ^PKD(TN,"f")=$P(X,"/",2)
+ .S ^PKD(TN,"i")=$P(X,"/",3),^PKD(TN,"o")=$P(X,"/",4)
+ .S ^PKD(TN,"otd")=+$E(X,3,5)
+ .S ^PKD(TN,"spec")=+$E(X,1,2)
+ S TN="" F  S TN=$O(^PKD(TN)) Q:TN=""  D
+ .S PL="" F  S PL=$O(^PKD(TN,PL)) Q:PL=""  D
+ ..S R=^(PL) D SET^IKADRY(TN,PL,DT,R) W "."
+ W "OK",!
+ Q

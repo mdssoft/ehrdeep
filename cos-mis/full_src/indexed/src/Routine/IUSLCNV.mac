@@ -1,0 +1,24 @@
+IUSLCNV ; Конвертирование услуг [ 10/30/2017  1:56 AM ]
+A ; Convert ^BCE -> ^ZFN
+ W !,"^BCE -> ^ZFN",!
+ W "Continue <N>:" R R Q:R'="Y"  W !,"Processing"
+ S IDX=1 K ^ZNF,^PNF,^ZNFL
+ S NIB=-1 F  S NIB=$N(^BCE(NIB)) Q:NIB=-1  D
+ .S CE1=-1 F  S CE1=$N(^BCE(NIB,CE1)) Q:CE1=-1  S DTT=-1 F  S DTT=$N(^BCE(NIB,CE1,DTT)) Q:DTT=-1  S CE2=-1 F  S CE2=$N(^BCE(NIB,CE1,DTT,CE2)) Q:CE2=-1  D
+ ..S VR=-1 F  S VR=$N(^BCE(NIB,CE1,DTT,CE2,VR)) Q:VR=-1  S OT=-1 F  S OT=$N(^BCE(NIB,CE1,DTT,CE2,VR,OT)) Q:OT=-1  D
+ ...S K=^BCE(NIB,CE1,DTT,CE2,VR,OT),DIA=$P(K,"/",3)
+ ...S USL=+(CE1_$E("00",1,3-$L(CE2))_CE2)
+ ...S DTX=$S(DTT<54422:$$redt(DTT),1:DTT) ; fix ^TG bug
+ ...I $D(^BTN(NIB)) S REZ=$$ADD^IUSL(VR,DTT,OT,NIB,USL,DIA,"","","","",""),IDX=IDX+1 W:IDX#1000=0 !,IDX
+ W !,"OK",!,IDX
+ Q
+redt(X) 
+ S X=$$DT^DTUTL(X),$E(X,7,8)=20
+ Q $$DI^DTUTL(X)
+RETR ;
+ W !,"Processing" S IDX=1
+ Q
+CLR W !,"Processing" S IDX=1
+ S NIB=-1 F  S NIB=$N(^BCE(NIB)) Q:NIB=-1  D
+ .S CE1=-1 F  S CE1=$N(^BCE(NIB,CE1)) Q:CE1=-1  S DTT=-1 F  S DTT=$N(^BCE(NIB,CE1,DTT)) Q:DTT=-1  K:DTT<60266 ^BCE(NIB,CE1,DTT) S IDX=IDX+1 W:IDX#1000=0 "."
+ W "OK",!,IDX,!

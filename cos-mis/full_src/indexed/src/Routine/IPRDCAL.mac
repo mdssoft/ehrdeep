@@ -1,0 +1,24 @@
+IPRDCAL ; Производственный календарь [ 08/17/2018  1:58 PM ]
+ ; ^KDRM("prodcal",+$H)=1/2-полный/сокращенный
+IMP 
+ ; Импорт csv из:
+ ; http://data.gov.ru/opendata/7708660670-proizvcalendar
+ ; выходные и сокращенные дни
+ N %J,A,M,Y,R,D,I,DT
+ D ORH^RWU
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  D
+ .S Y=$P(A,"|",1) Q:Y<$$YEAR^DTUTL(+$H)
+ .F M=1:1:12 S R=$P(A,"|",1+M) D:R'=""
+ ..F I=1:1:$L(R,",") S D=$P(R,",",I),DT=$$DI^DTUTL($TR(D,"*","")_"."_M_"."_Y),^KDRM("prodcal",DT)=$S(D["*":2,1:1)
+ D CR^RWU
+ Q
+GET(DS,DE,FH,HH) ; Получить количество рабочих часов
+ ; DS - начальная дата
+ ; DE - конечная дата
+ ; FH - полный рабочий день, час
+ ; HH - сокращенный раб. день, час
+ S:'$G(FH) FH=8 S:'$G(HH) HH=7
+ N D,S,X
+ S S=0
+ F D=DS:1:DE S X=$G(^KDRM("prodcal",D)),S=S+$S(X=2:HH,X:0,1:FH)
+ Q S

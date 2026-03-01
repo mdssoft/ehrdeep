@@ -1,0 +1,147 @@
+NWSALE ; Продажа со склада [ 04/18/2018  0:51 AM ]
+INIT 
+ N CF S CF=+$G(^cfg("rasp-mk-alllpu"))
+ D OWF^RWU(".xmlb")
+ D W^RWU(^PP(0,1)_"<nb_console><wseller><tp>")
+ D BTPLST^IBILL(,,"kssl")
+ D W^RWU("</tp><vr>")
+ D FLST^NVFIND("","","",0,CF,1)
+ D W^RWU("</vr>")
+ D WTAGD^RWU("pb",$$LCL^IUSER("wsale","real-in-wrh"))
+ D W^RWU("</wseller></nb_console>")
+ D C^RWU
+ Q
+CLR ; Очистить чек
+ K ^JOB(%JOB,"wsale")
+ Q
+ADDI(ID,SKD,CNT,SS) ; Добавить товар в чек
+ ; ID - код номенклатуры
+ ; SS - розничная стоимость 
+ ; SKD - скидка
+ I ID="" Q 
+ N X,ST,S,R
+ S SKD=$G(SKD),SKD=$S(SKD="":"",1:"~"_SKD),CNT=+$G(CNT)
+ S:'CNT CNT=1
+ S S=$P(ID,"@",2),ID=$P(ID,"@",1)
+ S ST=$$stk()
+ S X=$G(^JOB(%JOB,"wsale",ID_"~"_S_SKD))
+ I $$LCL^IUSER("wsale","real-in-wrh") S R=$$RESTS^IWRH(ST,ID) S:(R-X-CNT)<0 CNT=R-X S X=X+CNT I CNT'>0 D TAB Q  
+ S ^JOB(%JOB,"wsale",ID_"~"_S_SKD)=X
+ D TAB
+ Q
+DELI(ID) ; Удалить товар из чека (на 1 шт.)
+ I ID="" Q 
+ S ^(ID)=$G(^JOB(%JOB,"wsale",ID))-1
+ K:^(ID)'>0 ^(ID)
+ D TAB
+ Q
+TAB ; Show table
+ D OWF^RWU(".txt")
+ N ID,S,C,I,SKD,STK,SS
+ S ID="",S=0
+ F  S ID=$O(^JOB(%JOB,"wsale",ID)) Q:ID=""  D
+ .S C=^(ID),I=$P(ID,"~",1),SKD=$P(ID,"~",3),SS=$P(ID,"~",2)
+ .S SKD=$S(SKD>0:100-SKD*0.01,1:1) S S=C*SS*SKD+S
+  
+ D WC^RWU($TR(S,".",",")_"|Наименование|Кол-во|Цена|Сумма|Со скидкой")
+ S ID="" F  S ID=$O(^JOB(%JOB,"wsale",ID)) Q:ID=""  D
+ .S C=^(ID),I=$P(ID,"~",1),SKD=$P(ID,"~",3),S=$P(ID,"~",2)
+ .S SKD=$S(SKD>0:100-SKD*0.01,1:1)
+ .D WC^RWU(CR_ID_"|"_$$NAMENM^IWRHS(I)_"|"_C_"|"_$J(S,0,2)_"|"_$J(S*C,0,2)_"|"_$J(S*C*SKD,0,2))
+ D C^RWU
+ Q
+PAY(IDK,SUM,TP,COM,WHO,NN) ; Оплата
+ ; TP - тип платежа
+ ; COM - примечание
+ ; WHO - агент
+ ; NN - номер карты 
+ N A,BN,ID,C,REZ,OT,ST,X,N,SK,SKX,VV,SA,IW,LP,S,SS
+ S COM=$$WD^TXTU(COM),WHO=$G(WHO)
+ S VV=(SUM<0) ; Возврат
+ I VV,$$LCL^IUSER("wsale","nreturn") Q  ; запрет возврата
+ 
+ S LP=$$^I("ilpu")
+ S ST=$$stk()
+ S IW=$$LCL^IUSER("wsale","real-in-wrh")
+ 
+ S (A,ID,SS)="" F  S ID=$O(^JOB(%JOB,"wsale",ID)) Q:ID=""  D
+ .S C=^(ID),X=$P(ID,"~",1),SKX=$P(ID,"~",3),SK=SKX
+ .I IW,'VV S N=$$RESTS^IWRH(ST,X) S:C>N C=N Q:C'>0
+ .S S=$P(ID,"~",2)*C
+ .S:SK SK=$S(SK>0:100-SK*0.01,1:1),S=S*SK,$P(X,"@",3)=S
+ .S:VV C=-C
+ .S:C'=1 $P(X,"@",2)=C
+ .S:SKX $P(X,"@",4)=SKX
+ .S A=$S(A="":"",1:A_"/")_X,SS=SS+S
+ I A="" D MSG^RWU("На складе отсутствует выбранный товар") Q  ; нет номенклатуры
+ S SA="WRH:"_A_$S($G(NN)="":"",1:":N:"_$TR(NN,":"," "))
+ S:VV SS=-SS ; обратное преобразование при возврате
+ S BN=$$SALE^IBILL($H,SS,TP,IDK,SA,COM,"REZ")
+ S:WHO="" WHO=$$KDR^IUSER() S OT=$$OTD^IKADRY(WHO)
+ ; сумма списания вычисл. ! (пока игнор оплаты)
+ D:BN'="" SUB^IWRH(+LP,OT,WHO,$TR(A,"/","|"),ST,1,"","BILLC:"_REZ,SS)
+ K ^JOB(%JOB,"wsale")
+ D MSG^RWU("OK:"_BN)
+ Q 
+stk() ; Получение склада
+ N ST,L
+ S L=$$^I("ilpu")
+ S ST=$$VRSTK^IWRHS($$KDR^IUSER(),0,1) ; ; аптечный
+ S:ST="" ST=$$LPUSTK^IWRHS(L,1) ; аптечный
+ S:ST="" ST=$$LPUSTK^IWRHS(L) ; любой
+ Q ST
+FNDNML(TXT,BAR) ; Номенклатура по профилю, с ценой из сущ. на складе
+ N LP,ID,R,A,NM,S,BS,ST,IW,RS,STX,ARR,TC,SI,DT,SLL
+ S IW=$$LCL^IUSER("wsale","real-in-wrh")
+ ;I '($$LCL^IUSER("wsale","in-wrh")!IW) D NMLSTCN^NWRHS("",TXT,$G(BAR)) Q
+ D OWF^RWU(".txt"),WC^RWU("|Наименование|Ед.изм."_$S(IW:"|Остаток",1:"")_"|Цена")
+ S TXT=$$LU^TXTU($$WD^TXTU(TXT)),BAR=$G(BAR),ID=""
+ S LP=$$^I("ilpu"),STX=$$stk(),DT=+$H
+ 
+ ; Текущие выбранные
+ S R="" F  S R=$O(^JOB(%JOB,"wsale",R)) Q:R=""  D
+ .S SLL($P(R,"~",1,2))=^JOB(%JOB,"wsale",R)
+ 
+ S ST="" F  S ST=$O(^WRH(ST)) Q:ST=""  S A=$P($G(^WRHM("stock",ST)),"|",4) D:$S(STX'="":ST=STX,A="":1,1:A=LP) 
+ .Q:ST["|"  ; только простые склады
+ .S ID="" F  S ID=$O(^WRH(ST,ID)) Q:ID=""  D
+ ..S R=$G(^WRHE(ID)) Q:R="" 
+ ..Q:+$P(R,"|",15) 
+ ..I '$D(^(ID,"f")),'$D(^("tc")) Q 
+ ..S NM=$P(R,"|",1),S=$P($G(^("f")),"|",1),TC=$G(^("tc"))
+ ..Q:S=""&(TC="")  
+ ..I BAR'="",$G(^("a"))'=BAR Q 
+ ..I TXT'="",$$LU^TXTU(NM)'[TXT Q
+ ..S RS=$$RESTS^IWRH(ST,ID),BS=S
+ ..I IW,RS'>0 Q 
+ ..I S'="" S RS=RS-$G(SLL(ID_"~"_S)) D lnnml(S) Q   ; фикс.цена
+ ..D RESTBS^IWRH(ST,ID,"ARR","")
+ ..S SI="" F  S SI=$O(ARR(SI)) Q:SI=""  D
+ ...S S=$$CCENN^IWRHS(TC,ID,DT,SI) Q:'S 
+ ...S RS=ARR(SI)-$G(SLL(ID_"~"_S))
+ ...D lnnml(S)
+ D C^RWU
+ Q
+lnnml(S) ; Вывод строки номенклатуры
+ D WC^RWU(CR_ID_"@"_S_"|"_NM_"|"_$$NAME^IWRHS("means",+$P(R,"|",5))_$S(IW:"|"_RS,1:"")_"|"_S)
+ Q
+setSYS ; Обновить индексы BILLC в WRH
+ N ST,ID,H,D,T,R,L
+ S ST="" F  S ST=$O(^WRH(ST)) Q:ST=""  D:$S(ST'["|":1,$P(ST,"|",1)="":1,1:0)
+ .S ID="" F  S ID=$O(^WRH(ST,ID)) Q:ID=""  D
+ ..S H="" F  S H=$O(^WRH(ST,ID,H)) Q:H=""  D
+ ...S D=$P(H,",",1),T=$P(H,",",2)
+ ...S R=^(H),L=$P($P(R,"|",5),"@",2) Q:$P(R,"|",11)'="" 
+ ...Q:L=""
+ ...Q:'$D(^BILLC(L,D,"sl",T)) 
+ ...W "."
+ ...S $P(^WRH(ST,ID,H),"|",11)="BILLC:"_H
+ ...D GL^IEXCH("^WRH",ST,ID,H)
+ Q
+REGLCL ;
+ K ^LCLI("wsale")
+ S ^LCLI("wsale")="Продажа товара"
+ S ^LCLI("wsale","in-wrh")="Продажа только зарегистрированного на складе текущего ЛПУ"
+ S ^LCLI("wsale","real-in-wrh")="Продажа по фактическим остаткам на складе"
+ S ^LCLI("wsale","nreturn")="Запрет возвратов"
+ Q

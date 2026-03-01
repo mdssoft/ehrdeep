@@ -1,0 +1,216 @@
+YIMHU ; Утилиты ЭИБ [ 05/17/2023  3:14 PM ]
+AUTOSBS(DT,HALF) ; Подписать все на дату
+ ; HALF - 0/1 - только частично подписанные док-ты
+ N N,ID,R
+ I '$D(%LOG) N %LOG,%JOB S %LOG="sys",%JOB=77777
+ S HALF=+$G(HALF),N=""
+ F  S N=$O(^EPRI("dt",DT,N)) Q:N=""  S ID="" F  S ID=$O(^EPRI("dt",DT,N,ID)) Q:ID=""  D
+ .S R=$G(^EPR(N,ID,"s")) Q:$P(R,"|",1)=1 
+ .I HALF S R=$O(^("s","")) Q:R=""  Q:$P($G(^(R)),"|",1)'=2 
+ .D SBSC^YIMH(N,ID,0,"")
+ K %B,%L
+ Q
+AUTOUDEL(DT,HALF) ; Удалить все неподписанное на дату
+ ; HALF = 0/1 - и частично подписанные док-ты
+ N N,ID,R,FL,X,K,T,D
+ I '$D(%LOG) N %LOG,%JOB S %LOG="sys",%JOB=77777
+ S HALF=+$G(HALF),N=""
+ F  S N=$O(^EPRI("dt",DT,N)) Q:N=""  S ID="" F  S ID=$O(^EPRI("dt",DT,N,ID)) Q:ID=""  D
+ .S R=$G(^EPR(N,ID,"s")) Q:+$P(R,"|",1)=1 
+ .I HALF S R=$O(^("s","")) Q:R=""  Q:$P($G(^(R)),"|",1)'=2
+ .D DELsys^YIMH
+ K %B,%L
+ Q
+INTXT ; Автосоздание документа из импортируемого текста
+ N %J,A,ST,ALI,NM1,NM2,ID,PL,FL,TP,TXT,ADD,DEF,FLD,IP,K,LI,GRP,PRM,J,PP,PV
+ S ALI("заключение")="заключение"
+ S ALI("протокол")="протокол"
+ S ALI("жалобы")="jalob"
+ S ALI("рекомендации")="рекомендации"
+ S ALI("рекомендована")="рекомендации"
+ S ALI("рекомендовано")="рекомендации"
+ S ALI("направления")="направления"
+ S ALI("исследование")="исследование"
+ ;S ALI("")=""
+ 
+ S DEF("направлен","@lst")="fnc:$$LSTVRL^NIMHFN(2)",DEF("направлен","@tit")="Направление от",DEF("направлен","@tp")="s"
+ 
+ S FLD=1,ST=0,ID=""
+ 
+ D ORH^RWU
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D
+ .S J=$$TRIM^TXTU(A),K="" S:$E(J,1)="#" K=$$UL^TXTU($E(J,1,5))
+ .I ST=2,$E(K,1)="#",$L(ID),$L(FL),$L(TXT) S ^EPRPT(" ",ID,"default",FL)=$$TRIM^TXTU(TXT)
+ .I $E(K,1,5)="#add#" S A=$$TRIM^TXTU($P(A,"#",3,99)) M:$L(A) ADD(A)=DEF(A) Q  ; конфигурируемые общие поля по умолчанию
+ .I $E(K,1,5)="#fld#" S FLD=$$TRIM^TXTU($P(A,"#",3,99)) Q 
+ .I $E(K,1,4)="#new" D:ST initDOC S (NM1,NM2,TXT,FL,PL)="",(ST,IP)=1,ID=$O(^DTYPE(""),-1)+1 D initPRE Q 
+ .I $E(K,1,4)="#h1#" S NM1=$$TRIM^TXTU($P(A,"#",3,99)) Q 
+ .I $E(K,1,4)="#h2#" S NM2=$$TRIM^TXTU($P(A,"#",3,99)) Q 
+ .I $E(K,1,2)="#f" D:$L(ID)  Q 
+ ..S TP=$$UL^TXTU($P(A,"#",2)),PRM=$P(TP,"@",2),TP=$E($P(TP,"@",1),2,4)
+ ..S:TP="" TP="m"
+ ..S PL=$$TRIM^TXTU($P(A,"#",3)),FL=$$TRIM^TXTU($P(A,"#",4)),GRP=$$TRIM^TXTU($P(A,"#",5))
+ ..S FL=$$reFL($S($L(FL):FL,1:$TR(PL,",.;/","")))
+ ..S ^DTYPE(ID,"fields",FL)=IP
+ ..S ^DTYPE(ID,"fields",FL,"@tp")=TP,^("@tit")=PL
+ ..S:GRP'="" ^DTYPE(ID,"fields",FL,"@grp")=GRP
+ ..S:TP="m" ^("@h")="v"
+ ..F J=1:1:$L(PRM,",") S PP=$P(PRM,",",J),PV=$P(PP,"=",2),PP=$P(PP,"=",1) D  
+ ...S:PP="l" ^("@br")=0 
+ ...S:PP="h" ^("@h")=$S(PV="v":PV,1:$$NNUM^TXTU(PV))
+ ...S:PP="w" ^("@w")=$$NNUM^TXTU(PV)
+ ...S:PP="nn" ^("@nn")=1
+ ...S:PP="ro" ^("@ro")=1
+ ..S ST=2,IP=IP+1,TXT=""
+ .I $E(K,1,2)="#c" S:FL'="" ^DTYPE(ID,"fields",FL,"@c")=$$TRIM^TXTU($P(A,"#",3,99)) Q  ; описание поля (примечание)
+ .I $E(K,1,2)="#l" D  Q  ; справочники
+ ..S ST=3,LI=1,^DTYPE(ID,"fields",FL,"@lst")=FL
+ .I ST=3,'$L(A) S ST=2 Q 
+ .I ST=3 S ^DTYPE(ID,"list",FL,LI)=$$TRIMR^TXTU(A),LI=LI+1
+ .S:ST=2&$L(A) TXT=$S($L(TXT):TXT_CR,1:"")_A ; шаблон по умолчанию
+ I ST=2,$L(TXT),$L(ID),$L(FL) S ^EPRPT(" ",ID,"default",FL)=$$TRIM^TXTU(TXT)
+ D:ST initDOC
+ D CR^RWU 
+ Q
+initPRE 
+ N I
+ M ^DTYPE(ID,"fields")=ADD
+ S I="" F  S I=$O(^DTYPE(ID,"fields",I)) Q:I=""  S ^DTYPE(ID,"fields",I)=IP,IP=IP+1
+ Q
+initDOC 
+ N I
+ S ^DTYPE(ID,"ext")="rpt"
+ S ^DTYPE(ID,"folder")=FLD
+ S ^DTYPE(ID,"rights")="aaa"
+ S ^DTYPE(ID,"tname")=$$reNM(NM1_$S($L(NM2):" "_NM2,1:""))
+ D defINPL(ID)
+ D MKPAT^YIMHS(ID)
+ D MKPRN^YIMHS(ID)
+ S I="" F  S I=$O(^BUFH(%JOB,".txt",I)) Q:I=""  S ^DTYPE(ID,"print",I)=$$WD^TXTU(^BUFH(%JOB,".txt",I))
+ K ^BUFH(%JOB,".txt")
+ Q
+reFL(X) ; 
+ S X=$$DBLSP^TXTU($$UL^TXTU($TR(X,"-,.;:+="," ")))
+ I $D(ALI(X)) Q ALI(X)
+ N I,L,W,R
+ S L=$L(X," ")
+ I L=1 Q $E(X,1,32)
+ S R="" F I=1:1:L S W=$P(X," ",I) S:$L(W)>7 W=$E(W,1,5) S R=$S($L(R):R_"_",1:"")_W
+ Q R
+reNM(X) 
+ Q $$LU^TXTU($E(X,1))_$$UL^TXTU($E(X,2,999))
+defINPL(ID) ; Добавить поля по умолчанию в документ
+ S ^DTYPE(ID,"fields","date","@src")="int:date",^("@sw")=0,^("@tp")="n",^("@w")=""
+ S ^DTYPE(ID,"fields","dfio","@src")="int:dfio",^("@sw")=0,^("@tp")="n",^("@w")=""
+ S ^DTYPE(ID,"fields","lpu","@src")="int:lpu",^("@sw")=0,^("@tp")="n",^("@w")=""
+ S ^DTYPE(ID,"fields","lpuaddr","@src")="int:lpuaddr",^("@sw")=0,^("@tp")="n",^("@w")=""
+ S ^DTYPE(ID,"fields","lpuphone","@src")="int:lpuphone",^("@sw")=0,^("@tp")="n",^("@w")=""
+ S ^DTYPE(ID,"fields","pfio","@src")="int:pfio",^("@sv")=0,^("@sw")=0,^("@tp")="n",^("@w")=""
+ S ^DTYPE(ID,"fields","pnum","@src")="int:pnum",^("@sv")=0,^("@sw")=0,^("@tp")="n",^("@w")=""
+ S ^DTYPE(ID,"fields","time","@src")="int:time",^("@sw")=0,^("@tp")="n",^("@w")=""
+ S ^DTYPE(ID,"fields","age","@src")="int:p_age",^("@sw")=0,^("@tp")="n",^("@w")=""
+ Q
+REIDX ; Обновить индексы
+ N TP,DT,OW,NI,ID,I
+ S NI="",I=0
+ F  S NI=$O(^EPR(NI)) Q:NI=""  S ID="" F  S ID=$O(^EPR(NI,ID)) Q:ID=""  D
+ .S TP=+$G(^(ID,"t")) Q:'TP 
+ .S DT=+$P($G(^("dt")),"|",1) Q:'DT 
+ .S OW=$G(^("o")) Q:$P(OW,"|",1)'="D"  S OW=$P(OW,"|",2)
+ .S ^EPRI("dt",DT,NI,ID)=""
+ .S ^EPRI("t",NI,TP,ID)=OW
+ .S ^EPRI("nd",NI,DT,ID)=TP_"|"_OW
+ .W:I#100=0 "." S I=I+1
+ W !,"Processed "_I_" documents"
+ Q
+TPLST(USE) ; Типы документов ЭИБ
+ N ID,NM,FLD,FNM,BUF
+ D OWF^RWU(".txt")
+ D WC^RWU("Раздел|Наименование типа документа|Код")
+ S ID="" F  S ID=$O(^DTYPE(ID)) Q:ID=""  D
+ .S NM=$G(^(ID,"tname"))
+ .I USE Q:$G(^("use"))=0  Q:$G(^("hidden"))  
+ .S FLD=+$G(^("folder"))
+ .S BUF(FLD_"|"_NM)=ID
+ S ID="" F  S ID=$O(BUF(ID)) Q:ID=""  D
+ .S FLD=$P(ID,"|",1),NM=$P(ID,"|",2,9)
+ .D WC^RWU(CR_$G(^DFLD(FLD,"name"))_"|"_NM_"|"_BUF(ID))
+ D C^RWU
+ Q
+EXPXBUF(ANON) ; Экспорт ЭМК в XML для списка пациентов в ^BUF("x"
+ N NI,ENI,ID,HH,X,II
+ D OWF^RWU(".xml")
+ D W^RWU("<?xml version=""1.0"" encoding=""windows-1251""?>")
+ D W^RWU("<InterchangeEnvelope version=""1.0""><Head>")
+ D WTAGC^RWU("DocID","Выгрузка карт пациентов")
+ S HH=$H
+ D WTAG^RWU("Timestamp",$$DTISO^DTUTL(HH)_"T"_$$TIME^DTUTL(HH)_".000")
+ D W^RWU("</Head><Body><ElectronicPatientRecords>")
+ S II="" F  S II=$O(^BUF("x",II)) Q:II=""  D 
+ .S NI=$P(^(II),"|",1),ENI=$P(^(II),"|",2)
+ .S ID="" F  S ID=$O(^EPR(NI,ID)) Q:ID=""  D
+ ..S X=$$SEBUF^IEPRU(NI,ID,ANON,ENI) Q:'X
+ ..D W^RWU("<item>"_CR)
+ ..D L^XMLU("^BUF",$J)
+ ..D W^RWU(CR_"</item>")
+ 
+ D W^RWU("</ElectronicPatientRecords></Body></InterchangeEnvelope>")
+ D C^RWU
+ Q
+EXPXFBUF(FN,ANON) ; В файл
+ N NI,ENI,ID,HH,X,II,IX,DEV
+ S:FN="" FN=$$dbdir^IJOURNAL("") ; TODO default namespace
+ S DEV=$$OW^FIL(FN)
+ D W^FIL("<?xml version=""1.0"" encoding=""windows-1251""?>",DEV)
+ D W^FIL("<InterchangeEnvelope version=""1.0""><Head>",DEV)
+ D WTAG^FIL("DocID","Выгрузка карт пациентов",DEV)
+ S HH=$H
+ D WTAG^FIL("Timestamp",$$DTISO^DTUTL(HH)_"T"_$$TIME^DTUTL(HH)_".000",DEV)
+ D W^FIL("</Head><Body><ElectronicPatientRecords>",DEV)
+ 
+ S IX=0
+ S II="" F  S II=$O(^BUF("x",II)) Q:II=""  D
+ .S NI=$P(^(II),"|",1),ENI=$P(^(II),"|",2)
+ .S ID="" F  S ID=$O(^EPR(NI,ID)) Q:ID=""  D
+ ..S X=$$SEBUF^IEPRU(NI,ID,ANON,ENI) Q:'X 
+ ..D W^FIL("<item>"_CR,DEV)
+ ..D LDEV^XMLU("^BUF",$J,"",DEV)
+ ..D W^FIL(CR_"</item>",DEV)
+ ..S IX=IX+1
+ 
+ D W^FIL("</ElectronicPatientRecords></Body></InterchangeEnvelope>",DEV)
+ D C^FIL(DEV)
+ D MSG^RWU("Записей"_CR_IX)
+ Q
+EXPDT(DS,DE,FN,ANON) 
+ N NI,ENI,ID,HH,X,II,IX,DEV,ENIV,TMPE
+ S:FN="" FN=$$dbdir^IJOURNAL("") ; TODO default namespace
+ S DEV=$$OW^FIL(FN)
+ D W^FIL("<?xml version=""1.0"" encoding=""windows-1251""?>",DEV)
+ D W^FIL("<InterchangeEnvelope version=""1.0""><Head>",DEV)
+ D WTAG^FIL("DocID","Выгрузка карт пациентов",DEV)
+ S HH=$H
+ D WTAG^FIL("Timestamp",$$DTISO^DTUTL(HH)_"T"_$$TIME^DTUTL(HH)_".000",DEV)
+ D W^FIL("</Head><Body><ElectronicPatientRecords>",DEV)
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ 
+ S IX=0,ENIV=1,ENI=0
+ S DT=DS-1 F  S DT=$O(^EPRI("dt",DT)) Q:DT=""!(DT>DE)  D
+ .S NI="" F  S NI=$O(^EPRI("dt",DT,NI)) Q:NI=""  D
+ ..S ID="" F  S ID=$O(^EPRI("dt",DT,NI,ID)) Q:ID=""  D
+ ..I ANON S ENI=$G(ENIV(NI)) S:ENI="" ENI=ENIV+1,ENIV(NI)=ENI
+ ..S X=$$SEVAR^IEPRU(NI,ID,ANON,ENI,"TMPE") Q:'X 
+ ..D W^FIL("<item>"_CR,DEV)
+ ..D LDEV^XMLU("TMPE","",DEV)
+ ..D W^FIL(CR_"</item>",DEV)
+ ..S IX=IX+1
+ 
+ D W^FIL("</ElectronicPatientRecords></Body></InterchangeEnvelope>",DEV)
+ D C^FIL(DEV)
+ U 0 W !,"Записей: "_IX
+ Q
+REGIPROC ;
+ S ^IPROC("Система","ЭМК","Типы документов ЭИБ")="TPLST_YIMHU,1,1,t@string:1/Действующие#0/Все,Показыть документы"
+ S ^IPROC("Система","ЭМК","Экспорт ЭМК в XML")="EXPXBUF_YIMHU,16,1,t@string:1/Да#0/Нет,Анонимный экспорт"
+ S ^IPROC("Система","ЭМК","Экспорт ЭМК в XML файл")="EXPXFBUF_YIMHU,1,2,s,Имя файла,t@string:1/Да#0/Нет,Анонимный экспорт"
+ Q

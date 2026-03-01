@@ -1,0 +1,77 @@
+NETIFD ; Network Infodent connection [ 07/23/2007  9:28 AM ]
+DO 
+ N FUN,HH,D,I,R,X
+ K ^IFD
+ S HH="ib2net(""192.168.99.150:c:\Data\DENTBASE008.GDB"",""CHEA"",""PDNTP"","""
+ U 0 W !,"PAYREF"
+ S FUN=HH_"select * from PAYREF;"")"
+ ; U 0 W !,FUN,!
+ S D=$$RUN(FUN,"192.168.99.150")
+ I D'="" F  S R=$$READ(D) Q:R=""  Q:R="OK"  D
+ .S I=$P(R,"|",1),R=$$WD^TXTU(R)
+ .S ^IFD("PAYREF",I)=$P(R,"|",2,99)
+ D CLOSE
+ U 0 W !,"DOCTOR"
+ ; S FUN=HH_"select DOCTOR.DOCTCODE, DOCTOR.DNAME, DEPARTMENTS.DEPCODE,DOCTMAINSPEC.speccode from DOCTOR, DOCTMAINSPEC, DEPARTMENTS where DOCTOR.dcode=DOCTMAINSPEC.dcode and DOCTOR.DEPNUM=DEPARTMENTS.depnum and DEPARTMENTS.dept;"")"
+ S FUN=HH_"select DOCTOR.DCODE,DOCTOR.DNAME,DOCTMAINSPEC.speccode from DOCTOR,DOCTMAINSPEC where DOCTOR.dcode=DOCTMAINSPEC.dcode;"")"
+ ; U 0 W !,FUN,!
+ S D=$$RUN(FUN,"192.168.99.150")
+ I D'="" F  S R=$$READ(D) Q:R=""  Q:R="OK"  D
+ .S I=$P(R,"|",1),R=$$WD^TXTU(R)
+ .S ^IFD("DOCTOR",I)=$P(R,"|",2,99)
+ D CLOSE
+ U 0 W !,"DEPARTMENT"
+ S FUN=HH_"select DEPCODE, DEPNAME from DEPARTMENTS;"")"
+ ; U 0 W !,FUN,!
+ S D=$$RUN(FUN,"192.168.99.150")
+ I D'="" F  S R=$$READ(D) Q:R=""  Q:R="OK"  D
+ .S I=$P(R,"|",1),R=$$WD^TXTU(R) Q:I="" 
+ .S ^IFD("DEPARTMENT",I)=$P(R,"|",2,99)
+ D CLOSE
+ U 0 W !,"CLIENTS"
+ S FUN=HH_"select PCODE,HISTNUM,LASTNAME as fiof,FIRSTNAME as fioi,MIDNAME as fioo,POL,BDATE,ADDR as street,PHONE1 as tel1,PHONE2 as tel2,PASPSER as paspser,PASPNUM as paspnum,PASPPLACE as paspplace from CLIENTS;"")"
+ ;U 0 W !,FUN,!
+ S D=$$RUN(FUN,"192.168.99.150")
+ I D'="" F  S R=$$READ(D) Q:R=""  Q:R="OK"  D
+ .S I=$P(R,"|",1),R=$$WD^TXTU(R)
+ .S ^IFD("CLIENTS",I)=$P(R,"|",2,99)
+ D CLOSE
+ U 0 W !,"INCOM"
+ S FUN=HH_"select I.PCODE,I.PAYNUM,I.OPDATE,C.HISTNUM,I.PAYDATE,I.AMOUNTRUB,I.DCODE,I.PAYCODE,I.ORDERNO from INCOM I,CLIENTS C where I.PCODE=C.PCODE and I.PAYDATE>'01.01.2000';"")"
+ ; U 0 W !,FUN,!
+ S D=$$RUN(FUN,"192.168.99.150")
+ I D'="" F  S R=$$READ(D) Q:R=""  Q:R="OK"  D
+ .S I=$P(R,"|",1),X=$P(R,"|",2),R=$$WD^TXTU(R)
+ .S ^IFD("INCOM",I,X)=$P(R,"|",3,99)
+ D CLOSE
+ U 0 W !,"AVANS"
+ S FUN=HH_"select PCODE,ID,AMOUNTRUB,PAYDATE,MODIFYDATE from CLAVANS where PAYDATE>'01.01.2000';"")"
+ ; U 0 W !,FUN,!
+ S D=$$RUN(FUN,"192.168.99.150")
+ I D'="" F  S R=$$READ(D) Q:R=""  Q:R="OK"  D
+ .S I=$P(R,"|",1),X=$P(R,"|",2),R=$$WD^TXTU(R)
+ .S ^IFD("AVANS",I,X)=$P(R,"|",3,99)
+ D CLOSE
+ U 0 W !,"TREAT"
+ S FUN=HH_"select pcode, treatcode, treatdate, dcode, AmountCl_Disc as SumRub, AmountJP_Disc JAmountRub from Treat where treatdate>'01.01.2000';"")"
+ ; U 0 W !,FUN,!
+ S D=$$RUN(FUN,"192.168.99.150")
+ I D'="" F  S R=$$READ(D) Q:R=""  Q:R="OK"  D
+ .S I=$P(R,"|",1),X=$P(R,"|",2),R=$$WD^TXTU(R)
+ .S ^IFD("TREAT",I,X)=$P(R,"|",3,99)
+ D CLOSE
+ Q
+RUN(FUN,HOST)   S SOC=1154
+ N DEV S %RSTR=""
+ O 56 U 56::"TCP" S DEV=$KEY 
+ U 56:DEV W /SOCKET(HOST,SOC) S ZC=$ZC I ZC Q ""
+ U 56:DEV W FUN_$C(13,10) S TIM=$P($H,",",2)
+ Q DEV
+READ(DEV) 
+ N S,CR,ZC S CR=$C(13,10),ZC=0
+ F  Q:%RSTR[CR  U 56:DEV R S:3600 S ZC=$ZC Q:ZC  S %RSTR=%RSTR_S
+ Q:ZC ""  S S=$P(%RSTR,CR,1),%RSTR=$P(%RSTR,CR,2,999)
+ Q S
+CLOSE 
+ C 56
+ Q

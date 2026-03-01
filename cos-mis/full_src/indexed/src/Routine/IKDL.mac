@@ -1,0 +1,276 @@
+IKDL ; KDL-Test routines [ 03/12/2018  4:43 PM ]
+DOSEND ; Отправка заявок
+ N DT,NI,ID,S3,CT,LAB,LP,NW
+ S CT=$G(^cfg("lab","noprnbar"))
+ S DT=$H-3 F  S DT=$O(^MLABI("d",DT)) Q:DT=""  D
+ .S ID="" F  S ID=$O(^MLABI("d",DT,ID)) Q:ID=""  D
+ ..S NI=^(ID)
+ ..S LAB=$P($G(^MLAB(NI,ID,"lab")),"|",1) Q:'LAB
+ ..Q:$G(^LABC(LAB,"uid"))'="kdlt" 
+ ..S S3=$P($G(^MLAB(NI,ID,"s3")),"|",1) Q:'S3  
+ ..Q:'$P($G(^("s31")),"|",1) 
+ ..I CT,'$P($G(^("s3")),"|",1) Q 
+ ..Q:$P($G(^("s4")),"|",1)=2
+ ..Q:$P($G(^("s9")),"|",1)
+ ..S LP=$P($G(^("s1")),"|",4)
+ ..Q:'$$MKSEND(NI,ID)  
+ ..D SETSTAT^IMLAB(NI,ID,4,2) ; у контрагента
+ Q
+DORECV(IDX) ; Получение исследований
+ ; запуск из IMSGHUB
+ D DOSEND
+ N LST,I,LAB,X,MOD
+ S LAB="" F  S LAB=$O(^LABC(LAB)) Q:LAB=""  I $G(^(LAB,"uid"))="kdlt" D  
+ .S X=$G(^("id"))
+ .S:X'="" LST(LAB,X)=""
+ .S I="" F  S I=$O(^LABC(LAB,"lpu",I)) Q:I=""  S X=$G(^(I,"id")) S:X'="" LST(LAB,X)="",LST(LAB,X,"nw")=$G(^("nw"))
+ 
+ ;S LAB="" F  S LAB=$O(LST(LAB)) Q:LAB=""  D
+ ;.S I="" F  S I=$O(LST(LAB,I)) Q:I=""  D GETALL(LAB,I)
+ Q
+MKSEND(NI,ID) 
+ N LAB,ALAB,I,J,R,C,U,a,req,pac,order,VR,LPU,DT,RV,X,%J,SID,LID,DTT,BIO
+ N USR
+ S LAB=$P($G(^MLAB(NI,ID,"lab")),"|",1)
+ Q:'LAB 0
+ S DTT=+$G(^MLAB(NI,ID))
+ S:'DTT DTT=+$H
+ S R=$G(^MLAB(NI,ID,"s1"))
+ S VR=$P(R,"|",5),LPU=+$P(R,"|",4)
+ S ALAB=$G(^LABC(LAB,"lpu",LPU,"id"))
+ S:ALAB="" ALAB=$G(^LABC(LAB,"id"))
+ S:ALAB="" ALAB=LAB
+ Q:'$D(^cfg("lab","eml",ALAB)) 0
+ S RV=$G(^LABC(LAB,"lpu",LPU,"eid"))
+ S:RV="" RV=$G(^LABC(LAB,"eid"))
+ S USR=$G(^cfg("lab","eml",ALAB,"user"))
+ S DT=$$DTM^DTUTL($H)
+ 
+ S RR="<root><Header>"
+ S RR=RR_"<FileDate>"_$$DTISO^DTUTL(DT)_"</FileDate>"
+ S RR=RR_"<FileTime>"_$$TIME^DTUTL($H)_"</FileTime>"
+ S RR=RR_"<FileType>Order</FileType>"
+ S RR=RR_"<Version>4</Version>"
+ S:RV="" RV="kdltest_united"
+ S RR=RR_"<LaboratoryID>"_RV_"</LaboratoryID>"
+ S RR=RR_"<LaboratoryName>КДЛТЕСТ</LaboratoryName>"
+ S RR=RR_"<ClinicID>"_USR_"</ClinicID>"
+ S RR=RR_"<Direction>FromClinic</Direction>"
+ S RR=RR_"</Header>"
+ 
+ I $G(^cfg("lab","pemail")) D  
+ .S X=$$GET^IPAC(NI,"pemail",DTT) Q:X="" 
+ .S RR=RR_" patient_email_address="""_X_""" need_send_patient_email=""true"""
+ .D SETRT^IMLAB(NI,ID,"mail",1)
+ .Q:'$G(^MSGHUB("labeml",1,"slog")) 
+ .S D=$H,R=$O(^MSGSLOG("labeml",1,+D,""),-1)+1,^MSGSLOG("labeml",1,+D,R)="|"_X_"|"_NI_"|"_$H_"|"_D
+ 
+ S RR=RR_"<Order OrderID="""_^MLAB(NI,ID,"bar")_""">"
+ S RR=RR_"<Patient>"
+ 
+ S X=$G(^MLAB(NI,ID,"fl","ndbr"))
+ S:X RR=RR_"<PREGNANCY>"_X_"/<PREGNANCY>"
+ S X=$G(^MLAB(NI,ID,"fl","dcl"))
+ S:X RR=RR_"<CYCLE>"_X_"</CYCLE>"
+ S X=$G(^MLAB(NI,ID,"fl","sutdd"))
+ ;S:X RR=RR_" DiuresisMl="""_X_""" "
+ S:$G(^MLAB(NI,ID,"ci")) RR=RR_" Cito=""true"" "
+ ;S X=$G(^MLAB(NI,ID,"nt"))
+ ;S:$P(X,"|",1)'="" RR=RR_" DiagnosisCode="""_$$HTML^TXTU($P(X,"|",1))_""" "
+ ;S:$P(X,"|",2)'="" RR=RR_" Comment="""_$$HTML^TXTU($P(X,"|",2))_""" "
+ 
+ S RR=RR_"<LastName>"_$$TAG^TXTU($$GET^IPAC(NI,"fiof",DTT))_"</LastName>"
+ S RR=RR_"<FirstMiddleName>"_$$TAG^TXTU($$GET^IPAC(NI,"fioi",DTT)_" "_$$GET^IPAC(NI,"fioi",DTT))_"</FirstMiddleName>"
+ S RR=RR_"<DOB>"_$$DTISO^DTUTL($$GET^IPAC(NI,"datar",DTT))_"</DOB>"
+ S R=$$GET^IPAC(NI,"pol",+$H)
+ S RR=RR_"<Sex>"_$S(R=1:"M",R=2:"F",1:"U")_"</Sex>"
+ S RR=RR_"</Patient>"
+ 
+ S RR=RR_"<Tests>"
+ S BIO="" F  S BIO=$O(^MLAB(NI,ID,"mi",BIO)) Q:BIO=""  D
+ .S LOC=$$fndBIO^IMLABS(LAB,BIO) Q:LOC="" 
+ .S R=^MLAB(NI,ID,"ul")
+ .F I=1:1:$L(R,"|") d
+ ..S U=$P($P(R,"|",I),":",1),C=$P(U,"*",2),U=$P(U,"*",1)
+ ..S a=^LABTI("LAB",LAB,"CN",U)
+ ..S:'C C=1
+ ..F J=1:1:C S RR=RR_"<Test><TestShortName>"_a_"</TestShortName>" S:LOC'=0&(LOC'="") RR=RR_"<locus>"_LOC_"</locus></Test>" ; услуги LAB
+ S RR=RR_"</Tests>"
+ S RR=RR_"</Order></root>"
+ 
+ D POST("127.0.0.1",$TR($H,",","-")_".xml",RR)
+ Q
+ 
+ N FIL
+ S FIL=$G(^cfg("lab","kdlt","path"))
+ S:FIL="" FIL="C:\exchange\kdl-test\out\"
+ S FIL=$$OW^FIL(FIL_$TR($H,",","-")_".xml")
+ I FIL'="" U FIL W $$WU8^TXTU(RR) C:FIL'="" FIL
+ 
+ ;S LID=$G(XML("Message","Referral",$c(3)_"LisId"))
+ ;Q:LID="" 0
+ ;S $P(^MLAB(NI,ID,"lab"),"|",2)=LID
+ ; TODO S $P(^MLAB(NI,ID,"lab"),"|",3)=$$DTI^DTUTL(XML("Message",$c(3)_"Date"))
+ Q 1
+POST(IP,FN,TXT) 
+ N NET,X
+ S NET=$$OPEN^WWWCLI(IP,5051) Q:NET="" 
+ D OWBUF^WWWCLI(NET)
+ D WBUF^WWWCLI(NET,$$WU8^TXTU(TXT))
+ D CBUF^WWWCLI(NET)
+ D SETHDR^WWWCLI(NET,"Content-type","application/octet-stream")
+ S X=$$POST^WWWCLI(NET,"/"_FN)
+ D CLOSE^WWWCLI(NET)
+ Q
+LOADDTF(FN) ; Загрузить данные по пациенту из файла
+ N I,F,K
+ K ^BUF($J)
+ S F=$$OR^FIL(FN),K="",I=1
+ F  U F R R#1 Q:$$ST^FIL()=0  S K=K_R I $L(K)>7000 S ^BUF($J,"f",I)=K,K="",I=I+1
+ S:$L(K) ^BUF($J,"f",I)=K
+ C F
+ D LOADDT
+ Q
+LOADDT ; Загрузить данные по пациенту
+ N R,I,FIOF,FIOI,FIOO,BD,SEX,M,TT,ID,IDT,IDX,IDS,NM
+ S (FIOF,FIOI,FIOO,BD,SEX)="",M=0
+ D OEV^XMLR("LDDTS^IKDL","LDDT^IKDL","LDDTE^IKDL")
+ F I=1:1 Q:'$D(^BUF($J,"f",I))  S R=^(I) D REV^XMLR(R)
+ D CEV^XMLR
+ K ^BUF($J,"f")
+ S NI=$$GETNIB^IPACFND(FIOF,FIOI,FIOO,DB,SEX)
+ I NI="" W !,"Patient not found"
+ Q:NI="" 
+ S IDT="" F  S IDT=$O(^BUF($J,"p",IDT)) Q:IDT=""  D
+ .S M=^(IDT),IDS=M,M="Лаборатория: "_M
+ .W !,"Found for "_NI_", "_M Q 
+ .S ID=$$FIND^YIMHS(M)
+ .D:ID<0
+ ..S ID=$$ADDT^YIMHS(M,$$ADDF^YIMHS("Лечебный процесс"),"txt")
+ ..D SET^YIMHS(ID,"rproc","ODOC^IKDL")
+ ..D SET^YIMHS(ID,"rights","rrr")
+ ..D SET^YIMHS(ID,"ext","txt")
+ ..D MKIDX^IMHS(ID)
+ .S ID=$$MKDOC^IEPR(NI,ID,"",1) Q:ID="" 
+ .M ^EPR(NI,$P(ID,",",2),"data")=^BUF($J,"p",IDT)
+ .D SET^IEPR(NI,ID,"section",IDS)
+ K ^BUF($J,"p")
+ Q
+ODOC 
+ N NI,I,S,A,R,X
+ S NI=N
+ D WC^RWU($$^I("iname")_CR_CR)
+ D WC^RWU($$GET^IEPR(NI,ID,"section")_CR)
+ D WC^RWU("Наименование теста"_$C(9,9,9,9,9)_"Значение"_$C(9)_"Норма")
+ S S=$C(9,9,9,9,9,9,9,9)
+ S I="" F  S I=$O(^EPR(NI,ID,"data",I)) Q:I=""  D
+ .S R=^(I)
+ .S X=$P(R,"|",2),A=8-(($L(X)-($L(X)#8))/8)+$S($L(X)#8<3:1,1:0)
+ .S A=X_$E(S,1,A)
+ .S X=$P(R,"|",4),A=A_X_$C(9)
+ .S:$P(R,"|",5)'="" A=A_$P(R,"|",5)_"-"_$P(R,"|",5)
+ .S:$P(R,"|",6)'="" A=A_$P(R,"|",6)
+ .D W^RWU(CR_A_$C(9)_$P(R,"|",3))
+ Q
+LDDTS 
+ I M=0 I %XM(2)="Patient" S M=1,(FIOF,FIOI,FIOO,BD,SEX)="" Q
+ I M=0 I %XM(2)="Pages" S M=2 Q
+ I M=2 I %XM(2)="Section" S M=3,ID=$G(%XM(2,"p","SectionID")) Q 
+ I M=0 I %XM(2)="Tests" S M=4 Q
+ I M=4 I %XM(2)="Test" S IDT=$G(%XM(2,"p","TestID")),(IDX,IDS,R)="" Q
+ Q
+LDDT 
+ D:M=1
+ .I %XM(2)="LastName" S FIOF=FIOF_%XD Q 
+ .I %XM(2)="FirstMiddleName" S FIOI=FIOI_%XD Q
+ .I %XM(2)="DOB" S BD=BD_%XD Q
+ .I %XM(2)="Sex" S SEX=SEX_%XD Q
+ D:M=3
+ .I %XM(2)="SectionName" S:ID'="" ^(ID)=$G(^BUF($J,"p",ID))_%XD
+ D:M=4
+ .I %XM(2)="TestName" S $P(R,"|",1)=$P(R,"|",1)_%XD Q
+ .I %XM(2)="Dimension" S $P(R,"|",2)=$P(R,"|",2)_%XD Q 
+ .I %XM(2)="Value" S $P(R,"|",3)=$P(R,"|",3)_%XD Q 
+ .I %XM(2)="NormalValueMin" S $P(R,"|",4)=$P(R,"|",4)_%XD Q 
+ .I %XM(2)="NormalValueMax" S $P(R,"|",5)=$P(R,"|",5)_%XD Q 
+ .I %XM(2)="SectionID" S IDS=IDS_%XD Q 
+ .I %XM(2)="SectionItem" S IDX=IDX_%XD
+ Q
+LDDTE 
+ I M=1 I %XM(2)="Patient" D  S M=0 Q
+ .S SEX=$S(SEX="M":1,SEX="F":2,1:"")
+ .S FIOO=$P(FIOI," ",2,9),FIOI=$P(FIOI," ",1)
+ .S BD=$P(BD,"-",3)_"."_$P(BD,"-",2)_"."_$P(BD,"-",1)
+ .S BD=$$DI^DTUTL(BD)
+ I M=2 I %XM(2)="Pages" S M=0 Q
+ I M=3 I %XM(2)="Section" S M=2 Q
+ I M=4 I %XM(2)="Test" D:IDS'=""&(IDX'="")  Q
+ .S ^BUF($J,"p",IDS,IDX)=IDT_"|"_R
+ .S (IDS,IDX,R)=""
+ I M=4 I %XM(2)="Tests" S M=0 Q
+ Q
+LOADF(FNG,FNT,FNP) ; Load profiles,tests and price
+ I '$$CHECK^FIL(FNG) W !,"File "_FNG_" not found !" Q
+ I '$$CHECK^FIL(FNT) W !,"File "_FNT_" not found !" Q 
+ I '$$CHECK^FIL(FNP) W !,"File "_FNP_" not found !" Q 
+ N F,M,R,K,PR,TID,DT
+ K ^IKDL
+ S F=$$OR^FIL(FNG),K=""
+ D OEV^XMLR("LDFTS^IKDL","LDFDT^IKDL","LDFET^IKDL")
+ F  U F R R#1 Q:$$ST^FIL()=0  S K=K_R I $L(K)>1000 D REV^XMLR(K) S K=""
+ C F
+ S F=$$OR^FIL(FNT),K="" K DT
+ D OEV^XMLR("LDFTS2^IKDL","LDFDT2^IKDL","LDFET2^IKDL")
+ F  U F R R#1 Q:$$ST^FIL()=0  S K=K_R I $L(K)>1000 D REV^XMLR(K) S K=""
+ C F
+ D CEV^XMLR
+ S F=$$OR^FIL(FNP),K="" K DT
+ D OEV^XMLR("","LDFDT1^IKDL","LDFET1^IKDL")
+ F  U F R R#1 Q:$$ST^FIL()=0  S K=K_R I $L(K)>1000 D REV^XMLR(K) S K=""
+ C F
+ D CEV^XMLR
+ Q
+LDFTS ; xml tag event
+ Q:%XM(2)="root"!(%XM(2)="xml")!(%XM(2)="profiles") 
+ I %XM(2)="Profile" S PR=%XM(2,"p","profileid") Q 
+ I %XM(2)="Test" S TID=%XM(2,"p","testid") K DT Q 
+ Q
+LDFDT ; xml data event
+ I %XM(2)="Name" D  Q 
+ .I %XM(4,$O(%XM(4,""),-1)-1)="Profile" S ^IKDL("P",PR)=$G(^IKDL("P",PR))_%XD Q 
+ .S DT(1)=$G(DT(1))_%XD,DT(2)=""
+ S:%XM(2)="Group" DT(2)=$G(DT(3))_%XD
+ S:%XM(2)="Dimension" DT(3)=$G(DT(4))_%XD
+ Q
+LDFET ; xml tag end
+ Q:%XM(2)'="Test"  Q:(TID="")!(PR="") 
+ S ^IKDL("T",TID)=$G(DT(1))_"||"_$G(DT(3))_"|"_$G(DT(4))
+ S ^IKDL("P",PR,TID)=""
+ S:$G(DT(3))'="" ^IKDL("G",DT(3))=""
+ Q
+LDFTS2 ; xml tag event
+ Q:%XM(2)="root"!(%XM(2)="xml")!(%XM(2)="Tests") 
+ I %XM(2)="Test" S TID=%XM(2,"p","testid") Q 
+ Q
+LDFDT2 ; xml data event
+ S:%XM(2)="TestName" DT(1)=$G(DT(1))_%XD
+ S:%XM(2)="TestShortName" DT(2)=$G(DT(2))_%XD
+ S:%XM(2)="GroupName" DT(3)=$G(DT(3))_%XD
+ S:%XM(2)="Dimension" DT(4)=$G(DT(4))_%XD
+ Q
+LDFET2 ; xml tag end
+ Q:%XM(2)'="Test"  Q:TID="" 
+ S ^IKDL("T",TID)=$G(DT(1))_"|"_$G(DT(2))_"|"_$G(DT(3))_"|"_$G(DT(4))
+ S:$G(DT(3))'="" ^IKDL("G",DT(3))=""
+ K DT
+ Q
+LDFDT1 ; xml data event
+ S:%XM(2)="lis" DT(1)=$G(DT(1))_%XD
+ S:%XM(2)="price_name" DT(2)=$G(DT(2))_%XD
+ S:%XM(2)="type" DT(3)=$G(DT(3))_%XD
+ Q
+LDFET1 ; xml tag end
+ Q:%XM(2)'="position"  Q:$G(DT(1))="" 
+ S ^IKDL("C",DT(1))="|"_$G(DT(2))_"|"_$G(DT(3)) K DT
+ Q 
+ 

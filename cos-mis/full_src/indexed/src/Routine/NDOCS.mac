@@ -1,0 +1,140 @@
+NDOCS ; Работа с общими документами [ 07/10/2020  1:07 PM ]
+INIT ; Начальная инициализация формы
+ Q
+DFLD ; Перечень папок
+ D LFT^YDOCTP
+ Q
+DLSTLT(TXT) ; "Облегченный" вывод документов
+ N F S F=$$LCL^IUSER("docs","deffld")
+ S:F="" F=$G(^cfg("docs","deffld"))
+ I F="" F  S F=$O(^CFLD(F)) Q:F=""  Q:$G(^(F,"uid"))="default" 
+ Q:F="" 
+ D DLSTF(F,$G(TXT))
+ Q
+DLST(FLD,DS,DE,FLG,DDEL) ; Документы в папке
+ N DT,I,EXT,FIL,PAT,DN,NM,A,LPU,KX
+ S DS=$$DI^DTUTL($G(DS)),DE=$$DI^DTUTL($G(DE)),DDEL=$G(DDEL)
+ S A=$$LCL^IUSER("docs","fld"),FLG=$G(FLG)
+ S:$L(FLG) FLG="|"_FLG_"|"
+ I A'="",A'[FLD Q 
+ S LPU=+$$^I("ilpu")
+ D OWF^RWU(".txt")
+ S KX=(DS-1)_",0" F  S KX=$O(^CDOCI("fld",FLD,KX)) Q:KX=""!$S(DE="":0,1:$P(KX,",",1)>DE)  D
+ .S DT=$P(KX,",",1),I=$P(KX,",",2)
+ .Q:$G(^CDOC(DT,I,"fld"))'=FLD
+ .I 'DDEL,$G(^("del")) Q 
+ .I DDEL,'$G(^("del")) Q 
+ .I $L(FLG),FLG["|clpu|" Q:+$P($G(^("owner")),"@",2)'=LPU 
+ .S EXT=$G(^("ext")),FIL=$G(^("file")),PAT=$G(^("pattern"))
+ .S NM=$G(^("nm")),DN=DT_","_I,A=EXT_"~"_FIL_"~"_PAT_"~~"_DN_"~~"
+ .D WC^RWU(A_"|"_NM_CR)
+ D C^RWU
+ Q
+DLSTF(FLD,STR,DS,DE,FLG,DDEL) ; Документы по имени (папка не исп)
+ S STR=$$LU^TXTU($$WD^TXTU(STR))
+ S DS=$$DI^DTUTL($G(DS)),DE=$$DI^DTUTL($G(DE)),FLG=$G(FLG),DDEL=$G(DDEL)
+ S:FLG'="" FLG="|"_FLG_"|"
+ N DT,I,NM,EXT,FIL,A,PAT,LPU,K
+ S A=$$LCL^IUSER("docs","fld")
+ I A'="",A'[FLD Q  ; разрешенные папки
+ D OWF^RWU(".txt")
+ S LPU=+$$^I("ilpu")
+ S DT=DS-1,DE=$S(DE="":999999,1:DE)
+ I FLD="" F  S DT=$O(^CDOC(DT)) Q:DT=""!(DT>DE)  S I="" F  S I=$O(^CDOC(DT,I)) Q:I=""  D DLSTFp
+ I FLD'="" S K=(DS+1)_",0" F  S K=$O(^CDOCI("fld",FLD,K)) Q:K=""!($P(K,",",1)>DE)  D
+ .S DT=$P(K,",",1),I=$P(K,",",2)
+ .D DLSTFp
+ D C^RWU
+ Q
+DLSTFp 
+ I 'DDEL,$G(^CDOC(DT,I,"del")) Q  
+ I DDEL,'$G(^CDOC(DT,I,"del")) Q 
+ I $L(FLG),FLG["|clpu|" Q:+$P($G(^CDOC(DT,I,"owner")),"@",2)'=LPU
+ S NM=$G(^CDOC(DT,I,"nm")) Q:$$LU^TXTU(NM)'[STR 
+ S EXT=$G(^CDOC(DT,I,"ext"))
+ S FIL=$G(^("file")),PAT=$G(^("pattern"))
+ S DN=DT_","_I,A=EXT_"~"_FIL_"~"_PAT_"~~"_DN_"~~"
+ D WC^RWU(A_"|"_NM_CR)
+ Q
+LXML(ND) ; Загрузить документ по его номеру
+ N EXT,PRC,P,A,LNK,S
+ S EXT=$$GET^YDOCS(ND,"ext")
+ S PRC=$$GET^YDOCS(ND,"rproc")
+ S P=$S(EXT="txt":"vtext",EXT="tab":"table",EXT="rep":"vrep",1:"")
+ Q:P="" Q
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<vdocs>")
+ D WTAGDC^RWU("cdate",$$DTM^DTUTL($$GET^YDOCS(ND,"date")))
+ S A=$$GET^YDOCS(ND,"owner") S:A="" A=$$GET^YDOCS(ND,"user")
+ G:PRC="" LXMLW
+ S LNK=$$GET^YDOCS(ND,"lnk")
+ S S=$S(EXT="txt":12,EXT="tab":2637826,EXT="rep":0,1:"")
+ S:LNK S=$S(EXT="txt":12,EXT="tab":16386,EXT="rep":0,1:"")
+ D WTAGDC^RWU("wcrea",A)
+ D WC^RWU("<"_P_" title="""_$$TKAV^TXTU($$GET^YDOCS(ND,"nm"))_""" style="""_S_""">")
+ D @PRC
+ D W^RWU("</"_P_"></vdocs></nb_console>"),C^RWU
+ Q
+LXMLW D WTAGDC^RWU("wcrea",A)
+ D W^RWU("<"_P_" title="""_$$TKAV^TXTU($$GET^YDOCS(ND,"nm"))_""">")
+ S TYPE=$$GET^YDOCS(ND,"type")
+ S DT=$P(ND,",",1),ID=$P(ND,",",2)
+ S I="" F  S I=$O(^CDOC(DT,ID,"data",I)) Q:I=""  D WC^RWU(^(I))
+ D W^RWU("</"_P_"></vdocs></nb_console>")
+ D C^RWU
+ Q
+LTXT(ND) ; Загрузить документ по его номеру (по тексту)
+ N EXT,PRC,P,A,LNK,S
+ S EXT=$$GET^YDOCS(ND,"ext")
+ S PRC=$$GET^YDOCS(ND,"rproc")
+ S P=$S(EXT="txt":"vtext",EXT="tab":"table",EXT="rep":"vrep",EXT="htm":"vhtml",1:"")
+ Q:P="" 
+ D OWF^RWU(".txt")
+ S A=$$GET^YDOCS(ND,"owner") S:A="" A=$$GET^YDOCS(ND,"user")
+ G:PRC="" LTXTW
+ S LNK=$$GET^YDOCS(ND,"lnk")
+ S S=$S(EXT="txt":12,EXT="tab":2,EXT="rep":0,1:"")
+ S:LNK S=$S(EXT="txt":12,EXT="tab":16386,EXT="rep":0,1:"")
+ D @PRC
+ D C^RWU
+ Q
+LTXTW 
+ S TYPE=$$GET^YDOCS(ND,"type")
+ S DT=$P(ND,",",1),ID=$P(ND,",",2)
+ S I="" F  S I=$O(^CDOC(DT,ID,"data",I)) Q:I=""  D WC^RWU(^(I))
+ D C^RWU
+ Q
+DELDOC(ND,PASS) ; Delete document
+ I '$$ChkPAS^IUSER(PASS) D MSG^RWU("Неверный пароль.") Q
+ I $$LCL^IUSER("docs","del")=0 d MSG^RWU("Недостаточно прав.") Q 
+ D DEL^YDOCS(ND)
+ Q
+MKLST ; List of types 
+ N LST,TP,FL,R,C
+ I '+$$LCL^IUSER("docs","new") Q 
+ S TP="" F  S TP=$O(^CDT(TP)) Q:TP=""  D:$G(^(TP,"manual"))
+ .S FL=+$G(^("folder")),R=$G(^("name"))
+ .Q:R=""
+ .S LST(FL,TP)=R
+ D OWF^RWU(",txt")
+ S (C,FL)="" F  S FL=$O(LST(FL)) Q:FL=""  D
+ .I FL D WC^RWU(C_$G(^CFLD(FL))) S C=CR
+ .S TP="" F  S TP=$O(LST(FL,TP)) Q:TP=""  D WC^RWU(C_$S(FL:$C(9),1:"")_LST(FL,TP)_"|"_TP) S C=CR
+ D C^RWU
+ Q
+SFIL(TP,NM,FIL)    ; Создать новый документ с файлом
+ Q:FIL=""  
+ N DOC,FL
+ S FL=$$TPFLD^YDOCTP(TP),FIL=$$UL^TXTU($$WD^TXTU(FIL))
+ S DOC=$$MKDOC^YDOCS($$WD^TXTU(NM),TP,FL)
+ S FIL="DBDIR/cdoc/"_TP_"/"_FIL
+ D SET^YDOCS(DOC,"file",FIL)
+ D MSG^RWU(FIL)
+ Q
+REGLCL ; 
+ K ^LCLI("docs")
+ S ^LCLI("docs")="Общие документы (репозиторий)"
+ S ^LCLI("docs","new")="Создание документов"
+ S ^LCLI("docs","del")="Удаление документов"
+ S ^LCLI("docs","fld")="Разрешенные папки документов"
+ S ^LCLI("docs","deffld")="ID папки по умолчанию"
+ Q

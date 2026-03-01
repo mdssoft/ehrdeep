@@ -1,0 +1,66 @@
+ISMSCRU ; Отправка SMS smsc.ru [ 04/27/2015  3:10 PM ]
+DORECV(ID) 
+ Q
+DOSEND(ID) 
+ N SRV,USR,PAS,I,R,IDX,FR,TO,F,FROM,SF,DEBUG
+ S SRV=$G(^MSGHUB("sms",ID,"server")) ; first
+ S USR=$G(^("login")),PAS=$G(^("passwd"))
+ Q:SRV=""  Q:USR=""  Q:PAS="" 
+ S SF=$G(^MSGHUB("sms",ID,"safemod"))
+ S DEBUG=$G(^MSGHUB("sms",ID,"debug"))
+ S FROM=$G(^("from")),F=0 
+ S IDX="" F  S IDX=$O(^MSGOUT("sms",ID,IDX)) Q:IDX=""  D
+ .S R=^(IDX),FR=$P(R,"|",1),TO=$P(R,"|",2),R=""
+ .Q:TO="" 
+ .Q:$G(^(IDX,"chkfn"))'=""  Q:$G(^("wait")) 
+ .Q:$$timeout^IMSGHUB("sms",ID,IDX) 
+ .S I="" F  S I=$O(^MSGOUT("sms",ID,IDX,"data",I)) Q:I=""  S R=R_^(I)
+ .Q:R=""
+ .I 'SF,'F D OPEN(USR,PAS,"",SRV) S F=1
+ .D:SF OPEN(USR,PAS,"",SRV)
+ .S TO=$TR(TO,",","|") ; multi phones
+ .S:DEBUG ^ISLOG("ISMSCRU")=$H_"|"_TO_"|"_R_"|"_FR
+ .S:FR="" FR=FROM
+ .D SMS(TO,R,FR)
+ .D endsend^IMSGHUB("sms",ID,IDX)
+ .D:SF CLOSE
+ D:F CLOSE
+ Q
+OPEN(USR,PAS,ADR,SRV) 
+ K %ISMSCRU
+ S:ADR="" ADR="smsc.ru"
+ S %ISMSCRU("u")=USR,%ISMSCRU("p")=PAS
+ S %ISMSCRU("a")=ADR,%ISMSCRU("s")=SRV
+ S %SID=$$OPEN^WWWCLI(SRV,80)
+ Q
+CLOSE 
+ D CLOSE^WWWCLI(%SID)
+ K %ISMSCRU
+ Q
+SMS(DST,TXT,SRC) 
+ S DST=$TR(DST," /-()+","")
+ Q:DST=""  Q:TXT="" 
+ S:$E(DST,1)=8 $E(DST,1)=7
+ I $L(DST)=10,$E(DST,1)=9 S DST=7_DST
+ N R,I,X
+ D SETCONN^WWWCLI(%SID,2)
+ S R="/sys/send.php?login="
+ S R=R_%ISMSCRU("u")_"&psw="_%ISMSCRU("p")
+ S R=R_"&phones="_DST
+ S R=R_"&mes="_$$TURL^TXTU($$DW^TXTU(TXT))
+ S R=$$GET^WWWCLI(%SID,R)
+ Q
+ U 0 W !,"GET OK="_R
+ D OBUF^WWWCLI(%SID)
+ S I=$$BUFCNT^WWWCLI(%SID) F X=1:1:I W $$RBUF^WWWCLI(%SID)
+ D CBUF^WWWCLI(%SID)
+ Q
+T 
+ D OPEN("mhealth","nnzik9","","smsc.ru")
+ D SMS("79161433929","Приветъ Ё-моётЪ","SMSTEST")
+ D CLOSE
+ Q
+INITDB 
+ Q:$D(^MSGHUB("sms"))
+ S ^MSGHUB("sms")="ISMSCRU"
+ Q

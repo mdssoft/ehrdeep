@@ -1,0 +1,284 @@
+NMHDISP ; Диспетчер телемониторинга [ 05/10/2012  2:09 AM ]
+INIT ; Init form
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<dispmon><lpu>")
+ D LSTFILTs^YCONTR
+ D WC^RWU("</lpu><state>-|Без статуса")
+ D LSTs^NSPRAV("mhmst",0,1)
+ D WC^RWU("</state><vid>")
+ D:$$FNDUID^YIMHS("med_mon/cardio") WC^RWU("cardio|Кардиограмма")
+ D:$$FNDUID^YIMHS("med_mon/bpp") WC^RWU(CR_"bpp|Арт.давление")
+ D:$$FNDUID^YIMHS("med_mon/diabet") WC^RWU(CR_"diabet|Уровень глюкозы")
+ D:$$FNDUID^YIMHS("med_mon/oxi") WC^RWU(CR_"oxi|Пульсоксиметрия")
+ D:$$FNDUID^YIMHS("med_mon/weight") WC^RWU(CR_"weight|Вес")
+ D:$$FNDUID^YIMHS("med_mon/bread") WC^RWU(CR_"bread|Калории")
+ D:$$FNDUID^YIMHS("med_mon/diary") WC^RWU(CR_"diary|Дневник")
+ ;D:$$FNDUID^YIMHS("med_mon/event") WC^RWU(CR_"event|События")
+ D WC^RWU(CR_"sys|Служебные") 
+ D W^RWU("</vid></dispmon></nb_console>"),C^RWU
+ Q
+TAB(DS,DE,VI,ST,PAC,LPU,PRI) ; Вывод таблицы данных
+ N I,A,II,IC,IM,X,FTL,TL,TP,TTP,TTX,DTT,DTM,DT,NI,F,K,R,FIO,ID,IX
+ N X,X1,X2,X3,X4,EV,V
+ S DS=$$DI^DTUTL(DS),DE=$$DIH^DTUTL(DE),PRI=$G(PRI)
+ S PAC=$$UL^TXTU($$WD^TXTU($P(PAC," ",1)))
+ I VI=""!(VI="bpp") S X=$$FNDUID^YIMHS("med_mon/bpp") S:X FTL(X)=1
+ I VI=""!(VI="cardio") S X=$$FNDUID^YIMHS("med_mon/cardio") S:X FTL(X)=2
+ I VI=""!(VI="diabet") S X=$$FNDUID^YIMHS("med_mon/diabet") S:X FTL(X)=3
+ I VI=""!(VI="oxi") S X=$$FNDUID^YIMHS("med_mon/oxi") S:X FTL(X)=4
+ I VI=""!(VI="weight") S X=$$FNDUID^YIMHS("med_mon/weight") S:X FTL(X)=5
+ I VI=""!(VI="bread") S X=$$FNDUID^YIMHS("med_mon/bread") S:X FTL(X)=8
+ I VI=""!(VI="diary") S X=$$FNDUID^YIMHS("med_mon/diary") S:X FTL(X)=6
+ I VI=""!(VI="event") S X=$$FNDUID^YIMHS("med_mon/event") S:X FTL(X)=7
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<dispmon><table>")
+ S:DS>DE DS=DE
+ S A="",II="</item><item>",IC="</item><item class=""",IM="<item img="""
+ F I="Пр.","Дата,время","Тип","Данные","Пациент","Отм.","Статус","Результат" S A=A_"<item>"_I_"</item>"
+ D WC^RWU("<titles><key></key>"_A_"</titles>")
+ s DT=DE+1 F  S DT=$O(^EPRI("dt",DT),-1) Q:DT=""!(DT<DS)  D
+ .S DTT=$$DT^DTUTL(DT)
+ .s NI="" F  S NI=$O(^EPRI("dt",DT,NI)) Q:NI=""  D
+ ..S F=0,K="" F  S K=$O(FTL(K)) Q:K=""  I $D(^EPRI("t",NI,K)) S F=1 Q
+ ..Q:'F  ; нет нужных типов
+ ..S FIO=$$FIO^YIPACN(NI)
+ ..I PAC'="",$$UL^TXTU($P(FIO," ",1))'[PAC Q 
+ ..S IX="" F  S IX=$O(^EPRI("dt",DT,NI,IX)) Q:IX=""  D
+ ...S TP=$G(^EPR(NI,IX,"t")) Q:TP=""  Q:'$D(FTL(TP)) 
+ ...Q:$G(^("bd")) 
+ ...S ID=IX
+ ...S TTP=$G(FTL(TP)),TTX=II_$$txtTP(TTP)_II
+ ...I 315[TTP S ID=$$FNDTP^IEPR(NI,TP) Q:ID="" 
+ ...I TTP=1 D  Q  ; АД
+ ....S DTM="" F  S DTM=$O(^EPRD(NI,ID,DT,DTM),-1) Q:DTM=""  D
+ .....S X=^(DTM),EV=$G(^MHMON(NI,"e",DT,DTM)),V=$P(EV,"|",2)
+ .....I PRI'="",PRI'=V q 
+ .....S R=$$imgVV(V)_$$DT^DTUTL(DT)_", "_$$TM^DTUTL(DTM)_TTX
+ .....S R=R_$P(X,"|",1)_"/"_$P(X,"|",2)_", пульс "_$P(X,"|",3)_II
+ .....S X1=$P(EV,"|",1)
+ .....I ST'="" Q:ST="-"&X1  Q:ST'=X1 
+ .....S R=R_FIO_II_II_$S(X1:$$NAME^ISPRAV("mhmst",X1),1:"")_II
+ .....D wROW(NI_"@"_ID_"@"_DT_","_DTM_"@g",R)
+ ...I TTP=3 D  Q  ; глюкоза
+ ....S DTM="" F  S DTM=$O(^EPRD(NI,ID,DT,DTM),-1) Q:DTM=""  D
+ .....S X=^(DTM),EV=$G(^MHMON(NI,"e",DT,DTM)),V=$P(EV,"|",2)
+ .....I PRI'="",PRI'=V q
+ .....S R=$$imgVV(V)_$$DT^DTUTL(DT)_", "_$$TM^DTUTL(DTM)_TTX
+ .....S R=R_$P(X,"|",2)_" млмоль/мл"_II
+ .....S X1=$P(EV,"|",1)
+ .....I ST'="" Q:ST="-"&X1  Q:ST'=X1
+ .....S R=R_FIO_II_II_$S(X1:$$NAME^ISPRAV("mhmst",X1),1:"")_II
+ .....D wROW(NI_"@"_ID_"@"_DT_","_DTM_"@g",R)
+ ...I TTP=5 D  Q  ; вес
+ ....S DTM="" F  S DTM=$O(^EPRD(NI,ID,DT,DTM),-1) Q:DTM=""  D
+ .....S X=^(DTM),EV=$G(^MHMON(NI,"e",DT,DTM)),V=$P(EV,"|",2)
+ .....I PRI'="",PRI'=V q
+ .....S R=$$imgVV(V)_$$DT^DTUTL(DT)_", "_$$TM^DTUTL(DTM)_TTX
+ .....S R=R_($P(X,"|",1)/10)_" Кг. , BMI "_$J(($P(X,"|",1)/10)/(1.75*1.75),"",2)_II
+ .....S X1=$P(EV,"|",1)
+ .....I ST'="" Q:ST="-"&X1  Q:ST'=X1
+ .....S R=R_FIO_II_II_$S(X1:$$NAME^ISPRAV("mhmst",X1),1:"")_II
+ .....D wROW(NI_"@"_ID_"@"_DT_","_DTM_"@g",R)
+ ...I TTP=8 D  Q  ; калории
+ ....S DTM="" F  S DTM=$O(^EPRD(NI,ID,DT,DTM),-1) Q:DTM=""  D
+ .....S X=^(DTM),EV=$G(^MHMON(NI,"e",DT,DTM)),V=$P(EV,"|",2)
+ .....I PRI'="",PRI'=V q
+ .....S R=$$imgVV(V)_$$DT^DTUTL(DT)_", "_$$TM^DTUTL(DTM)_TTX
+ .....S X1=$P(X,"|",4)
+ .....S R=R_$P(X,"|",3)_" ХЕ" S:X1 R=R_", "_X1_" ККал"_II
+ .....S X1=$P(EV,"|",1)
+ .....I ST'="" Q:ST="-"&X1  Q:ST'=X1
+ .....S R=R_FIO_II_II_$S(X1:$$NAME^ISPRAV("mhmst",X1),1:"")_II
+ .....D wROW(NI_"@"_ID_"@"_DT_","_DTM_"@g",R)
+ ...I TTP=2 D  Q  ; экг
+ ....S DTM=$P($P(^EPR(NI,ID,"dt"),"|",1),",",2)
+ ....S EV=$G(^MHMON(NI,"e",DT,DTM)),V=$P(EV,"|",2)
+ ....I PRI'="",PRI'=V q
+ ....S R=$$imgVV(V)_$$DT^DTUTL(DT)_", "_$$TM^DTUTL(DTM)_TTX
+ ....S R=R_"-"_II
+ ....S X1=$P(EV,"|",1)
+ ....I ST'="" Q:ST="-"&X1  Q:ST'=X1
+ ....S R=R_FIO_II_II_$S(X1:$$NAME^ISPRAV("mhmst",X1),1:"")_II
+ ....D wROW(NI_"@"_ID_"@"_DT_","_DTM_"@f",R)
+ ...I TTP=4 D  Q  ; оксиметр
+ ....S DTM=$P($P(^EPR(NI,ID,"dt"),"|",1),",",2)
+ ....S EV=$G(^MHMON(NI,"e",DT,DTM)),V=$P(EV,"|",2)
+ ....I PRI'="",PRI'=V q
+ ....S R=$$imgVV(V)_$$DT^DTUTL(DT)_", "_$$TM^DTUTL(DTM)_TTX
+ ....S R=R_"-"_II
+ ....S X1=$P(EV,"|",1)
+ ....I ST'="" Q:ST="-"&X1  Q:ST'=X1
+ ....S R=R_FIO_II_II_$S(X1:$$NAME^ISPRAV("mhmst",X1),1:"")_II
+ ....D wROW(NI_"@"_ID_"@"_DT_","_DTM_"@f",R)
+ ...I TTP=6 D  Q  ; дневник
+ ....S DTM=$P($P(^EPR(NI,ID,"dt"),"|",1),",",2)
+ ....S EV=$G(^MHMON(NI,"e",DT,DTM)),V=$P(EV,"|",2)
+ ....I PRI'="",PRI'=V q
+ ....S R=$$imgVV(V)_$$DT^DTUTL(DT)_", "_$$TM^DTUTL(DTM)_TTX
+ ....S X1=$P(EV,"|",1)
+ ....I ST'="" Q:ST="-"&X1  Q:ST'=X1
+ ....S R=R_II_FIO_II_II_$S(X1:$$NAME^ISPRAV("mhmst",X1),1:"")_II
+ ....D wROW(NI_"@"_ID_"@"_DT_","_DTM_"@f",R)
+ 
+ D W^RWU("</table></dispmon></nb_console>")
+ D C^RWU
+ Q
+wROW(K,R) 
+ D WC^RWU(CR_"<row><key>"_K_"</key>"_R_"</item></row>")
+ Q
+imgVV(V) 
+ Q:'V "<item>"_II
+ Q IM_$S(V=2:"excl16y.bmp",V=3:"excl16r.bmp",1:"excl16g.bmp")_"""/><item>"
+txtSTAT(NI,DT,TM) ; Получить последнее событие
+ Q
+SHOWGR(KEY) ; График по параметру
+ N NI,ID,TP,UID
+ S NI=$P(KEY,"@",1),ID=$P(KEY,"@",2)
+ S TP=$G(^EPR(NI,ID,"t")),UID=$P($$GET^YIMHS(TP,"uid"),"/",2)
+ Q:UID="" 
+ D CH^IMEDMON(NI_"~"_ID)
+ Q
+SHOWTAB(KEY) 
+ N NI,N,ID,TP,UID
+ S NI=$P(KEY,"@",1),ID=$P(KEY,"@",2)
+ S TP=$G(^EPR(NI,ID,"t")),UID=$P($$GET^YIMHS(TP,"uid"),"/",2)
+ Q:UID="" 
+ S N=NI
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<ktable><table>")
+ D:UID="bpp" P^IMEDMON
+ D:UID="diabet" O^IMEDMON
+ D:UID="weight" WH^IMEDMON
+ D:UID="bread" E^IMEDMON
+ S N=$$UID2NM^IMEDMON(UID)
+ D WC^RWU("</table><label title="""_N_"""/></ktable></nb_console>")
+ D C^RWU
+ Q
+GETFN(KEY) ; Получить имя файла
+ N NI,ID
+ S NI=$P(KEY,"@",1),ID=$P(KEY,"@",2)
+ D MSG^RWU($G(^EPRD(NI,ID)))
+ Q
+txtTP(X) 
+ Q:X=1 "Арт.давление"
+ Q:X=2 "Кардиограмма"
+ Q:X=3 "Уровень глюкозы"
+ Q:X=4 "Пульсоксиметрия"
+ Q:X=5 "Вес"
+ Q:X=6 "Дневник"
+ Q:X=7 "Событие"
+ Q:X=8 "Калории"
+ Q ""
+nrmCL(TP,X1,X2,X3) ; Нормы по пациенту
+ I UID="bpp" 
+ I UID="cardio" 
+ I UID="diabet" 
+ I UID="oxi" 
+ I UID="weight" 
+ I UID="bread" 
+ I UID="diary" 
+ Q
+SETPRI(KEY,PRI) ; Установить приоритет
+ N NI,ID,DT,TM,TP,UID
+ S NI=$P(KEY,"@",1),ID=$P(KEY,"@",2),DT=$P(KEY,"@",3)
+ S TP=$G(^EPR(NI,ID,"t")),UID=$P($$GET^YIMHS(TP,"uid"),"/",2)
+ Q:UID="" 
+ S TM=$P(DT,",",2),DT=$P(DT,",",1)
+ S $P(^MHMON(NI,"e",DT,TM),"|",2)=PRI
+ Q
+SETST(KEY,ST) ; Установить статус
+ N NI,ID,DT,TM,TP,UID
+ S NI=$P(KEY,"@",1),ID=$P(KEY,"@",2),DT=$P(KEY,"@",3)
+ S TP=$G(^EPR(NI,ID,"t")),UID=$P($$GET^YIMHS(TP,"uid"),"/",2)
+ Q:UID="" 
+ S TM=$P(DT,",",2),DT=$P(DT,",",1)
+ S $P(^MHMON(NI,"e",DT,TM),"|",1)=ST
+ Q
+SENDLST ; Возможные варианты отсылки
+ D OWF^RWU(".txt")
+ D WC^RWU("vrcall|Вызов врача")
+ D WC^RWU(CR_"vrsms|SMS врачу")
+ D WC^RWU(CR_"vrmail|Email врачу")
+ D WC^RWU(CR_"fhsms|SMS родственнику")
+ D WC^RWU(CR_"fhmail|Email родственнику")
+ D WC^RWU(CR_"medarhiv|В medarhiv.ru")
+ D WC^RWU(CR_"pacmail|Email пациенту")
+ D C^RWU
+ Q
+DOEV(KEY,TP) ; Выполнить событие
+ N NI,ID,DT,TM,ADR,X,UID,UIDS,DB
+ S NI=$P(KEY,"@",1),ID=$P(KEY,"@",2),DT=$P(KEY,"@",3)
+ S TM=$P(DT,",",2),DT=$P(DT,",",1),ADR=""
+ I TP["sms" D  Q 
+ .S:TP="vrsms" X=$$GET^ISPRAV("uchastok",$$GET^IPAC(NI,"ush")),ADR=$$GET^IKADRY(X,"mphone")
+ .S:TP="fhsms" X=$$GET^IPAC(NI,"lnkhist"),ADR=$$GET^IPAC(X,"pager")
+ .Q:ADR="" 
+ .S X=$$MSGTEXT^IMEDMONS(NI,ID,DT,TM)
+ .S:$$IsMSGFIL^IMEDMON(NI,ID,DT,TM) X="Получена ЭКГ: "_$$FIOSH^IPAC(NI) ; TODO
+ .S X=$$ADDSEND^IMSGHUB("sms","medmon","",ADR,X,"")
+ I TP["mail" D  Q 
+ .S:TP="vrmail" X=$$GET^ISPRAV("uchastok",$$GET^IPAC(NI,"ush")),ADR=$$GET^IKADRY(X,"email")
+ .S:TP="fhmail" X=$$GET^IPAC(NI,"lnkhist"),ADR=$$GET^IPAC(X,"email")
+ .S:TP="pacmail" ADR=$$GET^IPAC(NI,"email")
+ .Q:ADR="" 
+ .S X=$$MSGTEXT^IMEDMONS(NI,ID,DT,TM)
+ .S:X'="" X=X_CR_"Дата, время: "_$$DT^DTUTL(DT)_", "_$$TM^DTUTL(TM)
+ .S:X'="" X=$$ADDSEND^IMSGHUB("mail","medmon","",ADR,X,"Данные телемониторинга")
+ .Q:'$$IsMSGFIL^IMEDMON(NI,ID,DT,TM)
+ .D SENDFIL^IMEDMONS(NI,ID,ADR)
+ I TP="medarhiv" D
+ .S ADR=$$GET^IPAC(NI,"email") Q:ADR="" 
+ .S UID=$$UID^IMHS(NI,ID),UIDS="|"_$P(UID,"/",2)_"|"
+ .S DB=$S("|cardio|oxi|diary|"[UIDS:ID,1:$$GETDBID^IMEDMON(NI,UID,DT_",1"))
+ .S DB=NI_"|"_DB_"|"_DT_","_TM
+ .S X=$$ADDSEND^IMSGHUB("medarhiv","","mHealth",ADR,"","",DB)
+ Q
+LSTPRM 
+ N A
+ S A="bpp|Измеритель А.Д."
+ S A=A_CR_"diabet|Глюкометр"
+ S A=A_CR_"weight|Весы"
+ S A=A_CR_"cardio|Кардиограф"
+ S A=A_CR_"oxi|Пульсоксиметр"
+ D MSG^RWU(A)
+ Q
+DEVTAB(TXT,DS,DE) ; Список устройств
+ N NI,DEV,F,FIO,R,RR
+ D OWF^RWU(".txt")
+ D WC^RWU("|Пациент|Регистрация|Устройство|Сер.номер|Оператор")
+ S TXT=$$UL^TXTU($$WD^TXTU(TXT))
+ S NI="" F  S NI=$O(^MHMON(NI)) Q:NI=""  D
+ .S FIO=$$FIO^IPAC(NI),F=0
+ .I TXT'="",$$UL^TXTU(FIO)'[TXT Q 
+ .S DEV="" F  S DEV=$O(^MHMON(NI,"f",DEV)) Q:DEV=""  D:DEV'="set"
+ ..S RR=$G(^(DEV,"dev"))
+ ..S R=$$UID2NM^IMEDMON(DEV),F=1
+ ..D WC^RWU(CR_NI_"@"_DEV_"|"_FIO_"|"_$$DTM^DTUTL($P(RR,"|",3))_"|"_R_"|"_$P(RR,"|",2)_"|"_$$FIO^IUSER($P(RR,"|",4)))
+ .D:'F WC^RWU(CR_NI_"|"_FIO_"||нет")
+ D C^RWU
+ Q
+ADEV(NI,DEV) 
+ S ^MHMON(NI,"f",DEV,"dev")="1||"_$H_"|"_$$USR^IUSER()
+ Q
+DDEV(KEY) 
+ N NI,D
+ S NI=$P(KEY,"@",1),D=$P(KEY,"@",2) Q:NI=""  Q:D=""
+ K ^MHMON(NI,"f",D)
+ Q
+DEVSN(KEY,SN) ; Установить серийный номер
+ N NI,D
+ S NI=$P(KEY,"@",1),D=$P(KEY,"@",2) Q:NI=""  Q:D=""
+ S $P(^MHMON(NI,"f",D,"dev"),"|",2)=SN
+ D GL^IEXCH("^MHMON",NI,"f",DEV,"dev")
+ Q
+DEVCARD(KEY,CARD) ; Зарегистрировать RFID для устройства
+ N NI,D
+ S NI=$P(KEY,"@",1),D=$P(KEY,"@",2) Q:NI=""  Q:D=""
+ D REG^ISCARD(CARD,"P",NI)
+ D SETPL^ISCARD(CARD,"mmdev",D)
+ D MSG^RWU("OK")
+ Q
+SETRTE(NI) ; Realtime ecg
+ S ^ECGTMP(NI)=$H
+ D MSG^RWU($$FIO^IPAC(NI))
+ Q
+DELRTE(NI) 
+ K ^ECGTMP(NI)
+ Q

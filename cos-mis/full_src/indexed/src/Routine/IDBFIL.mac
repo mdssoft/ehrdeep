@@ -1,0 +1,36 @@
+IDBFIL ; files in database [ 12/20/2011  2:10 PM ]
+MKUFN(PATH,EXT) ; Получить уникальное имя файла в каталоге
+ N I,X,K,G,J,FN
+ S FN=""
+ S:$E(PATH)'="/" PATH="/"_PATH
+ S EXT=$G(EXT) S:EXT'="" EXT="."_EXT
+ S I="^FILES(" F X=2:1:99 S K=$P(PATH,"/",X) Q:K=""  S I=I_$S(X>2:",",1:"")_""""_K_""""
+ F J=1:1:16 S K=$R(999999),G=I_","""_K_EXT_""")" I '$D(@G) S FN=K_EXT Q 
+ I FN="" F J=1:1:999999 S K=$R(99999999),G=I_","""_K_EXT_""")" I '$D(@G) S FN=K_EXT Q 
+ Q FN
+RMFILE(PATH,FN) ; remove file
+ N I,X,K
+ S:$E(PATH)'="/" PATH="/"_PATH
+ S I="^FILES(" F X=2:1:99 S K=$P(PATH,"/",X) Q:K=""  S I=I_$S(X>2:",",1:"")_""""_K_""""
+ S I=I_","""_FN_""")"
+ K @I
+ D UGL^IEXCH("-"_I)
+ Q
+EXISTFN(PATH,FN) ; файл существует (путь,имя файла)
+ S PATH=$TR(PATH,"\","/")
+ N I,X,K
+ S:$E(PATH)'="/" PATH="/"_PATH
+ S I="^FILES(" F X=2:1:99 S K=$P(PATH,"/",X) Q:K=""  S I=I_$S(X>2:",",1:"")_""""_K_""""
+ Q $S($D(@(I_","""_FN_""")")):1,1:0)
+EXIST(PATH) ; файл существует
+ S PATH=$TR(PATH,"\","/")
+ N I,X,K
+ S:$E(PATH)'="/" PATH="/"_PATH
+ S I="^FILES(" F X=2:1:99 S K=$P(PATH,"/",X) Q:K=""  S I=I_$S(X>2:",",1:"")_""""_K_""""
+ Q $S($P($G(@(I_")")),"|",1)="F":1,1:0)
+LEN(PATH) ; Размер файла
+ S PATH=$TR($$WD^TXTU(PATH),"\","/")
+ N I,X,K
+ S:$E(PATH)'="/" PATH="/"_PATH
+ S I="^FILES(" F X=2:1:99 S K=$P(PATH,"/",X) Q:K=""  S I=I_$S(X>2:",",1:"")_""""_K_""""
+ Q $P($G(@(I_")")),"|",2)

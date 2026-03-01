@@ -1,0 +1,62 @@
+IMDD ; Служебные процедуры мед. мониторинга [ 10/28/2013  12:44 PM ]
+MKMSG(NI,TP,DT,TM) ; Отсылка сообщений
+ N HDR,R,I,X,VR,PH,ML,PML,FIO,K,MSG
+ S PML=$$GET^IPAC(NI,"email")
+ S VR=$$GET^IPAC(NI,"ush")
+ S VR=$$GET^ISPRAV("uchastok",VR)
+ S PH=$$GET^IKADRY(VR,"mphone")
+ S ML=$$GET^IKADRY(VR,"email")
+ S HDR="Мобильная диагностика"
+ I TP="ecg" Q:'$$CHKECG(NI,DT,TM) 0
+ I TP="ecg" S X=$$MKPDF(NI,DT,TM) ; заранее создание PDF
+ I PML'=""!($$GET^IPAC(NI,"anib")'="") S X=$$ADDSEND^IMSGHUB("medarhiv","","mHealth",PML,"","",NI_"|"_TP_"|"_DT_"|"_TM)
+ I $$GET^IPAC(NI,"anib")'="" S X=$$ADDSEND^IMSGHUB("medterra","","mHealth",PML,"","",NI_"|"_TP_"|"_DT_"|"_TM)
+ I ML'=""!(PH'=""),TP="ecg" D:ML'="" SENDFIL(NI,DT,TM,ML) S:PH'="" X=$$ADDSEND^IMSGHUB("sms","medmon","",PH,"Получена ЭКГ: "_$$FIOSH^IPAC(NI),"") Q 1
+ S MSG=$$MSGTEXT(NI,TP,DT,TM)
+ W !,"MSG="_MSG
+ W !,"ML="_ML_" , PML="_PML
+ Q:MSG="" 1
+ S:PH'="" X=$$ADDSEND^IMSGHUB("sms","medmon","",PH,MSG,"")
+ S MSG=MSG_CR_"Дата, время события: "_$$DT^DTUTL(DT)_", "_$$TM^DTUTL(TM)
+ S:ML'="" X=$$ADDSEND^IMSGHUB("mail","medmon","",ML,MSG,HDR)
+ S:PML'="" X=$$ADDSEND^IMSGHUB("mail","medmon","",PML,MSG,HDR)
+ Q 1
+MSGTEXT(NI,TP,DT,TM) ; Формирование тектового сообщения
+ N FIO,MSG
+ S FIO=$$FIO^IPAC(NI)
+ S MSG=FIO_CR_^MDDM("mean",TP)_": "_$$textVAL^NMDD(NI,DT,TM,TP)
+ Q MSG
+CHKECG(NI,DT,TM) ; Проверить наличие файла ЭКГ
+ N X
+ S X=$G(^MDD(NI,DT,TM,"ecg")) Q:X="" 0
+ S X="/DBDIR/"_X
+ Q:$$LEN^NFILES(X) 1
+ Q 0
+MKPDF(NI,DT,TM) ; Создать временный PDF файл
+ N X,P
+ S X=$G(^MDD(NI,DT,TM,"ecg")) Q:X="" ""
+ S X=$P(X,".",1,$L(X,".")-1)_".pdf"
+ S X=$$TDIR^FIL()_"/"_X
+ Q:$$CHECK^FIL(X) X ; файл есть
+ S P=$$FILPDF^IMDD(NI,DT,TM,X)
+ Q X
+SENDFIL(NI,DT,TM,MAIL) 
+ N X,P
+ S X=$$MKPDF(NI,DT,TM) Q:X="" 
+ S P="$$FILPDF^IMDD("""_NI_""","_DT_","_TM_","""_X_""")"
+ S X=$$ADDSEND^IMSGHUB("mail","medmon","",MAIL,"Файл от "_$$DTM^DTUTL(DT_","_TM)_" приложен.","Данные мобильной диагностики (ЭКГ)",X)
+ Q
+FILPDF(NI,DT,TM,FN) ; Создать PDF файл (для вызова из IMSGHUB)
+ N F,DTM
+ S F="/DBDIR/"_^MDD(NI,DT,TM,"ecg")
+ Q:'$$LEN^NFILES(F) 0
+ N IO,X,TXT
+ S X=FN
+ S IO=$$OW^FIL(X) Q:IO="" 0
+ S F=$$SENDECG^INETECG(F) Q:F="" 0
+ S DTM=$$DTM^DTUTL(DT_","_TM)
+ S TXT=$$GET^IPAC(NI,"email")
+ S:DTM TXT=$S(TXT="":"",1:TXT_", "_DTM)
+ D PDFW^INETECG(F,IO,DTM)
+ C IO
+ Q 1

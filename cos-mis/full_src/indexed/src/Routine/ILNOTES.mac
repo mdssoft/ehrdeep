@@ -1,0 +1,24 @@
+ILNOTES ; Import from Lotus Notes txt [ 07/19/2009  10:29 PM ]
+LOAD(FN,DID,SYS) ; Загрузка из файла
+ ; DID - Document ID (если надо)
+ ; SYS - Грузить системные поля
+ ; ^LNOTES(DID,ID,field)=data
+ N I,R,A,FL,F,ID,DI,LST,X,i
+ O 52:(FN:"R")
+ S F=52,DID=$G(DID),SYS='+$G(SYS),i=0
+ F I=1:1 U F R A Q:$ZC  D 
+ .S A=$$WD^TXTU(A)
+ .I $A(A)=12 K LST Q 
+ .I A="" Q:'$D(LST)  D  U 0 W "." Q 
+ ..S DI=$G(LST("doc_id")) 
+ ..I DI="" K LST Q 
+ ..I $L(DID),DID'=DI K LST Q 
+ ..S ID=$O(^LNOTES(DI,""),-1)+1,i=i+1 M ^LNOTES(DI,ID)=LST K LST 
+ .S X=$F(A,":") Q:'X 
+ .S FL=$E(A,1,X-2)
+ .I SYS,$E(FL)="$" Q 
+ .S R=$$TRIM^TXTU($E(A,X,9999)) Q:R="" 
+ .S LST(FL)=R
+ D C^FIL(F)
+ U 0 W !,"Loaded "_i_" documents"
+ Q

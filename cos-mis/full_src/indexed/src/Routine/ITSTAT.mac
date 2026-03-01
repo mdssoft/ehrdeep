@@ -1,0 +1,102 @@
+ITSTAT ; Предварительный расчет статистики  [ 07/11/2015  10:50 AM ]
+CALC(DS,DE) 
+ N DT,DIR,DGL,BTPLS,DGT,ABO,SKSS,CC,XX,RR,ZZ,GG,KA,K0,TI,TII
+ N CLS,GCLS,ZFPOS,ZPOS,PPL,ES,SC
+ D clr
+ K ^BUF($J)
+ M BTPLS=^BTPLS("stc")
+ D MKALLPRC^IUSLSC(DS,DE,1,"proc^ITSTAT","","","",0,"")
+ K ^BUF($J)
+ D dsh
+ K ^BUF($J)
+ Q
+clr 
+ F DIR="common","kdl" D
+ .S DT=DS-1 F  S DT=$O(^TSTAT(DIR,DT)) Q:DT=""!(DT>DE)  K ^(DT)
+ Q
+proc 
+ S LPU=+LPU
+ S DGT=$$GETDGT^IRPUSL(CSTC,DT)
+ S ABO=$D(BTPLS(CSTC))
+ S SKSS=(STAT=2)
+ S CC=UL(U)
+ S XX=$S($L(SUMM):SUMM,1:$$PRICEH^IPRICE(U,PRC,DT)*KSKD)*CC
+ S SC=$$GET^IPRICE(U,"scost",PRC,DT)*UL(U)
+ S KA=$G(^ZNF(VR,OTD,DT,ID,"c")),K0=$P(KA,"|",3)
+ I $P(KA,"|",1)="",K0="" S K0=$$GET2IDX^YNPRICE(U,"con",PRC,DT)
+ S ES=$S($P(KA,"|",1):$P(KA,"|",1),K0="":"",1:$P($$GET2^IPRICE(U,"con",K0,PRC,DT),"|",1))
+ S CLS="|"_$$GET^IPRICE(U,"cls",PRC,DT)_"|"
+ S GG=$$GET^IPRICE(U,"grp",PRC,DT)
+ S GCLS="|"_$$FLG^NPRICEG(GG)_"|"
+ S ZZ=VR_","_NI_","_DT,ZPOS=0 S:'$D(^BUF($J,"tpos",ZZ)) ^(ZZ)="",ZPOS=1
+ S ZFPOS=$$IsFPOS^IUSL(NI,OTD,VR,DT,ID)
+ 
+ S TI="dv" d proctp
+ S TI="dv"_DGT d proctp
+ I ABO S TI="da" d proctp
+ I SKSS S TI="dk" d proctp
+ Q
+proctp 
+ D common
+ D:(CLS["|lab|")!(GCLS["|lab|") kdl
+ Q
+common 
+ S RR=$G(^TSTAT("common",DT,LPU,TI))
+ S $P(RR,"|",1)=$P(RR,"|",1)+XX
+ S $P(RR,"|",2)=$P(RR,"|",2)+CC
+ S:ZPOS $P(RR,"|",5)=$P(RR,"|",5)+1
+ S:ZFPOS $P(RR,"|",6)=$P(RR,"|",6)+1
+ S $P(RR,"|",7)=$P(RR,"|",7)+SC
+ S ^TSTAT("common",DT,LPU,TI)=RR
+ 
+ S RR=$G(^TSTAT("common",DT,LPU,OTD,TI))
+ S $P(RR,"|",1)=$P(RR,"|",1)+XX
+ S $P(RR,"|",2)=$P(RR,"|",2)+CC
+ S:ZPOS $P(RR,"|",5)=$P(RR,"|",5)+1
+ S:ZFPOS $P(RR,"|",6)=$P(RR,"|",6)+1
+ S $P(RR,"|",7)=$P(RR,"|",7)+SC
+ S ^TSTAT("common",DT,LPU,OTD,TI)=RR
+ 
+ S RR=$G(^TSTAT("common",DT,LPU,OTD,SP,TI))
+ S $P(RR,"|",1)=$P(RR,"|",1)+XX
+ S $P(RR,"|",2)=$P(RR,"|",2)+CC
+ S:ZPOS $P(RR,"|",5)=$P(RR,"|",5)+1
+ S:ZFPOS $P(RR,"|",6)=$P(RR,"|",6)+1
+ S $P(RR,"|",7)=$P(RR,"|",7)+SC
+ S ^TSTAT("common",DT,LPU,OTD,SP,TI)=RR
+ 
+ S RR=$G(^TSTAT("common",DT,LPU,OTD,SP,VR,TI))
+ S $P(RR,"|",1)=$P(RR,"|",1)+XX
+ S $P(RR,"|",2)=$P(RR,"|",2)+CC
+ S:ZPOS $P(RR,"|",5)=$P(RR,"|",5)+1
+ S:ZFPOS $P(RR,"|",6)=$P(RR,"|",6)+1
+ S $P(RR,"|",7)=$P(RR,"|",7)+SC
+ S ^TSTAT("common",DT,LPU,OTD,SP,VR,TI)=RR
+ Q
+kdl 
+ S RR=$G(^TSTAT("kdl",DT,TI))
+ S $P(RR,"|",1)=$P(RR,"|",1)+XX
+ S $P(RR,"|",2)=$P(RR,"|",2)+CC
+ S $P(RR,"|",4)=$P(RR,"|",4)+ES
+ S $P(RR,"|",5)=$P(RR,"|",5)+SC
+ 
+ S ^TSTAT("kdl",DT,TI)=RR
+ Q
+stom 
+ Q
+stac 
+ Q
+dsh ; Расписание
+ N STAT,LP,OT,VR,SP,KX,DT,R,I
+ F DT=DS:1:DE D
+ .K STAT
+ .D ZVRI^RRASP(DT,DT,"",9,1,0,0,0,0,"")
+ .K ^TSTAT("dsh",DT)
+ .S LP="" F  S LP=$O(STAT(LP)) Q:LP=""  D
+ ..S OT="" F  S OT=$O(STAT(LP,OT)) Q:OT=""  D
+ ...S KX="" F  S KX=$O(STAT(LP,OT,KX)) Q:KX=""  D
+ ....S SP=$P(KX,"@",1),VR=$P(KX,"@",2)
+ ....S R="" F I=1:1:6 S R=$S(I=1:"",1:R_"|")_$G(STAT(LP,OT,KX,I))
+ ....S R=R_"|"_$P($G(^DSH(LP,OT,VR,SP,DT)),"|",2) ; CAB(7)
+ ....S ^TSTAT("dsh",DT,LP,OT,SP,VR)=R
+ Q

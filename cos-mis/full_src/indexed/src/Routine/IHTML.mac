@@ -1,0 +1,53 @@
+IHTML ; html процедуры [ 07/23/2020  3:11 PM ]
+MINHDR(TIT) ; Простой заголовок
+ D OWF^RWU(".htm")
+ D WC^RWU("<!DOCTYPE HTML PUBLIC ""-//W3C//DTD HTML 4.01 Transitional//EN""><html><head>")
+ D:$G(TIT)'="" WC^RWU("<title>"_$$TAG^TXTU(TIT)_"</title>")
+ D WC^RWU(CR_"<meta http-equiv=""Content-Type"" content=""text/html; charset=windows-1251"">")
+ Q
+CSS 
+ D W^RWU(CR_"<style type=""text/css""><!--")
+ Q
+CSSE 
+ D W^RWU(CR_"--></style>")
+ Q
+NCSS(TAG) ; Normal CSS style
+ N A
+ S A=CR_"<style type=""text/css""><!--"
+ S A=A_"p.MsoNormal, div.MsoNormal"
+ S A=A_"{mso-style-unhide:no; mso-style-qformat:yes; mso-style-parent:""""; margin-top:0cm; margin-right:0cm; "
+ S A=A_"margin-bottom:10.0pt; margin-left:0cm; line-height:115%; mso-pagination:widow-orphan; font-size:11.0pt; color:#000000; "
+ S A=A_"font-family:""Calibri"",""sans-serif""; mso-ascii-font-family:Calibri; mso-ascii-theme-font:minor-latin; "
+ S A=A_"mso-fareast-font-family:Calibri; mso-fareast-theme-font:minor-latin; mso-hansi-font-family:Calibri; mso-hansi-theme-font:minor-latin; "
+ S A=A_"mso-bidi-font-family:""Times New Roman""; mso-bidi-theme-font:minor-bidi; mso-fareast-language:EN-US;}"
+ S A=A_CR_"--></style>"
+ D W^RWU($S($G(TAG):$$TAG^TXTU(A),1:A))
+ Q
+CSSI(nm,size,color,weight,bgcolor,align) 
+ S nm=nm_" { "
+ S:$G(size)'="" nm=nm_" font-size: "_size_";"
+ S:$G(color)'="" nm=nm_" color: "_color_";"
+ S:$G(weight)'="" nm=nm_" font-weight: "_weight_";"
+ S:$G(bgcolor)'="" nm=nm_" background-color: "_bgcolor_";"
+ S:$G(align)'="" nm=nm_" text-align: "_align_";"
+ D W^RWU(CR_nm_" }")
+ Q
+TAB(BRD,SPC,W,CLS) ; Вывод заголовка таблицы
+ D W^RWU("<table"_$S($G(W)="":"",1:" width="""_W_"""")_$S($G(BRD)="":"",1:" border="""_BRD_"""")_$S($G(SPC)="":"",1:" spacing="""_SPC_"""")_$S($G(CLS)="":"",1:" class="""_CLS_"""")_">")
+ Q
+TABLN(VAL,CSS,ATT,NOTG) ; Вывод строки таблицы
+ ; INST - атрибуты тега 
+ ; NOTG - не экранировать данные
+ N I,X,A,T
+ S CSS=$G(CSS),ATT=$G(ATT),A=""
+ S:'$G(NOTG) VAL=$$TAG^TXTU(VAL)
+ F I=1:1:$L(VAL,"|") S X=$P(VAL,"|",I),C=$P(CSS,"|",I),T=$P(ATT,"|",I),A=A_"<td"_$S(C="":"",1:" class="""_C_"""")_$S(T="":"",1:" "_T)_">"_$S(X="":"&nbsp;",1:X)_"</td>"
+ D WC^RWU(CR_"<tr>"_A_"</tr>")
+ Q
+FLN(NM,DATA) ; Field line
+ D WC^RWU(CR_"<div><b>"_$$TAG^TXTU(NM)_"</b> "_$$TAG^TXTU(DATA)_"<div>")
+ Q
+END ; Закрытие
+ D W^RWU("</body></html>")
+ D C^RWU
+ Q

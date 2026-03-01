@@ -1,0 +1,391 @@
+NNETR ; Нетрудоспособность - первичный учет [ 09/30/2019  4:07 PM ]
+FTAB(NIB,DT) ; Показать таблицу листков нетр. (открытых)
+ N X,ID,R,D
+ D OWF^RWU(".txt")
+ S DT=$$DI^DTUTL($G(DT))
+ S:'$$EXIST^IPAC(NIB) NIB=""
+ G:NIB=""&(DT="") FTABe
+ 
+ I DT'="",NIB'="" D:$D(^MNTRI("d",DT,NIB))  G FTABe
+ .S ID="" F  S ID=$O(^MNTRI("d",DT,NIB,ID)) Q:ID=""  D FTABln
+ 
+ I NIB="" D  G FTABe
+ .F  S NIB=$O(^MNTRI("d",DT,NIB)) Q:NIB=""  D
+ ..S ID="" F  S ID=$O(^MNTRI("d",DT,NIB,ID)) Q:ID=""  D FTABln
+ 
+ I DT="" S ID="" F  S ID=$O(^MNTR(NIB,ID)) Q:ID=""  S DT=$P($G(^MNTR(NIB,ID)),"|",4) D FTABln
+FTABe D C^RWU
+ Q 
+FTABln 
+ S X=^MNTR(NIB,ID)
+ S D=$P(X,"|",4) S:D="" D=+$P(X,"|",3)
+ S R=$$FIOSH^IPAC(NIB,D)
+ S:R="" R=$$FIOSH^IPAC(NIB)
+ S R=R_"|"_$$DT^DTUTL($P(X,"|",4))_"|"_$P(X,"|",1)
+ D WC^RWU(CR_NIB_"@"_ID_"|"_NIB_"|"_R)
+ Q
+L(KEY) ; Загрузить
+ N A,I,X,NIB,ID,V,Z
+ S NIB=$P(KEY,"@",1),ID=$P(KEY,"@",2)
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<netr>")
+ S A=$G(^MNTR(NIB,ID))
+ D WTAGDC^RWU("pac",NIB)
+ D WTAGDC^RWU("id",ID)
+ D WTAGDC^RWU("blnum",$P(A,"|",1))
+ D WTAGDC^RWU("dotkr",$$DT^DTUTL($P(A,"|",3)))
+ D WTAGDC^RWU("sdia",$P(A,"|",6))
+ D WTAGDC^RWU("edia",$P(A,"|",7))
+ D WTAGDC^RWU("sdia_label",$$NAME^YMKB10($P(A,"|",6)))
+ D WTAGDC^RWU("edia_label",$$NAME^YMKB10($P(A,"|",7)))
+ D WTAGDC^RWU("bltype",$P(A,"|",8))
+ D WTAGDC^RWU("bltypea",$P(A,"|",9))
+ D WTAGDC^RWU("bltyper",$P(A,"|",10))
+ D WTAGDC^RWU("prevbl",$P(A,"|",2))
+ S X=$P(A,"|",11)
+ D WTAGD^RWU("stat",$S(X=1:"",1:X))
+ D WTAGDC^RWU("statd",$$DT^DTUTL($P(A,"|",13)))
+ D WTAGDC^RWU("wrk",$G(^MNTR(NIB,ID,"wp")))
+ S V=$$UKDR^IUSER($P(A,"|",14)),X=$P(A,"|",15)
+ D WTAGDC^RWU("log",$$FIOSH^IKADRY(V)_", "_$$DTM^DTUTL(X))
+ S Z=$P(A,"|",12)
+ S A=""
+ F I=1:1:3 S A=A_CR S:$D(^MNTR(NIB,ID,I)) X=^(I),V=$P(X,"|",3),A=A_$$DT^DTUTL($P(X,"|",1))_"|"_$$DT^DTUTL($P(X,"|",2))_"|"_$S($P(X,"|",5)!(V=0):"Внешний",1:V_" "_$$FIOSH^IKADRY(V))
+ S $P(A,CR,5)="|Закрыл|"_$S(Z="":"",1:Z_" "_$$FIOSH^IKADRY(Z))
+ D WC^RWU("<dtable>"_A_"</dtable>")
+ D W^RWU("</netr></nb_console>"),C^RWU
+ Q
+S ; Сохранить
+ N NIB,FRM,NB,A,DT,I,X,DE,DS,ST,OVR,EVR,VR,NUM,PNUM,TBL,D,RO,ID,R,SS
+ S NB="nb_console",FRM="netr"
+ N @$$NEWVAR^YIXMLRR()
+ D RBUFH^YIXMLRR(1)
+ S NIB=$G(XML(NB,FRM,"pac")),DT=$$DIH^DTUTL($G(XML(NB,FRM,"dotkr")))
+ S ID=$G(XML(NB,FRM,"id"))
+ Q:NIB=""
+ I '$D(^BTN(NIB)) D MSG^RWU("Пациент не найден") Q 
+ S NUM=$G(XML(NB,FRM,"blnum"))
+ I ID'="",NUM'="",$D(^MNTRI("num",NUM)),$G(^(NUM))'=(NIB_"|"_ID) D MSG^RWU("Указанный номер листка уже используется") Q 
+ ; Проверка последовательности дат
+ S TBL=$G(XML(NB,FRM,"dtable")),D=""
+ F I=2:1:4 D  Q:$$IsMSG^RWU()
+ .S X=$$TRIM^TXTU($P(TBL,CR,I)) Q:$P(X,"|",1)="" 
+ .I I>2,D'=($$DI^DTUTL($P(X,"|",1))-1) D MSG^RWU("Неправильная дата в строке "_(I-1)) Q
+ .S D=$$DI^DTUTL($P(X,"|",2))
+ .
+ Q:$$IsMSG^RWU()
+ 
+ D:ID'="" RMIDX^INETR(NIB,ID) ; чистим индексы
+ S:ID="" ID=$O(^MNTR(NIB,""),-1)+1
+ S RO=""
+ S PNUM=$G(XML(NB,FRM,"prevbl")) S:PNUM=NUM PNUM=""
+ S RO=NUM_"|"_PNUM_"|"_DT
+ S $P(RO,"|",8)=$G(XML(NB,FRM,"bltype"))
+ S $P(RO,"|",9)=$G(XML(NB,FRM,"bltypea"))
+ S $P(RO,"|",10)=$G(XML(NB,FRM,"bltyper"))
+ S $P(RO,"|",6)=$$TRIM^TXTU($G(XML(NB,FRM,"sdia")))
+ S $P(RO,"|",7)=$$TRIM^TXTU($G(XML(NB,FRM,"edia")))
+ S $P(RO,"|",13)=$$DI^DTUTL($G(XML(NB,FRM,"statd")))
+ S ST=$G(XML(NB,FRM,"stat"))
+ 
+ S TBL=$G(XML(NB,FRM,"dtable")),(DS,DE,OVR,SS)=0
+ F I=2:1:4 D
+ .S X=$$TRIM^TXTU($P(TBL,CR,I))
+ .S D=$$DI^DTUTL($P(X,"|",1))
+ .I I=2 S DS=+D S:DS>0&(DS'=DT) DT=DS
+ .K ^MNTR(NIB,ID,I-1)
+ .Q:X="||"
+ .S DE=$$DI^DTUTL($P(X,"|",2)),VR=$P($P(X,"|",3)," ",1)
+ .S R=D_"|"_DE
+ .S:D&DE SS=SS+DE-D+1
+ .S:VR="Внешний" $P(R,"|",5)=1,VR=""
+ .S:VR'=""&(VR'="Внешний") $P(R,"|",3)=VR
+ .S ^MNTR(NIB,ID,I-1)=R
+ .S:'OVR&VR OVR=VR
+ S X=$$TRIM^TXTU($P(TBL,CR,5))
+ S EVR=$P($P(X,"|",3)," ",1)
+ S:EVR'="" ST=1
+ S $P(RO,"|",11)=ST
+ S:EVR $P(RO,"|",12)=EVR
+ S:DS $P(RO,"|",4)=DS
+ S:SS $P(RO,"|",5)=SS
+ S $P(RO,"|",14)=$$USR^IUSER(),$P(RO,"|",15)=$H,$P(RO,"|",16)=$$^I("ilpu")
+ S ^MNTR(NIB,ID)=RO
+ 
+ S X=$$TRIM^TXTU($G(XML(NB,FRM,"wrk")))
+ K:X="" ^MNTR(NIB,ID,"wp")
+ S:X'="" ^MNTR(NIB,ID,"wp")=X
+ 
+ D MKIDX^INETR(NIB,ID)
+ D SPDIAG(DT,NIB)
+ D MKDOC(NIB)
+ D REGL^IEXCH("^MNTR",NIB,ID)
+ 
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<netr>")
+ D WTAG^RWU("id",ID)
+ D W^RWU("</netr></nb_console>"),C^RWU
+ Q
+SS(NI,VR,DS,DE,TP,TPE,BB12,END,STDT) ; Открытие
+ N ID,DI,IX
+ S DS=$$DI^DTUTL(DS),DE=$$DI^DTUTL(DE)
+ I DS="" D MSG^RWU("Не указана дата открытия.") Q 
+ I $G(^cfg("netr","strictdts")),DE="" D MSG^RWU("Вы должны указать дату закрытия листа.") Q  
+ S STDT=$$DI^DTUTL(STDT)
+ S ID=$O(^MNTR(NI,""),-1)+1
+ S DI=$$RECODE^YMKB10($$WD^TXTU($G(^JOB(%JOB,"epr-u","DIA"))))
+ S R=""
+ S $P(R,"|",3)=+$H,$P(R,"|",4)=DS
+ S:DE $P(R,"|",5)=DE-DS+1+$S(STDT:DS-STDT,1:0)
+ S:DI'="" $P(R,"|",6)=DI
+ S $P(R,"|",8)=TP
+ S $P(R,"|",9)=TPE
+ S:END $P(R,"|",11)=1,$P(R,"|",12)=VR,$P(R,"|",7)=DI
+ S $P(R,"|",14)=$$USR^IUSER(),$P(R,"|",15)=$H,$P(R,"|",16)=$$^I("ilpu")
+ S ^MNTR(NI,ID)=R
+ S:BB12 $P(^MNTR(NI,ID,"i"),"|",1)=1
+ S IX=$S(STDT="":1,1:2)
+ S ^MNTR(NI,ID,IX)=DS_"|"_DE_"|"_VR
+ S:STDT'="" ^MNTR(NI,ID,1)=STDT_"|"_(DS-1)_"|"_VR_"||1"
+ D MKIDX^INETR(NI,ID)
+ D REGL^IEXCH("^MNTR",NI,ID)
+ D MKDOC(NI)
+ Q
+SE(NI,VR,DE,ST) ; Закрытие
+ N ID,D,DI,RO,D,DD,I,PD
+ S ID=$O(^MNTR(NI,""),-1)
+ Q:ID="" 
+ S RO=^MNTR(NI,ID)
+ I $P(RO,"|",11)'="" Q  ; уже закрыт
+ S DE=$$DI^DTUTL(DE)
+ S:DE="" DE=$H+1
+ S:ST="" ST=1
+ S DI=$$RECODE^YMKB10($$WD^TXTU($G(^JOB(%JOB,"epr-u","DIA"))))
+ S:DI="" DI=$P(RO,"|",6) ; из открытия
+ S:DI'="" $P(RO,"|",7)=DI
+ S $P(RO,"|",11)=ST
+ S $P(RO,"|",12)=VR
+ S D=$P(RO,"|",4)
+ I D,DE'="",$P(RO,"|",5)'=(DE-D) D  ; больше существующ. длительности
+ .S I=$O(^MNTR(NI,ID,99),-1),DD=$P(^(I),"|",2)
+ .S:DD'="" DD=DD+1 ; следующая дата если есть
+ .S ^(I+1)=DD_"|"_(DE-1)_"|"_VR
+ .S $P(RO,"|",5)=DE-D
+ S ^MNTR(NI,ID)=RO
+ D REGL^IEXCH("^MNTR",NI,ID)
+ D MKIDX^INETR(NI,ID)
+ Q
+SC(NI,VR,OT,DT) ; Отмена регистрации ЛВН
+ ; TODO - убрать флаг из ZNF 
+ Q
+GPNUM(NUM) ; Get prevous number TODO
+ Q:$D(^MNTRI("n",NUM))[0 ""
+ N DT,NI,A S A=^(NUM),DT=$P(A,"|",1),NI=$P(A,"|",2)
+ S A=$G(^MNTR(DT,NI,"n"))
+ Q $P(A,"|",5)
+SPDIAG(DT,NI) ; Сохр. закл. диаг в первом по цепочке TODO
+ Q
+ N DI,NN,I S I=0
+ S DI=$P($G(^MNTR(DT,NI,"n")),"|",3) Q:DI="" 
+ F  S NN=$P($G(^MNTR(DT,NI,"n")),"|",5) Q:NN=""  S A=$G(^MNTRI("n",NN)),DT=$P(A,"|",1),NI=$P(A,"|",2),A=$G(^MNTR(DT,NI,"n")),I=I+1 Q:I>16  D:A'=""
+ .S $P(A,"|",3)=DI,^MNTR(DT,NI,"n")=A,^MNTRI("c",DT,NI)=$H
+ .D GL^IEXCH("^MNTR",DT,NI)
+ .D KGL^IEXCH("^MNTRI","c",DT,NI)
+ ; I - чтобы больничные не зацикливались 
+ Q
+FDEL(KEY) ; for .frm
+ N NIB,ID
+ S NIB=$P(KEY,"@",1),ID=$P(KEY,"@",2)
+ D DEL^INETR(NIB,ID)
+ Q
+EXTVR ;
+ N A S A=+$G(^cfg("netr","extvr"))
+ D MSG^RWU(A_" "_$$FIOSH^IKADRY(A))
+ Q
+DOEND(NI,DE,DIA,ST) ; Закрыть (последний) больничный по диагнозу TODO
+ Q 
+ ; DE - дата закрытия
+ ; ST - статус закрытия
+ N DT,I,R
+ S DE=$G(DE),DIA=$G(DIA),ST=$G(ST)
+ S:DE="" DE=+$H S:ST="" ST=1
+ S DT=$O(^MNTRI("i",NI,""),-1) Q:DT=""
+ F I=3:-1:1 Q:$G(^MNTR(DT,NI,I))'=""
+ I DE'=$P(^(I),"|",2) S $P(^(I),"|",2)=DE ; корр. посл. срока
+ S:DIA="" DIA=$P(^MNTR(DT,NI,"n"),"|",2)
+ S R=^MNTR(DT,NI,"n")
+ S $P(R,"|",3)=DIA S:ST $P(R,"|",9)=ST
+ S ^MNTR(DT,NI,"n")=R
+ S $P(^MNTR(DT,NI,99),"|",2)=$H-$P($G(^MNTR(DT,NI,99)),"|",1)+1
+ S ^MNTRI("c",DT,NI)=$H
+ D GL^IEXCH("^MNTR",DT,NI)
+ D GL^IEXCH("^MNTRI","c",DT,NI)
+ Q
+STATE(NIB,DT) 
+ ; состояние последнего ЛВН <= даты. 0-закрыт, 1-открыт
+ N ID
+ S ID=$O(^MNTR(NIB,""),-1) Q:ID="" 0
+ Q:$P($G(^(ID)),"|",11)="" 1
+ Q 0
+STATET(Z,NIB,VR,SP) ; Текстовый экспетрный анамнез для ЭМК
+ ; Sample: "Экспертный анамнез|#ft:STATET^NNETR@"
+ I $G(Z) D STATETA(Z,NIB,$G(VR),$G(SP)) Q  ; all, 365 days
+ N ID,N,R,X
+ S ID=$O(^MNTR(NIB,""),-1) Q:ID="" 
+ S X=$G(^(ID))
+ S R="Выдан лист временной нетрудоспособности "
+ D lnSTATE
+ D MSG^RWU(R)
+ Q
+STATETA(Z,NIB,VR,SP) ; Текстовый экспертный анамнез для ЭМК (за 365 дней)
+ N ID,N,R,X,D,I
+ S D=$H-367,R="",I="" F  S D=$O(^MNTRI("nd",NIB,D)) Q:D=""  D
+ .S ID="" F  S ID=$O(^MNTRI("nd",NIB,D,ID)) Q:ID=""  D
+ ..S X=$G(^MNTR(NIB,ID)) Q:X=""
+ ..S I=I+1
+ ..S:R'="" R=R_"; "
+ ..D lnSTATE
+ S:I R=$S(I>1:"Выданы",1:"Выдан")_" л.в.н "_R
+ D MSG^RWU(R)
+ Q
+lnSTATE 
+ S N=$P(X,"|",1)
+ S:N'="" R=R_"№ "_N
+ S R=R_" с "_$$DT^DTUTL($P(X,"|",4))
+ S N=$P(X,"|",5)
+ S:N R=R_" длительностью "_$$DAYT^DTUTL(N)
+ S N=$P(X,"|",7)
+ S:N'="" R=R_", диагноз "_N
+ Q
+MKDOC(NI) ; Создать документ в ЭИБ
+ N ID
+ S ID=$$REGint()
+ S:$$FNDTP^IEPR(NI,ID)="" ID=$$MKDOC^YIMH(NI,ID,"",1)
+ Q
+REGIMHS 
+ S ^EPRSP("flg",8,"nf")="8 Открытие листа нетрудоспособности"
+ S ^EPRSP("flg",8,"nm")="Л.В.Н."
+ S ^EPRSP("flg",8,"eh")="$$STATE^NNETR(NIB,+$H)"
+ S ^EPRSP("flg",8,"n")=80
+ 
+ S ^EPRSP("flg",80,"nf")="8.0 Внешний лист нетрудоспособности"
+ S ^EPRSP("flg",80,"nm")="Вн. л.н."
+ S ^EPRSP("flg",80,"eh")="$$STATE^NNETR(NIB,+$H)"
+ S ^EPRSP("flg",80,"n")=8
+ 
+ S ^EPRSP("flg",81,"nf")="8.1 Продление листа нетрудоспособности"
+ S ^EPRSP("flg",81,"nm")="Продл. л.н."
+ S ^EPRSP("flg",81,"eh")="'$$STATE^NNETR(NIB,+$H)"
+ S ^EPRSP("flg",81,"n")=82
+ 
+ S ^EPRSP("flg",82,"nf")="8.2 Закрытие листа нетрудоспособности"
+ S ^EPRSP("flg",82,"nm")="Закр. л.н."
+ S ^EPRSP("flg",82,"eh")="'$$STATE^NNETR(NIB,+$H)"
+ S ^EPRSP("flg",82,"n")=81
+ Q
+REGint() 
+ N ID,NM
+ S ID=$$FNDUID^YIMHS("base/netr")
+ Q:ID'="" ID
+ S NM="Лист временной нетрудоспособности"
+ S ID=$$ADDT^YIMHS(NM,$$ADDF^YIMHS("Долговременная информация о больном"),"tab")
+ D SET^YIMHS(ID,"rproc","ODOC^NNETR")
+ D SET^YIMHS(ID,"rights","rrr")
+ D SET^YIMHS(ID,"ext","tab")
+ D SET^YIMHS(ID,"bdoc",1)
+ D SET^YIMHS(ID,"uid","base/netr")
+ D MKIDX^IMHS(ID)
+ Q ID
+ODOC ; 
+ N DT,DO,DZ,R,D,A,K,P,ID
+ D WC^RWU("Открытие|Диагноз открытия|Закрытие|Диагноз закрытия|Длительность")
+ 
+ S ID="" F  S ID=$O(^MNTR(N,ID)) Q:ID=""  D
+ .S R=$G(^(ID)),P=$P(R,"|",2)
+ .I P'="",$D(^MNTRI("n",P)) Q ; только первичн. б.л.
+ .S DO=$P(R,"|",6),DZ=$P(R,"|",7),D=$P(R,"|",5),DT=$P(R,"|",4)
+ .S A=CR_$$DT^DTUTL(DT)_"|"
+ .S X=$$NAME^YMKB10(DO,32)
+ .S R=DT+D-1 ; DS
+ .S A=A_X_"|"_$S(DZ="":"",1:$$DT^DTUTL(R))_"|"
+ .S X=$$NAME^YMKB10(DZ,32)
+ .D WC^RWU(A_X_"|"_$$ADAYS^NNETRS(N,ID))
+ Q
+INIT ; Инициализация формы
+ N R S R=+$G(^LOG(%LOG,"lcl","netr"))
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<netr>")
+ D:$G(^LCL("netr",R,"del")) W^RWU("<bt_del visible=""yes""/>")
+ D:$G(^LCL("netr",R,"new"))=0 W^RWU("<bt_crea visible=""no""/>")
+ D:$G(^LCL("netr",R,"save"))=0 W^RWU("<bt_save visible=""no""/>")
+ D:$G(^LCL("netr",R,"newext"))=0 W^RWU("<bt_ext visible=""no""/>")
+ D:$G(^LCL("netr",R,"long"))=0 W^RWU("<bt_cont visible=""no""/>")
+ D W^RWU("<bltype>")
+ D SILSTs^NSPRAV("netr-c")
+ D W^RWU("</bltype><bltypea>")
+ D SILSTs^NSPRAV("netr-ca")
+ D W^RWU("</bltypea><bltyper>")
+ D SILSTs^NSPRAV("netr-c")
+ D W^RWU("</bltyper><stat>")
+ D SILSTs^NSPRAV("netr-s")
+ D W^RWU("</stat></netr></nb_console>"),C^RWU
+ Q
+INITLT ; Инициализация формы
+ N FLG
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<mhnetr>")
+ S FLG="|"_$G(^JOB(%JOB,"epr-u","FLG"))_"|"
+ D W^RWU("<std visible="""_$S(FLG["|80|":"yes",1:"no")_"""/>") ; ext.
+ D W^RWU("<bltype>")
+ D SILSTs^NSPRAV("netr-c")
+ D W^RWU("</bltype><bltypea>")
+ D SILSTs^NSPRAV("netr-ca")
+ D W^RWU("</bltypea></mhnetr></nb_console>"),C^RWU
+ Q
+INITLTE ; Инициализация формы E
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<mhnetre>")
+ D W^RWU("<stat>")
+ D LSTs^NSPRAV("netr-s")
+ D W^RWU("</stat></mhnetre></nb_console>"),C^RWU
+ Q
+BLANK(NIB,ID) ; Данные для бланка нетрудоспособности
+ N R,I,RR,RV,V
+ D OWF^RWU(".xml")
+ D W^RWU(^PP(0,1)_"<streport><data>")
+ D WTAGC^RWU("nib",NIB)
+ D WTAGC^RWU("fiof",$$LU^TXTU($$GET^IPAC(NIB,"fiof")))
+ D WTAGC^RWU("fioi",$$LU^TXTU($$GET^IPAC(NIB,"fioi")))
+ D WTAGC^RWU("fioo",$$LU^TXTU($$GET^IPAC(NIB,"fioo")))
+ D WTAGC^RWU("born",$$GETE^IPAC(NIB,"datar"))
+ D WTAGC^RWU("sex",$$GET^IPAC(NIB,"pol"))
+ 
+ D WTAGC^RWU("work",$G(^MNTR(NIB,ID,"wp")))
+ 
+ S RR=$G(^MNTR(NIB,ID))
+ D WTAG^RWU("pntr1",$P(RR,"|",8))
+ D WTAG^RWU("pntr2",$P(RR,"|",9))
+ D WTAG^RWU("pntr3",$P(RR,"|",10))
+ 
+ D WTAG^RWU("dt",$$DT^DTUTL($P(RR,"|",3)))
+ D WTAG^RWU("prnum",$P(RR,"|",2))
+ 
+ S RV=$G(^MNTR(NIB,ID,1))
+ S:$P(RV,"|",5) RV=$G(^MNTR(NIB,ID,2)) ; строку внешнего игнорим
+ D WTAG^RWU("fd1",$$DT^DTUTL($P(RV,"|",1)))
+ D WTAG^RWU("td1",$$DT^DTUTL($P(RV,"|",2)))
+ S V=$P(RV,"|",3)
+ S R=$TR($$LU^TXTU($$FIOSH^IKADRY(V)),".","")
+ S R=$P(R," ",1)_" "_$P(R," ",2)_$P(R," ",3)
+ S R=$E(R,1,14)
+ D WTAGC^RWU("vr11",R)
+ S R=$$GETPL^ISPRAV("spec",$$SPEC^IKADRY(V),"lnname")
+ D WTAGC^RWU("dl11",$E(R,1,14))
+ 
+ D W^RWU("</data></streport>")
+ D C^RWU
+ Q
+REGLCL   ; Register description of available rights
+ K ^LCLI("netr")
+ S ^LCLI("netr")="Учет нетрудоспособности"
+ S ^LCLI("netr","del")="Удаление ЛН"
+ S ^LCLI("netr","new")="Создание нового ЛН"
+ S ^LCLI("netr","save")="Сохранение"
+ S ^LCLI("netr","newext")="Создание нового внешнего ЛН"
+ S ^LCLI("netr","long")="Продление"
+ Q

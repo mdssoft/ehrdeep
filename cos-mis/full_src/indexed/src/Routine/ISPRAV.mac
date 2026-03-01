@@ -1,0 +1,198 @@
+ISPRAV ; Справочники системы [ 07/22/2021  5:07 PM ]
+CHECK(NM,ID) ; Проверить, существует ли ID
+ ; NM - справочник
+ Q:ID="" 0 Q:NM="" 0
+ I +NM=NM Q:$D(^M(NM,ID)) 1 Q 0
+ Q:$D(^(+$G(^MN(NM)),ID)) 1 Q 0
+GET(NAME,ID)    ; получить строку из справочника по ID
+ Q:ID="" "" Q:NAME="" ""
+ I +NAME=NAME Q $G(^M(NAME,ID))
+ Q $G(^(+$G(^MN(NAME)),ID))
+GETN(NAME,ID,N)    ; получить Piece из справочника по ID
+ Q:ID="" "" Q:NAME="" ""
+ I +NAME=NAME Q $P($G(^M(NAME,ID)),"|",N)
+ Q $P($G(^(+$G(^MN(NAME)),ID)),"|",N)
+GETH(NAME,ID,PL,DT) ; Получить поле по ID и дате
+ S:$G(DT)="" DT=+$H
+ S NAME=+$G(^MN(NAME))
+ G:PL="" GEThn ; "вырожденное" поле
+ S DT=$O(^MN(NAME,ID,PL,DT+1),-1) Q:DT="" "" Q $G(^(DT))
+GEThn 
+ S DT=$O(^MN(NAME,ID,DT+1),-1) Q:DT="" "" Q $G(^(DT))
+ Q
+GETPL(NAME,ID,PL)       ; Получить поле из справочника по ID
+ Q:ID="" "" Q:NAME="" "" Q:PL="" ""
+ I NAME?1.N Q $G(^M(NAME,ID,PL))
+ Q $G(^(+$G(^MN(NAME)),ID,PL))
+SET(NAME,ID,R)    ; Присвоить строку из справочника по ID
+ Q:ID=""  Q:NAME=""
+ I NAME?1.N S ^M(NAME,ID)=R Q
+ I '$D(^MN(NAME)) S NAME=$$NEWIDX(NAME)
+ E  S NAME=^MN(NAME)
+ S ^MN(NAME,ID)=R
+ Q
+SETN(NAME,ID,R,N)    ; Присвоить Piece строки из справочника по ID
+ Q:ID=""  Q:NAME=""
+ I NAME?1.N S ^M(NAME,ID)=R Q
+ I '$D(^MN(NAME)) S NAME=$$NEWIDX(NAME)
+ E  S NAME=^MN(NAME)
+ S $P(^MN(NAME,ID),"|",N)=R
+ Q
+SETH(NAME,ID,PL,DT,R) ; Установить поле по ID и дате
+ Q:ID=""  Q:NAME="" 
+ N I,PR,DTPV
+ S I=+$G(^MN(NAME)),PR=""
+ S:'I I=$$NEWIDX(NAME)
+ G:PL="" SEThn
+ S DTPV=$O(^MN(I,ID,PL,DT),-1) S:$L(DTPV) PR=^(DTPV)
+ I $D(^(DT)),R'=^(DT) K ^MN(I,ID,PL,DT)
+ G SEThe
+SEThn 
+ S DTPV=$O(^MN(I,ID,DT),-1) S:$L(DTPV) PR=^(DTPV)
+ I $D(^(DT)),R'=^(DT) K ^MN(I,ID,DT)
+SEThe 
+ S:PR'=R ^(DT)=R
+ S DTPV=$O(^(DT))
+ I $L(DTPV) K:R=^(DTPV) ^(DTPV)
+ D UPD^IEXCH("YISPRAV",NAME)
+ Q
+SETPL(NAME,ID,PL,VAL)       ; Присвоить поле из справочника по ID
+ Q:ID=""  Q:NAME=""  Q:PL="" 
+ I NAME?1.N S ^M(NAME,ID,PL)=VAL Q
+ I '$D(^MN(NAME)) S NAME=$$NEWIDX(NAME)
+ E  S NAME=^MN(NAME)
+ S ^MN(NAME,ID,PL)=VAL
+ Q
+NAME(NAME,ID)   ; получить 'имя' из справочника по ID (1-й эл-т)
+ Q:ID="" "" Q:NAME="" ""
+ I NAME?1.N Q $P($G(^M(NAME,ID)),"|",1)
+ Q $P($G(^(+$G(^MN(NAME)),ID)),"|",1)
+NEXT(NM,ID) ; Для итераторов
+ I NM?1.N Q $O(^M(NM,ID))
+ Q $O(^(+$G(^MN(NM)),ID))
+NEWNUM(NM) ; Новый номер
+ I NM?1.N Q $O(^M(NM,""),-1)+1
+ I '$D(^MN(NM)) S NM=$$NEWIDX(NM)
+ E  S NM=^MN(NM)
+ Q $O(^MN(NM,""),-1)+1
+MERGENM(NM,ptrVAR) ; Все имена - в переменную
+ K @ptrVAR
+ S NM=+$G(^MN(NM)) Q:'NM 
+ N I
+ S I="" F  S I=$O(^MN(NM,I)) Q:I=""  S @ptrVAR@(I)=$P(^(I),"|",1)
+ Q
+VARNM(NM) ; Все имена - возврат ф-ции
+ S NM=+$G(^MN(NM)) Q:'NM ""
+ N I,R,C
+ S (I,C,R)="" S:'$D(CR) CR=$C(13,10)
+ F  S I=$O(^MN(NM,I)) Q:I=""  S R=R_C_I_"|"_$P(^(I),"|",1),C=CR
+ Q R
+CHKSPR(NM) ; Проверить существование справочника по имени
+ Q:+$G(^MN(NM)) 1
+ Q 0
+CNGDT(NM) ; Дата изменения справочника
+ Q:NM="" ""
+ I +NM=NM Q:$D(^M(NM)) ^(NM) Q ""
+ Q $G(^(+$G(^MN(NM))))
+ADDFN(NM,VAL) ; Добавить значение в справочник (возврат индекса)
+ ; NM - справочник
+ ; VAL - название элемента
+ N I,N
+ I NM?1.N S I=$O(^M(NM,""),-1)+1,^(I)=VAL D UPD^IEXCH("YISPRAV",NM) Q
+ I '$D(^MN(NM)) S N=$$NEWIDX(NM)
+ E  S N=^MN(NM)
+ S I=$O(^MN(N,""),-1)+1
+ S ^(I)=VAL
+ D W^ISSG("^MN("_NM_","_I_")="_VAL)
+ D UPD^IEXCH("YISPRAV",NM)
+ Q I
+ADD(NM,VAL) ; Добавить значение в справочник
+ S NM=$$ADDFN(NM,VAL)
+ Q
+FIND(NM,X,MOD) ; Поиск в справочнике
+ ; X - значение
+ ; MOD - вид поиска: 1 - с UL, 2-исключая знаки препинания
+ N I,R
+ S MOD=$G(MOD),X=$$recf(X,MOD)
+ G:NM?1.N FINDn
+ Q:'$D(^MN(NM)) ""
+ S NM=^(NM)
+ S I="" F  S I=$O(^MN(NM,I)) Q:I=""  I $$recf(^(I),MOD)=X Q
+ Q I
+FINDn 
+ Q:'$D(^M(NM)) ""
+ S I="" F  S I=$O(^M(NM,I)) Q:I=""  I $$recf(^(I),MOD)=X Q
+ Q I
+FINDN(NM,IDX,X,MOD) ; Поиск подэлемента в справочнике
+ ; IDX - позиция элемента 
+ ; X - значение
+ ; MOD - вид поиска: 1 - с UL, 2-исключая знаки препинания
+ N I,R
+ S MOD=$G(MOD),X=$$recf(X,MOD)
+ G:NM?1.N FINDNn Q:'$D(^MN(NM)) ""
+ S NM=^(NM)
+ S I="" F  S I=$O(^MN(NM,I)) Q:I=""  I $$recf($P(^(I),"|",IDX),MOD)=X Q
+ Q I
+FINDNn 
+ Q:'$D(^M(NM)) ""
+ S I="" F  S I=$O(^M(NM,I)) Q:I=""  I $$recf($P(^(I),"|",IDX),MOD)=X Q
+ Q I
+FINDPL(NM,PL,X) ; Поиск в справочнике по полю
+ ; X - значение
+ N I,R
+ G:NM?1.N FINDPLn Q:'$D(^MN(NM)) ""
+ S NM=^(NM)
+ S I="" F  S I=$O(^MN(NM,I)) Q:I=""  I $G(^(I,PL))=X Q
+ Q I
+FINDPLn 
+ Q:'$D(^M(NM)) ""
+ S I="" F  S I=$O(^M(NM,I)) Q:I=""  I $G(^(I,PL))=X Q
+ Q I
+FINDFLG(NM,PL,X) ; Поиск в справочнике по флагу-полю
+ ; X - значение
+ N I,R
+ G:NM?1.N FINDFnPl Q:'$D(^MN(NM)) ""
+ S NM=^(NM)
+ S I="" F  S I=$O(^MN(NM,I)) Q:I=""  I $$FLinFL^TXTU($G(^(I,PL)),X) Q 
+ Q I
+FINDFnPl 
+ Q:'$D(^M(NM)) ""
+ S I="" F  S I=$O(^M(NM,I)) Q:I=""  I $$FLinFL^TXTU($G(^(I,PL)),X) Q 
+ Q I
+recf(X,MOD) 
+ Q:'MOD X
+ S X=$$UL^TXTU(X)
+ Q:MOD=1 X
+ Q $TR(X,"[]{};:'\|,.<>/?!`~@#$%^&*()_+-= "_$C(9),"")
+NEWIDX(NAME) ; Вернуть или создать ключ справочника
+ N IDX,MI,I
+ S IDX=$G(^MN(NAME)) Q:IDX'="" IDX
+ S I=99999,MI=0
+ F  S I=$O(^MN(I)) Q:I=""   S:MI<(+$G(^MN(I))) MI=+$G(^MN(I))
+ S IDX=MI+1,^MN(NAME)=IDX
+ Q IDX
+SPEC(ID) ; Краткое наименование специальности
+ Q:ID="" "" N X S X=$G(^MN("spec")) Q:X="" ""
+ Q $G(^(X,ID,"sname"))
+OTD(ID) ; Краткое наименование отделения
+ Q:ID="" "" N X S X=$G(^MN("otd")) Q:X="" ""
+ Q $G(^(X,ID,"sname"))
+IDX(NAME) ; Вернуть ключ справочника
+ Q:NAME="" 0
+ N IDX
+ S IDX=$G(^MN(NAME))
+ Q:IDX="" 0
+ Q IDX
+USYNC(NM) ; Синхронизировать справочник у пользователей
+ D SYNC^ICHIFR(NM)
+ Q
+doSYNC(NM) ; system proc
+ N TUPD,DT,ND,ITE
+ S ITE=" type=""plain"""
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,1))_"<storage>")
+ S (TUPD,DT)=""
+ I +NM'=NM D LMN^ICHIFR(NM,0,)
+ I +NM=NM D MM^YCHIFR(NM,$S(NM=1:"status1",NM=5:"mectorab",1:""))
+ D W^RWU("</storage>")
+ D C^RWU
+ Q

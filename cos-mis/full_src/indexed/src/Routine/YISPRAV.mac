@@ -1,0 +1,325 @@
+A ; ЗАГРУЗКА СПРАВОЧНИКОВ [ 04/24/2024  5:33 PM ]
+MENJ ; Менеджеры - сохранение
+ N %J,A,OT,LL
+ D ORH^RWU
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  D
+ .S OT=+$P(A,"|",1),LL=$$WD^TXTU($P(A,"|",2)),^M(54,OT)=$$TRIM^TXTU(LL)
+ D CR^RWU
+ D USYNC^ISPRAV(54)
+ Q
+PODR ; Подразделения - сохранение
+ K ^M(135)
+ N %J,A,OT,LL
+ D ORH^RWU
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  D
+ .S OT=+$P(A,"|",1),LL=$$WD^TXTU($P(A,"|",2)),^M(135,OT)=$P(LL,"    ",1)
+ D CR^RWU
+ Q
+RTIME ; ЗАПИСЬ ВРЕМЕНИ ПРИЕМА
+ N ID,LL,%J,A
+ D ORH^RWU
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D
+ .S ID=$TR($P(A,"|",1),"@|",""),LL=$P(A,"|",2,3)
+ .S:ID'="" ^M(141,ID)=$$TRIM^TXTU(LL)
+ D CR^RWU
+ Q
+GOTD(N,PL) ; Имя отделения (или любое поле) по номеру
+ Q:N="" "" N X S X=$G(^MN("otd")) Q:X="" ""
+ Q:$D(PL) $G(^(X,N,PL))
+ Q $G(^(X,N,"sname"))
+NOTD ; Получить новый номер отделения
+ N I,N S I=$$NEWIDX("otd")
+ F N=1:1:998 Q:'$D(^MN(I,N))
+ D MSG^RWU(N)
+ Q
+DOTD(N) ; УДАЛЕНИЕ
+ Q:N="" "" N X S X=$G(^MN("otd")) Q:X="" ""
+ K:$D(^MN(X,N)) ^MN(X,N),^M(131,N)
+ D K^ISSG("^MN("_X_","_N_")")
+ D UPD^IEXCH("YISPRAV","otd")
+ D TOTD
+ D USYNC^ISPRAV("otd")
+ Q
+LOTD(N) ; ЗАГРУЗКА
+ N ID,PL S N=+N,ID=+$G(^MN("otd"))
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<totd>")
+ I '$D(^MN(ID,N)) D WTAGD^RWU("num","") G LOTDe
+ D WTAGD^RWU("num",N)
+ S PL="" F  S PL=$O(^MN(ID,N,PL)) Q:PL=""  S R=^(PL) D:PL'="lpu"&(PL'="flg") WTAGDC^RWU(PL,R) D:PL="lpu"!(PL="flg") WTAGC^RWU(PL,R)
+LOTDe D W^RWU("</totd></nb_console>"),C^RWU
+ Q
+SOTD ; СОХРАНЕНИЕ 
+ N PTI,%J,N,IDX,A,I,F,X1,X2
+ S PTI="nb_console"
+ D RSXML^XMLU
+ S IDX=$$NEWIDX("otd")
+ S N=+$G(XML(PTI,"totd","num"))
+ K XML(PTI,"totd","num")
+ F F="addr","flg","fname","head","lpu","med","num","phones","sname","use" K ^MN(IDX,N,F) ; edited fields
+ M ^MN(IDX,N)=XML(PTI,"totd")
+ ; D FILL131
+ D UPD^IEXCH("YISPRAV","otd")
+ S ^MN(IDX)=$H
+ S ^MN(IDX,N,"log")=$$USRH^IUSER()
+ S A=$G(^MN(IDX,N,"flg")),(X1,X2)=0
+ S X1=$$FLinFL^TXTU(A,"stom")
+ K:'X1 ^cfg("stom-otd",N) S:X1 ^cfg("stom-otd",N)=""
+ S X1=$$FLinFL^TXTU(A,"stac")
+ K:'X1 ^cfg("stac-otd",N) S:X1 ^cfg("stac-otd",N)=""
+ K XML
+ D REGL^IEXCH("^cfg","stom-otd")
+ D REGL^IEXCH("^cfg","stac-otd")
+ D USYNC^ISPRAV("otd")
+ D MSG^RWU("")
+ Q
+fndNM(NM,SPR) ; Найти по имени
+ N IDX,N,RR
+ S IDX=$G(^MN(SPR)),RR=$$UL^TXTU(NM)
+ Q:IDX="" ""
+ S N="" F  S N=$O(^MN(IDX,N)) Q:N=""  Q:$$UL^TXTU($G(^MN(IDX,N,"fname")))=RR  Q:$$UL^TXTU($G(^MN(IDX,N,"sname")))=RR
+ Q N
+FILL131 ; ^MN("otd")->^M(131)
+ N I,N S I=$G(^MN("otd")),N="" K ^M(131)
+ F  S N=$O(^MN(I,N)) Q:N=""  I $G(^(N,"use"))=1,$G(^("med"))=1 S ^M(131,N)=N_" "_$G(^("sname"))
+ Q
+OTCNVRT ; Конвертирование из старого в новый список отделений
+ N IDX,OT,NM
+ S IDX=$$NEWIDX("otd")
+ S OT="" F  S OT=$O(^M(131,OT)) Q:OT=""  S NM=$P(^M(131,OT)," ",2,254) I NM'="" S ^MN(IDX,OT,"fname")=NM,^("med")=1,^("sname")=NM,^("use")=1 W NM,!
+ Q
+ADDOT(NM,MED) ; Добавить отделение
+ N I,IDX
+ S I=$$NEWIDX^YISPRAV("otd"),IDX=$O(^MN(I,""),-1)+1
+ S ^MN(I,IDX,"fname")=NM,^("sname")=NM,^("use")=1
+ S:MED ^("med")=1
+ D USYNC^ISPRAV("otd")
+ Q IDX
+SP ; ??????
+ I C="" K ^M131(N,POLE) Q
+ I C'="" S:$L(POLE)>0 ^M131(N,POLE)=C,NS1=NS1+1,^SG(+$H,%LOG,$P($H,",",2)+(NS1/100),"W")="^M131("_N_","_POLE_")="""_C_""""
+ Q
+TOTD ; Список отделений
+ D OWF^RWU(".txt"),WC^RWU("Код|Наименование")
+ N I,NN S I=+$G(^MN("otd")),NN=""
+ F  S NN=$O(^MN(I,NN)) Q:NN=""  D WC^RWU(CR_NN_"|"_$G(^(NN,"fname")))
+ D C^RWU
+ Q
+LSTOTDA ; Список всех (и немедицинских) отделений
+ D OWF^RWU(".txt")
+ D LSTOTDAs(1)
+ D C^RWU
+ Q
+LSTOTDAs(NSTR,FLG) ; Список всех (и немедицинских) отделений (system)
+ ; NSTR - не пустая строка в начале
+ ; FLG - флаг отделения
+ N I,N,C S I=+$G(^MN("otd")),N="",NSTR=+$G(NSTR),C=$S(NSTR:"",1:CR),FLG=$G(FLG)
+ F  S N=$O(^MN(I,N)) Q:N=""  I $G(^(N,"use"))=1,$S(FLG="":1,1:$$FLinFL^TXTU($G(^("flg")),FLG)) D WC^RWU(C_N_"|"_$G(^("sname"))) S C=CR
+ Q
+LSTOTD ; Список отделений
+ D OWF^RWU(".txt")
+ D LSTs^NSPRAV("otd")
+ D C^RWU
+ Q
+GSPEC(N,PL) ; Имя специальности по номеру
+ Q:N="" "" N X S X=$G(^MN("spec")) Q:X="" ""
+ Q:$D(PL) $G(^(X,N,PL))
+ Q $G(^(X,N,"sname"))
+CSPEC(N) ; Проверить код
+ Q:N="" 0 Q $S('$D(^(+$G(^MN("spec")),N)):1,1:1)
+NSPEC ; Получить новый номер специальности
+ N I,N S I=$$NEWIDX("spec")
+ F N=1:1:998 Q:'$D(^MN(I,N))
+ D MSG^RWU(N)
+ Q
+DSPEC(N) ; УДАЛЕНИЕ специальности
+ Q:N="" 
+ N X S X=$G(^MN("spec")) I X="" D TSPEC Q
+ K:$D(^MN(X,N)) ^MN(X,N),^M(123,N)
+ D K^ISSG("^MN("_X_","_N_")")
+ ; todo - IEXCH
+ D UPD^IEXCH("YISPRAV","spec")
+ D TSPEC
+ D USYNC^ISPRAV("spec")
+ Q
+LSPEC(N) ; ЗАГРУЗКА специальности
+ N ID,PL,R S N=+N,ID=+$G(^MN("spec"))
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<tspec>")
+ I '$D(^MN(ID,N)) D WTAGD^RWU("num",""),WTAGD^RWU("sname",""),WTAGD^RWU("fname",""),WTAGD^RWU("use","0"),WTAGD^RWU("flg",""),WTAGD^RWU("lpu",""),W^RWU("</tspec></nb_console>"),C^RWU Q
+ D WTAGD^RWU("num",N)
+ S PL="" F  S PL=$O(^MN(ID,N,PL)) Q:PL=""  S R=^(PL) D:PL'="lpu"&(PL'="flg") WTAGDC^RWU(PL,R) D:PL="lpu"!(PL="flg") WTAGC^RWU(PL,R)
+ D W^RWU("</tspec></nb_console>"),C^RWU
+ Q
+SSPEC ; СОХРАНЕНИЕ специальности
+ N IDX,%J,N,PTI,F
+ S PTI="nb_console"
+ D RSXML^XMLU
+ S IDX=$$NEWIDX("spec")
+ S N=+$G(XML(PTI,"tspec","num"))
+ K XML(PTI,"tspec","num")
+ F F="flg","fname","lnname","lpu","num","pp","rtp","sname","sp337","tp","use","fspec","fpos" K ^MN(IDX,N,F) ; edited fields
+ M ^MN(IDX,N)=XML(PTI,"tspec")
+ S ^MN(IDX)=$H
+ S ^MN(IDX,N,"log")=$$USRH^IUSER()
+ D UPD^IEXCH("YISPRAV","spec")
+ K XML
+ D USYNC^ISPRAV("spec")
+ D MSG^RWU("")
+ Q
+ADDSP(NM) ; Добавить специальность
+ N I,IDX
+ S I=$$NEWIDX^YISPRAV("spec"),IDX=$O(^MN(I,""),-1)+1
+ S ^MN(I,IDX,"fname")=NM,^("sname")=NM,^("use")=1
+ D USYNC^ISPRAV("spec")
+ Q IDX
+TSPEC ; Список отделений для таблицы
+ D OWF^RWU(".txt"),WC^RWU("Код|Наименование")
+ N I,NN S I=+$G(^MN("spec")),NN=""
+ F  S NN=$O(^MN(I,NN)) Q:NN=""  D WC^RWU(CR_NN_"|"_$G(^(NN,"fname")))
+ D C^RWU
+ Q
+LSTSP ; Список специальностей 
+ D OWF^RWU(".txt")
+ D LSTs^NSPRAV("spec")
+ D C^RWU
+ Q
+SPCNVRT ; Конвертирование из старого в новый список отделений
+ S IDX=$$NEWIDX("spec")
+ S OT="" F  S OT=$O(^M(123,OT)) Q:OT=""  S NM=$P(^M(123,OT)," ",2,254) I NM'="" S ^MN(IDX,OT,"fname")=NM,^("sname")=NM,^("use")=1 W NM,!
+ Q
+GUCH(X) ; Получить наименование участка
+ Q:X="" ""
+ N R
+ S R=$P($G(^(+$G(^MN("uchastok")),X)),"|",1) Q:R="" ""
+ Q $$FIOSH^IKADRY(R)_" ("_X_")"
+SUCH ; Участки - сохранить
+ N %J,ID,IDX,MI,VR
+ S IDX=$$NEWIDX("uchastok")
+ K ^MN(IDX) S ^MN(IDX)=$H
+ D ORH^RWU
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  D:%J>1
+ .S ID=$P(A,"|",1),VR=$P(A,"|",2)
+ .Q:VR=""  Q:'$D(^KDR(VR)) 
+ .S:ID="" ID=$O(^MN(IDX,""),-1)+1
+ .S $P(^MN(IDX,ID),"|",1)=VR
+ D UPD^IEXCH("YISPRAV","uchastok")
+ D LUCH
+ Q
+LUCH ; Участки - загрузить
+ N X,ID,VR S X=$G(^MN("uchastok")) Q:X=""  
+ D OWF^RWU(".txt")
+ S ID="" F  S ID=$O(^MN(X,ID)) Q:ID=""  D
+ .S VR=$G(^(ID))
+ .Q:$P(VR,"|",2)  
+ .S VR=$P(VR,"|",1)
+ .D WC^RWU(CR_ID_"|"_VR_"|"_$$FIO^YIKADRY(VR))
+ D C^RWU
+ Q
+DUCH(N) ; Участки - удалить
+ K ^(+$G(^MN("uchastok")),N)
+ D UPD^IEXCH("YISPRAV","uchastok")
+ D LUCH
+ Q
+MR ; Места работы
+ N ID,LL,WS,A
+ S A="",WS=1
+ K ^BUF($J)
+ D ORH^RWU
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  D
+ .S ID=+$P(A,"|",1) Q:ID=0 
+ .S LL=$$WD^TXTU($P(A,"|",2))
+ .I $D(^BUF($J,ID)) S A=A_" "_ID_" дубль",WS=0 Q 
+ .S ^BUF($J,ID)=$$TRIM^TXTU(LL)
+ S ID="" F  S ID=$O(^BTI(" w",ID)) Q:ID=""  S:'$D(^BUF($J,ID)) A=A_" "_ID_" - отсутствует",WS=2
+ I WS'=2 K ^M(5) M ^M(5)=^BUF($J) D UPD^IEXCH("YISPRAV",5),USYNC^ISPRAV("mectorab")
+ K ^BUF($J)
+ D MSG^RWU($S(WS=2:"!",1:"")_A)
+ Q
+MOVMR(FROM,TO) ; Переместить место работы с .. на ..
+ I '$D(^M(5,TO)) D MSG^RWU(0) Q 
+ D MOVWRK^IPACUTL(FROM,TO)
+ K ^M(5,FROM)
+ D USYNC^ISPRAV("mectorab")
+ Q
+CLRMR(FROM) ; Очистить место работы
+ D MOVWRK^IPACUTL(FROM,"")
+ K ^M(5,FROM)
+ D USYNC^ISPRAV("mectorab")
+ Q
+SJT ; Save job title
+ N I,%J,R,X,WS,A
+ S I=$$NEWIDX("jobtitle")
+ S A="",WS=1 K ^BUF($J)
+ D ORH^RWU
+ F %J=1:1 S R=$$R^RWU Q:%IFN["Z"  D
+ .S X=$P(R,"|",1)
+ .I $D(^BUF($J,X)) S A=A_" "_X_" дубль",WS=0 Q
+ .S:X'="" ^BUF($J,X)=$$WD^TXTU($P(R,"|",2))
+ D CR^RWU
+ I WS K ^MN(I) S ^MN(I)=$H M ^MN(I)=^BUF($J)
+ K ^BUF($J)
+ D UPD^IEXCH("YISPRAV","jobtitle")
+ D USYNC^ISPRAV("jobtitle")
+ D MSG^RWU(A)
+ Q
+PACJT   ; 
+ S NI=-1 F  S NI=$$NEXT^YIPACN(NI) Q:NI=-1  K M D GETM^IPAC(NI,"jobtitle","M") S DTT="" F  S DTT=$O(M(DTT)) Q:DTT=""  S ID=M(DTT) I ID'=-1 W !,NI," ",ID
+ Q
+GDOLJN(N) ; Должность по номеру
+ Q:N="" "" N X S X=$G(^MN("doljn")) Q:X="" ""
+ Q $G(^(X,N))
+GET(NAME,ID) ; получить строку из справочника по ID
+ Q:ID="" "" Q:NAME="" ""
+ I NAME?1.N Q $G(^M(NAME,ID))
+ Q $G(^(+$G(^MN(NAME)),ID))
+NAME(NAME,ID) ; получить 'имя' из справочника по ID (1-й эл-т)
+ Q:ID="" "" Q:NAME="" ""
+ I NAME?1.N Q $P($G(^M(NAME,ID)),"|",1)
+ Q $P($G(^(+$G(^MN(NAME)),ID)),"|",1)
+GETPL(NAME,ID,PL) ; получить поле из справочника по ID
+ Q:ID="" "" Q:NAME="" "" Q:PL="" ""
+ I NAME?1.N Q $G(^M(NAME,ID,PL))
+ Q $G(^(+$G(^MN(NAME)),ID,PL))
+LST(NAME,ALL,CCR) 
+ G LSTs^NSPRAV
+NMLST(NAME,ALL) ; По имени, указывать/не указывать специальность
+ G NMLST+1^NSPRAV
+NEWIDX(NAME) 
+ N IDX,MI,I
+ S IDX=$G(^MN(NAME)),I=99999,MI=0
+ I IDX="" F  S I=$O(^MN(I)) Q:I=""   S:MI<(+$G(^MN(I))) MI=+$G(^MN(I))
+ S:IDX="" IDX=MI+1,^MN(NAME)=IDX
+ Q IDX
+LOAD ; Загрузка линейных справочников
+ ; format: <справочник>|<код>|<данные>
+ N %J,ID,A,R,UPD
+ D ORH^RWU
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  D
+ .S A=$$WD^TXTU(A),R=$P(A,"|",1)
+ .Q:R=""  Q:$P(A,"|",2)="" 
+ .S ID=$$NEWIDX(R),UPD(R)=""
+ .S ^MN(ID,$P(A,"|",2))=$P(A,"|",3,99)
+ D CR^RWU
+ S ID="" F  S ID=$O(UPD(ID)) Q:ID=""  D UPD^IEXCH("YISPRAV",ID)
+ Q
+RXCH 
+ N NM,ID
+ D R^XGUNET("hpar") Q:'$D(NM) 
+ I +NM=NM Q
+ N I S I=$$NEWIDX(NM)
+ K ^MN(I)
+ M ^MN(I)=^BUF(ID)
+ S ^MN(I)=$H
+ K ^BUF(ID)
+ Q
+WXCH(NM) ; Write - exchange (NM - name)
+ N GL
+ S LPU=+$$^I("ilpu"),GL("N")="NM"
+ I +NM=NM S GL("M")="^M("_NM D S^XGUNET("GL","exp.nb-data") Q 
+ N ID,X
+ S X=$$NEWIDX(NM),ID=$J_"@MN"_X
+ K ^BUF(ID)
+ M ^BUF(ID)=^MN(X)
+ S GL("M")="^BUF("""_ID_"""",GL("I")="ID"
+ D S^XGUNET("GL","exp.nb-data")
+ K ^BUF(ID)
+ Q

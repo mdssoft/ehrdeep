@@ -1,0 +1,175 @@
+NSTATVR ; Статистика по врачам [ 05/01/2019  7:13 PM ]
+ALST ; Список - отделение врач (первое отд.)
+ N OT,VR
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<vrstat>")
+ D:'$$FR^I() W^RWU("<lpu_label visible=""no""/><lpu visible=""no"" data="""_$$^I("ilpu")_"""/>")
+ D MKLST
+ D W^RWU("<otd>")
+ S OT="" F  S OT=$O(^BUF($J,"l",OT)) Q:OT=""  D WC^RWU(OT_"|"_$$GOTD^YISPRAV(OT)_CR)
+ D WC^RWU("|Все</otd><vrl>")
+ S OT=$O(^BUF($J,"l",""))
+ S VR="" F  S VR=$O(^BUF($J,"l",OT,VR)) Q:VR=""  D WC^RWU(VR_"|"_$$FIOSH^IKADRY(VR)_CR)
+ D WC^RWU("|Все</vrl></vrstat></nb_console>"),C^RWU
+ K ^BUF($J,"l")
+ Q
+VLST(OTD,LPU) ; Список врачи по отделению
+ N VR
+ D OWF^RWU(".txt")
+ S:$G(LPU)="" LPU=$$^I("ilpu")
+ I OTD'="" D MKLST S VR="" F  S VR=$O(^BUF($J,"l",OTD,VR)) Q:VR=""  D WC^RWU(VR_"|"_$$FIOSH^IKADRY(VR)_CR)
+ I OTD="" S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .I LPU'="",'$$IsLPU^IKADRY(VR,LPU,+$H) Q
+ .D WC^RWU(VR_"|"_$$FIOSH^IKADRY(VR)_CR)
+ D WC^RWU("|Все"),C^RWU
+ K ^BUF($J,"l")
+ Q
+MKLST 
+ K ^BUF($J,"l") N LPU,LP S LPU=$$^I("ilpu") ; todo
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D
+ .I LPU'="",'$$IsLPU^IKADRY(VR,LPU,+$H) Q 
+ .S:'$D(^BUF($J,"l",OT,VR)) ^(VR)=""
+ Q
+MAKE(OTD,VR,DS,DE,xLPU) 
+ N OTX,VRX,VDG,CEN,DTT,DOG,DIA,NI,CNT,STAT,VID,X1,X2,X3,X4,X5,USL
+ N DIACNT,J
+ S OTX=OTD,VRX=VR,A="",xLPU=$G(xLPU)
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<vrstat>")
+ S:VR="" A=$$GOTD^YISPRAV(OTD)_" "
+ S:VR'="" A=$G(A)_$$FIOSH^IKADRY(VR)
+ S:OTD=""&(VR="") A="По всему учреждению"
+ D MERGENM^ISPRAV("dvid","VDG")
+ S VDG(-1)="Все",J=$J
+ S X1=$S(DS=DE:" на "_$$DT2^DTUTL(DS),1:" с "_$$DT2^DTUTL(DS)_" по "_$$DT2^DTUTL(DE))
+ D WTAGDC^RWU("all_label",A_X1)
+ D WTAGD^RWU("sjob",J)
+ D MK
+ D WC^RWU("<table>|Месяц|Вид договора|Лиц|%|Услуг|%|Сумма|Усл. на лицо|Ср. цена усл.|Ошибок")
+ S DTT="" F  S DTT=$O(STAT(DTT)) Q:DTT=""  D
+ .S VID=-1 F  S VID=$O(STAT(DTT,VID)) Q:VID=""  D
+ ..S X1=$G(STAT(DTT)),STAT(DTT)=(+$P(X1,"|",1)+$G(STAT(DTT,VID,1)))_"|"_(+$P(X1,"|",2)+$G(STAT(DTT,VID,2)))
+ ..F X1=2:1:3 S STAT(DTT,-1,X1)=$G(STAT(DTT,-1,X1))+$G(STAT(DTT,VID,X1))
+ .S VID="",A=$P($$DT^DTUTL(DTT),".",2,3)
+ .F  S VID=$O(STAT(DTT,VID)) Q:VID=""  D
+ ..S X1=+$G(STAT(DTT,VID,1)),X2=+$G(STAT(DTT,VID,2))
+ ..S X3=+$G(STAT(DTT,VID,3)),X4=+$P($G(STAT(DTT)),"|",1)
+ ..S X5=+$P($G(STAT(DTT)),"|",2)
+ ..S A=A_"|"_$G(VDG(VID))_"|"_X1_"|"
+ ..S A=A_$$FN($S(X4=0:0,1:(100*X1)/X4))_"|"_X2_"|"
+ ..S A=A_$$FN($S(X5=0:0,1:(100*X2)/X5))_"|"_X3_"|"
+ ..S A=A_$$FN($S(X1=0:0,1:X2/X1))_"|"_$$FN($S(X2=0:0,1:X3/X2))
+ ..D WC^RWU(CR_J_"@"_DTT_"@"_VID_"|"_A_"|"_$G(STAT(DTT,VID,4)))
+ ..S A=""
+ D W^RWU("</table><diag>")
+ D WC^RWU("Диагноз|Случаев|Процент")
+ S DIA="" F  S DIA=$O(^BUF($J,"dia",DIA)) Q:DIA=""  S X1=$G(^(DIA)) D WC^RWU(CR_$$NAME^YMKB10($P(DIA,"|",2))_"|"_$P(X1,"|",1)_"|"_$P(X1,"|",2))
+ K ^BUF($J,"dia")
+ D W^RWU("</diag><osl>")
+ D WC^RWU("Наименование|Количество")
+ D W^RWU("</osl><netr>")
+ D WC^RWU("Диагноз|Кол-во случаев|Дней (ср.)|Дней (макс.)|Норма дней")
+ S DIA="" F  S DIA=$O(^BUF($J,"ntr",DIA)) Q:DIA=""  D
+ .S X1=0,X2=0,X4=0,NI=""
+ .F  S NI=$O(^BUF($J,"ntr",DIA,NI)) Q:NI=""  S X1=X1+1,X3=$G(^(NI)),X4=X4+X3 S:X2<X3 X2=X3
+ .D WC^RWU(CR_$$NAME^YMKB10(DIA)_"|"_X1_"|"_$$FN(X4/X1)_"|"_X2_"|"_$G(^NZN(DIA)))
+ D W^RWU("</netr><usl>")
+ D WC^RWU("Код|Наименование услуги|Кол-во|Сумма")
+ S USL="" F  S USL=$O(^BUF($J,"usl",USL)) Q:USL=""  D
+ .S X3=^(USL),(X1,X2)=0,NI="" ; X3 - name
+ .F  S NI=$O(^BUF($J,"usl",USL,NI)) Q:NI=""  S X4=$G(^(NI)),X1=$P(X4,"|",1)+X1,X2=X2+$P(X4,"|",2)
+ .D WC^RWU(CR_USL_"|"_X3_"|"_$$FN(X2)_"|"_$$FN(X1))
+ D WC^RWU("</usl></vrstat></nb_console>"),C^RWU
+ ;K ^BUF($J)
+ Q
+MK 
+ K ^BUF($J)
+ S PMN=0,DIACNT=0,A='$$FR^I()
+ D MKOTV^IUSLSC(OTD,VR,DS,DE,1,1,0,1,0,$S(xLPU:1,A:1,1:0),xLPU)
+ N VRLS,X,LP,ISTC,P,U,ID,SS
+ K STAT
+ F DT=DS:1:DE S MN=$$MONTH^DTUTL(DT) S:MN'=PMN STAT(DT)="" S PMN=MN
+ S OTX="" F  S OTX=$O(^BUF($J,"sc",OTX)) Q:OTX=""  S VRX="" F  S VRX=$O(^BUF($J,"sc",OTX,VRX)) Q:VRX=""  S IDX="",VRLS(VRX)="" F  S IDX=$O(^BUF($J,"sc",OTX,VRX,IDX)) Q:IDX=""  D
+ .S A=^(IDX),NI=$P(A,"|",7),DIA=$P(A,"|",5)
+ .I xLPU'="",xLPU'=$P(A,"|",8) Q 
+ .S CNT=$P(A,"|",4),U=$P(A,"|",2)
+ .S CEN=$P(A,"|",3),DTT=$P(A,"|",1),ISTC=$P(A,"|",10),P=$P(A,"|",6)
+ .S SS=CNT*CEN
+ .S DOG=$S(ISTC="":$$GETTZ^YIPACN(NI,+$G(TZRBTN("stc")),DTT),1:ISTC)
+ .S VID=$$GET^IINSC(DOG,"dvid",DTT) S:VID="" VID=99
+ .S DI=$O(STAT(DTT+1),-1) Q:DI="" 
+ .S STAT(DI,VID,2)=$G(STAT(DI,VID,2))+CNT
+ .S STAT(DI,VID,3)=$G(STAT(DI,VID,3))+SS
+ .S:'$D(^BUF($J,"pi",DI,NI)) ^(NI)="",STAT(DI,-1,1)=+$G(STAT(DI,-1,1))+1
+ .S:'$D(^(NI,VID)) ^(VID)=DOG,STAT(DI,VID,1)=+$G(STAT(DI,VID,1))+1
+ .S:'$D(^BUF($J,"usl",U)) ^BUF($J,"usl",U)=$$OWF^TXTU($$NAME^IPRICE(U,P),148)
+ .S X=$G(^(U,NI)),X=($P(X,"|",1)+SS)_"|"_($P(X,"|",2)+CNT),^(NI)=X
+ .I DIA'="" D
+ ..S ^(NI)=$G(^BUF($J,"di",DIA,NI))+1
+ ..S ^(DIA)=$G(^BUF($J,"di",DIA))+1,DIACNT=DIACNT+1
+ ..; todo осложнения ^BUF($J,"osl"
+ ; Ошибки -
+ S OTX="" F  S OTX=$O(^BUF($J,"err",OTX)) Q:OTX=""  S VRX="" F  S VRX=$O(^BUF($J,"err",OTX,VRX)) Q:VRX=""  S (IDX,VRLS(VRX))="" F  S IDX=$O(^BUF($J,"err",OTX,VRX,IDX)) Q:IDX=""  D
+ .S A=^(IDX),DTT=$P(A,"|",1),NI=$P(A,"|",2)
+ .S DOG=$$GET^IPAC(NI,"stc",DTT),VID=$$GET^IINSC(DOG,"dvid",DTT)
+ .S:VID="" VID=99
+ .S DI=$O(STAT(DTT),-1) Q:DI="" 
+ .S STAT(DI,VID,4)=$G(STAT(DI,VID,4))+1
+ ; Диагнозы - 
+ S DT=DS-1 F  S DT=$O(^MNTRI("d",DT)) Q:DT=""!(DT>DE)  S NI="" F  S NI=$O(^MNTRI("d",DT,NI)) Q:NI=""  D
+ .S ID="" F  S ID=$O(^MNTRI("d",DT,NI,ID)) Q:ID=""  D:$D(^MNTR(NI,ID))
+ ..S X=^(ID),A=$G(^(ID,1))
+ ..S VRX=$P(A,"|",3) Q:VRX="" 
+ ..Q:'$D(VRLS(VRX)) 
+ ..S X1=$P(X,"|",2)
+ ..I X1'="",$D(^MNTRI("n",X1)) Q
+ ..S DIAN=$P(X,"|",7) Q:DIAN=""  ; заключ. диагноз !!!
+ ..S X1=$P(X,"|",1),X2=$$ADAYS^NNETRS(NI,ID)
+ ..I $D(^MNTRI("n",X1))=11 S X3=$$LASTDI^INETR(NI,ID) S:X3'="" DIAN=X3
+ ..Q:DIAN=""  S DIAN=$$RECODE^YMKB10(DIAN) Q:DIAN="" 
+ ..Q:$D(^BUF($J,"ntr",DIAN,NI))  S ^(NI)=X2
+ ; sort "dia"
+ S DIA="" F  S DIA=$O(^BUF($J,"di",DIA)) Q:DIA=""  D
+ .S X1=$G(^(DIA)),X2=+$J(((X1*100)/DIACNT),"",3)
+ .S X=$J(99999-X2,"",2)
+ .S ^BUF($J,"dia",X_"|"_DIA)=X1_"|"_$TR(X2,".",",")
+ K ^BUF($J,"er"),^BUF($J,"sc")
+ Q
+CLR(JJ) ; Очистить буфер по номеру процесса
+ K ^BUF(JJ)
+ Q
+PIPLTAB(KEY) ; Список лиц по общей таблице
+ N JJ,DD,TP,NI,DT,R
+ D OWF^RWU(".txt")
+ S NI="",DT=+$H,JJ=$P(KEY,"@",1),DD=$P(KEY,"@",2),TP=$P(KEY,"@",3)
+ F  S NI=$O(^BUF(JJ,"pi",DD,NI)) Q:NI=""  D:$S(TP=-1:1,1:$D(^(NI,TP))) WC^RWU(CR_NI_"|"_$$FIO^IPAC(NI)_"|"_$$GETE^IPAC(NI,"ofor",DT)_"|"_$$GETE^IPAC(NI,"dog_to",DT))
+ D C^RWU
+ Q
+PIPLD(JJ,DIA) ; Список лиц по диагнозам
+ D OWF^RWU(".txt")
+ N NI,DT S NI="",DT=+$H,DIA=$$RECODE^YMKB10(DIA)
+ F  S NI=$O(^BUF(JJ,"di",DIA,NI)) Q:NI=""  D WC^RWU(CR_NI_"|"_$$FIO^IPAC(NI)_"|"_$$GETE^IPAC(NI,"ofor",DT)_"|"_$$GETE^IPAC(NI,"dog_to",DT))
+ D C^RWU
+ Q
+PIPLO(JJ,ID) ; Список лиц по осложнениям
+ D OWF^RWU(".txt")
+ N NI,DT S NI="",DT=+$H
+ F  S NI=$O(^BUF(JJ,"osl",ID,NI)) Q:NI=""  D WC^RWU(CR_NI_"|"_$$FIO^IPAC(NI)_"|"_$$GETE^IPAC(NI,"ofor",DT)_"|"_$$GETE^IPAC(NI,"dog_to",DT))
+ D C^RWU
+ Q
+PIPLN(JJ,DIA) ; Список лиц по нетрудоспособности
+ Q:DIA="" 
+ D OWF^RWU(".txt")
+ N NI,DT S NI="",DT=+$H
+ F  S NI=$O(^BUF(JJ,"ntr",DIA,NI)) Q:NI=""  D WC^RWU(CR_NI_"|"_$$FIO^IPAC(NI)_"|"_$$GETE^IPAC(NI,"ofor",DT)_"|"_$$GETE^IPAC(NI,"dog_to",DT))
+ D C^RWU
+ Q
+PIPLU(JJ,USL) ; Список лиц по услугам
+ Q:USL="" 
+ D OWF^RWU(".txt")
+ N NI,DT S NI="",DT=+$H
+ F  S NI=$O(^BUF(JJ,"usl",USL,NI)) Q:NI=""  D WC^RWU(CR_NI_"|"_$$FIO^IPAC(NI)_"|"_$$GETE^IPAC(NI,"ofor",DT)_"|"_$$GETE^IPAC(NI,"dog_to",DT))
+ D C^RWU
+ Q
+ 
+FN(X) 
+ Q $TR($FN(X,"",2),".",",")

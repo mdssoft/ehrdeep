@@ -1,0 +1,62 @@
+RLPUCTR ; Контролирующие отчеты по ЛПУ [ 06/10/2020  8:31 PM ]
+UNHOSP(DS,DE,DVID,DSU,LPUX) ; Неназначения госпитализаций
+ ; DVID - вид договора
+ ; DSU - число дней для стационарных услуг
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),LPUX=$G(LPUX)
+ N DIA,LID,@$$NEWVAR^IUSL(),ID,R,DT,VR,OT,SPL,X,F,DV,KX,DX,ptrST,SCOTD
+ S DSU=$$NNUM^TXTU(DSU)
+ S:'+$$FR^I() LPUX=$$^I("ilpu")
+ M SCOTD=^cfg("stac-otd") ; отделения стационара
+ S X="" F  S X=$$NEXT^ISPRAV("spec",X) Q:X=""  S:$$FLinFL^TXTU($$GETPL^ISPRAV("spec",X,"flg"),"cons") SPL(X)=""
+ S LID=$$FNDBYFL^IDILIST("uid","hospnaz")
+ K ^BUF($J)
+ S ptrST=$$PLIDX^IPAC("stc")
+ ; поиск случаев
+ D:LID ITERATE^IUSLD("UNHOSPp^RLPUCTR(VR,OT,DT,ID)",DS,DE,,,LPUX)
+ ; чистка случаев
+ S NI="" F  S NI=$O(^BUF($J,NI)) Q:NI=""  D
+ .I $$AGE^IPAC(NI)<18 K ^BUF($J,NI) Q  ; не дети 
+ .K ^BUF($J,NI,"-")
+ .S ID="" F  S ID=$O(^NAZI("n",NI,ID)) Q:ID=""  D
+ ..S R=^(ID) Q:$P(R,"|",1)'="h" 
+ ..S DT=$P(R,"|",3),VR=$P(R,"|",4)
+ ..Q:DT=""  Q:VR="" 
+ ..S F=1
+ ..K:$D(^BUF($J,NI,DT,VR)) ^(VR)
+ .Q:'DSU 
+ .S DT="" F  S DT=$O(^BUF($J,NI,DT)) Q:DT=""  D
+ ..S F=0
+ ..S DX=DT-DSU-1 F  S DX=$O(^PNF(NI,DX)) Q:DX=""!(DX>DT)  D
+ ...S KX="" F  S KX=$O(^PNF(NI,DX,KX)) Q:KX=""  D
+ ....S OT=$P(KX,"|",2) Q:'$D(SCOTD(OT))  ; не стац
+ ....Q:"wd"[$$GETSTAT^IUSL($P(KX,"|",1),DX,OT,$P(KX,"|",3)) 
+ ....K ^BUF($J,NI,DT)
+ 
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|№.И.б.|Пациент "_$$TXTP^DTUTL(DS,DE)_"|Врач|Дата|Диагноз"_$S(LPUX="":"|Филиал",1:""))
+ S NI="" F  S NI=$O(^BUF($J,NI)) Q:NI=""  D
+ .S DT="" F  S DT=$O(^BUF($J,NI,DT)) Q:DT=""  D
+ ..S VR="" F  S VR=$O(^BUF($J,NI,DT,VR)) Q:VR=""  D
+ ...S DIA=^(VR),LPU=$P(DIA,"|",2),DIA=$P(DIA,"|",1)
+ ...S R=NI_"|"_NI_"|"_$$FIO^IPAC(NI)_"|"_$$FIOSH^IKADRY(VR)
+ ...S R=R_"|"_$$DT^DTUTL(DT)_"|"_$$NAME^YMKB10(DIA,99)
+ ...D WC^RWU(CR_R_$S(LPUX="":"|"_$$NAME^ICONTR(LPU),1:""))
+ D C^RWU
+ K ^BUF($J)
+ Q
+UNHOSPp(VR,OT,DT,ID) 
+ S DIA=$$GETDI^IUSL(VR,DT,OT,ID) Q:DIA=""
+ Q:'$$IsLST^IDILIST(LID,DIA)
+ D GET^IUSL(VR,DT,OT,ID)
+ Q:"wd"[STAT 
+ ; Q:$P($O(UL("")),".",1)=36 
+ I DVID'="",$$GET^IINSC($S($G(ISTC):ISTC,1:$$GETTZ^IPAC(NI,ptrST,DT)),"dvid",DT)'=DVID Q 
+ Q:'$D(SPL(+SP))  ; только конс.
+ Q:$D(^BUF($J,NI,"-",DIA))  S ^(DIA)=""
+ S ^BUF($J,NI,DT,VR)=DIA_"|"_$$GETPL^IUSL(VR,DT,OT,ID,"l")
+ Q
+REGIPROC 
+ N FF
+ S FF=+$$FR^I()
+ S ^IPROC("Отчеты ЛПУ","Направления","Ненаправление на госпитализацию")="UNHOSP_RLPUCTR,100,"_$S(FF:5,1:4)_",d,Начальная дата,d,Конечная дата,t@net:NMLCR_NSPRAV(""dvid""),Вид договора,s,Исключить при наличии услуг в стационаре (дней)"_$S(FF:",t@storage:lpu,Филиал",1:"")
+ Q

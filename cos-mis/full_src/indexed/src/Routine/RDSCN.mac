@@ -1,0 +1,44 @@
+RDSCN ; Отчеты по скидкам [ 02/27/2016  1:04 AM ]
+LST(VTP,PTP,STAT,DGN) ; Перечень 0-сокращенно, 1-подробно
+ N N,P,S,A,D,T,R,X,Z,DT
+ S N="Вид скидки|",PTP=+$G(PTP),DT=+$H
+ S A=$G(STAT) K STAT
+ F D=1:1:$L(A,"|") S T=$P(A,"|",D) S:T'="" STAT("|"_T_"|")=""
+ D OWF^RWU(".txt")
+ D:VTP WC^RWU(N_"Ф.И.О.|Действует с|Статусы|Примечание|Оператор|Изменено")
+ D:'VTP WC^RWU(N_"Кол-во")
+ K ^BUF($J)
+ S S="" F  S S=$O(^DSCN(S)) Q:S=""  S ^BUF($J,S)=0
+ I 'PTP S P="" F  S P=$O(^PDSC(P)) Q:P=""  D
+ .S S=$H,N=$O(^PDSC(P,S),-1) Q:N=""  S N=$P(^(N),"|",1)
+ .S S=$$GET^IPAC(P,"skd",DT) Q:S=""  ; уже не действует
+ .S R=0
+ .I $D(STAT) S R=1,X=$$GET^IPAC(P,"status",DT) Q:X=""  S X="|"_X_"|",Z="" F  S Z=$O(STAT(Z)) Q:Z=""  I X[Z S R=0 Q
+ .Q:R 
+ .S ^(S)=^BUF($J,S)+1,^(N)=$G(^BUF($J,S,N))+1 Q:'VTP  S ^(P)=""
+ I PTP S P=0 F  S P=$$NEXT^IPAC(P) Q:P=""  D  
+ .S S=$$GET^IPAC(P,"skd",DT) Q:S=""  ; уже не действует
+ .I DGN'="",$$PIDXN^IPAC(P)=-1 Q  
+ .S N=$$GET^IDSCN(P,DT) Q:N="" 
+ .S R=0
+ .I $D(STAT) S R=1,X=$$GET^IPAC(P,"status",DT) Q:X=""  S X="|"_X_"|",Z="" F  S Z=$O(STAT(Z)) Q:Z=""  I X[Z S R=0 Q
+ .Q:R 
+ .S ^(S)=$G(^BUF($J,S))+1,^(N)=$G(^BUF($J,S,N))+1 Q:'VTP  S ^(N,P)=""
+ S S="" F  S S=$O(^BUF($J,S)) Q:S=""  D
+ .D WC^RWU(CR_$G(^DSCN(S,"nm"))_"|"_+$G(^BUF($J,S)))
+ .S N="" F  S N=$O(^BUF($J,S,N)) Q:N=""  D
+ ..D WC^RWU(CR_"   "_N_" %|"_+$G(^BUF($J,S,N)))
+ ..S P="" F  S P=$O(^BUF($J,S,N,P)) Q:P=""  D
+ ...S D=$$FLCNG^IPAC(P,"skd",DT)
+ ...S A=$$GET^IPAC(P,"opfio",D)
+ ...S A=$$FIOSH^NUSER($P(A,"|",1),2)_"|"_$$DTM^DTUTL($P(A,"|",2))
+ ...S T=$$LASTC^NPACEV(P,"DSCN",D)
+ ...S T=$$GETE^IPAC(P,"status",D)_"|"_$S(T="":"",1:T_" ")
+ ...S T=T_$TR($E($$GET^IPAC(P,"text",D),1,255),$C(9)_CR," ")
+ ...D WC^RWU(CR_"|"_P_" "_$$FIO^IPAC(P)_"|"_$$DT^DTUTL(D)_"|"_T_"|"_A)
+ K ^BUF($J)
+ D C^RWU
+ Q
+REGIPROC 
+ S ^IPROC("Отчеты по пациентам","Отчет по скидкам")="LST_RDSCN,1,4,t@string:0/Сокращенный#1/Полный список,Вид отчета,t@string:0/Накопительная#1/Все,Тип скидки,c@net:NMLST_NSPRAV(1),Статус пациента,te@storage:dog,Договор"
+ Q

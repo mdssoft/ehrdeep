@@ -1,0 +1,112 @@
+IRASPU ; Утилиты расписания [ 03/24/2021  5:25 PM ]
+REIDXW ; Переиндексация для DSHW
+ N HH,LP,OT,VR
+ S HH="" F  S HH=$O(^DSHW(HH)) Q:HH=""  D
+ .S LP="" F  S LP=$O(^DSHW(HH,LP)) Q:LP=""  D
+ ..S OT="" F  S OT=$O(^DSHW(HH,LP,OT)) Q:OT=""  D  
+ ...S VR="" F  S VR=$O(^DSHW(HH,LP,OT,VR)) Q:VR=""  D
+ ....Q:$D(^DSHWI(LP,VR,HH)) 
+ ....S ^DSHWI(LP,VR,HH)=""
+ Q
+UPDDTE ; Обновить ключи дат в расписании
+ s DS=$H-1000,DE=$H+90,L=""
+ F  S L=$O(^DSH(L)) Q:L=""  D MKI^IMRASP(L,DE,DS,DE) 
+ Q
+MOVL(DS,DE,LPU,LPT,OTX,OTT) ; Move to LPU, with another OT
+ N DT,OT,VR,SP,DT,D,T,R,N,OT1,R1
+ S OTX=$G(OTX)
+ S OT="" F  S OT=$O(^DSH(LPU,OT)) Q:OT=""  I OTX=""!(OTX=OT) S VR="" F  S VR=$O(^DSH(LPU,OT,VR)) Q:VR=""  S SP="" F  S SP=$O(^DSH(LPU,OT,VR,SP)) Q:SP=""  D
+ .S D=DS-1 F  S D=$O(^DSH(LPU,OT,VR,SP,D)) Q:D=""!(D>DE)  D
+ ..S ^DSH(LPT,OTT,VR,SP,D)=^(D)
+ ..S T="" F  S T=$O(^DSH(LPU,OT,VR,SP,D,T)) Q:T=""  D
+ ...S R=$G(^(T))
+ ...I R="" K ^(T) S ^DSH(LPT,OTT,VR,SP,D,T)="" Q
+ ...M ^DSH(LPT,OTT,VR,SP,D,T)=^DSH(LPU,OT,VR,SP,D,T)
+ ...S N=$P(R,"|",1) S:'$$EXIST^IPAC(N) N=$P(R,"|",7)
+ ...Q:N="" 
+ ...S R1=^DSHP(N,D,T,VR)
+ ...S $P(R1,"|",2)=OTT,$P(R1,"|",1)=LPT
+ ...S ^DSHP(N,D,T,VR)=R1
+ ...D GL^IEXCH("^DSHP",N,D,T,VR)
+ ..K ^DSH(LPU,OT,VR,SP,D)
+ ..D KGL^IEXCH("^DSH",LPU,OT,VR,SP,D)
+ ..D GL^IEXCH("^DSH",LPT,OTT,VR,SP,D)
+ .Q:$D(^DSHI("sp",LPT,SP,OTT_"|"_VR)) ; TODO - clear old
+ .S ^DSHI("sp",LPT,SP,OTT_"|"_VR)=SP
+ .D GL^IEXCH("^DSHI","sp",LPT,SP,OTT_"|"_VR)
+ Q
+CLRDT(LPU,DS,DE) ; Удалить все расписание за период
+ N OT,VR,SP,DT
+ S DS=$$DI^DTUTL(DS),DE=$$DI^DTUTL(DE)
+ S OT="" F  S OT=$O(^DSH(LPU,OT)) Q:OT=""  S VR="" F  S VR=$O(^DSH(LPU,OT,VR)) Q:VR=""  S SP="" F  S SP=$O(^DSH(LPU,OT,VR,SP)) Q:SP=""  D
+ .S DT=DS-1 F  S DT=$O(^DSH(LPU,OT,VR,SP,DT)) Q:DT=""!(DT>DE)  D
+ ..K ^DSH(LPU,OT,VR,SP,DT)
+ ..D KGL^IEXCH("^DSH",LPU,OT,VR,SP,DT)
+ D UPDDTE,CHKDSHP
+ Q
+CHKDSHP ; Проверить DSHP с DSH и удалить лишнее DSHP
+ N NI,DT,TM,VR,R,LP,OT,SP,RD,I
+ S I=0
+ S NI="" F  S NI=$O(^DSHP(NI)) Q:NI=""  D
+ .S DT="" F  S DT=$O(^DSHP(NI,DT)) Q:DT=""  S TM="" F  S TM=$O(^DSHP(NI,DT,TM)) Q:TM=""  D
+ ..S VR="" F  S VR=$O(^DSHP(NI,DT,TM,VR)) Q:VR=""  D
+ ...S R=$G(^(VR)) Q:R="" 
+ ...S LP=$P(R,"|",1),OT=$P(R,"|",2),SP=$P(R,"|",3)
+ ...S RD=$G(^DSH(LP,OT,VR,SP,DT,TM)) 
+ ...I $P(RD,"|",1)=NI!($P(RD,"|",7)=NI) Q 
+ ...W "." S I=I+1
+ ...I I<10 W !,"^DSHP("_NI_","_DT_","_TM_","_VR,!,"^DSH("_LP_","_OT_","_VR_","_SP_","_DT_","_TM,!
+ ...K ^DSHP(NI,DT,TM,VR) D KGL^IEXCH("^DSHP",NI,DT,TM,VR)
+ W !,"Total="_I,!
+ Q
+CHKDSH ; Проверить DSH с DSHP и добавить нужное
+ N LP,OT,VR,SP,DT,TM,R,DP,NI,RP,PI,RI,I,U
+ S I=0
+ S LP="" F  S LP=$O(^DSH(LP)) Q:LP=""  S OT="" F  S OT=$O(^DSH(LP,OT)) Q:OT=""  S VR="" F  S VR=$O(^DSH(LP,OT,VR)) Q:VR=""  S SP="" F  S SP=$O(^DSH(LP,OT,VR,SP)) Q:SP=""  D
+ .S DT="" F  S DT=$O(^DSH(LP,OT,VR,SP,DT)) Q:DT=""  D
+ ..S TM="" F  S TM=$O(^DSH(LP,OT,VR,SP,DT,TM)) Q:TM=""  D
+ ...S R=$G(^(TM)) Q:TM=""   S RI=$G(^(TM,"i"))
+ ...S NI=$P(R,"|",1),DP=$P(R,"|",7)
+ ...I '$$EXIST^IPAC(NI),DP="" Q 
+ ...S PI=$S(DP'="":DP,1:NI)
+ ...S RP=$G(^DSHP(PI,DT,TM,VR))
+ ...Q:RP'="" 
+ ...W "." S I=I+1
+ ...S U=$P(RI,"|",10)
+ ...S ^DSHP(PI,DT,TM,VR)=LP_"|"_OT_"|"_SP_"|"_U
+ ...D GL^IEXCH("^DSHP",PI,DT,TM,VR)
+ W !,"Total="_I,!
+ Q
+CHKDSHPR(DS,DE) ; Проверить DSHP с DSH и добавить в DSH
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N NI,DT,TM,VR,R,LP,OT,SP,RD,I
+ S I=0
+ S NI="" F  S NI=$O(^DSHP(NI)) Q:NI=""  D
+ .S DT=DS-1 F  S DT=$O(^DSHP(NI,DT)) Q:DT=""!(DT>DE)  S TM="" F  S TM=$O(^DSHP(NI,DT,TM)) Q:TM=""  D
+ ..S VR="" F  S VR=$O(^DSHP(NI,DT,TM,VR)) Q:VR=""  D
+ ...S R=$G(^(VR)) Q:R="" 
+ ...S LP=$P(R,"|",1),OT=$P(R,"|",2),SP=$P(R,"|",3)
+ ...S RD=$G(^DSH(LP,OT,VR,SP,DT,TM)) Q:RD'="" 
+ ...W "." S I=I+1
+ ...S ^DSH(LP,OT,VR,SP,DT,TM)=NI
+ ...D GL^IEXCH("^DSH",LP,OT,VR,SP,DT,TM)
+ W !,"Total="_I,!
+ Q
+FNDBK(DS,DE,LP,OT,VR,SP,DT) ; Поиск по фактам изменения графика
+ N DX
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE) 
+ S DX=DS_",0" F  S DX=$O(^DSHBK(DX)) Q:DX=""!(+DX>DE)  D
+ .q:'$D(^DSHBK(DX,LP,OT,VR,SP,DT)) 
+ .w !,DX_" "_$$DIH^DTUTL(DX)
+ Q
+CONVERT ; from ^RAS to ^DSH
+ N LPU,L,VR,OT,SP,DT,TM,K,Z S LPU=+$$^I("ilpu")
+ M ^DSH(LPU)=^RAS
+ S OT="" F  S OT=$O(^RAS(OT)) Q:OT=""  S TN="" F  S TN=$O(^RAS(OT,TN)) Q:TN=""  S SP="" F  S SP=$O(^RAS(OT,TN,SP)) Q:SP=""  S DT="" F  S DT=$O(^RAS(OT,TN,SP,DT)) Q:DT=""  D
+ .S L=^RAS(OT,TN,SP,DT),Z=$P(L,"|",1)
+ .S K=$P(Z,"@",1)_"|"_$S($P(Z,"@",2)["~":$E($P(Z,"@",2),2,99),1:$P(Z,"@",2))_"|"_$P(L,"|",2,3)_"|"_$S($P(Z,"@",2)["~":1,1:"")
+ .S ^DSH(LPU,OT,TN,SP,DT)=K
+ S L="" F  S L=$O(^RASP(L)) Q:L=""  S DT="" F  S DT=$O(^RASP(L,DT)) Q:DT=""  S TM="" F  S TM=$O(^RASP(L,DT,TM)) Q:TM=""  S VR="" F  S VR=$O(^RASP(L,DT,TM,VR)) Q:VR=""  D
+ .S K=$G(^(VR)) S:K'="" ^DSHP(L,DT,TM,VR)=LPU_"|"_$TR(K,"@","|")
+ S L="" F  S L=$O(^RASW(L)) Q:L=""  M ^DSHW(L,LPU)=^RASW(L)
+ Q

@@ -1,0 +1,278 @@
+RSEC ; Отчеты по контролю доступа [ 04/04/2018  6:47 PM ]
+WHOIN(TIPP)     ; КТО В УЧРЕЖДЕНИИ
+ N NN,L,DT,TIP,VAL,OTD,OT,SPE,FIO,TP,TT,STP,I
+ S I=1
+ D OWF^RWU(".txt")
+ D WC^RWU("П.п.|Фамилия|Имя|Отчество|Тип|Отд./Орг.|Дата, время входа")
+ S NN="" F  S NN=$O(^CARD(NN)) Q:NN=""  D
+ .Q:$G(^(NN,"hide")) 
+ .S L=$G(^("enter")) Q:$P(L,",",1)'=1 
+ .S DT=$P(L,",",2),TT=$P(L,",",3)
+ .S L=$G(^CARD(NN)),TIP=$P(L,"|",1),VAL=$P(L,"|",2) Q:L="" 
+ .I TIPP'="",TIPP'=TIP Q 
+ .D unTYPE(NN,TIP,VAL)
+ .S OTD=$$OWF^TXTU(OTD,32)
+ .D WC^RWU(CR_I_"|"_FIO_"|"_TP_"|"_OTD_"|"_$$DTM^DTUTL(DT_","_TT))
+ .S I=I+1
+ D C^RWU
+ Q
+WHONR(DS,DE,TIPP)     ; КТО НЕ ОБРАЩАЛСЯ
+ N NN,X1,X2,D,T,TIP,OTD,OT,SPE,FIO,TP,F,R,I
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D OWF^RWU(".txt")
+ D WC^RWU("П.п.|Ф.И.О. "_$$TXTP^DTUTL(DS,DE)_"|Тип|Отд./Орг.|Дата регистрации|Последнее событие")
+ S I=1
+ S NN="" F  S NN=$O(^CARD(NN)) Q:NN=""  D
+ .S R=$G(^CARD(NN)),TIP=$P(R,"|",1) Q:R="" 
+ .I TIPP'="",TIPP'=TIP Q 
+ .S X1=$O(^CRDLOG(NN,DS-1))
+ .I X1'="",X1<(DE+1) Q
+ .S D=$O(^CARD(NN,"dis",DS+1),-1),F=0
+ .I D'="" S F=($G(^(D))=1) I F F  S D=$O(^CARD(NN,"dis",D)) Q:D=""!(D>DE)  I $G(^(D))=0 S F=0 Q 
+ .Q:F 
+ .S F=$G(^CARD(NN,"enter"))
+ .S D=$P(F,",",2),T=$P(F,",",3)
+ .S X1=$P(R,"|",2),X2=+$P(R,"|",3)
+ .D unTYPE(NN,TIP,X1)
+ .S OTD=$$OWF^TXTU(OTD,32),FIO=$TR(FIO,"|"," ")
+ .S D=$S(D="":"нет",1:$$DTM^DTUTL(D_","_T))
+ .D WC^RWU(CR_I_"|"_FIO_"|"_TP_"|"_OTD_"|"_$$DT^DTUTL(X2)_"|"_D)
+ .S I=I+1
+ D C^RWU
+ Q
+TIMEO(DN,DK,TIPP,OTDD) ; ВХОД ПО ОТДЕЛЕНИЯМ
+ N TIMM1,TIMM2,TIME
+ S TIME=""
+ S TIMM1=$P(TIME,"-",1),TIMM2=$P(TIME,"-",2) S:TIMM2="" TIMM2="24:00" S:TIMM1="" TIMM1="00:00" S TIMM1=$$TI^DTUTL(TIMM1),TIMM2=$$TI^DTUTL(TIMM2)
+ G TIMEC
+TIME(DN,DK,TIPP)     ; ВХОД ВЫХОД В УЧРЕЖДЕНИИ
+ N OTDD,TIMM1,TIMM2
+ S OTDD="",TIMM1=0,TIMM2=99999
+TIMEC N NN,DTN,DT,L,A,JT,A1,TIM,TTT,TTE,POTD,TIP,OTD,SPE,FIO,TP,OT
+ D OWF^RWU(".txt")
+ S DN=$$DIH^DTUTL(DN),DK=$$DIH^DTUTL(DK)
+ S:(DK-DN)>100 DK=DN+100
+ S DTN=DN
+ D WC^RWU("№|Фамилия Имя Отчество|дата:")
+ S A="" F DT=DN:1:DK S A=A_"|"_$$DT2^DTUTL(DT)
+ D WC^RWU(A)
+ K ^BUF($J)
+ S NN="" F  S NN=$O(^CRDLOG(NN)) Q:NN=""  D
+ .Q:'$D(^CARD(NN)) 
+ .Q:$G(^(NN,"hide"))
+ .S TIP=$P(^CARD(NN),"|",1),PAC=$P(^(NN),"|",2)
+ .I TIPP'="",TIP'=TIPP Q 
+ .D unTYPE(NN,TIP,PAC)
+ .S OT=+OT
+ .I OTDD'="",OT'=OTDD Q 
+ .S ^BUF($J,OT,FIO_NN)=PAC_"|"_$TR(FIO,"|"," ")_"|"_TP,TTE=0
+ .S (TIM0,TIM1,TTT)=0
+ .S DT=DN-1 F  S DT=$O(^CRDLOG(NN,DT)) Q:DT=""  Q:DT>DK  D
+ ..S (JT)=0,TIM=""
+ ..F  S TIM=$O(^CRDLOG(NN,DT,TIM)) Q:TIM<TIMM1!(TIM>TIMM2)  Q:TIM=""  D
+ ...S L=$P(^(TIM),"|",1,4),EV=$P(L,"|",4)
+ ...Q:10'[(+$P(L,"|",3))  ; другие типы
+ ...S $P(L,"|",5)=$$TM^DTUTL(TIM),JT=JT+1
+ ...S ^BUF($J,OT,FIO_NN,JT,DT)=L
+ ...S:EV=1 TIM0=DT_","_TIM S:TIM0&(EV=2) TIM1=DT_","_TIM
+ ...S:TIM0&TIM1 TTT=TTT+$$TMBTW^DTUTL(TIM1,TIM0),TIM0=0,TIM1=0
+ ..I TTT,JT S JT=JT+1,^BUF($J,OT,FIO_NN,JT,DT)="+"_TTT,TTE=TTE+TTT,TTT=0
+ .S:TTE $P(^BUF($J,OT,FIO_NN),"|",4)=TTE
+ 
+ S POTD=0
+ S OTD="" F  S OTD=$O(^BUF($J,OTD)) Q:OTD=""  S NN="" F  S NN=$O(^BUF($J,OTD,NN)) Q:NN=""  D
+ .S A1=$G(^BUF($J,OTD,NN))
+ .S TTE=$$TM^DTUTL($P(A1,"|",4)),A1=$P(A1,"|",1,3)
+ .S JT="" F  S JT=$O(^BUF($J,OTD,NN,JT)) Q:JT=""  D
+ ..S A="" F DT=DN:1:DK S L=$G(^BUF($J,OTD,NN,JT,DT)) D
+ ...I $E(L)="+" S A=A_"|++"_$$TM^DTUTL($P(L,"+",2)) Q
+ ...S EV=$P(L,"|",4),TIM=$P(L,"|",5),EVV=">>"
+ ...S:EV'=1 EVV="<<"
+ ...S:$P(L,"|",3)'=1 EVV="<X"
+ ...S:TIM="" EVV="" S TIM=TIM_EVV,A=A_"|"_TIM
+ ..I POTD'=OTD D WC^RWU(CR_"|"_$$GOTD^YISPRAV(OTD)) S POTD=OTD
+ ..D WC^RWU(CR_A1_A)
+ ..S:JT=1 A1="||"_TTE S:JT=2 A1="||"
+ K ^BUF($J)
+ D C^RWU
+ Q
+TIMELT(DN,DK,TIPP)     ; Время по дням
+ N OTDD,TIMM1,TIMM2
+ S OTDD="",TIMM1=0,TIMM2=99999
+ N NN,DTN,DT,L,A,JT,A1,TIM,TTT,TTE,POTD,TIP,OTD,SPE,FIO,TP,OT
+ D OWF^RWU(".txt")
+ S DN=$$DIH^DTUTL(DN),DK=$$DIH^DTUTL(DK)
+ S:(DK-DN)>100 DK=DN+100
+ S DTN=DN
+ D WC^RWU("№|Фамилия Имя Отчество|Итого")
+ S A="" F DT=DN:1:DK S A=A_"|"_$$DT2^DTUTL(DT)
+ D WC^RWU(A)
+ K ^BUF($J)
+ S NN="" F  S NN=$O(^CRDLOG(NN)) Q:NN=""  D
+ .Q:'$D(^CARD(NN)) 
+ .Q:$G(^(NN,"hide"))
+ .S TIP=$P(^CARD(NN),"|",1),PAC=$P(^(NN),"|",2)
+ .I TIPP'="",TIP'=TIPP Q 
+ .D unTYPE(NN,TIP,PAC)
+ .S OT=+OT
+ .I OTDD'="",OT'=OTDD Q 
+ .S ^BUF($J,OT,FIO_NN)=PAC_"|"_$TR(FIO,"|"," ")_"|",TTE=0
+ .S (TIM0,TIM1,TTT)=0
+ .S DT=DN-1 F  S DT=$O(^CRDLOG(NN,DT)) Q:DT=""  Q:DT>DK  D
+ ..S TIM=""
+ ..F  S TIM=$O(^CRDLOG(NN,DT,TIM)) Q:TIM<TIMM1!(TIM>TIMM2)  Q:TIM=""  D
+ ...S L=$P(^(TIM),"|",1,4),EV=$P(L,"|",4)
+ ...Q:10'[(+$P(L,"|",3))  ; другие типы
+ ...S:EV=1 TIM0=DT_","_TIM S:TIM0&(EV=2) TIM1=DT_","_TIM
+ ...S:TIM0&TIM1 TTT=TTT+$$TMBTW^DTUTL(TIM1,TIM0),TIM0=0,TIM1=0
+ ..S:TTT ^BUF($J,OT,FIO_NN,DT)=TTT,TTE=TTE+TTT,TTT=0
+ .S:TTE $P(^BUF($J,OT,FIO_NN),"|",3)=TTE
+ 
+ S POTD=0
+ S OTD="" F  S OTD=$O(^BUF($J,OTD)) Q:OTD=""  S NN="" F  S NN=$O(^BUF($J,OTD,NN)) Q:NN=""  D
+ .S A=$G(^BUF($J,OTD,NN))
+ .S TTE=$$TM^DTUTL($P(A,"|",3)),A=$P(A,"|",1,2)_"|"_TTE
+ .F DT=DN:1:DK S A=A_"|"_$$TM^DTUTL($G(^BUF($J,OTD,NN,DT)))
+ .I POTD'=OTD D WC^RWU(CR_"|"_$$GOTD^YISPRAV(OTD)) S POTD=OTD
+ .D WC^RWU(CR_A)
+ K ^BUF($J)
+ D C^RWU
+ Q
+unTYPE(CRD,TIP,X) ; Расшифровать на основании типа карты
+ I TIP="D" S FIO=$$GET^IKADRY(X,"f")_"|"_$$GET^IKADRY(X,"i")_"|"_$$GET^IKADRY(X,"o"),TP="сотр.",SPE="",OT=$$OTD^IKADRY(X),OTD=$$GOTD^YISPRAV(OT) Q
+ I TIP="P" S FIO=$$GET^IPAC(X,"fiof")_"|"_$$GET^IPAC(X,"fioi")_"|"_$$GET^IPAC(X,"fioo"),SPE="",OT="",OTD=$$GETE^IPAC(X,"stc"),TP="пациент" Q
+ Q:TIP'="O" 
+ S $P(FIO,"|",1,3)=$TR($$FIO^NPEOPL(X)," ","|")
+ S OTD=$G(^CARD(CRD,"podr")),SPE=$G(^("spec")),OT="",TP="физлица"
+ Q
+KTON(DN,DK,TIPP)     ; Кто не пользуется картами
+ N DNN,DTN,X,TIP,DTV,DTL,DTC,L,PAC,TT,DT,NN,R
+ S DNN=$$DIH^DTUTL(DN),DTK=$$DIH^DTUTL(DK)
+ S DTN=DNN
+ D OWF^RWU(".txt")
+ D WC^RWU("П.п.|Фамилия|Имя|Отчество|Кто|Отд./Орг.|Дата регистрации")
+ S NN="" F  S NN=$O(^CARD(NN)) Q:NN=""  D
+ .S R=$G(^(NN)) Q:R="" 
+ .S TIP=$P(R,"|",1),PAC=$P(R,"|",2),DTV=+$P(R,"|",3)
+ .I TIPP'="",TIPP'=TIP Q 
+ .Q:$G(^(NN,"deny"))
+ .S DT=$O(^CRDLOG(NN,DNN-1)) I DT'="",DT'>DTK Q  
+ .S DT=$O(^CRDLOG(NN,DTK+1),-1) I DT'="",DT'<DNN Q
+ .S DT=$O(^CARD(NN,"dis",DNN+1)),PRV=0
+ .I DT'="" S PRV=1,DT=DT-1 F  S DT=$O(^CARD(NN,"dis",DT)) Q:DT=""!(DT>DTK)  I '^(DT) S PRV=0 Q ; попадается отсутствие блокировки
+ .Q:PRV 
+ .I TIP="D",'$$USED^IKADRY(PAC,DTK) Q  
+ .D unTYPE(NN,TIP,PAC)
+ .S OTD=$E(OTD,1,30)
+ .D WC^RWU(CR_PAC_"|"_FIO_"|"_TP_"|"_OTD_"|"_$$DT^DTUTL(DTV))
+ D C^RWU
+ Q
+JRNV(DT) ; Журнал учета рабочего времени
+ N TM,LP,R,LST,ID,N,VR,FR,LPU,VR,OT,TS,TE,EN
+ S DT=$$DIH^DTUTL(DT)
+ S LPU=$$^I("ilpu"),FR=+$G(^cfg("sl-kadry"))
+ S:+$G(^cfg("sl-kadry-only")) FR=2
+ S ID="D" F  S ID=$O(^CARDI(ID)) Q:ID=""!($E(ID,1)'="D")  D
+ .S N=$O(^CARDI(ID,""),-1) ; последний идентификатор
+ .Q:N=""
+ .S VR=$E(ID,2,99) Q:'$$CHECK^IKADRY(VR)
+ .I FR,LPU'="",$$USEInLPU^IKADRY(VR,LPU,DT) Q
+ .S R=$E($$GET^IKADRY(VR,"f",DT),1,32)_"|"_VR
+ .S LST(R)=$$OTD^IKADRY(VR,DT)_"|"_N
+ D OWF^RWU(".txt")
+ D WC^RWU("Сотрудник|Отделение|Приход|Уход")
+ S N="" F  S N=$O(LST(N)) Q:N=""  D
+ .S R=LST(N),ID=$P(R,"|",2)
+ .Q:'$D(^CRDLOG(ID,DT)) 
+ .S (TS,TE)="",VR=$P(N,"|",2),OT=$P(R,"|",1)
+ .S TM="" F  S TM=$O(^CRDLOG(ID,DT,TM)) Q:TM=""  D
+ ..S R=^(TM)
+ ..S EN=$P($P(R,"|",6),"@",2)
+ ..I FR,LPU'="",EN'="",LPU'=EN Q 
+ ..S EN=$P(R,"|",4)
+ ..S:(TS="")&(EN=1) TS=TM
+ ..S:EN=2 TE=TM
+ .Q:(TS="")&(TE="") 
+ .D WC^RWU(CR_$$FIO^IKADRY(VR)_"|"_$$GOTD^YISPRAV(OT)_"|"_$$TM^DTUTL(TS)_"|"_$$TM^DTUTL(TE))
+ D C^RWU
+ Q
+JRNO(DS,DE,LPU) ; Журнал опозданий
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),LPU=$G(LPU)
+ N LST,ID,DT,TM,R,LP,EN,TS,TE,VR,VRF,CS,CE,FR
+ S FR=$$FR^I()
+ S:'FR LPU=$$^I("ilpu")
+ K ^BUF($J)
+ S ID="" F  S ID=$O(^CRDLOG(ID)) Q:ID=""  D
+ .S R=$G(^CARD(ID))
+ .Q:$P(R,"|",1)'="D" 
+ .S VR=$P(R,"|",2),VRF=""
+ .S DT=DS-1 F  S DT=$O(^CRDLOG(ID,DT)) Q:DT=""!(DT>DE)  D
+ ..K LST
+ ..S TM="" F  S TM=$O(^CRDLOG(ID,DT,TM)) Q:TM=""  D
+ ...S R=^(TM)
+ ...S LP=$P($P(R,"|",6),"@",2)
+ ...I LPU'="",LP'="",LPU'=LP Q
+ ...S EN=$P(R,"|",4)
+ ...S:($P($G(LST(+LP)),"|",1)="")&(EN=1) $P(LST(+LP),"|",1)=TM
+ ...S:EN=2 $P(LST(+LP),"|",2)=TM
+ ..S LP="" F  S LP=$O(LST(LP)) Q:LP=""  D
+ ...S R=$$PGTIMES^NPTBL(LP,VR,DT) Q:R=""
+ ...S CS=$P(R,"|",1),CE=$P(R,"|",2)
+ ...S TS=LST(LP),TE=$P(TS,"|",2),TS=$P(TS,"|",1),EN=1
+ ...I TS'="",CS'="",(TS-59)>CS S EN=0  ; лаг в 59 сек.
+ ...I 'EN,TE'="",CE'="",TE<(CE-59) S EN=0
+ ...Q:EN
+ ...S:VRF="" VRF=$E($$GET^IKADRY(VR,"f"),1,32)
+ ...S ^BUF($J,VRF_"|"_VR_"|"_LP_"|"_DT)=VR_"|"_LP_"|"_DT_"|"_TS_"|"_TE_"|"_CS_"|"_CE
+ D OWF^RWU(".txt")
+ D WC^RWU("Сотрудник|Дата|Приход|Уход|График с|График по"_$S(FR:"|Филиал",1:""))
+ S ID="" F  S ID=$O(^BUF($J,ID)) Q:ID=""  D
+ .S R=^(ID),VR=$P(R,"|",1),LP=$P(R,"|",2),DT=$P(R,"|",3)
+ .S EN=$$FIO^IKADRY(VR)_"|"_$$DT^DTUTL(DT)_"|"
+ .S EN=EN_$$TM^DTUTL($P(R,"|",4))_"|"_$$TM^DTUTL($P(R,"|",5))_"|"
+ .S EN=EN_$$TM^DTUTL($P(R,"|",6))_"|"_$$TM^DTUTL($P(R,"|",7))
+ .D WC^RWU(CR_EN_$S(FR:"|"_$$NAME^ICONTR(LP),1:""))
+ D C^RWU
+ Q
+LISTID(OF) ; Перечень ручных идентификаторов карт
+ ; OF - оформление
+ N CI,PREF,R,L,V,H
+ S PREF=$$PREFIX^ISCARD(),L=$L(PREF),OF=$G(OF),H=+$H
+ D OWF^RWU(".txt")
+ D WC^RWU("Таб.№|Владелец карты|Код карты|Зарегистрирован")
+ S CI="" F  S CI=$O(^CARD(CI)) Q:CI=""  D
+ .I L,$E(CI,1,L)'=PREF Q
+ .S R=$G(^(CI)) Q:R=""  Q:$P(R,"|",1)'="D"  ; сотрудники
+ .S V=$P(R,"|",2)
+ .I OF,$S(OF=1:'$$USED^IKADRY(V,H),OF=2:$$USED^IKADRY(V,H),1:0) Q 
+ .D WC^RWU(CR_V_"|"_$$FIO^IKADRY(V)_"|"_$E(CI,L+1,99)_"|"_$$DTM^DTUTL($P(R,"|",3)))
+ D C^RWU
+ Q
+LISTIDP(OF) ; Перечень идентификаторов карт пациентов
+ N CI,PREF,R,L,V,NI
+ S PREF=$G(^cfg("scard","prefix")),L=$L(PREF),OF=$G(OF),H=+$H
+ D OWF^RWU(".txt")
+ D WC^RWU("№ и.б.|Владелец карты|Код карты|Зарегистрирован")
+ S CI="" F  S CI=$O(^CARD(CI)) Q:CI=""  D
+ .I L,$E(CI,1,L)'=PREF Q
+ .S R=$G(^(CI)) Q:R=""  Q:$P(R,"|",1)'="P"  ; сотрудники
+ .S NI=$P(R,"|",2)
+ .D WC^RWU(CR_NI_"|"_$$FIO^IPAC(NI)_"|"_$E(CI,L+1,99)_"|"_$$DTM^DTUTL($P(R,"|",3)))
+ D C^RWU
+ Q
+REGIPROC 
+ N D,T,F
+ S D="Контроль доступа"
+ S T="t@string:D/Сотрудники#P/Пациенты#O/Прочие лица,Принадлежность"
+ S F=$$FR^I()
+ S ^IPROC(D,"Кто сейчас в учреждении")="WHOIN_RSEC,1,1,"_T
+ S ^IPROC(D,"Отсутствие событий контроля доступа")="WHONR_RSEC,1,3,d,Начальная дата,d,Конечная дата,"_T
+ S ^IPROC(D,"Кто не пользуется картами")="KTON_RSEC,1,3,d,Начальная дата,d,Конечная дата,"_T
+ S ^IPROC(D,"Журнал учета рабочего времени")="JRNV_RSEC,1,1,d,Дата отчета"
+ S ^IPROC(D,"Журнал опозданий")="JRNO_RSEC,1,"_$S(F:3,1:2)_",d,Начальная дата,d,Конечная дата"_$S(F:",t@storage:lpu,Филиал",1:"")
+ S ^IPROC(D,"Учет рабочего времени по отделению")="TIMEO_RSEC,1,4,d,Начальная дата,d,Конечная дата,te@storage:otd@1,Отделение,"_T
+ S ^IPROC(D,"Учет рабочего времени")="TIME_RSEC,1,3,d,Начальная дата,d,Конечная дата,"_T
+ S ^IPROC(D,"Отработанное время")="TIMELT_RSEC,1,3,d,Начальная дата,d,Конечная дата,"_T
+ S ^IPROC(D,"Система","Список идентификаторов")="LISTID_RSEC,1,1,t@string:0/Все#1/Работающие#2/Уволенные,Статус оформления сотрудника"
+ S ^IPROC(D,"Система","Список идентификаторов пациентов")="LISTIDP_RSEC,1,1,t@string:0/Все#1/Оформлен#2/Снят,Статус оформления пациента"
+ Q

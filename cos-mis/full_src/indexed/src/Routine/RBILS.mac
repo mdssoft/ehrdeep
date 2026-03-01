@@ -1,0 +1,44 @@
+RBILS ; Отчеты по бонусным счетам [ 01/01/2017  11:34 PM ]
+JRN(DS,DE,TPX,LPUX) ; Журнал движения по счетам
+ N NI,DT,TM,R,L,LP,OPE,DD,SUM,TXT,LOG,FR
+ S TPX=+TPX
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S FR=$$FR^I()
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|||За период "_$$DT2^DTUTL(DS)_"-"_$$DT2^DTUTL(DE)_"||;")
+ D WC^RWU(CR_"xpatient:patient|№ И.Б.|Дата, время|Ф.И.О. пациента|Сумма|Операция"_$S(FR:"|Филиал",1:""))
+ S NI="" F  S NI=$O(^BILS(NI)) Q:NI=""  D
+ .S DT=DS-1 F  S DT=$O(^BILS(NI,TPX,DT)) Q:DT=""  D
+ ..S TM="" F  S TM=$O(^BILS(NI,TPX,DT,TM)) Q:TM=""  D
+ ...S L=^(TM),OPE=$P(L,"|",1)
+ ...I OPE'="+",OPE'="-",$L(OPE) Q 
+ ...S LOG=$P(L,"|",3),LP=$P(LOG,"@",2)
+ ...I LPUX'="",LP'=LPUX 
+ ...S DD=$$DT^DTUTL(DT)_","_$$TM^DTUTL(TM)
+ ...S SUM=$P(L,"|",2)
+ ...S:$L(OPE) TXT="зачисление"
+ ...I OPE="" S TXT="списание" 
+ ...S:$E(SUM,1)="+" SUM=$E(SUM,2,$L(SUM)) S:SUM<0 SUM=0-SUM
+ ...S R=NI_"|"_NI_"|"_DD_"|"_$$FIO^IPAC(NI)_"|"_$TR(SUM,".",",")_"|"_TXT_$S(FR:"|"_$$NAME^ICONTR(LP),1:"")
+ ...D WC^RWU(CR_R)
+ D C^RWU
+ Q
+LST(MIN,MAX,TPX) ; Реестр бонусных счетов
+ N NI,SC,SUM
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|№ И.Б.|Ф.И.О. пациента|Сумма|Счет")
+ S NI="" F  S NI=$O(^BILS(NI)) Q:NI=""  D
+ .S SC=TPX-1 F  S SC=$O(^BILS(NI,SC)) Q:SC=""  D:$S(TPX="":1,1:TPX=SC)
+ ..S SUM=$P(^(SC),"|",1)
+ ..I MIN'="",SUM<MIN Q 
+ ..I MAX'="",SUM>MAX Q 
+ ..D WC^RWU(CR_NI_"|"_NI_"|"_$$FIO^IPAC(NI)_"|"_$TR(SUM,".",",")_"|"_$$NAME^ISPRAV("bilsc",SC))
+ D C^RWU
+ Q
+REGIPROC 
+ N D,F,T
+ S D="Касса",F=$$FR^I()
+ S T=$S(F:",t@storage:lpu,Филиал",1:"")
+ S ^IPROC(D,"Бонусные счета","Журнал движения по счетам")="JRN_RBILS,100,"_$S(F:4,1:3)_",d,Начальная дата,d,Конечная дата,t@net:NMLST_NSPRAV(""bilsc""),Бонусный счет"_T_",p"
+ S ^IPROC(D,"Бонусные счета","Реестр бонусных счетов")="LST_RBILS,100,3,s,Минимальная сумма,s,Максимальная сумма,t@net:NMLST_NSPRAV(""bilsc"")@1,Бонусный счет"
+ Q

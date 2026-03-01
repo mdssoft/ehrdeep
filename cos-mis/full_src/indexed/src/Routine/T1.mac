@@ -1,0 +1,15 @@
+T
+	S T1=$P($ZTIMESTAMP,",",2)
+	S B="1|2|3"
+	F I=1:1:99999999 s A=$P(B,"|",3)
+	w !,"Stage1="_($P($ZTIMESTAMP,",",2)-T1)
+	K A
+	S T1=$P($ZTIMESTAMP,",",2)
+	F I=1:1:99999999 s A(1)=1,A(7)=3,A(3)="sd"
+	w !,"Stage2="_($P($ZTIMESTAMP,",",2)-T1)
+	K A
+	Q
+	S T1=$P($ZTIMESTAMP,",",2)
+	F I=1:1:99999999 s A("ass")="ass",A("ssa")="ssa",A("ggg")="sd"
+	w !,"Stage2="_($P($ZTIMESTAMP,",",2)-T1)
+	Q

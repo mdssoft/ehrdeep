@@ -1,0 +1,277 @@
+NISUTL ; Утилиты системы [ 11/18/2020  2:09 PM ]
+NUL ; For ping network connection
+ D MSG^RWU("OK")
+ Q
+LOADBUF 
+ N %J,A
+ D ORH^RWU
+ K ^BUF("x")
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  S:%J>1 ^BUF("x",%J)=$$WD^TXTU(A)
+ D CR^RWU
+ Q
+LOADIDX 
+ N %J,A
+ D ORH^RWU
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  S:%J>1 A=$$WD^TXTU(A),^BUF($P(A,"|",1),$P(A,"|",2))=$P(A,"|",3,99)
+ D CR^RWU
+ Q
+LOADGL(CC,VNUL) 
+ ; global|key1|key2..|value
+ ; CC - число колонок
+ ; VNUL - наличие пустого значения
+ N %J,A,G,C,I,R,X
+ D ORH^RWU
+ S CC=$G(CC),VNUL=$G(VNUL)
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  D:%J>1
+ .S A=$$WD^TXTU(A),G=$P(A,"|",1) Q:G=""
+ .S C=$L(A,"|"),R=""
+ .S:VNUL C=C+1
+ .S:CC'="" C=CC
+ .F I=2:1:C-1 S X=$P(A,"|",I) Q:X=""  S R=R_$S(R="":"",1:",")_""""_X_""""
+ .S:$E(G)'="^" G="^"_G
+ .S G=G_"("_R_")",A=$P(A,"|",C,999)
+ .X "S "_G_"=A"
+ D CR^RWU
+ Q
+LOADGLN ; Импорт индексов глобала с нулевым значением
+ D LOADGL("",1)
+ Q
+EXPBUF 
+ N I,C
+ D OWF^RWU(".txt")
+ S (C,I)="" F  S I=$O(^BUF("x",I)) Q:I=""  D WC^RWU(C_^(I)) S C=CR
+ D C^RWU
+ Q
+MSGALL(TXT) ; Сообщение всем
+ S TXT=$$TAG^TXTU($$DW^TXTU(TXT))
+ S:$G(%JOB)="" %JOB=777
+ D SENDALL^YISYNC("MSGU^NISUTL","("""_TXT_""")")
+ Q
+MSGVR(VR,TXT) ; Сообщение врачу
+ N U S U="",TXT=$$TAG^TXTU($$DW^TXTU(TXT))
+ S:$G(%JOB)="" %JOB=777
+ F  S U=$O(^LOG(U)) Q:U=""  I $G(^(U,"kadry"))=VR D msgU
+ Q
+MSGSP(SP,TXT) ; Сообщение специальности
+ N U,H
+ S U="",TXT=$$TAG^TXTU($$DW^TXTU(TXT)),H=+$H
+ S:$G(%JOB)="" %JOB=777
+ F  S U=$O(^LOG(U)) Q:U=""  D:$$IsSP^IKADRY($G(^(U,"kadry")),SP,H) msgU
+ Q
+MSGDL(DL,TXT) ; Сообщение должности
+ N U,H
+ S U="",TXT=$$TAG^TXTU($$DW^TXTU(TXT)),H=+$H
+ S:$G(%JOB)="" %JOB=777
+ F  S U=$O(^LOG(U)) Q:U=""  D:$$IsDL^IKADRY($G(^(U,"kadry")),DL,H) msgU
+ Q
+msgU 
+ D SENDUSR^YISYNC("MSGU^NISUTL","("""_TXT_""")",U)
+ Q
+msg(TXT) ; Диалоговое сообщение через xml
+ S TXT=$$TAG^TXTU(TXT)
+ D MSG^RWU(^PP(0,2)_"<script_variable><message>"_TXT_"</message></script_variable><run>show_message(0,0);"_CR_"</run></nb_console>",".xmlb")
+ Q
+MSGU(TXT) ; Текстовое сообщение
+ S %B=".xmlb"
+ S TXT=$$TAG^TXTU(TXT)
+ S %L="<nb_console><script_variable><message>"_TXT_"</message></script_variable><run>show_tooltip(0,0);"_CR_"</run></nb_console>"
+ Q
+CMDALL(TXT) ; Команда всем
+ S TXT=$$TAG^TXTU($$DW^TXTU(TXT))
+ S:$G(%JOB)="" %JOB=777
+ D SENDALL^YISYNC("MSGSC^NISUTL","("""_TXT_""")")
+ Q
+CMDVR(TXT,VR) ; Команда сотруднику
+ N U S U="",TXT=$$TAG^TXTU($$DW^TXTU(TXT))
+ S:$G(%JOB)="" %JOB=777
+ F  S U=$O(^LOG(U)) Q:U=""  D:$G(^(U,"kadry"))=VR SENDUSR^YISYNC("MSGSC^NISUTL","("""_TXT_""")",U)
+ Q
+EXALL ; Выйти из всех клиентов
+ D CMDALL("RUN_EXIT_PROGRAM")
+ Q
+MSGSC(CMD) ; Системная команда
+ S %B=".xmlb"
+ S %L="<nb_console><run>"_CMD_CR_"</run></nb_console>"
+ Q
+LNZ ; Загрузка фиктивных назначений
+ ; дата,пациент,NAZ,a,услуга,KEY,from
+ N %J,A,G,C,I,R,X,DT,K,USL,iN,iA,SP,fVR,OT,ID,VR,NI
+ ; date|nib fio|NAZ index|NAZ(a) index|usl|KEY|from (TN)
+ D ORH^RWU
+ K ^BUF("x")
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  D:%J>1
+ .S A=$$WD^TXTU(A)
+ .S NI=$P($P(A,"|",2)," ",1) Q:NI=""
+ .S iN=$P(A,"|",3),R=$P(A,"|",4)
+ .S iA=$S(R="":iA+1,1:R)
+ .S U=$TR($P($P(A,"|",5)," ",1),",",".") Q:U="" 
+ .S K=$P(A,"|",6)
+ .S VR=$P(K,"@",1),OT=$P(K,"@",2),DT=$P(K,"@",3),ID=$P(K,"@",4)
+ .S fVR=$P(A,"|",7)
+ .S ^NAZ(iN,"a",iA)="1||0||"_U_"||||||"_K_"|"_DT_","_$P($H,",",2)_"|"_VR
+ .S ^ZNF(VR,OT,DT,ID,"f")=iN
+ .S ^NAZ(iN,"i")="l|"_NI_"|"_fVR_"|1|"_DT_","_$P($H,",",2)_"|"_fVR
+ .S ^NAZI("n",NI,iN)="l|"_$$SPEC^IKADRY(fVR)_"|"_DT_"|"_fVR
+ .S ^NAZI("d",DT,iN)="l|"_NI
+ .D GL^IEXCH("^NAZ",iN),GL^IEXCH("^NAZI","n",NI,iN),GL^IEXCH("^NAZI","d",DT,iN)
+ D CR^RWU
+ Q
+DESTRAH ; Изменение страх. пациентов с вышедшими сроками на физлиц. 
+ N NI,R,T,D,H,ST,CP,CG,MV,STAT,log,PGP,ILST,MF
+ S H=+$H,ST=$G(^cfg("def-stc")),CP=+$G(^cfg("pspis","clr-polis"))
+ S STAT=$G(^cfg("pspis","def-stat"))
+ S CG=+$G(^cfg("pspis","clr-grn"))
+ S PGP=$G(^cfg("pspis","grn-ofor"))
+ S R="" F  S R=$O(^DGN(R)) Q:R=""  S ILST(R)=$$GET^IINSC(R,"dvid",H)
+ S:ST="" ST=1
+ S NI="" F  S NI=$$NEXT^IPAC(NI) Q:NI=""  D
+ .S R=$$GET^IPAC(NI,"ofor",H)
+ .I PGP,R=PGP D   ; по гп
+ ..Q:$$GETID^IGRNL(NI,H,"")'=""
+ ..D SET^IPAC(NI,"stc",H,ST),SET^IPAC(NI,"prog",H,""),SET^IPAC(NI,"ofor",H,1,1)
+ .Q:+R>1  ; неоформл. не трогаем
+ .S D=$$GET^IPAC(NI,"dog_to",H)
+ .S MV=0,log=0,MF=""
+ .I D'="",D<H,R'="" D
+ ..S R=$$GET^IPAC(NI,"stc",H) ; только СК
+ ..Q:R="" 
+ ..S T=$G(ILST(R))
+ ..Q:$S(T="":1,T=3:0,1:T>1)  ; strah
+ ..D:T<2 SET^IPAC(NI,"stc",H,ST)
+ ..D RECNTSTC^IPAC(NI,H)
+ ..D SET^IPAC(NI,"prog",H,"")
+ ..D:CP SET^IPAC(NI,"polis",H,"")
+ ..D SET^IPAC(NI,"dog_to",H,"")
+ ..D SET^IPAC(NI,"dog_from",H,"")
+ ..D SET^IPAC(NI,"stcprg",H,"")
+ ..D SET^IPAC(NI,"stcdog",H,"")
+ ..S MV=1,MF=1
+ ..D:CG END^IGRNL(NI,R,H)
+ ..S log=1
+ .S D=$$GET^IPAC(NI,"dog_to1",H)
+ .I D'="",D<H D
+ ..S R=$$GET^IPAC(NI,"stc1",H) ; только СК
+ ..Q:R=""  
+ ..S T=$G(ILST(R))
+ ..Q:$S(T="":1,T=3:0,1:T>1)  ; strah
+ ..D:T<2 SET^IPAC(NI,"stc1",H,"")
+ ..D RECNTSTC^IPAC(NI,H)
+ ..D SET^IPAC(NI,"prog1",H,"")
+ ..D:CP SET^IPAC(NI,"polis1",H,"")
+ ..D SET^IPAC(NI,"dog_to1",H,"")
+ ..D SET^IPAC(NI,"dog_from1",H,"")
+ ..S MV=2
+ ..D:CG END^IGRNL(NI,R,H)
+ ..S log=1
+ .S D=$$GET^IPAC(NI,"dog_to2",H)
+ .I D'="",D<H,R'="" D
+ ..S R=$$GET^IPAC(NI,"stc2",H) ; только СК
+ ..Q:R="" 
+ ..S T=$G(ILST(R))
+ ..Q:$S(T="":1,T=3:0,1:T>1)  ; strah
+ ..D:T<2 SET^IPAC(NI,"stc2",H,"")
+ ..D RECNTSTC^IPAC(NI,H)
+ ..D SET^IPAC(NI,"prog2",H,"")
+ ..D:CP SET^IPAC(NI,"polis2",H,"")
+ ..D SET^IPAC(NI,"dog_to2",H,"")
+ ..D SET^IPAC(NI,"dog_from2",H,"",1)
+ ..D:CG END^IGRNL(NI,R,H)
+ ..S log=1
+ .D:log SET^IPAC(NI,"opfio",H,$$USRH^IUSER(),1)
+ .I 'MV,$$GET^IPAC(NI,"stc1",H)="",$$GET^IPAC(NI,"stc2",H)'="" S MV=2 ; если ничего не меняли, но есть пустое место
+ .Q:'MV  ; "всплывание" договоров
+ .I MV=1,$$GET^IPAC(NI,"stc1",H)="",$$GET^IPAC(NI,"stc2",H)'="" S MF=2 ; если договор 1 пустой, а 2 есть
+ .I MV=2,$$GET^IPAC(NI,"stc2",H)'="" D
+ ..D SET^IPAC(NI,"stc1",H,$$GET^IPAC(NI,"stc2",H))
+ ..D SET^IPAC(NI,"prog1",H,$$GET^IPAC(NI,"prog2",H))
+ ..D SET^IPAC(NI,"polis1",H,$$GET^IPAC(NI,"polis2",H))
+ ..D SET^IPAC(NI,"dog_to1",H,$$GET^IPAC(NI,"dog_to2",H))
+ ..D SET^IPAC(NI,"dog_from1",H,$$GET^IPAC(NI,"dog_from2",H))
+ ..D SET^IPAC(NI,"stc2",H,"") ; todo movfrom and clrfrom
+ ..D RECNTSTC^IPAC(NI,H)
+ ..D SET^IPAC(NI,"prog2",H,"")
+ ..D SET^IPAC(NI,"polis2",H,"")
+ ..D SET^IPAC(NI,"dog_to2",H,"")
+ ..D SET^IPAC(NI,"dog_from2",H,"",1)
+ .I MV=1,$$GET^IPAC(NI,"stc"_MF,H)'="" D
+ ..D SET^IPAC(NI,"stc",H,$$GET^IPAC(NI,"stc"_MF,H))
+ ..D SET^IPAC(NI,"prog",H,$$GET^IPAC(NI,"prog"_MF,H))
+ ..D SET^IPAC(NI,"polis",H,$$GET^IPAC(NI,"polis"_MF,H))
+ ..D SET^IPAC(NI,"dog_to",H,$$GET^IPAC(NI,"dog_to"_MF,H))
+ ..D SET^IPAC(NI,"dog_from",H,$$GET^IPAC(NI,"dog_from"_MF,H))
+ ..D SET^IPAC(NI,"stc"_MF,H,"") ; todo movfrom and clrfrom
+ ..D RECNTSTC^IPAC(NI,H)
+ ..D SET^IPAC(NI,"prog"_MF,H,"")
+ ..D SET^IPAC(NI,"polis"_MF,H,"")
+ ..D SET^IPAC(NI,"dog_to"_MF,H,"")
+ ..D SET^IPAC(NI,"dog_from"_MF,H,"",1)
+ Q
+TOPSTRAH ; "всплытие" договоров если первый - дефолтный
+ N NI,R,T,D,H,ST,CP,MV
+ S H=+$H,ST=$G(^cfg("def-stc")),CP=+$G(^cfg("pspis","clr-polis"))
+ S:ST="" ST=1
+ S NI="" F  S NI=$$NEXT^IPAC(NI) Q:NI=""  D  
+ .S MV=0
+ .S R=$$GET^IPAC(NI,"stc1",H)
+ .I R'="",R'=ST,$$GET^IPAC(NI,"stc",H)=ST S MV=1
+ .S R=$$GET^IPAC(NI,"stc2",H)
+ .I R'="",R'=ST,$$GET^IPAC(NI,"stc1",H)=ST S MV=2
+ .I 'MV,$$GET^IPAC(NI,"stc",H)="" S MV=1 
+ .Q:'MV 
+ .D SET^IPAC(NI,"opfio",H,$$USRH^IUSER())
+ .I MV=2 D  Q
+ ..D SET^IPAC(NI,"stc1",H,$$GET^IPAC(NI,"stc2",H))
+ ..D SET^IPAC(NI,"prog1",H,$$GET^IPAC(NI,"prog2",H))
+ ..D SET^IPAC(NI,"polis1",H,$$GET^IPAC(NI,"polis2",H))
+ ..D SET^IPAC(NI,"dog_to1",H,$$GET^IPAC(NI,"dog_to2",H))
+ ..D SET^IPAC(NI,"dog_from1",H,$$GET^IPAC(NI,"dog_from2",H))
+ ..D SET^IPAC(NI,"stc2",H,"") ; todo movfrom and clrfrom
+ ..D RECNTSTC^IPAC(NI,H)
+ ..D SET^IPAC(NI,"prog2",H,"")
+ ..D SET^IPAC(NI,"polis2",H,"")
+ ..D SET^IPAC(NI,"dog_to2",H,"")
+ ..D SET^IPAC(NI,"dog_from2",H,"",1)
+ .I MV=1 D:$$GET^IPAC(NI,"stc1",H)'=""  Q  
+ ..D SET^IPAC(NI,"stc",H,$$GET^IPAC(NI,"stc1",H))
+ ..D SET^IPAC(NI,"prog",H,$$GET^IPAC(NI,"prog1",H))
+ ..D SET^IPAC(NI,"polis",H,$$GET^IPAC(NI,"polis1",H))
+ ..D SET^IPAC(NI,"dog_to",H,$$GET^IPAC(NI,"dog_to1",H))
+ ..D SET^IPAC(NI,"dog_from",H,$$GET^IPAC(NI,"dog_from1",H))
+ ..D SET^IPAC(NI,"stc1",H,"") ; todo movfrom and clrfrom
+ ..D RECNTSTC^IPAC(NI,H)
+ ..D SET^IPAC(NI,"prog1",H,"")
+ ..D SET^IPAC(NI,"polis1",H,"")
+ ..D SET^IPAC(NI,"dog_to1",H,"")
+ ..D SET^IPAC(NI,"dog_from1",H,"",1)
+ Q
+ONVUSL ; Вкл виртуальные услги и платежи
+ s ^cfg("pko-pac-all")=""
+ s ^cfg("ksv-pko")=""
+ s ^cfg("no-vusl")=0
+ Q
+OFFVUSL ; Выкл виртуальные услуги и платежи
+ s ^cfg("pko-pac-all")=2
+ s ^cfg("ksv-pko")=2
+ s ^cfg("no-vusl")=1
+ Q
+REEX ; Retreive server update and restart services
+ D STOP^IEXCH
+ H 2
+ D:'$D(^EXCH) UPD^IEXCH("NULL",0)
+ D START^IEXCH
+ D STOP^ICRON H 1 D START^ICRON
+ Q
+UPDFILE(STR) ; Послать файл на обновление
+ S STR=$$TRIM^TXTU($$WD^TXTU(STR)) Q:STR="" 
+ D UPDFILE^IEXCHU(STR)
+ Q
+UPDRO(STR) ; Послать файл с процедурами на обновление
+ S STR=$$TRIM^TXTU($$WD^TXTU(STR)) Q:STR="" 
+ D UPDRI^IEXCHU(STR,1)
+ Q
+REMSGS ; Restart msghub
+ D STOP^IMSGHUB,START^IMSGHUB
+ Q
+REGIPROC 
+ S ^IPROC("Система","Экспорт буфера")="EXPBUF_NISUTL,1,0"
+ Q

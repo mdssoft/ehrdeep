@@ -1,0 +1,182 @@
+NIFD ; Infodent [ 08/13/2007  1:31 AM ]
+NIBID(NIB) ; Get ID by anib
+ N ID,A,F
+ S ID="",F=0
+ F  S ID=$O(^IFD("CLIENTS",ID)) Q:ID=""  S A=$P(^(ID),"|",1) I A=NIB!($P(A,"-",2)=NIB) S F=1 Q 
+ Q $S(F:ID,1:"")
+WNIB(NIB) ; Get ID by anib
+ N ID,A,F
+ S ID=""
+ F  S ID=$O(^IFD("CLIENTS",ID)) Q:ID=""  S A=$P(^(ID),"|",1) I A=NIB!($P(A,"-",2)=NIB) W !,$P(^(ID),"|",1,4)
+ Q
+NIB(NIB) ; Get by sisyem NIB
+ N R S R=$$GET^YIPACN(NIB,"anib",+$H) Q:R="" 
+ Q $$NIBID(R)
+FILNIB 
+ N N,R,ID,A
+ K ^BUF($J)
+ S ID="" F  S ID=$O(^IFD("CLIENTS",ID)) Q:ID=""  S A=$P(^(ID),"|",1) S R=$S($G(^BTI("anib",A))'="":A,$G(^BTI("anib",+$P(A,"-",2)))'="":$P(A,"-",2),1:"") S:R'="" ^BUF($J,A)=ID
+ S N=0 F  S N=$$NEXT^YIPACN(N) Q:N<0  S R=$$GET^YIPACN(N,"anib",+$H) I R'="" S R=$G(^BUF($J,R)) W:R'="" !,N_"="_R D:R'="" SET^YIPACN(N,"inib",+$H,R,1)
+ K ^BUF($J)
+ Q
+FILPAC 
+ N N,R,A,X
+ S N=0 F  S N=$$NEXT^YIPACN(N) Q:N<0  D
+ .S R=$$GET^YIPACN(N,"inib",+$H) Q:R="" 
+ .S A=$G(^IFD("CLIENTS",R)) Q:A="" 
+ .S X=$$UL^TXTU($P(A,"|",2)) Q:X'[$$UL^TXTU($$GET^YIPACN(N,"f",+$H)) 
+ .S X=$P(A,"|",5) D:X'="" SET^YIPACN(N,"pol",+$H,X)
+ .S X=$P(A,"|",6) D:X'="" SET^YIPACN(N,"datar",+$H,$$DI^DTUTL(X))
+ .S X=$P(A,"|",7) D:X'="" SET^YIPACN(N,"street",+$H,X)
+ .S X=$P(A,"|",8) D:X'="" SET^YIPACN(N,"tel1",+$H,X)
+ .S X=$P(A,"|",9) D:X'="" SET^YIPACN(N,"tel2",+$H,X)
+ .S X=$P(A,"|",10) D:X'="" SET^YIPACN(N,"pasp",+$H,X_" "_$P(A,"|",11))
+ .S X=$P(A,"|",12) D:X'="" SET^YIPACN(N,"pasp_dan",+$H,X)
+ .D UPD^IEXCH("IPACEX",N)
+ Q
+FILCOM 
+ N N
+ S N=0 F  S N=$O(^BTI("anib",N)) Q:N=""  D WINCOM(N)
+ Q
+WINCOM(INIB) 
+ N N,X,DTM,A,S,R,Z,M,V,TT
+ S N=$$NIBID(INIB),S=0 Q:N=0  Q:N=""  
+ S RNIB=+$G(^BTI("anib",INIB))
+ S X="" F  S X=$O(^IFD("TREAT",N,X)) Q:X=""  D
+ .S A=^(X),TT=28800,DTM=$$DI^DTUTL($P(A,"|",1)),M=+$P(A,"|",3)
+ .Q:M=0 
+ .S V=$P(A,"|",2) S:V'="" V=$G(^IFD("DOC",V)) S:V="" V=$P(A,"|",2)
+ .F  Q:$D(^BILX(RNIB,+DTM,TT))=0  S TT=TT+1
+ .S ^BILX(RNIB,DTM,TT)="|-"_M_"||1|sys@1|ZNF:"_V_":38:"_DTM
+ W !,"N="_N
+ S X="" F  S X=$O(^IFD("INCOM",N,X)) Q:X=""  D
+ .S A=^(X),R=$P(A,"|",1)
+ .S TT=$$TI^DTUTL($P(R," ",2)),DTM=$$DI^DTUTL($P(A,"|",3))_","_TT
+ .; Q:(+DTM)<60478 
+ .S Z="^BILL("_INIB_","_+DTM_","_TT_")="_$$DTM^DTUTL(DTM)_"|"
+ .S R=+$P(A,"|",6),M=$P(A,"|",4),V=$P(A,"|",5)
+ .S:V'="" V=$G(^IFD("DOC",V)) S:V="" V=$P(A,"|",5)
+ .F  Q:$D(^BILX(RNIB,+DTM,TT))=0  S TT=TT+1
+ .; S A="+|"_M_"|1|1|sys@1",^BILX(RNIB,+DTM,TT)=A Q 
+ .I R=1 D  Q 
+ ..S A="+|"_M_"|1|1|sys@1",^BILX(RNIB,+DTM,TT)=A ; W !,Z_A ; ..S A="|-"_M_"||1|sys@1|ZNF:"_V_":38:"_+DTM,^BILX(RNIB,+DTM,TT+1)=A 
+ .I R=2 S A="+|"_M_"|1|1|sys@1",^BILX(RNIB,+DTM,TT)=A Q ;W !,Z_A Q 
+ .I R=3 S A="+|"_M_"||1|sys@1|ZND:"_V_":38:"_+DTM,^BILX(RNIB,+DTM,TT)=A Q  ; W !,Z_A Q  
+ .I R=5 S A="-|-"_M_"|1|1|sys@1|ZND:"_V_":38:"_+DTM,^BILX(RNIB,+DTM,TT)=A Q  ; W !,A Q   
+ .Q 
+ .S Z=Z_$S(R=1:"",R=2:"",R=3:"",R=5:"")
+ .S Z=Z_$P($G(^IFD("PAYREF",+$P(A,"|",6))),"|",2)_"|"_$P(A,"|",4)
+ .S Z=Z_"|1|1|ZNF:"_$P(A,"|",5)_":38"
+ .W !,Z
+ S X="",S=0
+ F  S X=$O(^BILX(RNIB,X)) Q:X=""  S Z="" F  S Z=$O(^BILX(RNIB,X,Z)) Q:Z=""  S S=S+$P(^(Z),"|",2)
+ S ^BILX(RNIB)=S
+ W !,RNIB_"-OK"
+ Q
+PAYUSE 
+ N X,Y,L,A
+ S X="" F  S X=$O(^IFD("INCOM",X)) Q:X=""  S Y="" F  S Y=$O(^IFD("INCOM",X,Y)) Q:Y=""  S A=$P(^(Y),"|",6) S:A="" A="-" S L(A)=""
+ S X="" F  S X=$O(L(X)) Q:X=""  W !,X
+ Q
+FDOCT ; Find doctor
+ N ID,Ff,Fi,Fo,N,A
+ S ID="" F  S ID=$O(^IFD("DOCTOR",ID)) Q:ID=""  D
+ .S A=$$LU^TXTU($P(^(ID),"|",1)),A=$$DBLSP^TXTU($TR(A,"./\","   "))
+ .S Ff=$P(A," ",1),Fi=$E($P(A," ",2),1),Fo=$E($P(A," ",3))
+ .S N=""  F  S N=$O(^KDR(N)) Q:N=""  D  Q:$D(^IFD("DOC",ID))'=0 
+ ..Q:$$LU^TXTU($$GET^YIKADRY(N,"f",+$H))'=Ff 
+ ..Q:$E($$LU^TXTU($$GET^YIKADRY(N,"i",+$H)),1)'=Fi
+ ..Q:$E($$LU^TXTU($$GET^YIKADRY(N,"o",+$H)),1)'=Fo
+ ..S ^IFD("DOC",ID)=N 
+ Q
+BAL(NIB,ODT,WW) ; баланс на дату
+ I $D(^BTN(NIB))=0 W !,"Patient not exists !"
+ N INIB,IID,FF,FI,FO,FD,R,DT,TM,N,S,T,SS,K,OP,SD,A,SM,DTM
+ N LSUM,I,VSUM,J,UPD
+ I $D(WW)=0 N WW S WW=0
+ S INIB=$$GET^YIPACN(NIB,"anib",+$H),ODT=$$DI^DTUTL(ODT),N=NIB,SD=0
+ D:INIB=""
+ .W !,"iNIB not found !"
+ .S FF=$$LU^TXTU($$GET^YIPACN(NIB,"fiof",+$H))
+ .S FI=$$LU^TXTU($$GET^YIPACN(NIB,"fioi",+$H))
+ .S FO=$$LU^TXTU($$GET^YIPACN(NIB,"fioo",+$H))
+ .S FD=$$GET^YIPACN(NIB,"datar",+$H)
+ .S IID="" F  S IID=$O(^IFD("CLIENTS",IID)) Q:IID=""!(INIB'="")  D
+ ..S R=$$LU^TXTU(^(IID)) Q:$P(R,"|",2)=""  
+ ..Q:FF'=$TR($P($P(R,"|",2)," ",1),"*= ","") 
+ ..Q:FI'=$P(R,"|",3)  Q:FO'=$P(R,"|",4)
+ ..I FD'="" Q:FD'=$$DI^DTUTL($P(R,"|",6))  
+ ..S INIB=$P(R,"|",1)
+ .W !,"Found iNIB="_INIB_", IID="_IID S N=0 Q:'WW 
+ .S K=$P(R,"|",8)
+ .D:$$GET^YIPACN(NIB,"tel1",+$H)="" SET^YIPACN(NIB,"tel1",+$H,K)
+ .S K=$P(R,"|",9)
+ .D:$$GET^YIPACN(NIB,"tel2",+$H)="" SET^YIPACN(NIB,"tel2",+$H,K)
+ .S K=$P(R,"|",5)
+ .I (+K>0)&(+K<3) D:$$GET^YIPACN(NIB,"pol",+$H)="" SET^YIPACN(NIB,"pol",+$H,K)
+ .D SET^YIPACN(NIB,"anib",+$H,INIB)
+ .D SET^YIPACN(NIB,"inib",+$H,IID,1)
+ S IID=$$NIBID(INIB)
+ I IID="" W !,"!!! Not Found !!!" Q 
+ K ^BILX(N)
+ D WINCOM(INIB)
+ W:$$GET^YIPACN(NIB,"anib",+$H)="" !,"iNIB not filled !"
+ S DT="",SS=0,FF=0,SM="",DTM=0
+ F  S DT=$O(^BILX(N,DT)) Q:DT=""!(DT>ODT)  D
+ .S TM="" K LSUM Q:$G(^BILX(N,DT))="OK" 
+ .F  S TM=$O(^BILX(N,DT,TM)) Q:TM=""  D
+ ..S R=^(TM),S=+$P(R,"|",2),SS=S+SS,T="" Q:S=0 
+ ..S:DT<60478 SD=SD+S
+ ..Q:DT<60478   
+ ..S:S>0 LSUM(TM)=S
+ ..I WW I DT<60590 I $P(R,"|",1)'="+" S ^BILL(NIB,DT,TM)=R,UPD(DT)=""
+ ..I DT>60589 I SM="" S SM=SS-S,DTM=DT W !,"#### SM="_SM
+ ..W !,"BillX("_DT_","_TM_")="_R
+ .Q:DT>60589  ; 20.11.2006
+ .Q:$D(LSUM)=0  
+ .; S I="" F  S I=$O(LSUM(I)) Q:I=""  W !," #L("_I_")="_LSUM(I)
+ .D CALCVAR K VSUM M VSUM=LSUM
+ .S I="" F  S I=$O(LSUM(I),-1) Q:I=""  D  Q:$D(VSUM(I))=1!($D(VSUM(I))=0)  ; без узлов 
+ ..; S J="" F  S J=$O(VSUM(I,J)) Q:J=""  W !," #V("_I_","_J_")="_LSUM(I,J)
+ ..S T="" F  S T=$O(^BILL(100,DT,T)) Q:T=""  D
+ ...S K=^(T),OP=$P(K,"|",1),S=+$P(K,"|",2),J="" Q:OP'="+" 
+ ...F  S J=$O(VSUM(I,J)) Q:J=""  I $P(VSUM(I,J),"|",1)=S K VSUM(I,J) S LSUM(I,J,1)=T Q 
+ .I I="" W !,"# Not all summ found !!!" Q 
+ .S ^BILX(N,DT)="OK"
+ .S J="" F  S J=$O(LSUM(I,J)) Q:J=""  D
+ ..S T=LSUM(I,J,1)
+ ..W !,"Found: ("_DT_","_LSUM(I,J,1)_")="_^BILL(100,DT,T)
+ ..Q:'WW 
+ ..S ^BILL(NIB,DT,T)=^BILL(100,DT,T)
+ ..K ^BILL(100,DT,T)
+ 
+BL1 W !,"S(DT)="_SS_", dS="_($$NOW^IBILL(N)-SS)_", Now="_$$NOW^IBILL(N)_", Middle="_+SM_" ("_DTM_")"
+ Q:'WW 
+ S K=""
+ I SD'=0 W !,"Assign "_SD_" on date "_$$DT^DTUTL(60477)_" ?" R K S K=$TR(K,"y1","YY")
+ D:K="Y" 
+ .S T=28000,DTM=60477 F  Q:$D(^BILL(NIB,DTM,T))=0  S T=T+1
+ .S ^BILL(NIB,DTM,T)="|"_SD_"|7|1|sys@1|ZNF:9230:38:"_DTM,UPD(DTM)=""
+ .W " - OK"
+ S T="" F  S T=$O(UPD(T)) Q:T=""  D UPD^IEXCH("IBILL",NIB_","_T)
+ D REFBAL^IBILL(NIB)
+ Q
+CALCVAR ; calc variants of summ
+ N I,X,K,C,S,H,Z,SS
+ S I="",K=0,C=0 F  S I=$O(LSUM(I)) Q:I=""  S Z(I)=K,K=K+1
+ S I="" F  S I=$O(LSUM(I)) Q:I=""  D
+ .S S=0,K=0,X=I-1,H=""
+ .F  S X=$O(LSUM(X)) Q:X=""  S S=S+LSUM(X),K=K+(2**Z(X)),H=H_"|"_X,SS(K)=S_H S:K>C C=K
+ D:C>0 CS(C)
+ K LSUM M LSUM=SS 
+ Q
+CS(E) ; Calc summ
+ N I,K,S,Z,REZ
+ S I="",Z=1 F  S I=$O(SS(I)) Q:I=""  D
+ .K REZ(Z) S S=I,K=I,REZ(Z,K)=SS(K)
+ .F  S K=$O(SS(K)) Q:K=""  I $ZB(S,K,1)=0 S S=S+K,REZ(Z,K)=SS(K) Q:S=E 
+ .S:S=E Z=Z+1 K REZ(Z) Q:I=E  S K=I,S=0,REZ(Z,K)=SS(K),K=$O(SS(K))
+ .F  S K=$O(SS(K)) Q:K=""  I $ZB(I,K,1)=0 S S=I+K Q:S=E  
+ .S:S=E REZ(Z,K)=SS(+K),Z=Z+1 K REZ(Z)
+ K SS M SS=REZ
+ Q

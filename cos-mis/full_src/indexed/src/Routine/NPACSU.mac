@@ -1,0 +1,26 @@
+NPACSU ; Utilities for PACS server [ 04/07/2011  8:44 PM ]
+TLIST ; Список временных записей
+ N KX,R,A,NM
+ D OWF^RWU(".txt")
+ d WC^RWU("|Дата, время|Отм.|Код исследования|Модальность")
+ S KX="" f  s KX=$O(^DCMTMP(KX),-1) q:KX=""  D
+ .S R=^(KX),A=$P(R,"|",3)
+ .S NM=$$NM^IDICOM(A)
+ .S A=$$DTM^DTUTL($P(R,"|",2))_"||"_$P(R,"|",1)_"|"_NM
+ .D WC^RWU(CR_KX_"|"_A)
+ D C^RWU
+ Q
+TIMP ; Обработать временные записи
+ N NI,R,J,A,MOD,NM
+ D ORH^RWU
+ S NI=""
+ F J=1:1 S A=$$R^RWU Q:%IFN["Z"  D
+ .I J=1 S NI=A S:NI="-" NI=$G(^JOB(%JOB,"epr-ni")) Q 
+ .Q:NI=""  Q:A="" 
+ .S R=$G(^DCMTMP(A)) Q:R="" 
+ .S MOD=$P(R,"|",3) 
+ .D MKEPR^IDICOM(NI,$P(R,"|",2),$$NM^IDICOM(MOD),MOD,$P(R,"|",4))
+ .K ^DCMTMP(A)
+ I NI="" d MSG^RWU("!Пациент не выбран.") Q
+ D TLIST
+ Q

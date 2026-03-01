@@ -1,0 +1,81 @@
+RMKRPTS ; Создание отчетов - настройка [ 02/18/2010  6:11 PM ]
+DELRPT(ID) ; Удалить отчет
+ I ID="" D LST^RMKRPT Q
+ D K^ISSG("^SRPT("_ID_")")
+ K ^SRPT(ID)
+ D KGL^IEXCH("^SRPT",ID)
+ D LST^RMKRPT
+ Q
+LOAD(ID) ; Загрузить данные по отчету
+ Q:ID="" 
+ N TI,FL,NM
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<mkirpt>")
+ D WTAGDC^RWU("nm",^SRPT(ID)),W^RWU("<otable>")
+ S TI="" F  S TI=$O(^SRPT(ID,"table",TI)) Q:TI=""  D
+ .S NM=^(TI),FL=$G(^(TI,"d"))
+ .D WC^RWU(CR_FL_"|"_NM_"|"_$$enNM($P(FL,".",1))_"."_$$fleNM($P(FL,".",1),$P(FL,".",2)))
+ D W^RWU("</otable><ent>")
+ D ENTLST(ID)
+ D W^RWU(%L) K %L,%B
+ D W^RWU("</ent></mkirpt></nb_console>"),C^RWU
+ Q
+ENTLST(ID) ; Загрузить список объектов по отчету
+ S %L="",%B=".txt"
+ N R S R="" F  S R=$O(^SRPT(ID,"entity",R)) Q:R=""  S %L=$S($L(%L):%L_CR,1:"")_R_"|"_^STRUCT(^(R)," ")
+ S %L=$$DW^TXTU(%L)
+ Q
+ENTADD(ID,nEID) ; Добавить объект в отчет
+ N X
+ S %L=0,%B=".txt"
+ S X="" F  S X=$O(^SRPT(ID,"entity",X)) Q:X=""  I ^(X)=nEID Q 
+ Q:$L(X) 
+ S X=$O(^SRPT(ID,"entity",""),-1)+1,%L=1
+ S ^(X)=nEID
+ Q
+ENTDEL(ID,EID) ; Удалить объект из отчета
+ Q:ID=""!(EID="") 
+ K ^SRPT(ID,"entity",EID)
+ D KGL^IEXCH("^SRPT",ID,"entity",EID)
+ D ENTLST(ID)
+ Q
+LENT(ID,EID) ; Загрузить данные по объекту
+ N FL,R,X,EIS,FLL,A,K,OP,IN,RO
+ S EIS=^SRPT(ID,"entity",EID),FLL=""
+ S FL=" " F  S FL=$O(^STRUCT(EIS,FL)) Q:FL=""  S R=^(FL),FLL=$S($L(FLL):FLL_CR,1:"")_FL_"|"_$P(R,"|",2)
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<mkirpt><keyfl>")
+ D WC^RWU(CR_FLL_"</keyfl><grp>"_CR_FLL_"</grp><lnke>")
+ S (A,X)="" F  S X=$O(^SRPT(ID,"entity",X)) Q:X=""  I X'=EID S R=^(X),R=^STRUCT(R," "),A=$S($L(A):A_CR,1:"")_X_"|"_R
+ D WC^RWU(CR_A_"</lnke>")
+ D WTAGDC^RWU("keyfl",$G(^SRPT(ID,"entity",EID,"k")))
+ S X=$G(^SRPT(ID,"entity",EID,"g",1))
+ D WTAGDC^RWU("grp",$S($E(X)="F":$P(X,":",2),1:""))
+ S X=$G(^SRPT(ID,"entity",EID,"l"))
+ D WTAGDC^RWU("lnke",$P(X,":",1))
+ D WTAGDC^RWU("lnkv",$P(X,":",2))
+ D WC^RWU("<flt>")
+ S X="" F  S X=$O(^SRPT(ID,"entity",EID,"f",X)) Q:X=""  D
+ .S FL=$G(^(X,"f")),OP=$G(^("o")),IN=$G(^("v")),RO=$G(^("r"))
+ .S A=$S($E(IN)="I":"|+",1:$P(IN,":",2,99)_"|")
+ .D WC^RWU(CR_FL_"|"_$$flNM(EIS,FL)_"|"_OP_"|"_A)
+ D WC^RWU("</flt><agr>")
+ S FL="" F  S X=$O(^SRPT(ID,"entity",EID,"g",1,FL)) Q:FL=""  D
+ .S R=^(FL)
+ .D WC^RWU(CR_FL_"|"_$$flNM(EIS,FL)_"|"_R)
+ D W^RWU("</agr></mkirpt></nb_console>"),C^RWU
+ Q
+flNM(EIS,FL) 
+ Q $P(^STRUCT(EIS,FL),"|",2)
+fleNM(EID,FL) 
+ S EID=^SRPT(ID,"entity",EID)
+ Q $P(^STRUCT(EID,FL),"|",2)
+enNM(EID) ; Entity name
+ S EID=^SRPT(ID,"entity",EID)
+ Q ^STRUCT(EID," ")
+SENT ; Сохранить данные по объекту
+ Q
+FLLST(ID,EID) ; Список полей по объекту
+ S %L="",%B=".txt",EID=^SRPT(ID,"entity",EID)
+ N FL,R
+ S FL=" " F  S FL=$O(^STRUCT(EID,FL)) Q:FL=""  S R=^(FL),%L=$S($L(%L):%L_CR,1:"")_FL_"|"_$P(R,"|",2)
+ S %L=$$DW^TXTU(%L)
+ Q

@@ -1,0 +1,137 @@
+IMHU ; YIMH utility [ 12/29/2020  12:47 PM ]
+LOAD ; Загрузка библиотеки
+ N A,%J,R,GL,L,X,F,G,I,LIB
+ D ORH^RWU
+ S F=0,X=""
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D
+ .I %J=1 S LIB=A S:LIB="" LIB="fisio" K ^EPRL(LIB) Q 
+ .I LIB="" S LIB="fisio" K ^EPRL(LIB) ; на всяк. случай, если нет
+ .S A=$TR($$TRIM^TXTU(A),"""","'") Q:A="" 
+ .I 'F,$E(A,1)="-",X'="" D
+ ..S G="" F I=1:1:L S $P(G,"~",I)=""""_$$DKAV^TXTU(GL(I))_""""
+ ..S @("^EPRL("""_LIB_""","_$TR(G,"~",",")_")")=X,X=""
+ .Q:A="-"  ; end
+ .I $E(A,1)="-" S A=$$DBLSP^TXTU(A),L=$P(A,"-",2),A=$P(A,"-",3,99),F=1 K:L=1 GL S GL(L)=A Q 
+ .S X=X_CR_A,F=0
+ D CR^RWU
+ Q
+GETROOT(X) ; Корневой каталог справочника
+ N MN,TXT,ZZ
+ S MN=$G(^cfg("eprl-max-size")) S:MN="" MN=10000
+ S ZZ="Поиск|#fq:GETDIR^IMHU@"_X,TXT=""
+ G GETDIR1
+ S I=""
+ F  S I=$O(^EPRL(X,I)) Q:I=""  S ZZ=ZZ_CR_I_"|#fc:GETDIR^IMHU@"_X_"~"_I
+ D MSG^RWU(ZZ)
+ Q
+GETDIR(X,NIB,VR,SP,TXT) ; Каталог справочника
+ N MN,ZZ
+ S MN=$G(^cfg("eprl-max-size")) S:MN="" MN=10000
+ S TXT=$G(TXT),TXT=$$WD^TXTU(TXT),X=$$WD^TXTU(X)
+ S:TXT'="" ZZ="Поиск по:"_TXT_"|#fq:GETDIR^IMHU@"_X,TXT=$$LU^TXTU(TXT)
+ S:TXT="" ZZ="Поиск|#fq:GETDIR^IMHU@"_X
+GETDIR1 
+ N I,PI,TBB,L,K,A,F,Z,R,i,EN
+ S i=0 S:$E(X,1)="+" i=1,X=$E(X,2,999) S R=$P(X,"~",1)
+ ; todo - продолжение, вывод с верхн. уровнями
+ S TBB="" F I=1:1:9 S TBB=TBB_$C(9)
+ 
+ S:$P(X,"~",2)'="" ZZ=ZZ_CR_"Вернуться к оглавлению|#fc:GETROOT^IMHU@"_R
+ S (F,PI)="" F I=1:1:9 S A=$P(X,"~",I) Q:A=""  S PI=PI_$S(PI="":"",1:",")_""""_A_"""" S:I>1 ZZ=ZZ_CR_$E(TBB,1,I-2)_A
+ 
+ S EN="^EPRL("_$S(i:"",1:PI),PI="^EPRL("_PI_")"
+ S I=PI,i=0 F  S I=$Q(@I) Q:I=""  Q:I'[EN  Q:i  D
+ .S L=$QL(I),F=0,A=""
+ .I TXT'="" Q:$$LU^TXTU(I)'[TXT 
+ .F K=1:1:L-1 S:$QS(PI,K)'=$QS(I,K) F=1 S $P(A,"~",K)=$QS(I,K) S:F=1 ZZ=ZZ_CR_$E(TBB,1,K-2)_$QS(I,K)
+ .S ZZ=ZZ_CR_$E(TBB,1,L-2)_$QS(I,L)_"|#ft:GET^IMHU@"_A_"~"_$QS(I,L)
+ .S PI=I
+ .S:$L(ZZ)>MN ZZ=ZZ_CR_"Далее...|#fc:GETDIR^IMHU@+"_A_"~"_$QS(I,L),i=1
+ D MSG^RWU(ZZ)
+ Q
+GET(ID,NIB,VR,SP) ; Получить значение справочника
+ N A,I,R,G,C
+ S ID=$$WD^TXTU(ID),(A,C,G)=""
+ F I=1:1:9 S R=$P(ID,"~",I) Q:R=""  S G=G_C_""""_R_"""",C=",",A=R
+ Q:G=""  
+ D MSG^RWU(A_CR_$G(@("^EPRL("_G_")")))
+ Q
+GETFDII(X,NIB,VR,SP) 
+ G GETFDIR+1
+GETFDIR(X) ; разделы назначений ФТО
+ N I,Z
+ S (Z,I)=""
+ F  S I=$O(^EPRL("fisio",I)) Q:I=""  S Z=Z_I_"|#fc:LSFIS^IMHU@"_I_CR
+ I X=9 D MSG^RWU(Z) Q 
+ Q Z
+LSFIS(X,NIB,VR,SP) ; назначения ФТО по разделам
+ N I,PI,TBB,L,K,A,F,Z
+ S X=$$WD^TXTU(X)
+ S TBB="" F I=1:1:9 S TBB=TBB_$C(9)
+ S PI="^EPRL(""fisio"","""_X_""")"
+ S Z="Вернуться к разделам|#fc:GETFDII^IMHU@9"
+ S I=PI F  S I=$Q(@I) Q:I=""  Q:$QS(I,1)'="fisio"  Q:$QS(I,2)'=X  D
+ .S L=$QL(I),F=0,A=""
+ .F K=1:1:L-1 S:$QS(PI,K)'=$QS(I,K) F=1 S:K>1 $P(A,"~",K-1)=$QS(I,K) S:F=1 Z=Z_CR_$E(TBB,1,K-3)_$QS(I,K)
+ .S Z=Z_CR_$E(TBB,1,L-3)_$QS(I,L)_"|#ft:LFIS^IMHU@"_A_"~"_$QS(I,L)
+ .S PI=I
+ D MSG^RWU(Z)
+ Q
+GETFIS(X) ; назначения ФТО по разделам
+ N I,PI,TBB,L,K,A,F,Z
+ S TBB="" F I=1:1:9 S TBB=TBB_$C(9)
+ S PI="^EPRL(""fisio"","""")",Z=""
+ S I=PI F  S I=$Q(@I) Q:I=""  Q:$QS(I,1)'="fisio"  D
+ .S L=$QL(I),F=0,A=""
+ .F K=1:1:L-1 S:$QS(PI,K)'=$QS(I,K) F=1 S:K>1 $P(A,"~",K-1)=$QS(I,K) S:F=1 Z=Z_$E(TBB,1,K-2)_$QS(I,K)_CR
+ .S Z=Z_$E(TBB,1,L-2)_$QS(I,L)_"|#ft:LFIS^IMHU@"_A_"~"_$QS(I,L)_CR
+ .S PI=I
+ Q Z
+LFIS(ID,NIB,VR,SP) ;
+ N I,R,G
+ S ID=$$WD^TXTU(ID),(A,G)=""
+ F I=1:1:9 S R=$P(ID,"~",I) Q:R=""  S G=G_$S(G'="":",",1:"")_""""_R_"""",A=R
+ Q:G=""  
+ D MSG^RWU(A_CR_$G(@("^EPRL(""fisio"","_G_")")))
+ Q
+IsPRP(NI,DT,LP) ; Докумен первичный (для ЛПУ)
+ I '$G(LP) Q:$O(^EPRI("nd",NI,DT),-1)="" 1 Q 0
+ N ID,D,F
+ S F=0,D=DT
+ F  S D=$O(^EPRI("nd",NI,D),-1) Q:D=""!F  S ID="" F  S ID=$O(^EPRI("nd",NI,D,ID)) Q:ID=""  I $P($G(^EPR(NI,ID,"o")),"|",3)=LP S F=1 Q
+ Q:F 0
+ Q 1
+COPY(FNI,TNI) ; Копировать ЭМК с пациента на пациента
+ N ID,NID
+ S ID="" F  S ID=$O(^EPR(FNI,ID)) Q:ID=""  D
+ .S NID=$$NNUM^IEPR(TNI)
+ .M ^EPR(TNI,NID)=^EPR(FNI,ID)
+ .M ^EPRD(TNI,NID)=^EPRD(FNI,ID)
+ .D MKIDX^IEPR(TNI,NID,1)
+ Q
+MVFN(DIR1,DIR2,BY) ; Переместить файлы с определенным годом
+ ; DIR1 - из каталога
+ ; DIR2 - в каталог 
+ N I,J,X,Y,FN,LL,FND,DT,YY,i
+ s i=0
+ F I=0:1:255 D
+ .S X=$$HEX^CONU(I) S:$L(X)<2 X=0_X
+ .F J=0:1:15 D
+ ..S FND="/"_X_"/"_$$HEX^CONU(J)_"/"
+ ..K LL
+ ..w !,DIR1_FND
+ ..D DIR^FIL(DIR1_FND,"LL")
+ ..S FN="" F  S FN=$O(LL(FN)) Q:FN=""  D
+ ...Q:$E(FN)'="p"  ; not a patient
+ ...S DT=$$FHEX^CONU($P(FN,"-",2)),YY=$E(DT,$L(DT)-1,$L(DT))
+ ...Q:YY'=BY
+ ...W "."
+ ...D MOVE^FIL(DIR1_FND_FN,DIR2_FND_FN)
+ Q
+ADDESIG 
+ S N="" F  S N=$O(^DTYPE(N)) Q:N=""  D
+ .Q:$G(^DTYPE(N,"use"))'=1 
+ .Q:$G(^DTYPE(N,"ext"))'="rpt"
+ .Q:$D(^DTYPE(N,"fields","esign"))
+ .S ^DTYPE(N,"fields","esign","@sv")=0,^("@tp")="esign"
+ Q

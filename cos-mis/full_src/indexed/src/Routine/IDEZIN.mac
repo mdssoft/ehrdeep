@@ -1,0 +1,153 @@
+IDEZIN
+INP
+	N conn,sc,res,CL,A,I,i,ID,last,sql,ID,DB,ri
+	Set CR=$C(13,10),%LOG="sys",%JOB=777
+	S DB="B302PR"
+	Set conn=##class(%SQLGatewayConnection).%New()
+	Set sc=conn.Connect(DB,"sa","1234")
+	U 0 If '$P(sc," ",1) do $System.Status.DisplayError(sc) quit
+	Set res=##class(%ResultSet).%New("%DynamicQueryGW:SQLGW")
+	
+	D clri,clru
+	
+	s sql="Select R.Prikaz_Pril, R.Prikaz_NN, D.Doctor_Name, D.Doctor_Name_Cena"
+	s sql=sql_" from Doctor_Name D, Doctor_Pr90 P, Prikaz R "
+	s sql=sql_" where D.Doctor_Name_ID=P.Doctor_Name_ID and P.Prikaz_ID=R.Prikaz_ID and R.Prikaz_N=302;"
+	w !,sql
+	
+	S stat=res.Prepare(sql,,conn)
+	I 'stat D $System.OBJ.DisplayError(stat) Q 
+	S stat=res.Execute()
+	I 'stat D $System.OBJ.DisplayError(stat) D res.Close() Q
+	S CL=res.GetColumnCount(),i=0
+	While res.Next() 
+	{
+		F ri=1:1:CL S $P(R,"|",ri)=$$getPL(res,ri)
+		;w !,R
+		S i=i+1
+		D iprik(R,"p")
+	}
+	D res.Close()
+	
+	s sql="Select R.Prikaz_Pril, R.Prikaz_NN, I.Issl_Name, I.Issl_Name_Cena"
+	s sql=sql_" from Issl_Name I, Issl_Pr90 S, Prikaz R "
+	s sql=sql_" where I.Issl_Name_ID=S.Issl_Name_ID and S.Prikaz_ID=R.Prikaz_ID;"
+	w !,sql
+	
+	S stat=res.Prepare(sql,,conn)
+	I 'stat D $System.OBJ.DisplayError(stat) Q 
+	S stat=res.Execute()
+	I 'stat D $System.OBJ.DisplayError(stat) D res.Close() Q
+	S CL=res.GetColumnCount(),i=0
+	While res.Next() 
+	{
+		F ri=1:1:CL S $P(R,"|",ri)=$$getPL(res,ri)
+		;w !,R
+		S i=i+1
+		D iprik(R,"l")
+	}
+	D res.Close()
+	
+	D updprik
+	
+	s sc=conn.Disconnect()
+	If '$P(sc," ",1) do $System.Status.DisplayError(sc)
+	Q
+iprik(R,TP)
+	N ID,P1,P2,NM,CN
+	S P1=$$num($P(R,"|",1)),P2=$P(R,"|",2)
+	S ID=P1_"."_P2
+	S:$E(ID,$L(ID))="." ID=$E(ID,1,$L(ID)-1)
+	Q:'$D(^PROFV("v302",ID)) 
+	S NM=$$TRIM^TXTU($$DBLSP^TXTU($P(R,"|",3))),CN=$$NNUM^TXTU($P(R,"|",4))
+	S NX=$$UL^TXTU($TR(NM," ,./\;:'-""","__________"))
+	D addu(NX,NM,CN,TP)
+	S ^PROFV("v302",ID,NX)=""
+	Q
+updprik
+	N NX,I1,I2,TP,CN,DT
+	S I1=1,I2=30
+	S DT=$$DI^DTUTL("01.08.16")
+	S NX="" F  S NX=$O(^PROFV("i302",NX)) Q:NX=""  D
+	.S TP=$G(^PROFV("i302",NX,"t"))
+	.S NM=$G(^PROFV("i302",NX,"c"))
+	.S CN=""
+	.I TP="p" S CN="00."_I1,I1=I1+1
+	.I TP="l" S CN="00."_I2,I2=I2+1
+	.Q:CN="" 
+	.S ^PROFV("i302",NX)=CN
+	.D SET^IPRICE(CN,"cname",1,DT,NM) 
+	.D SET^IPRICE(CN,"name",1,DT,NM)
+	.D SETPRICE^IPRICE(CN,1,DT,$G(^PROFV("i302",NX,"s")))
+	
+	S I1="" F  S I1=$O(^PROFV("v302",I1)) Q:I1=""  D
+	.S NX="" F  S NX=$O(^PROFV("v302",I1,NX)) Q:NX=""  D
+	..S ^PROFV("v302",I1,NX)=^PROFV("i302",NX)
+	
+	Q
+addu(NX,NM,CN,TP) ; Добавить услугу
+	Q:$D(^PROFV("i302",NX)) 
+	S ^PROFV("i302",NX)=""
+	S ^PROFV("i302",NX,"c")=NM
+	S ^PROFV("i302",NX,"s")=+CN
+	S ^PROFV("i302",NX,"t")=TP
+	Q
+clri ; Очистить услуги
+	N I,ID
+	S ID="" F  S ID=$O(^PROFV("v302",ID)) Q:ID=""  D
+	.S I="" F  S I=$O(^PROFV("v302",ID,I)) Q:I=""  K ^(I)
+	K ^PROFV("i302")
+	Q
+clru
+	N CN
+	S CN="" F  S CN=$O(^CN(CN)) Q:CN=""  I $E(CN,1,3)="00." K ^(CN),^CNE(CN)
+	Q
+mktp
+	N NX,U,T
+	S NX="" F  S NX=$O(^PROFV("i302",NX)) Q:NX=""  D
+	.S U=^(NX),T=^(NX,"t")
+	.Q:U="" 
+	.S ^PROFV("tp302",U)=T
+	Q
+INPNM
+	N conn,sc,res,CL,A,I,i,ID,last,sql,ID,DB,ri
+	Set CR=$C(13,10),%LOG="sys",%JOB=777
+	S DB="B302PR"
+	Set conn=##class(%SQLGatewayConnection).%New()
+	Set sc=conn.Connect(DB,"sa","1234")
+	U 0 If '$P(sc," ",1) do $System.Status.DisplayError(sc) quit
+	Set res=##class(%ResultSet).%New("%DynamicQueryGW:SQLGW")
+	
+	s sql="Select R.Prikaz_Pril, R.Prikaz_NN, R.Prikaz_Work"
+	s sql=sql_" from Prikaz R"
+	s sql=sql_" where R.Prikaz_N=302;"
+	w !,sql
+	
+	S stat=res.Prepare(sql,,conn)
+	I 'stat D $System.OBJ.DisplayError(stat) Q 
+	S stat=res.Execute()
+	I 'stat D $System.OBJ.DisplayError(stat) D res.Close() Q
+	S CL=res.GetColumnCount(),i=0
+	While res.Next() 
+	{
+		F ri=1:1:CL S $P(R,"|",ri)=$$getPL(res,ri)
+		;w !,R
+		S i=i+1
+		S P1=$$num($P(R,"|",1)),P2=$P(R,"|",2)
+		S ID=P1_"."_P2
+		S:$E(ID,$L(ID))="." ID=$E(ID,1,$L(ID)-1)
+		S NM=$P(R,"|",3)
+		I $D(^PROFV("v302",ID)) w "_"_ID s $P(^PROFV("v302",ID),"|",2)=NM
+	}
+	D res.Close()
+	
+	s sc=conn.Disconnect()
+	If '$P(sc," ",1) do $System.Status.DisplayError(sc)
+	Q
+num(X)
+	Q $TR(X,$TR(X,"1234567890",""),"")
+dti(X)
+	S X=$P(X," ",1)
+	Q $$DI^DTUTL($P(X,"-",3)_"."_$P(X,"-",2)_"."_$P(X,"-",1))
+getPL(res,ID)
+	Q $$TRIM^TXTU($TR(res.GetData(ID),$C(0),""))

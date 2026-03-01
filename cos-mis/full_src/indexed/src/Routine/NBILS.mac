@@ -1,0 +1,41 @@
+NBILS ; Дополнительные счета пациентов [ 12/13/2016  12:43 PM ]
+LSTSC(NI) ; Перечень счетов пациента
+ N SC,S,A
+ S (A,SC)="" F  S SC=$O(^BILS(NI,SC)) Q:SC=""  D
+ .S S=^(SC)
+ .S A=$S(A="":"",1:A_CR)_S_"@"_SC_"|"_S_" бонусов, "_$$NAME^ISPRAV("bilsc",SC)
+ D MSG^RWU(A)
+ Q
+PKO(NI,DS,DE,XLPU) 
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N OPE,SUM,DD,TP,TXT,S1,S2,L,TI,K,X,C,PA,SC
+ S XLPU=$G(XLPU)
+ D OWF^RWU(".txt")
+ D WC^RWU("|Дата, время|Операция|Сумма|Оператор")
+ S SC="" F  S SC=$O(^BILS(NI,SC)) Q:SC=""  D
+ .S (S1,S2)=0
+ .D WC^RWU(CR_"||"_$$NAME^ISPRAV("bilsc",SC)_"|")
+ .S DT=DE+1 F  S DT=$O(^BILS(NI,SC,DT),-1) Q:DT=""!(DT<DS)  S TI=99999 F  S TI=$O(^BILS(NI,SC,DT,TI),-1) Q:TI=""  D  
+ ..S L=^(TI),OPE=$P(L,"|",1)
+ ..I OPE'="+",OPE'="-",$L(OPE) Q 
+ ..S LOG=$P(L,"|",3)
+ ..I XLPU'="",$P(LOG,"@",2)'=XLPU 
+ ..S DD=$$DT^DTUTL(DT)_","_$$TM^DTUTL(TI)
+ ..S SUM=$P(L,"|",2)
+ ..S LOG=$S(LOG="":"",1:LOG_", "_$$FIOSH^NUSER(LOG))
+ ..S:$L(OPE) S1=S1+SUM,TXT="зачисление"
+ ..I OPE="" S:SUM>0 S1=S1+SUM S:SUM<0 S2=S2-SUM S TXT="списание" 
+ ..S:$E(SUM,1)="+" SUM=$E(SUM,2,$L(SUM)) S:SUM<0 SUM=0-SUM
+ ..S TP=0,X="" ; TODO
+ ..S C=$S(TP=1:"",TP>4:"#10",TP>1:"#9",X["ZNF":"#11",$L(X):"#12",1:"") ; color style
+ ..S K=$S(X["ZNF":NI_"@"_DT_"@"_TI_C_"|",1:C_"|")
+ ..D WC^RWU(CR_K_DD_"|"_TXT_"|"_$TR(SUM,".",",")_"|"_LOG)
+ .D WC^RWU(CR_"||Итого внесено|"_$$FFN(S1))
+ .D WC^RWU(CR_"||Итого списано|"_$$FFN(S2))
+ .D WC^RWU(CR_"||Баланс по счету|"_$$FFN(+$G(^BILS(NI,SC))))
+ D C^RWU
+ Q
+FN(X) 
+ Q $TR($J(X,0,2),".",",")
+FFN(X) 
+ Q $TR($FN(X,"",2),".",",")

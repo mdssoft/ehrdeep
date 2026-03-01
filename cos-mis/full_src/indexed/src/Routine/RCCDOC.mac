@@ -1,0 +1,26 @@
+RCCDOC ; Функции событий печатных документов [ 07/21/2024  10:42 PM ]
+DGNUML(DS,DE) ; Перечень номеров по договорам
+ N DT,TM,ID,R,TP,NI,IDD,IDL,I,A,TAB
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S ID=+$G(^MN("xpacprn"))
+ S I="" F  S I=$O(^MN(ID,I)) Q:I=""  D
+ .S R=$P(^(I),"|",8) Q:R=""
+ .I ("~"_R_"~")["~num~" S IDL(I)=1
+ 
+ S TP=^cfg("pac","prn-event")
+ S DT=DS-1 F  S DT=$O(^CME(DT)) Q:DT=""!(DT>DE)  S TM="" F  S TM=$O(^CME(DT,TM)) Q:TM=""  S ID="" F  S ID=$O(^CME(DT,TM,ID)) Q:ID=""  D
+ .S R=^(ID)
+ .Q:$P(R,"|",1)'=1  Q:$P(R,"|",7)'=TP  
+ .S IDD=$P(R,"|",8) Q:IDD=""  Q:'$D(IDL(IDL))
+ .S NI=$P(R,"|",3)
+ .S I=$$GET^IPAC(NI,"dnum",DT)
+ .Q:$D(TAB(I_"|"_NI)) 
+ .S TAB(I_"|"_NI)=I_"|"_$$FIO^IPAC(NI)_"|"_NI_"|"_$$GETN^ISPRAV("xpacprn",IDD,2)_"|"_$$TM^DTUTL(TM)
+ D OWF^RWU(".txt")
+ D WC^RWU("Номер|Пациент|№ и.б.|Договор|Время")
+ S I="" F  S I=$O(TAB(I)) Q:I=""  D WC^RWU(CR_TAB(I))
+ D C^RWU
+ Q
+REGIPROC 
+ S ^IPROC("Отчеты по пациентам","Журналы событий","Журнал печати договоров")="DGNUML_RCCDOC,1,2,d,Начальная дата,d,Конечная дата"
+ Q

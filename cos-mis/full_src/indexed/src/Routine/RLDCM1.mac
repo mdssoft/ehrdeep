@@ -1,0 +1,50 @@
+RLDCN
+PNZ(DS,DE,DGN)
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N BBDGN,DTP,DVD,DV,PPUL,U,CC,NZ,KX,TP,OT,TABLE,J,I
+ S BBDGN(0)=1,BBDGN(6200)=1,BBDGN(6400)=1
+ S U="" F  S U=$O(^CN(U)) Q:U=""  D:$D(^CN(U,1))
+ .S R=$$GET^IPRICE(U,"cls",1,DE) Q:R=""
+ .S:R["pervp" PPUL(U)=1 S:R["povp" PPUL(U)=2
+ K ^BUF($J)
+ D MKAPPRC^IUSLSC(DS,DE,1,"","PNZp^RLDCN","","",FF)
+ S OT="" F  S OT=$O(^BUF($J,OT)) Q:OT=""  D
+ .S I=0,KX="" F  S KX=$O(^BUF($J,OT,"n",KX)) Q:KX=""  S I=I+1 ; Обратившиеся
+ .S KX="" F  S KX=$O(^BUF($J,OT,"u",KX)) Q:KX=""  D
+ ..S TP=0
+ ..S U="" F  S U=$O(^BUF($J,OT,"u",KX,"u",U)) Q:U=""  I $D(PPUL(U)) S TP=PPUL(U) Q
+ ..I 'TP K ^BUF($J,OT,"u",KX) Q 
+ ..S DTP=$P(KX,"|",4)
+ ..S TABLE(DTP,TP)=$G(TABLE(DTP,TP)) ; Посещений первичные-повторные 1,2
+ D OWF^RWU(".txt")
+ D WC^RWU("|ДМС|2|3|4|5|6|Касса|8|9|10|11|12|Бюджет|14|15|16|17|18;")
+ D WC^RWU("Отделение|Первичных|Повторных|Услуг в перв.|Услуг в повт.|Направлений в перв.|Направлений в повт.|Первичных|Повторных|Услуг в перв.|Услуг в повт.|Направлений в перв.|Направлений в повт.|Первичных|Повторных|Услуг в перв.|Услуг в повт.|Направлений в перв.|Направлений в повт.")
+ D C^RWU
+ K ^BUF($J)
+ Q
+PNZp
+ I '$D(DVD(CSTC,DT)) S DV=$$GET^YNDOG(CSTC,"dvid",DT),DVD(CSTC,DT)=DV
+ E  S DV=DVD(CSTC,DT)
+ S DTP=$S(STAT=2:2,DV<2:1,$D(BBDGN(CSTC)):3,1:0)
+ Q:'DTP
+ S U="" F  S U=$O(UL(U)) Q:U=""  D
+ .S CC=$G(UL(U))
+ .S ^BUF($J,OT,"u",VR_"|"_DT_"|"_NI_"|"_DTP,"u",U)=C
+ .S:'$D(^BUF($J,OT,"n",NI)) ^(NI)=""
+ Q
+nzcnt
+ N C,I,ID,DT
+ Q
+recl
+ S DD=$$DI^DTUTL("01.01.16")
+ S C="" F  S C=$O(^CN(C)) Q:C=""  D
+ .S X=$$UL^TXTU($$NAME^IPRICE(C,1))
+ .S X=$S(X["":1,X["":2,1:0) Q:'X 
+ .S R=$$GET^IPRICE(C,"cls",1,+$H)
+ .S D=$O(^CN(1,1,"cname","")) S:D<DD D=DD
+ .S R=$$STFLG^TXTU(R,$S(X=1:"perv",1:"povp"))
+ .D SET^IPRICE(C,"cls",1,D,R)
+ Q
+REGIPROC
+ S ^IPROC("Отчеты по страховым компаниям","Показатели отделений и СК")="PNZ_RLDCM1,1,3,d,Начальная дата,d,Конечная дата,te@storage:dog,Договор"
+ Q

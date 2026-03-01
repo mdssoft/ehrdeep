@@ -1,0 +1,176 @@
+A ; ОБРАТНАЯ СИНХРОНИЗАЦИЯ [ 12/04/2017 ]
+RREG(JOB,LNK) ; Регистрация обратного вызова
+ Q:JOB=""  Q:'$D(^JOB(JOB)) 
+ S ^JOB(LNK,21)=JOB,^JOB(JOB,22)=LNK,^JOB(JOB,26)=1 ; 26-'new mode' flag
+ Q
+RDO ; Ожидание новых данных для получения
+ N JOBO,NSTR,LPRO,NN,SH,%IPA,TST,%FLS,%EE,%FF,%LOG
+ S %EE=0
+rds
+ I %EE>240 D MSG^RWU("OK") Q  ; every 4 minutes
+ 
+ ; send commands
+ S JOBO="",%FF=0 F  S JOBO=$O(^JOBE(JOBO)) Q:JOBO=""  D  Q:%FF
+ .S LPRO=^(JOBO)
+ .D MSG^RWU(LPRO,".nb-cmd")
+ .S %FF=1,HEADER="X-From-Sync: "_JOBO ; current
+ .K ^JOBE(JOBO)
+ Q:%FF 
+ 
+ ; send data
+ S JOBO="",%FF=0 F  S JOBO=$O(^JOB(JOBO)) Q:JOBO=""  D:$D(^JOB(JOBO,21))  Q:%FF
+ .S %LOG=$G(^JOB(JOBO,2)) S:%LOG="" LOG="sys"
+ .S SH="" F  S SH=$O(^JOB(JOBO,25,SH)) Q:SH=""  S LPRO=$G(^(SH)) D  Q:%FF
+ ..K ^JOB(JOBO,25,SH) ; delete before. if error - dont call them second time
+ ..D wwrdo(SH,LPRO)
+ ..S HEADER="X-From-Sync: "_^JOB(JOBO,21) ; linked
+ ..S %FF=1
+ I '%FF S %EE=%EE+1 H 0.5 G rds
+ Q
+R(RR) ;
+ N JOBO,NSTR,SIDX,LPRO,NN,SH,%IPA,TST,%FLS
+ S ^JOB(RR,21)=%JOB,^JOB(%JOB,22)=RR,JOBO=RR,SIDX=0
+ S %IPA=$G(^JOB(%JOB,6))
+ S NSTR=$G(^PP(0,1))_"<nb_console></nb_console>"
+ S FN=".xmlb" D OWU^RWU
+CR S %FLS=0 I $$QCHK D CU^RWU,LCLOSE S %B="" Q
+ I SIDX#180=170 S ^JOB(%JOB,4)=$H,%FLS=1 D WU^RWU(NSTR)
+ S $ZT="ZT^YISYNC",SH="",TST=1
+ ; L ^JOB(JOBO,25)
+ F  S SH=$O(^JOB(JOBO,25,SH)) Q:SH=""  S LPRO=$G(^(SH)) D WWR Q:'TST 
+ ; L -^JOB(JOBO,25)
+ I 'TST D CU^RWU Q 
+ I $$CHECK^IMSGS(%LOG) D
+ .S NN=1
+ .F  D:$$DOSTART^IMSGS(%LOG,NN)  S NN=0 Q:$$ISEND^IMSGS!$$QCHK 
+ ..D DOCHUNK^IMSGS,DOEND^IMSGS S %FLS=1
+ I $$CHECK^IMSGS(%IPA) D
+ .S NN=1
+ .F  D:$$DOSTART^IMSGS(%IPA,NN)  S NN=0 Q:$$ISEND^IMSGS!$$QCHK 
+ ..D DOCHUNK^IMSGS,DOEND^IMSGS S %FLS=1
+ ;D:%FLS UFLUSH^RWU
+ D UFLUSH^RWU
+ I SIDX>600 D CU^RWU S %B="" Q ; disconn. every 10 min (600)
+ I (SIDX#10)=5,'$D(^JOB(JOBO)) D CU^RWU S %B="" Q  ; disconn. if parent closed
+ H 1 S SIDX=SIDX+1
+ G CR
+ Q
+ZT ; Error handler
+ K ^JOB(JOBO,25,SH)
+ ; L -^JOB(JOBO,25)
+ K A,NN,X,STR,BUF,%DW,%WD,%cLU,%cLL,LA1
+ S X=$O(^ERSTK(""),-1)+1
+ S ^ERSTK(X,"-")=$H_"|"_$STACK_"|"_$STORAGE_"|"_$ZE
+ S A="" F  X "S A=$O("_A_")" Q:A=""  I A'="A" X "M ^ERSTK(X,A)="_A
+ N ZE S ZE=$ZE
+ S ^ERLOG("SYNC-"_$E($G(LPRO),1,200),+$H,$P($H,",",2))=ZE_"|"_$ESTACK
+ S $ZT="ZT^YISYNC",LPRO=""
+ Q:ZE["<DSCON>" 
+ G CR
+QCHK() ; Check for quit
+ Q '$D(^JOB(JOBO))!('$D(^JOB(%JOB)))
+wwrdo(SH,LPRO) ; RDO sub.proc
+ N JOBO,SH,%FF,%EE,%SH
+ K ^BUFH(%JOB),%L
+ D:LPRO'="" @LPRO
+ Q
+WWR ;
+ N FNN,LPROG,N,%SH,R
+ S LPROG=LPRO,%SH=SH,TST=1
+ K ^BUFH(%JOB),%L N SH D @LPROG
+ I $D(%L) D WU^RWU(%L),UFLUSH^RWU K %L,%B,^JOB(JOBO,25,%SH) Q 
+ S FNN=$O(^BUFH(%JOB,"")) Q:FNN="" 
+ S (%L,N)="" F  S N=$O(^BUFH(%JOB,FNN,N)) Q:N=""  D  Q:'TST 
+ .S R=^(N)
+ .I ($L(R)+$L(%L))>28000 D WU^RWU(%L) S %L=""
+ .S %L=%L_R K R
+ I %L'="" D WU^RWU(%L) K %L
+ K:TST ^BUFH(%JOB,FNN),^JOB(JOBO,25,%SH)
+ K %L
+ Q
+NULL ; Run in connection timeout (1 line at once)
+ Q:$G(%JOB)=""  N LPRO,%SH
+ S $ZT="ZTN^YISYNC"
+ ; L ^JOB(%JOB,25)
+ S %SH=$O(^JOB(%JOB,25,-1))
+ I %SH'="" S LPRO=$G(^(SH)) D @LPRO K ^JOB(%JOB,25,LPRO)
+ ; L -^JOB(%JOB,25)
+ Q
+ZTN ; Error handler for NULL^
+ L -^JOB(%JOB,25)
+ Q
+LCLOSE ;
+ N P S P=""
+ F  S P=$O(^AS(P)) Q:P=""  K ^AS(P,JOBO) 
+ K ^JOB(%JOB),^BUFH(%JOB),%PATH
+ S CONNK=0 ; $S(PORT>57772:1,1:0)
+ Q
+LOGOUT ; ОСТАНОВ СИНХРОНИЗАЦИИ (из основного потока)
+ N P,J S P="",J=$G(^JOB(%JOB,21)) K ^JOB(%JOB)
+ S ^JOBE(J)="endsync:"_J
+ F  S P=$O(^AS(P)) Q:P=""  K ^AS(P,%JOB),^AS(P,J)
+ I $G(^JOB(%JOB,21)) F P=1:1:9 H 1 Q:'$D(^JOBE(J)) 
+ I '$G(^JOB(%JOB,21)) F P=1:1:9 H 1 Q:$D(^JOB(J)) 
+ K ^JOB(J),^BUFH(J)
+ Q
+REG(PROC,PRM) ; зарегистрировать при просмотре
+ Q:$G(%JOB)=""  Q:'$D(^JOB(%JOB,21))  Q:PROC="" 
+ S ^AS(PROC,%JOB)=PRM
+ Q
+REGID(PROC,PRM,ID) ; зарегистрировать при просмотре
+ Q:'$D(^JOB(%JOB,21))  I $G(ID)="" S ^AS(PROC,%JOB)=PRM Q 
+ S ^AS(PROC,%JOB,ID)=PRM
+ Q
+UREG(PROC) ; отрегистрировать просмотр
+ Q:PROC=""  Q:$G(%JOB)="" 
+ K ^AS(PROC,%JOB)
+ Q
+UREGID(PROC,ID) ; отрегистрировать просмотр
+ Q:PROC=""  Q:$G(%JOB)=""  Q:ID="" 
+ K ^AS(PROC,%JOB,ID)
+ Q
+UPD(PROC,PRM,ALL) ; синхронизировать
+ Q:PROC=""  N J,I,P
+ S J="",P=+$$LYH^IHASH(PROC_PRM),ALL=+$G(ALL)
+ F  S J=$O(^AS(PROC,J)) Q:J=""  D:J'=$G(%JOB)!ALL
+ .I $G(^AS(PROC,J))=PRM L ^JOB(J,25):2 S ^JOB(J,25,P)=PROC_PRM L -^JOB(J,25)
+ .S I="" F  S I=$O(^AS(PROC,J,I)) Q:I=""  I ^(I)=PRM L ^JOB(J,25):2 S ^JOB(J,25,P)=PROC_PRM L -^JOB(J,25)
+ Q
+UPDI(PROC,ID) ; синхронизировать
+ Q:ID=""  N J,P S J=""
+ F  S J=$O(^AS(PROC,J)) Q:J=""  I J'=$G(%JOB) S P=$G(^(J,ID)) I P'="" L +^JOB(J,25):2 S ^JOB(J,25,+$$LYH^IHASH(PROC_P))=PROC_P L -^JOB(J,25)
+ Q
+UPDPRC(PROC) ; без параметров, по всем именам
+ N J,I,PRM,P S J=""
+ F  S J=$O(^AS(PROC,J)) Q:J=""  D:J'=$G(%JOB)
+ .S PRM=$G(^(J)),P=+$$LYH^IHASH(PROC_PRM)
+ .I PRM'="" L +^JOB(J,25):2 S ^JOB(J,25,P)=PROC_PRM L -^JOB(J,25)
+ .S I="" F  S I=$O(^AS(PROC,J,I)) Q:I=""  S PRM=$G(^(J)),P=+$$LYH^IHASH(PROC_PRM) I PRM'="" L +^JOB(J,25):2 S ^JOB(J,25,P)=PROC_PRM L -^JOB(J,25)
+ Q
+UPDIP(PROC,PRM,IPA) ; синхронизировать для определенного адреса
+ Q:'$D(PRM)  N J,I S J=""
+ F  S J=$O(^AS(PROC,J)) Q:J=""  I J'=$G(%JOB) D:$G(^JOB(J,6))=IPA
+ .I ^AS(PROC,J)=PRM L ^JOB(J,25):2 S ^JOB(J,25,+$$LYH^IHASH(PROC_PRM))=PROC_PRM L -^JOB(J,25)
+ .S I="" F  S I=$O(^AS(PROC,J,I)) Q:I=""  I ^(I)=PRM L +^JOB(J,25):2 S ^JOB(J,25,+$$LYH^IHASH(PROC_PRM))=PROC_PRM L -^JOB(J,25)
+ Q
+SENDIP(PROC,PRM,IPA) ; вызвать принудительно процедуру по обратной связи 
+ Q:'$D(PRM)  N J S J=""
+ F  S J=$O(^JOB(J)) Q:J=""  I J'=$G(%JOB),$G(^(J,6))=IPA,$D(^(21)) L +^JOB(J,25):2 S ^JOB(J,25,+$$LYH^IHASH(PROC_PRM))=PROC_PRM L -^JOB(J,25)
+ Q
+SENDUSR(PROC,PRM,USR) ; вызвать принудительно процедуру по обратной связи для логина
+ Q:'$D(PRM)  N J S J=""
+ F  S J=$O(^JOB(J)) Q:J=""  I J'=$G(%JOB),$G(^(J,2))=USR,$D(^(21)) L +^JOB(J,25):2 S ^JOB(J,25,+$$LYH^IHASH(PROC_PRM))=PROC_PRM L -^JOB(J,25)
+ Q
+SENDALL(PROC,PRM,LOC) ; вызвать принудительно процедуру по обратной связи
+ ; LOC - и для текущего пользователя
+ Q:'$D(PRM)  
+ N J S J="",LOC=$G(LOC)
+ F  S J=$O(^JOB(J)) Q:J=""  I LOC!(J'=$G(%JOB)),$D(^(J,21)) L +^JOB(J,25):2 S ^JOB(J,25,+$$LYH^IHASH(PROC_PRM))=PROC_PRM L -^JOB(J,25)
+ Q
+SENDJOB(PROC,PRM,J) ; вызвать принудительно процедуру по обратной связи для логина
+ Q:'$D(PRM)  Q:J=""
+ Q:'$D(^JOB(J,21))
+ L +^JOB(J,25):2
+ S ^JOB(J,25,+$$LYH^IHASH(PROC_PRM))=PROC_PRM
+ L -^JOB(J,25)
+ Q

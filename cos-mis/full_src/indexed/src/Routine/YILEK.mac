@@ -1,0 +1,24 @@
+A ; LEKARSTVA [ 03/07/2010  0:48 AM ]
+TOHEX(STR) 
+ S S1="" F I=1:1:$L(STR) S S1=S1_"%"_$ZHEX($A($E(STR,I)))
+ Q S1
+NEWGL S NM=$O(^LEKL("")),ID=1000 Q:NM="" 
+ F  S ^LEKL(NM,"i")=NM,NM=$O(^LEKL(NM)),ID=ID+1 Q:NM="" 
+ Q
+NFND(STR) ; POISK LEKARSTV
+ S STR=$$LU^TXTU($$WD^TXTU(STR))
+ I STR="" S %L="",%B=".txt",FN=%B Q
+ D OWF^RWU(".txt")
+ S FID=$O(^LEK1(-1)),RET=""
+ F  Q:FID=""  S NM=$$LU^TXTU(FID),RET=$S(NM[STR:FID,$G(^LEKL(FID))[STR:FID,1:"") D:$L(RET) WC^RWU($G(^LEK1(FID))_"|"_RET_CR) S FID=$O(^LEK1(FID))
+ K FID,RET,NM,%LLR,%LUR
+ D C^RWU
+ Q
+SEL(ID) S %L=$G(^LEK(ID)),%B=".txt",FN=%B Q
+TXT(ID) ; DRUGS DESCRIPTION
+ S NAME=$G(^LEK(ID)) I NAME="" S %L="",%B=".txt",FN=%B
+ D OWF^RWU("1.txt")
+ F K=0:1 S RR=$G(^LEKL(NAME,":",K)) Q:'$L(RR)  D WC^RWU(RR_CR)
+ K K,RR,NAME
+ D C^RWU
+ Q

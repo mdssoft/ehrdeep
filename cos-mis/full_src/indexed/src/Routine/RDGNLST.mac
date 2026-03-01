@@ -1,0 +1,109 @@
+RDGNLST ; Списки по договору [ 01/14/2015  1:19 PM ]
+ANLST(DS,DE,XDGN) ; Аналитическая сводка по контингенту (old)
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N aSUM,aCNT,aSB,LP,F,DT,A,PIDX,PDS,PDE,PSTC,PSUM,DSUM,SBSUM,D
+ 
+ D OWF^RWU(".txt")
+ S A=$S(DS=DE:"за "_$$DT^DTUTL(DS),1:"с "_$$DT^DTUTL(DS)_" по "_$$DT^DTUTL(DE))
+ D WC^RWU("xpatient:patient||"_A_"|||Место||Вид|||||Услуг|Услуг|Услуг|Себест.||Остаток;")
+ D WC^RWU(CR_"|№ И.Б.|Ф.И.О. пациента|Возраст|Вид|работы|Договор|дог.|Полис|Период с|Период по|Стоимость|за период|по прикреплению|по себест.|по прикрепл.|Остаток|по себест.")
+ I XDGN'="" D LOOP^IRPKON(DS,DE,XDGN,"","ANLprc^RDGNLST",1)
+ I XDGN="" F  S XDGN=$$NEXTIDX^IPAC("stc",XDGN) Q:XDGN=""  I $$GET^IINSC(XDGN,"dvid")'=3 D LOOP^IRPKON(DS,DE,XDGN,"","ANLprc^RDGNLST",1)
+ D C^RWU
+ Q
+ANLprc ; Первичный по дог.
+ S PSTC=XDGN
+ S PSUM=$S($$GET^IINSC(PSTC,"psumm",DE)="":$$GET^IPAC(NIB,"psumm",DDE),1:0)
+ S:PSUM="" PSUM=$$GET^IINSC(PSTC,"psumm",DE)
+ S PDS=$S(DS<DDS:DDS,1:DS),PDE=$S(DE>DDE:DDE,1:DE)
+ s aSUM=$$SPRCUSL^IUSLD(NIB,PDS,PDE,"scost",PSTC,1,0,0,1)
+ S aSB=$P(aSUM,"|",2),aSUM=$P(aSUM,"|",1)
+ S A=$S(PDS=DDS:"0|0",1:$$SPRCUSL^IUSLD(NIB,DDS,PDS-1,"scost",PSTC,1,0,0,1))
+ S DSUM=$P(A,"|",1),SBSUM=$P(A,"|",2)
+ S A=NIB_"|"_NIB_"|"_$$FIO^IPAC(NIB,DDE) ; 1,2
+ S A=A_"|"_$$AGE^IPAC(NIB,DDE)
+ S A=A_"|"_$S($$ANLpp():"новый",1:"") ; 3
+ S A=A_"|"_$$GETE^IPAC(NIB,"work",DDE) ; 4
+ S A=A_"|"_$$NAME^IINSC(PSTC) ; 5
+ S A=A_"|"_$$NAME^ISPRAV("dgtype",$$GET^IINSC(PSTC,"tp",DDE)) ; 6
+ S A=A_"|"_$$GET^IPAC(NIB,"polis",DDE) ; 7
+ S A=A_"|"_$$DT2^DTUTL(DDS) ; 8
+ S A=A_"|"_$$DT2^DTUTL(DDE) ; 9
+ S A=A_"|"_$$FN(PSUM) ; 10
+ S A=A_"|"_$$FN(aSUM) ; 11
+ S A=A_"|"_$$FN(DSUM+aSUM) ; 12
+ S A=A_"|"_$$FN(aSB) ; 13
+ S A=A_"|"_$$FN(SBSUM+aSB) ; 14
+ S A=A_"|"_$$FN(PSUM-DSUM-aSUM) ; 15
+ S A=A_"|"_$$FN(PSUM-SBSUM-aSB) ; 16
+ D WC^RWU(CR_A)
+ Q
+ANLpp() ; Первичный по дог.
+ Q:$$CREATED^IPAC(NIB)<DDS 0
+ Q 1
+ooLST(DS,DE,XDGN) ; Аналитическая сводка по контингенту (old)
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N NI,ID,aSUM,aCNT,aSB,FF,LP,F,DT,A,PIDX,PDS,PDE,PSTC,PSUM,DSUM,SBSUM,D
+ S FF='+$$FR^I()
+ 
+ K ^BUF($J,"al")
+ D MKAPPRC^IUSLSC(DS,DE,1,"ANLf^RDGNLST","ANLp^RDGNLST","","",FF)
+ 
+ D OWF^RWU(".txt")
+ S A=$S(DS=DE:"за "_$$DT^STUTL(DS),1:"с "_$$DT^DTUTL(DTSTART)_" по "_$$DT^DTUTL(DTEND))
+ D WC^RWU("xpatient:patient||"_A_"||Место||Вид|||||Услуг|Услуг|Услуг|Себест.||Остаток;")
+ D WC^RWU(CR_"|№ И.Б.|Ф.И.О. пациента|Вид|работы|Договор|дог.|Полис|Период с|Период по|Стоимость|за период|по прикреплению|по себест.|по прикрепл.|Остаток|по себест.")
+ 
+ S NI="" F  S NI=$O(^BUF($J,"al",NI)) Q:NI=""  D
+ .S aSUM=$G(^(NI,1)),aSB=$G(^(2))
+ .S PIDX=$S(XDGN="":"",1:$$PIDX^IPAC(NI,XDGN,DE))
+ .S PDS=$$GET^IPAC(NI,"dog_from"_PIDX,DE)
+ .S PDE=$$GET^IPAC(NI,"dog_to"_PIDX,DE)
+ .S PSTC=$S(XDGN="":$$GET^IPAC(NI,"stc",DE),1:XDGN)
+ .S PSUM=$$GET^IPAC(NI,"psumm",DE)
+ .S:PSUM="" PSUM=$$GET^IINSC(PSTC,"psumm",DE)
+ .S A=$$SPRCUSL^IUSLD(NI,PDS,DS-1,PSTC,1,0,0,1)
+ .S DSUM=$P(A,"|",1),SBSUM=$P(A,"|",2)
+ .S A=NI_"|"_NI_"|"_$$FIO^IPAC(NI) ; 1,2
+ .S A=A_"|"_$S($$ANLpm():"новый",1:"") ; 3
+ .S A=A_"|"_$$GETE^IPAC(NI,"work",DE) ; 4
+ .S A=A_"|"_$$NAME^IINSC(PSTC) ; 5
+ .S A=A_"|"_$$NAME^ISPRAV("dgtype",$$GET^IINSC(PSTC,"tp",DE)) ; 6
+ .S A=A_"|"_$$GET^IPAC(NI,"polis",DE) ; 7
+ .S A=A_"|"_$$DT2^DTUTL(PDS) ; 8
+ .S A=A_"|"_$$DT2^DTUTL(PDE) ; 9
+ .S A=A_"|"_$$FN(PSUM) ; 10
+ .S A=A_"|"_$$FN(aSUM) ; 11
+ .S A=A_"|"_$$FN(DSUM+aSUM) ; 12
+ .S A=A_"|"_$$FN(aSB) ; 13
+ .S A=A_"|"_$$FN(SBSUM+aSB) ; 14
+ .S A=A_"|"_$$FN(PSUM-DSUM-aSUM) ; 15
+ .S A=A_"|"_$$FN(PSUM-SBSUM-aSB) ; 16
+ .D WC^RWU(CR_A)
+ 
+ D C^RWU
+ K ^BUF($J,"al")
+ Q
+ANLpm() ; Первичный по дог.
+ S D=$$CREATED^IPAC(NI)
+ I D<DE,$$GET^IPAC(NI,"dog_from"_PIDX,D)'=PDS Q 0
+ Q 1
+ANLf ; filter
+ S TEST=1
+ Q:XDGN="" 
+ I '$$InIDX^IPAC(NIB,"stc",XDGN) S TEST=0 Q 
+ Q
+ANLp ; proc
+ Q:STAT=2 
+ s aCNT=$G(UL(U))
+ s aSUM=$S($L(SUMM):SUMM,1:$$PRICEH^IPRICE(U,PRC,DT)*KSKD)*aCNT
+ s aSB=$$GET^IPRICE(U,"scost",PRC,DT)*aCNT
+ s ^(1)=$G(^BUF($J,"al",NI,1))+aSUM,^(2)=$G(^(2))+aSB
+ Q
+FN(X) 
+ Q $TR(+$J(X,"",2),".",",")
+REGIPROC 
+ N D,FF
+ S D="Отчеты по страховым компаниям",FF=+$$FR^I()
+ S ^IPROC(D,"Аналитическая сводка по контингенту")="ANLST_RDGNLST,100,3,d,Дата услуг с,d,Дата услуг по,te@storage:dog,Договор"
+ Q

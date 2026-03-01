@@ -1,0 +1,38 @@
+ITWITTER ; Twitter connector for MSGHUB [ 04/27/2015  3:10 PM ]
+DOSEND(ID) 
+ N IP,NET,X,IDX,TO,R,PRT,MSG
+ S IP=$G(^MSGHUB("twitter",ID,"ip"))
+ S:IP="" IP=$G(^MSGHUB("twitter",ID,"server")) Q:IP=""
+ S PRT=$G(^MSGHUB("twitter",ID,"port")) Q:PRT="" PRT=3003
+ S IDX="" F  S IDX=$O(^MSGOUT("twitter",ID,IDX)) Q:IDX=""  D
+ .S R=^(IDX),TO=$P(R,"|",2)
+ .Q:$G(^(IDX,"chkfn"))'=""  Q:$G(^("wait")) 
+ .Q:$$timeout^IMSGHUB("twitter",ID,IDX) 
+ .S NET=$$OPEN^WWWCLI(IP,PRT)
+ .Q:NET="" 
+ .D OWBUF^WWWCLI(NET)
+ .S (MSG,I)="" F  S I=$O(^MSGOUT("twitter",ID,IDX,"data",I)) Q:I=""  S MSG=MSG_^(I)
+ .D WBUF^WWWCLI(NET,$$WU8^TXTU("{""text"":"""_MSG_"""}"))
+ .D CBUF^WWWCLI(NET)
+ .D SETHDR^WWWCLI(NET,"Content-type","application/json")
+ .S X=$$POST^WWWCLI(NET,"/tools/twitter")
+ .D CLOSE^WWWCLI(NET)
+ .Q:X'=200
+ .D endsend^IMSGHUB("twitter",ID,IDX)
+ Q
+DORECV(ID) 
+ ; not implemented
+ Q
+INITDB 
+ S ^MSGHUB("twitter")="ITWITTER"
+ Q
+TEST 
+ S NET=$$OPEN^WWWCLI("127.0.0.1",3000)
+ Q:NET="" 
+ D OWBUF^WWWCLI(NET)
+ D WBUF^WWWCLI(NET,$$WU8^TXTU($$DW^TXTU("{""text"":""BP is 120/80 pulse 60""}")))
+ D CBUF^WWWCLI(NET)
+ D SETHDR^WWWCLI(NET,"Content-type","application/json")
+ S X=$$POST^WWWCLI(NET,"/tools/twitter")
+ D CLOSE^WWWCLI(NET)
+ Q

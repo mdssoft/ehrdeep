@@ -1,0 +1,105 @@
+RKADRY ; Кадры - отчеты [ 11/16/2022  9:50 PM ]
+VRL(DT,OTX,SPX,OFF,DUVL,MOD,LPU) ; Список сотрудников
+ ; DT - дата отчета
+ ; OTX - отделение
+ ; SPX - специальность
+ ; OFF - отображать уволенных
+ ; DUVL - дата увольнения не менее
+ ; MOD - обычный/расширенный
+ ; LPU - филиал
+ N VR,R,FF,LP
+ S DT=$$DIH^DTUTL(DT),DUVL=$$DI^DTUTL(DUVL),LPU=$G(LPU)
+ S FF=$G(^cfg("sl-kadry"))!('$G(^cfg("filial-report"))),OFF=+OFF
+ S:'FF FF=$$LCL^NUSER("kadry","clpu")
+ S:FF LPU=$$^I("ilpu")
+ S:OTX=999 OTX="" S:SPX=999 SPX=""
+ D OWF^RWU(".txt")
+ D WC^RWU("Таб. №|Фамилия|Имя|Отчество|Отделение|Специальность|Должность|Дата оформ."_$S(MOD:"|Кадровый №|Отделение 2|Специальность 2|Отделение 3|Специальность 3|На приеме|Тел. внутр.",1:"")_$S(DUVL'="":"|Дата увольн.",1:""))
+ S VR="" F  S VR=$O(^KDR(VR)) Q:VR=""  D
+ .I OTX'="",'$$IsOTD^IKADRY(VR,OTX,DT) Q 
+ .I SPX'="",'$$IsSPEC^IKADRY(VR,SPX,DT) Q 
+ .I LPU'="",'$$IsLPU^IKADRY(VR,LPU,DT) Q 
+ .I OFF=0,$$GET^IKADRY(VR,"ofor",DT)=0 Q
+ .I OFF=2,$$GET^IKADRY(VR,"ofor",DT) Q 
+ .I DUVL'="" S R=$$GET^IKADRY(VR,"duvol",DT) I R'="",R'<DUVL Q 
+ .S R="|"_$$GET^IKADRY(VR,"f",DT)_"|"_$$GET^IKADRY(VR,"i",DT)_"|"
+ .S R=R_$$GET^IKADRY(VR,"o",DT)_"|"_$$GETE^IKADRY(VR,"otd")
+ .S R=R_"|"_$$GETE^IKADRY(VR,"spec",DT)
+ .S R=R_"|"_$$NAME^ISPRAV("doljn",$$GET^IKADRY(VR,"doljn",DT))
+ .S R=R_"|"_$$GETE^IKADRY(VR,"dofor",DT)
+ .S:MOD R=R_"|"_$$GET^IKADRY(VR,"knum",DT) 
+ .S:MOD R=R_"|"_$$GETE^IKADRY(VR,"otd2",DT)
+ .S:MOD R=R_"|"_$$GETE^IKADRY(VR,"spec2",DT)
+ .S:MOD R=R_"|"_$$GETE^IKADRY(VR,"otd3",DT)
+ .S:MOD R=R_"|"_$$GETE^IKADRY(VR,"spec3",DT)
+ .S:MOD R=R_"|"_$S($$GET^IKADRY(VR,"norsp",DT):"Нет",1:"")
+ .S:MOD R=R_"|"_$$GET^IKADRY(VR,"tel_int",DT)
+ .S:DUVL'="" R=R_"|"_$$GETE^IKADRY(VR,"duvol",DT)
+ .D WC^RWU(CR_VR_R)
+ D C^RWU
+ Q
+isu(VR) ; есть услуги 3 мес.
+ N OT,DS,F
+ S DS=$H-90,F=0
+ S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""!F  D  Q:F
+ .I $O(^ZNF(VR,OT,DS))'="" S F=1
+ Q F
+NULST(DS,DE,VID,OTX,SPX,OFF,LPU) ; Список по надбавкам и удержаниям
+ ; VID = 0/1/2 - все/текущие/периодические
+ ; OFF - оформленные
+ N VR,R,FF,LP,KX,B,C,D
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),LPU=$G(LPU)
+ S FF=$G(^cfg("sl-kadry"))!('$G(^cfg("filial-report"))),OFF='+OFF
+ S:'FF FF=$$LCL^NUSER("kadry","clpu")
+ S:FF LPU=$$^I("ilpu")
+ S:OTX=999 OTX="" S:SPX=999 SPX=""
+ D OWF^RWU(".txt")
+ D WC^RWU("Таб. №|Фамилия|Имя|Отчество|Дата|Тип|Основание|Процент|Сумма|Отделение|Специальность")
+ S VR="" F  S VR=$O(^KDR(VR)) Q:VR=""  D
+ .I OTX'="",'$$IsOTD^IKADRY(VR,OTX,DE) Q 
+ .I SPX'="",'$$IsSPEC^IKADRY(VR,SPX,DE) Q 
+ .I LPU'="",'$$IsLPU^IKADRY(VR,LPU,DE) Q 
+ .I OFF,$$GET^IKADRY(VR,"ofor",DE)=0 Q
+ .S B=VR_"|"_$$GET^IKADRY(VR,"f",DE)_"|"_$$GET^IKADRY(VR,"i",DE)_"|"
+ .S B=B_$$GET^IKADRY(VR,"o",DE)
+ .S C="|"_$$GOTD^YISPRAV($$GET^IKADRY(VR,"otd"))
+ .S C=C_"|"_$$GSPEC^YISPRAV($$GET^IKADRY(VR,"spec",DE))
+ .I VID'=1 S KX="" F  S KX=$O(^KDR(VR,"cfin",KX)) Q:KX=""  D
+ ..S R=$G(^(KX)) 
+ ..Q:$P(R,"|",3,4)="|" 
+ ..I LPU'="",$P(R,"|",6)'="",$P(R,"|",6)'=LPU Q
+ ..D WC^RWU(CR_B_"||"_$P(R,"|",1)_"|"_$S($P(R,"|",2)=2:"Удержание",1:"Начисление")_"|"_$P(R,"|",3,4)_C)
+ .I VID'=2 S KX="" F  S KX=$O(^KDR(VR,"dfin",KX)) Q:KX=""  D
+ ..S R=$G(^(KX)),D=$P(KX,".",1)
+ ..Q:D<DS  Q:D>DE 
+ ..Q:$P(R,"|",3,4)="|" 
+ ..I LPU'="",$P(R,"|",5)'="",$P(R,"|",5)'=LPU Q 
+ ..D WC^RWU(CR_B_"|"_$$DT2^DTUTL(D)_"|"_$P(R,"|",1)_"|"_$S($P(R,"|",2)=2:"Удержание",1:"Начисление")_"|"_$P(R,"|",3,4)_C)
+ D C^RWU
+ Q
+ZRPREF(DT,OFOR,DET,LPU) ; Вывод шаблонов ЗП
+ S DT=$$DI^DTUTL(DT),LPU=$G(LPU)
+ N K,RR,R,I,LP,LL,L
+ S K="" F  S K=$O(^CGAI("flg","gd",K)) Q:K=""  I ("|"_$$GET^ICONTR(K,"flg",+$H)_"|")["|gd|" S LL(K)=$$NAME^ICONTR(K)
+ D OWF^RWU(".txt")
+ D WC^RWU("Ф.И.О.|Отделение|Специальность|Юрлица|"_$P($$iLVRHDR^NZARP(DET),"|",2,99))
+ S K="" F  S K=$O(^KDR(K)) Q:K=""  D
+ .I 'OFOR,$$GET^IKADRY(K,"ofor",DT)=0 Q 
+ .I LPU'="",'$$USEInLPU^IKADRY(K,LPU,DT) Q 
+ .S LL=$$GET^IKADRY(K,"lpu",DT),R=""
+ .F I=1:1:$L(LL,"|") S L=$P(LL,"|",I) I L'="",$D(LL(L)) S R=$S(R="":"",1:R_", ")_LL(L)
+ .S RR=$$FIO^IKADRY(K)_"|"_$$GOTD^YISPRAV($$OTD^IKADRY(K))
+ .S RR=RR_"|"_$$GSPEC^YISPRAV($$SPEC^IKADRY(K))_"|"_R_"|"
+ .S I="" F  S I=$O(^KDR(K,"zarp",I)) Q:I=""  D:LPU=""!(LPU=I)
+ ..S R=^(I) Q:R=""  Q:R="|"  Q:R="||" 
+ ..D WC^RWU(CR_RR_$P($$iLVR^NZARPU(I,K,^(I),DET),"|",2,99))
+ D C^RWU
+ Q
+REGIPROC ;
+ N A,FF
+ S A="Зарплата и кадры"
+ S FF=('$G(^cfg("sl-kadry")))&($G(^cfg("filial-report")))
+ S ^IPROC(A,"Список сотрудников")="VRL_RKADRY,1,"_$S(FF:7,1:6)_",d,Дата отчета,te@storage:otd@1,Отделение,te@storage:spec@1,Специальность,t@string:0/Нет#1/Да#2/Только уволенных,Отображать уволенных,d,Дата увольнения не менее,t@string:0/Сокращенный#1/Полный,Вид отчета"_$S(FF:",t@storage:lpu,Филиал",1:"")
+ S ^IPROC(A,"Начисления и удержания по сотрудникам")="NULST_RKADRY,1,"_$S(FF:7,1:6)_",d,Дата начала периода,d,Дата окончания периода,t@string:0/Все#1/Постоянные#2/Периодические,Отображать,te@storage:otd@1,Отделение,te@storage:spec@1,Специальность,t@string:0/Нет#1/Да,Отображать уволенных"_$S(FF:",t@storage:lpu,Филиал",1:"")
+ S ^IPROC(A,"Правила начисления З.П. (из кадров)")="ZRPREF_RKADRY,1,4,d,Дата отчета,t@string:0/Нет#1/Да,Отображать уволенных,t@string:0/Нет#1/Да,Вывод массивов параметров,t@storage:lpu,Филиал"
+ Q

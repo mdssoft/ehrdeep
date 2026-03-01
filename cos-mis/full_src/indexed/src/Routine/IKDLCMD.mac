@@ -1,0 +1,234 @@
+IKDLCMD ; Лаборатория CMD
+SETUP
+	S ^cfg("lab","cmd",1,"server")="office.cmd-online.ru"
+	S ^cfg("lab","cmd",1,"url")="/api/v1/order/integration"
+	S ^cfg("lab","cmd",1,"token")="90B9FFBA-045E-4F7A-8B1C-9263384697C5"
+	S ^cfg("lab","cmd",1,"passwd")="123"
+	S ^cfg("lab","cmd",1,"pre")="cmd" ; prefix
+	S ^cfg("lab","cmd",1,"debug")=0
+	S ^cfg("lab","cmd",1,"noprnbar")=1
+	S ^cfg("lab","cmd",1,"path")="C:\node\kdl\cmdlab"
+	Q
+DOSEND ; Отправка заявок
+	N DT,NI,ID,S3,CT,LAB,LP,NW,LID
+	S CT=$G(^cfg("lab","noprnbar"))
+	S DT=$H-3 F  S DT=$O(^MLABI("d",DT)) Q:DT=""  D 
+	.S ID="" F  S ID=$O(^MLABI("d",DT,ID)) Q:ID=""  D
+	..S NI=^(ID) 
+	..S LAB=$P($G(^MLAB(NI,ID,"lab")),"|",1) Q:'LAB
+	..Q:$G(^LABC(LAB,"uid"))'="cmd" 
+	..;w !,1
+	..S LID=$G(^LABC(LAB,"id")) Q:LID="" 
+	..S CT=$G(^cfg("lab","cmd",LID,"noprnbar"))
+	..;w !,2
+	..S S3=$P($G(^MLAB(NI,ID,"s3")),"|",1) Q:'S3  
+	..;Q:'$P($G(^("s31")),"|",1) 
+	..;w !,3
+	..I CT,'$P($G(^("s3")),"|",1) Q 
+	..Q:$P($G(^("s4")),"|",1)=2
+	..;w !,5
+	..Q:$P($G(^("s9")),"|",1)
+	..S LP=$P($G(^("s1")),"|",4)
+	..Q:'$$MKSEND(NI,ID)
+	..D SETSTAT^IMLAB(NI,ID,4,2) ; у контрагента
+	Q
+DORECV(IDX) ; Получение исследований по всем лабораториям
+	; запуск из IMSGHUB
+	s ^KKKLAB=1_"|"_$H
+	;D DOSEND
+	N LST,I,LAB,X,MOD
+	S LAB="" F  S LAB=$O(^LABC(LAB)) Q:LAB=""  I $G(^(LAB,"uid"))="cmd" D  
+	.S X=$G(^("id"))
+	.S:X'="" LST(LAB,X)=""
+	.S I="" F  S I=$O(^LABC(LAB,"lpu",I)) Q:I=""  S X=$G(^(I,"id")) S:X'="" LST(LAB,X)=""
+	
+	S LAB="" F  S LAB=$O(LST(LAB)) Q:LAB=""  D
+	.S I="" F  S I=$O(LST(LAB,I)) Q:I=""  D GETALL(LAB,I)
+	Q
+MKSEND(NI,ID) ; Формирование и отправка сообщения
+	N MID,EID,RR,DTT,X,R,R1,R2,BAR,LAB,ALAB,LPU,VR,OT,FL,S2,BIO,I,J,U,C,UUL,a,cul
+	
+	S LAB=$P($G(^MLAB(NI,ID,"lab")),"|",1)
+	S S2=$G(^MLAB(NI,ID,"s2"))
+	S LPU=$P(S2,"|",4) S:LPU="" LPU=$$^I("ilpu")
+	
+	S ALAB=$G(^LABC(LAB,"lpu",LPU,"id"))
+	S:ALAB="" ALAB=$G(^LABC(LAB,"id"))
+	S:ALAB="" ALAB=LAB
+	
+	S R=$G(^MLAB(NI,ID,"s1"))
+	S VR=$P(R,"|",5),OT=$$OTD^IKADRY(VR)
+	
+	S cul=$S($G(^LABC(LAB,"CN"))="i":1,1:0) ; по услугам
+	
+	S DTT=+$G(^MLAB(NI,ID))
+	S:'DTT DTT=+$H
+	
+	S EID=$G(^LABC(LAB,"lpu",LPU,"eid"))
+	S RR="<?xml version=""1.0"" encoding=""utf-8""?>"
+	S RR=RR_"<Order><LpuCode>"_EID_"</LpuCode>"
+	S RR=RR_"<OrderId>"_ID_"</OrderId>"
+	S RR=RR_"<PatientId>"_ID_"</PatientId>"
+	S RR=RR_"<Lastname>"_$$GET^IPAC(NI,"fiof",DTT)_"</Lastname>"
+	S RR=RR_"<Firstname>"_$$GET^IPAC(NI,"fioi",DTT)_"</Firstname>"
+	S RR=RR_"<Middlename>"_$$GET^IPAC(NI,"fioo",DTT)_"</Middlename>"
+	S X=$$GET^IPAC(NI,"pol",DTT)
+	S RR=RR_"<Gender>"_$S(X=1:"M",X=2:"F",1:"")_"</Gender>"
+	S RR=RR_"<Birthdate>"_$$GETE^IPAC(NI,"datar",DTT)_"</Birthdate>"
+	S RR=RR_"<PatientPhone>"_$$GET^IPAC(NI,"fioi",DTT)_"</PatientPhone>"
+	S RR=RR_"<PatientEmail>"_$$GET^IPAC(NI,"fioo",DTT)_"</PatientEmail>"
+	
+	S RR=RR_"<DocFamilyName>"_$$GET^IKADRY(VR,"f",DTT)_"</DocFamilyName>"
+	S RR=RR_"<DocPatName>"_$$GET^IKADRY(VR,"o",DTT)_"</DocPatName>"
+	S RR=RR_"<DocName>"_$$GET^IKADRY(VR,"i",DTT)_"</DocName>"
+	S RR=RR_"<DocProfession>"_$$GSPEC^YISPRAV($$SPEC^IKADRY(VR))_"</DocProfession>"
+  
+	S RR=RR_CR_"<Services>"
+	S R=^MLAB(NI,ID,"ul")
+	F I=1:1:$L(R,"|") d
+	.S U=$P($P(R,"|",I),":",1),C=$P(U,"*",2),U=$P(U,"*",1) Q:U="" 
+	.S:C="" C=1
+	.S a=$S(cul:U,1:$G(^LABTI("LAB",LAB,"CN",U))) Q:a="" 
+	.F J=1:1:C S RR=RR_"<ServiceId>"_a_"</ServiceId>"
+	S RR=RR_"</Services>"_CR
+  
+	S RR=RR_"</Order>"
+	
+	;u 0 w ! w RR
+	s ^KKKLAB=2_"|"_$H
+	
+    Set httprequest=##class(%Net.HttpRequest).%New()
+    set httprequest.SSLConfiguration="default"
+    set httprequest.Https=1
+    set httprequest.Server=^cfg("lab","cmd",1,"server")
+    set httprequest.Port=443
+    Do httprequest.InsertFormData("token",^cfg("lab","cmd",1,"token"))
+    Do httprequest.InsertFormData("xml",$$WU8^TXTU(RR))
+    set tSc = httprequest.Post(^cfg("lab","cmd",1,"url"))
+    ;u 0 w ! s r=httprequest.HttpResponse w r
+    ;W r.StatusCode
+    
+	S A="" While 'httprequest.HttpResponse.Data.AtEnd { S A=A_httprequest.HttpResponse.Data.ReadLine(32000) }
+	s ^KKKLAB("res",$H)=A
+	;w A
+	Q 1
+phn(X) ; Преобразование телефона
+	S X=$$MPHN^TXTU(X)
+	S:X=""!(X="-")!($L(X)<4) X="Отсутствует"
+	S:$E(X,1,2)="+7" X=$E(X,2,99)
+	Q $$TKAV^TXTU(X)
+GETALL(LAB,LID)
+	N FN,FILL,FL,i
+	S FN=$G(^cfg("lab","cmd",1,"path")) Q:FN="" 
+	w !,FN_"\in\*.xml"
+	D DIR^FIL(FN_"\in\*.xml","FILL")
+	Q:'$D(FILL) 
+	; load
+	S FL="" F  S FL=$O(FILL(FL)) Q:FL=""  D:FILL(FL)=0 GET(LAB,FN_"\in\"_FL)
+	Q
+GET(LAB,FN) ; Загрузить один файл с результатом
+	N A,F,R,K,xNI,xID,ST,STS,DTM,MDTM,LID,RR,msgid,lpu,mpref,IsOK,mnnew
+	N bar,prm,COM,VAL,VH,VL,unit,COMR,pnm,NVAL,rPRM,T,TP,X,RX,%XM,ecLAB
+	N FF,FI,FO,DRX,lisid,%LOG
+	
+	s lpu=$$^I("ilpu"),%LOG="sys"
+	S mpref=$S($G(^LABC(LAB,"CN"))="i":"",1:"cmd.") ; встроенная лаб.
+	S (xNI,xID,bar,IsOK)=""
+	
+	S mknew=1
+	
+	S F=$$OR^FIL(FN),K=""
+	D OEV^XMLR("otgTS^IKDLCMD","otgTD^IKDLCMD","otgTE^IKDLCMD")
+	F  U F R R#1 Q:$$ST^FIL()=0  S K=K_R
+	C F
+
+	D:K'="" REV^XMLR(K)
+	
+	I xID'="" s ^KKKLABB(xID)=K
+	
+	I IsOK=-1 D DEL^FIL(FN) Q 
+	
+ 	I xID'="",bar'="",IsOK D
+ 	.u 0 w !,"xID="_xID_",bar="_bar_",IsOK="_IsOK
+ 	.S:'$D(^MLAB(xNI,xID,"s9")) ^("s9")="0|"_$H
+	.D SBREZ^NMLABR(xID,1)
+	.D DEL^FIL(FN)
+	.;S X=$$SBS^IMLAB(xID)
+	Q
+otgTS
+	S A=%XM(2)
+	I A="Request" D
+	.S MDTM=$$DTI^DTUTL($G(%XM(2,"p","CreateDate"))),xID=$G(%XM(2,"p","Id"))
+	.S ecLAB=$G(%XM(2,"p","OrderNumber"))
+	.S:'$D(^MLABI("c",xID)) xID=""
+	.I xID="",ecLAB'="" s xID=$P($$GETELAB^IMLAB(LAB,ecLAB),"|",2)
+	
+	I A="Patient" D
+	.S xNI=$G(%XM(2,"p","Id")) I xNI'="" S:'$D(^BTN(xNI)) xNI="" 
+	.S FF=$G(%XM(2,"p","LastName"))
+	.S FI=$G(%XM(2,"p","FirstName"))
+	.S FO=$G(%XM(2,"p","MiddleName"))
+	.S DRX=$$DI^DTUTL($G(%XM(2,"p","BirthDay"))_"."_$G(%XM(2,"p","BirthMonth"))_"."_$G(%XM(2,"p","BirthYear")))
+	
+	I A="Sample" D
+	.S DTM=$G(%XM(2,"p","ADate"))
+	.Q:DTM="" 
+	.S DTM=$$DTI^DTUTL(DTM),IsOK=1
+	.S bar=$G(%XM(2,"p","Barcode")),lisid=$G(%XM(2,"p","id"))
+	.I xNI="",DRX S xNI=$$GETNIB^IPACFND(FF,FI,FO,+DRX,"",1) w !,"xNI="_xNI_"="_FF_","_FI_","_FO_","_(+DRX)_","""",1" S:xNI=-1 xNI="" ; find patient
+	.I xID="",bar'="",$D(^MLABI("bar",bar)) s xID=$O(^MLABI("bar",bar,""),-1) Q  ; only by bar
+	.I xID="",xNI'="",IsOK,mknew S xID=$$MK^IMLAB(xNI,DTM,"",LAB,ecLAB) ; create new clear record
+	.Q:xID="" 
+	.S:xNI="" xNI=$G(^MLABI("c",xID)) Q:xNI="" 
+	.I '$D(^MLAB(xNI,xID)) S (xNI,xID)="" Q 
+	.S:'$D(^MLAB(xNI,xID,"s5")) ^("s5")="0|"_$H
+	
+	I A="Work" D
+	.S prm=$G(%XM(2,"p","Uid"))
+	.S VAL=$$TGA^TXTU($G(%XM(2,"p","Value")))
+	.S VL=$$TGA^TXTU($G(%XM(2,"p","Norms"))),VH=$P(VL,"-",2,9),VL=$P(VL,"-",1)
+	.S NVAL=$$TGA^TXTU($G(%XM(2,"p","NormComment"))) ; text refs
+	.S COMR=$$TGA^TXTU($G(%XM(2,"p","Comment")))
+	.S pnm=$$TGA^TXTU($G(%XM(2,"p","Name")))
+	.S unit=$$TGA^TXTU($G(%XM(2,"p","UnitName")))
+	.D setprm
+	
+	Q
+otgTD
+	Q
+otgTE
+	Q
+setprm
+	Q:xID=""  Q:xNI=""  Q:IsOK'=1 
+	s rPRM=$$CHKAP^IMLABS(mpref_prm,pnm,unit)
+	u 0 w !,"CHKAP("""_mpref_prm_""","""_pnm_""","""_unit_""""
+	D CHKNM^IMLABS(mpref_prm,pnm)
+	
+	S RR=$$NNUM^TXTU(VL)_"|"_$$NNUM^TXTU(VH)_"|"_NVAL
+	u 0 w !,xNI_","_xID_",""d"","_prm_"/"_rPRM_"="_pnm_"="_VAL_" "_unit_"/"_RR_"/"
+	Q:rPRM="" 
+	
+	S T=$G(^LABT("T",rPRM,"t"))
+	D:T'=""
+	.S TP=$P(T,"|",1),X=$P(T,"|",2)
+	.S:TP="T" VAL=$$TRIM^TXTU(VAL)
+	.I TP="N"!(TP="") S VAL=+$TR(VAL,",",".") S:X'="" VAL=$J(VAL,"",X) ; формат
+	
+	S RX=$TR(VAL_"|"_$P(RR,"|",1)_"|"_$P(RR,"|",2)_$S($P(RR,"|",3)="":"",1:"|||"_$P(RR,"|",3)),$C(0),"")
+	
+	S:COMR'="" $P(RX,"|",6)=$S($P(RX,"|",6)="":"",1:$P(RX,"|",6)_"; ")_COMR
+	w !,"RX="_RX
+	
+	; Compare witch prev date of changing
+	
+	I $D(^MLAB(xNI,xID,"d",rPRM)),^(rPRM)'=RX S ^MLABE(xNI,xID,"d",rPRM,$H)=^MLAB(xNI,xID,"d",rPRM)
+	S ^MLAB(xNI,xID,"d",rPRM)=RX
+	S RR=$G(^MLAB(xNI,xID,"d",rPRM,"s"))
+	S RR=1 ; subs. TODO
+	S $P(RR,"|",2)=DTM,$P(RR,"|",4)=lpu,$P(RR,"|",8)=LAB
+	S ^MLAB(xNI,xID,"d",rPRM,"s")=RR
+	S:'$D(^MLAB(xNI,xID,"s8")) ^("s8")="1|"_$H
+	D GL^IEXCH("^MLAB",xNI,xID,"d",rPRM)
+SPR
+	; ^LABC(X,"CN",nomenclature,"b",sampleType)=rule
+	Q

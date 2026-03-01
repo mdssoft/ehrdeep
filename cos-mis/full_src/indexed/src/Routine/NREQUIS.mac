@@ -1,0 +1,28 @@
+A ; Информация об организации [ 10/29/2020  2:59 PM ]
+SR ; СОХРАНИТЬ РЕКВИЗИТЫ
+ N %J,A,GL
+ S GL="^i"
+ I $G(%IIDLCL) S GL="^LCL(""i"","_%IIDLCL_")"
+ I %LOG'="",$G(^LOG(%LOG,"lcl","i")) S A=^("i"),GL="^LCL(""i"","_A_")"
+ D ORH^RWU
+ K XML,XMLR
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D XML^YIXMLRR
+ M @GL=XML("nb_console","orginfo")
+ F A="iaddr","ibank","icmdr","ifax","ifname","ifss","iglbh","igldr","iglvr","iinn","ikodes","ikpp","iks","ilic","iname","iogrn","iokdp","iokpo","irs","itel" S:'$D(XML("nb_console","orginfo",A)) @GL@(A)="" ; обнуление
+ S:$G(@GL@("iglvrd"))="" @GL@("iglvrd")="Главный врач"
+ S:$G(@GL@("iglbhd"))="" @GL@("iglbhd")="Главный бухгалтер"
+ M:'$D(@GL@("ifname")) @GL@("ifname")=@GL@("iname")
+ D CR^RWU,CLOSE^YIXMLRR
+ S @GL@("log")=$$USRH^IUSER()
+ ; Системные поля:
+ ; iprgname - наименование программы
+ Q
+LR ; ВЫГРУЗИТЬ РЕКВИЗИТЫ
+ N POLE,GL
+ S GL="^i",POLE=""
+ I $G(%IIDLCL) S GL="^LCL(""i"","_%IIDLCL_")"
+ I %LOG'="",$G(^LOG(%LOG,"lcl","i")) S A=^("i"),GL="^LCL(""i"","_A_")"
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<orginfo>")
+ F  S POLE=$O(@GL@(POLE)) Q:POLE=""  I $E(POLE)'="^",$D(^(POLE))'=10 D WTAGDC^RWU(POLE,^(POLE))
+ D W^RWU("</orginfo></nb_console>"),C^RWU
+ Q

@@ -1,0 +1,78 @@
+RFIN ; Финансовые отчеты [ 09/05/2013  0:30 AM ]
+VDG(DS,DE) ; Выручка по договорам
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N DT,TM,L,CM,SUM,OPE,TP,STT,LP,PLST,SS,C9,NI,OT,DS1,DE1,I,DG,SUMM,X,iX
+ N DGTPS
+ D MKALLPRC^IUSLSC(DS,DE,1,"VDGPRC^RFIN","",'+$$FR^I())
+ D DOKSDGN
+ D OPSUM^RPOLIS(DS,DE)
+ S DG="" F  S DG=$O(SUMM(DG)) Q:DG=""  D
+ .S TP=$$GETTP(DG),STT(TP,DG,3)=$G(STT(TP,DG,3))+$G(SUMM(DG))
+ K SUMM
+ D USUMsys^RSCPRP(DS,DE)
+ S DG="" F  S DG=$O(SUMM(DG)) Q:DG=""  D
+ .S TP=$$GETTP(DG),STT(TP,DG,3)=$G(STT(TP,DG,3))+$G(SUMM(DG,3))
+ ; Физические лица
+ S DG="" F  S DG=$O(STT(1,DG)) Q:DG=""  S STT(1,DG,6)=$G(STT(1,DG,$S(DG="S":5,1:1))),STT(1,DG,7)=$G(STT(1,DG,2))
+ ; Страховые компании по факту
+ S DG="" F  S DG=$O(STT(2,DG)) Q:DG=""  S STT(2,DG,6)=$G(STT(2,DG,1))
+ ; Страховые компании по предоплате
+ S DG="" F  S DG=$O(STT(3,DG)) Q:DG=""  S STT(3,DG,6)=$G(STT(3,DG,3))
+ ; Абонементы
+ S DG="" F  S DG=$O(STT(4,DG)) Q:DG=""  S STT(4,DG,6)=$G(STT(4,DG,5))+$G(STT(4,DG,3)),STT(4,DG,7)=$G(STT(4,DG,2))
+ ; Прочие договора
+ S DG="" F  S DG=$O(STT(5,DG)) Q:DG=""  S STT(5,DG,6)=$G(STT(5,DG,1))+$G(STT(5,DG,4)),STT(5,DG,7)=$G(STT(5,DG,2))
+ D OWF^RWU(".txt")
+ D WC^RWU("|Оказано|Оплачено||Услуг|Выставлено|Выполнено|Выполнено|Оплачено;"_CR)
+ D WC^RWU("Договор за период "_$$DT2^DTUTL(DS)_"-"_$$DT2^DTUTL(DE)_"|Услуг (руб.)|по кассе (руб.)|Расчет (руб.)|по рекламациям|по счетам|по кассе|Итого (руб.)|Итого (руб.)")
+ S TP="" F  S TP=$O(STT(TP)) Q:TP=""  D
+ .K SS
+ .D WC^RWU(CR_$S(TP=1:"Физические лица",TP=2:"Страховые компании по факту",TP=3:"Страховые компании по предоплате",TP=4:"Абонементы",1:"Прочие договора"))
+ .S DG="" F  S DG=$O(STT(TP,DG)) Q:DG=""  D
+ ..S iX=1
+ ..S A="" F I=1:1:4 S X=$G(STT(TP,DG,I)),A=A_"|"_$TR($FN(X,"",2),".",","),SS(iX)=$G(SS(iX))+X,iX=iX+1
+ ..S X=$G(STT(TP,DG,8)),SS(iX)=$G(SS(iX))+X,iX=iX+1
+ ..S A=A_"|"_$TR($FN(X,"",2),".",",")
+ ..F I=5:1:7 S X=$G(STT(TP,DG,I)),A=A_"|"_$TR($FN(X,"",2),".",","),SS(iX)=$G(SS(iX))+X,iX=iX+1
+ ..D WC^RWU(CR_" - "_$S(DG="S":"Физические лица от СК",1:$$NAMEH^YNDOG(DG,DE))_A)
+ .Q:'$D(SS) 
+ .S A=""
+ .F I=1:1:iX-1 S A=A_"|"_$TR($FN($G(SS(I)),"",2),".",",")
+ .D WC^RWU(CR_"Итого по разделу"_A)
+ D C^RWU
+ Q
+DOKSDGN 
+ S DT=DS-1 F  S DT=$O(^BILLI(DT)) Q:DT=""!(DT>DE)  S TM="" F  S TM=$O(^BILLI(DT,TM)) Q:TM=""  S NI="" F  S NI=$O(^BILLI(DT,TM,NI)) Q:NI=""  D
+ .S L=$G(^BILL(NI,DT,TM)) Q:L=""
+ .Q:$P(L,"|",1)'=""  ; OPE
+ .S R=$P($P($P(L,"|",6),"/",1),":",1) Q:R'="ZNF"&(R'="ZND")
+ .S SUM=+$P(L,"|",2),L=+$P($P(L,"|",5),"@",2) Q:SUM=0 
+ .S DG=+$$GET^IPAC(NI,"stc",DT),TP=$$GETTP(DG)
+ .S:TP=2 STT(TP,DG,2)=$G(STT(TP,DG,2))-SUM,DG="S",TP=1
+ .S:TP=3 STT(TP,DG,2)=$G(STT(TP,DG,2))-SUM,DG="S",TP=1
+ .S STT(TP,DG,2)=$G(STT(TP,DG,2))-SUM
+ Q
+GETTP(DG) 
+ S TP=$G(DGTPS(DG)) Q:TP'="" TP
+ D  S DGTPS(DG)=TP
+ I $D(^BTPLS("stc",DG)) S TP=4 G GETTP1
+ S K=$$GET^YNDOG(DG,"dvid",DT) ; todo - timeline
+ I K=0 S TP=2 G GETTP1
+ I K=1 S TP=3 G GETTP1
+ I K=3 S TP=1 G GETTP1
+ S TP=5
+GETTP1 S DGTPS(DG)=TP
+ Q TP
+VDGPRC 
+ N TP,K,L,X
+ S CSTC=+CSTC,TP=$$GETTP(CSTC),L=1
+ I TP'=1,STAT=2!(("|"_$G(FLG)_"|")["|kss|") S L=5 ; не Ф.Л. -без кассы
+ S X=SUMM*$G(UL(U)) Q:X=0  ; $$PRICEH^IPRICE(U,PRC,DT)*KSKD
+ S L=$S(STAT=4:4,1:L)
+ S STT(TP,CSTC,L)=$G(STT(TP,CSTC,L))+X
+ S:STAT=3 STT(TP,CSTC,8)=$G(STT(TP,CSTC,8))+X
+ I L=5 S:TP=2!(TP=3) STT(1,"S",L)=$G(STT(1,"S",L))+X
+ Q
+REGIPROC 
+ S ^IPROC("Финансы","Выручка по договорам")="VDG_RFIN,1,2,d,Начальная дата отчета,d,Конечная дата отчета"
+ Q

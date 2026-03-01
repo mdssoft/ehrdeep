@@ -1,0 +1,95 @@
+NPACUR ; Процедуры для отчетов по контингенту [ 11/28/2020  11:20 PM ]
+CNTSTC(DTT,BYTP) ; Численность по страховым ->STAT(TYPE,STC) на дату
+ S BYTP=$G(BYTP,1)
+ N KD,KDO,KDOF,D,NI,ST,TP,STVL,K,D1
+ S KD=$$PLIDX^IPAC("fiof") Q:KD="" 
+ S KDO=+$$PLIDX^IPAC("opfio")
+ S KDOF=+$$PLIDX^IPAC("ofor")
+ S NI="" F  S NI=$O(^BTN(NI)) Q:NI=""!(NI[$C(9))  D
+ .S D=$O(^BTN(NI,KD,0))
+ .S D1=$O(^BTN(NI,KDO,0)) S:D1="" D1=D
+ .S:D1<D D=D1 Q:D>DTT 
+ .S K=$$GETTZ^IPAC(NI,KDOF,DTT)
+ .I K'="",K'=1 Q  
+ .S ST=$$GET^IPAC(NI,"stc",DTT) Q:ST="" 
+ .;Q:'$$CHECK^IPAC(NI,DTT,ST)
+ .I 'BYTP S STAT(ST)=$G(STAT(ST))+1 Q 
+ .I '$D(STVL(ST)) S STVL(ST)=$$GET^YNDOG(ST,"dvid",DTT)
+ .S K=+$G(STVL(ST)) I K=0!(K=1) S STAT(K,ST)=$G(STAT(K,ST))+1
+ Q
+VCNTSTC(DTT,DGN) ; Численность по компании на дату
+ N KD,KDO,D,NI,ST,TP,STVL,K,D1,CNT
+ D PRETZR^IPAC
+ S KD=$$PLIDX^IPAC("fiof") Q:KD="" 0
+ S KDO=+$$PLIDX^IPAC("opfio") 
+ S CNT=0
+ S NI="" F  S NI=$$NEXT^IPAC(NI,"stc",DGN) Q:NI=""!(NI[$C(9))  D
+ .S D=$O(^BTN(NI,KD,0))
+ .S D1=$O(^BTN(NI,KDO,0)) S:D1="" D1=D
+ .S:D1<D D=D1 Q:D>DTT 
+ .S ST=$$PIDXN^IPAC(NI,DGN,DTT) Q:ST=-1 
+ .Q:'$$CHECK^IPAC(NI,DTT,DGN)
+ .S CNT=CNT+1 
+ Q CNT
+FLOWSTC(DS,DE,OFOR,PRG,WRK,RSC,FSC) ; Движение контингента за период
+ ; OFOR=1 - фактически прикрепленные
+ ; PRG - программа
+ ; WRK - место работы
+ ; RSC - источник рекламы
+ ; FSC - только по основному договору
+ ; результат -> STAT(STC,1/2/3)
+ ; 1 - прикреплено, 2 - откреплено, 3 - лиц на конец
+ ; 4 - на начало периода
+ ; 5 - перемещено из дог., 6 - перемещено в дог.
+ s OFOR=$G(OFOR),PRG=$G(PRG),WRK=$G(WRK),RSC=$G(RSC),FSC=+$G(FSC)
+ N NI,KD,KDO,D,D1,OF1,OF2,DG,T,R,PR,K,DC,CS,SI,OD,OD1,I,wrI,rsI,stcI
+ N iDS,iDE,csI,ofI,DTS
+ D PRETZR^IPAC
+ S KD=$G(TZRBTN("fiof")) Q:KD=""
+ S KDO=+$G(TZRBTN("opfio"))
+ s wrI=+$G(TZRBTN("work"))
+ s rsI=+$G(TZRBTN("rsource"))
+ S csI=+$G(TZRBTN("cntstc"))
+ S ofI=$G(TZRBTN("ofor"))
+ F I="",1,2 S stcI(+I)=+$G(TZRBTN("stc"_I)) ; для ускорения
+ S:'wrI WRK="" ; нет work вообще
+ S:'rsI RSC=""
+ S NI="" F  S NI=$$NEXT^IPAC(NI) Q:NI=""  D
+ .S D=$O(^BTN(NI,KD,0)) I D'="" Q:D>DE 
+ .S DTS=D
+ .I D="" S D=$O(^BTN(NI,KDO,0)) Q:D>DE  ; огранич.по дате создания
+ .S:D'=""&(D<DTS) DTS=D
+ .I WRK'="",$$GETTZ^IPAC(NI,wrI,DE)'=WRK Q 
+ .I RSC'="",$$GETTZ^IPAC(NI,rsI,DE)'=RSC Q
+ .S PR=$$GETTZ^IPAC(NI,ofI,DS)
+ .S OD=$O(^BTN(NI,ofI,DS-1)),OD1=$O(^BTN(NI,ofI,DE+1),-1)+1
+ .S CS=+$$GETTZ^IPAC(NI,csI,DE) S:'CS CS=1
+ .F I="",1,2 Q:I=CS  D  Q:FSC 
+ ..S SI=stcI(+I)
+ ..I PRG'="",'$$FLinFL^TXTU(PRG,$$GETTZ^IPAC(NI,$G(TZRBTN("prog"_I)),DE)) Q 
+ ..I OD'="",OD1>DS,OD<(DE+1) S D=OD F  D  S D=$O(^BTN(NI,ofI,D)) Q:D=""!(D>DE) 
+ ...S R=^BTN(NI,ofI,D),DG=+$$GETTZ^IPAC(NI,SI,OD)
+ ...S:R="" R=1 ; if not set
+ ...I PR="" S PR=R,STAT(DG,1)=$G(STAT(DG,1))+1 S:R'=1 STAT(DG,2)=$G(STAT(DG,2))+1 Q 
+ ...S:R'=PR K=$S(R=1:1,1:2),STAT(DG,K)=$G(STAT(DG,K))+1
+ ...S PR=R
+ ..S PR=$$GETTZ^IPAC(NI,SI,DS),D=$O(^BTN(NI,SI,DS-1)),D1=$O(^BTN(NI,SI,DE+1),-1)+1
+ ..I D'="",D1>DS,D<(DE+1) F  D  S D=$O(^BTN(NI,SI,D)) Q:D=""!(D>DE) 
+ ...S R=+^(D)
+ ...S:R'=PR&(PR'="") STAT(PR,5)=$G(STAT(PR,5))+1,STAT(R,6)=$G(STAT(R,6))+1
+ ...S PR=R
+ ..I OFOR S iDS=$G(TZRBTN("dog_from"_I)),iDE=$G(TZRBTN("dog_to"_I))
+ ..D FLOWSp(DS,3)
+ ..D FLOWSp(DE,4) 
+ Q
+FLOWSp(DT,IDX) 
+ Q:DTS>DT 
+ S DG=+$$GETTZ^IPAC(NI,SI,DT)
+ I I'="",'DG Q
+ I 'OFOR S STAT(DG,IDX)=$G(STAT(DG,IDX))+1 Q 
+ S R=$$GETTZ^IPAC(NI,ofI,DT) I R'="",R'=1 Q
+ Q:$$GETTZ^IPAC(NI,iDS,DT)>DT 
+ S R=$$GETTZ^IPAC(NI,iDE,DT)
+ I R'="",R<DT Q 
+ S STAT(DG,IDX)=$G(STAT(DG,IDX))+1
+ Q

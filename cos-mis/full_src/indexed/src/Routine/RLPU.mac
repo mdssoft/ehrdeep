@@ -1,0 +1,577 @@
+RLPU ; Базовые отчеты по ЛПУ [ 10/08/2020  3:18 PM ]
+DAYPRINT(DS,DE,DET) 
+ N LPU,WWW S WWW=0
+ G DAYREPl
+DAYREPR(DS,DE,LPU,DET) ; Дневной отчет
+ N WWW S WWW=1
+ G DAYREPl
+DAYREP(DS,DE,DET) ; Дневной отчет
+ N LPU,WWW S WWW=1
+DAYREPl S DS=$$DIH^DTUTL(DS),DE=$$DI^DTUTL($G(DE)) S:DE="" DE=DS
+ S LPU=$G(LPU),DET=+$G(DET)
+ S:LPU="" LPU=+$$^I("ilpu")
+ K ^BUF($J,"prn")
+ 
+ N SUMM,SUM,PSUMM,FLG,DT,TM,NI,L,OPE,TP,LP,SS0,SS1,SU,SSU,ULST,BLST,R,K
+ N SUMb,DKS,A,VLST,FK,fFK,F,T,VTP,ID,IDK,KV,BKSUM,BKSUMP,fVK,idx
+ S (SUMM,FLG,SS0,SS1,SSU,SUMb,DKS,PSUMM,BKSUM,BKSUMP)=0
+ S R=$$LCL^NUSER("bill","ksvperiod")
+ I R,($H-DS)>R D MSG^RWU(CR_"Нет прав для просмотра") Q 
+ S:$G(^cfg("dayrep","smonth")) DKS=$$DI^DTUTL("01."_$P($$DT^DTUTL(DS),".",2,3))-1
+ S:$G(^cfg("dayrep","sday")) DKS=DS-1
+ S fFK=+$G(^cfg("dayrep","no-bcart"))
+ S fVK=+$G(^cfg("dayrep","viewkn"))
+ S VTP=$G(^cfg("ksv-pko"))
+ S IDK=$S($G(^cfg("dayrep","all-kkm")):"",$$LCL^NUSER("bill","all-kkm"):"",1:$$KKM^IUSER())
+ ; Виртуальные оплаты
+ S R=$$IDX^ISPRAV("outkss")
+ I R S L="" F  S L=$O(^MN(R,L)) Q:L=""  S:$P(^(L),"|",3) VLST(L)=""
+ ; банк. карты
+ S R=$$IDX^ISPRAV("paytype"),FK="|2|",L=""
+ F  S L=$O(^MN(R,L)) Q:L=""  S:$P(^(L),"|",6) FK=FK_L_"|"
+ 
+ S DT=DKS F  S DT=$O(^BILL("00",LPU,DT)) Q:DT=""!(DT>DS)!(DT=DS)  D
+ .S TM="" F  S TM=$O(^BILL("00",LPU,DT,TM)) Q:TM=""  D
+ ..D:$D(^(TM,"ok"))
+ ...S R=$P($G(^("ok")),"|",1)
+ ...S ID=$P(R,"@",1) I IDK'="",ID'="",ID'=IDK Q
+ ...S:'$D(VLST(+$P(R,"@",3))) SUMM=SUMM-$P(R,"@",2)
+ ..D:$D(^BILL("00",LPU,DT,TM,"ik"))
+ ...S L=$P($G(^("ik")),"|",1)
+ ...S ID=$P(L,"@",1) I IDK'="",ID'="",ID'=IDK Q
+ ...S SUMM=SUMM+$P(L,"@",2)
+ 
+ ; TODO - оптимизация ^BILLC
+ S DT=DKS F  S DT=$O(^BILLC(LPU,DT)) Q:DT=""!(DT>DS)!(DT=DS)  D
+ .S TP="" F  S TP=$O(^BILLC(LPU,DT,TP)) Q:TP=""  D:+TP=TP 
+ ..S TM="" F  S TM=$O(^BILLC(LPU,DT,TP,TM)) Q:TM=""  D
+ ...S R=^(TM),SUM=$P(R,"|",1),K=$P(R,"|",2),ID=$P(R,"|",3)
+ ...I IDK'="",ID'="",ID'=IDK Q 
+ ...I TP="ok" D:'$D(VLST(+$P(R,"|",2)))  Q 
+ ....I fFK,K'="",FK[("|"_K_"|") S BKSUM=BKSUM-SUM Q
+ ....S SUMM=SUMM-SUM
+ ...I TP="ik"!(TP="sl") D:$P(R,"|",2)<4  Q 
+ ....I fFK,K'="",FK[("|"_K_"|") S BKSUM=BKSUM+SUM Q
+ ....S SUMM=SUMM+SUM
+ 
+ S DT=DKS F  S DT=$O(^BILLI(DT)) Q:DT=""!(DT>DE)  D
+ .S TM="" F  S TM=$O(^BILLI(DT,TM)) Q:TM=""  D
+ ..S NI="" F  S NI=$O(^BILLI(DT,TM,NI)) Q:NI=""  D
+ ...S L=$G(^(NI)) Q:L=""
+ ...S LP=+$P($P(L,"|",4),"@",2)
+ ...I LPU>0,LP>0,LP'=LPU Q 
+ ...S L=$G(^BILL(NI,DT,TM)) Q:L=""
+ ...S SUM=$P(L,"|",2),OPE=$P(L,"|",1),TP=+$P(L,"|",3)
+ ...Q:SUM=0   I VTP,TP>VTP Q  
+ ...I DT<DS,OPE'="+",OPE'="-" Q 
+ ...S ID=$P(L,"|",4) I IDK'="",ID'="",ID'=IDK Q  ; по текущей кассе
+ ...S LP=$S(DET:DT_","_TM,1:DT),F=0,KV=$P(L,"|",8)
+ ...I fFK,TP'="",FK[("|"_TP_"|") S F=1 I OPE'="" S BKSUM=BKSUM+SUM S:DT>(DS-1) BKSUMP=BKSUMP+SUM
+ ...I TP>4!F,DT>(DS-1) D  Q  ; другие типы оплаты
+ ....S:SUM>0 BLST(TP,NI,LP)=$G(BLST(TP,NI,LP))+SUM
+ ....S:SUM<0 BLST(TP,NI,LP,8)=$G(BLST(TP,NI,LP,8))-SUM
+ ....S:DET BLST(TP,NI,LP,"k")=KV
+ ....S A=$P(L,"|",7) Q:A=""
+ ....S BLST(TP,NI,LP,9)=$S(DET:A,$D(BLST(TP,NI,LP,9)):BLST(TP,NI,LP,9)_", "_A,1:A) 
+ ...I DT>(DS-1),'FLG D W($$DT^DTUTL(DS)_"|Остаток на начало|||||"_$$FN1(SUMM),"N") D:fFK&BKSUM W("|Остаток по б.картам|||"_$$FN1(BKSUMP)_"||"_$$FN1(BKSUM),"N") D W("|Сводка по пациентам","LG") S FLG=1,SUMb=SUMM
+ ...I OPE="" S:SUM'=0 ULST(NI,LP,4)=(-SUM)_"|"_$P($P(L,"|",6),":",2) Q 
+ ...I OPE'="+",OPE'="-" Q 
+ ...S SUM=+SUM S:'F&(TP<5) SUMM=SUMM+SUM ; w.o. card
+ ...Q:'FLG 
+ ...I OPE="-"!(OPE="+") S ULST(NI,LP,4)="|"_$$FIO^NUSER($P(L,"|",5),1) 
+ ...S:SUM>0 SS0=SS0+SUM S:SUM<0 SS1=SS1-SUM
+ ...S:SUM>0 ULST(NI,LP,0)=$G(ULST(NI,LP,0))+SUM
+ ...S:SUM<0 ULST(NI,LP,1)=$G(ULST(NI,LP,1))-SUM
+ ...S:TP'=1 ULST(NI,LP,5,TP)="" ; типы платежей
+ ...S L=$P(L,"|",7)
+ ...S:DET ULST(NI,LP,"k")=KV
+ ...S:$L(L) ULST(NI,LP,9)=$S(DET:L,$D(ULST(NI,LP,9)):ULST(NI,LP,9)_", "_L,1:L)
+ F L=1:1:3 S SSU(L)=0
+ S NI="" F  S NI=$O(ULST(NI)) Q:NI=""  S DT="" F  S DT=$O(ULST(NI,DT)) Q:DT=""  D
+ .S SU=$G(ULST(NI,DT))
+ .S SS0=$G(ULST(NI,DT,0)),SS1=$G(ULST(NI,DT,1))
+ .S SSU(1)=SSU(1)+SS0,PSUMM=PSUMM+SS0
+ .S SSU(2)=SSU(2)+SS1+SU
+ .S SSU(3)=SSU(3)+SS0-SS1-SU
+ .S L=$$GET^IPAC(NI,"status",+DT),R=""
+ .I DET,$D(ULST(NI,DT,4)) S R=ULST(NI,DT,4),K=$P(R,"|",1),R=$S(K="":"",1:K_"р., ")_$$FIOSH^IKADRY($P(R,"|",2),DT)
+ .S:'DET TP=+$$NOW^IBILL(NI,+DT)
+ .S:DET TP=+$P($G(^BILLI(+DT,$P(DT,",",2),NI)),"|",1)
+ .S:TP'=0 R=$S(R="":"",1:R_" ")_$S(TP>0:"Аванс "_TP,1:"Долг "_(-TP))_" р."
+ .S TP="" F  S TP=$O(ULST(NI,DT,5,TP)) Q:TP=""  S R=$S(R="":"",1:R_", ")_$$NAME^ISPRAV("paytype",TP)
+ .S:L="" L=$$getSKTP(NI,+DT)
+ .S:DET KV=$G(ULST(NI,DT,"k"))
+ .S L=$$FIOSH^IPAC(NI,DE)_" ("_NI_")"_$S('DET:"",KV:" кв.№"_KV,1:"")_"|"_$TR(L,"|",",")
+ .S LP=$S(DET:$$DTM^DTUTL(DT),1:$$DT^DTUTL(DT))
+ .I $D(ULST(NI,DT,9)) S R=$S(R="":"",1:R_" ")_$G(ULST(NI,DT,9))
+ .S OPE=$$GET^IDSCN(NI,+DT) S:OPE=0 OPE=""
+ .D W(LP_"|"_L_"|"_OPE_"|"_$$FN1(SS0)_"|"_$$FN1(SS1+SU)_"|"_$$FN1(SS0-SS1-SU)_"|"_R,"B")
+ D TOTAL
+ S TP="" F  S TP=$O(BLST(TP)) Q:TP=""  D
+ .D W("|"_$$NAME^ISPRAV("paytype",TP),"G")
+ .F L=1:1:3 S SSU(L)=0
+ .S NI="" F  S NI=$O(BLST(TP,NI)) Q:NI=""  S DT="" F  S DT=$O(BLST(TP,NI,DT)) Q:DT=""  D
+ ..S SU=$G(BLST(TP,NI,DT)),SSU(1)=SSU(1)+SU
+ ..S SS1=$G(BLST(TP,NI,DT,8))
+ ..S:DET KV=$G(BLST(TP,NI,DT,"k"))
+ ..S L=$$GET^IPAC(NI,"status",+DT),R=$G(BLST(TP,NI,DT,9))
+ ..S L=$$FIOSH^IPAC(NI,DE)_" ("_NI_")"_$S('DET:"",KV:" кв.№"_KV,1:"")_"|"_$TR(L,"|",",")
+ ..S LP=$S(DET:$$DTM^DTUTL(DT),1:$$DT^DTUTL(DT))
+ ..S OPE=$$GET^IDSCN(NI,+DT) S:OPE=0 OPE=""
+ ..D W(LP_"|"_L_"|"_OPE_"|"_$$FN1(SU)_"|"_$$FN1(SS1)_"||"_R,"B")
+ .D TOTALI
+ S:DT="" DT=DS S:DT>DS DT=DS
+ I 'FLG D W($$DT^DTUTL(DT)_"|Остаток на начало|||||"_$$FN1(SUMM),"N") D:fFK&BKSUM W("|Остаток по б.картам|||"_$$FN1(BKSUMP)_"||"_$$FN1(BKSUM),"N") D W("|Сводка по пациентам","LG") S SUMb=SUMM
+ F L=1:1:3 S SSU(L)=0
+ S (SS0,SS1,FLG)=0
+ K BLST
+ S DT=DS-1 F  S DT=$O(^BILL("00",LPU,DT)) Q:DT=""!(DT>DE)  D
+ .S TM="" F  S TM=$O(^BILL("00",LPU,DT,TM)) Q:TM=""  D
+ ..I $D(^(TM,"ok")) S L=$P($G(^("ok")),"|",1),BLST(+$P(L,"@",3),DT,TM)=L  Q
+ ..Q:'$D(^BILL("00",LPU,DT,TM,"ik")) 
+ ..S L=$P($G(^("ik")),"|",1),R=$P(L,"@",2)
+ ..S SUMM=SUMM+R,SS0=SS0+R,SSU(1)=SSU(1)+R
+ ..D:'FLG W("|Движение денежных средств","LG")
+ ..D W($$DT^DTUTL(DT)_" "_$$TM^DTUTL(TM)_"|Прием наличных|||"_$$FN1(R)_"|","N")
+ ..S FLG=1
+ 
+ S TP="" F  S TP=$O(BLST(TP)) Q:TP=""  I '$D(VLST(TP)) S DT="" F  S DT=$O(BLST(TP,DT)) Q:DT=""  D
+ .S TM="" F  S TM=$O(BLST(TP,DT,TM)) Q:TM=""  D
+ ..S L=BLST(TP,DT,TM),R=$P(L,"@",2)
+ ..S SUMM=SUMM-R,SS1=SS1+R,SSU(2)=SSU(2)+R
+ ..S OPE=$$NAME^ISPRAV("outkss",TP)
+ ..D:'FLG W("|Движение денежных средств","LG")
+ ..D W($$DT^DTUTL(DT)_" "_$$TM^DTUTL(TM)_"|"_OPE_"||||"_R_"||"_$P(L,"@",4),"N")
+ ..S FLG=1
+ D TOTAL
+ 
+ ; продажи
+ F I=1,2,3 S SSU(I)=0
+ S DT=DS-1,FLG=0 F  S DT=$O(^BILLC(LPU,DT)) Q:DT=""!(DT>DE)  D
+ .S TM="" F  S TM=$O(^BILLC(LPU,DT,"sl",TM)) Q:TM=""  D
+ ..S R=^(TM),L=$P(R,"|",5),ID=$P(R,"|",3)
+ ..I IDK'="",ID'="",ID'=IDK Q
+ ..Q:$P(L,":",1)'="WRH" 
+ ..S L=$P(L,":",2),TP=$P(R,"|",2),OPE=$P(R,"|",7),R=$P(R,"|",1)
+ ..I fFK,TP'="",FK[("|"_TP_"|") S BKSUM=BKSUM+R,BKSUMP=BKSUMP+R
+ ..E  S PSUMM=PSUMM+R,SUMM=SUMM+R
+ ..S SSU(1)=SSU(1)+R
+ ..D:'FLG W("|Продажа товаров","LG")
+ ..S K=$$DT^DTUTL(DT)_" "_$$TM^DTUTL(TM)_"||||"_R
+ ..F I=1:1:$L(L,"/") S T=$$NAMESALL^IWRHS($P(L,"/",I)),$P(K,"|",2)=$S($L(T)>74:$E(T,1,74)_"..",1:T) S:OPE'="" $P(K,"|",8)=OPE,OPE="" D W(K,"N") S K=""
+ ..S FLG=1
+ D TOTAL
+ 
+ S FLG=0 F L=1:1:3 S SSU(L)=0
+ S TP="" F  S TP=$O(BLST(TP)) Q:TP=""  I $D(VLST(TP)) S DT="" F  S DT=$O(BLST(TP,DT)) Q:DT=""  D
+ .S TM="" F  S TM=$O(BLST(TP,DT,TM)) Q:TM=""  D
+ ..S L=BLST(TP,DT,TM),R=$P(L,"@",2)
+ ..S SS1=SS1+R,SSU(2)=SSU(2)+R
+ ..S OPE=$$NAME^ISPRAV("outkss",TP)
+ ..D:'FLG W("|Оплата служебных счетов","LG")
+ ..D W($$DT^DTUTL(DT)_" "_$$TM^DTUTL(TM)_"|"_OPE_"||||"_R_"||"_$P(L,"@",4),"N")
+ ..S FLG=1
+ D TOTAL
+ 
+ D:$G(^cfg("dayrep","zarp")) ZARV ; зарплата
+ D W($$DT^DTUTL(DE)_"|Дневная выручка|||"_$$FN1(PSUMM)_"||"_$$FN1(SUMM-SUMb),"NG")
+ D:fFK&BKSUM W("|Остаток по б.картам|||"_$$FN1(BKSUMP)_"||"_$$FN1(BKSUM),"N")
+ D W("|Остаток на конец|||||"_$$FN1(SUMM),"N")
+ 
+ D:$G(^cfg("dayrep","pbydg")) DGLIST
+ 
+ I $D(^$R("NSECU")),$$IsDAYLPU^NSECU(DS,$G(^cfg("sec","alert-tp"))) D
+ .D W("|Учет рабочего времени","LG")
+ .D DAYLPU^NSECU(DS,$G(^cfg("sec","alert-tp")),"W^RLPU(A,""N"")")
+ D:$G(^cfg("dayrep","nosbdoc"))
+ .N STATE
+ .D NSBSys^RMHS(DS,DE)
+ .Q:'$D(STATE) 
+ .D W("|Неподписанные документы","LG")
+ .S R="" F  S R=$O(STATE(R)) Q:R=""  D W("|"_$$FIOSH^IKADRY(R)_"|||||"_STATE(R),"N")
+ D:$G(^cfg("dayrep","nomkdoc"))
+ .N STATE
+ .D UNDsys^RLPUSYS(DS,DE,$S(+$$FR^I():"",1:$$^I("ilpu")))
+ .Q:'$D(STATE) 
+ .D W("|Не созданно документов","LG")
+ .S R="" F  S R=$O(STATE(R)) Q:R=""  D W("|"_$$FIOSH^IKADRY(R)_"|||||"_STATE(R),"N")
+ D:$G(^cfg("dayrep","dvidstat")) POSSTAT
+ 
+ D:WWW WOUT
+ D:'WWW WPRN
+ D C^RWU
+ K ^BUF($J,"prn")
+ Q
+TOTAL 
+ I SSU(1)=0,SSU(2)=0,SSU(3)=0 Q 
+ D W("|Итого|||"_$$FN2(SSU(1))_"|"_$$FN2(SSU(2))_"|"_$$FN2(SSU(3)),"Nb")
+ Q
+TOTALI ; Only first column
+ I SSU(1)=0 Q 
+ D W("|Итого|||"_$$FN1(SSU(1))_"||","T")
+ Q
+getSKTP(NI,DT) ; Тип страховой компании сокращенно
+ S T=$$GET^IINSC($$GET^IPAC(NI,"stc",DT),"dvid",DT)
+ Q $S(T=0:"СК",T=1:"ФСК",1:"")
+WOUT 
+ D OWF^RWU(".txt")
+ D WC^RWU("Дата, время|Клиент/назначение|Статус|Скидка|Приход|Расход|Разница|Примечание")
+ N I S I="" F  S I=$O(^BUF($J,"prn",I)) Q:I=""  D WC^RWU(CR_^(I))
+ Q
+WPRN 
+ D OWF^RWU(".xml")
+ D OPEN^ISTREP("Ежедневный отчет "_$TR($S(DS=DE:$$DT2^DTUTL(DS),1:$$DT2^DTUTL(DS)_"-"_$$DT2^DTUTL(DE)),".",""))
+ D FONT^ISTREP(1,"Times New Roman",10)
+ D FONT^ISTREP(2,"Times New Roman",12)
+ D FONT^ISTREP(3,"Times New Roman",14,"b")
+ D FONT^ISTREP(4,"Times New Roman",10,"b,i")
+ D FONT^ISTREP(5,"Times New Roman",10,"b")
+ D CSTART^ISTREP("p")
+ D LD^ISTREP($$^I("iname"),4,"r")
+ D LD^ISTREP($$^I("iaddr"),4,"r")
+ D H^ISTREP(5)
+ D LD^ISTREP("Ежедневный отчет",3,"c")
+ D LD^ISTREP("кассира-администратора",2,"c")
+ D H^ISTREP(5)
+ N I,R,F,W,F,A
+ S I="",W="29|46|17|13|15|15|20|40",F="c||c|c|c|c|c"
+ D TAB^ISTREP("Дата, время|Клиент/назначение|Статус|Скидка|Приход|Расход|Разница|Примечание",W,"f")
+ D H^ISTREP(3)
+ F  S I=$O(^BUF($J,"prn",I)) Q:I=""  D
+ .S R=^(I),A=$G(^(I,"A"))
+ .I A="T" D TLN^ISTREP(R,W,"","","t",F) Q
+ .I A="B" D TLN^ISTREP(R,W,"","","b",F) Q
+ .I A="G" D TLN^ISTREP(R,W,"4","#EEEEEE","",F) Q
+ .I A="N" D TLN^ISTREP(R,W,"","","",F) Q
+ .I A="Nb" D TLN^ISTREP(R,W,"5","","",F) Q
+ .I A="NG" D TLN^ISTREP(R,W,"","#EEEEEE","",F) Q
+ .I A="LN" D TLN^ISTREP(R,"30|165","","","","c|") Q  ; заголовок
+ .I A="LG" D TLN^ISTREP(R,"30|165","4","#EEEEEE","","c|") Q  ; сер.загол
+ .D TAB^ISTREP(R,W,"f","","",F)
+ D H^ISTREP(5)
+ D SUBSCR^ISTREP("Администратор",$$FIOSH^IKADRY($$KDR^IUSER()))
+ D CEND^ISTREP,CLOSE^ISTREP
+ Q
+W(S,ATT) 
+ N X S X=$O(^BUF($J,"prn",""),-1)+1
+ S ^(X)=S S:$G(ATT)'="" ^(X,"A")=ATT
+ Q
+ZARV 
+ N VR,OT,Dx,RS,S,F
+ S F=0
+ S VR="" F  S VR=$O(^ZARV(LPU,VR)) Q:VR=""  S Dx="" F  S Dx=$O(^ZARV(LPU,VR,Dx)) Q:Dx=""  D
+ .S DT=DS_",0",L=$$FIODT^YIKADRY(VR,DE)
+ .S TP=-$G(^ZARV(LPU,VR,Dx,0)),(S,RS)=0
+ .F  S DT=$O(^ZARV(LPU,VR,Dx,DT)) Q:DT=""!($P(DT,",",1)>DE)  D
+ ..S R=^(DT),RS=RS+$P(R,"|",1) Q:$P(R,"|",3)>1  S S=S+$P(R,"|",1)
+ .Q:'S 
+ .D:'F W("|Заработная плата по сотрудникам","LG")
+ .D W($$DTM^DTUTL(DT)_"|"_L_"||||"_$$FN1(S)_"|"_$$FN1(TP-RS),"N")
+ .S F=1
+ Q
+DGLIST ; Лица по договору
+ N s,FF
+ F L=1:1:3 S SSU(L)=0
+ S FF='+$$FR^I()
+ K ^BUF($J,"pdg")
+ D MKALLPRC^IUSLSC(DS,DE,1,"DGLISTp^RLPU","",FF)
+ Q:'$D(^BUF($J,"pdg")) 
+ D W("|Пациенты по договорам","LG")
+ S NI="" F  S NI=$O(^BUF($J,"pdg",NI)) Q:NI=""  D
+ .S SUM=^(NI),SSU(1)=SSU(1)+SUM
+ .S L=$$GET^IPAC(NI,"status",DE)
+ .S L=$$FIOSH^IPAC(NI,DE)_" ("_NI_")|"_$TR(L,"|",",")
+ .D W("|"_L_"||"_$$FN1(SUM),"B")
+ K ^BUF($J,"pdg")
+ D TOTAL
+ Q
+DGLISTp ;
+ Q:KASS  
+ S s=$S($D(UL(U,1)):UL(U,1),1:$$PRICEH^IPRICE(U,PRC,DT)*KSKD*UL(U))
+ Q:'s 
+ S ^(NI)=$G(^BUF($J,"pdg",NI))+s
+ Q
+POSSTAT 
+ N DTPL,DTP,TABLE,s,TABLE1,D,FF,PX
+ K ^BUF($J,"p")
+ S FF='+$$FR^I()
+ D:$G(^cfg("dayrep","dvidstat"))=2
+ .S D=$$DI^DTUTL("01."_$P($$DT^DTUTL(DS),".",2,3)),PX=0
+ .D MKALLPRC^IUSLSC(D,DE,1,"POSSTATp^RLPU","",FF)
+ .M TABLE1=TABLE K TABLE
+ S PX=1
+ D MKALLPRC^IUSLSC(DS,DE,1,"POSSTATp^RLPU","",FF)
+ K ^BUF($J,"p")
+ Q:'$D(TABLE)
+ D W("|Сводка по видам договоров","LG")
+ S DTP="" F  S DTP=$O(TABLE(DTP)) Q:DTP=""  D
+ .D W("|"_$$NAME^ISPRAV("dvid",DTP)_"||||Лиц|"_$$FN1($G(TABLE(DTP,1))),"N")
+ .D W("|||||Сумма|"_$$FN1($G(TABLE(DTP,2)))_"|"_$$FN1($G(TABLE1(DTP,2))),"N")
+ Q
+POSSTATp 
+ Q:U="" 
+ I '$D(DTPL(CSTC,DT)) S DTP=+$$GET^IINSC(CSTC,"dvid",DT),DTPL(CSTC,DT)=DTP
+ E  S DTP=DTPL(CSTC,DT)
+ S:KASS DTP=3 ; касса
+ Q:DTP=2  Q:DTP>3
+ I PX,'$D(^BUF($J,"p",NI,DTP)) S ^(DTP)="",TABLE(DTP,1)=$G(TABLE(DTP,1))+1
+ S s=$S($D(UL(U,1)):UL(U,1),1:$$PRICEH^IPRICE(U,PRC,DT)*KSKD*UL(U))
+ S TABLE(DTP,2)=$G(TABLE(DTP,2))+s
+ Q
+DAYREPD(DS,DE,LPU) 
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL($G(DE)),LPU=$G(LPU)
+ S:LPU="" LPU=+$$^I("ilpu")
+ D PACU
+ N SUMM,SUM,FLG,DT,TM,NI,L,OPE,TP,LP,SS0,SS1,SU,SSU,ULST,R,DD,CU
+ S (SUMM,FLG,SS0,SS1,SSU)=0
+ S DT="" F  S DT=$O(^BILL("00",LPU,DT)) Q:DT=""!(DT>DS)!(DT=DS)  D
+ .S TM="" F  S TM=$O(^BILL("00",LPU,DT,TM)) Q:TM=""  D
+ ..I $D(^(TM,"ok")) S SUMM=SUMM-$P($P($G(^("ok")),"|",1),"@",2)
+ ..I $D(^BILL("00",LPU,DT,TM,"ik")) S L=$G(^("ik")),SUMM=SUMM+$P($P($G(^("ik")),"|",1),"@",2)
+ D OWF^RWU(".txt")
+ D WC^RWU("Дата, время|Клиент/назначение|Статус|Скидка|Приход|Расход|Разница|Примечание")
+ S DT="" F  S DT=$O(^BILLI(DT)) Q:DT=""!(DT>DE)  D
+ .S TM="" F  S TM=$O(^BILLI(DT,TM)) Q:TM=""  D
+ ..S NI="" F  S NI=$O(^BILLI(DT,TM,NI)) Q:NI=""  D
+ ...S L=$G(^(NI)) Q:L=""
+ ...S LP=+$P($P(L,"|",4),"@",2) I LPU>0 I LP>0 Q:LP'=LPU
+ ...S L=$G(^BILL(NI,DT,TM)) Q:L=""
+ ...S SUM=$P(L,"|",2),OPE=$P(L,"|",1),TP=+$P(L,"|",3)
+ ...Q:TP>4  Q:OPE'="+"&(OPE'="-")  Q:SUM=0  ;I CCRD=0 Q:TP>1
+ ...I DT>(DS-1) I 'FLG D WC^RWU(CR_$$DT^DTUTL(DS)_"|Остаток на начало|||||"_$$FN1(SUMM)_CR_"|Сводка по пациентам") S FLG=1
+ ...S SUM=+SUM,SUMM=SUMM+SUM Q:'FLG 
+ ...S:SUM>0 SS0=SS0+SUM S:SUM<0 SS1=SS1-SUM
+ ...S:SUM>0 ULST(NI,DT_"|"_TM,0)=$G(ULST(NI,DT,0))+SUM
+ ...S:SUM<0 ULST(NI,DT_"|"_TM,1)=$G(ULST(NI,DT,1))+(-1*SUM)
+ S SSU=0
+ S NI="" F  S NI=$O(^BUF($J,"ni",NI)) Q:NI=""  S:'$D(ULST(NI)) ULST(NI)=""
+ S NI="" F  S NI=$O(ULST(NI)) Q:NI=""  D
+ .S L=$$GETE^IPAC(NI,"status",DE),R=""
+ .S L=NI_" "_$$FIO^IPAC(NI,DE)_"|"
+ .S TP=+$$NOW^IBILL(NI,DE) S:TP'=0 R=$S(TP>0:"Аванс "_TP,1:"Долг "_(-TP))_" р."
+ .D WC^RWU(CR_"|"_L_"|||||"_R)
+ .S DT="" F  S DT=$O(ULST(NI,DT)) Q:DT=""  D
+ ..S SU=$G(ULST(NI,DT))
+ ..S SS0=$G(ULST(NI,DT,0)),SS1=$G(ULST(NI,DT,1))
+ ..S SSU=SSU+SS0-SS1-SU
+ ..S DD=$P(DT,"|",1),TM=$P(DT,"|",2),R=""
+ ..S L=NI_" "_$$FIO^IPAC(NI,DT)_"|"
+ ..D WC^RWU(CR_$$DT2^DTUTL(DD)_","_$$TM^DTUTL(TM)_"|"_L_"||"_$$FN1(SS0)_"|"_$$FN1(SS1+SU)_"|"_$$FN1(SS0-SS1-SU)_"|"_R)
+ .S DT="" F  S DT=$O(^BUF($J,"ni",NI,DT)) Q:DT=""  D
+ ..S CU="" F  S CU=$O(^BUF($J,"ni",NI,DT,CU)) Q:CU=""  D
+ ...S R=$G(^(CU))
+ ...D WC^RWU(CR_$$DT^DTUTL(DT)_"|"_CU_" "_$E($$NAMEH^IPRICE(CU,$P(R,"|",4),DT),1,120)_"|"_$P(R,"|",2)_" шт.|||"_$P(R,"|",1))
+ ;K ^BUF($J,"ni")
+ D:SSU>0 WC^RWU(CR_$$DT^DTUTL(DT)_"|Итого|||||"_$$FN1(SSU))
+ S:DT="" DT=DS
+ I 'FLG D WC^RWU(CR_$$DT^DTUTL(DS)_"|Остаток на начало|||||"_$$FN1(SUMM)_CR_"|Пациенты")
+ D WC^RWU(CR_"|Движение средств")
+ S SS0=0,SS1=0
+ S DT=DS-1 F  S DT=$O(^BILL("00",LPU,DT)) Q:DT=""!(DT>DE)  D
+ .S TM="" F  S TM=$O(^BILL("00",LPU,DT,TM)) Q:TM=""  D
+ ..I $D(^(TM,"ok")) D  Q
+ ...S L=$P($G(^("ok")),"|",1),SUMM=SUMM-$P(L,"@",2)
+ ...S SS1=SS1+$P(L,"@",2)
+ ...S TP=$S(+$P(L,"@",3)>1:"Вн.перемещение",1:"Инкассация")
+ ...D WC^RWU(CR_$$DTM^DTUTL(DT_","_TM)_"|"_TP_"||||"_$P(L,"@",2))
+ ..Q:$D(^BILL("00",LPU,DT,TM,"ik"))=0
+ ..S L=$G(^("ik")),SUMM=SUMM+$P($P(L,"|",1),"@",2)
+ ..S SS0=SS0+$P($P(L,"|",1),"@",2)
+ ..D WC^RWU(CR_$$DTM^DTUTL(DT_","_TM)_"|Прием наличных|||"_$P($P(L,"|",1),"@",2)_"|")
+ D WC^RWU(CR_"|Сотрудники")
+ D WC^RWU(CR_$$DT^DTUTL(DE)_"|Остаток на конец|||||"_$$FN1(SUMM))
+ D C^RWU
+ 
+ Q
+PACU ; Услуги пациентов -> ULST(DT,NIB)
+ D MKALL^IUSLSC(DS,DE,1,1,1,'+$$FR^I())
+ K ^BUF($J,"ni")
+ N OT,VR,ID,NIB,DTT,CN,CNT,CU
+ S OT="" F  S OT=$O(^BUF($J,"sc",OT)) Q:OT=""  S VR="" F  S VR=$O(^BUF($J,"sc",OT,VR)) Q:VR=""  S ID="" F  S ID=$O(^BUF($J,"sc",OT,VR,ID)) Q:ID=""  D
+ .S A=^(ID)
+ .S DTT=$P(A,"|",1),CU=$P(A,"|",2),CN=$P(A,"|",3),CNT=$P(A,"|",4)
+ .S NIB=$P(A,"|",7)
+ .S X=$G(^BUF($J,"ni",NIB,DTT,CU))
+ .S ^(CU)=($P(X,"|",1)+(CN*CNT))_"|"_($P(X,"|",2)+CNT)_"|"_DTT_"|"_$P(A,"|",6)
+ .S ^BUF($J,"ni",NIB)=DTT
+ ;K ^BUF($J,"sc"),^("er")
+ Q 
+ S NIB="" F  S NIB=$O(^BUF($J,"ni",NIB)) Q:NIB=""  D
+ .D WC^RWU(CR_"|"_$$FIO^IPAC(NIB,^(NIB)))
+ .S CU=""
+ .F  S CU=$O(^BUF($J,"ni",NIB,CU)) Q:CU=""  S A=$G(^(CU)) D WC^RWU(CR_CU_"|"_$E($$NAMEH^IPRICE(CU,$P(A,"|",4),$P(A,"|",3)),1,120)_"|"_$P(A,"|",2)_"|"_$P(A,"|",1))
+ K ^BUF($J,"ni")
+ Q
+FN1(X) 
+ Q $TR(+X,".",",")
+FN2(X) 
+ Q:X="" "" Q:'+X ""
+ Q $TR(+X,".",",")
+BSUMM(DS,IDK,LPU) ; Сумма на начало дня
+ ; IDK - ID кассы
+ N SUMM,SUM,FLG,DT,TM,NI,L,OPE,TP,LP,R,K,DKS,A,ID
+ S (SUMM,FLG,DKS)=0,IDK=$G(IDK),LPU=$G(LPU)
+ S:LPU="" LPU=+$$^I("ilpu")
+ S:$G(^cfg("dayrep","smonth")) DKS=$$DI^DTUTL("01."_$P($$DT^DTUTL(DS),".",2,3))-1
+ ; TODO - оптимизировать
+ S DT=DKS F  S DT=$O(^BILL("00",LPU,DT)) Q:DT=""!(DT>DS)!(DT=DS)  D
+ .S TM="" F  S TM=$O(^BILL("00",LPU,DT,TM)) Q:TM=""  D
+ ..S L=$P($G(^(TM,"ok")),"|",1)
+ ..D:L'=""
+ ...S ID=$P(L,"@",1) I IDK'="",ID'="",ID'=IDK Q
+ ...S SUMM=SUMM-$P(L,"@",2)
+ ..S L=$P($G(^BILL("00",LPU,DT,TM,"ik")),"|",1) Q:L=""
+ ..S ID=$P(L,"@",1) I IDK'="",ID'="",ID'=IDK Q
+ ..S SUMM=SUMM+$P(L,"@",2)
+ S DS=DS-1
+ S DT=DKS F  S DT=$O(^BILLI(DT)) Q:DT=""!(DT>DS)  D
+ .S TM="" F  S TM=$O(^BILLI(DT,TM)) Q:TM=""  D
+ ..S NI="" F  S NI=$O(^BILLI(DT,TM,NI)) Q:NI=""  D
+ ...S L=$G(^(NI)) Q:L=""
+ ...S LP=+$P($P(L,"|",4),"@",2) I LPU>0,LP>0,LP'=LPU Q 
+ ...S L=$G(^BILL(NI,DT,TM)) Q:L=""
+ ...S SUM=$P(L,"|",2),OPE=$P(L,"|",1),TP=+$P(L,"|",3)
+ ...Q:SUM=0  Q:TP>4
+ ...S ID=$P(L,"|",4) I IDK'="",ID'="",ID'=IDK Q   
+ ...I OPE'="+",OPE'="-" Q 
+ ...S SUMM=SUMM+SUM 
+ Q SUMM
+PRVA(DS,DE,LPU) ; Число зарегистрированных пациентов
+ N NI,ID,R,STAT,DT,OP,LP,V,STC,SUM,I
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S NI="" F  S NI=$$NEXT^IPAC(NI) Q:NI=""  D
+ .S DT=$$CREATED^IPAC(NI) Q:DT<DS  Q:DT>DE 
+ .Q:'$D(^PNF(NI,DT)) 
+ .S OP=$$GET^IPAC(NI,"opfio",DT) ;Q:OP="" 
+ .S OP=$P(OP,"|",1),LP=+$P(OP,"@",2),V=OP
+ .I LPU'="" Q:LPU'=LP 
+ .S OP=$G(^LOG($P(OP,"@",1),"kadry")) ; $$FIO^NUSER(OP,1)
+ .I OP="" S OP=V Q:V=""  ; неизвестно кто
+ .S STC=$$GET^IPAC(NI,"stc",DT)
+ .S V=$S(STC=5:4,1:"") ; некий договор 
+ .I V="" S DV=$$GET^IINSC(STC,"dvid",DT),V=$S(DV=0:1,DV=1:2,1:3)
+ .S STAT(LP,OP)=$G(STAT(LP,OP))+1
+ .S STAT(LP,OP,V)=$G(STAT(LP,OP,V))+1
+ D OWF^RWU(".txt")
+ D WC^RWU("Филиал|Сотрудник за период "_$$DT2^DTUTL(DS)_"-"_$$DT2^DTUTL(DE)_"|Первичных всего|СК факт|СК аванс|Наличные|""Свои""")
+ S LP="" F  S LP=$O(STAT(LP)) Q:LP=""  D
+ .S V=$$NAME^ICONTR(LP),OP="" K SUM
+ .F  S OP=$O(STAT(LP,OP)) Q:OP=""  D
+ ..S R=V_"|"_OP_" "_$$FIO^YIKADRY(OP)_"|"_$G(STAT(LP,OP))_"|"
+ ..D WC^RWU(CR_R_$TR($G(STAT(LP,OP,1))_"|"_$G(STAT(LP,OP,2))_"|"_$G(STAT(LP,OP,3))_"|"_$G(STAT(LP,OP,4)),".",","))
+ ..S SUM(0)=$G(SUM(0))+$G(STAT(LP,OP)) F I=1:1:4 S SUM(I)=$G(SUM(I))+$G(STAT(LP,OP,I))
+ .D WC^RWU(CR_"|Итого|"_$TR($G(SUM(0))_"|"_$G(SUM(1))_"|"_$G(SUM(2))_"|"_$G(SUM(3))_"|"_$G(SUM(4)),".",","))
+ D C^RWU
+ Q
+BWRH(DS,DE,TPP) ; Продажа товаров
+ N LPU,DT,TM,R,L,V,T,R,NN
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),LPU=+$$^I("ilpu")
+ D OWF^RWU(".txt")
+ D WC^RWU("Дата, время|Наименование товара|Сумма|"_$S(TPP:"",1:"Вид платежа|")_"Кассир")
+ S DT=DS-1 F  S DT=$O(^BILLC(LPU,DT)) Q:DT=""!(DT>DE)  D
+ .S TM="" F  S TM=$O(^BILLC(LPU,DT,"sl",TM)) Q:TM=""  D
+ ..S R=^(TM),L=$P(R,"|",5)
+ ..Q:$P(L,":",1)'="WRH" 
+ ..S NN=$S($P(L,":",3)="N":$P(L,":",4),1:"")
+ ..S L=$P(L,":",2),V=$$FIO^NUSER($P(R,"|",4),1)
+ ..S T=$P(R,"|",2),R=$P(R,"|",1)
+ ..I TPP,TPP'=T Q 
+ ..S V=$$FIOSH^IKADRY(V)
+ ..S R="|"_$$NAMESALL^IWRHS($TR(L,"/","|"))_"|"_$TR(R,".",",")_"|"
+ ..S:'TPP R=R_$$NAME^ISPRAV("paytype",T)_$S(NN="":"",1:" №"_NN)_"|"
+ ..D WC^RWU(CR_$$DT^DTUTL(DT)_", "_$$TM^DTUTL(TM)_R_V)
+ D C^RWU
+ Q
+BWRHK(DS,DE) ; Продажа товаров по кассирам
+ N LPU,DT,TM,R,L,V,W,X,I,NN
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),LPU=+$$^I("ilpu")
+ D OWF^RWU(".txt")
+ K ^BUF($J)
+ D WC^RWU("Кассир за период "_$$DT2^DTUTL(DS)_"-"_$$DT2^DTUTL(DE)_"|Наименование товара|Кол-во|Сумма")
+ S DT=DS-1,FLG=0 F  S DT=$O(^BILLC(LPU,DT)) Q:DT=""!(DT>DE)  D
+ .S TM="" F  S TM=$O(^BILLC(LPU,DT,"sl",TM)) Q:TM=""  D
+ ..S R=^(TM),L=$P(R,"|",5)
+ ..Q:$P(L,":",1)'="WRH" 
+ ..S L=$P(L,":",2),V=$$FIO^NUSER($P(R,"|",4),1),R=$P(R,"|",1)
+ ..F I=1:1:$L(L,"/") S X=$P(L,"/",I),W=$P(X,"@",1),X=$P(X,"@",2) S:X="" X=1 S ^BUF($J,V,W)=$G(^BUF($J,V,W))+X
+ 
+ S V="" F  S V=$O(^BUF($J,V)) Q:V=""  D
+ .D WC^RWU(CR_$$FIOSH^IKADRY(V)) S R=""
+ .S W="" F  S W=$O(^BUF($J,V,W)) Q:W=""  D
+ ..S X=^(W)
+ ..D WC^RWU(R_"|"_$$NAMESALL^IWRHS(W)_"|"_X_"|"_(X*$$CENN^IWRHS(W,DS)))
+ ..S R=CR
+ D C^RWU
+ Q
+VRKS(DT) ; По сотрудникам и платежам
+ N TABLE,F,FVR,U,UL,CC,X,VR,@$$NEWVAR^IUSL,KSKD,SUMM,LP,VLST,L,BLST,TP,TM,FLG,OPE,LPU,SST,I
+ S DT=$$DIH^DTUTL(DT)
+ K ^BUF($J)
+ D ITERATE^IUSLD("VRKSup^RLPU(VR,OT,DT,ID)",DT,DT)
+ D OWF^RWU(".txt")
+ D WC^RWU("На "_$$DT^DTUTL(DT)_"|Пациентов|Сумма|Услуг|Назначил|Услуг")
+ D WC^RWU(CR_"Сводка по сотрудникам")
+ S VR="" F  S VR=$O(TABLE("V",VR)) Q:VR=""  D
+ .S X=$$FIO^IKADRY(VR)
+ .S X=X_"|"_$TR($G(TABLE("V",VR,0)),".",",")
+ .S X=X_"|"_$TR($G(TABLE("V",VR,1)),".",",")
+ .S X=X_"|"_$TR($G(TABLE("V",VR,2)),".",",")
+ .S X=X_"|"_$TR($G(TABLE("V",VR,4)),".",",")
+ .S X=X_"|"_$TR($G(TABLE("V",VR,4)),".",",")
+ .F I=0:1:4 S SST(I)=$G(SST(I))+$G(TABLE("V",VR,I))
+ .D WC^RWU(CR_X)
+ D:$D(SST) WC^RWU(CR_"Итого|"_$TR(SST(0)_"|"_SST(1)_"|"_SST(2)_"|"_SST(3)_"|"_SST(4),".",","))
+ D WC^RWU(CR_CR_"Сводка по платежам")
+ S LP=+$$^I("ilpu"),LPU=LP
+ D TPDAYS^RBILL(DT,DT,"")
+ D WC^RWU(CR_"Наличные||"_$TR($G(SUMM(LP,1)),".",","))
+ D WC^RWU(CR_"Банковская карта||"_$TR($G(SUMM(LP,2)),".",","))
+ D WC^RWU(CR_"Итого по платежам||"_$TR($G(SUMM(LP,1))+$G(SUMM(LP,2)),".",","))
+ ; Виртуальные оплаты
+ S R=$$IDX^ISPRAV("outkss")
+ I R S L="" F  S L=$O(^MN(R,L)) Q:L=""  S:$P(^(L),"|",3) VLST(L)=""
+ 
+ S TM="" F  S TM=$O(^BILL("00",LPU,DT,TM)) Q:TM=""  D
+ .I $D(^(TM,"ok")) S L=$P($G(^("ok")),"|",1),BLST(+$P(L,"@",3),DT,TM)=L
+ 
+ K SST
+ S FLG=0,SST=0
+ S TP="" F  S TP=$O(BLST(TP)) Q:TP=""  I '$D(VLST(TP)) D
+ .S TM="" F  S TM=$O(BLST(TP,DT,TM)) Q:TM=""  D
+ ..S L=BLST(TP,DT,TM),R=$P(L,"@",2)
+ ..S OPE=$$NAME^ISPRAV("outkss",TP)
+ ..D:'FLG WC^RWU(CR_CR_"Движение денежных средств")
+ ..D WC^RWU(CR_OPE_": "_$P(L,"@",4)_"|"_$$DT^DTUTL(DT)_" "_$$TM^DTUTL(TM)_"|"_$TR(R,".",","))
+ ..S FLG=1,SST=SST+R
+ D:SST WC^RWU(CR_"Итого по движению||"_$TR(SST,".",","))
+ 
+ D C^RWU
+ K ^BUF($J)
+ Q
+VRKSup(VR,OT,DT,ID) 
+ D GET^IUSL(VR,DT,OT,ID)
+ Q:STAT="d"!(STAT="w")
+ S KSKD=1 S:$D(SKID) KSKD=SKID/100
+ S FVR=""
+ S F=$$GETPL^IUSL(VR,DT,OT,ID,"f")
+ S:F'="" FVR=$$fromVRI^INAZN(F)
+ I '$D(^BUF($J,"p",VR,NI)) S ^(NI)="",TABLE("V",VR,0)=$G(TABLE("V",VR,0))+1
+ S U="" F  S U=$O(UL(U)) Q:U=""  D
+ .S CC=UL(U)
+ .S X=$S($D(UL(U,1)):UL(U,1),1:$$PRICEH^IPRICE(U,PRC,DT)*KSKD*CC)
+ .S TABLE("V",VR,1)=$G(TABLE("V",VR,1))+X
+ .S TABLE("V",VR,2)=$G(TABLE("V",VR,2))+CC
+ .Q:FVR="" 
+ .S TABLE("V",FVR,3)=$G(TABLE("V",FVR,3))+X
+ .S TABLE("V",FVR,4)=$G(TABLE("V",FVR,4))+CC
+ Q
+REGIPROC ; 
+ N FF
+ S FF=+$$FR^I()
+ S ^IPROC("Отчеты ЛПУ","Текущие","Дневной отчет")="DAYREPR_RLPU,1,"_$S(FF:3,1:2)_",d,Дата начала периода,d,Дата окончания периода"_$S(FF:",t@storage:lpu,Филиал",1:"")
+ S ^IPROC("Отчеты ЛПУ","Текущие","Детальный дневной отчет")="DAYREPD_RLPU,1,"_$S(FF:3,1:2)_",d,Дата начала периода,d,Дата окончания периода"_$S(FF:",t@storage:lpu,Филиал",1:"")
+ S ^IPROC("Расписание приемов","Аналитика","Первичная регистрация по администраторам")="PRVA_RLPU,1,3,d,Дата начала периода,d,Дата окончания периода,t@storage:lpu,Филиал"
+ S ^IPROC("Касса","Продажа товаров")="BWRH_RLPU,1,3,d,Дата начала периода,d,Дата окончания периода,t@net:NMLST_NSPRAV(""paytype"")@1,Вид платежа"
+ S ^IPROC("Касса","Продажа товаров по кассирам")="BWRHK_RLPU,1,2,d,Дата начала периода,d,Дата окончания периода"
+ S ^IPROC("Ежедневная отчетность","По сотрудникам и платежам")="VRKS_RLPU,1,1,d,Дата отчета"
+ Q

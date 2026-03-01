@@ -1,0 +1,415 @@
+NRASP ; Doctor SHedule [ 11/17/2022  1:37 PM ]
+VTAB(vDT,MODE,LW) ; View xml table from LST,IDL and IDC, vDT - view date
+ ; MODE - расширенный режим, для полного расписания
+ ; LW - лимит ФИО пациентов по ширине
+ N A,B,C,I,i,K,J,Z,X,H,TP,CIT,T,X,CDT,Id,Im,STC,PP,IM,COMM,LSE,ET,Kl,TX
+ N Sc,Sn,Sph,Skn,Sz,UD,Nii,Sbl,Tph,MxT,MxC,CJ,Spp,Cas,DE,bST,iST,EDf,V,DT,NI
+ N imgkey,Scml
+ S vDT=$G(vDT,0),Id=$G(^MN("raspimg"))
+ N TIT,TIT0,ROW,ROW0,IT,IT0,IT1,IT2,IT5,IT6,IT7,IT8,IT9,IT13,IT15,IT16,ITZ,IM,IE
+ S ITZ="<item class=""",IM=" img="""
+ S TIT="<titles>",TIT0="</titles>",ROW="<row>",ROW0="</row>",IT="<item>",IT0="</item>",IT1=ITZ_"1""",IT2=ITZ_"2""",IT5=ITZ_"5"">",IT6=ITZ_"6""",IT7=ITZ_"7"" width=""min"">",IT8=ITZ_"8"">",IT13=ITZ_"13"">",IT15=ITZ_"15"">",IT16=ITZ_"16"""
+ S (K,J,C)="" F  S J=$O(IDL(J)) Q:J=""  S:K'="" K=K_"|" S K=K_IDL(J),C=J
+ S T=+$G(^MN("raspzt")),MODE=+$G(MODE),LW=$G(LW)
+ D PRETZR^IPAC
+ D WTAGD^RWU("tabln",K)
+ D W^RWU("<table>")
+ S J="",A=TIT,MxT=$S(C=1:100,1:16),MxC=$S(C=1:128,1:20)
+ S Kl=$G(^cfg("rasp-cab-label")) S:Kl="" Kl="каб."
+ S Sc=$G(^cfg("rasp-show-comm"))!$$LCL^IUSER("rasp","show-comm"),Sc=$S(Sc=0:0,1:1)
+ S Skn=$G(^cfg("rasp-show-knum"))
+ S:Skn="" Skn=$$LCL^IUSER("rasp","show-knum")
+ S Sn=$G(^cfg("rasp-show-nib")),Sn=$S(Sn=0:0,1:1)
+ S Sbl=+$G(^cfg("rasp-show-bill"))
+ S Tph=+$G(^cfg("rasp-cut-phone"))
+ S Spp=+$G(^cfg("rasp-show-perv"))
+ S Cas=+$G(^cfg("rasp-ce-asterisk"))
+ S EDf=$G(^cfg("rasp","todate")) S:'EDf EDf=99999
+ S Sz=$$LCL^NUSER("sprasp","maxud") ; used days
+ S ET=$G(^cfg("ras-end-txt")) S:ET="" ET="конец работы"
+ ; заголовки (3 строки)
+ S CJ=$O(IDL(""),-1),DE=+$H
+ S Scml=$S(CJ<30:32,1:24) ; длина комм. пациента в инф.
+ F J=1:1:CJ S CDT=$P(IDL(J),"~",5),I=$P(IDL(J),"~",3),K=$S(CJ>2:$$VFIOSH^IRASP2(I),1:$$VFIO^IRASP2(I)),A=A_IT_$S(vDT:$$DT2^DTUTL(CDT),1:"")_IT0_IT_K_IT0,IDL(J,1)=CDT,IDL(J,2)=I S:Tph IDL(J,5)=$L(K) S:DE<CDT DE=CDT
+ D WC^RWU(A_TIT0_CR)
+ S A=TIT F J=1:1:CJ S K=$P(IDC(J),"|",2),A=A_IT_$S(K="":K,1:Kl_K)_IT0_IT_$$SPECS($P(IDL(J),"~",4))_$S($P(IDL(J),"~",7)="":"",1:"+")_IT0
+ D WC^RWU(A_TIT0_CR)
+ S (UD,J)="",A=TIT
+ S I=+$G(^cfg("rasp-aotimer")),TP=+$G(^cfg("rasp-dwk")),H=+$H
+ S K=$$LCL^IUSER("rasp","aotimer") S:K'="" I=K
+ ; время с выделением выходных, замороженное расписание, цвет при комм., телефон или комм. к дню
+ F  S J=$O(IDL(J)) Q:J=""  D
+ .S B=IDC(J),K=$P(B,"|",3),Z=$G(IDL(J,1)),C=$P(B,"|",5),X=$P(B,"|",4)
+ .S K=$S(Tph:$E(K,1,+$G(IDL(J,5))),1:K),B=$P(B,"|",7)
+ .S C=$S(C:1,H>Z&I:1,EDf'>Z:1,'Sz:0,Sz>0&(H+Sz-1<Z):1,Sz<0&(H-Sz>Z):1,1:0)
+ .S A=A_$S(TP:$$dwkC(Z),1:IT_"время")_IT0
+ .S A=A_$S(C:IT15,X="f":ITZ_"48"">",$L(B):ITZ_"21"">",1:IT)
+ .S A=A_$S(B="":"",$L(B)'>MxT:B,1:$E(B,1,MxT)_"..")_$S(K="":"",1:$S(B="":"",1:" ")_"т."_K)_IT0
+ D WC^RWU(A_TIT0_CR)
+ K IDC
+ ; добавляем дополнительное время
+ I $G(^cfg("rasp-ovt")) K LSE S I="" F  S I=$O(LST(I),-1) Q:I=""  D
+ .S J="" F  S J=$O(LST(I,J)) Q:J=""  I '$D(LSE(J))  S LSE(J)=I
+ S J="" F  S J=$O(LSE(J)) Q:J=""  D
+ .S I=LSE(J) Q:I=""  S K=LST(I,J) Q:K'["|"  S K=$P(K,"|",1)
+ .S K=$S(K<90000:90000,1:K+60),LST($S(I<199:I+1,1:K/60),J)=K
+ K LSE
+ ; построчный вывод таблицы
+ S I="",i=0 F  S I=$O(LST(I)) Q:I=""  D
+ .S A=ROW,i=i+1
+ .F J=1:1:$O(LST(I,""),-1) D
+ ..S K=$G(LST(I,J))
+ ..I K="" S A=A_$S($D(LSE(J)):IT,1:IT13)_IT0_IT_IT0 Q
+ ..S:'$D(LSE(J)) LSE(J)=""
+ ..S Z=$$TIME^IRASP2($P(K,"|",1))
+ ..S A=A_$$iTw($S(Z["++":23,$P(Z,":",2)="00":7,1:23),Z)
+ ..S K=$P(K,"|",2,99)
+ ..S CIT=$G(LST(I,J,"t"))
+ ..S:$L(CIT) X=$G(^MN(T,$P(CIT,"|",1))),Z=$P(CIT,"|",2),CIT=ITZ_$P(X,"|",1)_""">"_$S(Z'="":Z,1:$P(X,"|",2))
+ ..S:CIT="" CIT=IT
+ ..I K="" S A=A_CIT_IT0 Q
+ ..I K="*" S A=A_IT8_ET_IT0 Q
+ ..S NI=$P($P(K,"#",1),"|",1),TP=""
+ ..; todo - callback style
+ ..S COMM=$P($TR($P(K,"|",2),"|","/"),1,512),(K,TP,II,bST,iST)=""
+ ..S Z=COMM
+ ..S:$D(LST(I,J,"b")) TP="b",bST=LST(I,J,"b") ; отзвон
+ ..S:$D(LST(I,J,"i")) TP=TP_"i",iST=LST(I,J,"i") ; info
+ ..S:$D(LST(I,J,"e")) TP=TP_"e" ; ушел
+ ..S:$D(LST(I,J,"s")) TP=TP_"s"_LST(I,J,"s") ; статусы
+ ..I Sc S Z=$$OWF^TXTU(Z,MxC)
+ ..S:$D(LST(I,J,"c")) Z=Z_" "_$S(Cas:$S(LST(I,J,"c"):"*",1:"")_$S(TP["e":"*",1:""),1:$S(LST(I,J,"c"):"**",1:"*")) 
+ ..S Nii=$$EXIST^IPAC(NI)
+ ..I MODE S K=$G(LST(I,J,"p")),(B,C)=0 S:Sbl&Nii B=$$NOW^IBILL(NI),C=$$SRES^IBILL(NI) S UD=UD_$S(UD="":"",1:CR)_(2*J-1)_":"_(i+2)_"="_$S(Nii:NI,1:"")_"|"_$E(COMM,1,Scml)_"|"_$S(B<0:"долг "_(-B),B>0:"аванс "_B,1:"")_$S(C:" к оплате "_C,1:"")
+ ..I 'Nii S A=A_$S(TP["i":IT16,1:IT6) D:$L(Id) DOIMGLT S A=A_">"_$$TAG^TXTU($$FIOSHF^TXTU(NI)_" "_Z)_IT0 Q
+ ..S A=A_$S('Spp&(TP["i"):IT16,'Spp:IT2,$O(^DSHP(NI,+$P(IDL(J),"~",5)),-1)="":IT1,1:IT2)
+ ..D:$L(Id) DOIMG
+ ..S TX=$S(Sn:NI_"-",1:"")_$$FIOSH^IPAC(NI,H)_$S(Z="":"",1:" "_Z)
+ ..S:LW TX=$$OWF^TXTU(TX,LW)
+ ..S A=A_">"_$$TAG^TXTU(TX)_IT0
+ .F J=J+1:1:$O(IDL(""),-1) S A=A_$S($D(LSE(J)):IT,1:IT13)_IT0_IT_IT0
+ .D WC^RWU(CR_A_ROW0)
+ D W^RWU("</table>")
+ I MODE D:$L(UD) WTAGC^RWU("tabsys",UD) D:UD="" WTAGD^RWU("tabsys","")
+ Q
+dwkC(X) ; DayOfWeek class
+ S X=$$DWEEK^DTUTL(X)
+ Q ITZ_$S(X<6:45,X=6:46,1:47)_""">"_$$DWKNML^DTUTL(X)
+iT(N,X) 
+ Q "<item class="""_N_""">"_X_"</item>"
+iTw(N,X) 
+ Q "<item class="""_N_""" width=""min"">"_X_"</item>"
+DOIMG ; change image index
+ K imgkey
+ S CDT=+$G(IDL(J,1))
+ S STC=$$GET^IPAC(NI,"stc",CDT),PP=$S($D(^PNF(NI)):1,1:0)
+ S K="" F  S K=$O(^MN(Id,K)) Q:K=""  S X=^(K),Im=$P(X,"|",1),X=$P(X,"|",2,99) I X'="" I @X S:Im'="" A=A_IM_Im_"""" Q 
+ Q
+DOIMGLT ; lite version
+ K imgkey
+ S CDT=+$G(IDL(J,1)),STC="",PP=0
+ S K="" F  S K=$O(^MN(Id,K)) Q:K=""  S X=^(K),Im=$P(X,"|",1),X=$P(X,"|",2,99) I X'="" I @X S:Im'="" A=A_IM_Im_"""" Q 
+ Q
+getni(FL) ; Helper for DOIMG - кеширование полей пациента
+ Q:FL="" 
+ S:'$D(imgkey(FL)) imgkey(FL)=$$GET^IPAC(NI,FL,CDT)
+ Q imgkey(FL)
+SPECS(SPP)      ; Decode multiple specs
+ N A,I,X S A=""
+ F I=1:1:99 S X=$P(SPP,"|",I) Q:X=""  S:A'="" A=A_", " S A=A_$$SPEC^ISPRAV(X)
+ Q A
+UREG 
+ D UREG^YISYNC("DUP^IRASP2")
+ D UREG^YISYNC("uPAC^NSPRASP") ; FAKA
+ Q
+RCALL ; Результат отзвона
+ N X,I,C,R,A
+ S (C,I,X,A)=""
+ S X=$G(^CMM("link","dsh-call"))
+ I X="" S A=$$FNDTP^ICCME("Обзвон пациентов","dsh-call") Q:A=""  S ^CMM("link","dsh-call")=A,X=A
+ S (A,I)="" F  S I=$O(^CMM("result",X,I)) Q:I=""  S R=^(I),A=A_C_I_"@"_$P(R,"|",2)_"|"_$P(R,"|",1),C=CR
+ D MSG^RWU(A)
+ Q
+ZTRT ; Table of time types
+ N R,I,X
+ D OWF^RWU(".xmlb")
+ D W^RWU(^PP(0,2)_"<ztrasp><table>")
+ D WC^RWU("<row><key>0</key><item class=""24"">Не установлено</item></row>"_CR)
+ S R="",I=+$G(^MN("raspzt"))
+ F  S R=$O(^MN(I,R)) Q:R=""  S X=^(R) D WC^RWU("<row><key>"_R_"</key><item class="""_$P(X,"|",1)_""">"_$P(X,"|",2)_"</item></row>"_CR)
+ D W^RWU("</table></ztrasp><nb_console>"),C^RWU
+ Q
+FIND(VR,STR,DT,ALL,OTX,DGX) ; Поиск по расписанию
+ D OWF^RWU(".txt")
+ D FINDsys(VR,STR,DT,$G(ALL),$G(OTX),$G(DGX))
+ D C^RWU
+ Q
+FINDPAC(STR,DS,DE) ; Поиск среди записанных пациентов
+ D OWF^RWU(".txt")
+ D WC^RWU("|№ И.Б.|Фамилия|Имя|Отчество|Время|Прием|Сотрудник|Статус|Примечание")
+ D FINDsys("",STR,DS,1,"","",DE,1)
+ D C^RWU
+ Q
+FINDsys(VR,STR,DS,ALL,OTX,DGX,DE,WKEY) ; Поиск по расписанию (системно)
+ ; nib|f|i|o|time|comment
+ ; ALL - по всем врачам
+ ; DGX - договор пациента
+ ; DE - дата окончания поиска
+ ; WKEY - выводить ключ записи
+ N SP,OT,TM,LPU,K,LN,P,X,Nii,Sn,Ds,NDs,AV,Nall
+ S LPU=+$$^I("ilpu"),ALL=+$G(ALL),WKEY=+$G(WKEY)
+ S STR=$$LU^TXTU($$WD^TXTU(STR)),OTX=$G(OTX),DGX=$G(DGX)
+ S Ds=$$LCL^NUSER("epr","raspdblsp")
+ S NDs=$$LCL^NUSER("epr","raspshnow")!$$LCL^NUSER("epr","shnow")
+ S:ALL&$$LCL^NUSER("epr","raspnall") ALL=0
+ S:+$G(ALL) VR=""
+ S DS=$$DIH^DTUTL($G(DS)),DE=$S($G(DE)="":DS,1:$$DI^DTUTL(DE))
+ S Sn=$$EXIST^IPAC(STR)
+ S:NDs&(+$H=DS) NDs=0 ; не сегодня
+ S OT="" F  S OT=$O(^DSH(LPU,OT)) Q:OT=""  D
+ .I $L(VR) S AV="" F  S AV=$O(^PLPUI("v",VR,AV)) Q:AV=""  D FINDprc(AV)
+ .I $L(VR) D FINDprc(VR) Q 
+ .I OTX'="",OTX'=OT Q 
+ .S VR="" F  S VR=$O(^DSH(LPU,OT,VR)) Q:VR=""  D FINDprc(VR)
+ Q
+FINDprc(VR) 
+ S SP="" F  S SP=$O(^DSH(LPU,OT,VR,SP)) Q:SP=""  S DT=DS-1 F  S DT=$O(^DSH(LPU,OT,VR,SP,DT)) Q:DT=""!(DT>DE)  D
+ .S TM="" F  S TM=$O(^DSH(LPU,OT,VR,SP,DT,TM)) Q:TM=""  D
+ ..S K=$G(^(TM)) Q:K=""  Q:K="*" 
+ ..S NI=$P(K,"|",1)
+ ..I Sn Q:NI'=STR  
+ ..S P=$O(^(TM)) S:P="" P=TM+1800
+ ..S LN="|"_$S(DS=DE:"",1:$$DT2^DTUTL(DT)_", ")_$$TIME^IRASP2(TM)
+ ..S LN=LN_"|"_$$TiMIN(P-TM)_"|"
+ ..S P=$G(^(TM,"c")),X=$G(^("b"))
+ ..S Nii=$$EXIST^IPAC(NI)
+ ..S P=$S($P(P,"|",3)'="":"заверш.",$P(P,"|",1)'="":"пришел",$P(X,"|",4)=2!($P(X,"|",4)=3):"отмена",X'="":"уточнено",'Nii:"",1:$$pstat(NI,VR,DT))
+ ..S:WKEY LN=LN_$$VFIOSHD^IRASP2(VR,DT)_", "_$$SPEC^ISPRAV(SP)_"|"
+ ..S LN=LN_P_"|"_$P(K,"|",2)_$S(WKEY:"",Ds:CR,1:"")
+ ..I Nii,DGX'="",$$PIDXN^IPAC(NI,DGX,DT)=-1 Q 
+ ..S P=$S(Nii:$$FIO^IPAC(NI,DT),1:NI) S:'Nii NI=""
+ ..I $L(STR),'Sn Q:$$LU^TXTU(P)'[STR 
+ ..S:NDs NI=""
+ ..D WC^RWU(CR_$S(WKEY:LPU_"~"_OT_"~"_VR_"~"_SP_"~"_DT_"~"_TM_"|",1:"")_NI_"|"_$P(P," ",1)_"|"_$P(P," ",2)_"|"_$P(P," ",3,9)_LN)
+ Q
+pstat(NI,VR,DT) ; текстовое описание статуса пациента
+ N X1,X2
+ S X1=$D(^PNF(NI,DT))
+ I 'X1 Q:'$D(^EPRI("nd",NI,DT)) "" Q:$$CHKDT^IEPR(NI,VR,DT)'="" "ЭМК" Q ""
+ S X1=$$IsVR^IUSL(NI,VR,DT)
+ I '$D(^EPRI("nd",NI,DT)),X1 Q "услуги"
+ Q:$$CHKDT^IEPR(NI,VR,DT) "посещ."
+ Q:X1 "услуги"
+ Q ""
+TN1(OT,TN1,DT) ;РАСПИСАНИЕ ВРАЧА ВСЕ
+ N PAC2 S PAC2=1 G TNL2
+TN2(OT,TN1,DT) ;РАСПИСАНИЕ ВРАЧА ПОСЛЕ
+ N PAC2 S PAC2=2 G TNL2
+TN(OT,TN1,DT) ;РАСПИСАНИЕ ВРАЧА ДО
+ N PAC2 S PAC2=3
+TNL2 N TN,SP,OT1,TM,DTT,LPU,K,TML,L,CC
+ S LPU=+$$^I("ilpu"),CC="" S:OT="999" OT="" S:'OT OT="" S DTT=DT
+ S DT=$$DIH^DTUTL($G(DT)),DTT=$$DT^DTUTL(DT)
+ D OWF^RWU(".txt"),WC^RWU("|Время|Пациент|Приемы")
+ S OT1="" F  S OT1=$O(^DSH(LPU,OT1)) Q:OT1=""  D
+ .I OT'="" Q:OT'=OT1 
+ .S OTN=$$GOTD^YISPRAV(OT1)
+ .S TN=$S(TN1="":"",1:TN1-1) F  S TN=$O(^DSH(LPU,OT1,TN)) Q:TN=""!((TN1'="")&(TN1'=TN))  S SP="" F  S SP=$O(^DSH(LPU,OT1,TN,SP)) Q:SP=""  D
+ ..Q:$D(^DSH(LPU,OT1,TN,SP,DT))=0  
+ ..S K=$P($G(^(DT)),"|",2),K=$S(K="":K,1:", Каб."_K),TM=""
+ ..D WC^RWU(CC_CR_DTT_"|"_$$VFIOSH^IRASP2(TN)_", "_TN_"|"_$$SPECS(SP)_K)
+ ..S CC=CR
+ ..F  S TM=$O(^DSH(LPU,OT1,TN,SP,DT,TM)) Q:TM=""  D
+ ...S K=$G(^(TM))
+ ...I K="" D W^RWU(CR_"|"_$$TIME^IRASP2(TM)_"|||") Q 
+ ...I K="*" D WC^RWU(CR_"|"_$$TIME^IRASP2(TM)_"|КОНЕЦ РАБОТЫ||") Q 
+ ...S NI=$P(K,"|",1)
+ ...I '$$EXIST^IPAC(NI) D WC^RWU(CR_"|"_$$TIME^IRASP2(TM)_"|"_NI_"||"_$P(K,"|",2)) Q 
+ ...K TML D TNHIST(NI,DT,TM,PAC2)
+ ...S L=""
+ ...I $G(^cfg("rasp-show-rpp")) S:'$D(^PNF(NI)) L=" первичн."
+ ...I $G(^cfg("rasp","show-anib")),$$GET^IPAC(NI,"anib",DT)'="" S L=L_" / "_$$GET^IPAC(NI,"anib")
+ ...D WC^RWU(CR_"|"_$$TIME^IRASP2(TM)_"|"_$$FIOSH^YIPACN(NI)_" ("_NI_L_")|"_$G(TML(+$O(TML(-1))))_"|"_$P(K,"|",2))
+ ...S K=1 F  S K=$O(TML(K)) Q:K=""  D WC^RWU(CR_"|||"_TML(K)_"|")
+ D C^RWU
+ Q
+TNHIST(NI,DT,TM,TYPE) ; Предыд. или следующие 
+ N VR,TT,I,K,R
+ I TYPE=3 S TM=$O(^DSHP(NI,DT,TM),-1) Q:TM=""  S TT=$O(^DSHP(NI,DT,TM,"")) Q:TT=""  S R=^(TT),TML(1)=$$TIME^IRASP2(TM)_" "_$$VFIOSH^IRASP2(TT)_", "_TT_"(к."_$$GETCAB^IRASP2(TT,DT,R)_")" Q 
+ S TT=$S(TYPE=1:"",TYPE=2:TM,TYPE=4:TM,1:""),I=1
+ F  S TT=$O(^DSHP(NI,DT,TT),$S(TYPE=2:-1,1:1)) Q:TT=""  I TT'=TM S K=$O(^DSHP(NI,DT,TT,"")) Q:K=""  S R=^(K),TML(I)=$$TIME^IRASP2(TT)_" "_$$VFIOSH^IRASP2(K)_", "_K_"(к."_$$GETCAB^IRASP2(K,DT,R)_")",I=I+1
+ Q
+TNPRN(OT,TN1,DT) ; РАСПИСАНИЕ ВРАЧА (печать)
+ N PAC2 S PAC2=3
+ N TN,SP,OT1,TM,DTT,LPU,K,TML,L,CC,PG,A0,A1,A2,DG,X,rpp,sanib,cdto
+ S LPU=+$$^I("ilpu"),CC="" S:OT="999" OT="" S:'OT OT="" S DTT=DT
+ S DT=$$DIH^DTUTL($G(DT)),DTT=$$DT^DTUTL(DT)
+ S rpp=$G(^cfg("rasp-show-rpp"))
+ S sanib=$G(^cfg("rasp","show-anib"))
+ S cdto=$G(^cfg("rasp","prn-control-dto"))
+ D OWF^RWU(".xml")
+ D OPEN^ISTREP("График приемов")
+ D FONT^ISTREP(1,"Times New Roman",12)
+ D FONT^ISTREP(2,"Arial",12,"b")
+ D FONT^ISTREP(3,"Arial",12)
+ D FONT^ISTREP(4,"Times New Roman",8)
+ D FONT^ISTREP(5,"Times New Roman",10,"b")
+ D CSTART^ISTREP("p","","35|35|5|5")
+ S PG=0
+ S OT1="" F  S OT1=$O(^DSH(LPU,OT1)) Q:OT1=""  D
+ .I OT'="" Q:OT'=OT1 
+ .S OTN=$$GOTD^YISPRAV(OT1)
+ .S TN=$S(TN1="":"",1:TN1-1) F  S TN=$O(^DSH(LPU,OT1,TN)) Q:TN=""!((TN1'="")&(TN1'=TN))  S SP="" F  S SP=$O(^DSH(LPU,OT1,TN,SP)) Q:SP=""  D
+ ..Q:'$D(^DSH(LPU,OT1,TN,SP,DT))  
+ ..Q:$O(^DSH(LPU,OT1,TN,SP,DT,""))=""  ; no times
+ ..S K=$P($G(^DSH(LPU,OT1,TN,SP,DT)),"|",2),K=$S(K="":K,1:", Каб."_K),TM=""
+ ..D:PG NPG^ISTREP() S PG=1
+ ..D LD^ISTREP($$SPECS(SP)_", "_$$VFIOSH^IRASP2(TN),2,"c")
+ ..D H^ISTREP(2)
+ ..D WC^RWU("<l><d f=""2"">Дата:</d><d f=""3""> "_$$TAG^TXTU($$DT^DTUTL(DT)_K)_"</d></l>")
+ ..D H^ISTREP(2)
+ ..S CC=CR
+ ..F  S TM=$O(^DSH(LPU,OT1,TN,SP,DT,TM)) Q:TM=""  D
+ ...S K=$G(^(TM)),(A1,A2)=""
+ ...I K="" D wln("","","","") Q 
+ ...I K="*" D wln("КОНЕЦ РАБОТЫ","","","") Q 
+ ...S NI=$P(K,"|",1)
+ ...I '$$EXIST^IPAC(NI) D wln(NI_" "_$P(K,"|",2),"","","",$P($G(^DSH(LPU,OT1,TN,SP,DT,TM,"i")),"|",1)) Q 
+ ...K TML D TNHIST(NI,DT,TM,3) S A1=$G(TML(1)) S:A1'="" A1="-> "_A1
+ ...K TML D TNHIST(NI,DT,TM,4) S A2=$G(TML(1)) S:A2'="" A2="<- "_A2
+ ...S L=""
+ ...I rpp S:'$D(^PNF(NI)) L=" первичн."
+ ...I sanib,$$GET^IPAC(NI,"anib",DT)'="" S L=L_" / "_$$GET^IPAC(NI,"anib")
+ ...S AZ=$$chkPAC(NI,DT)
+ ...I cdto S X=$$GET^IPAC(NI,"dog_to",DT),X=$S('X:"",+$H>(X-cdto):"Срок обслуживания "_$$DT^DTUTL(X),1:"") S:X'="" AZ=$S(AZ="":"",1:AZ_", "_X)
+ ...S A0=$$GETE^IPAC(NI,"ush",DT)
+ ...S DG=$$GET^IPAC(NI,"polis",DT),DG=$$GETE^IPAC(NI,"stc",DT)_$S(DG="":"",1:" ("_DG_")")
+ ...S A0=DG_$S(A0="":"",1:", "_A0)_", "_$$GETE^IPAC(NI,"datar")_" ("_$$AGET^IPAC(NI,DT)_")"
+ ...D wln($$FIOSH^YIPACN(NI)_" ("_NI_L_") "_$P(K,"|",2),A1,A2,A0,AZ)
+ D CEND^ISTREP,CLOSE^ISTREP
+ D C^RWU
+ Q
+wln(A,A1,A2,A0,AZ) 
+ D WC^RWU("<l><d h=""5"" w=""5"" b=""tblr""/><d w=""2""/><d>"_$$TIME^IRASP2(TM)_"</d><d w=""3""/><d>"_$$TAG^TXTU(A)_"</d></l>")
+ D:$G(AZ)'="" WC^RWU("<l f=""5""><d w=""25""/><d>"_$$TAG^TXTU(AZ)_"</d></l>")
+ D:$G(A0)'="" WC^RWU("<l f=""4""><d w=""25""/><d>"_$$TAG^TXTU(A0)_"</d></l>")
+ D:A1'="" WC^RWU("<l f=""4"" a=""r""><d>"_$$TAG^TXTU(A1)_"</d></l>")
+ D:A2'="" WC^RWU("<l f=""4"" a=""r""><d>"_$$TAG^TXTU(A2)_"</d></l>")
+ D WC^RWU("<l h=""2""/>")
+ Q
+RVR(VR,DS,DE,DET,XLPU,RUN) ; Расписание врача
+ Q:VR="" 
+ ; DET - подробно
+ N SP,OT,TM,DT,LPU,K,LN,TL,A,RI
+ S XLPU=$G(XLPU),DET=+$G(DET),RUN=$G(RUN)
+ S DS=$$DI^DTUTL($G(DS)),DE=$$DI^DTUTL($G(DE))
+ S:XLPU="" XLPU=+$$^I("ilpu")
+ D OWF^RWU(".txt"),WC^RWU($S(RUN="":"",1:RUN_"|")_"Дата|Время|Прием|Пациент|Примечание"_$S(DET:"|Статус|Договор",1:""))
+ S LPU="" F  S LPU=$O(^DSH(LPU)) Q:LPU=""  I XLPU=""!(XLPU=LPU) S OT="" F  S OT=$O(^DSH(LPU,OT)) Q:OT=""  D
+ .S SP="" F  S SP=$O(^DSH(LPU,OT,VR,SP)) Q:SP=""  S DT=DS-1 F  S DT=$O(^DSH(LPU,OT,VR,SP,DT)) Q:DT=""!(DT>DE)  D
+ ..S TM="" F  S TM=$O(^DSH(LPU,OT,VR,SP,DT,TM)) Q:TM=""  D
+ ...S K=$G(^(TM)) Q:K=""  Q:K="*" 
+ ...S TL=$O(^(TM)),TL=$S(TL="":1800,1:TL-TM)
+ ...S NI=$P(K,"|",1),RI=LPU_"~"_OT_"~"_VR_"~"_SP_"~"_DT_"~"_TM
+ ...S LN=$$DT^DTUTL(DT)_"|"_$$TM^DTUTL(TM)_"|"_$$TiMIN(TL)_"|"
+ ...I '$$EXIST^IPAC(NI) D WC^RWU(CR_$S(RUN="":"",RUN=1:RI_"|",1:"|")_LN_NI_"|"_$P(K,"|",2)) Q
+ ...S RI=$S(RUN="":"",RUN=1:RI_"|",1:NI_"|")
+ ...S A=LN_$$FIO^IPAC(NI)_" ("_NI_")|"_$P(K,"|",2)
+ ...I 'DET D WC^RWU(CR_RI_A) Q 
+ ...S A=A_"|"
+ ...S:$$IsPRP^NFNPAC(NI,DT) A=A_"первичный"
+ ...D WC^RWU(CR_RI_A_"|"_$$GETE^IPAC(NI,"stc",DT))
+ D C^RWU
+ Q
+VRNEAR(VR,DS,CNT,LPU) ; Ближайшие даты расписания врача
+ Q:VR="" 
+ N SP,OT,TS,TE,DT,LPU,X,A
+ S DS=$$DIH^DTUTL(DS),CNT=+$G(CNT),A=""
+ S:$G(LPU)="" LPU=+$$^I("ilpu")
+ S:'CNT CNT=15
+ S OT="" F  S OT=$O(^DSH(LPU,OT)) Q:OT=""!('CNT)  D
+ .S SP="" F  S SP=$O(^DSH(LPU,OT,VR,SP)) Q:SP=""!('CNT)  S DT=DS-1 F  S DT=$O(^DSH(LPU,OT,VR,SP,DT)) Q:DT=""!('CNT)  D
+ ..S TS=$O(^(DT,"")),TE=$O(^(90000),-1) Q:TS="" 
+ ..S TS=$$TM^DTUTL(TS)_"-"_$$TM^DTUTL(TE)
+ ..S A=A_$S(A="":"",1:CR)_OT_"@"_VR_"@"_SP_"@"_DT_"|"
+ ..S X=$$DWEEK^DTUTL(DT),X=$$DWKNM^DTUTL(X)
+ ..S A=A_$$DT^DTUTL(DT)_", "_X_$C(9)_TS_$C(9)_$$SPEC^ISPRAV(SP)
+ ..S CNT=CNT-1
+ D MSG^RWU(A)
+ Q
+CABLST ; Список кабинетов по ЛПУ
+ D OWF^RWU(".txt")
+ N I,C,L S I=-1,C="",L=+$$^I("ilpu")
+ F  S I=$O(^DSHI("cab",L,I)) Q:I=""  D WC^RWU(C_I) S C=CR
+ D C^RWU
+ Q
+RCAB(CAB,DS,DE) ; Расписание по кабинету
+ Q:CAB=""
+ N I,L,R,KX,DT,VR,OT,SP,TM,K,NI,LN,TL
+ D OWF^RWU(".txt"),WC^RWU("Дата|Время|Прием|Врач|Пациент|Примечание")
+ S DS=$$DIH^DTUTL($G(DS)),DE=$$DIH^DTUTL($G(DE))
+ S L=+$$^I("ilpu"),DT=DS-1
+ F  S DT=$O(^DSHI("cab",L,CAB,DT)) Q:DT=""!(DT>DE)  D
+ .S KX="" F  S KX=$O(^DSHI("cab",L,CAB,DT,KX)) Q:KX=""  S OT=$P(KX,"@",1),VR=$P(KX,"@",2),SP=$P(KX,"@",3) D:$D(^DSH(L,OT,VR,SP,DT))
+ ..S TM="" F  S TM=$O(^DSH(L,OT,VR,SP,DT,TM)) Q:TM=""  D
+ ...S K=$G(^(TM)) Q:K=""  Q:K="*" 
+ ...S TL=$O(^(TM)),TL=$S(TL="":1800,1:TL-TM)
+ ...S NI=$P(K,"|",1)
+ ...S LN=CR_$$DT^DTUTL(DT)_"|"_$$TM^DTUTL(TM)_"|"_$$TiMIN(TL)_"|"
+ ...S LN=LN_$$VFIOSHD^IRASP2(VR,DT)_"|"
+ ...S LN=LN_$S($$EXIST^IPAC(NI):$$FIO^IPAC(NI)_" ("_NI_")",1:NI) 
+ ...D WC^RWU(LN_"|"_$P(K,"|",2))
+ D C^RWU
+ Q
+VRLST(LPU) ; Список действующих врачей в расписании по ЛПУ
+ S:$G(LPU)="" LPU=+$$^I("ilpu")
+ N OT,VR,C,L
+ S (C,OT)="" F  S OT=$O(^DSH(LPU,OT)) Q:OT=""  D
+ .S VR="" F  S VR=$O(^DSH(LPU,OT,VR)) Q:VR=""  S:$$VCHK^IRASP2(VR) L($$VFIOSH^IRASP2(VR)_"|"_VR)=""
+ D OWF^RWU(".txt")
+ S VR="" F  S VR=$O(L(VR)) Q:VR=""  D WC^RWU(C_$P(VR,"|",2)_"|"_$P(VR,"|",1)) S C=CR
+ D C^RWU
+ Q
+evi(LPU,OT,VR,SP,DT,TM) ; События по записи
+ Q
+TiMIN(X) ; Время в минутах
+ Q:X="" ""
+ S X=$J(X/60,0,0)
+ Q:X<60 X_" мин."
+ Q $J(X\60,0,0)_"ч."_$S(X#60:(X#60)_"м.",1:"")
+chkPAC(NI,DT) ; Проверка валидности пациента
+ N REZ
+ D CHKTXT^YIPACN(NI,DT)
+ Q $G(REZ)
+CEL(NIB,TXT,INT) ; Прейскурант для расписания
+ ; TXT - строка поиска
+ ; TODO - OT, SP
+ N U,P,NM
+ S P=$$PRC^IINSC("",NIB,+$H,"")
+ S TXT=$$UL^TXTU($$TRIM^TXTU($$WD^TXTU($G(TXT))))
+ D OWF^RWU(".txt")
+ D WC^RWU("Код|Наименование|Цена")
+ S U="" F  S U=$O(^CN(U)) Q:U=""  D:$D(^(U,P))
+ .Q:'$$CHECK^IPRICE(U,P)
+ .Q:$$GET^IPRICE(U,"cls",P,+$H)'["dsh"
+ .S NM=$$NAME^IPRICE(U,P)
+ .I TXT'="",$$UL^TXTU(NM)'[TXT Q
+ .D WC^RWU(CR_U_"|"_NM_"|"_$$PRICE^IPRICE(U,P))
+ D C^RWU
+ Q
+INITDB 
+ N I
+ S ^MN("root","raspimg")="Значки записей в расписании"
+ S ^MN("root","rasptml")="Длительность времени приема в расписании"
+ S ^MN("root","rasptml","kname")="Минут",^("fname")="Описание"
+ D:'$D(^MN("rasptml"))
+ .S I=$$NEWIDX^YISPRAV("rasptml")
+ .S ^MN(I,5)="5 мин.",^MN(I,10)="10 мин.",^MN(I,15)="15 мин."
+ .S ^MN(I,20)="20 мин.",^MN(I,25)="25 мин.",^MN(I,30)="30 мин."
+ .S ^MN(I,35)="35 мин.",^MN(I,40)="40 мин.",^MN(I,45)="45 мин."
+ .S ^MN(I,50)="50 мин.",^MN(I,55)="55 мин.",^MN(I,60)="1 час\"
+ .S ^MN(I,70)="1 час 10 мин.",^MN(I,75)="1 час 15 мин."
+ .S ^MN(I,80)="1 час 20 мин.",^MN(I,90)="1 час 30 мин."
+ .S ^MN(I,105)="1 час 45 мин.",^MN(I,120)="2 часа"
+ .S ^MN(I,150)="2 часа 30 мин."
+ Q

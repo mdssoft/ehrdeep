@@ -1,0 +1,60 @@
+ISSG ; Системный журнал [ 10/07/2017  1:25 AM ]
+W(X) ; Запись
+ N HH S HH=$H
+ L +^SSGN(HH)
+ S ^SSGN(HH,$O(^SSGN(HH,""),-1)+1,"W")=$G(%LOG)_"|"_X
+ L -^SSGN(HH)
+ Q
+K(X) ; Удаление
+ N HH S HH=$H
+ L +^SSGN(HH)
+ S ^SSGN(HH,$O(^SSGN(HH,""),-1)+1,"K")=$G(%LOG)_"|"_X
+ L -^SSGN(HH)
+ Q
+WD(X) ; Запись
+ Q:'$D(@X) 
+ N HH S HH=$H
+ L +^SSGN(HH)
+ S ^SSGN(HH,$O(^SSGN(HH,""),-1)+1,"W")=$G(%LOG)_"|"_X_"="_$G(@X)
+ L -^SSGN(HH)
+ Q
+KD(X) ; Удаление
+ Q:'$D(@X) 
+ N HH S HH=$H
+ L +^SSGN(HH)
+ S ^SSGN(HH,$O(^SSGN(HH,""),-1)+1,"K")=$G(%LOG)_"|"_X_"="_$G(@X)
+ L -^SSGN(HH)
+ Q
+SHOW(DS,DE,TXT) ; Show by date & text
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N DT,I,O S DT=DS_",0",TXT=$G(TXT)
+ F  S DT=$O(^SSGN(DT)) Q:DT=""  Q:(+DT)>DE  S I="" F  S I=$O(^SSGN(DT,I)) Q:I=""  S O="" F  S O=$O(^SSGN(DT,I,O)) Q:O=""  D
+ .S R=$G(^(O))
+ .I TXT'="",R'[TXT Q 
+ .W !,DT,",",O,"=",R
+ Q
+LOG(TXT) ; write to ^SYSLOG
+ N X S X=$O(^SYSLOG(""),-1)+1
+ S ^SYSLOG(X)=$H_"|"_TXT
+ Q
+SHOWS(DTT,TXT) ; Show SYSLOG by date & text
+ N I,R,F,D
+ S TXT=$$UL^TXTU(TXT)
+ S:DTT["." DTT=$$DI^DTUTL(DTT)
+ S I="",F=0 F  S I=$O(^SYSLOG(I),-1) Q:I=""  D  Q:F
+ .S R=^(I)
+ .I DTT'="" Q:+$P(R,"|",1)>DTT  I +$P(R,"|",1)<DTT S F=1 Q 
+ .I TXT'="",$$UL^TXTU($P(R,"|",2))'[TXT Q 
+ .W !,I_":",$C(9),$$DTM^DTUTL($P(R,"|",1)),$C(9),$P(R,"|",2) 
+ Q
+CLRLOG(DIR) ; Сохранить и очистить SYSLOG
+ N E,I,G
+ S E=$O(^SYSLOG(""),-1) Q:E="" 
+ W !,"Save.."
+ S G(1)="^SYSLOG"
+ D SFN^XGU("G",DIR_"SYSLOG"_$TR($$DT2^DTUTL(+$H),".","")_".xgl")
+ S E=E-1
+ W !,"Delete.."
+ F I=$O(^SYSLOG("")):1:E K ^SYSLOG(I)
+ W "OK",!
+ Q

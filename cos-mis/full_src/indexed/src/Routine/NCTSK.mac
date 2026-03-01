@@ -1,0 +1,185 @@
+NMEDTSK ; TaskFlow по мед. задачам [ 11/15/2023  1:44 PM ]
+LSTTP ; Список возможных типов
+ N I,X,A
+ S (I,A)=""
+ F  S I=$O(^TSTS(I)) Q:I=""  S X=^(I) I $P($P(X,"|",3),"/",1)="task" S A=$S(A="":"",1:A_CR)_I_"|"_$P(X,"|",1)
+ D MSG^RWU(A)
+ Q
+NEW(TP) ; Создать новую задачу по типу
+ Q
+TAB(DS,DE,TP,OK,OTD,LPU,TXTF) ; Таблица по задачам
+ ; OK - выполненные 0/1/2 = все/незаверш./заверш. 
+ N LP,ID,R,DT,FR,ST,A,I,TXT,MYO,VR,HDL,HFL,TPFL,TT
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S FR=+$$FR^I(),LPU=$G(LPU),OTD=$G(OTD),TXTF=$$UL^TXTU($$WD^TXTU($G(TXTF)))
+ S:'FR LPU=+$$^I("ilpu")
+ S R=$$LCL^NUSER("tasks","myotd"),MYO=""
+ S:R MYO=$$OTD^IKADRY($$KDR^IUSER())
+ S:OTD'="" MYO=OTD
+ D OWF^RWU(".txt")
+ S A="",I=1 F  S I=$O(^TSTS(TP,"s",I)) Q:I=""  S R=$P(^(I),"|",1),HDL(I)=R,A=A_"|"_R
+ S I="" F  S I=$O(^TSTS(TP,"ud",I)) Q:I=""  S R=^(I),TPFL(I)=$P(R,"|",1),R=$P(R,"|",2),HFL(I)=R,A=A_"|"_R
+ 
+ D WC^RWU("|Создано|Описание|Статус"_A)
+ S DT=DS-1 F  S DT=$O(^TSKI("df",DT)) Q:DT>DE!(DT="")  D
+ .S LP="" F  S LP=$O(^TSKI("df",DT,LP)) Q:LP=""  D:(LPU="")!(LP=LPU) 
+ ..S ID="" F  S ID=$O(^TSKI("df",DT,LP,ID)) Q:ID=""  D:^(ID)=TP
+ ...S R=$G(^TSK(LP,ID)) Q:R=""
+ ...S ST=$P(R,"|",1)
+ ...I OK=2,ST'=9 Q 
+ ...I OK=1,ST=9 Q 
+ ...S VR=$P(R,"|",7)
+ ...I MYO,'$$IsOTD^IKADRY(VR,MYO,DT) Q 
+ ...S TXT=$$TAG^TXTU($P(R,"|",5))
+ ...S A=$$DTM^DTUTL($P(R,"|",6))_"|"_$$OWF^TXTU(TXT,50)_"|"_$$STATNM^IFTASK(ST)
+ ...S I="" F  S I=$O(HDL(I)) Q:I=""  S A=A_"|"_$$DT^DTUTL($P($G(^TSK(LP,ID,"st",I)),"|",1))
+ ...S I="" F  S I=$O(HFL(I)) Q:I=""  S A=A_"|"_$$TAG^TXTU($$GETUDE^IFTASK(LP,ID,I,TP,TPFL(I)))
+ ...I TXTF'="",$$UL^TXTU(A)'[TXTF Q 
+ ...D WC^RWU(CR_LP_","_ID_"|"_A)
+ D C^RWU
+ Q
+DOLST(KEY) ; Список допустимых действий
+ S KEY=$P($G(^TSK($P(KEY,",",1),$P(KEY,",",2))),"|",2)
+ Q:KEY=""  
+ D DOLST^NFTASK(KEY)
+ Q
+DOACT(KEY,DS,DE,TP,OK,IDS,OTD,LPU,TXT) ; Выполнить действие
+ I KEY="" D TAB(DS,DE,TP,OK) Q 
+ N LP,ID,T,TT,R,ST,NI,X,SYBT,SYS
+ S LP=$P(KEY,",",1),ID=$P(KEY,",",2)
+ I IDS="clear" G:$$LCL^IUSER("tasks","clear")=0 doacte S X=$$SETSTAT^IFTASK(LP,ID,0) G doacte
+ S R=$G(^TSK(LP,ID)),T=$P(R,"|",2),TT=$$TPUID^IFTASK(T)
+ S ST=$G(^TSTS(T,"s",IDS))
+ S SUBT=$P(ST,"|",8),ST=$P(ST,"|",4)
+ S X=$G(^TSTS(T,"s",IDS,"exe"))
+ I X'="" X X
+ 
+ Q:$$IsMSG^RWU() 
+ 
+ S T=$$SETSTG^IFTASK(LP,ID,IDS,"")
+doacte D TAB(DS,DE,TP,OK,OTD,LPU,TXT)
+ Q
+DO(KEY,DS,DE,TP,OK,ReDo,OTD,LPU,TXT) ; Выполнить
+ I KEY="" D TAB(DS,DE,TP,OK) Q 
+ N LP,ID,T,TT,R,SYS,NI,SUBT
+ S LP=$P(KEY,",",1),ID=$P(KEY,",",2)
+ I $$GETSTAT^IFTASK(LP,ID)=9 D MSG^RWU("Задача выполнена") Q 
+ S R=$G(^TSK(LP,ID)),T=$P(R,"|",2),TT=$$TPUID^IFTASK(T)
+ S SYS=$$GETUD^IFTASK(LP,ID,"sys"),NI=$$GETUD^IFTASK(LP,ID,"nib")
+ 
+ D action(TT,"",SYS,KEY)
+ Q:$$IsMSG^RWU() 
+ 
+ S T=$$SETSTAT^IFTASK(LP,ID,9) ; выполнено
+ D TAB(DS,DE,TP,OK,OTD,LPU,TXT)
+ Q
+action(TT,SUBT,SYS,KEY) 
+ Q
+DEL(KEY,DS,DE,TP,OK,OTD,LPU,TXT) ; Удалить
+ I $$LCL^IUSER("tasks","del")=0 S KEY=""
+ I KEY="" D TAB(DS,DE,TP,OK) Q 
+ N LP,ID
+ S LP=$P(KEY,",",1),ID=$P(KEY,",",2)
+ D DEL^IFTASK(LP,ID)
+ D TAB(DS,DE,TP,OK,OTD,LPU,TXT)
+ Q
+CANCEL(KEY,DS,DE,TP,OK,OTD,LPU,TXT) ; Отменить
+ I $$LCL^IUSER("tasks","cancel")=0 S KEY=""
+ I KEY="" D TAB(DS,DE,TP,OK) Q 
+ N LP,ID,X
+ S LP=$P(KEY,",",1),ID=$P(KEY,",",2)
+ I $$LCL^IUSER("tasks","ncancel"),$$GETSTAT^IFTASK(LP,ID)'=9 D TAB(DS,DE,TP,OK,OTD,LPU,TXT) Q
+ S:$$GETSTAT^IFTASK(LP,ID)'=5 X=$$SETSTAT^IFTASK(LP,ID,5)
+ D TAB(DS,DE,TP,OK,OTD,LPU,TXT)
+ Q
+DETAIL(KEY) ; Информация по задаче
+ N LP,ID,T,R,I,X,Y
+ S LP=$P(KEY,",",1),ID=$P(KEY,",",2)
+ S R=$G(^TSK(LP,ID)),T=$P(R,"|",2)
+ D MINHDR^IHTML("Информация о задаче")
+ D CSS^IHTML
+ D W^RWU(CR_".hdr { background-color: #66CCFF; }")
+ D W^RWU(CR_".right { text-align: right; }")
+ D W^RWU(CR_".th { background-color: #BBBBBB; text-align: center; }")
+ D CSSE^IHTML
+ D W^RWU(CR_"</head><body>")
+ D WTAGC^RWU("b",$P($G(^TSTS(T)),"|",1))
+ S X=$P(R,"|",5)
+ D:X'="" WC^RWU("<br>"_$$TAG^TXTU(X)_"<br>") ; описание
+ S X=$P(R,"|",1),Y=$$GETSUE^IFTASK(LP,ID,X)
+ S:Y'="" Y=$$TAG^TXTU(" ("_Y_")")
+ D WC^RWU("<br>Создана; "_$$DTM^DTUTL($P(R,"|",6))_"<br>Состояние: <b>"_$$TAG^TXTU($$STATNM^IFTASK(X))_"</b>"_Y)
+ S X=$P(R,"|",7)
+ D:X'="" WC^RWU("<br>Автор: "_$$TAG^TXTU($$FIO^IKADRY(X)))
+ S X=$P(R,"|",8),I=$P(R,"|",9)
+ S:X=+$P(R,"|",6) X=""
+ D:X!I WC^RWU("<br>Выполнить "_$S('X:"",1:"не ранее "_$$DT^DTUTL(X))_$S(X&I:", ",1:"")_$S('I:"",1:"не позднее "_$$DT^DTUTL(I)))
+ 
+ S X=$G(^TSK(LP,ID,"d"))
+ D:X'="" WC^RWU("<br>Детальное описание: "_$$TAG^TXTU(X)) 
+ D W^RWU("<br><br>")
+ 
+ G:'$D(^TSK(LP,ID,"st")) det1
+ D TAB^IHTML(0,2,"100%")
+ D TABLN^IHTML("Состояние|Дата, время|Исполнитель","th|th|th")
+ S I="" F  S I=$O(^TSK(LP,ID,"st",I)) Q:I=""  D
+ .S X=^(I),R=$P(^TSTS(T,"s",I),"|",1)
+ .D TABLN^IHTML(R_"|"_$$DTM^DTUTL($P(X,"|",1))_"|"_$$FIO^IUSER($P(X,"|",2)))
+ D TABLN^IHTML("||")
+ D W^RWU("</table>")
+ 
+det1 G:'$D(^TSK(LP,ID,"ud")) det2
+ D TAB^IHTML(0,2,"100%")
+ D TABLN^IHTML("Атрибут|Значение","th|th")
+ S X="" F  S X=$O(^TSK(LP,ID,"ud",X)) Q:X=""  D TABLN^IHTML($$NMUD^IFTASK(T,X)_"|"_$$GETUDE^IFTASK(LP,ID,X))
+ D W^RWU("</table>")
+det2 
+ D END^IHTML
+ Q
+DOTP(KEY,COL) ; Операции по столбцу
+ N LP,ID,T,R,X
+ S LP=$P(KEY,",",1),ID=$P(KEY,",",2)
+ S R=$G(^TSK(LP,ID)),T=$P(R,"|",2)
+ D MSG^RWU($$tpCOL(T,COL))
+ Q
+SETFL(KEY,FL,VAL) ; Изменить поле
+ I $$LCL^IUSER("tasks","set")=0 D MSG^RWU("Недостаточно прав.") Q
+ N LP,ID
+ S LP=$P(KEY,",",1),ID=$P(KEY,",",2)
+ D SETUD^IFTASK(LP,ID,FL,$$WD^TXTU(VAL))
+ Q
+SETFLD(KEY,FL,VAL) ; Изменить поле даты
+ I $$LCL^IUSER("tasks","set")=0 D MSG^RWU("Недостаточно прав.") Q 
+ N LP,ID
+ S LP=$P(KEY,",",1),ID=$P(KEY,",",2)
+ D SETUD^IFTASK(LP,ID,FL,$$DI^TXTU(VAL))
+ Q
+FLLIST(KEY,FL) ; Список по полю
+ N LP,ID,TP,R
+ S LP=$P(KEY,",",1),ID=$P(KEY,",",2)
+ S R=$G(^TSK(LP,ID)),TP=$P(R,"|",2),R=""
+ S ID="" F  S ID=$O(^TSTS(TP,"udl",FL,ID)) Q:ID=""  S R=$S(R="":"",1:R_CR)_ID_"|"_^(ID)
+ D MSG^RWU(R)
+ Q
+MK(TP,DSC) ; Создать задачу определенного типа
+ ; TP - тип
+ ; DSC - описание задачи
+ I $$LCL^IUSER("tasks","new")=0 D MSG^RWU("Недостаточно прав.") Q 
+ N DC,DE
+ S DC=+$H,DSC=$$WD^TXTU($G(DSC))
+ S DE=DC+$S($D(^cfg("ctask","maxdays")):^("maxdays"),1:30)
+ S A=$$ADD^IFTASK(0,TP,DSC,"",DC,DE)
+ Q
+SETCOM(KEY,DSC) ; Изменить описание задачи
+ I $$LCL^IUSER("tasks","scomm")=0 D MSG^RWU("Недостаточно прав.") Q
+ N LP,ID
+ S LP=$P(KEY,",",1),ID=$P(KEY,",",2)
+ D SETTXT^IFTASK(LP,ID,$$WD^TXTU(DSC))
+ Q
+tpCOL(TP,COL) ; Тип данных по колонке
+ Q:TP="" "" Q:COL="" ""
+ N I,R,IDX,LL
+ S I=1,IDX=3
+ F  S I=$O(^TSTS(TP,"s",I)) Q:I=""  S R=$P(^(I),"|",3),LL(IDX)="ST|"_I_"|"_R,IDX=IDX+1
+ S I="" F  S I=$O(^TSTS(TP,"ud",I)) Q:I=""  S R=^(I),LL(IDX)=$P(R,"|",1)_"|"_I_"|"_$P(R,"|",2),IDX=IDX+1
+ Q $G(LL(COL))

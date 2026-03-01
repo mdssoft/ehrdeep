@@ -1,0 +1,517 @@
+NKSSL ; Облегченная касса [ 10/11/2021  6:58 PM ]
+REG 
+ S ^TRIGGER("bill","sub","TRG^NKSSL")=""
+ S ^TRIGGER("bill","add","TRG^NKSSL")=""
+ D REG^YISYNC("CHKXML^NKSSL","(0)")
+ S ^AS("CHKXML^NKSSL",%JOB)="(0)"
+ 
+ D OWF^RWU(".xmlb")
+ D W^RWU(^PP(0,1)_"<nb_console><kssalert>")
+ D WTAG^RWU("blink",+$$C^I("kssl","blink"))
+ D WTAG^RWU("noforeground",+$$C^I("kssl","nofg"))
+ D W^RWU("</kssalert></nb_console>")
+ D C^RWU
+ Q
+UREG 
+ Q
+TRG() ; Trigger
+ Q:+$G(DTH)'=(+$H)  ; только за сегодня
+ D UPD^YISYNC("CHKXML^NKSSL","(0)")
+ Q
+CHKsys() ; System check now
+ N H,TM,NI,X,L,R,CK
+ S H=+$H,TM="",X=0,L=$$^I("ilpu")
+ S CK=$S($$C^I("kssl","curkkm"):$$KKM^IUSER(),1:0)
+ F  S TM=$O(^BILLI(H,TM),-1) Q:TM=""!X  D
+ .S NI="" F  S NI=$O(^BILLI(H,TM,NI)) Q:NI=""  D  Q:X 
+ ..S R=$P($P($G(^(NI)),"|",4),"@",2)
+ ..I R'=""&(R'=L),$D(^(NI,"R")) Q 
+ ..I CK,$P($G(^BILL(NI,H,TM)),"|",4)'=CK Q  
+ ..I $$NOW^IBILL(NI)<0 S X=1
+ Q X_"|"_$$NSUCHK^NLPUST(+$H)
+CHK ; Check now
+ D MSG^RWU($$CHKsys())
+ Q
+CHKXML(A) 
+ D MSG^RWU("<nb_console><run>kssalert_check("_$P($$CHKsys(),"|",1)_",0)</run></nb_console>",".xmlb")
+ Q
+TABCHK(A) 
+ D MSG^RWU("<nb_console><run>ksslist_refresh(0,0)</run></nb_console>",".xmlb")
+ Q
+INIT ; Инициализация формы
+ N A,F
+ D REG^YISYNC("TABCHK^NKSSL","(0)")
+ S ^AS("TABCHK^NKSSL",%JOB)="(0)"
+ D OWF^RWU(".xmlb")
+ D W^RWU(^PP(0,1)_"<nb_console><ksslist><tp>")
+ D BTPLST^IBILL(,,"kssl")
+ S A=$S($$C^I("kssl","combpay"):CR_"D|Комбинированный",1:"")_"</tp>" ; TODO - если неск. разрешено
+ S F=""
+ S:$$LCL^IUSER("patients"," setskd")=2 F=$$STFLG^TXTU(F,"smskd") ; simple skd
+ S:$$C^I("kssl","qusebal") F=$$STFLG^TXTU(F,"qbal")
+ S:$$C^I("kssl","vrsel") F=$$STFLG^TXTU(F,"vrsel")
+ S:$$C^I("kssl","dblask") F=$$STFLG^TXTU(F,"dblask")
+ S:$$C^I("kssl","hbalance")!$$C^I("kssl","locksum") F=$$STFLG^TXTU(F,"strict")
+ S:$$C^I("bill","useacc") F=$$STFLG^TXTU(F,"acc")
+ S:F'="" A=A_"<flg>"_F_"</flg>"
+ D WC^RWU(A)
+ D WTAGC^RWU("kkm",$$NAME^ISPRAV("kkm",$$KKM^IUSER()))
+ D WTAGC^RWU("kkm_port",$$GETN^ISPRAV("kkm",$$KKM^IUSER(),7))
+ D W^RWU("</ksslist></nb_console>")
+ D C^RWU
+ Q
+TABS N SM,VRX,DTX,NIBX S SM=0 G TAB+1
+TAB(SM,VRX,DTX,NIBX) ; Show table
+ ; SM = 1 - не скрывать пациентов, 2 - с любым балансом
+ D OWF^RWU(".txt")
+ D WC^RWU("|Пациент|Сумма|Примечание")
+ N H,TM,NI,LST,X,R,I,Z,Y,P,VR,SP,OT,LP,fSS,fGV,VR,T,PA,SC,KEY,CK
+ S DTX=$$DI^DTUTL($G(DTX))
+ S H=+$H,TM="",LP=$$^I("ilpu"),SM=+$G(SM),VRX=$G(VRX),NIBX=$G(NIBX)
+ S:DTX'="" H=DTX
+ S fSS=$$C^I("kssl","hbalance")
+ S fGV=$$C^I("kssl","vrgrp")
+ S fUA=$$C^I("bill","useacc")
+ S CK=$S($$C^I("kssl","curkkm"):$$KKM^IUSER(),1:0)
+ ; Все сегодня
+ I NIBX="" F  S TM=$O(^BILLI(H,TM)) Q:TM=""  D
+ .S NI="" F  S NI=$O(^BILLI(H,TM,NI)) Q:NI=""  D tabproc(SM)
+ ; На пациента
+ I NIBX'="" S H="",NI=NIBX F  S H=$O(^BILL(NI,H)) Q:H=""!(+H'=H)  D
+ .S TM="" F  S TM=$O(^BILL(NI,H,TM)) Q:TM=""  D tabproc(1)
+ ; Из расписания
+ S LP=+$$^I("ilpu")
+ ;S OT="" F  S OT=$O(^DSH(LP,OT)) Q:OT=""  S VR="" F  S VR=$O(^DSH(LP,OT,VR)) Q:VR=""  D:VRX=""!(VRX=VR) 
+ ;. TODO S Z=$$CALCDSH(LP,OT,VR)
+ ; фильтрация последних - todo
+ I 0,'fSS S NI="" F  S NI=$O(LST(NI)) Q:NI=""  D
+ .S Z=LST(NI),I="",X=0
+ .F  S I=$O(LST(NI,I),-1) Q:I=""  D
+ ..S R=$P(LST(NI,I),"|",1)
+ ..I SM'=2,(Z-R-X)<0 K LST(NI,I) Q  ; не скрываем част.опл.
+ ..S X=X+R
+ ; вывод
+ S KEY="" F  S KEY=$O(LST(KEY)) Q:KEY=""  D
+ .S NI=$P(KEY,"@",1),SC=$P(KEY,"@",2)
+ .S X=$S($D(^BUF("khide",H,NI)):1,1:0)
+ .S Z=LST(KEY),R="" S:Z<0 Z=0
+ .S PA=$$GET^IPAC(NI,"parents")
+ .I PA="" S Y=$$GET^IPAC(NI,"lnkhist") S:Y'="" PA=$$FIOSH^IPAC(Y)
+ .S:PA'="" PA=" ("_PA_")"
+ .D WC^RWU(CR_NI_"@"_H_"@@@"_X_"@"_SC_"|"_$$FIO^IPAC(NI)_PA_R_"|"_Z_"|"_$S(SC:$$NAME^ISPRAV("payacc",SC),1:"К оплате"))
+ .S I=""
+ .F  S I=$O(LST(KEY,I)) Q:I=""  D WC^RWU(CR_LST(KEY,I,0)_"@"_X_"||"_LST(KEY,I))
+ D C^RWU
+ Q
+tabproc(SM) 
+ S R=$P($P($G(^BILLI(H,TM,NI)),"|",4),"@",2),Y=0
+ I R'="",R'=LP Q  ; this LPU
+ I $D(^(NI,"R")) S Z=$P(^("R"),"|",3),Y=$S(Z["@":$P(Z,"@",2)=LP,1:1) Q:'Y 
+ I 'SM,$D(^BUF("khide",H,NI)) Q 
+ I Y S Z=$$SRES^IBILL(NI) I Z>0 S I=$O(LST(NI,""),-1)+1,LST(NI,I)=Z_"|"_$$GPTYPE^IBILL($G(^BILL(NI,"R",H,TM)),"R"),LST(NI,I,0)="" S:$D(LST(NI))[0 LST(NI)=Z-$$NOW^IBILL(NI)
+ S R=$G(^BILL(NI,H,TM)) Q:R=""  Q:$P(R,"|",1)'="" 
+ I CK,$P(R,"|",4)'=CK Q  ; другая касса
+ S Z=$$NOW^IBILL(NI),VR="",SC=$P(R,"|",12) ; sub.acc.
+ I SC'="",$D(^BILL(NI,"SC",SC)) S Z=^BILL(NI,"SC",SC)
+ I fSS,Z<0,$P(R,"|",11) Q  ; при наличии долга показываем
+ I SM'=2,Z'<0  Q 
+ ; D ulst(NI,H)
+ S SU=$S(fSS:$$supay(NI,R),1:-$P(R,"|",2)) I SM'=2,'SU Q 
+ S VR=$P(R,"|",6),VR=$S($P(VR,":",1)="ZNF":$P(VR,":",2),1:"")
+ S X=$S(VR="":$TR($$GPTYPE^IBILL(R,"",1),"|",""),1:$$FIOSH^IKADRY(VR))
+ S:NIBX'="" X=X_", "_$$DT2^DTUTL(H)
+ S KEY=$S(fUA:NI_"@"_SC,1:NI)
+ S I=$S(fGV&(VR'=""):"V"_VR,1:$O(LST(KEY,99999),-1)+1)
+ S LST(KEY,I)=(SU+$G(LST(KEY,I)))_"|"_X
+ S LST(KEY,I,0)=NI_"@"_H_"@"_$S(fGV:"",1:TM)_"@"_VR
+ I fSS S LST(KEY)=$G(LST(KEY))+SU Q  ; сумма платежей
+ S:$D(LST(KEY))[0 LST(KEY)=-Z
+ Q
+supay(NI,LN) ; Сумма неоплаченных услуг по транзакции
+ N P,Z,VR,OT,D,S,I,KPS
+ S P=$P(LN,"|",6) Q:$P(P,":",1)'="ZNF" 0
+ ; TODO - NAZ
+ S VR=$P(P,":",2),OT=$P(P,":",3),D=$P($P(P,"/",1),":",4),S=0
+ F I=2:1:99 S Z=$P(P,"/",I) Q:Z=""  D
+ .S Z=$P(Z,":",3)
+ .S KPS=$G(^ZNF(VR,OT,D,Z,"kp"))
+ .Q:$P(KPS,"|",1)  Q:$G(^("rcl"))'="" 
+ .S S=S+$P($G(^("s")),"|",1)
+ Q S
+ulst(NI,DT) ; fill
+ N KX,VR,OT,ID,FLG,R,LL,S,KPS
+ S KX="" F  S KX=$O(^PNF(NI,DT,KX)) Q:KX=""  D
+ .S VR=$P(KX,"|",1),OT=$P(KX,"|",2),ID=$P(KX,"|",3)
+ .S FLG="|"_$P($G(^ZNF(VR,OT,DT,ID,"m")),"~",2)_"|"
+ .Q:FLG["|nop|"  Q:FLG["|grn|"
+ .I 12'[$P($G(^("e")),"~",1),FLG'["kss"  Q
+ .S KPS=$G(^("kp"))
+ .Q:$P(KPS,"|",1)   Q:$G(^("rcl"))'="" 
+ .S S=$P($G(^("s")),"|",1)
+ .Q:'S 
+ .S LL(VR)=$G(LL(VR))+S
+ .S LL(VR,0)=NI_"@"_DT_"@@"_VR
+ S VR="" F  S VR=$O(LL(VR)) Q:VR=""  S LL(VR)=LL(VR)_"|"_$$FIOSH^IKADRY(VR)_" ("_$$GSPEC^YISPRAV($$SPEC^IKADRY(VR))_")"
+ M LST(NI)=LL
+ Q
+lastpay(NI,DT,NOW) ; Последний платеж сейчас или баланс на утро
+ N T,R,S
+ S T="",S=0 F  S T=$O(^BILL(NI,DT,T),-1) Q:T=""  S R=$G(^(T)) I $P(R,"|",1)="+" S S=$P(^BILLI(DT,T,NI),"|",1) Q 
+ I T'="" S S=NOW 
+ I T="" S S=$$NOW^IBILL(NI,DT-1) S:S<0 S=NOW S:S>0 S=NOW-S ; вчера был плюс или - полный должник 
+ Q T_"|"_S
+CALCDSH(LP,OT,VR) ; Сумма из расписания - TODO - Зачем ?
+ N SP,TM,NI,U,S,Z,H,DG,P
+ S S=0,SP="",H=+$H
+ S SP="" F  S SP=$O(^DSH(LP,OT,VR,SP)) Q:SP=""  D
+ .S TM="" F  S TM=$O(^DSH(LP,OT,VR,SP,H,TM)) Q:TM=""  D:$D(^(TM,"u"))
+ ..S NI=$$GETNIB^IRASP2(LP,OT,VR,SP,H,TM) Q:NI=""  
+ ..S DG=$$GET^IPAC(NI,"stc",H)
+ ..S P=$$PRC^IINSC(DG,NI,H,1)
+ ..S U="" F  S U=$O(^DSH(LP,OT,VR,SP,H,TM,"u",U)) Q:U=""  D
+ ...S Z=^(U) S:'+Z Z=1
+ ...S S=S+$$CALC^IUSL(VR,H,OT,NI,U_"*"_Z,"","",$$CALC^IDSCN(NI,OT,U,DG,P,Z)) ; TODO - не совсем правильный расчет скидки
+ Q 0
+SEL(KEY) ; Select line w. FIO
+ N R,X,FIO,NIB
+ S NIB=$P(KEY,"@",1) Q:NIB="" 
+ S DT=$P(KEY,"@",2) S:DT="" DT=+$H
+ D mklist(NIB,KEY)
+ D OWF^RWU(".xmlb")
+ D W^RWU(^PP(0,1)_"<nb_console><ksslist>")
+ D WTAGDC^RWU("nib",NIB)
+ D WTAGDC^RWU("fiof",$$GET^IPAC(NIB,"fiof"))
+ D WTAGDC^RWU("fioi",$$GET^IPAC(NIB,"fioi"))
+ D WTAGDC^RWU("fioo",$$GET^IPAC(NIB,"fioo"))
+ S X=$$GET^IPAC(NIB,"status")
+ S R=$S($$FLinFL^TXTU(X,"kkm.phone"):$$MPHN^TXTU($$GET^IPAC(NIB,"pager")),$$FLinFL^TXTU(X,"kkm.email"):$$GET^IPAC(NIB,"email"),1:"") ; TODO - проверять корректность mail
+ D WTAGD^RWU("send_check",R)
+ S X=$$C^I("kssl","prnfio"),FI=""
+ I X S FI=$$FIOSHF^TXTU($$GET^IPAC(NIB,"parents")) S:FI="" FI=$$FIOSH^IPAC($$GET^IPAC(NIB,"lnkhist")) S:FI="" FI=$$FIOSH^IPAC(NIB) S FI=FI_" (и.б. "_NIB_")"
+ D WTAGDC^RWU("prnfio",FI)
+ S X=$$FTBILL^IBILL(NIB)
+ S R=$S(X=0:"",$L(X)>9:"Счет "_X,1:"На счету "_X)
+ S:$$SLOCK^IBILL(NIB) R=$S(R="":"",1:R_" ")_"(блок.)"
+ D WTAGDCU^RWU("bill",R,X)
+ S R=$$NOW^IBILL(NIB)
+ D WTAGD^RWU("cbill",R) ; абс. сумма
+ S R=$S(R>0:0,1:-R)
+ D WTAGDC^RWU("nib",NIB)
+ D WTAGD^RWU("summ",R)
+ D WTAGD^RWU("in",R)
+ D WTAGD^RWU("tp",1),WTAGD^RWU("sd",0)
+ D WTAGD^RWU("dt",$$DT^DTUTL(DT))
+ D:'$$C^I("kssl","nobonus") WTAGD^RWU("bonus",+$$NOW^IBILS(NIB))
+ S R=$$IsNAZ^INAZN(NIB,+$H,1,1)
+ I R=0,$$IsNAZ^INAZN(NIB,+$H,1) S R=2
+ D W^RWU("<btn_naz color="""_$S(R=1:"red",R:"green",1:"black")_"""/>")
+ D:'$$C^I("kssl","nocunsbs") WTAGD^RWU("unsbs",+$$IsUNSB^NPACSC(NIB,+$H))
+ D W^RWU("</ksslist></nb_console>")
+ S ^BUF("ksslock",NIB,+$H)=%JOB_"|"_$P($H,",",2)
+ D C^RWU
+ Q
+mklist(NIB,KEY) ; Создать список для печати на чеке
+ N LN,DT,TM,VR,D,T,idx
+ S DT=$P(KEY,"@",2),TM=$P(KEY,"@",3),VR=$P(KEY,"@",4),idx=0
+ S:DT="R" DT=""
+ K ^JOB(%JOB,"nkssl-u")
+ I DT'="",TM'="" D mkln($G(^BILL(NIB,DT,TM)),VR) Q 
+ S D="" F  S D=$O(^BILL(NIB,D)) Q:D=""!(+D'=D)  D:D=DT!(DT="")
+ .S T="" F  S T=$O(^BILL(NIB,D,T)) Q:T=""  I TM=""!(T=TM) D mkln($G(^BILL(NIB,D,T)),VR)
+ S ^JOB(%JOB,"nkssl-u")=idx
+ Q
+mkln(A,VRX) 
+ N U,I,CEN,CNT,DTT,VR,OT,ID,IDL,SUS,SUi,SU,K,CC,KX,FLG,SUE
+ S U=$P(A,"|",6),I=$P(U,"/",1)
+ ;S:A["ZNF" ^KKK(8)=$G(^KKK(8))+$P(A,"|",2)
+ Q:$P(U,":",1)'="ZNF"  ; TODO
+ S VR=$P(I,":",2),OT=$P(I,":",3),DTT=$P(I,":",4)
+ I VRX'="",VRX'=VR Q 
+ N @$$NEWVAR^IUSL
+ F I=2:1:99 S A=$P(U,"/",I) Q:A=""  S A=$P(A,":",3) S:$L(A) IDL(A)=""
+ S ID="" F  S ID=$O(IDL(ID)) Q:ID=""  D mklnp
+ Q
+mklnp 
+ Q:$$GETPL^IUSL(VR,DTT,OT,ID,"kp")  Q:$$ISPL^IUSL(VR,DTT,OT,ID,"rcl")  
+ D GET^IUSL(VR,DTT,OT,ID)
+ S SUS=$$GETPL^IUSL(VR,DTT,OT,ID,"s"),SUi=2
+ S U=$O(UL("")) Q:U=""  
+ S CNT=$G(UL(U))
+ S CEN=$S($L(SUS):$P(SUS,"|",1),1:$$USUM^IUSL(DTT,U,CNT))
+ S SUE=$$GET^IPRICE(U,"uetv",PRC,DTT)*CNT
+ S ^JOB(%JOB,"nkssl-u",VR_"|"_DTT_"|"_OT_"|"_ID)=U_"|"_PRC_"|"_CNT_"|"_CEN_"|"_SUE
+ S idx=idx+1
+ Q
+RASP(VR,DT,NI) ; Init form from NSPRASP
+ H 2 ; form init - todo
+ D SEL(NI)
+ Q
+CHKI1(IDK,NI,SUM,OPL,NNUM,COM,UKEY,CNUM,OPLS) ; Предварительная проверка
+ ; UKEY - коды услуг
+ ; CNUM - номер чека
+ ; OPL - тип платежа
+ ; OPLS - субсчет
+ N A,H,T,R,I,SPT,SB,GD,U,P,D
+ S H=+$H
+ ; Таймаут на выбор - 1 мин.
+ I $D(^BUF("ksslock",NI,H)) S A=^(H) I $P(A,"|",1)'=%JOB,$P($H,",",2)-$P(A,"|",2)<60 D MSG^RWU("Пациент выбран другим сотрудником.") Q
+ I $$C^I("kssl","nzview"),$$IsNAZ^INAZN(NI,+$H,1,1) D MSG^RWU("У пациента не просмотрены назначения.") Q 
+ S SB=$$GETN^ISPRAV("paytype",OPL,8)
+ I SB,$G(OPLS)="" D MSG^RWU("Недопустимая опата бонусным счетом.") Q 
+ S:'IDK IDK=$$KKM^IUSER()
+ S GD=$$GETN^ISPRAV("kkm",IDK,8)
+ I GD'="" S (A,I)="" F  S I=$O(^JOB(%JOB,"nkssl-u",I)) Q:I=""  D  Q:I=""
+ .S R=^(I),D=$P(I,"|",2),U=$P(R,"|",1),P=$P(R,"|",2)
+ .I '$$CHKGD^IPRICE(U,P,D,GD) D MSG^RWU("Услуги не могут быть оплачены на данной кассе") S I=""
+ Q:$$IsMSG^RWU()
+ S SUM=$P(SUM,"|",1),OPL=$P(OPL,"|",2)
+ I SUM'=0 D CHKI1^YIBILL(IDK,NI,SUM,OPL) D:$$GETMSG^RWU()="OK" CLRMSG^RWU()
+ Q
+CHKI2(IDK,NI,SUM,OPL,NNUM,COM,UKEY,CNUM,OPLS,NCHK) ; Прием наличных
+ ; UKEY - коды услуг
+ ; NNUM - номер карты
+ ; CNUM - номер чека
+ ; OPL - тип платежа
+ ; OPLS - субсчет
+ ; NCHK - не проверять условия
+ N A,H,T,R,KV,S2,TP2
+ S H=+$H,KV="",NCHK=+$G(NCHK)
+ S S2=$$NNUM^TXTU($P(SUM,"|",2)),SUM=$$NNUM^TXTU($P(SUM,"|",1))
+ S TP2=$P(OPL,"|",2),OPL=$P(OPL,"|",1)
+ S:'IDK IDK=$$KKM^IUSER()
+ ; Таймаут на выбор - 1 мин.-5 sec
+ I 'NCHK,$D(^BUF("ksslock",NI,H)) S A=^(H) I $P(A,"|",1)'=%JOB,$P($H,",",2)-$P(A,"|",2)<55 D MSG^RWU("Пациент выбран другим сотрудником.") Q 
+ I 'NCHK,$$C^I("kssl","nzview"),$$IsNAZ^INAZN(NI,+$H,1,1) D MSG^RWU("У пациента не просмотрены назначения.") Q 
+ 
+ S SB=$$GETN^ISPRAV("paytype",OPL,8)
+ I SB,$G(OPLS)="" D MSG^RWU("Недопустимая опата бонусным счетом.") Q 
+ I SB S SPT=$$SUB^IBILS(NI,$G(OPLS),$H,SUM,"","")
+ D:SUM'=0
+ .S KV=$$GET^IINKR("NKSS")
+ .D CHKI2^YIBILL(IDK,NI,SUM,OPL,NNUM,COM,KV,$G(CNUM)) ;TODO - PTR to SPT
+ .D:S2 CHKI2^YIBILL(IDK,NI,S2,TP2,NNUM,COM,KV,$G(CNUM),NCHK)
+ I $G(%L)'="",%L'="OK" Q 
+ 
+ D setukey(NI,$G(UKEY),KV)
+ 
+ ; ключи списаний
+ I 0 S T="" F  S T=$O(^BILL(NI,H,T)) Q:T=""  D  ; TODO
+ .S R=$G(^(T)) Q:R=""
+ .Q:$P(R,"|",1)'=""  ; денежные операции
+ .Q:$P(R,"|",11)  ; уже отмечено
+ .S $P(R,"|",11)=$P(R,"|",2),^(T)=R
+ .D UPD^IEXCH("IBILL",NI_","_H)
+ 
+ D UPD^YISYNC("TABCHK^NKSSL","(0)")
+ ;S ^BUF("ksslock",NI,H)=%JOB_"|"_$P($H,",",2)
+ H 1
+ K ^BUF("ksslock",NI,H)
+ S A=$$LCL^IUSER("inkss","autoprn-stc")
+ I $L(A),"01"[$$GET^IINSC($$GET^IPAC(NI,"stc"),"dvid") D MSG^RWU($G(^PP(0,2))_"<ksslist><print>"_A_"</print></ksslist></nb_console>",".xmlb") Q 
+ S A=$$LCL^IUSER("inkss","autoprn")
+ I $L(A) D MSG^RWU($G(^PP(0,2))_"<ksslist><print>"_A_"</print></ksslist></nb_console>",".xmlb") Q 
+ Q
+setukey(NI,UKEY,KV) ; заполнить поля услуги после платежа
+ N KX,VR,DTT,OT,ID,R
+ 
+ S:UKEY'="" UKEY="|"_UKEY_"|"
+ 
+ S KX="" F  S KX=$O(^JOB(%JOB,"nkssl-u",KX)) Q:KX=""  D
+ .S VR=$P(KX,"|",1),DTT=$P(KX,"|",2),OT=$P(KX,"|",3),ID=$P(KX,"|",4)
+ .I UKEY'="",UKEY'[("|"_VR_"@"_DTT_"@"_OT_"@"_ID_"|")  Q 
+ .S R=$$SETPL^IUSL(VR,DTT,OT,ID,"kp",$H)
+ .S:KV'="" R=$$SETPL^IUSL(VR,DTT,OT,ID,"kv",KV)
+ K ^JOB(%JOB,"nkssl-u")
+ Q
+SETHIDE(NIB,OFF) ; Скрыть на сегодня строку
+ I NIB="" D TAB(0) Q 
+ S:'+$G(OFF) ^BUF("khide",+$H,NIB)=""
+ K:+$G(OFF) ^BUF("khide",+$H,NIB)
+ D TAB(0)
+ Q
+ULIST(NIB,DT,TM,vK,VR,SUM) ; список услуг по платежу
+ ; SUM - сумма платежа
+ S vK=+$G(vK) ; w. key column
+ D OWF^RWU(".txt")
+ D WC^RWU($S(vK=2:"|Отм.|",vK:"|",1:"")_"Наименование услуги|Кол-во|Сумма")
+ N KX,VR,DTT,OT,ID,R,CC,U,PRC,CNT,CEN,SUE,S1,S2,S3
+ S (S1,S2,S3)=0
+ S (KX,CC)="" F  S KX=$O(^JOB(%JOB,"nkssl-u",KX)) Q:KX=""  D
+ .S VR=$P(KX,"|",1),DTT=$P(KX,"|",2),OT=$P(KX,"|",3),ID=$P(KX,"|",4)
+ .S R=^(KX)
+ .S U=$P(R,"|",1),PRC=$P(R,"|",2),CNT=$P(R,"|",3),CEN=$P(R,"|",4)
+ .S SUE=$P(R,"|",5)
+ .D WC^RWU(CR_$S(vK:VR_"@"_DTT_"@"_OT_"@"_ID_"|",1:"")_$S(vK=2:"|",1:"")_U_" "_$$NAMEH^IPRICE(U,PRC,DTT)_"|"_CNT_"|"_CEN_$S(SUE:"/"_SUE,1:""))
+ .S S1=S1+CEN,S2=S2+CNT,S3=S3+SUE
+ 
+ D:S2>1 WC^RWU(CR_$S(vK=2:"||",vK:"|",1:"")_"Итого|"_S2_"|"_S1_$S(S3:"/"_S3,1:""))
+ D C^RWU
+ Q
+ULIST1 
+ N KX,VRX,OT,ID,FLG,R,S
+ N A,U,I,CEN,S1,S2,CNT,DTT,OT,ID,IDL,SUS,SUi,SU,K
+ N @$$NEWVAR^IUSL
+ S VRX=VR,S1=0,S2=0
+ S KX="" F  S KX=$O(^PNF(NIB,DT,KX)) Q:KX=""  D
+ .S VR=$P(KX,"|",1),OT=$P(KX,"|",2),ID=$P(KX,"|",3)
+ .Q:VRX'=VR 
+ .S FLG="|"_$P($G(^ZNF(VR,OT,DT,ID,"m")),"~",2)_"|"
+ .Q:FLG["|nop|"  Q:FLG["|grn|"
+ .I 12'[$P($G(^("e")),"~",1),FLG'["kss"  Q
+ .Q:$G(^("kv"))'="" 
+ .S S=$P($G(^("s")),"|",1) Q:'S 
+ .D GET^IUSL(VR,DT,OT,ID)
+ .S SUS=$$GETPL^IUSL(VR,DT,OT,ID,"s"),SUi=2
+ .S U="" F  S U=$O(UL(U)) Q:U=""  D
+ ..S CNT=$G(UL(U))
+ ..S CEN=$S($L(SUS)&(SUS'["|"):SUS,$L(SUS):$P(SUS,"|",SUi),1:$$USUM^IUSL(DTT,U,CNT))
+ ..S SUi=SUi+1
+ ..D WC^RWU(CR_VR_"@"_DT_"@"_OT_"@"_ID_$S(vK=2:"||",vK:"|",1:"")_U_" "_$$NAMEH^IPRICE(U,PRC,DT)_"|"_CNT_"|"_CEN)
+ ..S S1=S1+CEN,S2=S2+CNT
+ D:S2>1 WC^RWU(CR_$S(vK=2:"||",vK:"|",1:"")_"Итого|"_S2_"|"_S1)
+ D C^RWU
+ 
+ Q
+ULSTRC(NIB,DT,TM,VRX,ZSUM) ; список услуг по платежу (для чека)
+ I '$$C^I("kssl","detrcpt") Q 
+ D OWF^RWU(".txt")
+ N KX,VR,DTT,OT,ID,R,CC,U,PRC,CNT,CEN,UT,fOMS
+ S fOMS=$$C^I("kss","omscode")
+ S (KX,CC)="" F  S KX=$O(^JOB(%JOB,"nkssl-u",KX)) Q:KX=""  D
+ .S VR=$P(KX,"|",1),DTT=$P(KX,"|",2),OT=$P(KX,"|",3),ID=$P(KX,"|",4)
+ .S R=^(KX)
+ .S U=$P(R,"|",1),PRC=$P(R,"|",2),CNT=$P(R,"|",3),CEN=$P(R,"|",4)
+ .Q:'CNT  Q:'CEN 
+ .S UT=U
+ .I fOMS S UT=$$GET^IPRICE(U,"oms",PRC,DTT),UT=$S(UT="":U,fOMS=2:UT_" / "_U,1:UT)
+ .D WC^RWU(CC_$$OWF^TXTU(UT_" "_$$NAMEH^IPRICE(U,PRC,DTT),40)_"|"_(+CEN/CNT)_"|"_CNT)
+ .S CC=CR
+ D C^RWU
+ Q
+ULSTRC1 ; TODO
+ S KX="" F  S KX=$O(^PNF(NIB,DT,KX)) Q:KX=""  D
+ .S VR=$P(KX,"|",1),OT=$P(KX,"|",2),ID=$P(KX,"|",3)
+ .Q:VRX'=VR 
+ .S FLG="|"_$P($G(^ZNF(VR,OT,DT,ID,"m")),"~",2)_"|"
+ .Q:FLG["|nop|"  Q:FLG["|grn|"  
+ .I 12'[$P($G(^("e")),"~",1),FLG'["kss"  Q
+ .Q:$G(^("kp"))  Q:'$P($G(^("s")),"|",1)  Q:$G(^("rcl"))'="" 
+ .S DTT=DT
+ .;D ULSTRp
+ D C^RWU
+ Q
+UPDSKD(NIB,DT,TM) ; пересчитать скидку по услугам платежа
+ S vK=+$G(vK)
+ N A,U,I,CEN,CNT,DTT,VR,OT,ID,IDL,KEY,SKD,STC,LP,@$$NEWVAR^IUSL
+ S STC=$$GET^IPAC(NIB,"stc",DT),LP=$$^I("ilpu")
+ S A=$G(^BILL(NIB,DT,TM)),U=$P(A,"|",6),I=$P(U,"/",1)
+ S VR=$P(I,":",2),OT=$P(I,":",3),DTT=$P(I,":",4),(S1,S2)=0
+ F I=2:1:99 S A=$P(U,"/",I) Q:A=""  S A=$P(A,":",3) S:$L(A) IDL(A)=""
+ S ID="" F  S ID=$O(IDL(ID)) Q:ID=""  D  Q:$$IsMSG^RWU()  
+ .S KEY=VR_"@"_DTT_"@"_OT_"@"_ID
+ .D GETLT^IUSL(VR,DTT,OT,ID)
+ .Q:$D(ERR) 
+ .S ISTC=$S($G(ISTC)'="":ISTC,1:STC)
+ .S U=$O(UL(""))
+ .S:'PRC PRC=$$GET^IINSC(ISTC,"price",DTT)
+ .S SKD=$$CALC^IDSCN(NIB,OT,U,ISTC,PRC,UL(U),LP)
+ .D USKD^NPACADM(NIB,KEY,SKD,1,1)
+ .Q:$$IsMSG^RWU() 
+ .D UDOSBS^NPACADM(NIB,KEY,1)
+ Q
+UPDSKDT(NIB,DT,TM,IDSK) ; Применить скидку к услугам платежа
+ ; IDSK - ID скидки
+ N A,U,I,CEN,CNT,DTT,VR,OT,ID,IDL,KEY,SKD,STC,LP,ADD,@$$NEWVAR^IUSL
+ S STC=$$GET^IPAC(NIB,"stc",DT),LP=$$^I("ilpu")
+ S A=$G(^BILL(NIB,DT,TM)),U=$P(A,"|",6),I=$P(U,"/",1)
+ S VR=$P(I,":",2),OT=$P(I,":",3),DTT=$P(I,":",4),(S1,S2)=0
+ S ADD=$$IsTAG^IDSCN(IDSK,"append")
+ F I=2:1:99 S A=$P(U,"/",I) Q:A=""  S A=$P(A,":",3) S:$L(A) IDL(A)=""
+ S ID="" F  S ID=$O(IDL(ID)) Q:ID=""  D  Q:$$IsMSG^RWU() 
+ .S KEY=VR_"@"_DTT_"@"_OT_"@"_ID
+ .D GETLT^IUSL(VR,DTT,OT,ID)
+ .Q:$D(ERR) 
+ .S ISTC=$S($G(ISTC)'="":ISTC,1:STC)
+ .S U=$O(UL("")) Q:U="" 
+ .S:'PRC PRC=$$GET^IINSC(ISTC,"price",DTT)
+ .S SKD=$$CALCID^IDSCN(IDSK,OT,U,ISTC,PRC,UL(U),LP)
+ .S:ADD SKD=$$GETSKD^IUSL(VR,DTT,OT,ID)+SKD
+ .D USKD^NPACADM(NIB,KEY,SKD,1,1)
+ .Q:$$IsMSG^RWU() 
+ .D UDOSBS^NPACADM(NIB,KEY,1)
+ Q
+SELCMP(NIB,DT,TM,IDC) ; Выбрать акцию
+ N A,U,I,CEN,CNT,DTT,VR,OT,ID,IDL,KEY,SKD,STC,LP,@$$NEWVAR^IUSL
+ S STC=$$GET^IPAC(NIB,"stc",DT),LP=$$^I("ilpu")
+ S A=$G(^BILL(NIB,DT,TM)),U=$P(A,"|",6),I=$P(U,"/",1)
+ S VR=$P(I,":",2),OT=$P(I,":",3),DTT=$P(I,":",4),(S1,S2)=0
+ 
+ F I=2:1:99 S A=$P(U,"/",I) Q:A=""  S A=$P(A,":",3) S:$L(A) IDL(A)=""
+ S ID="" F  S ID=$O(IDL(ID)) Q:ID=""  D  Q:$$IsMSG^RWU() 
+ .S KEY=VR_"@"_DTT_"@"_OT_"@"_ID
+ .Q:'$$IsOK^NACAMP(IDC,VR,DTT,OT,ID) 
+ .d upd^NACAMP(IDC,VR,DTT,OT,ID)
+ 
+ Q
+CALCSKD(NIB,DT,TM,IDSK) ; Посчитать предполагаемую скидку
+ ; IDSK - ID скидки
+ N A,U,I,CEN,CNT,DTT,VR,OT,ID,IDL,KEY,SKD,STC,LP,ADD,@$$NEWVAR^IUSL
+ S STC=$$GET^IPAC(NIB,"stc",DT),LP=$$^I("ilpu")
+ S A=$G(^BILL(NIB,DT,TM)),U=$P(A,"|",6),I=$P(U,"/",1)
+ S VR=$P(I,":",2),OT=$P(I,":",3),DTT=$P(I,":",4),(S1,S2)=0
+ S ADD=$$IsTAG^IDSCN(IDSK,"append")
+ F I=2:1:99 S A=$P(U,"/",I) Q:A=""  S A=$P(A,":",3) S:$L(A) IDL(A)=""
+ S ID="" F  S ID=$O(IDL(ID)) Q:ID=""  D  Q:$$IsMSG^RWU() 
+ .S KEY=VR_"@"_DTT_"@"_OT_"@"_ID
+ .D GETLT^IUSL(VR,DTT,OT,ID)
+ .Q:$D(ERR) 
+ .S ISTC=$S($G(ISTC)'="":ISTC,1:STC)
+ .S U=$O(UL("")) Q:U="" 
+ .S:'PRC PRC=$$GET^IINSC(ISTC,"price",DTT)
+ .S SKD=$$CALCID^IDSCN(IDSK,OT,U,ISTC,PRC,UL(U),LP)
+ .S:ADD SKD=$$GETSKD^IUSL(VR,DTT,OT,ID)+SKD
+ .D USKD^NPACADM(NIB,KEY,SKD,1,1)
+ .Q:$$IsMSG^RWU() 
+ .D UDOSBS^NPACADM(NIB,KEY,1)
+ Q
+DOUSL(NIB,DT,TM,KEY,SUM) ; Выполнить действи на таблице с услугами
+ G:'$$LCL^IUSER("inkss","summ") DOUSLe
+ N VR,DTT,OT,ID,S,P
+ S VR=$P(KEY,"@",1),DTT=$P(KEY,"@",2),OT=$P(KEY,"@",3),ID=$P(KEY,"@",4)
+ S SUM=$TR(SUM,",",".")
+ S S=$$SETPL^IUSL(VR,DTT,OT,ID,"s",SUM)
+ S P=$$GETPL^IUSL(VR,DTT,OT,ID,"p")
+ G:P="" DOUSLe
+ D REMBILL^IBILL(NIB,P,S-SUM,"")
+DOUSLe 
+ D ULIST(NIB,DT,TM,1)
+ Q
+PRNBILL(NIB,KEY) ; Печатная форма
+ N RTp,IDX,DT,TM,VR,A,KV,UT,UX,fOMS
+ S DT=$P(KEY,"@",2),TM=$P(KEY,"@",3),VR=$P(KEY,"@",4),KV=$P(KEY,"@",5)
+ S:'$$C^I("kssl","detrcpt") VR=""
+ S fOMS=$$C^I("kss","omscode")
+ I VR'="" S DT=$P(KEY,"@",2),IDX=DT_"@"_KV_"@"_VR
+ D:VR=""
+ .S A=$G(^BILL(NIB,DT,TM)),IDX=$P($P(A,"|",6),"/",1)
+ .S VR=$P(IDX,":",2),DT=$P(IDX,":",4)
+ S IDX=$S($P(IDX,":",1)="NAZ":"@@"_IDX,VR="":"",1:DT_"@"_KV_"@"_VR)
+ 
+ D OWF^RWU(".xml")
+ S RTp=$$C^I("kss","prnlbill"),IDX=$G(IDX)
+ S:RTp="" RTp=$$C^I("kss","prnbill") ; default settings
+ S RTp=+RTp
+ D OPEN^ISTREP("Квитанция")
+ D:(RTp[0)!(RTp[3) PRNBFULL^NKSS
+ D:RTp[1 PRNBLT^NKSS
+ I RTp[2 D PRNBLTE^NKSS,CLOSE^ISTREP,C^RWU Q
+ D CEND^ISTREP,CLOSE^ISTREP
+ D C^RWU
+ Q
+DSCNL(NI) ; Перечень скидок на прием
+ N TAG
+ S TAG=$$C^I("kssl","dscn-tag")
+ S TAG=$$STFLGS^TXTU(TAG,$$LCL^IUSER("inkss","dscn-tag"))
+ D:TAG="" LST2^NDSCN
+ D:TAG'="" LSTTAG^NDSCN(TAG)
+ Q

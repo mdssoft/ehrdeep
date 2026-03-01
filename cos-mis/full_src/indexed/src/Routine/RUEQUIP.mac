@@ -1,0 +1,111 @@
+RUEQUIP ; Отчеты по услугам и оборудованию [ 08/01/2019  2:03 PM ]
+VOE(DS,DE,VTP,LPU) ; Выручка по оборудованию
+ ; VTP - +по типам договоров
+ N X1,X2,X3,TABLE,TABLEV,I,R,L,C,J,K,ULX,ULC,DGL,DGT
+ K ^BUF($J,"ue")
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S LPU=$G(LPU)
+ S:'+$$FR^I() LPU=$$^I("ilpu")
+ S L="" F  S L=$O(^PLPU(L)) Q:L=""  D:LPU=""!(LPU=L)
+ .S X1="" F  S X1=$O(^PLPU(L,X1)) Q:X1=""  D
+ ..S X2="" F  S X2=$O(^PLPU(L,X1,X2)) Q:X2=""  D
+ ...S C="" F  S C=$O(^PLPU(L,X1,X2,"cab",C)) Q:C=""  D
+ ....S I="" F  S I=$O(^PLPU(L,X1,X2,"cab",C,"eq",I)) Q:I=""  D
+ .....S R=^(I),J=$P(R,"|",1),K=$P(R,"|",2) S:K="" K=1
+ .....Q:J=""  ; no dev
+ .....S TABLE(L,J,1)=$G(TABLE(L,J,1))+K
+ S I="" F  S I=$O(^EQUIP(I)) Q:I=""  D
+ .S C="" F  S C=$O(^EQUIP(I,"usl",C)) Q:C=""  S ^BUF($J,"ue",C)=I
+ 
+ D ITERATE^IUSLD("VOEp^RUEQUIP(VR,OT,DT,ID)",DS,DE,,,LPU)
+ D OWF^RWU(".txt")
+ D WC^RWU("Оборудование||Число|Услуг на|Сумма|Выручка на|Средняя;")
+ D WC^RWU(CR_$$TXTP^DTUTL(DS,DE)_"|Единиц|услуг|оборудование|услуг|оборудование|стоим. услуги")
+ 
+ S LPU="" F  S LPU=$O(TABLE(LPU)) Q:LPU=""  D
+ .D WC^RWU(CR_$$NAME^YCONTR(LPU))
+ .S I="" F  S I=$O(TABLE(LPU,I)) Q:I=""  D
+ ..S X1=$G(TABLE(LPU,I,1)),X2=$G(TABLE(LPU,I,2))
+ ..S K=$G(TABLE(LPU,I,4))
+ ..S R=$$NAME^NEQUIP(I)_"|"_X1_"|"_$$fn(X2)_"|"
+ ..S R=R_$S(X1:$$fn(X2/X1),1:0)_"|"_$$fn(K)_"|"
+ ..S R=R_$S(X1:$$fn(K/X1),1:0)_"|"
+ ..S R=R_$S(X2:$$fn(K/X2),1:0)
+ ..D WC^RWU(CR_R)
+ ..Q:'VTP
+ ..S DGT="" F  S DGT=$O(TABLEV(LPU,I,DGT)) Q:DGT=""  D
+ ...S X2=$G(TABLEV(LPU,I,DGT,2)),K=$G(TABLEV(LPU,I,DGT,4))
+ ...S R=" - "_$$NAME^ISPRAV("dvid",DGT)_"||"_$$fn(X2)_"|"
+ ...S R=R_$S(X1:$$fn(X2/X1),1:0)_"|"_$$fn(K)_"|"
+ ...S R=R_$S(X1:$$fn(K/X1),1:0)_"|"
+ ...S R=R_$S(X2:$$fn(K/X2),1:0)
+ ...D WC^RWU(CR_R)
+ D C^RWU
+ K ^BUF($J,"ue")
+ Q
+fn(X) 
+ Q +$J(X,"",2)
+VOEp(VR,OT,DT,ID) 
+ Q:"wd"[$$GETSTAT^IUSL(VR,DT,OT,ID) 
+ S ULX=$$GETUSLS^IUSL(VR,DT,OT,ID) Q:ULX="" 
+ S ULC=$P(ULX,"*",2) S:ULC="" ULC=1
+ S ULX=$P(ULX,"*",1) Q:ULX="" 
+ Q:'$D(^BUF($J,"ue",ULX))
+ S X2=^(ULX)
+ S X1=$$GETLPU^IUSL(VR,DT,OT,ID)
+ S X3=$$GETSUM^IUSL(VR,DT,OT,ID)
+ S TABLE(X1,X2,2)=$G(TABLE(X1,X2,2))+ULC
+ S TABLE(X1,X2,4)=$G(TABLE(X1,X2,4))+X3
+ Q:'VTP 
+ S DGT=$$GETDGT^IRPUSL($$GETDGN^IUSL(VR,DT,OT,ID),DT)
+ S TABLEV(X1,X2,DGT,2)=$G(TABLEV(X1,X2,DGT,2))+ULC
+ S TABLEV(X1,X2,DGT,4)=$G(TABLEV(X1,X2,DGT,4))+X3
+ Q
+EQRCE(DT,PRC) ; Оборудование по прейскуранту
+ N CN,ID,R,I
+ K ^BUF($J)
+ S PRC=$$CORCP^IPRICET(PRC),DT=$$DIH^DTUTL(DT)
+ 
+ S ID="" F  S ID=$O(^EQUIP(ID)) Q:ID=""  D
+ .S CN="" F  S CN=$O(^EQUIP(ID,"usl",CN)) Q:CN=""  D
+ ..S ^BUF($J,CN)=$$STFLG^TXTU($G(^BUF($J,CN)),ID)
+ 
+ D OWF^RWU(".txt")
+ D WC^RWU("Код|Услуга на "_$$DT^DTUTL(DT)_"|Единиц|Оборудование|Код оборудования")
+ S CN="" F  S CN=$O(^CN(CN)) Q:CN=""  D:$D(^(CN,PRC))
+ .S R=$G(^BUF($J,CN)) Q:R=""  
+ .Q:'$$CHECKH^IPRICE(CN,PRC,DT)
+ .S ID="" F I=1:1:$L(R,"|") S ID=$S(ID="":"",1:ID_", ")_$G(^EQUIP($P(R,"|",I)))
+ .D WC^RWU(CR_CN_"|"_$$CNAMEH^IPRICE(CN,PRC,DT)_"|"_$L(R,"|")_"|"_ID_"|"_$TR(R,"|",","))
+ D C^RWU
+ K ^BUF($J)
+ Q
+LST(AC,LPU) ; Полный перечень оборудования
+ ; AC - только активное
+ N X1,X2,X3,I,R,L,C,J,K,ULX,ULC,DGL,DGT
+ 
+ D OWF^RWU(".txt")
+ D WC^RWU("Филиал|Оборудование|Кол-во|Инв. номер|Расположение|Носимое") 
+ 
+ S LPU=$G(LPU)
+ S:'+$$FR^I() LPU=$$^I("ilpu")
+ S L="" F  S L=$O(^PLPU(L)) Q:L=""  D:LPU=""!(LPU=L)
+ .S X1="" F  S X1=$O(^PLPU(L,X1)) Q:X1=""  D
+ ..S X2="" F  S X2=$O(^PLPU(L,X1,X2)) Q:X2=""  D
+ ...S C="" F  S C=$O(^PLPU(L,X1,X2,"cab",C)) Q:C=""  D
+ ....I AC,$P($G(^(C)),"|",5)>0 Q 
+ ....S I="" F  S I=$O(^PLPU(L,X1,X2,"cab",C,"eq",I)) Q:I=""  D
+ .....S R=^(I),J=$P(R,"|",1),K=$P(R,"|",2) S:K="" K=1
+ .....Q:J=""  ; no dev
+ .....I AC,$P(R,"|",4) Q 
+ .....D WC^RWU(CR_$$NAME^ICONTR(L)_"|"_$P($G(^EQUIP(J)),"|",1)_"|"_K_"|"_$P(R,"|",3)_"|"_$$NAME^IPLPU(L,X1,X2,C,1)_"|"_$S($P(R,"|",5):"да",1:""))
+ 
+ D C^RWU
+ Q
+REGIPROC 
+ N F
+ S F=+$$FR^I()
+ S ^IPROC("Отчеты ЛПУ","Оборудование","Выручка по оборудованию")="VOE_RUEQUIP,1,"_$S(F:4,1:3)_",d,Начальная дата,d,Конечная дата,t@string:0/Обычный#1/По видам договоров,Формат отчета"_$S(F:",t@storage:lpu,Филиал",1:"")
+ S ^IPROC("Система","Прейскурант","Оборудование по прейскуранту")="EQRCE_RUEQUIP,1,2,d,Дата,t@net:LSTCP_YNPRICE(),Прейскурант"
+ S ^IPROC("Отчеты ЛПУ","Оборудование","Реестр оборудования")="LST_RUEQUIP,1,"_$S(F:2,1:1)_",t@string:0/Все#1/Действующее,Выводить оборудование"_$S(F:",t@storage:lpu,Филиал",1:"")
+ Q

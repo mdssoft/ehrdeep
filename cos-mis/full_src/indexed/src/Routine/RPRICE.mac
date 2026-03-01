@@ -1,0 +1,192 @@
+RPRICE ; Отчеты по прейскуранту [ 03/05/2019  5:16 PM ]
+EX(DT,VT,LT,US,FNX) ; Export
+ ; US - действующий
+ ; FNX - функция условия prm1<operator>prm2
+ N COD,OTX,SPX,PL,DMX,DD,NM,I,PRL,CEN,R,X,A,P1,P2,PP1,PP2
+ N TL,TLL D MKLST^NPRICEG("TL",1)
+ ; make field list
+ S COD="" F  S COD=$O(^CN(COD)) Q:COD=""  I $D(^CN(COD,VT)) S PL=99999 F  S PL=$O(^CN(COD,VT,PL)) Q:PL=""  I '$$Is2IDX^YNPRICE(PL),'$D(PRL(PL)) S PRL(PL)=""
+ S COD="" F  S COD=$O(^CNE(COD)) Q:COD=""  I $D(^CNE(COD,VT)) S PL=99999 F  S PL=$O(^CNE(COD,VT,PL)) Q:PL=""  I '$$Is2IDX^YNPRICE(PL),'$D(PRL(PL)) S PRL(PL)=""
+ F PL="otd","spec","cname","name","grp","mat","lnk","cowrk","age","lpu","acu","con","cls","tdsc","cdsc","pdsc" K PRL(PL)
+ S PL="" F  S PL=$O(PRL(PL)) Q:PL=""  I $$IsSYS^IPRICE(PL) K PRL(PL)
+ S (R,PL)="" F  S PL=$O(PRL(PL)) Q:PL=""  S R=R_"|"_PL
+ ; Exec prms.
+ M PL=PRL F X="name","code","price","grp","acu","cls" S PL(X)="" 
+ S FNX=$$EQ^IEVAL($G(FNX),"PL") K PL
+ S PP1=$P(FNX,"|",1),PP2=$P(FNX,"|",2),FNX=$P(FNX,"|",3,99)
+ 
+ S DT=$$DIH^DTUTL(DT),LT=+$G(LT),US=+$G(US)
+ D OWF^RWU(".txt")
+ D WC^RWU("Код|Наименование услуги на "_$$DT^DTUTL(DT)_"|Отд.|Спец.|Цена|Классы|Ан.Классы|cname"_R)
+ K ^BUF($J,"prc")
+ S COD="" F  S COD=$O(^CN(COD)) Q:COD=""  D:$D(^CN(COD,VT))
+ .I US,'$$CHECKH^IPRICE(COD,VT,DT) Q 
+ .S NM=$$NAMEH^IPRICE(COD,VT,DT)
+ .S CEN=$$PRICEH^IPRICE(COD,VT,DT)
+ .I FNX'="" S:PP1'="" P1=$$getpl(PP1) S:PP2'="" P2=$$getpl(PP2) S A="S A=("_FNX_")" X A Q:'A 
+ .S OTX=$TR($$GET^IPRICE(COD,"otd",VT,DT),"|",";")
+ .S SPX=$TR($$GET^IPRICE(COD,"spec",VT,DT),"|",";")
+ .S:$E(OTX,1)=";" OTX=$E(OTX,2,$L(OTX))
+ .S:$E(OTX,$L(OTX))=";" OTX=$E(OTX,1,$L(OTX)-1)
+ .S:$E(SPX,1)=";" SPX=$E(SPX,2,$L(SPX))
+ .S:$E(SPX,$L(SPX))=";" SPX=$E(SPX,1,$L(SPX)-1)
+ .S A=NM_"|"_OTX_"|"_SPX_"|"_CEN_"|"
+ .S A=A_$TR($$GET^IPRICE(COD,"cls",VT,DT),"|",";")_"|"
+ .S A=A_$TR($$GET^IPRICE(COD,"acu",VT,DT),"|",";")_"|"
+ .S PL=$$GET^IPRICE(COD,"cname",VT,DT)
+ .;S:PL'=NM A=A_$TR(PL,"|",";") ; псевдоним, если отличается
+ .S PL="" F  S PL=$O(PRL(PL)) Q:PL=""  D
+ ..S A=A_"|"_$TR($$GET^IPRICE(COD,PL,VT,DT),"|"_CR,"; ")
+ .I LT S ^BUF($J,"prc","~|"_$J(COD,10))=A Q 
+ .S X=$$GET^IPRICE(COD,"grp",VT,DT),X=$S(X="":"z",1:$G(TL(X))),^BUF($J,"prc",X_"~x|"_COD)=A
+ .F I=1:1:99 S R=+$P(X,"~",I) Q:R=""  S R=$S(R="":"z",1:$G(TL(R))) I R'="" S ^BUF($J,"prc",X_"~x"_R_"|")=$S(R="z":"",1:$$NAME^NPRICEG(+$P(R,"~",$L(R,"~")))) S:'$D(TLL(R)) TLL(R)="",^BUF($J,"prc",X_"~z|")=""
+ S X=""
+ F  S X=$O(^BUF($J,"prc",X)) Q:X=""  D WC^RWU(CR_$$TRIM^TXTU($P(X,"|",2))_"|"_^(X))
+ K ^BUF($J,"prc")
+ D C^RWU
+ Q
+getpl(PL) 
+ Q:PL="name" NM
+ Q:PL="code" COD
+ Q:PL="price" CEN
+ Q $$GET^IPRICE(COD,PL,VT,DT) 
+EXO(DT,VT,US) ; Экспорт с отделениями
+ ; US - used, VT - price
+ N COD,OTX,SPX,PL,DMX,DD,NM,I,PRL,R,X,A
+ N TL,TLL D MKLST^NPRICEG("TL",1)
+ S DT=$$DIH^DTUTL(DT),US=$G(US)
+ D OWF^RWU(".txt")
+ D WC^RWU("Код|Наименование услуги на "_$$DT^DTUTL(DT)_"|Цена|Отделение")
+ K ^BUF($J,"prc")
+ S COD="" F  S COD=$O(^CN(COD)) Q:COD=""  D:$D(^CN(COD,VT))
+ .I US,'$$CHECKH^IPRICE(COD,VT,DT) Q
+ .S NM=$$NAMEH^IPRICE(COD,VT,DT)
+ .S OTX=$TR($$GET^IPRICE(COD,"otd",VT,DT),"|",";")
+ .S:$E(OTX,1)=";" OTX=$E(OTX,2,$L(OTX))
+ .S:$E(OTX,$L(OTX))=";" OTX=$E(OTX,1,$L(OTX)-1)
+ .S A=NM_"|"_$$PRICEH^IPRICE(COD,VT,DT)_"|"_OTX
+ .S X=$$GET^IPRICE(COD,"grp",VT,DT),X=$S(X="":"z",1:$G(TL(X))),^BUF($J,"prc",X_"~x|"_COD)=A
+ .F I=1:1:99 S R=+$P(X,"~",I) Q:R=""  S R=$S(R="":"z",1:$G(TL(R))) I R'="" S ^BUF($J,"prc",X_"~x"_R_"|")=$S(R="z":"",1:$$NAME^NPRICEG(+$P(R,"~",$L(R,"~")))) S:'$D(TLL(R)) TLL(R)="",^BUF($J,"prc",X_"~z|")=""
+ S X=""
+ F  S X=$O(^BUF($J,"prc",X)) Q:X=""  D WC^RWU(CR_$TR($P(X,"|",2)," ","")_"|"_^(X))
+ K ^BUF($J,"prc")
+ D C^RWU
+ Q
+EXSP(DT,VT,US) ; Экспорт с специальностиями
+ ; US - used, VT - price
+ N COD,SPX,PL,DMX,DD,NM,I,PRL,R,X,A,RR
+ S DT=$$DIH^DTUTL(DT),US=$G(US)
+ D OWF^RWU(".txt")
+ D WC^RWU("Код|Наименование услуги на "_$$DT^DTUTL(DT)_"|Цена|Коды спец.|Специальность")
+ S COD="" F  S COD=$O(^CN(COD)) Q:COD=""  D:$D(^CN(COD,VT))
+ .I US,'$$CHECKH^IPRICE(COD,VT,DT) Q
+ .S NM=$$NAMEH^IPRICE(COD,VT,DT)
+ .S SPX=$TR($$GET^IPRICE(COD,"spec",VT,DT),"|",";")
+ .S:$E(SPX,1)=";" SPX=$E(SPX,2,$L(SPX))
+ .S:$E(SPX,$L(SPX))=";" SPX=$E(SPX,1,$L(SPX)-1)
+ .S RR="" F I=1:1:$L(SPX,";") S X=$P(SPX,";",I) I X'="" S RR=$S(RR="":"",1:RR_", ")_$$GSPEC^YISPRAV(X)
+ .S A=NM_"|"_$$PRICEH^IPRICE(COD,VT,DT)_"|"_SPX_"|"_RR
+ .D WC^RWU(CR_A)
+ D C^RWU
+ Q
+OMS(DT,VT,LT,BASE,OTD) ; Прейскурант с кодами ОМС
+ ; VT - прейскурант
+ ; LT - с группами/без групп
+ ; BASE - с основными кодами
+ ; OTD - фильтр по отделению
+ N COD,OMC,DMX,DD,NM,I,R,X,A,OT
+ N TL,TLL D MKLST^NPRICEG("TL",1)
+ S DT=$$DIH^DTUTL(DT)
+ S:OTD'="" OTD="|"_OTD_"|"
+ D OWF^RWU(".txt")
+ D WC^RWU($S(BASE:"Код ОМС|",1:"")_"Код|Наименование на "_$$DT^DTUTL(DT)_"|Цена")
+ K ^BUF($J,"prc")
+ S COD="" F  S COD=$O(^CN(COD)) Q:COD=""  D:$D(^CN(COD,VT))
+ .I '$$CHECKH^IPRICE(COD,VT,DT) Q 
+ .S OMC=$$GET^IPRICE(COD,"oms",VT,DT) Q:OMC=""
+ .I OTD'="" S A=$$GET^IPRICE(COD,"otd",VT,DT) I A'="",("|"_A_"|")'[OTD Q
+ .S NM=$$NAMEH^IPRICE(COD,VT,DT)
+ .S A=$S(BASE:COD_"|",1:"")_NM_"|"_$$PRICEH^IPRICE(COD,VT,DT)
+ .S PL=$$GET^IPRICE(COD,"cname",VT,DT)
+ .;S:PL'=NM A=A_$TR(PL,"|",";") ; псевдоним, если отличается
+ .I LT S ^BUF($J,"prc","~|"_$J(OMC,16))=A Q 
+ .S X=$$GET^IPRICE(COD,"grp",VT,DT),X=$S(X="":"z",1:$G(TL(X))),^BUF($J,"prc",X_"~x|"_OMC)=A
+ .F I=1:1:99 S R=+$P(X,"~",I) Q:R=""  S R=$S(R="":"z",1:$G(TL(R))) I R'="" S ^BUF($J,"prc",X_"~x"_R_"|")=$S(BASE:"|",1:"")_$S(R="z":"",1:$$NAME^NPRICEG(+$P(R,"~",$L(R,"~")))) S:'$D(TLL(R)) TLL(R)="",^BUF($J,"prc",X_"~z|")=""
+ S X=""
+ F  S X=$O(^BUF($J,"prc",X)) Q:X=""  D WC^RWU(CR_$$TRIM^TXTU($P(X,"|",2))_"|"_^(X))
+ K ^BUF($J,"prc")
+ D C^RWU
+ Q
+TML(DS,DE,VT,OTD) ; Изменение цены
+ ; VT - прейскурант
+ ; OTD - фильтр по отделению
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D OWF^RWU(".txt")
+ D WC^RWU("Код|Услуга "_$$TXTP^DTUTL(DS,DE)_"|Дата|Цена")
+ S COD="" F  S COD=$O(^CN(COD)) Q:COD=""  D:$D(^CN(COD,VT))
+ .S DT=$O(^CN(COD,VT,DS),-1) ; чтобы начальное значение вошло
+ .F  S DT=$O(^CN(COD,VT,DT)) Q:DT=""!(DT>DE)!(+DT'=DT)  D
+ ..I OTD'="" S A=$$GET^IPRICE(COD,"otd",VT,DT) I A'="",("|"_A_"|")'[OTD Q
+ ..D WC^RWU(CR_COD_"|"_$$NAMEH^IPRICE(COD,VT,DT)_"|"_$$DT^DTUTL(DT)_"|"_$TR($G(^CN(COD,VT,DT)),".",","))
+ D C^RWU
+ Q
+CONTR(DT,PRC,CON,US,BPRC) ; Прайс контрагента
+ N COD,R
+ S DT=$$DIH^DTUTL(DT),PRC=$$CORCP^IPRICET(+$G(PRC)),US=$G(US),BPRC=$G(BPRC)
+ D OWF^RWU(".txt")
+ D WC^RWU("Код прейск.|Код|Наименование на "_$$DT^DTUTL(DT)_"|Цена"_$S(BPRC:"|Внутренняя",1:""))
+ S COD="" F  S COD=$O(^CN(COD)) Q:COD=""  D:$D(^CN(COD,PRC))
+ .Q:'$D(^CNE(COD,PRC,"con"))
+ .I US,'$$CHECKH^IPRICE(COD,PRC,DT) Q 
+ .S R=$$GET2^IPRICE(COD,"con",CON,PRC,DT) Q:R=""
+ .D WC^RWU(CR_COD_"|"_$P(R,"|",2)_"|"_$$NAMEH^IPRICE(COD,PRC,DT)_"|"_$TR($P(R,"|",1),".",",")_$S(BPRC:"|"_$TR($$PRICEH^IPRICE(COD,PRC,DT),".",","),1:""))
+ D C^RWU
+ Q
+TECHC(DT,PRC,US) ; Экспорт технологических карт
+ ; US - используемые
+ N COD,R
+ S DT=$$DIH^DTUTL(DT),PRC=$$CORCP^IPRICET(+$G(PRC)),US=$G(US)
+ D OWF^RWU(".txt")
+ D WC^RWU("|||")
+ S COD="" F  S COD=$O(^CN(COD)) Q:COD=""  D:$D(^CN(COD,PRC))
+ .I US,'$$CHECKH^IPRICE(COD,PRC,DT) Q 
+ .Q:$$FLinFL^TXTU($$GET^IPRICE(COD,"cls",PRC,DT),"int") 
+ .D TECHCwc^YUPRICE(COD,DT,PRC)
+ D C^RWU
+ Q
+CONEXP(DT,CON,PRC) ; Экспорт прейскуранта по контрагенту
+ N COD,N,R
+ S DT=$$DIH^DTUTL(DT),PRC=$$CORCP^IPRICET(+$G(PRC)),US=$G(US)
+ D OWF^RWU(".txt")
+ D W^RWU("code|name|price")
+ S COD="" F  S COD=$O(^CN(COD)) Q:COD=""  D:$D(^CN(COD,PRC))
+ .Q:'$D(^CNE(COD,PRC,"con"))
+ .I US,'$$CHECKH^IPRICE(COD,PRC,DT) Q 
+ .S R=$$GET2^IPRICE(COD,"con",CON,PRC,DT) Q:R=""
+ .S N=$P(R,"|",2) S:N="" N=COD
+ .D WC^RWU(CR_N_"|"_$$NAMEH^IPRICE(COD,PRC,DT)_"|"_$TR($P(R,"|",1),".",","))
+ D C^RWU
+ Q
+VRKEXP ; Экспорт коэффициентов на услуги
+ N CN,DT,I
+ D OWF^RWU(".txt")
+ D WC^RWU("услуга|дата|коэфф.|прейскурант|флаг врача|уч.степень|звание|флаг услуги|отделение")
+ S CN="" F  S CN=$O(^CNCL("vrk",CN)) Q:CN=""  D
+ .S DT="" F  S DT=$O(^CNCL("vrk",CN,DT)) Q:DT=""  S I="" F  S I=$O(^CNCL("vrk",CN,DT,I)) Q:I=""  D
+ ..D WC^RWU(CR_CN_"|"_$$DT^DTUTL(DT)_"|"_$G(^CNCL("vrk",CN,DT,I)))
+ D C^RWU
+ Q
+REGIPROC 
+ N A,B,US
+ S A="Система",B="Прейскурант"
+ S US=",t@string:1/только действующие#0/все,Показывать услуги"
+ S ^IPROC(A,B,"Экспорт прейскуранта")="EX_RPRICE,1,5,d,Дата прейскуранта,t@net:LSTCP_YNPRICE(),Прейскурант,t@string:0/По разделам#1/Линейно,Вид таблицы"_US_",s,Функция фильтра"
+ S ^IPROC(A,B,"Экспорт прейскуранта с отделениями")="EXO_RPRICE,1,3,d,Дата прейскуранта,t@net:LSTCP_YNPRICE(),Прейскурант"_US
+ S ^IPROC(A,B,"Экспорт прейскуранта со специальностями")="EXSP_RPRICE,1,3,d,Дата прейскуранта,t@net:LSTCP_YNPRICE(),Прейскурант"_US
+ S ^IPROC(A,B,"Внешний прейскурант по контрагенту")="CONTR_RPRICE,1,4,d,Дата прейскуранта,t@net:LSTCP_YNPRICE(),Прейскурант,t@net:LSTFLG_YCONTR(""sup#prt"";""1""),Контрагент"_US_",t@string:0/Внешнюю#1/Внешнюю и внутреннюю,Показывать цену"
+ S ^IPROC(A,B,"Прейскурант ОМС")="OMS_RPRICE,1,5,d,Дата прейскуранта,t@net:LSTCP_YNPRICE(),Прейскурант,t@string:0/По разделам#1/Линейно,Вид таблицы,t@string:0/Нет#1/Да,Выводить основной код,te@storage:otd@1,Отделение"
+ S ^IPROC(A,B,"Изменение цены в прейскуранте")="TML_RPRICE,1,4,d,Дата начала периода,d,Дата окончания периода,t@net:LSTCP_YNPRICE(),Прейскурант,te@storage:otd@1,Отделение"
+ S ^IPROC(A,B,"Экспорт технологических карт")="TECHC_RPRICE,1,3,d,Дата прейскуранта,t@net:LSTCP_YNPRICE(),Прейскурант"_US
+ S ^IPROC(A,B,"Экспорт коэффициентов на услуги")="VRKEXP_RPRICE,1,0"
+ Q
+ 

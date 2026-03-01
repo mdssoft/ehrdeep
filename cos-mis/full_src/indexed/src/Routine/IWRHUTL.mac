@@ -1,0 +1,128 @@
+IWRHUTL ; Утилиты склада [ 05/22/2018  10:54 PM ]
+CHKDNM ; Проверить дубли единиц номенклатуры
+ N ID,R,M,P,NM
+ S ID="" F  S ID=$O(^WRHE(ID)) Q:ID=""  D
+ .S R=^(ID)
+ .S M=$P(R,"|",5),P=$P(R,"|",6)
+ .Q:M=""  Q:P=""  
+ .Q:$$NAME^IWRHS("means",M)'=$$NAME^IWRHS("pack",P)
+ .Q:(+$P(R,"|",12))'>1  
+ .W !,ID_" "_$P(R,"|",1)_"; "_$$NAME^IWRHS("means",M)_" = "_$$NAME^IWRHS("pack",P)_"("_(+$P(R,"|",12))_")"
+ Q
+corrW(ST) 
+ N OP,FW
+ S ID="" F  S ID=$O(^WRH(ST,ID)) Q:ID=""  D
+ .S H="" F  S H=$O(^WRH(ST,ID,H)) Q:H=""  D
+ ..S R=^(H),OP=$P(R,"|",2)
+ ..S OWS=$S(OP="+":$P(R,"|",7,8),1:$P(R,"|",9,10))
+ ..S FW=$S(OP="-":$P(R,"|",7,8),1:$P(R,"|",9,10))
+ ..Q:FW'=("W|"_ST) 
+ ..S OWS=$S($P(OWS,"|",1)="W":$P(OWS,"|",2),1:OWS)
+ ..Q:OWS="|"!(OWS="")
+ ..Q:$D(^WRH(OWS,ID,H))  Q:'$D(^WRH("W",ID,H)) 
+ ..W !,ID_","""_H_"""" ; Q
+ ..S R=^WRH("W",ID,H)
+ ..S ^WRH(OWS,ID,H)=R K ^WRH("W",ID,H)
+ Q
+corrDEL(DS) 
+ S DS=$$DIH^DTUTL(DS)
+ S ST="" F  S ST=$O(^WRH(ST)) Q:ST=""  D
+ .S ID="" F  S ID=$O(^WRH(ST,ID)) Q:ID=""  D
+ ..S H=DS_",0" F  S H=$O(^WRH(ST,ID,H)) Q:H=""  D
+ ...S R=^(H),NN=$P(R,"|",4) Q:NN="" 
+ ...Q:$D(^WRHI("n",NN)) 
+ ...W !,ID_","""_H_"""" ; Q 
+ ...K ^WRH(ST,ID,H)
+ Q
+corrNN ; Коррекция номеров документов (после импорта)
+ N ST,ID,H,R,NN
+ S ST="" F  S ST=$O(^WRH(ST)) Q:ST=""  D
+ .S ID="" F  S ID=$O(^WRH(ST,ID)) Q:ID=""  D
+ ..S H="" F  S H=$O(^WRH(ST,ID,H)) Q:ID=""  D
+ ...S R=^(H),NN=$P(R,"|",4) Q:NN=""
+ ...I $D(^WRHI("n",NN))[0 
+ 
+ Q
+corrS(STK) 
+ N ST,ID,H,R,NN,OP,OWS,C,S
+ S ST="" F  S ST=$O(^WRH(ST)) Q:ST=""  D:STK=""!(STK=ST) 
+ .S ID="" F  S ID=$O(^WRH(ST,ID)) Q:ID=""  D
+ ..S H="" F  S H=$O(^WRH(ST,ID,H)) Q:H=""  D
+ ...S R=^(H) Q:'$P(R,"|",1)
+ ...S OP=$P(R,"|",2),NN=$P(R,"|",4)
+ ...Q:OP="+"  ; приход не трогаем
+ ...S C=$P(R,"|",3),S=+$J($$RESTWS^IWRH(ST,ID,C,H),"",6)
+ ...Q:+$P(R,"|",14)=S 
+ ...W !,ID_" "_S_"!="_$P(R,"|",14) Q  ; test
+ ...S $P(R,"|",14)=S,^WRH(ST,ID,H)=S
+ ...Q:NN="" 
+ ...S OWS=$P(R,"|",9,10),OWS=$S($P(OWS,"|",1)="W":$P(OWS,"|",2),1:OWS)
+ ...Q:OWS="|"
+ ...Q:'$D(^WRH(OWS,ID,H)) 
+ ...S $P(^WRH(OWS,ID,H),"|",14)=S
+ Q
+corPKSL ; Корректировка срока годности и кодов партионного учета
+ N ST,ID,PK,H,HE,R,SER,SG,F
+ S ST="" F  S ST=$O(^WRH(ST)) Q:ST=""  D 
+ .S ID="" F  S ID=$O(^WRH(ST,ID)) Q:ID=""  D:ID=343
+ ..Q:'$$PKU^IWRHS(ID)
+ ..F  Q:'$$pksl() 
+ Q
+pksl() ; one step
+ S F=0
+ S SER="",SG="",HE="",HS=""
+ S H="" F  S H=$O(^WRH(ST,ID,H)) Q:H=""  D  I F,SER'="" Q 
+ .S R=^(H)
+ .I $P(R,"|",12)="" S F=1,HS=H
+ .I F,SER="",$P(R,"|",12)'="" S SER=$P(R,"|",12),HE=H
+ .I F,SG="",$P(R,"|",21)'="" S SG=$P(R,"|",21)
+ Q:SER="" 0
+ S H=$P(HS,",",1)_","_($P(HS,",",2)-1)
+ F  S H=$O(^WRH(ST,ID,H)) Q:H=""!(H=HE)  D
+ .S R=^(H),Z=0
+ .I $P(R,"|",12)="" S $P(R,"|",12)=SER,Z=1
+ .I $P(R,"|",21)="" S $P(R,"|",21)=SG,Z=1
+ .S:Z ^WRH(ST,ID,H)=R
+ Q F
+chkWOSN ; Проверить номенклатуру без серийных номеров
+ N ST,ID,PK,H,HE,R,SER,SG,F
+ S ST="" F  S ST=$O(^WRH(ST)) Q:ST=""  D 
+ .S ID="" F  S ID=$O(^WRH(ST,ID)) Q:ID=""  D:ID=343
+ ..Q:'$$PKU^IWRHS(ID)
+ ..S H="" F  S H=$O(^WRH(ST,ID,H)) Q:H=""  D
+ ...S R=^(H)
+ ...Q:$P(R,"|",12)'="" 
+ ...S SNM=$$NAME^IWRHS("stock",ST)
+ ...S:SNM="" SNM="("_ST_")"
+ ...S NNM=$$NAMENM^IWRHS(ID)
+ ...S:NNM="" NNM="("_ID_")"
+ ...w !,SNM_" / "_NNM_" / "_$$DTM^DTUTL(H)
+ Q
+REPOS(IDD) ; Перепровести документ
+ 
+ Q
+RESI(ST,WO,IDS) ; Перепровести суммы списаний
+ ; ST - склад
+ N ID,HH,R,TP,CNT,S,DOC,SN,X,LST,H,H1,S1,R1,C1
+ S IDS=$G(IDS)
+ S ID="" F  S ID=$O(^WRH(ST,ID)) Q:ID=""  D:IDS=""!(IDS=ID) 
+ .S HH="" F  S HH=$O(^WRH(ST,ID,HH)) Q:HH=""  D
+ ..S R=^(HH) Q:'$P(R,"|",1) 
+ ..Q:$P(R,"|",2)'="-" 
+ ..S CNT=$P(R,"|",3),S=$P(R,"|",14),DOC=$P(R,"|",4),SN=$P(R,"|",12)
+ ..S S=+$J(S,"",8)
+ ..S X=$$RESTWS^IWRH(ST,ID,CNT,HH,"LST",SN)
+ ..S H1=$O(LST(""))
+ ..I H1="" W !,"No REST "_ID_","_HH_" C="_CNT_" S="_S Q 
+ ..S R1=LST(H1),C1=$P(R1,"|",1),S1=$P(R1,"|",2) ;*CNT/C1
+ ..S S1=+$J(S1,"",8)
+ ..I C1<CNT W !,"No CNT "_ID_","_HH_" C="_CNT_"/"_C1_" S="_S Q 
+ ..Q:S1=S  ; all ok
+ ..W !,ID_","_HH_" C="_CNT_" S="_S_"/"_S1
+ ..Q:S1=0 
+ ..S $P(R,"|",14)=S1
+ ..S ^WRH(ST,ID,HH)=R
+ ..Q
+ ..S H="" F  S H=$O(LST(H)) Q:H=""  D
+ ...W !,">"_H_" ="_LST(H)
+ Q

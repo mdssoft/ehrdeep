@@ -1,0 +1,39 @@
+IOPERSH ; График операций [ 09/24/2024  2:02 PM ]
+MKIDX(LP,OT,CAB,DT,TM) ; Создать индекс
+ Q:(LP="")!(OT="")!(CAB="")!(DT="")!(TM="") 
+ N R,NI,K
+ S R=$G(^OPSH(LP,OT,CAB,DT,TM)),NI=$P(R,"|",1)
+ S K=LP_"|"_OT_"|"_CAB
+ I NI'="",$D(^BTN(NI)) D 
+ .S ^OPSHI("nd",NI,DT,TM,K)=""
+ .D GL^IEXCH("^OPSHI","nd",NI,DT,TM,K)
+ Q
+RMIDX(LP,OT,CAB,DT,TM) ; Удалить индекс
+ N R,NI,K
+ S R=$G(^OPSH(LP,OT,CAB,DT,TM)),NI=$P(R,"|",1)
+ S K=LP_"|"_OT_"|"_CAB
+ I NI'="",$D(^BTN(NI)) D 
+ .K ^OPSHI("nd",NI,DT,TM,K)
+ .D KGL^IEXCH("^OPSHI","nd",NI,DT,TM,K)
+ Q
+REIDX ; Полная переиндексация
+ N LP,OT,CAB,DT,TM
+ K ^OPSHI
+ S LP="" F  S LP=$O(^OPSH(LP)) Q:LP=""  D
+ .S OT="" F  S OT=$O(^OPSH(LP,OT)) Q:OT=""  D
+ ..S CAB="" F  S CAB=$O(^OPSH(LP,OT,CAB)) Q:CAB=""  D
+ ...S DT="" F  S DT=$O(^OPSH(LP,OT,CAB,DT)) Q:DT=""  D
+ ....S TM="" F  S TM=$O(^OPSH(LP,OT,CAB,DT,TM)) Q:TM=""  D MKIDX(LP,OT,CAB,DT,TM)
+ D REGL^IEXCH("^OPSHI")
+ Q
+REGLCL 
+ S ^LCLI("opersh")="График операций"
+ S ^LCLI("opersh","new")="Создание"
+ S ^LCLI("opersh","save")="Сохранение/изменение"
+ S ^LCLI("opersh","del")="Удаление"
+ S ^LCLI("opersh","state")="Изменение статуса операционной"
+ S ^LCLI("opersh","reserve")="Возможность резерва (без пациента)"
+ S ^LCLI("opersh","addclean")="Добавить время уборки к длительности операции"
+ S ^LCLI("opersh","vtfields")="Поля,отображаемые в графике"
+ S ^LCLI("opersh","aotime")="Изменение задним числом"
+ Q

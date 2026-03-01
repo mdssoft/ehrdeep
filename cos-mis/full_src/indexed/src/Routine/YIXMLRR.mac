@@ -1,0 +1,119 @@
+A ; XML READ [ 09/06/2015  11:19 PM ]
+ ;
+TST 
+ F %J=1:1 Q:'$D(^KKK(%J))  S A=^(%J) D XMLAN^YIXMLRR
+ Q
+RF R !,"ИМЯ ФАЙЛА ",FN Q:FN="."  S:FN="" FN="HHH.XML"
+ O 51:(FN:"R") U 51
+ F %J=1:1 U 51 R A  Q:$ZC  U 0 W:0 A,! D XML
+ C 51 Q
+NEWVAR() 
+ Q "%UP,%UD,%UDD,%UI,XML,XMLR,XMLF,XMLS,XMLI,%ER,%A,%XML,%U,%XA,%A1,%A2,%A3,%A4,%A5,%A44,%A55,%A6,%A8,%A88,%XA1,%XA2,%XR"
+RBUFH(WD) ; Read from ^BUFH and generate XML
+ N A,%J
+ D ORH^RWU,CLOSE
+ S WD=+$G(WD)
+ F %J=1:1 S A=$$RA^RWU S:WD A=$$WD^TXTU(A) Q:%IFN["Z"  D XMLAN^YIXMLRR
+ D CR^RWU
+ K %UP,%UD,%UDD,%UI,%A,%XML,%U,%XA,%A1,%A2,%A3,%A4,%A5,%A44,%A55,%A6,%A8,%A88,%XA1,%XA2,%XR
+ Q
+XMLAN ; Main loop, Allow null tag
+ I %J=1 K %UP,%UD,%UDD,%UI,XML,XMLR,XMLF,XMLS,XMLI,%XA S C9=$C(9),C10=$C(10),C13=$C(13),%ER=0,%A="",%U=0,%XA="XML(",%XR="XMLR(",%XA(1)=1
+ G XML2
+XML ; Main loop
+ I %J=1 K %UP,%UD,%UDD,%UI,XML,XMLR,XMLF,XMLS,XMLI,%XA S C9=$C(9),C10=$C(10),C13=$C(13),%ER=0,%A="",%U=0,%XA="XML(",%XR="XMLR("
+XML2 S %A=%A_A
+CON Q:%A'[">"  G:%A'["<" SYS
+ S %A1=$P(%A,"<",1),%A2=$P(%A,"<",2)
+ ;W !,"%A2="_%A2_"  %A2="_$E(%A2,1,22)_"  %A="_$E(%A,1,22)
+ G:$E(%A2)="/" END G:$E(%A2)="?" SYS Q:%A2="" 
+ S %A2=$P(%A2,">",1)
+ ;Q:%XA[">""0"">"  ; !!!!
+ D  G:%A88="" TEG G:%A88=1 END G:%A="<" CON 
+ .S %A88=""
+ .I $E(%A2,$L(%A2))="/" S %A2=$E(%A2,1,$L(%A2)-1),%A8=%A,(%A,%A3)="" D TEG S %UI(%U)="",%A=">"_$P(%A8,">",2,1000),%A2="/"_%A2,%A88=1 Q 
+ .S %A=$P(%A,">",2,1000),%A3=$P(%A,"<",1)
+ .S:%A["<" %A="<"_$P(%A,"<",2,1000)
+SYS S %A2=$P($E(%A2,2,1000),">",1),%A=$P(%A,">",2,1000)
+ I %A["<" G CON
+ Q
+CLOSE 
+ K %UP,%UD,%UDD,%UI,XML,XMLR,XMLF,XMLS,XMLI,%ER,%A,%XML,%U,%XA
+ K %A1,%A2,%A3,%A4,%A5,%A44,%A55,%A6,%A8,%A88,%XA1,%XA2,%XR
+ Q
+END S %A2=$P($P($E(%A2,2,1000),">",1)," ",1),%A=$P(%A,">",2,1000)
+ I $G(%UP(%U))'=%A2 S %ER=1 Q 
+ D:'$L(%UD(%U)) A1 S %UD(%U)=$G(%UD(%U))_%A1 D COD2
+ S %XA1=$E(%XA,1,$L(%XA)-1),%XA1=$TR(%XA1,">",","),%XA2=%XA1_")="
+ I %UD(%U)'=""!($D(%UI(%U)))!$G(%XA(1)) S @(%XA2_"%UD(%U)")
+ D:$D(%UDD(%U))
+ .I $D(%UDD(%U,0)) S @(%XA1_",$C(2))=%UDD(%U,0)")
+ .S %MET=0 F  S %MET=$O(%UDD(%U,%MET)) Q:%MET=""  S @(%XA1_",$C(3)_%MET)=%UDD(%U,%MET)")
+ .K %UDD(%U)
+ S %U=%U-1,%XA=$P(%XA,">",1,%U)_">"
+ G:%A["<" CON
+ Q
+TEG D A1 S %UD(%U)=$G(%UD(%U))_%A1
+ D A3
+ D:%A["<" A31
+ S %U=%U+1,%A4=$P(%A2," ",1),%A6=%A4
+ I %A4["&" D COD1
+ S %A44=%A4
+ I %A4'=%A2 S %A5=$P(%A2," ",2,1000) D:%A5'=""  S:%A44="" %A44=$C(0)
+ .F %J5=1:1 S %A55=$P(%A5,""" ",%J5) Q:%A55=""  D
+ ..I %A55["value" S %A44=$P(%A55,"""",2),%UI(%U)="",%UDD(%U,0)=%A4 Q
+ ..S %UDD(%U,$P(%A55,"=",1))=$P(%A55,"""",2),%UI(%U)=""
+ S %XA=%XA_""""_%A44_""">",%UP(%U)=%A6,%UD(%U)=%A3
+ ;W !,%XA," ",%U," ",%A3
+ G:%A["<" CON
+ S %A="" ; already fill %UD
+ Q
+A3 S %AF=$E(%A3)
+ I %AF=" "!(%AF=C9)!(%AF=C10)!(%AF=C13) S %A3=$E(%A3,2,19999) G A3
+ Q
+A31 S %AL=$E(%A3,$L(%A3))
+ I %AL=" "!(%AL=C9)!(%AL=C10)!(%AL=C13) S %A3=$E(%A3,1,$L(%A3)-1) G A31
+ Q
+A1 S %AF=$E(%A1)
+ I %AF=" "!(%AF=C9)!(%AF=C10)!(%AF=C13) S %A1=$E(%A1,2,19999) G A1
+ S %AL=$E(%A1,$L(%A1))
+ I %AL=" "!(%AL=C9)!(%AL=C10)!(%AL=C13) S %A1=$E(%A1,1,$L(%A1)-1) G A1
+ Q
+COD1 ;
+ S %LA=%A4,%A4=""
+CCC I %LA'["&" S %A4=%A4_%LA Q
+ S %LL=$P($P(%LA,"&",2),";",1),%L=$P($P(%LA,"&",2),";",2,1000)
+ S:%LL="amp" %LL="&" S:%LL="gt" %LL=">" S:%LL="lt" %LL="<"
+ S %A4=%A4_$P(%LA,"&",1)_%LL,%LA=%L G CCC
+ Q
+COD2 ;
+ I %UD(%U)'["&" Q  N X
+ S X=1
+ F  S X=$F(%UD(%U),"&gt;",X) Q:X=0  S $E(%UD(%U),X-4,X-1)=">",X=X-3
+ S X=1
+ F  S X=$F(%UD(%U),"&lt;",X) Q:X=0  S $E(%UD(%U),X-4,X-1)="<",X=X-3
+ S X=1
+ F  S X=$F(%UD(%U),"&amp;",X) Q:X=0  S $E(%UD(%U),X-5,X-1)="&",X=X-4
+ Q
+RR 
+ I %J=1 K %UP,%UD,%UDD,%UI,XML,XMLR,XMLF,XMLS,XMLI,%XA S C9=$C(9),C10=$C(10),C13=$C(13),%ER=0,%A="",%XML=A,%U=0,%XA="XML(",%XR="XMLR(",%XA(1)=1
+ S %A=%A_A
+RR1 Q:%A'["<"  Q:%A'[">" 
+ S X1=$F(%A,"<"),X2=$F(%A,">")
+ I X1>X2 W !,"ERR" Q 
+ S TAG=$E(%A,X1,X2-2),%A=$E(%A,X2,32000)
+ S X1=$E(TAG,1)
+ I X1="?" G RR1  ; NULL tag
+ I X1="/" S %U=%U-1 K %UP(%U) G RR1 
+ S X1=TAG[" "
+ I 'X1 S %U=%U+1,%UP(%U)=TAG
+ I X1 G RRPRM
+ W !,"TAG="_TAG
+ ;W !,"%A="_%A
+ G RR1
+ Q
+RRPRM 
+ S X1=$P(TAG," ",2,99),TAG=$P(TAG," ",1)
+ S %U=%U+1,%UP(%U)=TAG
+ F X2=1:1:99 S X3=$P(X1," ",X2) Q:X3=""  S X4=$F(X3,"="),X5=$E(X3,1,X4-2),X3=$E(X3,X4,32000) I X5="data" S %UDD(%U)=X3
+ Q

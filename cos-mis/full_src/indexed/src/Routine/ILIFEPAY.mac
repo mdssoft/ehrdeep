@@ -1,0 +1,26 @@
+ILIFEPAY
+PAY(NI,SUM,TXT,PTP)
+	N obj,PHN
+	S PHN=$$MPHN^TXTU($$GET^IPAC(NI,"pager")) Q:PHN="" "Проверьте телефон клиента"
+	S obj={}
+	S obj.cmd="pay"
+	S obj.pid=NI
+	S obj.summ=SUM
+	S obj.description=TXT
+	S obj.client=PHN
+	d:$G(PTP)'="" obj.%Set("pay_method",PTP)
+	D PUB^IMQ("lifepay","",obj.%ToJSON())
+	Q ""
+mq	; MQ callback
+	N KKM,NI,SUM
+	D data^IMQ
+	s ^KKKMQ($H)=mqdata
+	S obj=$$FS^IJSON(mqdata)
+	i obj.event="pay_confirm" D
+	.S KKM=$$LKKM^IBILL($$^I("ilpu"))
+	.S NI=obj.pid,SUM=$$NNUM^TXTU(obj.summ)
+	.D ADD^IBILL(NI,$H,SUM,2,KKM,"lifepay:"_obj.num,"СБП")
+	Q
+INITDB
+	D REGTYPE^IMQ("lifepay","mq^ILIFEPAY")
+	Q

@@ -1,0 +1,1076 @@
+A ; Списки на прикрепление-открепление [ 01/10/2024  2:49 PM ]
+ Q
+LBTCFG 
+ D MSG^RWU("Ф."_CR_"И."_CR_"О."_CR_"ДАТА РОЖДЕНИЯ"_CR_"ПОЛИС"_CR_"ДОГОВОР")
+ Q
+LCFG(FFL,CFG) ; Перед 1-м этапом
+ ; FFL - список поисковых полей
+ ; CFG (1) - нормализ. ФИО, (2) - замена, (3) - backup, (4) - def. stc
+ K ^JOB(%JOB,"pspis")
+ 
+ N I,L,K
+ S FFL=$$WD^TXTU(FFL),CFG=$G(CFG)
+ F I=1:1:9 S K=$P(FFL,"|",I) Q:K=""  S ^JOB(%JOB,"pspis","btnc",K)=""
+ S ^JOB(%JOB,"pspis","nfio")=+$P(CFG,"|",1)
+ S ^JOB(%JOB,"pspis","zam")=+$P(CFG,"|",2)
+ S ^JOB(%JOB,"pspis","bk")=+$P(CFG,"|",3)
+ S ^JOB(%JOB,"pspis","dstc")=$P(CFG,"|",4)
+ S ^JOB(%JOB,"pspis","tzam")=$P(CFG,"|",5)
+ S ^JOB(%JOB,"pspis","npc")=+$P(CFG,"|",6)
+ S ^JOB(%JOB,"pspis","alg")=+$P(CFG,"|",7)
+ Q
+ISTATE(CFG) ; Import state
+ K ^JOB(%JOB,"pspis","istate")
+ Q:CFG="" 
+ N R
+ S CFG=$$WD^TXTU(CFG)
+ S R=$P(CFG,CR,1) S:R'="" ^JOB(%JOB,"pspis","istate","stc")=R
+ S R=$P(CFG,CR,2)
+ S:$L($P(R,"|",1))>4 ^JOB(%JOB,"pspis","istate","dog_from")=$P(R,"|",1)
+ S:$L($P(R,"|",2))>4 ^JOB(%JOB,"pspis","istate","dog_to")=$P(R,"|",2)
+ S R=$P(CFG,CR,3) S:R'="" ^JOB(%JOB,"pspis","istate","prog")=$$READPRG(R)
+ S R=$P(CFG,CR,4) S:$L(R)>4 ^JOB(%JOB,"pspis","istate","savedate")=$$DI^DTUTL(R)
+ S ^JOB(%JOB,"pspis","alg")=+$P(CFG,CR,6) ; алгоритм обработки
+ S R=$P(CFG,CR,5)
+ Q:$L(R)<5
+ N I,X
+ K ^JOB(%JOB,"pspis","istate","fcol")
+ S R=$$DW^TXTU(R)
+ F I=1:1:$L(R,"|") S X=$P(R,"|",I),^JOB(%JOB,"pspis","istate","fcol",$P(X,"=",1))=$P(X,"=",2)
+ Q
+LBTX1 ; Первый этап загрузки
+ K ^BUF(%JOB,"btn"),^BUF(%JOB,"btf"),^BUF(%JOB,"btnh")
+ D ORH^RWU
+ N %J,I,X,C,HD,FPL,REFPL,ADDPL,AFC,HS,N,SWis,COLS,BDmod,Alg,iOF,iWR,iDL,iRS
+ N nrmFIO,noFMIX,noDBL
+ S:'$D(^JOB(%JOB,"pspis","btnc")) ^("btnc","Ф.")="",^("И.")="",^("О.")="",^("ДАТА РОЖДЕНИЯ")=""
+ S SWis=$G(^cfg("pspis","show-istate"))
+ S BDmod=$G(^cfg("pspis","strict-bdate"))
+ S fMIX='$G(^cfg("pspis","allow-mix-ruen"))
+ S noDBL=+$G(^cfg("pspis","no-dbl"))
+ S nrmFIO='+$G(^JOB(%JOB,"pspis","nfio"))
+ s Alg=+$G(^JOB(%JOB,"pspis","alg"))
+ S:Alg="" Alg=$$LCL^IUSER("pspis","alg")
+ S iOF=+$G(^MN("ofor")),iDL=+$G(^MN("doljn")),iDL=+$G(^MN("rsource"))
+ M FPL=^JOB(%JOB,"pspis","btnc")
+ D MKCOLUMN("COLS","")
+ S AFC=""
+ F %J=1:1 S A=$TR($$R^RWU,"<>&"""""_$C(9),"{}@''") Q:%IFN["Z"  D
+ .I %J=1 D  Q 
+ ..F I=1:1:$L(A,"|") S X=$P(A,"|",I) I $E(X)="+" S X=$E(X,2,99),ADDPL($$WD^TXTU(X))="",$P(A,"|",I)=X ; добавляемые к пациенту данные
+ ..S I=0,HD=A,C=$L(A,"|")
+ ..I SWis F I="stc","dog_from","dog_to","prog","savedate" D
+ ...S X=$G(^JOB(%JOB,"pspis","istate",I)) Q:X="" 
+ ...S X=$S(I="dog_from"!(I="dog_to")!(I="savedate"):$$DT^DTUTL(X),I="prog":$$DW^TXTU($$TRIM^TXTU($TR(X,"|"_$C(13,10),";"))),1:X)
+ ...S C=C+1,$P(HD,"|",C)=$$DW^TXTU(COLS(I))
+ ...S AFC=$S(AFC="":"",1:AFC_"|")_X
+ ..S I="" F  S I=$O(^JOB(%JOB,"pspis","istate","fcol",I)) Q:I=""  S C=C+1,$P(HD,"|",C)=I,AFC=$S(AFC="":"",1:AFC_"|")_^(I)
+ ..F I=1:1:C S X=$P(A,"|",I) S:$L(X) REFPL(X)=I
+ ..S HS=$$SPLIT(HD,HD,C)
+ ..F I=1:1:$L(HS,"|") S X=$P(HS,"|",I) S:$L(X) ^BUF(%JOB,"btnh",I)=X
+ ..S ^BUF(%JOB,"btnh")=HS
+ .; todo - если пустой заголовок
+ .S ^BUF(%JOB,"btn",%J)=$$SPLITF(A_$S(%J=2:"",AFC'="":"|"_AFC,1:""),HD,C,BDmod,%J)
+ S A=$$SPLIT(HD,HD,C)
+ D CHKLDBL(A)
+ D OWF^RWU(".txt"),W^RWU($$DW^TXTU("|№|ОТМ.|")_A)
+ S (%J,X)=""
+ F I=1:1 S %J=$O(^BUF(%JOB,"btn",%J)) Q:%J=""  D W^RWU(CR_^(%J))
+ D C^RWU
+ K ^JOB(%JOB,"pspis","btnc")
+ Q
+SPLIT(X,REF,C) ; Split and find
+ N I,R
+ F I=1:1:C I $P(REF,"|",I)'="" S:$D(R)>0 R=R_"|" S R=$G(R)_$P(X,"|",I)
+ Q $G(R)
+SPLITF(X,REF,C,DMOD,ROW) ; Split, check and find
+ N I,ID,R,K,FF,FI,FO,DR,PLS,DGN,CC,N,ER,F,Z,Y,Y1,D,T,T1,TMP,TPL,MV,PL,SD,FL,stLST
+ S (R,FF,FI,FO,DR,PLS,DGN,ER,K)="",REF=$$WD^TXTU(REF),(CC,F,Z)=0
+ S SD=+$H
+ F I=1:1:C D:$P(REF,"|",I)'=""
+ .S K=$$TRIM^TXTU($P(X,"|",I)),CC=CC+1,ID=$P(REF,"|",I)
+ .S:K="NULL" K=""
+ .S:K'="" F=1
+ .I %J=2 S:R'="" R=R_"|" S R=R_K,F=0 Q 
+ .S:ID="И.Б." N=K,Z=1
+ .I ID="Ф." S K=$$NRMFAM(K),FF=K,Z=1 S:$S(K="":1,fMIX:$$MIXRE^TXTU(K),1:0) ER=ER_$S(ER="":"",1:"@")_CC
+ .S:ID="И." K=$$NRMFAM(K),FI=K,Z=1
+ .S:ID="О." K=$$NRMFAM(K),FO=K,Z=1
+ .I ID="Ф.И.О." S K=$$DBLSP^TXTU(K),FF=$P(K," ",1),FI=$P(K," ",2),FO=$P(K," ",3,9),K=$$NRMFIO3(FF,FI,FO),Z=1 S:$S(K="":1,fMIX:$$MIXRE^TXTU(K),1:0) ER=ER_$S(ER="":"",1:"@")_CC
+ .I ID="ДАТА РОЖДЕНИЯ" D
+ ..S:K<999&(K?1.N) K="01.01."_($$YEAR^DTUTL(+$H)-K)
+ ..S:K["00:00:00" K=$$DT^DTUTL($$DIISO^DTUTL(K))
+ ..I $L(K)=8,$E(K,1,2)>18,$E(K,3,4)>12 S K=$$DT^DTUTL($$DI^DTUTL($E(K,7,8)_"."_$E(K,5,6)_"."_$E(K,1,4)))
+ ..S DR=K,(Z,Y)=1,Y1=$$DI^DTUTL(K)
+ ..S:'$$CHKDT(K) ER=ER_$S(ER="":"",1:"@")_CC,Y=0
+ ..S:Y&(K'="")&(+$H-73000>Y1) ER=ER_$S(ER="":"",1:"@")_CC,Y=0 ; большой возраст
+ ..S:Y&(+$H<Y1) ER=ER_$S(ER="":"",1:"@")_CC,Y=0 ; > текущ.даты
+ ..S:Y TPL("datar")=""
+ .I ID="СТАТУСЫ" S:'$$chkST(K) ER=ER_$S(ER="":"",1:"@")_CC
+ .I ID="ПОЛИС" S PLS=K,Z=1 I $G(^cfg("pspis-nnull",ID)) S:K="" ER=ER_$S(ER="":"",1:"@")_CC
+ .I ID="ДОГОВОР" S DGN=$P(K,":",1),Z=1,DGN=$S(DGN="":"",$D(^DGN(DGN)):DGN,1:$$FNDNM^IINSC(DGN)) S:DGN'="" TPL("stc")=CC_":"_DGN S:'$$CHECK^YNDOG(DGN) ER=ER_$S(ER="":"",1:"@")_CC
+ .I ID="ПРОГРАММА" S Y=$TR(K,";:/\@,.","|||||||") S:Y'="" TPL("prog")=CC_":"_Y S:'$$EXISTA^IMPRP($TR(Y,"-+","")) ER=ER_$S(ER="":"",1:"@")_CC
+ .I ID="СРОК С" S K=$TR(K,$C(150)_" ","-"),D=K,T="" S:K["-" D=$$TRIM^TXTU($P(K,"-",2)),T=$$TRIM^TXTU($P(K,"-",1)),K=T_"-"_D S:($L(T)&('$$CHKDT(T)))!('$$CHKDT(D)) ER=ER_$S(ER="":"",1:"@")_CC S Z=1
+ .I ID="СРОК ПО"!(ID="ДАТА.ОФОРМЛ.")!(ID="ДАТА ИЗМЕНЕНИЯ")!(ID="ДАТА ОТКРЕПЛЕНИЯ") S:'$$CHKDT(K) ER=ER_$S(ER="":"",1:"@")_CC S Z=1
+ .I ID="СТОИМОСТЬ ПОЛИСА",K'="" S K=$TR(K,",","."),Z=1 S:K'?1.N ER=ER_$S(ER="":"",1:"@")_CC
+ .I ID="ОФОРМЛЕН",$S(K>9:1,K<0:1,K'?1.N:1,1:'$D(^MN(iOF,K))) S ER=ER_$S(ER="":"",1:"@")_CC,Z=1 
+ .I ID="ПОЛ" S K=$TR($$WD^TXTU($E(K,1)),"12мжmfMF","МЖМЖМЖМЖ"),Z=1 S:"МЖ"'[K ER=ER_$S(ER="":"",1:"@")_CC S K=$$DW^TXTU(K)
+ .I ID="СНИЛС" S K=$TR(K,"-","") S:$L(K)'=12 ER=ER_$S(ER="":"",1:"@")_CC S Z=1
+ .I ID="РАБОТА",K?1.N,'$$CHECK^ISPRAV(5,K) S ER=ER_$S(ER="":"",1:"@")_CC S Z=1 
+ .I ID="ДОЛЖНОСТЬ",$S(K="":1,1:'$D(^MN(iDL,K))) S ER=ER_$S(ER="":"",1:"@")_CC,Z=1 
+ .I ID="РЕКЛАМА",$S(K="":0,1:'$D(^MN(iRS,K))) S ER=ER_$S(ER="":"",1:"@")_CC,Z=1
+ .I ID="СКИДКА",$S(K="":0,1:'$D(^DSCN(K))) S ER=ER_$S(ER="":"",1:"@")_CC,Z=1
+ .I ID="ВРЕДНЫЕ ФАКТОРЫ",K'="",$$REVF^IPROFVR($$DBLSP^TXTU(K))="" S ER=ER_$S(ER="":"",1:"@")_CC,Z=1
+ .I ID="ВРЕДНЫЕ ФАКТОРЫ п.29",K'="",$$REVF^IPROFVR($$DBLSP^TXTU(K))="" S ER=ER_$S(ER="":"",1:"@")_CC,Z=1
+ .S:ID="Ф.ЛАТ." K=$$NRMFAM(K)
+ .S:ID="И.ЛАТ." K=$$NRMFAM(K)
+ .S:ID="О.ЛАТ." K=$$NRMFAM(K)
+ .S:ID="Ф.И.О.ЛАТ." K=$$NRMFIO(K)
+ .I 'Z,$G(^cfg("pspis-nnull",ID)) S:K="" ER=ER_$S(ER="":"",1:"@")_CC
+ .S:CC>1 R=R_"|" S R=R_K
+ G:ROW=2 SPLITFe
+ S K=""
+ S:'$D(FPL("Ф.")) FF="" S:'$D(FPL("И.")) FI="" S:'$D(FPL("О.")) FO=""
+ S:'$D(FPL("ДАТА РОЖДЕНИЯ")) DR=""
+ S:'$D(FPL("ПОЛИС")) PLS=""
+ S:'$D(FPL("ДОГОВОР")) DGN=""
+ S K=$G(N)
+ I $L(FF),$L(FI),K="" S K=$$CHKP(FF,FI,FO,DR,PLS,DGN,DMOD,SD)
+ 
+ I %J>2,$G(^JOB(%JOB,"pspis","npc")),K=""!('$$EXIST^IPAC(K)),'$D(TPL("stc"))!('$D(TPL("prog")))!$S('$D(FLP("ДАТА РОЖДЕНИЯ")):0,1:'$D(TPL("datar")))!((K="")&(FF="")) D
+ .S ER=ER_$S(ER="":"",1:"@")_"0:3",F=0 ; на отметке - нельзя грузить
+ 
+ I K'="",$$EXIST^IPAC(K) D
+ .s PL=$G(REFPL($$DW^TXTU("ДОГОВОР")))
+ .D:$D(TPL("stc"))
+ ..S Y=TPL("stc"),Z=$$GET^IPAC(K,"stc",SD),T=$P(Y,":",2,99)
+ ..I T'=Z,PL'="",T=$$GET^IPAC(K,"stc1",SD) S $P(R,"|",PL)=T_":2"
+ ..I T'=Z,PL'="",T=$$GET^IPAC(K,"stc2",SD) S $P(R,"|",PL)=T_":3"
+ ..Q:X=""   
+ ..S ER=ER_$S(ER="":"",1:"@")_$P(Y,":",1)_$S(T=Z:":7",Z=$$GETNEXT^YIPACN(K,"stc",SD):":14",Z=$G(^cfg("def-stc")):":12",1:":11") ; TODO - если уже ERR
+ .D:'$D(TPL("stc"))&(PL'="")
+ ..S T=$P(R,"|",PL) Q:T'=""  
+ ..Q:$$GET^IPAC(K,"stc1")'="" 
+ ..Q:$$GET^IPAC(K,"stc2")'="" 
+ ..S T=$$GET^IPAC(K,"stc",SD) Q:T=$G(^cfg("def-stc"))  ; ФЛ не ставим
+ ..S $P(R,"|",PL)=T
+ .I $D(TPL("prog")) S Y=TPL("prog") D
+ ..S Y1=$P(Y,":",2,99) Q:Y1=""
+ ..F FL="prog","prog1","prog2" S T1=$$GET^IPAC(K,FL,SD) I T1'="",Y1'=T1 S ER=ER_$S(ER="":"",1:"@")_$P(Y,":",1)_":11" Q
+ .S Y=$$GET^IPAC(K,"opfio")
+ .I +$P(Y,"|",2)=(+$H),$$^I("ilpu")=$P($P(Y,"|",1),"@",2) S ER=ER_$S(ER="":"",1:"@")_"0:14"
+ .s PL=$G(REFPL($$DW^TXTU("ЕСТЬ УСЛУГИ")))
+ .I PL'="" S T=$P(R,"|",PL),T=$S(T="":365,1:T),T=$O(^PNF(K,$H-T)),$P(R,"|",PL)=$S(T:1,1:"")
+ .I $D(ADDPL) S T="" F  S T=$O(ADDPL(T)) Q:T=""  D  ; добавление полей
+ ..S Y1=$$PLbyNM(T) Q:Y1="" 
+ ..S Y=$G(REFPL($$DW^TXTU(T))),T1=$$GET^IPAC(K,Y1,SD)
+ ..S $P(R,"|",Y)=$S(T1="":"",1:T1_" ")_$P(R,"|",Y)
+ 
+ I Alg S R=$$DO^NPSPISU(Alg,R,$G(N)) ; произвольный алгоритм
+ ; № истории был уже определен
+ Q:$L($G(N)) ER_"|"_N_"|(+)|"_R
+ ; есть одинаковые по фамилии
+ I $D(^BUF(%JOB,"btf",%J,"nif")),'$D(^BUF(%JOB,"btf",%J,"ni")) S ER="!"_ER
+SPLITFe 
+ Q ER_"|"_$S(K="-":$$DW^TXTU("Дубль||"),F=0:"||",K="":"|(+)|",1:K_"||")_R
+CHKP(FF,FI,FO,DR,PLS,DGN,DMOD,SD) ; Check patient and return hist number
+ ; DMOD - строгое соответствие дат
+ ; TODO - second DGN
+ N NI,IFIO,CPL,IPL,N,R,LFI,LFO,NFF,DV,PI
+ S NI="",DMOD=+$G(DMOD)
+ S:$G(SD)="" SD=+$H
+ S FF=$TR($$LU^TXTU($$WD^TXTU(FF)),"Ё","Е")
+ S FI=$TR($$LU^TXTU($$WD^TXTU(FI)),"Ё","Е")
+ S FO=$$LU^TXTU($$WD^TXTU(FO))
+ S IFIO=$$F^YIFAM(FF),DR=$$DI^DTUTL(DR),PLS=$$WD^TXTU(PLS)
+ Q:IFIO="" ""
+ S LFI=$L(FI),LFO=$L(FO)
+ S:$L(PLS) CPL=$$PLCNV^YIFINDN(PLS),IPL=$$RSH^IHASH(CPL)#16384,PLS=$$LU^TXTU(PLS)
+ S N="" F  S N=$O(^BTI(" i",IFIO,N)) Q:N=""  D   
+ .I $L(PLS),'$D(^BTI("pls",IPL,N)) Q  ; first or second
+ .S NFF=$$GET^IPAC(N,"fiof",SD),DV=SD
+ .I NFF="" S DV=$$FIRSTDT^IPAC(N),DV=$S(DV>SD:DV,1:SD),NFF=$$GET^IPAC(N,"fiof",DV)
+ .Q:$TR($$LU^TXTU($$GET^IPAC(N,"fiof",DV)),"Ё","Е")'=FF 
+ .I LFI,$TR($$LU^TXTU($$GET^IPAC(N,"fioi",DV)),"Ё","Е")'=FI Q 
+ .I LFO,$$LU^TXTU($$GET^IPAC(N,"fioo",DV))'=FO Q 
+ .S ^BUF(%JOB,"btf",%J,"nif",N)="" ; примерно похожие
+ .I DR="",PLS="",DGN="",'LFI!('LFO) Q  ; дальше не ищем - недостаточно реквизитов
+ .S R=$$GET^IPAC(N,"datar",DV) I R'=DR Q:DMOD  Q:R'=""   ; I $L(DR)
+ .S PI=-1
+ .I $L(DGN) S PI=$$PIDXN^IPAC(N,DGN,DV) Q:PI=-1  
+ .I $L(PLS) S:PI=-1 PI=$$PIDXN^IPAC(N,DGN,DV) S R=$$LU^TXTU($$GET^IPAC(N,"polis"_PI,DV)) I $L(R),R'=PLS Q 
+ .S ^BUF(%JOB,"btf",%J,"ni",N)=""
+ .I NI'="" S:'noDBL NI="-" Q  
+ .E  S NI=N
+ Q NI
+chkST(X) ; Проверить статусы
+ N I,R,F
+ S F=1 F I=1:1:$L(X,"|") S R=$P(X,"|",I) S:"-+"[$E(R) R=$E(R,2,999) I R'="",'$D(^M(1,R)) S F=0 Q
+ Q F
+NRMBD(X) ; Перекодировать дату рождения
+ N Z,I
+ S X=$TR(X,".-\ ","////"),Z=$TR(X,"0123456789/",""),X=$TR(X,Z,"")
+ F  S I=$E(X,1) Q:I'="/"  S X=$E(X,2,$L(X))
+ F  S I=$E(X,$L(X)) Q:I'="/"  S X=$E(X,1,$L(X)-1)
+ I X<999,X?1.N Q "01.01."_($$YEAR^DTUTL(+$H)-X)
+ I X>999,X<9999,X?1.N Q "01.01."_X
+ Q X
+NRMFAM(X) ; Нормализация фамилии
+ S X=$$TRIM^TXTU($TR(X,"/:.1234567890",""))
+ Q:nrmFIO X
+ Q $$DW^TXTU($$NRMFAM^YIFAM($$WD^TXTU(X)))
+NRMFIO(X) ; Нормализация ФИО
+ S X=$$TRIM^TXTU($TR(X,"/:.1234567890",""))
+ Q:nrmFIO X
+ Q $$DW^TXTU($$NRMFIO^YIFAM($$WD^TXTU(X)))
+NRMFIO3(FF,FI,FO) ; Нормализация ФИО из 3-х частей
+ S FF=$$NRMFAM(FF)
+ S FF=FF_$S(FI="":"",1:" "_$$NRMFAM(FI))
+ S FF=FF_$S(FO="":"",1:" "_$$NRMFAM(FO))
+ Q FF
+CHKDT(X) ; Проверить дату
+ Q:$L(X)<6 0
+ S X=$TR(X,".-\ ","////")
+ I X?1.N Q:$L(X)'=6&($L(X)'=8) 0 Q 1
+ Q:$P(X,"/",1)'?1.N 0
+ Q:$P(X,"/",2)'?1.N 0
+ Q:$P(X,"/",3)'?1.N 0
+ Q:$L($P(X,"/",3))=3 0
+ Q:$P(X,"/",4,9)'="" 0
+ Q 1
+CHKLDBL(HD) ; Проверить дубли по строкам
+ N X,R,I,IDX,N,HDR,A
+ S HD=$$WD^TXTU(HD)
+ F I=1:1:$L(HD,"|") S X=$P(HD,"|",I) S:X'="" HDR(X)=I+3
+ S (POS,IDX,X)="",I=1 F  S X=$O(HDR(X)) Q:X=""  D
+ .S R=HDR(X)
+ .I X="И.Б." S IDX=IDX_","_R,I=I+1 Q 
+ .I X="Ф.И.О." S IDX=IDX_","_R,I=I+1 Q 
+ .I X="Ф." S IDX=IDX_","_R,I=I+1 Q 
+ .I X="И." S IDX=IDX_","_R,I=I+1 Q 
+ .I X="О." S IDX=IDX_","_R,I=I+1 Q 
+ .I X="ДАТА РОЖДЕНИЯ" S IDX=IDX_","_R,I=I+1 Q 
+ Q:'I 
+ K ^BUF($J,"dbl")
+ S N="" F  S N=$O(^BUF(%JOB,"btn",N)) Q:N=""  D 
+ .S R=^(N),A=""
+ .F X=2:1:I S $P(A,"|",X-1)=$P(R,"|",$P(IDX,",",X))
+ .Q:A="" 
+ .S A=$$CRC32^IHASH(A)_"|"_$E(A,1,240) ; if long index
+ .I '$D(^BUF($J,"dbl",A)) S ^(A)=N Q 
+ .I $E(R)="!" S $E(R,1)="#"
+ .E  S R="#"_R
+ .S $P(R,"|",2)="Копия"
+ .S $P(R,"|",3)="" ; снимаем выделение
+ .S ^BUF(%JOB,"btn",N)=R
+ K ^BUF($J,"dbl")
+ Q
+NIBLST(LN) ; Список дублей по строке
+ N NI,R,A
+ S (A,NI)=""
+ F  S NI=$O(^BUF(%JOB,"btf",+LN,"ni",NI)) Q:NI=""  S R=$$GET^IPAC(NI,"ofor"),A=$S(A="":"",1:A_CR)_NI_"|"_NI_" "_$$FIO^IPAC(NI)_", "_$$GETE^IPAC(NI,"datar")_", "_$E($$GETE^IPAC(NI,"stc"),1,64)_$S(R>1:", "_$G(^(+$G(^MN("ofor")),R)),1:"")
+ D MSG^RWU(A)
+ Q
+NIFLST(LN) ; Список похожих фамилий по строке
+ N NI,R,A S (A,NI)=""
+ F  S NI=$O(^BUF(%JOB,"btf",+LN,"nif",NI)) Q:NI=""  S R=$$GET^IPAC(NI,"ofor"),A=$S(A="":"",1:A_CR)_NI_"|"_NI_" "_$$FIO^IPAC(NI)_", "_$$GETE^IPAC(NI,"datar")_", "_$E($$GETE^IPAC(NI,"stc"),1,64)_$S(R>1:", "_$G(^(+$G(^MN("ofor")),R)),1:"")
+ D MSG^RWU(A)
+ Q
+MATTAB(LN) ; Мастер обработки
+ Q:LN=""  
+ N X,PL,I,LST,N,Idx,NIB,II
+ S I="" F  S I=$O(^BUF(%JOB,"btnh",I)) Q:I=""  D
+ .S LST(I)=^BUF(%JOB,"btnh",I)
+ .S LST(I,0)=$P(^BUF(%JOB,"btn",LN),"|",I+3)
+ S (X,N)="",NIB=$P(^BUF(%JOB,"btn",LN),"|",2),Idx=$S(NIB="":0,1:1)
+ F  S N=$O(^BUF(%JOB,"btf",LN,"nif",N)) Q:N=""  D
+ .S Idx=Idx+1,II=Idx
+ .S:N=NIB II=1,Idx=Idx-1 ; найденный № и.б. в начало
+ .S $P(X,"|",II)="№ "_N
+ .S I="" F  S I=$O(LST(I)) Q:I=""  D
+ ..S PL=$$PLbyNM($$WD^TXTU(LST(I))) Q:PL="" 
+ ..S R=$S(PL="stc"!(PL="prog"):$TR($$GET^IPAC(N,PL),"|",";")_" ",1:"")
+ ..S LST(I,II)=R_$$GETE^IPAC(N,PL)
+ D OWF^RWU(".txt")
+ D WC^RWU("Наименование поля|Загружаемые данные|"_X)
+ S I="" F  S I=$O(LST(I)) Q:I=""  D
+ .S X=LST(I)_"|"_LST(I,0)
+ .F N=1:1:Idx S X=X_"|"_$$DW^TXTU($G(LST(I,N)))
+ .D W^RWU(CR_X)
+ D C^RWU
+ Q
+MATNEXT(LN) 
+ D MSG^RWU($O(^BUF(%JOB,"btf",LN)))
+ Q
+MATPREV(LN) 
+ D MSG^RWU($O(^BUF(%JOB,"btf",LN),-1))
+ Q
+MATFL(LN,IDX) ; Список замен поля (в мастере обработки)
+ N FL,N,PL,X1,X2,X3,A
+ S FL=^BUF(%JOB,"btnh",IDX),A=""
+ S PL=$$PLbyNM($$WD^TXTU(FL))
+ S FL=$$WD^TXTU(FL)
+ S N="" F  S N=$O(^BUF(%JOB,"btf",LN,"nif",N)) Q:N=""  D
+ .S X1=$$WD^TXTU($P(^BUF(%JOB,"btn",LN),"|",IDX+3)),X2=X1
+ .I FL="ДОГОВОР",X1="" D  Q  
+ ..S X1=$$GET^IPAC(N,"stc") S:X1'="" X1=X1_" "_$$NAME^IINSC(X1)
+ ..S X2=$$GET^IPAC(N,"stc1") S:X2'="" X2=X2_" "_$$NAME^IINSC(X2)
+ ..S X3=$$GET^IPAC(N,"stc2") S:X3'="" X3=X3_" "_$$NAME^IINSC(X3)
+ ..S:X1'="" A=A_CR_$P(X1," ",1)_"|Основной; "_X1
+ ..S:X2'="" A=A_CR_$P(X2," ",1)_":2|Дополнительный; "_X2
+ ..S:X3'="" A=A_CR_$P(X3," ",1)_":3|2-й дополнительный; "_X3
+ .I FL="ДОГОВОР" S X2=X1_" "_$$NAME^IINSC(X1)
+ .S A=$S(A="":"",1:A_CR)_X1_"|"_X2
+ .D:FL="ДОГОВОР"
+ ..S X2=$P(X1,":",2),X3=$P(X1,":",1)
+ ..S A=A_CR_X3_$S(X2<2:":2|Дополнительный; ",1:"|Основной; ")_$P(X1,":",1)_" "_$$NAME^IINSC(X3)
+ ..S A=A_CR_X3_$S(X2<2:":3|2-й дополнительный; ",1:"|Основной; ")_$P(X1,":",1)_" "_$$NAME^IINSC(X3)
+ .I FL="ПРОГРАММА" S A=A_CR_$S($E(X1)="+":"",1:"+")_X1_$S($E(X1)="+":"|Заменить ",1:"|Добавить ")_X1
+ .S X1=$$GET^IPAC(N,PL)
+ .S X2=$$GETE^IPAC(N,PL)
+ .S A=$S(A="":"",1:A_CR)_X1_"|"""_X1_""" "_X2
+ S A=$S(A="":"",1:A_CR)_"|Ввод значения"
+ D MSG^RWU(A)
+ Q
+MATFSET(LN,IDX,X) ; Заменить поле
+ S X=$$WD^TXTU(X)
+ S $P(^BUF(%JOB,"btn",LN),"|",IDX+3)=X
+ Q
+LBTX2 ;
+ D ORH^RWU
+ N HD,%J,C,PTI,ID,X,Y,Z,AP,NIB,DOC,pWRK,fWRK,nnWRK,K,N,FBK,SBK,caDW,PR,wOF,otM,SPIDX,sSPI,DEFFLDS,DEFPROF,UpWRK,UpJT
+ M DEFFLDS=^cfg("pspis","fields")
+ M DEFPROF=^cfg("pspis","pfields")
+ S FBK=+$G(^cfg("pspis-bk"))
+ S SBK=+$G(^cfg("pspis","srcbk"))
+ S wOF=$G(^cfg("pspis","setofor"))
+ S otM=$G(^cfg("pspis","deofor"))
+ S fWRK=$G(^cfg("pspis","workflc")) ; find in lower case
+ S nnWRK=$G(^cfg("pspis","worknum"))
+ S sSPI=$G(^cfg("pspis","setpidx"))
+ S SPIDX=$$GET^IINKR("pspisidx")
+ S (DOC,HD)="",pWRK="^BUF("_$J_",""wrk"")",(caDW,UpWRK,UpJT)=0
+ S X=$$LCL^IUSER("pspis","def-fld")
+ I X'="" F %J=1:1:$L(X,";") S Y=$P(X,";",%J) I Y'="",Y["=" S Z=$P(Y,"=",1) S:Z'="" DEFFLDS(Z)=$P(Y,"=",2)
+ S X=$$LCL^IUSER("pspis","def-pfld")
+ I X'="" F %J=1:1:$L(X,";") S Y=$P(X,";",%J) I Y'="",Y["=" S Z=$P(Y,"=",1) S:Z'="" DEFPROF(Z)=$P(Y,"=",2)
+ D CHKBK
+ K ^BUF(%JOB,"btn"),^BUF(%JOB,"btf")
+ K ^BUF($J,"cadw"),^BUF($J,"wrk")
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  D
+ .S A=$P(A,"|",2,99) ; exclude key
+ .I %J=1 S I=0,HD=$$WD^TXTU(A) F C=1:1:32 S I=$F(A,"|",I) Q:I=0
+ .I %J=1 F I=1:1:C S X=$P(HD,"|",I) I X="N ПРИКРЕПЛЕНИЯ" S caDW=I
+ .Q:%J<3 
+ .I DOC="",FBK!SBK!$G(^JOB(%JOB,"pspis","bk")) S DOC=$$MKDOCNM^YDOCS("Список на прикрепление от "_$$DT^DTUTL(+$H),"Списки на прикрепление","Договора")
+ .I SBK,DOC'="" S ^BTNBKS(DOC,%J)=$$WD^TXTU(A) S:%J=3 ^BTNBKS(DOC,1)=HD
+ .S AP=$P(A,"|",3,32),NIB=$P(A,"|",1),K=$P(A,"|",2),N=$$WD^TXTU(NIB)
+ .S NIB=$S(N="Дубль":"",N="Копия":"",1:NIB)
+ .D:$L(K) READBTN
+ .S ^BUF(%JOB,"btn",%J)=NIB_"|"_$S(NIB="":"ERR",$P(A,"|",2)="":"NOT",1:"OK")_"|"_AP
+ D CR^RWU
+ D:UpWRK USYNC^ISPRAV(5)
+ D:UpJT USYNC^ISPRAV("jobtitle")
+ G:%J=1 LBTX2M
+ D SETDEF^YDOCS(DOC)
+ I $L(DOC),$D(^BTNBK(DOC)) S ^BTNBK(DOC)=$H
+ D SET^YDOCS(DOC,"ext","tab")
+ D SET^YDOCS(DOC,"spidx",SPIDX)
+ D SET^YDOCS(DOC,"rproc","ODOC^NPSPIS")
+LBTX2M D OWF^RWU(".txt"),WC^RWU("|"_HD)
+ S (%J,X)=""
+ F I=1:1 S %J=$O(^BUF(%JOB,"btn",%J)) Q:%J=""  S X=^(%J) D W^RWU(CR_"|"_X),WSTR^YDOCS(DOC,$P(X,"|",1))
+ D C^RWU
+ K ^BUF(%JOB,"btn"),^BUF(%JOB,"btnc"),^BUF(%JOB,"btnh"),%L
+ K ^BUF($J,"cadw"),^BUF($J,"wrk")
+ Q
+READBTN 
+ K XML
+ N NS,NE,PROF,SD,R,ADD,FN,%IFN,PIDX
+ S PTI="patients",NS=$G(^cfg("pspis-start")),NE=$G(^cfg("pspis-end"))
+ S:NS="" NS=50000 S:NE="" NE=899999
+ S XML(PTI,"nspis")=DOC,SD=0
+ ; Поля по умолчанию для списков
+ M XML(PTI)=DEFFLDS
+ M PROF=DEFPROF
+ M:$G(^cfg("pspis","show-istate")) XML(PTI)=^JOB(%JOB,"pspis","istate") ; начальное состояние, если не выводится как колонки
+ 
+ S:'$D(XML(PTI,"savedate")) XML(PTI,"savedate")=$S($L(NIB)&$G(^JOB(%JOB,"pspis","zam")):$$CREATED^IPAC(NIB),1:+$H)
+ S:$L(NIB) XML(PTI,"hist")=NIB
+ F I=1:1:C S ID=$P(HD,"|",I),X=$$TRIM^TXTU($P(A,"|",I)) D
+ .I ID="И.Б." S XML(PTI,"hist")=X Q
+ .I ID="Ф." S XML(PTI,"fiof")=X Q 
+ .I ID="И." S XML(PTI,"fioi")=X Q 
+ .I ID="О." S XML(PTI,"fioo")=X Q 
+ .I ID="Ф.ЛАТ." S XML(PTI,"mnf")=X Q 
+ .I ID="И.ЛАТ." S XML(PTI,"mni")=X Q 
+ .I ID="О.ЛАТ." S XML(PTI,"mno")=X Q 
+ .I ID="Ф.И.О." S X=$$DBLSP^TXTU(X),XML(PTI,"fiof")=$P(X," ",1),XML(PTI,"fioi")=$P(X," ",2),XML(PTI,"fioo")=$P(X," ",3,9) Q 
+ .I ID="Ф.И.О.ЛАТ." S X=$$DBLSP^TXTU(X),XML(PTI,"mnf")=$P(X," ",1),XML(PTI,"mni")=$P(X," ",2),XML(PTI,"mno")=$P(X," ",3,9) Q 
+ .I ID="ПОЛ" S X=$E($$LU^TXTU($$WD^TXTU(X)),1),XML(PTI,"pol")=$S(X="М"!(X=1):1,X="Ж"!(X=2):2,1:"") Q 
+ .I ID="ДАТА РОЖДЕНИЯ" S XML(PTI,"datar")=X Q 
+ .I ID="АДРЕС" D  Q 
+ ..; S X=DECADDR(X)
+ ..S XML(PTI,"street")=X
+ .I ID="УЛИЦА" S XML(PTI,"street")=X Q
+ .I ID="ДОМ" S XML(PTI,"dom")=X Q
+ .I ID="КОРПУС" S XML(PTI,"korp")=X Q
+ .I ID="КВАРТИРА" S XML(PTI,"kvart")=X Q
+ .I ID="ДОМ.КОД" S XML(PTI,"domkod")=X Q
+ .I ID="ТЕЛЕФОН ДОМ." S XML(PTI,"tel1")=X Q 
+ .I ID="ТЕЛЕФОН СЛУЖ." S XML(PTI,"tel2")=X Q 
+ .I ID="ТЕЛЕФОН СОТ." S XML(PTI,"pager")=X Q
+ .I ID="ПОЛИС" S XML(PTI,"polis")=X Q 
+ .I ID="СРОК С",X["-" S XML(PTI,"dog_from")=$P(X,"-",1),XML(PTI,"dog_to")=$P(X,"-",2) Q
+ .I ID="СРОК С" S XML(PTI,"dog_from")=X Q 
+ .I ID="СРОК ПО" S XML(PTI,"dog_to")=X Q 
+ .I ID="ДАТА ОТКРЕПЛЕНИЯ" S XML(PTI,"dog_to")=$$DT^DTUTL($$DI^DTUTL(X)-1) S:otM XML(PTI,"ofor")=2 Q 
+ .I ID="ДОГОВОР" S:$D(^DGN(+X)) XML(PTI,"stc")=X Q  
+ .I ID="ПРОГРАММА" S XML(PTI,"prog")=$$READPRG(X) Q 
+ .I ID="E-MAIL" S XML(PTI,"email")=X Q 
+ .I ID="ОФОРМЛЕН" S:X'="" XML(PTI,"ofor")=X Q 
+ .I ID="ДАТА.ОФОРМЛ." S XML(PTI,"dofor")=$P(X," ",1) Q 
+ .I ID="СТАТУСЫ" S XML(PTI,"status")=$$READPRG(X) Q 
+ .I ID="РАБОТА" S:$L(X) XML(PTI,"is_work")=1 S XML(PTI,"work")=$S(X?1.N:X,1:$$pWORK(X)) Q  
+ .I ID="ПРИМЕЧАНИЕ" S XML(PTI,"text")=X Q
+ .I ID="СТРАХОВОЙ ДОГ." S XML(PTI,"stcdog")=X Q
+ .I ID="СТРАХ.ПРОГРАММА" S XML(PTI,"stcprg")=X Q 
+ .I ID="СНИЛС" S XML(PTI,"snils")=X Q 
+ .I ID="ПАСПОРТ N" S XML(PTI,"pasp")=X Q 
+ .I ID="ПАСПОРТ ВЫДАН" S XML(PTI,"pasp_dan")=X Q 
+ .I ID="ПРОФЕССИЯ" S K=$$FPROF^IPROFVR($$WD^TXTU(X)) S:K'="" XML(PTI,"prof")=$$DW^TXTU($$PROF^IPROFVR(K)),XML(PTI,"profid")=K Q
+ .I ID="ДОЛЖНОСТЬ" S:X'="" XML(PTI,"jobtitle")=$S(X?1.N:X,1:$$pJOBT(X)) Q 
+ .I ID="ФАКТ.АДРЕС" S:X'="" XML(PTI,"paddress")=X
+ .I ID="СТАЖ РАБОТЫ" S PROF("staj")=$S($TR(X,"летгода ","")?1.N:$$AFTERYY^DTUTL(+$H,-$TR(X,"летгода ","")),1:$$DI^DTUTL(X)) Q  
+ .I ID="СТАЖ В В.П." S PROF("stajv")=$S($TR(X,"летгода ","")?1.N:$$AFTERYY^DTUTL(+$H,-$TR(X,"летгода ","")),1:$$DI^DTUTL(X)) Q 
+ .I ID="ВИД ОБСЛЕДОВАНИЯ" S PROF("uslpat")=$$DBLSP^TXTU(X) Q 
+ .I ID="ВИД П.О." S PROF("ptp")=$$DBLSP^TXTU(X) Q
+ .I ID="ВРЕДНЫЕ ФАКТОРЫ" S PROF("vflist")=$$REVF^IPROFVR($$DBLSP^TXTU(X)) Q 
+ .I ID="ВРЕДНЫЕ ФАКТОРЫ п.29" S PROF("vflist2")=$$REVF^IPROFVR($$DBLSP^TXTU(X)) Q
+ .I ID="ЦЕХ" S PROF("depart")=$$DBLSP^TXTU(X) Q
+ .I ID="НАЦИОНАЛЬНОСТЬ" S PROF("nation")=$$DBLSP^TXTU(X),XML(PTI,"nation")=PROF("nation") Q 
+ .I ID="МЕСТО РОЖД." S PROF("bplace")=$$DBLSP^TXTU(X),XML(PTI,"aborn")=PROF("bplace") Q
+ .I ID="ВНЖ" S PROF("fmst")=$$DBLSP^TXTU(X) Q
+ .I ID="ЛМК" S PROF("lmk")=$$DBLSP^TXTU(X) Q 
+ .I ID="ТИП ЛМК" S PROF("lmkp")=$$DBLSP^TXTU(X) Q
+ .I ID="ПЕРИОД РЕГИСТРАЦИИ" S PROF("pvreg")=$$DBLSP^TXTU(X) Q 
+ .I ID="ПРОФ:РЕГИОН" S PROF("vregion")=$$DBLSP^TXTU(X) Q 
+ .I ID="ПРОФ:ГОРОД" S PROF("vcity")=$$WD^TXTU($$DBLSP^TXTU(X)) Q
+ .I ID="ПРОФ:УЛИЦА" S PROF("vstreet")=$$DBLSP^TXTU(X) Q
+ .I ID="ПРОФ:ДОМ" S PROF("vdom")=$$DBLSP^TXTU(X) Q
+ .I ID="ПРОФ:КВАРТИРА" S PROF("vkvart")=$$DBLSP^TXTU(X) Q  ; TODO
+ .I ID="ПРОФ:ПРОФИЛЬ" S PROF("pat")=$$DBLSP^TXTU(X) Q 
+ .I ID="ПРОФ:ДОЛЖНОСТЬ" S PROF("workd")=$$DBLSP^TXTU(X) Q
+ .I ID="ПРОФ:АДРЕС РАБОТЫ" S PROF("worka")=$$DBLSP^TXTU(X) Q
+ .I ID="ПРОФ:ВИД ОСМ." S PROF("ptp")=$$DBLSP^TXTU(X) Q
+ .I ID="ДАТА ИЗМЕНЕНИЯ" S R=$G(XML(PTI,"hist")),X=$S(X=0&$L(R):$$CREATED^IPAC(R),X=0:+$H,1:$$DIH^DTUTL(X)),XML(PTI,"savedate")=X,SD=1 Q 
+ .I ID="СТОИМОСТЬ ПОЛИСА" S XML(PTI,"psumm")=$S(X="":X,1:+$TR(X,", ",".")) Q 
+ .I ID="ЛИМИТ СУММЫ" S XML(PTI,"sumlimit")=$S(X="":X,1:+$TR(X,", ",".")) Q
+ .I ID="ФРАНШИЗА в %" S XML(PTI,"frap")=$S(X="":X,1:+$TR(X,", ",".")) Q
+ .I ID="СУММА ФРАНШИЗЫ" S XML(PTI,"fras")=$S(X="":X,1:+$TR(X,", ",".")) Q
+ .I ID="СУММА ПОСЕЩЕНИЯ ФР." S XML(PTI,"frasp")=$S(X="":X,1:+$TR(X,", ",".")) Q
+ .I ID="ГОРОД" S X=$$FPLACEID^YKLADR(X) S:X'="" XML(PTI,"place")=X,XML(PTI,"region")=$$RGNID^YKLADR(X) Q 
+ .I ID="ФИЛИАЛ" S XML(PTI,"lpu")=X Q 
+ .I ID="СЧЕТ" S:+X ADD("bill")=X Q 
+ .I ID="БАЛАНС" S:+X ADD("sbill")=X Q
+ .I ID="СКИДКА" S:X'="" XML(PTI,"skd")=X Q 
+ .I ID="РЕКЛАМА" S:X'="" XML(PTI,"rsource")=X Q
+ .I ID="ГДЕ КАРТА" S:X'="" XML(PTI,"whop")=X Q 
+ .I ID="АЛЬТ.НОМЕР" S:X'="" XML(PTI,"anib")=X Q 
+ 
+ S:$G(XML(PTI,"hist"))="" XML(PTI,"ofor")=1 ; for new
+ 
+ S X=$$DI^DTUTL($G(XML(PTI,"dog_from"))),R=XML(PTI,"savedate")
+ S:R=0 R=+$H
+ ; если принудительно не установили SD и есть dog_from
+ I $L(X),'SD S Z=$G(XML(PTI,"hist")) S:$S(Z="":X<R,$D(^BTN(Z)):1,1:X<R) XML(PTI,"savedate")=X,R=X
+ 
+ S X=$G(XML(PTI,"stc")),PIDX=""
+ I X[":" S PIDX=+$P(X,":",2)-1 S:PIDX<1 PIDX="" ; 1,2,3->"",1,2
+ 
+ ; Операции над реквизитами (добавить/изъять)
+ S Z="prog",X=$G(XML(PTI,Z))
+ S:PIDX'="" Z="prog"_PIDX
+ I X[":" S Z="prog"_$S($P(X,":",2)=1:"",1:$P(X,":",2)-1),X=$P(X,":",1),XML(PTI,Z)=X K XML(PTI,"prog") ; Индекс программы (если без договора)
+ I X'="","+-"[$E(X) S Y=$S(NIB="":"",1:$$DW^TXTU($$GET^IPAC(NIB,Z,R))),XML(PTI,Z)=$$REPRG(X,Y) K:Z'="prog" XML(PTI,"prog") ; clear def.val
+ S Z="status",X=$G(XML(PTI,Z))
+ I $L(X),"+-"[$E(X) S Y=$S(NIB="":"",1:$$DW^TXTU($$GET^IPAC(NIB,Z,R))),XML(PTI,Z)=$$REPRG(X,Y)
+ I NIB'="" F Z="text","stcdog","stcprg" D
+ .S X=$G(XML(PTI,Z))
+ .Q:$E(X)'="+" 
+ .S XML(PTI,Z)=$$DW^TXTU($$GET^IPAC(NIB,Z,R))_$E(X,2,9999)
+ I NIB'="" F Z="status" D  
+ .S X=$G(XML(PTI,Z)) 
+ .I $E(X)="+" S XML(PTI,Z)=$$STFLGS^TXTU($$DW^TXTU($$GET^IPAC(NIB,Z,R)),$E(X,2,9999)) Q
+ .I $E(X)="-" S XML(PTI,Z)=$$EXFLGS^TXTU($$DW^TXTU($$GET^IPAC(NIB,Z,R)),$E(X,2,9999)) Q
+ 
+ ; подсчет числа для новых
+ I caDW,$G(XML(PTI,"hist"))="" D
+ .S X=$$CALCDW($G(XML(PTI,"stc")),$G(XML(PTI,"work")))+1
+ .S $P(AP,"|",caDW-2)=X
+ 
+ I wOF,$G(XML(PTI,"hist"))="",$G(XML(PTI,"dofor"))="" S XML(PTI,"dofor")=$$DT2^DTUTL(+$H)
+ 
+ S:$G(XML(PTI,"hist"))="" XML(PTI,"hist")=$$NEW^IPAC(NS,NE)
+ ; Автоопределение пола
+ S X=$G(XML(PTI,"fiof"))
+ I $G(XML(PTI,"pol"))="",$L(X) S X=$$SEX^YIFAM($$WD^TXTU(X)) S:$L(X) XML(PTI,"pol")=X
+ S X=$G(XML(PTI,"fioi"))
+ I $G(XML(PTI,"pol"))="",$L(X) S X=$G(^ISLIB("fioi-sex",$$LU^TXTU($$WD^TXTU(X)))) S:$L(X) XML(PTI,"pol")=X
+ S X=$G(XML(PTI,"fioo"))
+ I $G(XML(PTI,"pol"))="",$L(X) S X=$G(^ISLIB("fioo-sex",$$LU^TXTU($$WD^TXTU(X)))) S:$L(X) XML(PTI,"pol")=X
+ 
+ ; Проверка неперепутанных дат договора
+ I $G(XML(PTI,"dog_from"))'="",$G(XML(PTI,"dog_to"))'="",$$DI^DTUTL(XML(PTI,"dog_to"))<$$DI^DTUTL(XML(PTI,"dog_from")) S X=XML(PTI,"dog_from"),XML(PTI,"dog_from")=XML(PTI,"dog_to"),XML(PTI,"dog_to")=X
+ 
+ ; Вторичный договор
+ D SECDGN
+ 
+ S NIB=XML(PTI,"hist"),XML(PTI,"savedate")=$$DT^DTUTL(R),SD=R
+ 
+ S:sSPI XML(PTI,"pspisidx")=SPIDX
+ ; Резервное копирование
+ I FBK!$G(^JOB(%JOB,"pspis","bk")) S ^BTNBK(DOC,NIB)=$S(NIB="":0,1:$H) M:NIB'="" ^BTNBK(DOC,NIB)=^BTN(NIB)
+ 
+ D DO^ITRIG("pspis","save")
+ ; Очистка реквизитов вперед по времени
+ I NIB'="",$G(^JOB(%JOB,"pspis","tzam")),$$EXIST^IPAC(NIB) S ID="" F  S ID=$O(XML(PTI,ID)) Q:ID=""  D CLRFROM^IPAC(NIB,ID,SD)
+ 
+ D W^YIPACN
+ S X="" F  S X=$O(PROF(X)) Q:X=""  D SET^NPROF(NIB,X,SD,$$WD^TXTU(PROF(X)),1,1)
+ I $D(PROF("lmk"))!$D(PROF("lmkp")) D updlmk^NPROF(SD,0)
+ D:$D(PROF) SETLOG^IPROF(NIB,SD)
+ S X="" F  S X=$O(ADD(X)) Q:X=""  D
+ .I X="bill" D SUB^IBILL(NIB,SD_","_$P($H,",",2),-ADD(X),"Коррекция счета") Q 
+ .I X="sbill" D SUB^IBILL(NIB,SD_","_$P($H,",",2),$$NOW^IBILL(NIB)-ADD(X),"Коррекция счета") Q
+ D DO^ITRIG("pspis","end")
+ K XML
+ Q
+READPRG(X) 
+ Q $$TLST^IPAC($TR(X,";:/\,","|||||||"))
+REPRG(X,EX) ; Exclude/include programms
+ N O,I,K
+ S O=$E(X),X=$E(X,2,999),X=$TR(X,CR,""),RE=""
+ S:$E(X,$L(X))="|" X=$E(X,1,$L(X)-1) ; последнюю пустую | убираем
+ I EX="" Q:O="-" "" S EX=X G REPRG1
+ I O="+" F I=1:1:$L(X,"|") S EX=$$STFLG^TXTU(EX,$P(X,"|",I))
+ I O="-" F I=1:1:$L(X,"|") S EX=$$EXFLG^TXTU(EX,$P(X,"|",I))
+REPRG1 S O="" F I=1:1:$L(EX,"|") S K=$P(EX,"|",I) S:K'="" O=O_$$TRIM^TXTU(K)_"|"_CR
+ Q O
+CALCDW(DGN,WRK) ; Получить число действующих прикрепленных по договору и/или месту работы
+ ; если уже считали - используем
+ I $D(^BUF($J,"cadw",DGN_"|"_WRK)) S DGN=DGN_"|"_WRK,WRK=^(DGN)+1,^(DGN)=WRK Q WRK
+ ; если нет - считаем
+ N NI,H,I,L S NI="",H=+$H,I=0,L=$L(DGN)
+ D PRETZR^IPAC
+ ; TODO - stc2,dog_to2 ...
+ I $L(WRK) F  S NI=$O(^BTI(" w",WRK,NI)) Q:NI=""  D
+ .Q:$$GET^IPAC(NI,"work",H)'=WRK 
+ .Q:$$GET^IPAC(NI,"ofor",H)>1 
+ .Q:$$GET^IPAC(NI,"dog_from",H)>H
+ .Q:$$GET^IPAC(NI,"dog_to",H)<H 
+ .I L Q:$$GET^IPAC(NI,"stc",H)'=DGN 
+ .S I=I+1
+ I $L(WRK) S ^BUF($J,"cadw",DGN_"|"_WRK)=I Q I
+ F  S NI=$O(^BTI(" s",DGN,NI)) Q:NI=""  D
+ .Q:$$GET^IPAC(NI,"stc",H)'=DGN 
+ .Q:$$GET^IPAC(NI,"ofor",H)>1 
+ .Q:$$GET^IPAC(NI,"dog_from",H)>H
+ .Q:$$GET^IPAC(NI,"dog_to",H)<H 
+ .S I=I+1
+ S ^BUF($J,"cadw",DGN_"|"_WRK)=I
+ Q I
+SECDGN ; Переместить реквизиты на вторичный договор
+ Q:$G(XML(PTI,"stc"))'[":" 
+ N X,Z
+ S X=XML(PTI,"stc"),Z=$P(X,":",2) Q:Z=1  ; 1-й договор
+ S Z=Z-1
+ S XML(PTI,"stc"_Z)=$P(X,":",1)
+ K XML(PTI,"stc")
+ M XML(PTI,"dog_from"_Z)=XML(PTI,"dog_from")
+ K XML(PTI,"dog_from")
+ M XML(PTI,"dog_to"_Z)=XML(PTI,"dog_to")
+ K XML(PTI,"dog_to")
+ M XML(PTI,"prog"_Z)=XML(PTI,"prog")
+ K XML(PTI,"prog")
+ M XML(PTI,"polis"_Z)=XML(PTI,"polis")
+ K XML(PTI,"polis")
+ Q
+ODOC ; for NDOCS
+ N X,FYDOCS,R,D
+ Q:'$$CHECK^YDOCS(ND)  D ORSTR^YDOCS
+ D WC^RWU("И.Б.|Ф.|И.|О.|Полис|Договор")
+ F  S X=$$RSTR^YDOCS(ND) Q:FYDOCS=""  D
+ .S D=$P(ND,",",1),R=$$GET^IPAC(X,"stc",D)
+ .D WC^RWU(CR_X_"|"_$$GET^IPAC(X,"fiof",D)_"|"_$$GET^IPAC(X,"fioi",D)_"|"_$$GET^IPAC(X,"fioo",D)_"|"_$$GET^IPAC(X,"polis",D)_"|"_$$NAMEH^YNDOG(R,D))
+ Q
+DECADDR(X) 
+ ; N F,R,K,IND,IDX,PI,P
+ S IND="",IDX=0
+ S F=$$DBLSP^TXTU($TR(X,",.;","   ")),PTI="patients"
+ S K=$P(F," ",1) I K?6N S IND=K,X=$P(X,K,2,999),F=$P(F," ",2,99)
+ I $$LU^TXTU($P(F," ",1))="Г" S K=$P(F," ",2),R=$$FIND^YKLADR(K) I R'="" S XML(PTI,"region")=R,X=$P(X,K,2,999),F=$P(F," ",2,99),IDX=1
+ I IDX<1 S K=$P(F," ",1) I $$LU^TXTU(K)="МОСКВА" S R=$$FIND^YKLADR(K) I R'="" S XML(PTI,"region")=R,X=$P(X,K,2,999),F=$P(F," ",3,99),IDX=1
+ S F="",IDX=0,PI=0,P=0 F K=1:1:999 S R=$E(X,K) D  Q:R="" 
+ .I $L(R),'(R?1P) S F=F_R S:P=0 P=K Q 
+ .I IDX=0 S F=$$UL^TXTU(F),PI=P D  Q 
+ ..I F="дом"!(F="д") S IDX=5 
+ ..I F="корпус"!(F="корп") S IDX=6 
+ ..I F="строение"!(F="ст")!(F="стр") S IDX=7
+ ..I F="кв"!(F="кварт") S IDX=8
+ ..S F="",P=0
+ .I IDX>0 D  Q 
+ ..S X1=$E(X,1,PI-1),X2=$E(X,K,$L(X)),K=K-(K-PI)
+ ..S:$TR($E(X1,$L(X1)),",.;/",",,,,")="," $E(X1,$L(X1))="",K=K-1
+ ..S X=X1_X2
+ ..I IDX=5 S XML(PTI,"dom")=F
+ ..I IDX=6 S XML(PTI,"korp")=F
+ ..I IDX=7 S XML(PTI,"stroen")=F
+ ..I IDX=8 S XML(PTI,"kvart")=F
+ ..S F="",(P,IDX,PI)=0
+ I $TR($E(X,1),",.;/",",,,,")="," S $E(X,1)=""
+ I $TR($E(X,$L(X)),",.;/",",,,,")="," S $E(X,$L(X))=""
+ Q $S(IND="":"",1:IND_", ")_$$TRIM^TXTU(X)
+pWORK(X) ; Найти (добавть если нет) место работы
+ ; pWRK - top new declaration
+ Q:X="" ""
+ N I,R,RN,XF
+ S XF=$S(fWRK:$$UL^TXTU(X),1:X)
+ I '$D(@pWRK) S I="" F  S I=$O(^M(5,I)) Q:I=""  S R=^(I),R1=$P(R," ",1),R=$S(nnWRK:R,+R1=R1:$P(R," ",2,99),1:R) S:R'="" @pWRK@($S(fWRK:$$UL^TXTU(R),1:R))=I
+ S X=$$WD^TXTU($TR(X,"""","'")),I=$G(@pWRK@(XF)) Q:I'="" I
+ S I=$O(^M(5,""),-1)+1 S:I=999 I=1000
+ S ^M(5,I)=$S(nnWRK:"",1:I_" ")_X,@pWRK@(XF)=I
+ D W^ISSG("^M(5,"_I_")="_X)
+ D GL^IEXCH("^M",5,I)
+ S UpWRK=1
+ Q I
+pJOBT(X) ; Найти (добавть если нет) должность
+ Q:X="" "" N I,K,S,Z
+ S I=$$NEWIDX^YISPRAV("jobtitle"),K="",Z="",S=$$WD^TXTU($TR(X,"""","'"))
+ F  S K=$O(^MN(I,K)) Q:K=""  I $$LU^TXTU($G(^(K)))=$$LU^TXTU(S) S Z=K Q 
+ Q:Z'="" Z 
+ L +^MN(I) S Z=$O(^MN(I,""),-1)+1 S:Z=999 Z=1000 S ^MN(I,Z)=S L -^MN(I)
+ D UPD^IEXCH("YISPRAV","jobtitle")
+ S UpJT=1
+ Q Z
+GCL ; Реквизиты списка
+ D OWF^RWU(".txt")
+ D WC^RWU($$CGList())
+ D C^RWU
+ Q
+CGList() ; Вернуть список полей через CR
+ N A 
+ S A="И.Б."_CR
+ S A=A_"Ф."_CR
+ S A=A_"И."_CR
+ S A=A_"О."_CR
+ S A=A_"Ф.И.О."_CR
+ S A=A_"ПОЛ"_CR
+ S A=A_"ДАТА РОЖДЕНИЯ"_CR
+ S A=A_"АДРЕС"_CR
+ S A=A_"ГОРОД"_CR
+ S A=A_"УЛИЦА"_CR
+ S A=A_"ДОМ"_CR
+ S A=A_"КОРПУС"_CR
+ S A=A_"КВАРТИРА"_CR
+ S A=A_"ДОМ.КОД"_CR
+ S A=A_"ФАКТ.АДРЕС"_CR
+ S A=A_"ТЕЛЕФОН ДОМ."_CR
+ S A=A_"ТЕЛЕФОН СЛУЖ."_CR
+ S A=A_"ТЕЛЕФОН СОТ."_CR
+ S A=A_"E-MAIL"_CR
+ S A=A_"ПОЛИС"_CR
+ S A=A_"СРОК С"_CR
+ S A=A_"СРОК ПО"_CR
+ S A=A_"ДОГОВОР"_CR
+ S A=A_"ПРОГРАММА"_CR
+ S A=A_"ОФОРМЛЕН"_CR
+ S A=A_"ДАТА.ОФОРМЛ."_CR
+ S A=A_"ДАТА ОТКРЕПЛЕНИЯ"_CR
+ S A=A_"СТАТУСЫ"_CR
+ S A=A_"СТРАХОВОЙ ДОГ."_CR
+ S A=A_"СТРАХ.ПРОГРАММА"_CR
+ S A=A_"РАБОТА"_CR
+ S A=A_"СНИЛС"_CR
+ S A=A_"ПРИМЕЧАНИЕ"_CR
+ S:$G(^cfg("profv")) A=A_"ПРОФЕССИЯ"_CR
+ S A=A_"ДОЛЖНОСТЬ"_CR
+ S A=A_"ПАСПОРТ N"_CR
+ S A=A_"ПАСПОРТ ВЫДАН"_CR
+ S:$G(^cfg("alt-fio")) A=A_"Ф.ЛАТ."_CR
+ S:$G(^cfg("alt-fio")) A=A_"И.ЛАТ."_CR
+ S:$G(^cfg("alt-fio")) A=A_"О.ЛАТ."_CR
+ S:$G(^cfg("alt-fio")) A=A_"Ф.И.О.ЛАТ."_CR
+ D:$G(^cfg("profv"))
+ .S A=A_"СТАЖ РАБОТЫ"_CR
+ .S A=A_"СТАЖ В В.П."_CR
+ .S A=A_"ЦЕХ"_CR
+ .S A=A_"ПРОФ:ДОЛЖНОСТЬ"_CR
+ .S A=A_"ВИД ОБСЛЕДОВАНИЯ"_CR
+ .S A=A_"ВИД П.О."_CR
+ .S A=A_"ПРОФ:ВИД ОСМ."_CR
+ .S A=A_"ПРОФ:ПРОФИЛЬ"_CR
+ .S A=A_"ВРЕДНЫЕ ФАКТОРЫ"_CR
+ .S A=A_"ВРЕДНЫЕ ФАКТОРЫ п.29"_CR
+ .S A=A_"НАЦИОНАЛЬНОСТЬ"_CR
+ .S A=A_"МЕСТО РОЖД."_CR
+ .S A=A_"ВНЖ"_CR
+ .S A=A_"ПЕРИОД РЕГИСТРАЦИИ"_CR
+ .S A=A_"АДРЕС РАБОТЫ"_CR
+ .S A=A_"ЛМК"_CR
+ .S A=A_"ТИП ЛМК"_CR
+ S A=A_"СКИДКА"_CR
+ S:$G(^cfg("pspis","prinum")) A=A_"N ПРИКРЕПЛЕНИЯ"_CR
+ S:$$LCL^IUSER("pspis","bill") A=A_"СЧЕТ"_CR_"БАЛАНС"_CR
+ S:$$LCL^IUSER("pspis","lpu") A=A_"ФИЛИАЛ"_CR
+ S A=A_"СТОИМОСТЬ ПОЛИСА"_CR
+ S A=A_"ЛИМИТ СУММЫ"_CR
+ S A=A_"ФРАНШИЗА в %"_CR
+ S A=A_"СУММА ФРАНШИЗЫ"_CR
+ S A=A_"СУММА ПОСЕЩЕНИЯ ФР."_CR
+ S A=A_"РЕКЛАМА"_CR
+ S A=A_"ГДЕ КАРТА"_CR
+ S A=A_"АЛЬТ.НОМЕР"_CR
+ S A=A_"ДАТА ИЗМЕНЕНИЯ"_CR
+ S A=A_"ЕСТЬ УСЛУГИ"_CR
+ S A=A_"ДЕЙСТВИЕ"_CR
+ Q A
+PLbyNM(ID) ; Поле по заголовку
+ I ID="Ф." Q "fiof"
+ I ID="И." Q "fioi"
+ I ID="О." Q "fioo"
+ I ID="Ф.И.О." Q "fio"
+ I ID="ПОЛ" Q "pol"
+ I ID="ДАТА РОЖДЕНИЯ" Q "datar"
+ I ID="АДРЕС" Q "address"
+ I ID="ГОРОД" Q "place"
+ I ID="УЛИЦА" Q "street"
+ I ID="ДОМ" Q "dom"
+ I ID="КОРПУС" Q "korp"
+ I ID="КВАРТИРА" Q "kvart"
+ I ID="ДОМ.КОД" Q "domkod"
+ I ID="ТЕЛЕФОН ДОМ." Q "tel1"
+ I ID="ТЕЛЕФОН СЛУЖ." Q "tel2"
+ I ID="ТЕЛЕФОН СОТ." Q "pager"
+ I ID="E-MAIL" Q "email"
+ I ID="ПОЛИС" Q "polis"
+ I ID="СРОК С" Q "dog_from"
+ I ID="СРОК ПО" Q "dog_to"
+ I ID="ДОГОВОР" Q "stc"
+ I ID="ПРОГРАММА" Q "prog"
+ I ID="ОФОРМЛЕН" Q "ofor"
+ I ID="ДАТА.ОФОРМЛ." Q "dofor"
+ I ID="СТАТУСЫ" Q "status"
+ I ID="СТРАХОВОЙ ДОГ." Q "stcdog"
+ I ID="СТРАХ.ПРОГРАММА" Q "stcprg"
+ I ID="РАБОТА" Q "work"
+ I ID="СНИЛС" Q "snils"
+ I ID="ПРИМЕЧАНИЕ" Q "text"
+ I ID="ПРОФЕССИЯ" Q "profid"
+ I ID="ДОЛЖНОСТЬ" Q "jobtitle"
+ I ID="ПАСПОРТ N" Q "pasp"
+ I ID="ПАСПОРТ ВЫДАН" Q "pasp_dan"
+ I ID="Ф.ЛАТ." Q "mnf"
+ I ID="И.ЛАТ." Q "mni"
+ I ID="О.ЛАТ." Q "mno"
+ I ID="Ф.И.О.ЛАТ." Q "mnfio"
+ I ID="СТАЖ РАБОТЫ" Q ""
+ I ID="СТАЖ В В.П." Q ""
+ I ID="ВИД ОБСЛЕДОВАНИЯ" Q ""
+ I ID="ВИД П.О." Q ""
+ I ID="ВРЕДНЫЕ ФАКТОРЫ" Q ""
+ I ID="ВРЕДНЫЕ ФАКТОРЫ п.29" Q ""
+ I ID="ПРОФ:РЕГИОН" Q ""
+ I ID="ПРОФ:ГОРОД" Q ""
+ I ID="ПРОФ:УЛИЦА" Q ""
+ I ID="ПРОФ:ДОМ" Q ""
+ I ID="ПРОФ:КВАРТИРА" Q ""
+ I ID="ПРОФ:ПРОФИЛЬ" Q ""
+ I ID="СТАЖ РАБОТЫ" Q ""
+ I ID="СКИДКА" Q "skd"
+ I ID="СТОИМОСТЬ ПОЛИСА" Q "psumm"
+ I ID="ЛИМИТ СУММЫ" Q "sumlimit"
+ I ID="ФРАНШИЗА в %" Q "frap"
+ I ID="СУММА ФРАНШИЗЫ" Q "fras"
+ I ID="СУММА ПОСЕЩЕНИЯ ФР." Q "frasp"
+ I ID="РЕКЛАМА" Q "rsource"
+ I ID="ГДЕ КАРТА" Q "whop"
+ I ID="АЛЬТ.НОМЕР" Q "anib"
+ I ID="ДАТА ИЗМЕНЕНИЯ" Q "savedate"
+ I ID="ЕСТЬ УСЛУГИ" Q ""
+ I ID="ДЕЙСТВИЕ" Q ""
+ Q ""
+NOADDP(ID) ; Необъединяемые (с сущ. данными) поля
+ N R S R=0
+ I ID="Ф." S R=1
+ I ID="И." S R=1
+ I ID="О." S R=1
+ I ID="Ф.И.О." S R=1
+ I ID="ПОЛ" S R=1
+ I ID="ДАТА РОЖДЕНИЯ" S R=1
+ I ID="ГОРОД" S R=1
+ I ID="ПОЛИС" S R=1
+ I ID="СРОК С" S R=1
+ I ID="СРОК ПО" S R=1
+ I ID="ДОГОВОР" S R=1
+ I ID="ПРОГРАММА" S R=1
+ I ID="ОФОРМЛЕН" S R=1
+ I ID="ДАТА.ОФОРМЛ." S R=1
+ I ID="СТАТУСЫ" S R=1
+ I ID="РАБОТА" S R=1
+ I ID="СНИЛС" S R=1
+ I ID="ДОЛЖНОСТЬ" S R=1
+ I ID="Ф.ЛАТ." S R=1
+ I ID="И.ЛАТ." S R=1
+ I ID="О.ЛАТ." S R=1
+ I ID="Ф.И.О.ЛАТ." S R=1
+ I ID="ВИД ОБСЛЕДОВАНИЯ" S R=1
+ I ID="ВИД П.О." S R=1
+ I ID="ВРЕДНЫЕ ФАКТОРЫ" S R=1
+ I ID="ВРЕДНЫЕ ФАКТОРЫ п.29" S R=1
+ I ID="СКИДКА" S R=1
+ I ID="СТОИМОСТЬ ПОЛИСА" S R=1
+ I ID="ЛИМИТ СУММЫ" S R=1
+ I ID="РЕКЛАМА" S R=1
+ I ID="ГДЕ КАРТА" S R=1
+ I ID="ДАТА ИЗМЕНЕНИЯ" S R=1
+ I ID="АЛЬТ.НОМЕР" S R=1
+ I ID="ЕСТЬ УСЛУГИ" S R=1
+ I ID="ДЕЙСТВИЕ" S R=1
+ D MSG^RWU(R)
+ Q
+MKCOLUMN(PLNM,NMPL) ; Массив по столбцам - прямой/обратный
+ N P,R,I
+ S R="polis|dog_from|dog_to|stc|prog|ofor|dofor|savedate"
+ S P="ПОЛИС|СРОК С|СРОК ПО|ДОГОВОР|ПРОГРАММА|ОФОРМЛЕН|ДАТА.ОФОРМЛ.|ДАТА ИЗМЕНЕНИЯ"
+ F I=1:1:8 S:PLNM'="" @PLNM@($P(R,"|",I))=$P(P,"|",I) S:NMPL'="" @NMPL@($P(P,"|",I))=$P(R,"|",I)
+ Q
+PRBYDGN(DGN,DT) ; Программы по договору
+ N R,X,A,Z
+ S DT=$$DIH^DTUTL($G(DT))
+ S R=$$GET^IINSC(DGN,"progs",DT)
+ S:$E(R,$L(R))="|" $E(R,$L(R))=""
+ S X=$$GET^IINSC(DGN,"progsa",DT)
+ S R=$S($L(X)&$L(R):R_"|"_X,X="":R,1:X)
+ S Z=""
+ F X=1:1:99 S A=$P(R,"|",X) Q:A=""  S:$$CHECK^IMPRP(A,DT) Z=Z_$S(Z="":"",1:CR)_A_"|"_$$NAME^IMPRP(A)
+ D MSG^RWU(Z)
+ Q
+LO(DGN,WRK,DDT,DT,USH,PRGX,PSUM,DF) ; Предварительный список на открепление
+ N NI,DH,D,FIO,X,DGT,I,NM,U,CIDX
+ S DH=$$DIH^DTUTL($G(DF)),PRGX=$G(PRGX),I=1,(NM,CIDX)=""
+ S:PRGX'="" PRGX="|"_PRGX_"|"
+ D OWF^RWU(".txt")
+ D WC^RWU("№ п.п.|Отметка|№ И.Б.|Участок|Фамилия Имя Отчество|Срок договора|Договор|Программы")
+ S DT=$$DIH^DTUTL(DT)
+ S:WRK=-1 WRK="" S:WRK=999 WRK=""
+ I DGN="" S NI="" F  S NI=$$NEXT^IPAC(NI) Q:NI=""  D LOPRG
+ I $L(DGN) S NI="",NM=$$NAMEH^YNDOG(DGN,DH) F  S NI=$$NEXT^IPAC(NI,"stc",DGN) Q:NI=""  D
+ .S CIDX=$$PIDXN^IPAC(NI,DGN,DH)
+ .Q:CIDX=-1
+ .D LOPRG
+ D C^RWU
+ Q
+LOPRG 
+ S DGT=$$GET^IPAC(NI,"dog_to"_CIDX,DH)
+ I DDT=1 Q:DGT>(DT-1) 
+ I DDT=2 Q:DGT>DT 
+ I DDT=3 S X=$$GET^IPAC(NI,"dog_from"_CIDX,DH) Q:X<DT 
+ I DDT=4 S X=$$GET^IPAC(NI,"dofor",DH) Q:X'=DT 
+ I WRK'="",$$GET^IPAC(NI,"work",DH)'=WRK Q 
+ I PRGX'="","|"_$$GET^IPAC(NI,"prog"_CIDX,DH)_"|"'[PRGX Q 
+ I PSUM'="",$$GET^IPAC(NI,"psumm",DH)'=PSUM Q 
+ S U=$$GET^IPAC(NI,"ush",DH) I USH'="",USH'=U Q 
+ S FIO=$$GET^IPAC(NI,"fiof",DH)
+ S X=NM
+ I DGN="" S X=$$GETE^IPAC(NI,"stc",DH)
+ D WC^RWU(CR_I_"||"_NI_"|"_U_"|"_$$FIO^IPAC(NI,DH)_"|"_$$DT^DTUTL(DGT)_"|"_X_"|"_$TR($$GETE^IPAC(NI,"prog"_CIDX,DH),"|",","))
+ S I=I+1
+ Q
+SOCFG(SD,MOD,DGN) ; SO config
+ S ^JOB(%JOB,"pspis","so-config")=SD_"|"_MOD_"|"_DGN
+ Q
+SO ; Открепить по списку
+ D ORH^RWU
+ N %J,U,X,NI,FIO,DH,I,DGT,A,OPF,MOD,A,DGN,PIDX,DSTC,CD
+ K ^BUF($J,"btn")
+ S X=$G(^JOB(%JOB,"pspis","so-config")) K ^JOB(%JOB,"pspis","so-config")
+ S DSTC=$G(^cfg("def-stc")) S:DSTC="" DSTC=$O(^DGN(""))
+ S DH=$$DIH^DTUTL($P(X,"|",1)),MOD=+$P(X,"|",2),DGN=$P(X,"|",3),I=1
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  D
+ .Q:%J=1  S NI=$P(A,"|",3) Q:NI=""  Q:$P(A,"|",2)'="(+)"
+ .S ^BUF($J,"btn",NI)=""
+ D CR^RWU
+ S OPF=$$USR^IUSER()_"|"_$H,PIDX=""
+ D OWF^RWU(".txt")
+ D WC^RWU("№ п.п.||N И.Б.|Участок|Фамилия Имя Отчество|Срок договора|Договор")
+ S NI="" F  S NI=$O(^BUF($J,"btn",NI)) Q:NI=""  D
+ .S CD=$$FIRSTDT^IPAC(NI)
+ .S DT=$S(DH>CD:DH,1:CD)
+ .S:DGN'="" PIDX=$$PIDX^IPAC(NI,DGN,DT)
+ .S DGT=$$GET^IPAC(NI,"dog_to"_PIDX,DT)
+ .S U=$$GET^IPAC(NI,"ush",DT) 
+ .S FIO=$$GET^IPAC(NI,"fiof",DT)
+ .D:'MOD
+ ..D SET^IPAC(NI,"ofor",DT,2)
+ ..D SET^IPAC(NI,"dofor",DT,DT,1)
+ .D:MOD=1
+ ..D SET^IPAC(NI,"dog_to"_PIDX,DT,DT,1)
+ .D:MOD=2
+ ..S A=$$NIBDEL(NI) Q:A 
+ ..D SET^IPAC(NI,"dog_to"_PIDX,DT,DT,1)
+ .D:MOD=3
+ ..D SET^IPAC(NI,"ofor",DT,1)
+ ..D SET^IPAC(NI,"dofor",DT,DT,1)
+ .D:MOD=4 
+ ..D SET^IPAC(NI,"ofor",DT,1)
+ ..D SET^IPAC(NI,"dofor",DT,DT,1)
+ ..D SET^IPAC(NI,"stc"_PIDX,DT,DSTC)
+ ..D SET^IPAC(NI,"dog_from"_PIDX,DT,"")
+ ..D SET^IPAC(NI,"dog_to"_PIDX,DT,"")
+ ..D SET^IPAC(NI,"prog"_PIDX,DT,"")
+ ..D SET^IPAC(NI,"polis"_PIDX,DT,"",1)
+ .D WLOG^IPAC(NI,DT,$H)
+ .S X=$$GETE^IPAC(NI,"stc"_PIDX,DT)
+ .D WC^RWU(CR_I_"|(+)|"_NI_"|"_U_"|"_$$FIO^IPAC(NI,DT)_"|"_$$DT^DTUTL(DGT)_"|"_X_"|")
+ .S I=I+1
+ K ^BUF($J,"btn")
+ D C^RWU
+ Q
+NIBDEL(NIB) ; Delete patient
+ N PAR,R,DT,%L,%B,NI
+ S NI=NIB
+ D NDEL+5^YIPACN
+ Q '$D(^BTN(NIB)) 
+LPAT ; Load pattern list
+ D OWF^RWU(".txt"),W^RWU("|")
+ D LPATsys
+ D C^RWU
+ Q
+LPATsys 
+ N I,X S I=+$G(^MN("spispat"))
+ S X="" F  S X=$O(^MN(I,X)) Q:X=""  D WC^RWU(CR_X_"~"_^(X))
+ Q
+APAT(NM,R) ; Add pattern
+ N I,X S I=$$NEWIDX^YISPRAV("spispat")
+ S X=$O(^MN(I,""),-1)+1,^MN(I,X)=$$WD^TXTU(R_"|"_NM)
+ D UPD^IEXCH("YISPRAV","spispat")
+ G LPAT
+DPAT(ID) ; Delete pattern
+ G:ID="" LPAT
+ N I S I=$$NEWIDX^YISPRAV("spispat")
+ K ^MN(I,ID) D UPD^IEXCH("YISPRAV","spispat")
+ G LPAT
+SPAT(ID,R) ; Save pattern
+ N I S I=$$NEWIDX^YISPRAV("spispat")
+ S $P(^MN(I,ID),"|",1)=$$WD^TXTU(R)
+ D UPD^IEXCH("YISPRAV","spispat")
+ G LPAT
+LOTAB(ND) ; Load patient list, from backup
+ D OWF^RWU(".txt")
+ D ODOC
+ D C^RWU
+ Q
+LBK(DT,DF) ; Load backup list
+ N X,C,LST,L,R
+ S (C,X)="",DT=$$DI^DTUTL($G(DT))
+ S DF=$G(DF),DF=$S(+DF=DF:$H-DF+1,1:$$DI^DTUTL(DF))
+ S:DT'="" X=DT_","
+ K ^BUF($J,"bkl")
+ F  S X=$O(^BTNBK(X),-1) Q:X=""  Q:DT'=""&(+X'=DT)  Q:DF'=""&(+X<DF)  D
+ .S L=$P(X,",",2),L=$E("000000",1,6-$L(L))_L
+ .S R=$$DTM^DTUTL($G(^(X)))_"|"_X
+ .S:$D(^BTNBKS(X)) R=R_"@1"
+ .S ^BUF($J,"bkl",$P(X,",",1)_","_L)=R
+ D OWF^RWU(".txt")
+ S X="" F  S X=$O(^BUF($J,"bkl",X),-1) Q:X=""  D WC^RWU(C_^BUF($J,"bkl",X)) S C=CR
+ D C^RWU
+ K ^BUF($J,"bkl")
+ Q
+DOBACK(ND) ; Restore backup
+ N NI,FYDOCS,FF,R,P
+ S FF=1,NI=""
+ F  S NI=$O(^BTNBK(ND,NI)) Q:NI=""  D
+ .I $O(^BTNBK(ND,NI,""))="" D  Q  ; нет никаких полей
+ ..S R=$D(^BILL(NI))
+ ..I R,$G(^BILL(NI))=0,$O(^BILL(NI,""))="" S R=0 K ^BILL(NI) D KGL^IEXCH("^BILL",NI)
+ ..I '$$CHKNUL^IPAC(NI) S FF=0 Q 
+ ..D RMIDX^YIPACN,K^ISSG("^BTN("_NI_")") K ^BTN(NI)
+ ..D KGL^IEXCH("^BTN",NI)
+ ..K ^BTNBK(ND,NI)
+ .D RMIDXU^YIPACN,K^ISSG("^BTN("_NI_")") K ^BTN(NI)
+ .S P="" F  S P=$O(^BTNBK(ND,NI,P)) Q:P=""  M ^BTN(NI,P)=^BTNBK(ND,NI,P) ; копирование  только полей, без служебн. инф. в ^BTNBK
+ .D MKIDX^YIPACN(+$H)
+ .D UPD^IEXCH("IPACEX",NI)
+ .K ^BTNBK(ND,NI)
+ I FF,$D(^BTNBK(ND))=1 D DEL^YDOCS(ND) K ^BTNBK(ND),^BTNBKS(ND) Q 
+ D LOTAB(ND)
+ Q
+CHKBK ; очистка последних N дней сохраненных списков
+ N X,K
+ S X=+$G(^cfg("pspis-bk")) Q:X<2 
+ S X=($H-X-1)_",0"
+ F  S X=$O(^BTNBK(X),-1) Q:X=""  K ^BTNBK(X),^BTNBKS(X)
+ Q
+BKTEXT(ND) ; Получить исходный список
+ N I,R,C
+ D OWF^RWU(".txt")
+ S (I,C)=""
+ F  S I=$O(^BTNBKS(ND,I)) Q:I=""  S R=^(I) D WC^RWU(C_R) S C=CR
+ D C^RWU
+ Q
+TPROF 
+ N ID,I,C S I=+$G(^MN("ppspis"))
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<skspisin>")
+ S C="<prof>Новый профиль|"_CR,ID=""
+ F  S ID=$O(^MN(I,ID)) Q:ID=""  D WC^RWU(C_$G(^(ID,"nm"))_"|"_ID) S C=CR
+ D:C'=CR WC^RWU(C)
+ D W^RWU("</prof><pat>"),LPATsys
+ D W^RWU("</pat><alg>"),PLSTsys^NPSPISU
+ D W^RWU("</alg></skspisin></nb_console>"),C^RWU
+ Q
+LPROF(ID) 
+ N I S I=$$NEWIDX^YISPRAV("ppspis")
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<skspisin>")
+ D L^XMLU("^MN("_I_")",ID,"LPROC^NPSPIS")
+ D W^RWU("</skspisin></nb_console>"),C^RWU
+ Q
+LPROC(PL,R)        ; Процедура вывода полей
+ I PL="fval" D WTAGC^RWU(PL,R) Q 1 ; как данные
+ Q:PL'="progs" 0
+ D PRBYDGN(+$G(^MN(I,ID,"stc")))
+ D W^RWU("<progs>"_%L_"</progs>")
+ D WC^RWU("<progs state="""_R_"""/>")
+ K %L,%B
+ Q 1
+DPROF(ID) 
+ N I S I=$$NEWIDX^YISPRAV("ppspis")
+ D K^ISSG("^MN("_I_","_ID_")")
+ K ^MN(I,ID)
+ D UPD^IEXCH("YISPRAV","ppspis")
+ D TPROF
+ Q
+SPROF 
+ N ID,I,C
+ S I=$$NEWIDX^YISPRAV("ppspis")
+ S ID=$$OS^XMLU("^MN("_I_")","skspisin","id")
+ D UPD^IEXCH("YISPRAV","ppspis")
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<skspisin>")
+ D WTAGD^RWU("id",ID),WC^RWU("<prof>Новый профиль|")
+ S (C,ID)="" F  S ID=$O(^MN(I,ID)) Q:ID=""  D WC^RWU(C_$G(^(ID,"nm"))_"|"_ID) S C=CR
+ D W^RWU("</prof></skspisin></nb_console>"),C^RWU
+ Q
+REGLCL ; 
+ K ^LCLI("pspis")
+ S ^LCLI("pspis")="Импорт контингента"
+ S ^LCLI("pspis","bill")="Изменение суммы счета"
+ S ^LCLI("pspis","lpu")="Привязка к филиалу"
+ S ^LCLI("pspis","alg")="Алгоритм по умолчанию"
+ S ^LCLI("pspis","def-fld")="Поля по умолчанию: поле=значение;..;.. "
+ S ^LCLI("pspis","def-pfld")="Поля по умолчанию для карты профмедицины. Формат поле=значение"
+ Q
+INITDB 
+ S ^MN("root","spispat")="Шаблоны колонок списков (импорт контингента)"
+ S ^MN("root","ppspis")="Профили списков (импорт контингента)"
+ S ^MN("frm","skspis")="Импорт контингента" 
+ Q

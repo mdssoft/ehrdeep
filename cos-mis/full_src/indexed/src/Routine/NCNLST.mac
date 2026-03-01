@@ -1,0 +1,18 @@
+NCNLST ; Списки услуг [ 09/30/2018  9:11 PM ]
+IMP ; Импорт
+ ; ID|u/field|value
+ N A,%J,ID,FL,V,II
+ D ORH^RWU
+ S II=""
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  D:%J>1
+ .S A=$$WD^TXTU(A)
+ .S ID=$P(A,"|",1),FL=$P(A,"|",2),V=$P(A,"|",3,99)
+ .I ID="",FL="",$P(V,"|",1)="" S II="" Q  ; reset
+ .Q:ID=""!(FL="") 
+ .I ID'="" S II=ID
+ .I II="",FL="uid" S II=$$FNDBYFL^ICNLIST("uid",V) S:II="" II=$$ADD^ICNLIST("uid",V)
+ .Q:II="" 
+ .I FL="u"!(FL="l")!(FL="usl") S ^CNLST(II,"l",V)="" Q 
+ .S ^CNLST(II,"f",FL)=V 
+ D CR^RWU
+ Q

@@ -1,0 +1,54 @@
+NBILLH ; Billing HTML format [ 06/26/2012  1:20 AM ]
+PKO(NI,DN,DK,TYP) ; Кассовые операции пациента
+ ; TYP=2/1/0/3/9/99=расх/дох/все/приход/все/долги 
+ N DNN,DKK,OPE,SUM,DD,TP,TXT,S1,S2,L,TI,K,X,C,PA,CS
+ S DNN=$$DI^DTUTL(DN),DKK=$$DI^DTUTL(DK)
+ S (S1,S2)=0,TYP=+$G(TYP)
+ S TYP=0,DNN=$H-9000,DKK=$H+1
+ S PA=+$G(^cfg("pko-pac-all"))
+ D OWF^RWU(".html")
+ D WC^RWU("<table><thead><tr><th>Дата, время</th><th>Операция</th><th>Сумма</th><th>На счету</th></tr></thead><tbody>")
+ S DT=DKK+1 F  S DT=$O(^BILL(NI,DT),-1) Q:DT=""!(DT<DNN)  S TI="" F  S TI=$O(^BILL(NI,DT,TI),-1) Q:TI=""  D
+ .S L=^(TI),OPE=$P(L,"|",1),TP=$P(L,"|",3)
+ .I 'PA Q:TP>10 
+ .I PA>1,TP>PA Q 
+ .I OPE'="+",OPE'="-",$L(OPE) Q 
+ .S CS=$TR($P(^BILLI(DT,TI,NI),"|",1),".",",")
+ .S DD=$$DT^DTUTL(DT)_","_$$TM^DTUTL(TI)
+ .S SUM=$P(L,"|",2),TXT=$$GPTYPE^IBILL(L)
+ .I TYP=2 Q:OPE="+"  Q:OPE=""&($E(SUM,1)="+")  S:SUM<0 SUM=0-SUM D WC^RWU(CR_DD_"|"_TXT_"|"_$TR(SUM,".",",")_"|"_CS) S S1=S1+SUM Q 
+ .I TYP=1 Q:OPE="-"  Q:OPE=""&($E(SUM,1)="-")  D WC^RWU(CR_DD_"|"_TXT_"|"_$TR(+SUM,".",",")_"|"_CS) S S1=S1+SUM Q 
+ .I TYP=3,OPE'="+" Q 
+ .S:$L(OPE) S1=S1+SUM
+ .I OPE="" S:SUM>0 S1=S1+SUM S:SUM<0 S2=S2-SUM
+ .S:$E(SUM,1)="+" SUM=$E(SUM,2,$L(SUM)) S:SUM<0 SUM=0-SUM
+ .S X=$P(L,"|",6)
+ .D WC^RWU(CR_"<tr><td>"_DD_"</td><td>"_TXT_"</td><td>"_$TR(SUM,".",",")_"</td><td>"_CS_"</td></tr>")
+ D:TYP=0 WC^RWU(CR_"<tr><td><b>Итого внесено</b></td><td>"_$$FFN(S1)_"</td></tr>")
+ D:TYP=0 WC^RWU(CR_"<tr><td><b>Итого списано</b></td><td>"_$$FFN(S2)_"</td></tr>")
+ D:123[TYP&S1 WC^RWU(CR_"<tr><td><b>Итого</b></td><td>"_$$FFN(S1)_"</td></tr>")
+ G:TYP=2!(TYP=99) PKOe
+ S DT=DKK+1 F  S DT=$O(^BILL(NI,"D",DT),-1) Q:DT=""!(DT<DNN)  S TI="" F  S TI=$O(^BILL(NI,"D",DT,TI)) Q:TI=""  D
+ .S L=^(TI),SUM=$P(L,"|",2)-$P(L,"|",1) Q:SUM=0 
+ .S TXT=$$GPTYPE^IBILL(L,"D")
+ .D WC^RWU(CR_$$DT^DTUTL(DT)_","_$$TM^DTUTL(TI)_"|"_TXT_"|"_$TR(SUM,".",","))
+ S DT=DKK+1 F  S DT=$O(^BILL(NI,"R",DT),-1) Q:DT=""!(DT<DNN)  S TI="" F  S TI=$O(^BILL(NI,"R",DT,TI)) Q:TI=""  D
+ .S L=^(TI) Q:$P(L,"|",1)=1 
+ .S SUM=$TR($P(L,"|",2),".",","),TXT=$$GPTYPE^IBILL(L,"R")
+ .D WC^RWU(CR_$$DT^DTUTL(DT)_","_$$TM^DTUTL(TI)_"|"_TXT_"|"_SUM)
+ S X=$$GETBRW^IBILL(NI)
+ D:X WC^RWU(CR_"|На заемном счету|"_$TR(X,".",","))
+ S DT=DKK+1 F  S DT=$O(^BILL(NI,"L",DT),-1) Q:DT=""!(DT<DNN)  S TI="" F  S TI=$O(^BILL(NI,"L",DT,TI)) Q:TI=""  D
+ .S L=^(TI) Q:$P(L,"|",1)=1
+ .S SUM=$TR($P(L,"|",2),".",","),TXT=$P(L,"|",3)
+ .S TXT="Заблокировано"_$S(TXT="":"",1:": "_TXT)
+ .D WC^RWU(CR_$$DT^DTUTL(DT)_","_$$TM^DTUTL(TI)_"|"_TXT_"|"_SUM)
+ S X=$$SLOCK^IBILL(NI)
+ D:X WC^RWU(CR_"|Итого заблокировано|"_$$FFN(X))
+PKOe D W^RWU("</tbody></table>")
+ D C^RWU
+ Q
+FN(X) 
+ Q $TR($J(X,0,2),".",",")
+FFN(X) 
+ Q $TR($FN(X,"",2),".",",")

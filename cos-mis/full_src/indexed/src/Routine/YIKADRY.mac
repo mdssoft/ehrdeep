@@ -1,0 +1,590 @@
+A ; СПРАВОЧНИК-КАДРЫ [ 03/22/2023  6:41 PM ]
+INIT ; Инициализация прав
+ N V,R,I,X,MOD
+ S R=+$G(^LOG(%LOG,"lcl","kadry")),V=" visible=""no""/>"
+ D OWF^RWU(".xmlb")
+ D W^RWU($G(^PP(0,2))_"<kadry>")
+ D:$G(^LCL("kadry",R,"anynum"))'=1 W^RWU("<tnum enabled=""no""/>")
+ D:$G(^LCL("kadry",R,"chknum"))=1 WTAGU^RWU("btn_new","chk")
+ D:$G(^LCL("kadry",R,"new"))=0 W^RWU("<btn_new"_V)
+ D:$G(^LCL("kadry",R,"save"))=0 W^RWU("<btn_save"_V)
+ S X=$G(^LCL("kadry",R,"user")),I=$G(^("userprn")) S:X="" X=1
+ D:X=0 W^RWU("<btn_user"_V)
+ D:X WTAGU^RWU("btn_user",X_"|"_I)
+ ; модификация поиска
+ D WTAGU^RWU("ftext",1)
+ ; нормализация ФИО
+ S X=$G(^cfg("kadry","normfio"))
+ D:X WTAGU^RWU("f",1)
+ ; идентифкация сотрудника
+ S X=$G(^LCL("kadry",R,"cardtype"))
+ S:X="" X=$G(^cfg("kadry","cardtype"))
+ D:X'="" WTAGU^RWU("btn_card",X)
+ D:$G(^LCL("kadry",R,"card"))=0 W^RWU("<btn_card"_V)
+ ; Скрытие разделов
+ S I="" F  S I=$O(^LCL("kadry",R,"dbtn",I)) Q:I=""  D W^RWU("<"_I_" "_V)
+ ; Скрытие полей
+ S I="" F  S I=$O(^LCL("kadry",R,"dfl",I)) Q:I=""  D W^RWU("<"_I_" "_V)
+ 
+ D:'$G(MOD) INITp
+ D W^RWU("</kadry></nb_console>"),C^RWU
+ Q
+INITp ; Init proc
+ D W^RWU("<ust>")
+ D LSTs^NSPRAV("scirank")
+ D W^RWU("</ust><cab>")
+ D LSTCAB^NPLPU(2,,1)
+ D W^RWU("</cab><cab2>")
+ D LSTCAB^NPLPU(2,,1)
+ D W^RWU("</cab2><otd>")
+ D LSTOTDAs^YISPRAV(1)
+ D W^RWU("</otd><attk>")
+ D LSTs^NSPRAV("vrattk")
+ D W^RWU("</attk><flg>")
+ D LSTs^NSPRAV("kadryflg")
+ D W^RWU("</flg><mwtp>")
+ D LSTs^NSPRAV("kadrymwtp")
+ D W^RWU("</mwtp><vdoc>")
+ D LSTs^NSPRAV("kdoctype")
+ D W^RWU("</vdoc><lpu>")
+ D LSTFLsys^YCONTR("gd","",0,1),LSTFLsys^YCONTR("fi","",1,1)
+ D W^RWU("</lpu>")
+ Q
+W ;
+ N ID,C,%J,A,R,Z,DIS
+ D ORH^RWU
+ I $$LCL^IUSER("kadry","save")=0 D CR^RWU Q
+ K XML,XMLR
+ F %J=1:1 S A=$$R13^RWU Q:%IFN["Z"  D XMLAN^YIXMLRR
+ 
+ D DO^ITRIG("kadry","start")
+ I $$IsMSG^RWU() D MXMLB^RWU("<kadry><f userdata=""!"_$$GETMSG^RWU()_"""/></kadry>") Q 
+ 
+WW S ID=$G(XML("nb_console","kadry","tnum"))
+ 
+ S Z=$G(^cfg("kadry","cdbl"))
+ I $S('Z:0,Z=2:$$Xpl("ok")'=1,1:1),'$D(DIS("f")),'$D(DIS("i")),'$D(DIS("o")) S R=$$LU^TXTU($$FIO^TXTU($$WD^TXTU($$Xpl("f")),$$WD^TXTU($$Xpl("i")),$$WD^TXTU($$Xpl("o")))),A=$$FNDFIO^NVFIND(R,$$DI^DTUTL($$Xpl("bdate"))) I A'="",A'=ID,$$LU^TXTU($$FIO^YIKADRY(ID))'=R G WFcpy
+ 
+ ; Разрешенные/запрещенные поля
+ I $D(^LOG(%LOG,"lcl","kadry")) S R=+^("kadry") D:R
+ .S A=$G(^LCL("kadry",R,"fl")) Q:A=""
+ .S C="" F  S C=$O(XML("nb_console","kadry",C)) Q:C=""  D
+ ..I A="a",'$D(^LCL("kadry",R,"fl",C)) K XML("nb_console","kadry",C) S DIS(C)=""
+ ..I A="d",$D(^LCL("kadry",R,"fl",C)) K XML("nb_console","kadry",C) S DIS(C)=""
+ 
+WINT N R,SD
+ D:ID=""  ; новый номер
+ .F  S ID=$O(^QUOTA("^KDR",ID)) Q:ID=""  I +$H>(^(ID)+1) Q:'$D(^KDR(ID))  K ^QUOTA("^KDR",ID) 
+ .I ID="" F ID=1:1:9999999 Q:'$D(^KDR(ID)) 
+ .K ^QUOTA("^KDR",ID)
+ Q:ID=""  ; Error !
+ S R=$$Xpl("foto")
+ I R'="" D WFOTO K XML("nb_console","kadry","foto")
+ S R=$$Xpl("dfin")
+ I R'="" D WDFIN K XML("nb_console","kadry","dfin")
+ S R=$$Xpl("cfin")
+ I R'="" D WCFIN K XML("nb_console","kadry","cfin")
+ S R=$$Xpl("docs")
+ I R'="" D WDOCS K XML("nb_console","kadry","docs")
+ S R=$$Xpl("zarp")
+ I R'="" D WZARP K XML("nb_console","kadry","zarp")
+ 
+ S SD=$$DIH^DTUTL($$Xpl("savedate"))
+ K XML("nb_console","kadry","savedate")
+ 
+ D SDT^XMLU("^KDR","kadry",ID,SD)
+ K:$D(^QUOTA("^KDR",ID)) ^(ID)
+ S ^KDR=$H
+ D SET^XMLU("^KDR",ID,"opfio",SD,$$USRH^IUSER())
+ D MKIDX
+ D W^ISSG("^KDR("_ID_")"),UPD^IEXCH("YIKADRY",ID)
+ D CR^RWU
+ ; Блокировка бользователей при увольнении
+ D:$G(^cfg("kadry","denylogin"))&(+$H'<SD)
+ .I $$GET^IKADRY(ID,"ofor",SD)=0,'$$IsDENY^IUSER(ID) D DENY^IUSER(ID,1)
+ .I $$GET^IKADRY(ID,"ofor",SD)'=0,$$IsDENY^IUSER(ID) D DENY^IUSER(ID,0)
+ 
+ I $$LCL^NUSER("kadry","chkzarp"),$$CHKZRP() Q 
+ Q
+MKIDX ; Пересоздать индексы
+ N V,D,R,X1,X2
+ K ^KDRI
+ S V="" F  S V=$O(^KDR(V)) Q:V=""  D
+ .D MKidxi("os","otd","spec")
+ .D MKidxi("os","otd2","spec2")
+ .D MKidxi("os","otd3","spec3")
+ .D MKidxi("so","spec","otd")
+ .D MKidxi("so","spec2","otd2")
+ .D MKidxi("so","spec3","otd3")
+ D REGL^IEXCH("^KDRI")
+ Q
+MKidxi(IDX,FL1,FL2) ; Создать элемент индекса из 2-х полей
+ S D="" F  S D=$O(^KDR(V,FL1,D)) Q:D=""  S X1=^(D),X2=$$GET(V,FL2,D) I X1'="",X2'="" S ^KDRI(IDX,X1,X2)=""
+ Q
+CHKZRP() ; Проверить зарплату по ЛПУ 
+ S R=$$GET(ID,"lpu"),C=0
+ F %J=1:1:99 S A=$P(R,"|",%J) Q:A=""  I '$D(^KDR(ID,"zarp",A)) S C=1 Q 
+ Q:'C 0
+ D MXMLB^RWU("<kadry><f userdata=""!Не указаны данные расчета заработной платы по:"_CR_$$NAME^ICONTR(A)_"""/></kadry>")
+ Q 1
+WFcpy 
+ D MXMLB^RWU("<kadry><f userdata="""_$S(Z=2:"?",1:"")_"Сотрудник с подобным Ф.И.О. уже введен (т.н. "_A_", "_$$GETE^IKADRY(A,"spec")_")"_$S(Z=2:CR_"Хотите сохранить нового сотрудника ?",1:"")_"""/></kadry>")
+ Q
+WFOTO 
+ N I,C,X
+ S C=$L(R)
+ K:$D(^KDR(ID,"foto")) ^("foto")
+ F I=1:1:99 S X=$E(R,I-1*4096,I-1*4096+$S(C>4096:4096,1:C)),^KDR(ID,"foto",I)=X,C=C-4096 Q:C'>0 
+ Q
+WCFIN ; Постоянные вычеты
+ N I,X,P,N,A,K
+ K:$D(^KDR(ID,"cfin")) ^("cfin")
+ S K=1 F I=1:1 S X=$P(R,CR,I+1) Q:X=""  D
+ .S P=$P(X,"|",1),N=$P(P,"@",3),$P(X,"|",3)=$P(P,"@",1)
+ .S:N="" N=I
+ .S A=$$WD^TXTU($P(X,"|",2,5))
+ .S X=$P(P,"@",4) S:X'="" $P(A,"|",5)=X ; lpu
+ .S X=$P(P,"@",2) S:X'="" $P(A,"|",6)=X ; month
+ .S X=$P(P,"@",5) S:X'="" $P(A,"|",7)=$$LU^TXTU(X) ; day+E(nd)
+ .Q:A="||||" 
+ .S ^KDR(ID,"cfin",K)=A,K=K+1
+ Q
+WDFIN ; Произвольные вычеты
+ N I,X,P,N,D,A,X,LL
+ M:$G(^cfg("kadry","dfinzrp")) LL=^KDR(ID,"dfin")
+ 
+ K:$D(^KDR(ID,"dfin")) ^("dfin")
+ F I=1:1 S X=$P(R,CR,I+1) Q:X=""  D
+ .S P=$P(X,"|",1),N=$P(P,"@",2),$P(X,"|",4)=$P(P,"@",1),L=$P(P,"@",4)
+ .S:N="" N=I S D=$$DI^DTUTL($P(X,"|",2)) Q:D="" 
+ .S A=$$WD^TXTU($P(X,"|",3,6))
+ .S X=$P(P,"@",4) S:X'="" $P(A,"|",5)=X ; lpu
+ .S:$P(A,"|",2)="" $P(A,"|",2)=1 ; не указан тип
+ .S X=$G(LL(D_"."_N))
+ .S $P(A,"|",7,8)=$S($P(X,"|",7)="":$H_"|"_%LOG,1:$P(X,"|",7,8))
+ .S ^KDR(ID,"dfin",D_"."_N)=A ; com|tp||sum|lpu|day|$H|%LOG
+ .K LL(D_"."_N)
+ 
+ S P=+$$^I("ilpu")
+ S I="" F  S I=$O(LL(I)) Q:I=""  D
+ .S X=LL(I),L=$P(X,"|",5)
+ .S:L="" L=P
+ .Q:'$$IsVR^IZARP(L,,ID,$P(I,",",1),1)
+ .S ^KDR(ID,"dfin",I)=X
+ Q
+WDOCS ; Приказы и документы
+ N I,X,P,N,D,IDX
+ K:$D(^KDR(ID,"docs")) ^("docs")
+ S IDX=1
+ F I=1:1 S X=$P(R,CR,I+1) Q:X=""  D:$P(X,"|",2)'=""
+ .S P=$P(X,"|",1),$P(X,"|",4)=$P(P,"@",1)
+ .S $P(X,"|",2)=$$DI^DTUTL($P(X,"|",2))
+ .S ^KDR(ID,"docs",IDX)=$$WD^TXTU($P(X,"|",2,6))
+ .S IDX=IDX+1
+ Q
+WZARP ; Зарплата
+ N I,X,L
+ K:$D(^KDR(ID,"zarp")) ^("zarp")
+ F I=1:1 S X=$P(R,CR,I+1) Q:X=""  D
+ .S L=$P($P(X,"|",1),"@",1) Q:L="" 
+ .S ^KDR(ID,"zarp",L)=$$iSVR^NZARPU(X)
+ Q
+Xpl(PL) ; Поле из XML
+ Q $G(XML("nb_console","kadry",PL))
+CHKDFIN(ID,KEY,DT) ; Проверка изменения dfin
+ I '$G(^cfg("kadry","dfinzrp")) Q 
+ N LP
+ S DT=$$DIH^DTUTL(DT),LP=$P(KEY,"@",4)
+ S:LP="" LP=+$$^I("ilpu")
+ I $$IsVR^IZARP(LP,,ID,DT,1) D MSG^RWU("Изменение запрещено - по сотруднику расчитана зарплата.") Q 
+ Q
+NDEL(TN,PAR)       ; УДАЛЕНИЕ СОТРУДНИКА
+ I $$LCL^IUSER("kadry","del")=0 D MSG^RWU("Нет прав на удаление.") Q 
+ I '$$ChkPAS^IUSER(PAR) D MSG^RWU("Неверный пароль.") Q 
+NDELI 
+ N A
+ S A=$$ANYDATA^IKADRY(TN)
+ I A'="" D MSG^RWU("Невозможно удалить - на сотрудника введены данные ("_A_").") Q
+ D DEL^IKADRY(TN)
+ Q
+L(N,DTH) ; Load data
+ D OWF^RWU(".xmlb")
+ D W^RWU($G(^PP(0,2))_"<kadry>")
+ N PR,KX,I,F,R
+ S DTH=$$DIH^DTUTL($G(DTH))
+ D WTAGD^RWU("tnum",N)
+ D WTAGD^RWU("savedate",$$DT^DTUTL(DTH))
+ D LDTP^XMLU("^KDR",N,DTH,"lPROC^YIKADRY")
+ I '$D(^$R("NZARPU")) S R="<zarp>" G Le
+ D WC^RWU("<zarp userdata="""_$$TKAV^TXTU($$iLVRLNK^NZARP())_""">"_$$iLVRHDR^NZARP())
+ S I="" F  S I=$O(^CGA(I)) Q:I=""  D
+ .S F="|"_$$GET^ICONTR(I,"flg",+$H)_"|"
+ .Q:F'["|fi|"
+ .S R=$G(^KDR(N,"zarp",I))
+ .D WC^RWU(CR_$$iLVR^NZARPU(I,N,R))
+ S R=""
+Le 
+ D W^RWU(R_"</zarp></kadry></nb_console>"),C^RWU
+ Q
+lPROC(P) ; Процедура вывода полей
+ I P="lpu" D WTAGD^RWU(P,$$GET^IKADRY(IDX,PL,DT)) Q 1
+ I $$flDT^IKADRY(PL) N R S R=$$GET^IKADRY(IDX,PL,DT) D WTAG^RWU(PL,$S(R[".":$$DI^DTUTL(R),1:R)) Q 1
+ I P'="foto",P'="docs",P'="cfin",P'="dfin",P'="zarp",P'="tnum" Q 0
+ Q:P="zarp" 1
+ D W^RWU("<"_P_">")
+ N R,Z
+ I P="foto" S Z="" F  S Z=$O(^KDR(IDX,PL,Z)) Q:Z=""  D W^RWU(^(Z))
+ I P="docs" D  
+ .S Z=$$IDX^ISPRAV("kadrydoc")
+ .S KX="" F  S KX=$O(^KDR(IDX,PL,KX)) Q:KX=""  D
+ ..S R=$G(^(KX))
+ ..D WC^RWU(CR_$P(R,"|",3)_"@"_KX_"|"_$$DT2^DTUTL($P(R,"|",1))_"|"_$P(R,"|",2)_"|"_$G(^MN(Z,+$P(R,"|",3)))_"|"_$P(R,"|",4))
+ I P="cfin" D  
+ .S KX="" F  S KX=$O(^KDR(IDX,PL,KX)) Q:KX=""  D
+ ..S R=$G(^(KX))
+ ..D WC^RWU(CR_$P(R,"|",2)_"@"_$P(R,"|",6)_"@"_KX_"@"_$P(R,"|",5)_"@"_$P(R,"|",7)_"|"_$P(R,"|",1)_"|"_$S($P(R,"|",2)=2:"Удержание",1:"Начисление")_"|"_$P(R,"|",3,4))
+ I P="dfin" D  
+ .S KX="" F  S KX=$O(^KDR(IDX,PL,KX),-1) Q:KX=""  D
+ ..S R=$G(^(KX))
+ ..D WC^RWU(CR_$P(R,"|",2)_"@"_$P(KX,".",2)_"@@"_$P(R,"|",5)_"@"_$P(R,"|",7)_"|"_$$DT2^DTUTL($P(KX,".",1))_"|"_$P(R,"|",1)_"|"_$S($P(R,"|",2)=2:"Удержание",1:"Начисление")_"|"_$P(R,"|",3,4))
+ D W^RWU("</"_P_">")
+ Q 1
+NTABsys() ; New number (internal)
+ N ID S ID=""
+ F  S ID=$O(^QUOTA("^KDR",ID)) Q:ID=""  I +$H>(^(ID)+1) K:$D(^KDR(ID)) ^QUOTA("^KDR",ID) I '$D(^KDR(ID)) Q 
+ I ID="" F ID=1:1:9999999 Q:'$D(^KDR(ID)) 
+ K ^QUOTA("^KDR",ID)
+ Q ID
+NTAB ; New number
+ D MSG^RWU($$NTABsys())
+ Q
+CHKTAB(NUM) ; Проверить табельный номер на наличие
+ S %L=0,%B=".txt"
+ I $L(NUM),$D(^KDR(NUM)) S %L=1
+ Q
+FIO(TN) ; Полная фамилия
+ Q:TN="" "" N D S D=+$H
+ Q $$GET(TN,"f",D)_" "_$$GET(TN,"i",D)_" "_$$GET(TN,"o",D)
+FIODT(TN,D) ; Полная фамилия по дате
+ Q:TN="" ""
+ Q $$GET(TN,"f",D)_" "_$$GET(TN,"i",D)_" "_$$GET(TN,"o",D)
+FIOSH(TN) ; Сокращенная фамилия
+ Q:TN="" "" N DT,F,I,O S DT=+$H
+ S F=$$GET(TN,"f",DT),I=$E($$GET(TN,"i",DT),1),O=$E($$GET(TN,"o",DT),1)
+ S:$L(I) F=F_" "_I_"." S:I=""&$L(O) F=F_" ." S:O'="" F=F_" "_O_"."
+ Q F
+FIOSHD(TN,DT) ; Сокращенная фамилия по дате
+ G FIOSH+1^IKADRY
+EXIST(TN,DT) ; same as CHECK
+ G CHECK+1
+CHECK(TN,DT) ; Проверка на наличие
+ Q:TN="" 0 Q:'$D(^KDR(TN)) 0 Q 1
+USED(TN,DT) 
+ G USED+1^IKADRY
+SPEC(TN,DT) ; Специальность
+ G SPEC+1^IKADRY
+OTD(TN,DT) ; Отделение
+ G OTD+1^IKADRY
+LPU(TN,DT) 
+ G LPU+1^IKADRY
+DEFOTD(TN) ; Имя и номер отделения по умолчанию
+ S TN=$$OTD(TN)
+ D MSG^RWU(TN_"|"_$$GOTD^YISPRAV(TN))
+ Q
+DEFSPEC(TN) ; Имя и номер специальности по умолчанию
+ S TN=$$SPEC(TN)
+ D MSG^RWU(TN_"|"_$$GSPEC^YISPRAV(TN))
+ Q
+VRLST ; Doctor's list
+ D OWF^RWU(".txt"),W^RWU(CR)
+ G GLVOS1
+GLVOS ; Список, для mdtype.frm
+ D OWF^RWU(".txt")
+GLVOS1 N N,LST
+ S N=""
+ F  S N=$O(^KDR(N)) Q:N=""  S:$$USED^IKADRY(N) LST($$FIOSH(N)_"|"_N)=""
+ S N="" F  S N=$O(LST(N)) Q:N=""  D WC^RWU($P(N,"|",2)_"|"_$P(N,"|",1)_CR)
+ D C^RWU
+ Q
+GET(TN,PL,DT) 
+ Q:TN=""!(PL="") "" S:$G(DT)="" DT=+$H
+ S DT=$O(^KDR(TN,PL,DT+1),-1) Q:DT="" "" Q $G(^(DT))
+SET(TN,PL,DT,R,UPD) 
+ Q:TN=""!(PL="")  D SET^XMLU("^KDR",TN,PL,DT,R)
+ D:$G(UPD) UPD^IEXCH("YIKADRY",TN)
+ Q
+IsOTD(TN,OT,DT) ; Сотрудник есть в отделении
+ G IsOTD+1^IKADRY
+IsSPEC(TN,SP,DT) ; У сотрудника есть специальность
+ G IsSPEC+1^IKADRY
+IsZARP(TN,LPU) ; Есть шаблон по зарплате
+ Q:TN="" 0
+ Q:$TR($G(^KDR(TN,"zarp",+$G(LPU))),"|","")'="" 1
+ Q 0
+ZARP(TN,LPU) ; Шаблон по зарплате
+ Q:TN="" 0
+ S LPU=+$G(LPU)
+ Q $G(^KDR(TN,"zarp",LPU))
+GETFSUM(LPU,TN,DS,DE,TP,LOGG,FIX) ; Получить сумму надбавок/вычетов
+ ; TP = 1/2 = надбавки/вычеты
+ N M,I,R,X,S,K,L,D,D1,D2,eD1,eD2,DM
+ S I=+$G(^cfg("kadry","sumstartm")) ; посл/первый день мес.
+ S eD1=$$EOFMN^DTUTL(DS),eD2=$$EOFMN^DTUTL(DE)
+ S D1=$$DAY^DTUTL(DS),D2=$$DAY^DTUTL(DE)
+ S DM=$S(I=1:1,I>1:I,1:"E"),M=""
+ F I=$$MONTH^DTUTL(DS):1:$$MONTH^DTUTL(DE) S M=$S(M="":"",1:"|")_I
+ S S=0,LOGG=$G(LOGG),FIX=$G(FIX)
+ S I="" F  S I=$O(^KDR(TN,"cfin",I)) Q:I=""  S R=^(I) D:$P(R,"|",2)=TP
+ .S X=$TR($P(R,"|",6),"~","|") Q:'$$FLinFL^TXTU(X,M)  ; не этот месяц
+ .S L=$P(R,"|",6)
+ .I LPU'="",L'="",L'=LPU Q
+ .S D=$P(R,"|",7)
+ .S:D="" D=DM
+ .I D'="",+D,(D<D1)!(D>D2) Q 
+ .I D="E",'eD1,'eD2 Q 
+ .S X=+$P(R,"|",4)
+ .Q:X'>0 
+ .S X=X*$S($P(R,"|",2)=2:-1,1:1),S=S+X
+ .Q:LOGG="" 
+ .S K=$O(@LOGG@(""),-1)+1,@LOGG@(K)=$P(R,"|",1)_"|"_X
+ S I="" ;$O(^KDR(TN,"dfin",DS_".1"),-1) ; TODO
+ F  S I=$O(^KDR(TN,"dfin",I)) Q:I=""  I $P(I,".",1)'<DS,$P(I,".",1)'>DE S R=^(I) D:$P(R,"|",2)=TP
+ .S X=+$P(R,"|",4)
+ .Q:X'>0  
+ .S L=$P(R,"|",6)
+ .I LPU'="",L'="",L'=LPU Q
+ .S X=X*$S($P(R,"|",2)=2:-1,1:1),S=S+X
+ .I FIX,$P(R,"|",6)="" S $P(^(I),"|",6)=LPU D GL^IEXCH("^KDR",TN,"dfin",I)
+ .Q:LOGG="" 
+ .S K=$O(@LOGG@(""),-1)+1,@LOGG@(K)=$P(R,"|",1)_"|"_X
+ Q S
+GETFPRC(LPU,TN,DS,DE,TP,LOGG,FIX) ; Получить проценты надбавок/вычетов
+ ; todo - проценты складывать не верно
+ ; FIX - фоксировать LPU
+ N M,I,R,X,S,K,D,D1,D2,DM
+ S I=+$G(^cfg("kadry","sumstartm")) ; посл/первый день м
+ S D1=$$DAY^DTUTL(DS),D2=$$DAY^DTUTL(DE)
+ S DM=$S(I=1:1,I>1:I,1:"E"),M=""
+ F I=$$MONTH^DTUTL(DS):1:$$MONTH^DTUTL(DE) S M=$S(M="":"",1:"|")_I
+ S S=0,LOGG=$G(LOGG),FIX=$G(FIX)
+ ; периодические вычеты
+ S I="" F  S I=$O(^KDR(TN,"cfin",I)) Q:I=""  S R=^(I) D:$P(R,"|",2)=TP
+ .S X=$TR($P(R,"|",6),"~","|") Q:'$$FLinFL^TXTU(X,M)  ; не этот месяц
+ .I LPU'="",$P(R,"|",5)'="",$P(R,"|",6)'=LPU Q
+ .S D=$P(R,"|",7)
+ .S:D="" D=DM
+ .I D'="",+D,(D<D1)!(D>D2) Q 
+ .I D="E",'eD1,'eD2 Q 
+ .S X=+$P(R,"|",3)
+ .Q:X'>0 
+ .S X=X*$S($P(R,"|",2)=2:-1,1:1),S=S+X
+ .Q:LOGG=""
+ .S K=$O(@LOGG@(""),-1)+1,@LOGG@(K)=$P(R,"|",1)_", в %|"_X
+ S I=$O(^KDR(TN,"dfin",DS_".1"),-1)
+ F  S I=$O(^KDR(TN,"dfin",I)) Q:I=""!($P(I,".",1)>DE)  S R=^(I) D:$P(R,"|",2)=TP
+ .S X=+$P(R,"|",3)
+ .Q:X'>0 
+ .I LPU'="",$P(R,"|",5)'="",$P(R,"|",5)'=LPU Q
+ .S X=X*$S($P(R,"|",2)=2:-1,1:1),S=S+X
+ .I FIX,$P(R,"|",5)="" S $P(^(I),"|",5)=LPU
+ .Q:LOGG=""
+ .S K=$O(@LOGG@(""),-1)+1,@LOGG@(K)=$P(R,"|",1)_", в %|"_X
+ Q S
+PRDT(N,DT) ; Previous change date
+ N P,PD,CD
+ S DT=$$DIH^DTUTL($G(DT))
+ S P="",PD=0
+ F  S P=$O(^KDR(N,P)) Q:P=""  I '$$IsIDX^IKADRY(P) S CD=+$O(^(P,DT),-1) S:CD>0&(CD>PD) PD=CD
+ S:PD=0 PD=DT
+ D L(N,$$DT^DTUTL(PD))
+ Q
+NXDT(N,DT) ; Next change date
+ N P,PD,CD
+ S DT=$$DIH^DTUTL($G(DT))
+ S P="",PD=99999
+ F  S P=$O(^KDR(N,P)) Q:P=""  I '$$IsIDX^IKADRY(P) S CD=+$O(^(P,DT)) S:CD>0&(CD<PD) PD=CD
+ S:PD=99999 PD=DT
+ D L(N,$$DT^DTUTL(PD))
+ Q
+LSTDT(N) ; Список измененных дат
+ N A,L,P,D
+ S (P,A)="" F  S P=$O(^KDR(N,P)) Q:P=""  S D=1000 F  S D=$O(^KDR(N,P,D)) Q:D=""  S L(D)=""
+ S D="" F  S D=$O(L(D)) Q:D=""  D
+ .S A=$S(A="":"",1:A_CR)_$$DT^DTUTL(D)
+ .S L=$G(^KDR(N,"opfio",D)) Q:L=""
+ .S A=A_", "_$$FIOSH^NUSER($P(L,"|",1))_" "_$$DTM^DTUTL($P(L,"|",2))
+ D MSG^RWU(A)
+ Q
+RCRATES(VR,DT,VAL) ; Расшифровать строку ставок
+ ; LPU,OTD,RATE:VAL|...|...
+ N LIST,R,I,X,LP,LL,OT,IR,LR,RK
+ S DT=$$DIH^DTUTL(DT)
+ S R=$$GET^IKADRY(VR,"lpu",DT) S:R="" R=+$$^I("ilpu")
+ F I=1:1:$L(R,"|") S LL(+$P(R,"|",I))=""
+ S IR=$$IDX^ISPRAV("staffrates")
+ S (RK,X)="",I=1 F  S X=$O(^MN(IR,X)) Q:X=""  S LR(X)=I,I=I+1,RK=$S(RK="":"",1:RK_",")_X
+ 
+ F I="",2,3 D
+ .S OT=$$GET^IKADRY(VR,"otd"_I,DT)
+ .Q:OT="" 
+ .S LP="" F  S LP=$O(LL(LP)) Q:LP=""  S X="" F  S X=$O(LR(X)) Q:X=""  S LIST(LP_","_OT,LR(X))=""
+ 
+ I VAL'="" F I=1:1:$L(VAL,"|") S R=$P(VAL,"|",I),X=$P(R,":",1),LIST($P(X,",",1,2),+$G(LR($P(X,",",3))))=$P(R,":",2)
+ 
+ D OWF^RWU(".txt")
+ S R=RK_"|Филиал, отделение",X="" F  S X=$O(^MN(IR,X)) Q:X=""  S R=R_"|"_$P(^MN(IR,X),"|",1)
+ D WC^RWU(R)
+ S X="" F  S X=$O(LIST(X)) Q:X=""  D
+ .S R="",I="" F  S I=$O(LIST(X,I)) Q:I=""  S $P(R,"|",I)=LIST(X,I)
+ .S LP=$P(X,",",1),OT=$P(X,",",2)
+ .D WC^RWU(CR_X_"|"_$$NAME^ICONTR(LP)_", "_$$GOTD^YISPRAV(OT)_"|"_R)
+ D C^RWU
+ Q
+RXCH 
+ D R^XGUNET("hpar")
+ S ^KDR=+$H
+ Q
+WXCH(ID) 
+ N GL
+ S GL("A")="-^KDR("_ID_")"
+ S:$D(^KDR(ID)) GL("K")="^KDR("_ID
+ D S^XGUNET("GL","exp.nb-data")
+ Q
+JSON(IsDOC,IsDSH,MOD,OTDL) ; Экспорт в JSON
+ ; IsDOC - ведет прием (медработник)
+ ; IsDSH - сотрудник есть в расписании
+ ; MOD=1 - сокращенное отображение 
+ ; OTDL - перечень отделений (для фильтра)
+ N N,F,X,D,LL,IsS,OTL,swDSH,FLG,FLL
+ D OWF^RWU(".txt"),W^RWU("[")
+ S D=+$H,IsDOC=$G(IsDOC),IsDSH=$G(IsDSH),MOD=$G(MOD),OTDL=$TR($G(OTDL),",;/","|||")
+ I OTDL'="" F N=1:1:$L(OTDL,"|") S X=$P(OTDL,"|",N) S:X'="" OTL(X)=""
+ S X=$G(^cfg("kadry","sw-json-dsh"))
+ S FLL=$G(^cfg("kadry","nfl-json")) ; don't export these fields
+ I X'="" S IsDSH=X
+ S N="",F=0 F  S N=$O(^KDR(N)) Q:N=""  D  
+ .Q:$$GET^IKADRY(N,"ofor",D)=0
+ .I IsDOC,$$GET^IKADRY(N,"norsp",D) Q 
+ .I IsDSH,'$D(^DSHI("vr",N)) Q 
+ .S FLG=$$GET^IKADRY(N,"flg",D)
+ .S IsS='$$FLinFL^TXTU(FLG,"nwww")
+ .I MOD=1 Q:'IsS 
+ .I '$$jChkOtl() Q 
+ .D B^IJSON()
+ .D W^IJSON("id",N)
+ .S X=$$GET^IKADRY(N,"knum",D)
+ .I MOD'=1 D:X'="" W^IJSON("ext_id",X)
+ .D W^IJSON("fiof",$$GET^IKADRY(N,"f",D))
+ .D W^IJSON("fioi",$$GET^IKADRY(N,"i",D))
+ .D W^IJSON("fioo",$$GET^IKADRY(N,"o",D))
+ .D WR^IJSON("position",$$jsPos())
+ .S X=$$GET^IKADRY(N,"pol",D),X=$S(X=1:"M",X=2:"F",1:"")
+ .D:X'="" W^IJSON("gender",X)
+ .S X=$$GET^IKADRY(N,"bdate",D)
+ .I X["." S X=$$DI^DTUTL(X)
+ .D:X W^IJSON("birthday",$S('X:"",1:$$DTISO^DTUTL(X)))
+ .D:$$GET^IKADRY(N,"norsp",D) WBL^IJSON("ndsh",0)
+ .S X=$$GET^IKADRY(N,"license",D)
+ .D:X'="" W^IJSON("license",X)
+ .S X=$$NAME^ISPRAV("vrattk",$$GET^IKADRY(N,"attk",D))
+ .D:X'="" W^IJSON("ccat",X)
+ .S X=$$NAME^ISPRAV("scirank",$$GET^IKADRY(N,"ust",D))
+ .D:X'="" W^IJSON("degree",X)
+ .S X=$$GET^IKADRY(N,"sptext",D)
+ .I MOD'=1 D:X'="" W^IJSON("speciality",X)
+ .S X=$$GET^IKADRY(N,"certs",D)
+ .I MOD'=1 D:X'="" W^IJSON("certificates",X)
+ .S X=$$GET^IKADRY(N,"ostaj",D)
+ .I MOD'=1 D:X'="" W^IJSON("experience_since",$$DTISO^DTUTL(X))
+ .S X=$$GET^IKADRY(N,"pstaj",D)
+ .I MOD'=1 D:X'="" W^IJSON("company_since",$$DTISO^DTUTL(X))
+ .S X=$$GET^IKADRY(N,"up_kv",D)
+ .I MOD'=1 D:X'="" W^IJSON("training",X)
+ .S X=$$GET^IKADRY(N,"up_kvz",D)
+ .I MOD'=1 D:X'="" W^IJSON("itraining",X)
+ .S X=$$GET^IKADRY(N,"add_text",D)
+ .I MOD'=1 D:X'="" W^IJSON("description",X)
+ .S X=$$GET^IKADRY(N,"pubinf",D)
+ .I FLL'["|pubinf|" D:X'="" W^IJSON("public_info",X)
+ .S X=$$GET^IKADRY(N,"dis_dsc",D)
+ .D:X'="" W^IJSON("disease_dsc",X)
+ .S X=$$GET^IKADRY(N,"pri_dsc",D)
+ .D:X'="" W^IJSON("prirc_dsc",X)
+ .S X=$$GET^IKADRY(N,"patent",D)
+ .D:X'="" W^IJSON("patents",X)
+ .S X=$$GET^IKADRY(N,"honors",D)
+ .D:X'="" W^IJSON("honors",X)
+ .S X=$$GET^IKADRY(N,"sciwrk",D)
+ .D:X'="" W^IJSON("scientific_activity",X)
+ .S X=$$GET^IKADRY(N,"scipub",D)
+ .D:X'="" W^IJSON("scientific_publications",X)
+ .S X=$$GET^IKADRY(N,"ppr",D)
+ .D:X'="" W^IJSON("diplomas",X)
+ .S X=$$GET^IKADRY(N,"obr",D)
+ .D:X'="" W^IJSON("education",X)
+ .S X=$$GET^IKADRY(N,"obr_d",D)
+ .D:X'="" W^IJSON("education_date",$$DTISO^DTUTL(X))
+ .S X=$$GET^IKADRY(N,"ppcenn",D)
+ .I FLL'["|ppcenn|" D:X'="" W^IJSON("basesumm",X)
+ .S X=$$jsLpu(N) ; TODO settings
+ .S:X'="" X=$$GET^IKADRY(N,"lpu",D)
+ .I FLL'["|lpu|" D:X'="" W^IJSON("lpu",X)
+ .D:MOD'=1 WBL^IJSON("is_show",IsS)
+ .D W^IJSON("pediatrics",$S($$FLinFL^TXTU(FLG,"child"):"true",1:"false"))
+ .S X=$$GET^IKADRY(N,"prefu",D)
+ .D:X'="" WR^IJSON("main_services",$$jMServ(X))
+ .S X=$$GET^IKADRY(N,"photo_url",D)
+ .D:X'="" W^IJSON("photo",X)
+ .D WC^RWU($S(F:",",1:"")_$$E^IJSON())
+ .S F=1
+ D W^RWU("]"),C^RWU
+ Q
+jsLpu(N) ; Список ЛПУ по специальности
+ N LL,L,R,H,D
+ S H=$H+7
+ S D=+$H-7 F  S D=$O(^DSHI("vr",N,D)) Q:D>H!(D="")  S L="" F  S L=$O(^DSHI("vr",N,D,L)) Q:L=""  S:'$D(LL(L)) LL(L)=""
+ S (R,L)="" F  S L=$O(LL(L)) Q:L=""  S R=$S(R="":"",1:R_"|")_L
+ Q R
+jsPos() ; Отделение-специальность-должность-кабинет
+ N I,J,T,X
+ S J=1,T="" F I="",2,3 D
+ .S X=$$GET^IKADRY(N,"otd"_I,D) Q:X="" 
+ .I $D(OTL),'$D(OTL(X)) Q 
+ .S:T'="" T=T_","
+ .S T=T_"{""id"":"_J_",""department"":"_X
+ .S X=$$GET^IKADRY(N,"spec"_I,D)
+ .S:X'="" T=T_",""spec"":"_X
+ .S X=$$GET^IKADRY(N,"doljn"_I,D)
+ .S:X'="" T=T_",""position"":"_X
+ .S X=$$GET^IKADRY(N,"cab"_I,D)
+ .S:X'="" T=T_",""cab"":"""_X_""""
+ .S T=T_"}"
+ .S J=J+1
+ Q "["_T_"]"
+jChkOtl() ; Проверка доступных отделений
+ Q:'$D(OTL) 1
+ N I,X,F
+ S F=0 F I="",2,3 S X=$$GET^IKADRY(N,"otd"_I,D) I X'="",$D(OTL(X)) S F=1 Q
+ Q F
+jMServ(X) ; Вывод предпочтительных услуг
+ N I,U,T,P
+ S T="",P=$$PRC^IINSC("","",D,1,$$GET^IKADRY(N,"otd",D),$$GET^IKADRY(N,"spec",D))
+ F I=1:1:999 S R=$P(X,"|",I) Q:R=""  S T=T_$S($L(T):",{",1:"{")_"""code"":"""_$$txt^IJSON(R)_""",""name"":"""_$$txt^IJSON($$NAME^IPRICE(R,P))_""",""price"":"_$$num^IJSON($$PRICE^IPRICE(R,P))_"}"
+ Q "["_T_"]"
+REGLCL 
+ K ^LCLI("kadry")
+ S ^LCLI("kadry")="Кадры"
+ S ^LCLI("kadry","anynum")="Разрешить ввод любого табельного номера"
+ S ^LCLI("kadry","chknum")="Проверять табельный номер"
+ S ^LCLI("kadry","new")="Создание"
+ S ^LCLI("kadry","save")="Сохранение"
+ S ^LCLI("kadry","user")="Управление пользователями: нет,стандартно,сокращенно, сокращенно с ролями"
+ S ^LCLI("kadry","card")="Идентификация сотрудника"
+ S ^LCLI("kadry","dbtn")="Разрешенные закладки"
+ S ^LCLI("kadry","dfl")="Скрытые поля"
+ S ^LCLI("kadry","chkzarp")="Проверять ввод зарплаты по филиалу"
+ S ^LCLI("kadry","userprn")="Печать документа при выдачи пароля"
+ S ^LCLI("kadry","cardtype")="Тип идентификации card/bio</token>"
+ S ^LCLI("kadry","clpu")="Сотрудники только текущего ЛПУ"
+ S ^LCLI("kadry","fndofor")="Поиск только оформленных сотрудников"
+ Q

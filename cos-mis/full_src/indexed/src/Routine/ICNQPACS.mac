@@ -1,0 +1,95 @@
+ICNQPACS ; Import from Conquest PACS
+JOB
+	D $System.License.DeferUserIdentification(1),$System.License.Login("_system") ; SQL user
+	S QQ=0
+	F  Q:QQ  D  Q:QQ  H 15
+	.I $D(^SYNCJ("JOB^ICNQPACS")) S QQ=1 Q
+	.Q:'+$G(^FLAG("DICOM"))
+	.H 15
+	.K ^FLAG("DICOM")
+	.D GET
+	K ^SYNCJ("JOB^ICNQPACS")
+ 	Q
+GET
+	N res,sql,stat,X,F,id,NI,SER,File,Mod,i,idx,DOC,TPD,exn
+	s TPD=$$FNDUID^YIMHS("dicom/dcm")
+	Q:TPD=""  ; нет шаблона
+	S id=+$G(^INKR("DICOM"))
+	S res=##class(%ResultSet).%New()
+	S sql="select SQLUser.DICOMImages.ImagePat, SQLUser.DICOMImages.SeriesInst, SQLUser.DICOMImages.ObjectFile, SQLUser.DICOMSeries.Modality, SQLUser.DICOMSeries.ID "
+	S sql=sql_"from SQLUser.DICOMImages,SQLUser.DICOMSeries "
+	S sql=sql_"where SQLUser.DICOMImages.SeriesInst=SQLUser.DICOMSeries.SeriesInst and SQLUser.DICOMSeries.ID>?"
+	S stat=res.Prepare(sql)
+	I 'stat D $System.OBJ.DisplayError(stat) Q 
+	S stat=res.Execute(id)
+	I 'stat D res.Close() Q 
+	s idx=1
+	while(res.Next())
+	{
+		S NI=res.GetData(1)
+		S SER=res.GetData(2)
+		S File=res.GetData(3)
+		S Mod=res.GetData(4)
+		S i=+res.GetData(5)
+		If Mod'="" {
+			I i>id S id=i
+			;W !,"NI="_NI,!,"Series="_SER,!,"File="_File,!,"Mod="_Mod
+			S NAM=$G(^DCMCFG(Mod))
+			S:NAM="" NAM=$S(Mod="US":"УЗ изображение",Mod="RF":"Рентгенография",Mod="CT":"Компьютерная томография",1:"")
+			s exn=$$EXIST^IPAC(NI),F=1
+			If 'exn,$G(^DCMCFG(Mod,"tset")) {
+				s ^DCMTMP(i)=NI_"|"_$H_"|"_Mod_"|"_File,F=0
+			}
+			If F,$G(^DCMCFG(Mod,"tset"))=2 {
+				s ^DCMTMP(i_"."_idx)=NI_"|"_$H_"|"_Mod_"|"_File
+				s exn=0
+			}
+			If $L(NAM),exn { 
+				S DOC=$$MKDOC^YIMH(NI,TPD,NAM,1)
+				D SETDT^YIMH(NI,DOC,+$H)
+				D SET^YIMH(NI,DOC,"dcm",Mod)
+				S ^EPRD(NI,DOC)=File
+				D UPD^YIMH(NI,DOC)
+			}
+			s idx=idx+1
+		}
+	}
+	S ^INKR("DICOM")=id
+	D res.Close()
+	Q
+INIT
+	S A="CREATE TRIGGER INDCM AFTER INSERT ON SQLUser.DICOMSeries LANGUAGE OBJECTSCRIPT {SET ^FLAG(""DICOM"")=1}"
+	S res=##class(%ResultSet).%New()
+	S sc=res.Prepare(A)
+    If $System.Status.IsError(sc) D $System.OBJ.DisplayError(sc) Q 
+    Set sc=res.Execute()
+    D res.Close()
+	Q
+EXEC(SQL) ; Execute SQL statement
+	N res,A,I,RI,TC,RZ,i,MM,XML,X1,X2,CR,%LOG,%JOB,FN
+	S %LOG="sys",%JOB=77777,CR=$C(10,13),i=0
+	S res=##class(%ResultSet).%New()
+ 
+	S sc=res.Prepare(SQL)
+    If $System.Status.IsError(sc) Q 
+    Set sc=res.Execute()
+    If $System.Status.IsError(sc) D res.Close() Q 
+    S CL=res.GetColumnCount(),i=1,P=""
+    While res.Next() 
+    {
+	    S A=""
+	    F I=1:1:CL S RI=$$TRIM^TXTU(res.GetData(I)) S:RI=$C(0) RI="" S A=A_$S(A="":"",1:$C(9))_""""_RI_""""
+	    S i=i+1
+	    Write !,i_"> ",A 
+    }
+    D res.Close()
+	Q
+START 
+	K ^SYNCJ("JOB^ICNQPACS")
+	J JOB^ICNQPACS
+	Q
+STOP 
+	S ^SYNCJ("JOB^ICNQPACS")=1
+	F I=1:1:60 Q:'$D(^SYNCJ("JOB^ICNQPACS"))  H 1
+	K ^SYNCJ("JOB^ICNQPACS")
+	Q

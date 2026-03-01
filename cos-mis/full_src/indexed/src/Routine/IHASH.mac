@@ -1,0 +1,65 @@
+IHASH ; Hash functions [ 04/12/2009  1:51 AM ]
+TST 
+ S H=$P($H,",",2)
+ F I=1:1:1999999 S A=$$LYH("gfdfgsf45g6yhg6")
+ W !,$P($H,",",2)-H,!
+ Q
+LYH(R) ; Leonid Yuriev, Lavaux&Janssens
+ N A,I S A=0
+ F I=1:1:$L(R) S A=(A*1664525+$A($E(R,I))+1013904223)#4294967296
+ Q A
+FAQ6(R) ; Bob Jenkins ???? - todo
+ N A,I S A=0
+ F I=1:1:$L(R) S A=A+$A($E(R,I)),A=A*1024+A,A=$$ZB^CONU(A,A/64,6)
+ S A=A*8+A,A=$$ZB^CONU(A,A/2048,6),A=(A*32768+A)#4294967296
+ Q A
+ELF(R) 
+ N A,I,X S A=0
+ F I=1:1:$L(R) S A=A*16+$A($E(R,I)),X=$$ZB^CONU(A,4026531840,1) S:X'=0 A=$$ZB^CONU(A,X/16777216,6),A=$$ZB^CONU(X,A,4)
+ Q $P(A,".",1)
+RSH(R) ; RS-AP
+ N A,I S A=0
+ F I=1:1:$L(R) S A=(A*63689)#4294967296+$A($E(R,I)),A=(A*378551)#4294967296
+ Q A
+CRC32(string,seed) ;
+ ; Polynomial X**32 + X**26 + X**23 + X**22 +
+ ; + X**16 + X**12 + X**11 + X**10 +
+ ; + X**8 + X**7 + X**5 + X**4 +
+ ; + X**2 + X + 1
+ N I,J,R
+ If '$Data(seed) Set R=4294967295
+ Else  If seed'<0,seed'>4294967295 Set R=4294967295-seed
+ Else  Set $ECODE=",M28,"
+ For I=1:1:$Length(string) Do
+ .Set R=$$XOR($Ascii(string,I),R,8)
+ .For J=0:1:7 Do
+ ..If R#2 Set R=$$XOR(R\2,3988292384,32)
+ ..Else  Set R=R\2
+ ..Q
+ .Q
+ Q 4294967295-R
+XOR(a,b,w) New I,M,R
+ S R=b,M=1
+ F I=1:1:w S:a\M#2 R=R+$Select(R\M#2:-M,1:M) S M=M+M
+ Q R
+ ;
+ ; The code below was approved in document X11/1998-32
+ ;
+CRC16(string,seed) ;
+ ; Polynomial x**16 + x**15 + x**2 + x**0
+ New I,J,R
+ If '$Data(seed) Set R=0
+ Else  If seed'<0,seed'>65535 Set R=seed\1
+ Else  Set $ECODE=",M28,"
+ For I=1:1:$Length(string) Do
+ .Set R=$$XOR($Ascii(string,I),R,8)
+ .For J=0:1:7 Do
+ ..If R#2 Set R=$$XOR(R\2,40961,16)
+ ..Else  Set R=R\2
+ ..Quit
+ .Quit
+ Q R
+ZXOR(a,b,w) 
+ N I,M,R S R=b,M=1
+ For I=1:1:w S:a\M#2 R=R+$Select(R\M#2:-M,1:M) S M=M+M
+ Q R

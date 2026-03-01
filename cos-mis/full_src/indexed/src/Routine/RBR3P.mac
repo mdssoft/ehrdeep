@@ -1,0 +1,99 @@
+RBR3P ; Отчеты Бранчевский Комм департамент [ 10/04/2018  3:17 PM ]
+F312(DS,DE) 
+ N REZ
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D MAKE^IDOCGEN("3_1_2.xlsx","REZ","xlsx")
+ Q
+F314(DS,DE) 
+ N REZ
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D MAKE^IDOCGEN("3_1_4.xlsx","REZ","xlsx")
+ Q
+F318(DS,DE) 
+ N REZ
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D MAKE^IDOCGEN("3_1_8.xlsx","REZ","xlsx")
+ Q
+F322(DS,DE,LPU) 
+ N REZ
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D MAKE^IDOCGEN("3_2_2.xlsx","REZ","xlsx")
+ Q
+F323(DS,DE,LPU) 
+ N REZ
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D MAKE^IDOCGEN("3_2_3.xlsx","REZ","xlsx")
+ Q
+F324(DS,DE,LPU) 
+ N REZ
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D MAKE^IDOCGEN("3_2_4.xlsx","REZ","xlsx")
+ Q
+F332(DS,DE) 
+ N REZ,DTT,DEP,DNM,NI,@$$NEWVAR^IUSL,DNL,DNU,DNC,LP
+ N TAB,KEY,DNMC,II,X,X1,X2
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S DNM="взрослый|дети|тренировки|операции|ОМС"
+ S DNMC="c01.01|c01.02|c01.06|c03|c05"
+ S DNL("c01.01")=1,DNL("c01.02")=2,DNL("c01.06")=3
+ S X=$$FNDBYFL^ICNLIST("uid","c01.02")
+ D:X'="" FILLU^ICNLIST(X,"DNU",2) ; дети
+ S X=$$FNDBYFL^ICNLIST("uid","c01.01")
+ D:X'="" FILLU^ICNLIST(X,"DNU",1)
+ S X=$$FNDBYFL^ICNLIST("uid","c01.06")
+ D:X'="" FILLU^ICNLIST(X,"DNU",3)
+ S DTT=$$DT2^DTUTL(DS)_"-"_$$DT2^DTUTL(DE)
+ S REZ("sheets","list","D26")=$$GET^IPRDCAL(DS,DE)
+ 
+ K ^BUF($J)
+ D ITERATE^IUSLD("F332p^RBR3P",DS,DE,,,"")
+ 
+ ; дни
+ S KEY="" F  S KEY=$O(TAB(KEY)) Q:KEY=""  D
+ .S X1=0,X="" F  S X=$O(TAB(KEY,"d",X)) Q:X=""  S X1=X1+1
+ .S TAB(KEY,"d")=X1
+ 
+ ; заполнение
+ S II=5,KEY="" F  S KEY=$O(TAB(KEY)) Q:KEY=""  D
+ .S LP=$P(KEY,"|",1),DNC=$P(KEY,"|",2)
+ .S X1=$P(DNMC,"|",DNC)
+ .D set("B"_II,$G(TAB(KEY,"d")))
+ .D set("C"_II,DTT)
+ .D set("D"_II,$$NAME^ICONTR(LP)_" "_$P(DNM,"|",DNC))
+ .; посещения
+ .D:DNC=5 set("I"_II,$G(TAB(KEY,"p")))
+ .D:DNC'=5 set("H"_II,$G(TAB(KEY,"p")))
+ .D:DNC'=5 set("E"_II,$$GETPLP^NFPLAN(LP,X1,"pos",DS,DE))
+ .; выручка
+ .D set("S"_II,$G(TAB(KEY,"s")))
+ .D set("R"_II,$$GETPLP^NFPLAN(LP,X1,"sum",DS,DE))
+ .S II=II+1
+ 
+ D MAKE^IDOCGEN("3_3_2.xlsx","REZ","xlsx")
+ K ^BUF($J)
+ Q
+F332p 
+ Q:"wd"[$$GETSTAT^IUSL(VR,DT,OT,ID)
+ D GET^IUSL(VR,DT,OT,ID)
+ S LP=$$GETPL^IUSL(VR,DT,OT,ID,"l")
+ S U="" F  S U=$O(UL(U)) Q:U=""  D
+ .S DNC=$S(PRC=5:5,$P(U,".",1)=2:4,1:+$G(DNU(U)))
+ .Q:'DNC 
+ .S KEY=LP_"|"_DNC
+ .S TAB(KEY,"s")=$G(TAB(KEY,"s"))+$$SUMM^IUSL(VR,DT,OT,ID) ; TODO - более одной услуги
+ .S:'$D(TAB(KEY,"d",DT)) TAB(KEY,"d",DT)=1
+ .I '$D(^BUF($J,"p",NI_"|"_VR_"|"_DT)) S ^(NI_"|"_VR_"|"_DT)="",TAB(KEY,"p")=$G(TAB(KEY,"p"))+1
+ Q
+F334(DS,DE) 
+ N REZ
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D MAKE^IDOCGEN("3_3_4.xlsx","REZ","xlsx")
+ Q
+F335(DS,DE,LPU) 
+ N REZ
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D MAKE^IDOCGEN("3_3_5.xlsx","REZ","xlsx")
+ Q
+set(POS,VAL) 
+ S REZ("sheets","list",POS)=VAL
+ Q

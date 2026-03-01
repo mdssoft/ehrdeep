@@ -1,0 +1,115 @@
+IKDLOUT ; КДЛ - драйвера/производство [ 03/23/2016  0:13 AM ]
+THREAD ; 
+ D:$D(^$R("WWWSRV")) USRCONN^WWWSRV ; for Cache
+ N I,CR,IDX
+ S (I,IDX)=0,^SYNCJ("THREAD^IKDLOUT-R")=1
+ S $ZT="ZT^IKDLOUT",CR=$C(13,10)
+ F  Q:$D(^SYNCJ("THREAD^IKDLOUT"))  H 1 S I=I+1 I I>16 S I=0 D CRON S IDX=IDX+1
+ K ^SYNCJ("THREAD^IKDLOUT")
+ Q
+CRON ; for ^ICRON
+ D:IDX#5=0 CLRNET
+ D DO(),DEVS
+ Q
+DO(MX,DAYS) ; Fill temp data
+ ; MX - отдельные методики
+ ; DAYS - просматривать DAYS назад
+ N D,NI,ID,S3,I,R,P,PRM,M,LL
+ S D=+$H-$S($G(DAYS):DAYS,1:64) ; 64 days ago
+ S MX=$G(MX)
+ I MX'="" S MX="|"_MX_"|"
+ F  S D=$O(^MLABI("d",D)) Q:D=""  S ID="" F  S ID=$O(^MLABI("d",D,ID)) Q:ID=""  D
+ .S NI=^(ID) Q:NI="" 
+ .S S3=$P($G(^MLAB(NI,ID,"s3")),"|",1) Q:'S3  
+ .Q:$P($G(^("s9")),"|",1)
+ .S PRM=$G(^("pr")) Q:PRM="" 
+ .F I=1:1:$L(PRM,"|") S P=$P(PRM,"|",I),M=$O(^LABT("T",P,"dev","")) I M'="",$P($G(^LABT("DEV",M,"i")),"|",1)="A",$G(^("use"))'=0 D
+ ..I MX'="",MX'[("|"_M_"|")   
+ ..Q:$P($G(^MLAB(NI,ID,"d",P)),"|",1)'=""  ; есть данные
+ ..Q:$D(^MLABW(M,0,ID,P))
+ ..S ^(P)=0,^MLABWE(M,0,"i",ID,ID)=""
+ ..S:$G(^MLABW(M,0,ID))="" ^(ID)="0|0|"_ID
+ ..S:'$D(LL(M)) LL(M)=""
+ S M="" F  S M=$O(LL(M)) Q:M=""  S P=$G(^LABT("DEV",M,"ud")) I P'="",$P($G(^MLABW(M,0)),"|",1)="" S $P(^(0),"|",1)=P ; set userdata
+ Q 
+ ; чистка - !+параметры!
+ S M="" F  S M=$O(^MLABW(M)) Q:M=""  D
+ .S ID="" F  S ID=$O(^MLABW(M,0,ID)) Q:ID=""  D
+ ..S NI=$G(^MLABI("c",ID))
+ ..I NI=""  K ^MLABW(M,0,ID) Q
+ ..S P="" F  S P=$O(^MLABW(M,0,ID,P)) Q:P=""  I '$D(^MLAB(NI,ID,"d",P)) K ^MLABW(M,0,ID,P),^MLABWE(M,0,"i",ID) ; TODO - правильное соответствие
+ Q
+DEVS ; Call devices
+ N D,R,X
+ S D="" F  S D=$O(^MLABW(D)) Q:D=""  D
+ .Q:$G(^LABT("DEV",D,"use"))=0 
+ .S X=$G(^LABT("DEV",D,"ex")) Q:X="" 
+ .S X=X_"("""_D_""")"
+ .D @X
+ Q
+CLRNET ; Очистить сетевые устройства по прошествии времени
+ N D,R,DT,TM
+ S DT=+$H,TM=$P($H,",",2)
+ S D="" F  S D=$O(^MLABD(D)) Q:D=""  D
+ .S R=$P(^(D),"|",2)
+ .I +R'=DT K ^(D) Q 
+ .I (TM-$P(R,",",2))>1800 K ^(D) ; >30 min.
+ Q
+START 
+ Q:$G(^cfg("lab","nokdlio")) 
+ K ^SYNCJ("THREAD^IKDLOUT")
+ J THREAD^IKDLOUT
+ Q
+STOP 
+ S ^SYNCJ("THREAD^IKDLOUT")=1
+ N I F I=1:1:16 H 1 Q:'$D(^SYNCJ("THREAD^IKDLOUT"))
+ K ^SYNCJ("THREAD^IKDLOUT-R")
+ Q
+RUNNING() 
+ Q:$D(^SYNCJ("THREAD^IKDLOUT-R")) 1
+ Q 0
+ZT S ^ERLOG("IKDLOUT",+$H,$P($H,",",2))=$ZE
+ G THREAD+2
+PRMT(DEV,PRM) ; Получить лаб. парам. из парам. методики
+ Q $P($G(^LABT("DEV",DEV,"t",PRM)),"|",1)
+FN(DEV,PRM) ; ф-ция обработки лаб. параметра
+ S PRM=$G(^LABT("T",PRM,"dev",DEV))
+ Q $G(^LABT("DEV",DEV,"t",PRM,"fn"))
+PREPOST(DEV,FN,CLR) ; Начать сетевой обмен
+ N RR,IP,NET,X,PORT,MM,RDEV
+ S RDEV=$G(^MLABD(DEV))
+ S IP=$P(RDEV,"|",1),CLR=$G(CLR)
+ Q:IP="" ""
+ S PORT=$P(RDEV,"|",3) S:PORT="" PORT=9099
+ S NET=$$OPEN^WWWCLI(IP,PORT)
+ Q:NET="" ""
+ S MM=$P(RDEV,"|",4)
+ S X=$$GET^WWWCLI(NET,"/existout?p="_FN_$S(MM:"&d="_DEV,1:""))
+ S X="" ; TODO
+ I $$BUFCNT^WWWCLI(NET) S X=$$RBUF^WWWCLI(NET)
+ D CLOSE^WWWCLI(NET)
+ I X="yes" D:CLR  Q:'CLR ""
+ .S NET=$$OPEN^WWWCLI(IP,PORT)
+ .Q:NET="" 
+ .S X=$$GET^WWWCLI(NET,"/delout?p="_FN_$S(MM:"&d="_DEV,1:""))
+ .D CLOSE^WWWCLI(NET)
+ Q NET
+ENDPOST(DEV,NET,FN) 
+ N X,IP,MM
+ S IP=$P(^MLABD(DEV),"|",1),MM=$P(^MLABD(DEV),"|",4)
+ S NET=$$OPEN^WWWCLI(IP,9099)
+ D BUFH2B^WWWCLI(NET,".txt")
+ S X=$$POST^WWWCLI(NET,"/"_$S(MM:DEV_"/",1:"")_FN)
+ D CLOSE^WWWCLI(NET)
+ D:$G(^cfg("lab","debug")) LOG^ISSG(X_":"_DEV_":"_"/"_$S(MM:DEV_"/",1:"")_FN)
+ Q
+GETCMD(DEV,CMD) ; Выполнить команду устройством
+ N NET,REZ,IP,MM,I
+ S IP=$P(^MLABD(DEV),"|",1),MM=$P(^MLABD(DEV),"|",4)
+ S NET=$$OPEN^WWWCLI(IP,9099)
+ Q:NET="" ""
+ S X=$$GET^WWWCLI(NET,"/"_CMD_$S(MM:"&d="_DEV,1:"")),REZ=""
+ I X=200 D OBUF^WWWCLI(NET) F I=1:1:$$BUFCNT^WWWCLI(NET) S REZ=REZ_$$RBUF^WWWCLI(NET)
+ D:X=200 CBUF^WWWCLI(NET)
+ D CLOSE^WWWCLI(NET)
+ Q REZ

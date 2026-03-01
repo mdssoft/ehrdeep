@@ -1,0 +1,643 @@
+A ; ЭИБ - паспортная часть и оповещение [ 09/23/2024  1:44 PM ]
+FND(TP,STR,DGN,VR,DT,CHK,DE,OTD) ; Поиск
+ S STR=$$TRIM^TXTU($E($G(STR),1,128)) ; принудительное ограничение
+ S DGN=$G(DGN),VR=$G(VR),DT=$G(DT),CHK=$G(CHK),OTD=$G(OTD)
+ N LP,D,X,EXE,VRC
+ S LP=$$^I("ilpu"),D=$$DIH^DTUTL(DT)
+ S:'$$LCL^IUSER("epr","fnd-dsh-otd") OTD=""
+ S X=$$LCL^IUSER("patients"," stc") S:X'="" DGN=X
+ S VRC=$G(^JOB(%JOB,"epr-cowrk"))
+ K ^JOB(%JOB,"epr-f")
+ D REMDSHU
+ I TP=2 D  Q
+ .D FIND^NRASP(VR,STR,DT,CHK,OTD,DGN)
+ .D:VRC'="" FIND^NRASP(VRC,STR,DT,CHK,OTD,DGN) ; соисп.
+ .Q:+$H'=D 
+ .S ^JOB(%JOB,"epr-f",1)=VR,^(2)=STR,^(3)=DT,^(4)=CHK,^(5)=OTD,^("t")=2
+ .D REGDSHU(VR)
+ I TP=1 D YFD^YIFINDN(STR,DGN,,1) Q 
+ S STR=$$WD^TXTU(STR),DT=D,DE=$$DIH^DTUTL($G(DE))
+ S:DT>DE DE=DT
+ S D=$G(^cfg("epr","mxdt-search")) S:D="" D=180 ; макс.период поиска
+ I TP'=9 S:(DE-DT)>D DT=DE-D ; для аналитики - без огр.
+ I TP=4 D FNDUSBS(STR,VR,DT,DE) Q 
+ S:$$LCL^NUSER("epr","shnow") (DT,DE)=+$H ; только сегодня
+ I TP=3 D FNDPOS(STR,VR,DT,DE) Q 
+ I TP=5 D FNDPOS(STR,"",DT,DE,OTD) Q
+ Q:TP'=9 
+ S EXE=$P($$LCL^IUSER("epr","find-var"),"|",2)
+ I EXE="" D FNDAN^YIMHA(STR,DT,DE,VR,OTD) Q 
+ S EXE="D "_EXE_"(STR,DT,DE,VR,OTD)"
+ X EXE
+ Q
+LPC(N,OT,VR,SP,TFND) ; ЗАГРУЗКА ПАСПОРТНОЙ ЧАСТИ ПАЦИЕНТА
+ ; TFND - тип поиска
+ Q:N="" 
+ N DH,R,I,K,C,DG,DGL,X,Z,Y,ALR,ALRV,WRN,HFL,AFL,FL,LMSG
+ S N=+N,DH=+$H,(WRN,ALR,ALRV)="",TFND=+$G(TFND)
+ S HFL=$$LCL^NUSER("epr","htitlefl")
+ S AFL=$$LCL^NUSER("epr","atitlefl")
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<mhist><inf>")
+ I '$$EXIST^IPAC(N) D WC^RWU("<field name=""pac_f"" title=""Фамилия""/></inf>") G CCC
+ S C="<item data="""
+ D WLPC("pac_f","Фамилия","",$$GET^IPAC(N,"fiof",DH))
+ D WLPC("pac_io","Имя, Отчество","",$$GET^IPAC(N,"fioi",DH)_" "_$$GET^IPAC(N,"fioo",DH))
+ S R=$$GET^IPAC(N,"pol",DH)
+ D:R'="" WLPC("pac_sex","Пол","",$S($$CHKSPR^ISPRAV("gender"):$$NAME^ISPRAV("gender",R),R=2:"Ж",1:"М")),WLPC("pac_pol","","",$S(R=2:"Ж",1:"М"),0,1) ; +sys fl
+ S R=$$GET^IPAC(N,"datar",DH)
+ D:$L(R) WLPC("pac_born","Дата рождения","",$$DT^DTUTL(R))
+ S DG=$$GET^IPAC(N,"stc",DH),K=$$GET^IPAC(N,"cntstc",DH)
+ S:K="" K=$S($$GET^IPAC(N,"stc2",DH)'="":3,$$GET^IPAC(N,"stc1",DH)'="":2,1:"")
+ D GETDLST^IGRNL(N,DH,"DGL") ; договора по ГП
+ K:DG'="" DGL(DG) 
+ D:$L(DG)!$L(K)!$D(DGL)
+ .D WLPCH("pac_dog","Договор",0,0,$S(+K<2&('$D(DGL)):"",1:"singlehref"))
+ .I $L(DG) D WC^RWU(C_DG_""" title="""_$$TKAV^TXTU($$NAME^IINSC(DG))_"""/>")
+ .S K=K-1
+ .F K=1:1:K S R=$$GET^IPAC(N,"stc"_K,DH) I R'="" D WC^RWU(C_R_""" title="""_$$TKAV^TXTU($$NAME^IINSC(R))_"""/>") K DGL(R)
+ .S R="" F  S R=$O(DGL(R)) Q:R=""  D WC^RWU(C_R_""" title="""_$$TKAV^TXTU($$NAME^IINSC(R))_" (по Г.П.)""/>")
+ .D WC^RWU("</field>")
+ I DG="",K="",$G(^cfg("epr","chk-ndgn")) S ALR=$S(ALR="":"",1:ALR_CR)_"У пациента отсутствует договор."
+ D:$$GET^IPAC(N,"ofor",DH)'=1 WLPC("ofor","Оформление","",$$GETE^IPAC(N,"ofor",DH),,,"#FF0000")
+ S R=$$GET^IPAC(N,"dog_from",DH)
+ S X=$$GET^IPAC(N,"dog_to",DH)
+ D:$L(R) WLPC("pac_dfrom","Срок с","",$$DT^DTUTL(R),$S(X="":0,1:1),,$S(R>DH:"#FF0000",1:""))
+ D:$L(X) WLPC("pac_dto","Срок по","",$$DT^DTUTL(X),,,$S(X<DH:"#FF0000",1:""))
+ S R=$$GET^IPAC(N,"polis",DH)
+ D:$L(R) WLPC("pac_polis","Полис","",R)
+ S R=$$GET^IPAC(N,"work",DH)
+ D:$L(R) WLPC("pac_work","Место работы","",$G(^M(5,+R)))
+ S R=$S($G(^cfg("epr","sw-stcprg")):$$GET^IPAC(N,"stcprg",DH),1:"")
+ D:$L(R) WLPC("pac_stcprg","Страховая программа","",R)
+ S R=$$GET^IPAC(N,"prog",DH)
+ D WLPCL("pac_prog","Программы","","DGNPINF^NFNPAC")
+ F I=1:1 S X=$P(R,"|",I) Q:X=""  D
+ .S Z=$$OWF^TXTU($$TKAV^TXTU($$NAME^IMPRP(X)),32)
+ .S Y=$$ISDGNPI^NFNPAC(DG,X,DH)
+ .S X=$$TKAV^TXTU(X)
+ .D WC^RWU(C_X_""" title="""_$S(Z="":X,1:Z)_""" ishref="""_Y_"""/>")
+ D:R="" WC^RWU(C_""" title=""Не определены""/>")
+ D WC^RWU("</field>")
+ D:$$CHECK^IGRNL(N,DH)
+ .D WLPCL("pac_grnl","Гарантийные письма","","GRNLTXT^NGRNL")
+ .S R=$$GETIDL^IGRNL(N,DH) F K=1:1:$L(R,"|") S I=$P(R,"|",K) D 
+ ..S Z=$G(^GRNL(N,I,"n")),Y=$P(Z,"|",1),Z="№ "_$P(Z,"|",2)
+ ..S:Y'="" Z=Z_" от "_$$DT2^DTUTL(Y)
+ ..S:$G(^GRNL(N,I,"smm")) Z=Z_" ЛИМИТ СУММЫ"
+ ..S Y=$S($$IsCOMM^IGRNL(N,I):1,$$IsIMG^IGRNL(N,I):1,$$IsPRG^IGRNL(N,I):1,$$APRGID^IGRNL(N,I):1,1:0)
+ ..D WC^RWU(C_N_"@"_I_""" title="""_Z_""" ishref="""_Y_"""/>")
+ .D WC^RWU("</field>")
+ S R=$$GET^IPAC(N,"status",DH)
+ D:$L(R)
+ .D WLPCH("pac_stat","Статусы")
+ .F I=1:1 S X=$P(R,"|",I) Q:X=""  D
+ ..S Z=$$OWF^TXTU($$TKAV^TXTU($G(^M(1,X))),36)
+ ..D WC^RWU(C_X_""" title="""_X_" "_Z_"""/>")
+ .D WC^RWU("</field>")
+ D NPRTIT^NNAZN(N,$$KDR^IUSER(),$G(SP),OT)
+ 
+ S K=$$NOW^IBILL(N)
+ 
+ S I=$$CHKSUM^IUSLD(N,DH,"",0)
+ D:I'=""
+ .S X=$P(I,"|",1),R=$P(I,"|",5)
+ .S Y=$$MIN3Z^IMATH($P(I,"|",2),$P(I,"|",3),$P(I,"|",4))
+ .S C=$S(R=1!(R=3):"#FF0000",X=Y:"#CC3333",R=2:"#5555A0",1:"")
+ .S LMSG=$G(^cfg("epr","limit-text"))
+ .S Z=$S(R:$S(LMSG="":"Лимит "_$S(R=3:"договора ",1:"")_"превышен",1:LMSG),1:"Остаток лимита")
+ .I $$LCL^IUSER("epr","sw-ovlimit"),'R Q 
+ .D WLPC("pac_limit",Z,"",$S(R:X_"/"_$P(I,"|",R+1),X=Y:"0/"_Y,1:(Y-X)_" из "_Y),$S(R=3:0,K'=0:1,1:0),,C)
+ 
+ S I=$$CHKSUM^IGRNL(N,DH,"","")
+ D:I'=""
+ .S X=$P(I,"|",1),Y=$P(I,"|",2) 
+ .D WLPC("grnl_limit",$S(Y<X:"Остаток лимита по Г.П.",1:"Лимит по Г.П. превышен"),"",$S(Y<X:(X-Y)_" из "_X,1:Y_"/"_X),0,,$S(Y<X:"#5555A0",1:"#FF0000"))
+ 
+ D:K'=0 WLPC("pac_deposit","Состояние счета","",$S(K="":"не используется",1:K))
+ I $G(^cfg("epr","sw-stcsum")) S X="01."_$P($$DT^DTUTL(DH),".",2,3),Y=$$SUMMUSL^IUSL(N,$$DI^DTUTL(X),DH,"",1,0,1,1) D:Y WLPC("stc_summ","Сумма договора с "_X,"",Y)
+ 
+ D:$G(^cfg("epr","swlekall"))
+ .S X=$$GETE^IPAC(N,"lekall",DH)
+ .D:X'="" WLPC("lekall","Лекарственная непереносимость","",X,,,"#995500")
+ 
+ S R=$$OWF^TXTU($$GET^IPAC(N,"text",DH),100)
+ I TFND S I=$$PACVRCOM^IRASP2(N,+$$^I("ilpu"),VR,DH) S:$L(I) R=$S(R="":"",1:R_", ")_I
+ I $G(^cfg("doc-stc-comm")) S X=$$GET^IPAC(N,"stcprg",DH) S:$L(X) R=$S(R="":"",1:R_", ")_X
+ D:R'="" WLPC("pac_comm","Комментарий","",R)
+ I $$LCL^NUSER("epr","vpovp"),$L($O(^PNF(N,DH),-1)) D WLPC("povp"," Повторный прием ","","",,,"#5555A0")
+ 
+ F I=1:1:$L(AFL,"|") S X=$P(AFL,"|",I) D:X'=""
+ .I X="nnpay",$$ChkNP^NKSS(N,DH) D WLPC("nnpay"," Существуют неоплаченные услуги ","","",,,"#995555") Q
+ .I X="prnchk" S:'$$IsPRN^NPACU(N) ALR=$S(ALR="":"",1:ALR_CR)_"У пациента не отпечатаны регистрационные документы." Q 
+ .I $E(X)="$" S FL=$E($P(X,":",1),2,99),X=$P(X,":",2) X "S X="_X D:X'="" WLPC(FL," "_X_" ","","",,,"#995555") Q
+ 
+ D CHKPAC
+ D:$G(^cfg("doc-rasp-only"))!$$LCL^IUSER("epr","rasp-only") CHKRASP(N,OT,VR,SP)
+ D CHKVR(VR,DH)
+ D:$L(ALR) WLPC("alert","","",ALR,0,1)
+ D:$L(ALRV) WLPC("alertv","","",ALRV,0,1) ; for view
+ D:$L(WRN) WLPC("warn","","",WRN,0,1)
+ D:'$$LCL^IUSER("epr","nopin") WLPC("apin","","",$$GET^IPAC(N,"apin"),0,1)
+ D DO^ITRIG("epr","loadnib")
+ D W^RWU("</inf><foto>")
+ D:$$OR^NPACF(N,"foto")
+ .F  D W^RWU($$R^NPACF()) Q:$$EOF^NPACF()
+ .D C^NPACF
+ D W^RWU("</foto>")
+ D W^RWU("<bt_pac_date title="""_$$DT^DTUTL(+$H)_"""/>")
+CCC D W^RWU("</mhist></nb_console>")
+ D C^RWU
+ Q
+LDGNCNG(N,DGN,DT) ; Изменение договора в паспортной части
+ N R,T,X,I,Z,C,HFL,Y
+ S DH=$$DIH^DTUTL(DT),C="<item data="""
+ S HFL=$$LCL^NUSER("epr","htitlefl")
+ F I="",1:1:9 I $$GET^IPAC(N,"stc"_I,DT)=DGN Q 
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<mhist><inf>")
+ 
+ S R=$$GET^IPAC(N,"dog_from"_I,DH)
+ S T=$$GET^IPAC(N,"dog_to"_I,DH)
+ I R="",T'="" D WLPC("pac_dfrom","Срок с","","",0,,"#8BADD5")
+ I R'="",T="" D WLPC("pac_dto","Срок по","","",0,,"#8BADD5")
+ D WLPC("pac_dfrom","Срок с","",$$DT^DTUTL(R),$S(T="":0,1:1),$S(R="":1,1:2),$S(R'=""&(R>DH):"#FF0000",1:"#8BADD5"))
+ D WLPC("pac_dto","Срок по","",$$DT^DTUTL(T),,$S(T="":1,1:2),$S(T'=""&(T<DH):"#FF0000",1:"#8BADD5"))
+ S R=$$GET^IPAC(N,"polis"_I,DH)
+ I I=1,R="" S R=$$GET^IPAC(N,"polis"_I,DH)
+ D:$L(R) WLPC("pac_polis","Полис","",R) ; TODO - затирать если был
+ 
+ S R=$$GET^IPAC(N,"prog"_I,DT)
+ D WLPCL("pac_prog","Программы","","DGNPINF^NFNPAC")
+ F I=1:1 S X=$P(R,"|",I) Q:X=""  D
+ .S Z=$$TKAV^TXTU($$OWF^TXTU($$NAME^IMPRP(X),32))
+ .S Y=$$ISDGNPI^NFNPAC(DGN,X,DT)
+ .S X=$$TKAV^TXTU(X)
+ .D WC^RWU(C_X_""" title="""_$S(Z="":X,1:Z)_""" ishref="""_Y_"""/>")
+ D:R="" WC^RWU(C_""" title=""Не определены""/>")
+ D W^RWU("</field>")
+ 
+ S I=$$CHKSUM^IUSLD(N,DH,DGN,0)
+ D:I="" WLPC("pac_limit","","","",,1)
+ D:I'=""
+ .S X=$P(I,"|",1),R=$P(I,"|",5)
+ .S Y=$$MIN3Z^IMATH($P(I,"|",2),$P(I,"|",3),$P(I,"|",4))
+ .S C=$S(R=1!(R=3):"#FF0000",X=Y:"#CC3333",R=2:"#5555A0",1:"")
+ .S Z=$S(R:"Лимит "_$S(R=3:"договора ",1:"")_"превышен",1:"Остаток лимита")
+ .D WLPC("pac_limit",Z,"",$S(R:X_"/"_$P(I,"|",R+1),X=Y:"0/"_Y,1:(Y-X)_" из "_Y),0,2,C)
+ 
+ D W^RWU("</inf></mhist></nb_console>")
+ D C^RWU
+ Q
+LPCLT(N,FRM) ; ЗАГРУЗКА ПАСПОРТНОЙ ЧАСТИ ПАЦИЕНТА
+ N DH,R,I,K,C,DG,X,Z,Y,ALR,ALRV,DGL
+ S N=+N,DH=+$H,(ALR,ALRV)=""
+ S HFL=$$LCL^NUSER("epr","htitlefl")
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<"_FRM_"><inf>")
+ I '$D(^BTN(N)) D WC^RWU("<field name=""pac_f"" title=""Фамилия""/></inf>") G LPCLe
+ S C="<item data="""
+ D WLPC("pac_f","Фамилия","",$$GET^IPAC(N,"fiof",DH))
+ D WLPC("pac_io","Имя, Отчество","",$$GET^IPAC(N,"fioi",DH)_" "_$$GET^IPAC(N,"fioo",DH))
+ S R=$$GET^IPAC(N,"pol",DH)
+ D:R'="" WLPC("pac_sex","Пол","",$S($$CHKSPR^ISPRAV("gender"):$$NAME^ISPRAV("gender",R),R=2:"Ж",1:"М")),WLPC("pac_pol","","",$S(R=2:"Ж",1:"М"),0,1)
+ S R=$$GET^IPAC(N,"datar",DH)
+ D:$L(R) WLPC("pac_born","Дата рождения","",$$DT^DTUTL(R))
+ S DG=$$GET^IPAC(N,"stc",DH),K=$$GET^IPAC(N,"cntstc",DH)
+ S:K="" K=$S($$GET^IPAC(N,"stc2",DH)'="":3,$$GET^IPAC(N,"stc1",DH)'="":2,1:"")
+ D GETDLST^IGRNL(N,DH,"DGL") ; договора по ГП
+ K:DG'="" DGL(DG) 
+ D:$L(DG)!$L(K)!$D(DGL)
+ .D WLPCH("pac_dog","Договор",0,0,$S(+K<2&('$D(DGL)):"",1:"singlehref"))
+ .I $L(DG) D WC^RWU(C_DG_""" title="""_$$TKAV^TXTU($$NAME^IINSC(DG))_"""/>")
+ .S K=K-1
+ .F K=1:1:K S R=$$GET^IPAC(N,"stc"_K,DH) I R'="" D WC^RWU(C_R_""" title="""_$$TKAV^TXTU($$NAME^IINSC(R))_"""/>") K DGL(R)
+ .S R="" F  S R=$O(DGL(R)) Q:R=""  D WC^RWU(C_R_""" title="""_$$TKAV^TXTU($$NAME^IINSC(R))_" (по Г.П.)""/>")
+ .D WC^RWU("</field>")
+ I $$GET^IPAC(N,"ofor",DH)'=1 D WLPC("ofor","Оформление","",$$GETE^IPAC(N,"ofor",DH))
+ S R=$$GET^IPAC(N,"dog_from",DH)
+ D:$L(R) WLPC("pac_dfrom","Срок с","",$$DT^DTUTL(R),1,,$S(R>DH:"#FF0000",1:""))
+ S R=$$GET^IPAC(N,"dog_to",DH)
+ D:$L(R) WLPC("pac_dto","Срок по","",$$DT^DTUTL(R),,$S(R<DH:"#FF0000",1:""))
+ S R=$$GET^IPAC(N,"polis",DH)
+ D:$L(R) WLPC("pac_polis","Полис","",R)
+ S R=$$GET^IPAC(N,"work",DH)
+ D:$L(R) WLPC("pac_work","Место работы","",$G(^M(5,+R)))
+ S R=$$GET^IPAC(N,"prog",DH)
+ D WLPCL("pac_prog","Программы","","DGNPINF^NFNPAC")
+ F I=1:1 S X=$P(R,"|",I) Q:X=""  D
+ .S Z=$$TKAV^TXTU($$OWF^TXTU($$NAME^IMPRP(X),32))
+ .S X=$$TKAV^TXTU(X)
+ .D WC^RWU(C_X_""" title="""_$S(Z="":X,1:Z)_"""/>")
+ D:R="" WC^RWU(C_""" title=""Не определены""/>")
+ D WC^RWU("</field>")
+ S R=$$GET^IPAC(N,"status",DH)
+ D:$L(R)
+ .D WLPCH("pac_stat","Статусы")
+ .F I=1:1 S X=$P(R,"|",I) Q:X=""  D
+ ..S Z=$$TKAV^TXTU($$OWF^TXTU($G(^M(1,X)),36))
+ ..D WC^RWU(C_X_""" title="""_X_" "_Z_"""/>")
+ .D WC^RWU("</field>")
+ S R=$$NOW^IBILL(N)
+ D:R'=0 WLPC("pac_deposit","Состояние счета","",$S(R="":"не используется",1:R),$S(I>0:1,1:0))
+ S R=$$GET^IPAC(N,"text",DH)
+ D:$L(R) WLPC("pac_comm","Комментарий","",R)
+LPCLe D W^RWU("</inf></"_FRM_"></nb_console>")
+ D C^RWU
+ Q
+CHKPAC ; Проверка реквизитов пациента
+ I $S($$GET^IPAC(N,"state",DH)["eprvw":1,1:$$FLinFL^TXTU($$LCL^IUSER("epr","eprvw"),$$GET^IPAC(N,"stc",DH))) S WRN=$S(WRN="":"",1:WRN_CR)_"Внимание, Вы в праве просматривать данную историю только в рамках приема."_CR_"Все Ваши действия будут записаны."
+ I '+$$LCL^NUSER("epr","chk-pac"),'$G(^cfg("epr-chk-pac")) Q 
+ S Z=""
+ S:$$GET^IPAC(N,"pol",DH)="" Z="Пол"
+ S:$$GET^IPAC(N,"datar",DH)="" Z=Z_$S(Z="":"",1:CR)_"Дата рождения"
+ S:$L(Z) ALR=$S(ALR="":"",1:ALR_CR)_"У пациента не заполнены поля:"_CR_Z
+ Q
+CHKPRP(N,DGN,OT,VR,SP,DT) ; Предоплатный пац. должн быть в расписании
+ Q:$G(OT)=""  Q:$G(VR)=""  Q:$G(SP)="" 
+ S:$G(DGN)="" DGN=$$GET^IPAC(N,"stc",DT)
+ Q:$$GET^IINSC(DGN,"dvid",DT)'=1  ; не предоплатный
+ S SP=$S($G(^cfg("doc-rasp-prp","nosp")):"",1:SP)
+ S OT=$S($G(^cfg("doc-rasp-prp","nootd")):"",1:OT)
+ Q:$$PACINV^IRASP2(N,+$$^I("ilpu"),OT,VR,SP,DT) 
+ S ALR=$S(ALR="":"",1:ALR_CR)_"Данный пациент к Вам не записан."
+ Q
+CHKRASP(N,OT,VR,SP) ; Пац. должн быть в расписании
+ Q:$G(OT)=""  Q:$G(VR)=""  Q:$G(SP)="" 
+ S SP=$S($G(^cfg("doc-rasp-only","nosp")):"",1:SP)
+ S OT=$S($G(^cfg("doc-rasp-only","nootd")):"",1:OT)
+ N AV,H
+ S AV=$O(^PLPUI("v",VR,"")),H=+$H ; Врач в кабинете
+ I AV'="",$$PACINV^IRASP2(N,+$$^I("ilpu"),OT,AV,SP,H) Q 
+ Q:$$PACINV^IRASP2(N,+$$^I("ilpu"),OT,VR,SP,H) 
+ S AV=$G(^JOB(%JOB,"epr-cowrk"))
+ I AV'="",$$PACINV^IRASP2(N,+$$^I("ilpu"),OT,VR,SP,H)
+ S ALR=$S(ALR="":"",1:ALR_CR)_"Данный пациент к Вам не записан."
+ Q
+CHKRASPA(N,DT) ; Пациент должен быть записан хоть куда в клинику
+ Q:N="" 
+ Q:$L($$PACFTM^IRASP2(N,+$$^I("ilpu"),DT)) 
+ S ALR=$S(ALR="":"",1:ALR_CR)_"Данный пациент не внесен в расписание приемов."
+ Q
+CHKVR(VR,DT) ; Проверка реквизитов врача
+ N R,A
+ S R=$$LCL^IUSER("epr","clpuvr") Q:'R
+ Q:$$USEInLPU^IKADRY(VR,+$$^I("ilpu"),DT)
+ S A="Вы принимаете пациента не в своем филиале."
+ I R=1 S WRN=$S(WRN="":"",1:WRN_CR)_A Q
+ S ALR=$S(ALR="":"",1:ALR_CR)_A
+ S:R=2 ALRV=$S(ALRV="":"",1:ALRV_CR)_A
+ Q
+isH(FL) ; Поле скрыто
+ Q:"|"_HFL_"|"[("|"_FL_"|") 1
+ Q 0
+isAF(FL) ; Доп. поле
+ Q:"|"_AFL_"|"[("|"_FL_"|") 1
+ Q 0
+WLPC(NM,TIT,X,TXT,LINE,HIDE,COLOR) ; Write field
+ S:$$isH(NM) HIDE=1
+ S HIDE=+$G(HIDE)
+ D WC^RWU("<field name="""_NM_""" title="""_TIT_""""_$S(HIDE=1:" visible=""no""",HIDE=2:" visible=""yes""",1:"")_$S(+$G(LINE):" break=""no""",1:"")_$S($L($G(COLOR)):" color="""_COLOR_"""",1:"")_">")
+ D WC^RWU("<item data="""_X_""" title="""_$$TKAV^TXTU(TXT)_"""/></field>")
+ Q
+WLPCH(NM,TIT,LINE,HIDE,MODE,CON) 
+ S:$$isH(NM) HIDE=1
+ D WC^RWU("<field name="""_NM_""" title="""_TIT_""""_$S(+$G(HIDE):" visible=""no""",1:"")_$S(+$G(LINE):" break=""no""",1:"")_$S($L($G(MODE)):" mode="""_MODE_"""",1:"")_$S($G(CON)="":"",1:" context="""_CON_"""")_">")
+ Q
+WLPCL(NM,TIT,LINE,LNK) ; w. Href Link
+ D WC^RWU("<field name="""_NM_""" title="""_TIT_""""_$S(+$G(LINE):" break=""no""",1:"")_$S($L($G(LNK)):" href="""_LNK_"""",1:"")_">")
+ Q
+WLPTs(NM,TXT) 
+ D WC^RWU("<field name="""_NM_""" visible=""no"">")
+ D WC^RWU("<item title="""_$$TKAV^TXTU(TXT)_"""/></field>")
+ Q
+WLPTsel(NM,TXT) 
+ D WC^RWU("<field name="""_NM_""" visible=""no"">")
+ D WC^RWU("<selected data="""_$$TKAV^TXTU(TXT)_"""/></field>")
+ Q
+CARD(ID,OT,TN,SP,DD) ; Отметка смарт-карты
+ S L=$G(^CARD(ID)) I L="" Q
+ N TIP S TIP=$P(L,"|",1)
+ I TIP="P" D MSG^RWU(L) ; G CRDCHK -> SELNIB
+ I TIP="O" D MSG^RWU("P|"_$P(L,"|",2,255)) Q
+ I TIP="D" S A=$P(L,"|",2),SPE=$$SPEC^IKADRY(TN),OTD=$$OTD^IKADRY(TN) D MSG^RWU("D|"_$$FIO^IKADRY(TN)_"|"_A_"|"_SPE_"|"_OTD_"|4") Q  ; todo
+ Q
+CRDCHK  ; Отметка в расписании
+ N HH,TT,LPU,LOG
+ S HH=$$DIH^DTUTL(DD),NI=$P(L,"|",2),TT="",LPU=+$$^I("ilpu")
+ S LOG=$$USR^IUSER()
+ F  S TT=$O(^DSH(LPU,OT,TN,SP,HH,TT)) Q:TT=""  D ; todo - multiple specs
+ .I $P($G(^(TT)),"|",1)=NI S ^(TT,"c")=$H_"|"_LOG
+ Q
+clrENV ; Clear patient environment
+ N A
+ F A="ni","otd","vr","spec","dt","dgn","naz" K ^JOB(%JOB,"epr-"_A)
+ Q
+SELNIB(NI,OT,VR,SP,NAZ,DGN,DT) ; Пациент пришел
+ ; NAZ - id назначения
+ D clrENV
+ I '$$EXIST^IPAC(NI) D msgWRONG("Вы не можете начать работу с данным пациентом") Q 
+ I '$$EXIST^YIKADRY(VR) D msgWRONG("Вы не в праве работать с пациентами") Q
+ N TT,LPU,SPP,A,ST,ALR,Z,INF,TD,TP,wI,ED,PI,LP,ALP,ALV,X,AL
+ S DT=$$DIH^DTUTL($G(DT))
+ S ST=$$STOM^IEDE(OT,SP),NAZ=$G(NAZ),DGN=$G(DGN),LPU=+$$^I("ilpu")
+ S (INF,ALR,QST,PI)="",wI=0
+ S:OT="" OT=$$OTD^IKADRY(VR)
+ S:DGN="" DGN=$$GET^IPAC(NI,"stc",DT)
+ S:NAZ="-" NAZ=""
+ S ALP=$$GET^IPAC(NI,"al",DT)
+ S AL=$$LCL^IUSER("epr","acclevel")
+ I $G(^JOB(%JOB,"card-ni"))=NI S AL=9 ; high level
+ I ALP>0,ALP>AL,$S(NAZ="":1,$G(^cfg("erp","alwnaz")):0,1:1) D msgWRONG("У Вас нет доступа к данной карте.") Q  ; TODO - apin
+ S A=$G(^cfg("epr","no-prev-month"))!$$LCL^IUSER("epr","no-prev-month")
+ I A,+$H>DT,$$MONTH^DTUTL($H)'=$$MONTH^DTUTL(DT) D msgWRONG("Вы не можете принимать пациента в прошедшем месяце.") Q 
+ I $G(^cfg("hosp","eprchk")),$$STAC^IEDE(OT,SP),'$$IsNIB^NHOSP(NI,DT) D msgWRONG("Пациент не внесен в журнал госпитализаций.") Q 
+ S TP=$$GET^IINSC(DGN,"dvid",DT)
+ S A=$G(^cfg("epr","nu-pofor"))
+ I A'="",TP'=3,A=$$GET^IPAC(NI,"ofor",DT) D msgWRONG("Вы не можете начать работу с данным пациентом") Q 
+ ; Check conditions
+ S PI=""
+ I DGN'="" S PI=$$PIDX^IPAC(NI,DGN,DT)
+ I DGN'="",'$G(^cfg("epr","nchk-udgn")),$$GET^IINSC(DGN,"use")=0 D msgWRONG("Внимание, договор находится в архиве.") Q
+ I DGN'="",'$G(^cfg("epr","nchk-abon")),$$IsABON^NTPOLIS(DGN) S A=$$GET^IPAC(NI,"polis"_PI,DT) I $$EXIST^IPOLIS(NI,A),'$$ALLOW^IPOLIS(NI,A) D msgWRONG("Вы не можете обслуживать пациента по этому абонементу.") Q 
+ I DGN'="",$$GET^IINSC(DGN,"wprg",DT),$$GET^IPAC(NI,"prog"_PI,DT)="",$$GET^IPAC(NI,"ofor",DT)'=1 D msgWRONG("Вы не можете обслуживать пациента - у него не указаны программы.") Q 
+ I $$LCL^NUSER("epr","rasp-come")!$G(^cfg("epr","rasp-come")),'$$IsCOME^IRASP2(NI,LPU,VR,DT) D msgWRONG("У пациента нет отметки о приходе в клинику.") Q
+ S A=1
+ I $$LCL^NUSER("epr","rasp-prp")!$G(^cfg("doc-rasp-prp")) D CHKPRP(NI,DGN,OT,VR,SP,DT) S A=0
+ I A,$$LCL^NUSER("epr","in-opersh"),$$IsNIB^NOPERSH(NI,DT) S A=0 ; TODO
+ I A,$$LCL^NUSER("epr","in-kfund"),$$IsNIB^NKFUND(NI,DT) S A=0
+ I A,$$LCL^NUSER("epr","in-cms"),$$IsNIB^ICMS(NI,DT) S A=0
+ I A,$$LCL^NUSER("epr","in-pnd"),$$IsNIB^NPND(NI,DT) S A=0
+ I A,$$LCL^NUSER("epr","rasp-any") D CHKRASPA(NI,DT) S A=0
+ 
+ S X=$$IsNIB^ICMS(NI,DT,,,"epr",1)
+ I $P(X,"|",1) N X1 S X1=$G(^CMM("start",+$P(X,"|",5),"data")) S:X1'="" INF=$S(INF="":X1,1:INF_CR_X1) D SETST^ICMS("P",$P(X,"|",2,4),2)
+ 
+ I $L(NAZ),$L($$PATTERN^INAZN(NAZ)),+$$LCL^NUSER("epr","pnaz-pbill"),'$$IsPAY^INAZN(NAZ),$S($G(^cfg("epr-anow-pnaz")):+$H'=$$fromDT^INAZN(NAZ),1:1),$$NOW^IBILL(NI)<0 S ALR=$S(ALR="":"",1:ALR_CR)_"Прием по выбранному назначению возможен только при положительном состоянии счета пациента."
+ D DO^ITRIG("epr","selnibchk")
+ I $L(ALR) D msgWRONG(ALR) Q 
+ ; Start select
+ D SS^IUSER("epr","apin",$$GET^IPAC(NI,"apin"))
+ S ^JOB(%JOB,"epr-ni")=NI
+ S ^("epr-otd")=OT,^("epr-vr")=VR,^("epr-spec")=SP
+ S ^("epr-dgn")=DGN,^("epr-naz")=NAZ,^("epr-dt")=DT
+ S ^("epr-stc")=DGN,^JOB(%JOB,"epr-polis")=$$GET^IPAC(NI,"polis"_PI,DT)
+ K ^JOB(%JOB,"epr-cnaz")
+ S SPP=$G(^DSHI("sp",LPU,SP,OT_"|"_VR))
+ S TT="" F  S TT=$O(^DSH(LPU,OT,VR,SPP,DT,TT)) Q:TT=""  I $P($G(^(TT)),"|",1)=NI,'$D(^(TT,"c")) Q 
+ D VRSTART^IEVLOG(LPU,OT,VR,NI,DT)
+ D CNG^IRASP2(DT,LPU,OT,SPP,VR) 
+ S A=$G(^DSH(LPU,OT,VR,SPP,DT)) G:A="" SELNIB1
+ S:'$G(^cfg("rasp","fixfree")) $P(A,"|",4)="p",^DSH(LPU,OT,VR,SPP,DT)=A
+ S A=+$$LCL^NUSER("epr","rasp-info-ovt")
+ I A,TT'="",+$H=DT,$P($H,",",2)-TT>A!($O(^DSH(LPU,OT,VR,SPP,DT,TT))-$P($H,",",2)>A) S INF="Вы принимаете пациента не в его время !",wI=1
+ I $L(NAZ),NAZ'="*",$$LCL^NUSER("epr","swnazvr") S QST=$S(QST="":"",1:QST_CR_CR)_"Вы принимаете пациента по направлению от "_$$GET^PADEJ($$FIO^IKADRY($$fromVRI^INAZN(NAZ))),wI=1
+SELNIB1 D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<mhist>")
+ S R=$$CHKEV(NI,OT,VR,SP,NAZ,+$H) ; события
+ D W^RWU("<bt_pac_alert visible="""_$S(R:"yes",1:"no")_"""/>")
+ S A=$S($$LCL^IUSER("epr","ro_nzub"):" style=""8""",1:"")
+ S R=$S($$LCL^IUSER("epr","clr_nzub"):" userdata=""2""",1:" userdata=""1""")
+ D W^RWU("<serv_nz visible="""_$S(ST:"yes",1:"no")_""""_A_R_"/>")
+ S A=""
+ I NAZ="",$$LCL^NUSER("epr","autonaz") S A="mkfnaz.frm",wI=1
+ ; выбор программ
+ S Z=$$GET^IPAC(NI,"prog"_PI,DT)
+ I Z["|",$G(^cfg("epr","sel-unq-prg")),$$IsUn^IMPRP(Z,DT) S A="mhselprg.frm",wI=1
+ ; Используемый диагноз
+ S TT=$S(NAZ="":"",NAZ="*":"",$$LCL^NUSER("epr","nazdiag"):$$DIAG^INAZN(NAZ),1:"")
+ S TT=$S(TT'="":TT,$$LCL^NUSER("epr","lastdiag")=1:$$CURDIAG(NI,VR,DT),1:"")
+ S:TT'="" wI=1
+ ; Неподписан док-т за сегодня
+ S Z=$$LASTUSB^YIMH(NI,VR,+$H,$G(^cfg("epr","cm-lasted"))) S:$L(Z) wI=1
+ ; Док-т ЭМК по умолчанию
+ S:$G(^cfg("epr","defvdoc"))'="" wI=1
+ D DO^ITRIG("epr","selnib")
+ D:wI!(TP'=3) 
+ .D W^RWU("<inf>")
+ .D:$L(TT) WLPTsel("diag",TT),WLPTsel("diagt",$$NAME^YMKB10(TT))
+ .D:$L(A) WLPTsel("exec",A)
+ .D:$L(INF) WLPTsel("msg",INF)
+ .D:$L(QST) WLPTsel("quest",QST_CR_CR_"Продолжить ?")
+ .D:TP'=3 WLPTsel("nokss",1)
+ .D:$L(Z) WLPTsel("inedit",Z)
+ .S Z=$G(^cfg("epr","defvdoc")),Z=$S($E(Z,1,3)="tp:":Z,1:$$CHKTP^IEPR(NI,Z,1))
+ .D:Z'="" WLPTsel("defvdoc",Z) 
+ .D W^RWU("</inf>")
+ S R=$$LCL^NUSER("lcl","ddf-view")
+ D:R'="" W^RWU("<hist_dates title="""_$$DT^DTUTL($H-R)_"-"_$$DT^DTUTL(+$H)_"""/>")
+ D W^RWU("</mhist></nb_console>"),C^RWU
+ D REMDSHU
+ Q
+SELVNIB(NI,OT,VR,SP) ; Выбор пациента для просмотра
+ N Z,R,T,DT,AL,ALP
+ I '$$EXIST^IPAC(NI) D msgALERT("Вы не можете начать работу с данным пациентом") Q 
+ S DT=+$H
+ S AL=$$LCL^IUSER("epr","acclevel"),ALP=$$GET^IPAC(NI,"al",DT)
+ I $G(^JOB(%JOB,"card-ni"))=NI S AL=9 ; high level
+ I ALP>0,ALP>AL D msgALERT("У Вас нет доступа к данной карте.") Q  ; TODO - apin
+ 
+ ; !ADD
+ N ALR S ALR=""
+ D:$G(^cfg("doc-rasp-only"))!$$LCL^IUSER("epr","rasp-only") CHKRASP(NI,OT,VR,SP)
+ I $L(ALR) D msgWRONG(ALR) Q 
+ 
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<mhist>")
+ S Z=$$LASTUSB^YIMH(NI,VR,+$H)
+ S T=$G(^cfg("epr","defvdoc"))
+ D:$L(Z)!$L(T)
+ .D W^RWU("<inf>")
+ .D:Z'="" WLPTsel("inedit",Z)
+ .S T=$S(T="":"",$E(Z,1,3)="tp:":T,1:$$CHKTP^IEPR(NI,T,1))
+ .D:T'="" WLPTsel("defvdoc",T) 
+ .D W^RWU("</inf>")
+ S R=$$LCL^NUSER("lcl","ddf-view")
+ D:R'="" W^RWU("<hist_dates title="""_$$DT^DTUTL(DT-R)_"-"_$$DT^DTUTL(DT)_"""/>")
+ D W^RWU("</mhist></nb_console>"),C^RWU
+ 
+ D SS^IUSER("epr","apin",$$GET^IPAC(NI,"apin"))
+ S ^JOB(%JOB,"epr-ni")=NI
+ S ^("epr-otd")=OT,^("epr-vr")=VR,^("epr-spec")=SP
+ 
+ D REMDSHU ; отрегистрировать поиск
+ Q
+CURDIAG(NI,VR,DT) 
+ N DI
+ S DI=$$LASTDIA^IUSL(NI,VR,"",DT,1)
+ Q:$L(DI) DI
+ N D,I S D=DT-1
+ F  S D=$O(^EPRI("nd",NI,D)) Q:D=""!(D'=DT)  D  Q:D=""
+ .S I=""
+ .F  S I=$O(^EPRI("nd",NI,D,I)) Q:I=""  D:$P(^(I),"|",2)=VR  Q:I=""
+ ..Q:'$D(^EPRD(NI,I,"diag"))
+ ..Q:^("diag")="" 
+ ..S DI=$P(^("diag")," ",1)
+ ..I $$CHECK^YMKB10(DI) S (D,I)="" ; found !
+ ..E  S DI=""
+ Q DI
+msgWRONG(TXT) ; 'Wrong' message
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<mhist><inf>"),WLPTs("wrong",TXT),W^RWU("</inf></mhist></nb_console>"),C^RWU 
+ Q
+msgALERT(TXT) ; 'Alert view' message
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<mhist><inf>"),WLPTs("alertv",TXT),W^RWU("</inf></mhist></nb_console>"),C^RWU 
+ Q
+CHKEV(NI,OT,TN,SP,NAZ,DT) 
+ N A
+ S A=0
+ I $L(NAZ),$$IsAddInf^INAZN(NAZ) S A=1 ; назначения
+ I 'A,$$ISEV^NCMS(NI,DT) S A=1 ; задачи
+ I 'A,$$CHKUSB^YIMH(NI,TN) S A=1 ; раб.документы
+ ; I 'A ; напоминалки врача
+ Q A
+LSTEV(NI,OT,TN,SP,NAZ,DT) ; Список событий
+ N R,X
+ D OWF^RWU(".txt")
+ S R=""
+ I $L(NAZ) S R=$$DIAG^INAZN(NAZ),X=$$COMM^INAZN(NAZ) S:$L(R) R=$$NAMET^YMKB10(R) I $L(R)!$L(X) D WC^RWU("RUN_MREPORT{nazninf.frm}|Примечание к направлению"_$C(9,9)_X_$S(R="":"",1:$S(X="":"",1:", ")_"диагноз: "_R)) S R=1
+ S R=$$LstLT^NCMS(NI,DT,"",$S(R=1:2,1:1))
+ S X=$$CNTUSB^YIMH(NI,TN)
+ I X D WC^RWU($S(R:CR,1:"")_"mhist_hist_work_old|Неподписанные документы"_$C(9,9)_"Найдено документов - "_X)
+ D C^RWU
+ Q
+MKNAZ(NI,VR) 
+ N TO,IN
+ S TO=$G(^JOB(%JOB,"epr-vr"))
+ I $G(^cfg("ed","anaz-real")),'$$IsVR^IUSL(NI,VR) D MSG^RWU("Пациент не посещял данного врача.") Q 
+ S IN=$$MKFTO^INAZN(NI,VR,TO,1) ; сразу выполнено
+ ; todo - events
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<mhist>")
+ D W^RWU("<inf>"),WLPTsel("napr",IN),W^RWU("</inf>")
+ D W^RWU("</mhist></nb_console>"),C^RWU
+ Q
+USELNIB(NI,OT,TN,SP,DT) ; Пациент ушел
+ Q:'$D(^BTN(NI)) 
+ N TT,LPU,A,SPP
+ S DT=$$DIH^DTUTL($G(DT))
+ S LPU=+$$^I("ilpu"),SPP=$G(^DSHI("sp",LPU,SP,OT_"|"_TN))
+ D clrENV
+ Q:SPP=""  
+ I '$$IsVR^IUSL(NI,TN,DT,1),'$$CHKDT^IEPR(NI,TN,DT,1) G USELNIBe ; нет ничего подписанного
+ S A=$G(^DSH(LPU,OT,TN,SPP,DT)) Q:A=""  
+ S:'$G(^cfg("rasp","fixfree")) $P(A,"|",4)="",^DSH(LPU,OT,TN,SPP,DT)=A
+ S TT=""
+ F  S TT=$O(^DSH(LPU,OT,TN,SPP,DT,TT)) Q:TT=""  I $P($G(^(TT)),"|",1)=NI S A=$G(^(TT,"c")) I $L(A) S $P(A,"|",3)=$H,^("c")=A Q 
+USELNIBe 
+ D VRETM^IEVLOG(LPU,OT,TN,+$H,NI)
+ D CNG^IRASP2(DT,LPU,OT,SPP,TN)
+ I $G(^JOB(%JOB,"epr-f","t"))=2 D REGDSHU(^(1)) Q ; если был поиск
+ D REMDSHU
+ Q
+END ; Конец работы с ЭИБ
+ D REMDSHU
+ Q
+PRNBILL(VR,OT,SP,NIB,DT) ; Форма общей кассовой квитанции
+ S DT=$$DIH^DTUTL(DT)
+ Q:NIB="" 
+ D PRNBILL^NKSS(NIB,DT_"@@"_VR)
+ Q
+SETDSHF(OT,TN,SP,DT,VAL) ; Установить статус "свободного кабинета"
+ N LPU,SPP
+ S DT=$$DIH^DTUTL($G(DT))
+ S LPU=+$$^I("ilpu"),SPP=$G(^DSHI("sp",LPU,SP,OT_"|"_TN))
+ I $D(^VICC),$$chkvr^NVICC(TN,VAL) Q  ; not handle
+ Q:SPP=""  
+ Q:'$D(^DSH(LPU,OT,TN,SPP,DT)) 
+ S $P(^DSH(LPU,OT,TN,SPP,DT),"|",4)=$S($G(VAL):"f",1:"")
+ D CNG^IRASP2(DT,LPU,OT,SPP,TN)
+ Q
+SETVR(VR,OT,SP,DT,MS) ; Установить нового сотрудника в рамках сессии
+ I '$$LCL^IUSER("epr","selvr") D MSG^RWU("0") Q 
+ S OT=$G(OT),SP=$G(SP)
+ D SETSKDR^IUSER(VR,OT,SP)
+ D:$G(MS) MSSET^NEDE(OT,VR,SP,$G(DT),MS)
+ Q
+SETCO(CO) ; Установить соисполнителя
+ ; TODO - права
+ Q:CO="" 
+ S ^JOB(%JOB,"epr-cowrk")=CO
+ Q
+NEWPAC(DT) ; Пациенты с новыми документами на дату
+ S DT=$$DIH^DTUTL(DT)
+ D OWF^RWU(".txt")
+ D C^RWU
+ Q
+UPDDSH(VR) ; Обновить расписание у врача
+ ; N X S X=%JOB,%JOB=787
+ D UPDI^YISYNC("UPDDSHp^YIMHP",VR)
+ ; S %JOB=X
+ Q
+UPDDSHp(PJOB) ; Do sync update
+ Q:'$D(^JOB(PJOB,"epr-f")) 
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<mhist><pfind>")
+ D FINDsys^NRASP(^JOB(PJOB,"epr-f",1),^(2),^(3),^(4),^(5))
+ D W^RWU("</pfind></mhist><run>mhist_pfind_color(0,0);"_CR_"</run></nb_console>")
+ D C^RWU
+ Q
+REGDSHU(VR) ; Register sync
+ D REGID^YISYNC("UPDDSHp^YIMHP","("""_%JOB_""")",VR)
+ Q
+REMDSHU ; Unregister sync
+ D UREG^YISYNC("UPDDSHp^YIMHP")
+ K ^JOB(%JOB,"epr-f")
+ Q
+FNDPOS(STR,VR,DS,DE,OTX) ; Поиск в посещениях
+ N LP,OT,NI,P,TM,A,DT,CNI,SL,R,LST,X
+ S LP=+$$^I("ilpu"),OT="",STR=$P(STR," ",1) ; TODO STR
+ S STR=$$LU^TXTU(STR),CNI=$$CHECK^IPAC(STR),SL=$L(STR),OTX=$G(OTX)
+ D OWF^RWU(".txt")
+ D WC^RWU("№ И.Б.|Фамилия|Имя|Отчество|Договор|Время,Дата")
+ G:OTX'="" FNDPOSo
+ F  S OT=$O(^VRPOS(LP,OT)) Q:OT=""  S DT=DS-1 F  S DT=$O(^VRPOS(LP,OT,VR,DT)) Q:DT=""!(DT>DE)  S NI="" F  S NI=$O(^VRPOS(LP,OT,VR,DT,NI)) Q:NI=""  D FNDPOSp
+ D C^RWU
+ Q
+FNDPOSo ; find by OTX
+ S DT=DS-1,OT=OTX
+ F  S DT=$O(^VRPOS(LP,OT,VR,DT)) Q:DT=""!(DT>DE)  S VR="" F  S VR=$O(^VRPOS(LP,OT,VR)) Q:VR=""  S NI="" F  S NI=$O(^VRPOS(LP,OT,VR,DT,NI)) Q:NI=""  D FNDPOSp
+ D C^RWU
+ Q
+FNDPOSp ; proc for FNDPOS
+ S TM=$O(^(NI,""),-1) Q:TM="" 
+ S X=$P(^(TM),"~",1)
+ Q:$D(LST(NI)) 
+ I CNI,SL,STR'=NI Q 
+ S P=$$FIO^IPAC(NI,DT)
+ I 'CNI,SL,$$LU^TXTU(P)'[STR Q 
+ I '$$IsVR^IUSL(NI,VR,DT),$$CHKDT^IEPR(NI,VR,DT)="" Q  ; ни док-в ни услуг
+ S LST(NI)=""
+ S A="|"_$$GETE^IPAC(NI,"stc")_"|"
+ S A=A_$$TM^DTUTL(TM)_$S(DS=DE:"",1:","_$$DT2^DTUTL(DT))
+ S:X'="" A=A_"*"
+ D WC^RWU(CR_NI_"|"_$P(P," ",1)_"|"_$P(P," ",2)_"|"_$P(P," ",3)_A)
+ Q
+FNDUSBS(STR,VR,DS,DE) ; Поиск в посещениях и неподписанных документах
+ N LP,LPX,OT,NI,P,TM,A,CNI,SL
+ S LPX=$S($$LCL^IUSER("epr","find-usbs-al"):"",1:+$$^I("ilpu"))
+ S OT="",STR=$P(STR," ",1) ; TODO STR
+ S STR=$$LU^TXTU(STR),CNI=$$CHECK^IPAC(STR),SL=$L(STR)
+ D OWF^RWU(".txt")
+ D WC^RWU("№ И.Б.|Фамилия|Имя|Отчество|Оформ.|Договор|Срок")
+ S LP="" F  S LP=$O(^VRPOS(LP)) Q:LP=""  D:(LPX="")!(LPX=LP)
+ .F  S OT=$O(^VRPOS(LP,OT)) Q:OT=""  S DT=DS-1 F  S DT=$O(^VRPOS(LP,OT,VR,DT)) Q:DT=""!(DT>DE)  S NI="" F  S NI=$O(^VRPOS(LP,OT,VR,DT,NI)) Q:NI=""  D
+ ..S TM=$O(^(NI,""),-1)
+ ..I CNI,SL,STR'=NI Q 
+ ..Q:'$$CHKUSBDT^YIMH(NI,VR,DT) 
+ ..S P=$$FIO^IPAC(NI,DT)
+ ..I 'CNI,SL,$$LU^TXTU(P)'[STR Q 
+ ..S A="|"_$$GETE^IPAC(NI,"stc")_"|"_$$TM^DTUTL(TM)_$S(DS=DE:"",1:","_$$DT2^DTUTL(DT))
+ ..D WC^RWU(CR_NI_"|"_$P(P," ",1)_"|"_$P(P," ",2)_"|"_$P(P," ",3)_A)
+ D C^RWU
+ Q
+FNDUSL(STR,DS,DE,VR,OTD) ; Поиск в услугах
+ N LP,LPX,OT,NI,P,TM,A,CNI,SL,ID,LL
+ S LPX=$S($$LCL^IUSER("epr","find-usbs-al"):"",1:+$$^I("ilpu"))
+ S OT="",STR=$P(STR," ",1) ; TODO STR
+ S STR=$$LU^TXTU(STR),CNI=$$CHECK^IPAC(STR),SL=$L(STR)
+ D OWF^RWU(".txt")
+ D WC^RWU("№ И.Б.|Фамилия|Имя|Отчество|Оформ.|Договор|Посещение")
+ S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ .S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ..S NI=$$GETNIB^IUSL(VR,DT,OT,ID) Q:NI=""  S LL(NI)=DT
+ S NI="" F  S NI=$O(LL(NI)) Q:NI=""  D 
+ .S DT=LL(NI)
+ .S P=$$FIO^IPAC(NI,DT)
+ .I 'CNI,SL,$$LU^TXTU(P)'[STR Q 
+ .S A="|"_$$GETE^IPAC(NI,"stc")_"|"_$$DT2^DTUTL(DT)
+ .D WC^RWU(CR_NI_"|"_$P(P," ",1)_"|"_$P(P," ",2)_"|"_$P(P," ",3)_A)
+ D C^RWU
+ Q

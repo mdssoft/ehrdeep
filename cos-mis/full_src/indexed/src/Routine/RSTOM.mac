@@ -1,0 +1,175 @@
+RSTOM ; Отчеты по стоматологии [ 12/12/2016  11:15 PM ]
+POSU(DS,DE) ; Посещения и услуги
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N SSTAT,STOM,FF,xD,xK,FFP,L
+ S L=$G(^cfg("stom-otd")) S:L'="" STOM(L)=""
+ M STOM=^cfg("stom-otd")
+ K ^BUF($J)
+ D MKALLPRC^IUSLSC(DS,DE,1,"USLPROC^RSTOM","USLERRP^RSTOM",'+$$FR^I())
+ S L="" F  S L=$O(SSTAT(L)) Q:L=""  S FF="" F  S FF=$O(SSTAT(L,FF)) Q:FF=""  D
+ .S xK=$G(SSTAT(L))
+ .S $P(xK,"|",1)=$P(xK,"|",1)+$G(SSTAT(L,FF,1))
+ .S $P(xK,"|",2)=$P(xK,"|",2)+$G(SSTAT(L,FF,2))
+ .S $P(xK,"|",3)=$P(xK,"|",3)+$G(SSTAT(L,FF,3))
+ .S $P(xK,"|",4)=$P(xK,"|",4)+$G(SSTAT(L,FF,4))
+ .S $P(xK,"|",5)=$P(xK,"|",5)+$G(SSTAT(L,FF,5))
+ .S $P(xK,"|",6)=$P(xK,"|",6)+$G(SSTAT(L,FF,6))
+ .S SSTAT(L)=xK
+ D OWF^RWU(".txt")
+ D WC^RWU("За период "_$$DT^DTUTL(DS)_"-"_$$DT^DTUTL(DE)_";"_CR)
+ D WC^RWU("Филиал - сотрудник|Лиц|Первичных приемов|Повторных приемов|Услуг|Кассовых|Рекламаций")
+ S L="" F  S L=$O(SSTAT(L)) Q:L=""  D
+ .D WC^RWU(CR_$$NAME^ICONTR(L)_"|"_$G(SSTAT(L)))
+ .S FF="" F  S FF=$O(SSTAT(L,FF)) Q:FF=""  D
+ ..S xK=" - "_$$FIOSH^YIKADRY(FF)
+ ..F xD=1:1:6 S xK=xK_"|"_+$G(SSTAT(L,FF,xD))
+ ..D WC^RWU(CR_xK)
+ D C^RWU
+ K ^BUF($J)
+ Q
+USLPROC ; for callback IUSLSC
+ Q:OTD="" 
+ Q:'$D(STOM(OTD)) 
+ S L=+$G(LPU),FFP=$G(UL(U))
+ S SSTAT(L,VR,4)=$G(SSTAT(L,VR,4))+FFP
+ S:STAT=2 SSTAT(L,VR,5)=$G(SSTAT(L,VR,5))+FFP
+ S:("|"_$G(FLG)_"|")["|rkl|" SSTAT(L,VR,6)=$G(SSTAT(L,VR,6))+FFP
+ S:$D(^BUF($J,1,L,NIB))=0 ^BUF($J,1,L,NIB)="",SSTAT(L,VR,1)=$G(SSTAT(L,VR,1))+1
+ S FFP=0,xD=DT
+ I $D(^BUF($J,2,L,NIB))=0 F  Q:FFP  S xD=$O(^PNF(NIB,xD),-1) Q:xD=""  S xK="" F  S xK=$O(^PNF(NIB,xD,xK)) Q:xK=""  I $D(STOM($P(xK,"|",2))) S ^BUF($J,2,L,NIB)="",^BUF($J,3,L,VR,DT,NIB)="",FFP=1,SSTAT(L,VR,2)=$G(SSTAT(L,VR,2))+1 Q 
+ Q:FFP 
+ S:$D(^BUF($J,3,L,VR,DT,NIB))=0 ^BUF($J,3,L,VR,DT,NIB)="",SSTAT(L,VR,3)=$G(SSTAT(L,VR,3))+1
+ Q
+USLERRP ; for callback IUSLSC
+ Q
+IMPCNT(DS,DE) ; Количество имплантантов
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N SSTAT,STOM,SS,X,L,ULSTAT
+ S L=$G(^cfg("stom-otd")) S:L'="" STOM(L)=""
+ M STOM=^cfg("stom-otd")
+ S ULSTAT(19256)="",ULSTAT(19257)="",ULSTAT(19258)=""
+ ; TODO price 'cls'
+ D MKALLPRC^IUSLSC(DS,DE,1,"IUPROC^RSTOM","USLERRP^RSTOM",'+$$FR^I())
+ D OWF^RWU(".txt")
+ D WC^RWU("Клиника за период "_$$DT2^DTUTL(DS)_"-"_$$DT2^DTUTL(DE)_"|Количество|Сумма")
+ K SS S L="" F  S L=$O(SSTAT(L)) Q:L=""  D
+ .D WC^RWU(CR_$$NAME^ICONTR(L)_"|"_+$G(SSTAT(L,1))_"|"_+$G(SSTAT(L,2)))
+ .S SS(1)=$G(SSTAT(L,1))+$G(SS(1)),SS(2)=$G(SSTAT(L,2))+$G(SS(2))
+ D WC^RWU(CR_"Итого|"_+$G(SS(1))_"|"_+$G(SS(2)))
+ D C^RWU
+ Q
+IUPROC ; for callback IUSLSC
+ Q:OTD="" 
+ Q:'$D(STOM(OTD)) 
+ Q:'$D(ULSTAT(U)) 
+ S L=+$G(LPU),X=$G(UL(U))
+ S SSTAT(L,1)=$G(SSTAT(L,1))+X
+ S X=$S($D(UL(U,1)):UL(U,1),1:$$PRICEH^IPRICE(U,PRC,DT)*KSKD*X)
+ S SSTAT(L,2)=$G(SSTAT(L,2))+X
+ Q
+VPLAN(DS,DE) 
+ D OWF^RWU(".txt")
+ D WC^RWU("Сотрудник|Пациент|Сумма|Выполнено|Остаток|% Выполнения")
+ ; TODO
+ D C^RWU
+ Q
+STEPRL(DS,DE,ST,PRM,ExZ) ; Список лиц по состояниям зубов
+ N DTPL,I,J,N,D,PL,T,ID,FF,Z,ZZ,STT,STP
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S ExZ=$TR(ExZ,";\|/:-",",,,,,,")
+ S:ExZ'="" ExZ=","_ExZ_","
+ S N="" F  S N=$O(^DTYPE(N)) Q:N=""  D
+ .S PL="" F  S PL=$O(^DTYPE(N,"fields",PL)) Q:PL=""  I $G(^DTYPE(N,"fields",PL,"@tp"))="stof" S DTPL(N)=PL
+ D OWF^RWU(".txt")
+ D WC^RWU("mhist:env:pac|№ И.Б.|Ф.И.О. Пациента|Дата посещения|Номера зубов")
+ S D=DS-1 F  S D=$O(^EPRI("dt",D)) Q:D=""!(D>DE)  D
+ .S N="" F  S N=$O(^EPRI("dt",D,N)) Q:N=""  D
+ ..S Q=""
+ ..S T="" F  S T=$O(DTPL(T)) Q:T=""  D:$D(^EPRI("t",N,T))  Q:Q'="" 
+ ...S ID="" F  S ID=$O(^EPRI("t",N,T,ID)) Q:ID=""  D  Q:Q'="" 
+ ....S I=+$P($G(^EPR(N,ID,"dt")),"|",1)
+ ....Q:I<DS  Q:I>DE 
+ ....S FF=$G(^EPRD(N,ID,DTPL(T))) Q:FF=""  
+ ....F I=1:1:32 S Z=$P(FF,",",I),ZZ=$P(Z,"(",1),Z=$P($P(Z,"(",2),")",1) Q:Z=""  D  Q:Q'="" 
+ .....I ExZ'="",ExZ[(","_ZZ_",") Q  ; искл зубы
+ .....F J=1:1:99 S STT=$P(Z,";",J) Q:STT=""  S STT=$P(STT,":",2),STP=$P(STT,"=",2),STT=$P(STT,"=",1) I STT=ST,PRM=""!(PRM=STP) S Q=$S(Q="":"",1:Q_",")_ZZ
+ ..Q:Q=""
+ ..D WC^RWU(CR_N_"|"_N_"|"_$$FIO^IPAC(N)_"|"_$$DT2^DTUTL(D)_"|"_Q) ;$$NZLN^ISTOM(Q))
+ D C^RWU
+ Q
+NZCTR(DS,DE,VRx,LPU) ; Контроль планов лечения
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N ID,R,U,I,LPU,K,Z,A,NI,S,P,VR,SP,OT,PRC,D,FF,LP,ST,LE,STOM
+ S LPU=$G(LPU),FF=+$$FR^I(),VRx=$G(VRx)
+ S:'FF LPU=$$^I("ilpu")
+ S LE=$RE(LPU)
+ M STOM=^cfg("stom-otd")
+ 
+ k ^BUF($J)
+ D ITERATE^IUSLD("nzup^RSTOM(VR,OT,DT,ID)",DS,DE,VRx,,LPU)
+ 
+ S D=DS-1 F  S D=$O(^EPRI("dt",D)) Q:D=""!(D>DE)  D
+ .S NI="" F  S NI=$O(^EPRI("dt",D,NI)) Q:NI=""  D
+ ..S U="" F  S U=$O(^EPRI("dt",D,NI,U)) Q:U=""  D
+ ...S I=$G(^(U)) I LPU'="",I'="",LPU'=I Q  ; 
+ ...S R=$G(^EPR(NI,U,"o")) Q:R=""  
+ ...I I="" S I=$P(R,"|",3) I LPU'="",LPU'=I Q 
+ ...S VR=$P(R,"|",2) Q:VR=""  I VRx'="",VRx'=VR Q 
+ ...S OT=$$OTD^IKADRY(VR) Q:'$D(STOM(OT)) 
+ ...I '$P($G(^BUF($J,D,VR,I,NI)),"|",2) S $P(^(NI),"|",2)=1
+ 
+ D OWF^RWU(".txt")
+ D WC^RWU("nzstom:env:pac|№ И.б.|Ф.И.О. Пациента|Дата|Услуги|ЭМК|План|Врач|Сумма плана|Вид договора"_$S(FF:"|Филиал",1:""))
+ S D=DS-1 F  S D=$O(^NAZI("d",D)) Q:D=""!(D>DE)  D
+ .S ID="" F  S ID=$O(^NAZI("d",D,ID)) Q:ID=""  I $P(^(ID),"|",1)="z",LPU=""!($P(ID,".",2)=LE) D
+ ..S R=$G(^NAZ(ID,"i")) Q:R=""  
+ ..S ST=$P($G(^("e")),"|",1)
+ ..Q:ST[289 
+ ..S S=$P($G(^("k")),"|",1)
+ ..S K=$G(^("a")),Z=$P(K,"|",4),K=$P(K,"|",1)
+ ..I K="",$L(Z) S K=$P($G(^NAZM("pt",Z)),"|",1)
+ ..S NI=$P(R,"|",2),VR=$P(R,"|",3)
+ ..I $L(VRx),VR'=VRx Q  ; по одному врачу
+ ..S:S="" S=$$SUMM^INAZN(ID)
+ ..S I=+$P(R,"|",4)
+ ..S A=$G(^BUF($J,D,VR,I,NI)),$P(A,"|",3)=1,$P(A,"|",5)=ID
+ ..S:S $P(A,"|",4)=$P(A,"|",4)+S
+ ..S ^BUF($J,D,VR,I,NI)=A
+ 
+ S D="" F  S D=$O(^BUF($J,D)) Q:D=""  D
+ .S VR="" F  S VR=$O(^BUF($J,D,VR)) Q:VR=""  D
+ ..S I="" F  S I=$O(^BUF($J,D,VR,I)) Q:I=""  D
+ ...S NI="" F  S NI=$O(^BUF($J,D,VR,I,NI)) Q:NI=""  D
+ ....S K=^(NI)
+ ....S A=$P(K,"|",5)_"|"_NI_"|"_$$FIO^IPAC(NI)_"|"_$$DT^DTUTL(D)
+ ....S A=A_"|"_$S($P(K,"|",1):"да",1:"")
+ ....S A=A_"|"_$S($P(K,"|",2):"да",1:"")
+ ....S A=A_"|"_$S($P(K,"|",3):"да",1:"")
+ ....S A=A_"|"_$$FIO^IKADRY(VR)
+ ....S A=A_"|"_$TR($P(K,"|",4),".",",")
+ ....S A=A_"|"_$$NAME^ISPRAV("dvid",$$GET^IINSC($$GET^IPAC(NI,"stc",D),"dvid",D))
+ ....S LP=$S(FF&I:"|"_$$NAME^ICONTR(I),1:"")
+ ....D WC^RWU(CR_A_LP)
+ K ^BUF($J)
+ D C^RWU
+ Q
+nzup(VR,OT,DT,ID) 
+ Q:'$D(STOM(OT)) 
+ Q:"wd"[$$GETSTAT^IUSL(VR,DT,OT,ID) 
+ S NI=$$GETNIB^IUSL(VR,DT,OT,ID) Q:NI="" 
+ S I=+$$GETLPU^IUSL(VR,DT,OT,ID)
+ Q:$P($G(^BUF($J,DT,VR,I,NI)),"|",1) 
+ S $P(^(NI),"|",1)=1
+ Q
+REGIPROC 
+ N F,FF,D,ST
+ S F=$$FR^I()
+ S ST="Стоматология"
+ S D="d,Начальная дата периода,d,Конечная дата периода"
+ S FF=$S(F:",t@storage:lpu,Филиал",1:"")
+ S ^IPROC(ST,"Отчет по посещениям и услугам")="POSU_RSTOM,1,2,"_D
+ S ^IPROC(ST,"Количество имплантов")="IMPCNT_RSTOM,1,2,"_D
+ S ^IPROC(ST,"Планируемая выручка")="VPLAN_RSTOM,1,2,"_D
+ S ^IPROC(ST,"Список лиц по состояниям зубов")="STEPRL_RSTOM,100,5,"_D_",t@net:NMLCR_NSPRAV(""stof""),Состояние зуба,s,Дополнительный параметр,s,Исключить № зубов"
+ S ^IPROC(ST,"Контроль планов лечения")="NZCTR_RSTOM,100,"_$S(F:4,1:3)_","_D_",te@net:FLST_NVFIND(""""),Сотрудник"_FF
+ Q

@@ -1,0 +1,67 @@
+IMLABW ; Рабочий список КДЛ [ 01/11/2018  7:06 PM ]
+LOOP(ST,IW,NOK,ZF,ZT,DS,DE,PROC) ; Обход заявок и тестов по списку
+ N DEV,ID,IJ,P,PP,F,I,D,BIO
+ F I=1:1:$L(ST) S DEV=$P(ST,"|",I) D:DEV'=""
+ .S ID=$S(ZF'="":$O(^MLABWE(DEV,IW,"i",ZF),-1),1:"")
+ .F  S ID=$O(^MLABWE(DEV,IW,"i",ID)) Q:ID=""  Q:ZT'=""&(ID>ZT)  D
+ ..I DT!DE S NI=^MLABI("c",ID) S D=+$P($G(^MLAB(NI,ID,"s1")),"|",2) Q:$S(DE="":D<DT,DT="":D>DE,D<DT:1,1:D>DE)
+ ..S IJ="" F  S IJ=$O(^MLABWE(DEV,IW,"i",ID,IJ)) Q:IJ=""  D
+ ...I NOK S F=$P($G(^MLABW(DEV,IW,IJ)),"|",1) Q:NOK=1&F  Q:NOK=2&('F)  ; TODO
+ ...S BIO=^MLABWE(DEV,IW,"i",ID,IJ)
+ ...S P="" F  S P=$O(^MLABW(DEV,IW,IJ,P)) Q:P=""  D
+ ....S F=0 I ^(P)'=0 S F=1
+ ....I NOK S F=$$IsPRM(ID,P,BIO) Q:NOK=1&(F=0)  Q:NOK=2&F
+ ....S PP=$P(P,"@",1)
+ ....D @PROC
+ Q
+IsPRM(ID,PRM,BIO) ; В иссл. заполнен параметр
+ N N S N=$G(^MLABI("c",ID)) Q:N="" 0
+ I $G(BIO)'="",$D(^MLAB(N,ID,"d",PRM_"@"_BIO)) S PRM=PRM_"@"_BIO
+ Q:$P($G(^MLAB(N,ID,"d",PRM)),"|",1)'="" 1
+ Q 0
+CNTT(DEV,WL) ; Подсчет кол-ва тестов в списке
+ N I,ID,P
+ S I=0,ID=""
+ F  S ID=$O(^MLABW(DEV,WL,ID)) Q:ID=""  D
+ .S P="" F  S P=$O(^MLABW(DEV,WL,ID,P)) Q:P=""  S I=I+1
+ Q I
+CNTI(DEV,WL) ; Подсчет кол-ва записей в списке
+ N I,ID
+ S I=0,ID=""
+ F  S ID=$O(^MLABW(DEV,WL,ID)) Q:ID=""  S I=I+1
+ Q I
+DEL(DEV,WL,IDX,RM) ; Удалить запись из списка
+ Q:DEV="" 
+ N M,ID,NI
+ S ID=$P(^MLABW(DEV,WL,IDX),"|",3)
+ S M=$G(^MLABWE(DEV,WL,"i",ID,IDX))
+ D DNUMD^IMLAB("",ID,DEV,M)
+ K ^MLABW(DEV,WL,IDX)
+ K ^MLABWE(DEV,WL,"i",ID,IDX)
+ D K^ISSG("^MLABWE("""_DEV_""","_WL_",""i"","""_ID_""","_IDX_")")
+ Q:RM 
+ S NI=^MLABI("c",ID)
+ Q:$D(^MLABE(NI,ID,"dev")) 
+ S $P(^MLAB(NI,ID,"s3"),"|",1)=0 ; только для целой заявки
+ D GL^IEXCH("^MLAB",NI,ID,"s3")
+ Q
+DELP(DEV,WL,IDX,PRM,RM) ; Удалить параметр из списка
+ ; RM - удалить без смены статусов исследования
+ Q:DEV="" 
+ K ^MLABW(DEV,WL,IDX,PRM)
+ Q:$D(^MLABW(DEV,WL,IDX))  ; еще есть параметры
+ D DEL(DEV,WL,IDX,$G(RM))
+ Q
+OKPRM(DEV,ID,PRM) ; параметр выполнен (для всех списков по ID заявки)
+ N IDX,P,Z,WL
+ ; TODO - по всем спискам
+ S P=$P(PRM,"@",1)
+ S IDX="" F  S IDX=$O(^MLABWE(DEV,0,"i",ID,IDX)) Q:IDX=""  D
+ .S Z=0
+ .S:$D(^MLABW(DEV,0,IDX,P)) Z=1
+ .S:$D(^MLABW(DEV,0,IDX,PRM)) Z=2 
+ .Q:'Z 
+ .K ^MLABW(DEV,0,IDX,$S(Z=2:PRM,1:P))
+ .I $L($D(^MLABW(DEV,0,IDX)))>1 S $P(^MLABW(DEV,0,IDX),"|",1)=1 Q 
+ .K ^MLABW(DEV,0,IDX),^MLABWE(DEV,0,"i",ID,IDX)
+ Q

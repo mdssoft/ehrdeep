@@ -6,6 +6,7 @@
   "private": true,
   "scripts": {
     "start": "node bin/cli.js",
+    "mis:index": "node bin/cache-export.js build",
     "ingest": "node bin/cli.js ingest",
     "analyze": "node bin/cli.js analyze --text-file ./sample-new-case.txt --diagnosis K74.6",
     "proxy:server": "node mis-proxy/bin/proxy-server.js",

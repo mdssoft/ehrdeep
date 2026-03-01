@@ -1,0 +1,61 @@
+NSECFIL ; Файловый импорт контроля доступа [ 03/23/2016  0:15 AM ]
+DORECV(ID) 
+ Q
+INFILE ; for MSGSTOR
+ ; s ^MSGHUB("file",1)="NSECFIL"
+ N J,R,TP,TN,DTM,DTI,CC
+ S DTM=$S($G(^cfg("sec","nofiltime")):$$DTM^DTUTL($H),1:$G(HTTPH("LASTMODIFIED")))
+ S DTM=$$DI^DTUTL($P(DTM," ",1))_","_$$TI^DTUTL($P(DTM," ",2))
+ S DTI=$P(DTM,",",1)_","_($P(DTM,",",2)-100)
+ D ORH^RWU
+ F J=1:1 S R=$$R^RWU Q:%IFN["Z"  D:R'=""
+ .S TP=$$UL^TXTU($P(R," ",1)),TN=$P(R," ",4) Q:TN=""
+ .S CC=$$GETVCARD^ISCARD(TN) Q:CC="" 
+ .I TP="in" S ^CARD(CC,"enter")="0,"_DTI
+ .I TP="out" S ^CARD(CC,"enter")="1,"_DTI
+ .D CRD^YISEC(CC,"",DTM)
+ .K %L,%B
+ D CR^RWU
+ Q
+LOOP ; fetch loop
+ D:$D(^$R("WWWSRV")) USRCONN^WWWSRV ; for Cache
+ S %LOG="sys"
+ N FILL,FNi,FNo,%L,R,TP,TN,CC,FL,IO,DTM,mTM
+ S FNi=$G(^cfg("sec","indir")),FNo=$G(^cfg("sec","outdir"))
+ S mTM=$G(^cfg("sec","nofiltime"))
+ F  Q:$D(^SYNCJ("LOOP^NSECFIL"))  D  H 30
+ .K FILL
+ .D DIR^FIL(FNi_"*.txt","FILL")
+ .S FL="" F  S FL=$O(FILL(FL)) Q:FL=""  D:FILL(FL)=0
+ ..S DTM=$S(mTM:$H,1:$$DTM^FIL(FNi_FL))
+ ..S IO=$$ORT^FIL(FNi_FL) Q:IO=""
+ ..U IO F  R R Q:$$ST^FIL()=0  D:R'=""
+ ...S TP=$$UL^TXTU($P(R," ",1)),TN=$P(R," ",4) Q:TN=""
+ ...S CC=$$GETVCARD^ISCARD(TN)
+ ...I TP="in" S ^CARD(CC,"enter")="0,"_$P(DTM,",",1)_","_($P(DTM,",",2)-100)
+ ...D CRD^YISEC(CC,"",DTM)
+ ..C IO
+ ..D DEL^FIL(FNi_FL)
+ .K FILL
+ .D DIR^FIL(FNo_"*.txt","FILL")
+ .S FL="" F  S FL=$O(FILL(FL)) Q:FL=""  D:FILL(FL)=0
+ ..S DTM=$$DTM^FIL(FNo_FL)
+ ..S IO=$$ORT^FIL(FNo_FL) Q:IO=""
+ ..U IO F  R R Q:$$ST^FIL()=0  D:R'=""
+ ...S TP=$$UL^TXTU($P(R," ",1)),TN=$P(R," ",4) Q:TN=""
+ ...S CC=$$GETVCARD^ISCARD(TN)
+ ...I TP="out" S ^CARD(CC,"enter")="1,"_$P(DTM,",",1)_","_($P(DTM,",",2)-100)
+ ...D CRD^YISEC(CC,"",DTM)
+ ..C IO
+ ..D DEL^FIL(FNo_FL)
+ 
+ K ^SYNCJ("LOOP^NBIOID")
+ Q
+START ; start process
+ K ^SYNCJ("LOOP^NSECFIL")
+ J LOOP^NSECFIL
+ Q
+STOP ; stop process
+ S ^SYNCJ("LOOP^NSECFIL")=1
+ N I F I=1:1:16 H 1 Q:'$D(^SYNCJ("LOOP^NSECFIL")) 
+ Q

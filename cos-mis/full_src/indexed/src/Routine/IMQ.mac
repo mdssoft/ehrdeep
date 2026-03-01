@@ -1,0 +1,138 @@
+IMQ ; Message queue client
+	Q
+SYNC(tp,topic,data) ; Send message
+	n i
+	L +^mqq
+	s i=$O(^mqq(""),-1)+1
+	s ^mqq(i)=tp_"|sync"
+	s ^mqq(i,1)=data
+	L -^mqq
+	Q idx
+PUB(mq,tp,data) ; Send message
+	n i
+	L +^mqq
+	s i=$O(^mqq(""),-1)+1
+	s ^mqq(i)=tp_"||"_mq
+	s ^mqq(i,1)=data
+	L -^mqq
+	Q i
+REGTYPE(TP,PROC) ; Register callback
+	Q:$D(^MQCFG("CB",TP)) 
+	S ^MQCFG("CB",TP)=PROC
+	Q
+UREGTYPE(TP,PROC) ; Unregister callback
+	Q:'$D(^MQCFG("CB",TP)) 
+	K ^MQCFG("CB",TP)
+	Q
+RECV
+	N %J,A,R,topic,TEST,mqsrc,mqtype,mqdata
+	S mqsrc=$G(HTTPH("MQ-ROUTING"))
+	S mqtype=$G(HTTPH("MQ-MSG-TYPE"))
+	;k ^KKK1 s ^KKK1(1)=$G(%LOG)_"|"_$G(%PASS)_"|"_$G(%VUSER)_"|"_$G(CATP)_"|"_$G(%JOB)
+	;m ^KKK1(2)=HTTPH
+	s %LOG="mqlink"
+	S TEST=0
+	TRY {
+	 I $D(^MQCFG("CB",mqtype)) X ("D "_^(mqtype))
+	 S TEST=1
+	} 
+	CATCH {
+	 S ^ERLOG("IMQ",+$H,$P($H,",",2))=$ZE
+	}
+	D:TEST MSG^RWU("ACK")
+	D:'TEST MSG^RWU("NACK")
+	Q
+data() ; Get current MQ data
+	D ORH^RWU
+	S mqdata="" F %J=1:1 S A=$$RA^RWU Q:%IFN["Z"  S mqdata=mqdata_A
+	D CR^RWU
+	Q mqdata
+job
+	D:$D(^$R("WWWSRV")) USRCONN^WWWSRV
+ 	S CR=$C(13,10),%LOG="sys",%JOB="mq"
+	m %MQCONF=^cfg("mq")
+	s %contm=0,%mqdev=""
+	F  D:$D(^mqq)  H 0.5  I $D(^SYNCJ("job^IMQ")) k ^SYNCJ("job^IMQ") Q 
+	.s i="" f  s i=$O(^mqq(i)) q:i=""  D  
+	..s %tmx=$ZHOROLOG-%contm
+	..Q:$$open() 
+	..L +^mqq(i)
+	..I $$send(i) K ^mqq(i)
+	..L -^mqq(i)
+	..d close
+	s %tmx=999
+	d close
+	Q
+START 
+	D:$$IsRUN() STOP
+	K ^SYNCJ("job^IMQ")
+	J job^IMQ
+	Q
+STOP 
+	S ^SYNCJ("job^IMQ")=1
+	N I F I=1:1:16 H 1 Q:'$$IsRUN() 
+	Q
+IsRUN() 
+	Q $$COUNTNM^IJOBUTL("IMQ")>0
+open()
+	Q:%tmx<180 0 ; 3 min.
+	u 0 w !,"reconnect",!
+	s %mqdev="|TCP|"_%MQCONF("port")
+	C %mqdev
+	O %mqdev:(%MQCONF("host"):%MQCONF("port"):"":::::120):20 ; keepalive + conn init timeout
+	Q:'$TEST 1
+	s %contm=$ZHOROLOG,%tmx=0
+	Q 0
+send(KEY)
+	Q:%mqdev="" 0
+	N A,q,t,ex,CR,j,R,ret,url,tp
+	S CR=$C(13,10)
+	s R=^mqq(KEY)
+	s tp=$P(R,"|",1),ex=$P(R,"|",2),q=$P(R,"|",3),t=$P(R,"|",4) ; type, exchange, queue, topic
+	i ex="",q="" s ex="sync"
+	s:q="" q="node"
+	s url=$S(ex="":"queue/"_q,1:"exchange/"_ex)_"/"_t
+	S A="POST /"_url_" HTTP/1.1"_CR
+	S A=A_"User-Agent: cache-mq"_CR
+	S A=A_"Host: "_%MQCONF("host")_$S(%MQCONF("port")'=80:":"_%MQCONF("port"),1:"")_CR
+	S A=A_"MQ-Msg-Type: "_tp_CR
+	S A=A_"Cache-Control: no-cache"_CR
+	S A=A_"Transfer-Encoding: chunked"_CR
+	S A=A_"Keep-Alive: timeout=100"_CR
+ 	S A=A_"Connection: "_$S(%tmx<180:"keep-alive",1:"close")_CR_CR
+ 	try {
+ 	 U %mqdev W A
+ 	} catch {
+	 	C %mqdev
+	 	S %mqdev="",%contm=0
+ 	}
+ 	try {
+ 	 s j="" f  s j=$O(^mqq(KEY,j)) q:j=""  d
+ 	 .S R=^(j)
+ 	 .s R=$ZCONVERT(R,"O","UTF8"),l=$L(R) ; to UTF-8
+ 	 .w $ZCONVERT($ZHEX(l),"l")_CR ; chunk header
+ 	 .w R
+ 	 .w CR
+ 	 w 0_CR_CR
+	 w *-3
+ 	} catch {
+	 	C %mqdev
+	 	S %mqdev="",%contm=0
+ 	}
+ 	Q:%mqdev="" 0
+ 	try {
+ 	 F  R ret:20  Q:'$TEST  Q:ret[(CR_CR) 
+ 	} catch {
+	 	C %mqdev
+	 	S %mqdev="",%contm=0
+ 	}
+	u 0 w !,ret U %mqdev
+	s R=$P(ret," ",2)
+	u 0 w !,R,!
+	Q $S(R=200:1,1:0)
+close
+	Q:%mqdev="" 
+	Q:%tmx<180  ; 3 min.
+	C %mqdev
+	s %contm=0
+	Q

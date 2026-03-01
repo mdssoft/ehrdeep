@@ -1,0 +1,68 @@
+RLPURNT ; Расчет рентабельности [ 12/14/2014  8:26 PM ]
+BYVR(DS,DE,XLPU) ; Расчет рентабельности по врачам
+ N OT,VR,X1,X2,X3,X4,X5,X6,CBS,A,MNX
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ K ^BUF($J,0)
+ D MK^IRPRASP(DS,DE,"^BUF($J,0","OT,VR","time,use",0,"")
+ D MK^IRPUSL(DS,DE,"^BUF($J,0","OT,VR","sum,zrp,mat,mtc,ext",0,"")
+ D OWF^RWU(".txt")
+ S X1=$$TXTP^DTUTL(DS,DE)
+ D WC^RWU("Сотрудник|Каб.|Часов|Площадь|Выручка|Выручка|Зарплата|Расходн.|Продажа|Внешние;")
+ D WC^RWU(CR_X1_"|||||среднемесячно||материалы|материалов|услуги")
+ S MNX=$$MONTHS^DTUTL(DS,DE)
+ S OT="" F  S OT=$O(^BUF($J,0,OT)) Q:OT=""  D
+ .D WC^RWU(CR_$$GOTD^YISPRAV(OT))
+ .S VR="" F  S VR=$O(^BUF($J,0,OT,VR)) Q:VR=""  D:VR'[" "
+ ..S A=" - "_VR_" "_$$FIOSH^YIKADRY(VR)
+ ..S CBS=$$CABS^IRPRASP(VR,OT,DS,DE)
+ ..S X1=$G(^BUF($J,0,OT,VR," time"))
+ ..S X2=$G(^(" sum")),X3=$G(^(" zrp"))
+ ..S X4=$G(^(" mat")),X5=$G(^(" mtc")),X6=$G(^(" ext"))
+ ..S A=A_"|"_$TR(CBS,"|",",")_"|"_$$FN(X1/60)_"|"
+ ..S A=A_$$FN($$AREAS^NPLPU(CBS))_"|"
+ ..S A=A_$$FN(X2)_"|"_$$FN(X2/MNX)_"|"_$$FN(X3)_"|"
+ ..S A=A_$$FN(X4)_"|"_$$FN(X5)_"|"_$$FN(X6)
+ ..D WC^RWU(CR_A)
+ D C^RWU
+ K ^BUF($J,0)
+ Q
+LSTVR(DS,DE,VRX,XLPU) ; Рентабельность по врачу
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N X1,X2,X3,X4,X41,X42,X5,V,REZ,SS,CC
+ D OWF^RWU(".txt")
+ S X1=$$TXTP^DTUTL(DS,DE)
+ D WC^RWU("||"_$$FIOSH^IKADRY(VRX)_" "_X1_"||||Зарплата|Зарплата|Расходн.|Продажа|Внешние|;")
+ D WC^RWU(CR_"Пациент|Дата|Услуга|Кол-во|Сумма|Зарплата|сотрудника|прочих|материалы|материалов|услуги|Себест.")
+ D:VRX'="" MKAPPRC^IUSLSC(DS,DE,1,"LSTVRf^RLPURNT","LSTVRp^RLPURNT","")
+ D:$D(REZ)
+ .S X1=""
+ .F X2=1:1:7 S X1=X1_"|"_$$FN($G(REZ(X2)))
+ .D WC^RWU(CR_"Итого|"_X1)
+ D C^RWU
+ Q
+LSTVRf 
+ I VR'=VRX S TEST=0 Q 
+ Q
+LSTVRp 
+ S CC=$G(UL(U))
+ S SS=$S($L(SUMM):SUMM,1:$$PRICEH^IPRICE(U,PRC,DT)*KSKD)*CC
+ S X1=$$KEYSUMM^IWRH($$GETPLE^IUSL(VR,DT,OTD,ID,"mt"))
+ S X2=$$CENNALL^IWRHS($TR($$GETPL^IUSL(VR,DT,OTD,ID,"mt"),"|","~"),DT)
+ S X3=$P($$GETPL^IUSL(VR,DT,OTD,ID,"c"),"|",1)
+ S (X4,X41,X42)=0,V=""
+ F  S V=$O(^ZNFE(VR,OTD,DT,ID,"zrp",V)) Q:V=""  S X0=$P(^(V),"|",1),X4=X4+X0 S:V=VR X41=X41+X0 S:V'=VR X42=X42+X0
+ S X5=$$GET^IPRICE(U,"scost",PRC,DT)*CC
+ D WC^RWU(CR_$$FIOSH^IPAC(NI)_"|"_$$DT^DTUTL(DT)_"|"_$$OWF^TXTU(U_" "_$$NAMEH^IPRICE(U,PRC,DT),99)_"|"_CC_"|"_$$FN(SS)_"|"_$$FN(X4)_"|"_$$FN(X41)_"|"_$$FN(X42)_"|"_$$FN(X1)_"|"_$$FN(X2)_"|"_$$FN(X3)_"|"_$$FN(X5))
+ S REZ(1)=$G(REZ(1))+CC,REZ(2)=$G(REZ(2))+SS
+ S REZ(3)=$G(REZ(3))+X4,REZ(4)=$G(REZ(4))+X41
+ S REZ(5)=$G(REZ(5))+X42,REZ(6)=$G(REZ(6))+X1
+ S REZ(7)=$G(REZ(7))+X2,REZ(8)=$G(REZ(8))+X3
+ S REZ(9)=$G(REZ(9))+X5
+ Q
+FN(X) 
+ Q $TR(+$J(X,"",2),".",",")
+REGIPROC 
+ N F S F=+$$FR^I()
+ S ^IPROC("Отчеты ЛПУ","По сотрудникам","Расчет рентабельности по врачам")="BYVR_RLPURNT,1,"_$S(F:3,1:2)_",d,Дата начала периода,d,Дата окончания периода"_$S(F:",t@storage:lpu,Филиал",1:"")
+ S ^IPROC("Отчеты ЛПУ","По сотрудникам","Рентабельность по сотруднику")="LSTVR_RLPURNT,1,"_$S(F:4,1:3)_",d,Дата начала периода,d,Дата окончания периода,te@net:FLST_NVFIND(""""),Сотрудник"_$S(F:",t@storage:lpu,Филиал",1:"")
+ Q

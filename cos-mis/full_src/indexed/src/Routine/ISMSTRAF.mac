@@ -1,0 +1,71 @@
+ISMSTRAF ; Отправка SMS smstraffic.ru [ 12/13/2016  12:39 PM ]
+ ; Для отправки указать originator по умолчанию в личном кабинете
+DORECV(ID) 
+ Q
+DOSEND(ID) 
+ N SRV,USR,PAS,I,R,IDX,FR,TO,F,FROM,SF,DEBUG
+ S SRV=$G(^MSGHUB("sms",ID,"server")) ; first
+ S USR=$G(^("login")),PAS=$G(^("passwd"))
+ Q:USR=""  Q:PAS="" 
+ S SF=$G(^MSGHUB("sms",ID,"safemod"))
+ S DEBUG=$G(^MSGHUB("sms",ID,"debug"))
+ S FROM=$G(^("from")),F=0 
+ S IDX="" F  S IDX=$O(^MSGOUT("sms",ID,IDX)) Q:IDX=""  D
+ .S R=^(IDX),FR=$P(R,"|",1),TO=$P(R,"|",2),R=""
+ .Q:TO="" 
+ .Q:$G(^(IDX,"chkfn"))'=""  Q:$G(^("wait")) 
+ .Q:$$timeout^IMSGHUB("sms",ID,IDX) 
+ .S I="" F  S I=$O(^MSGOUT("sms",ID,IDX,"data",I)) Q:I=""  S R=R_^(I)
+ .Q:R=""
+ .I 'SF,'F D OPEN(USR,PAS,"",SRV) S F=1
+ .D:SF OPEN(USR,PAS)
+ .S:DEBUG ^ISLOG("ISMSTRAF")=$H_"|"_TO_"|"_R_"|"_FR
+ .S:FR="" FR=FROM
+ .Q:'$$SMS(TO,R,FR) 
+ .D endsend^IMSGHUB("sms",ID,IDX)
+ .D:SF CLOSE
+ D:F CLOSE
+ Q
+OPEN(USR,PAS,ADR) 
+ K %SMSTRAF
+ S:$G(ADR)="" ADR="api.smstraffic.ru"
+ S %SMSTRAF("u")=USR,%SMSTRAF("p")=PAS
+ S %SMSTRAF("a")=ADR
+ w !,ADR,!
+ S %SID=$$OPEN^WWWCLI(ADR,80)
+ Q
+CLOSE 
+ D CLOSE^WWWCLI(%SID)
+ K %SMSTRAF
+ Q
+SMS(DST,TXT,SRC) 
+ Q:'$D(%SMSTRAF) 
+ S DST=$TR(DST," /-()+","")
+ Q:DST=""  Q:TXT="" 
+ S:$E(DST,1)=8 $E(DST,1)=7
+ I $L(DST)=10,$E(DST,1)=9 S DST=7_DST
+ N A,R,L,%J,I,XML,XMLR
+ S L=$L(TXT)
+ D SETCONN^WWWCLI(%SID,2)
+ S R="/multi.php?"
+ S R=R_"&login="_%SMSTRAF("u")
+ S R=R_"&password="_%SMSTRAF("p")
+ S R=R_"&phones="_DST
+ S R=R_"&message="_$$TURL^TXTU($$WU8^TXTU(TXT))
+ S R=R_"&rus=5"
+ S:L>66 R=R_"&max_parts="_(L+(67-L#67)\67)
+ u 0 w !,R,!
+ S R=$$GET^WWWCLI(%SID,R)
+ U 0 W !,"GET OK="_R,!
+ Q:R'=200 0
+ D OBUF^WWWCLI(%SID)
+ S A="",I=$$BUFCNT^WWWCLI(%SID)
+ F %J=1:1:I S A=$$RBUF^WWWCLI(%SID) D XML^YIXMLRR
+ D CBUF^WWWCLI(%SID)
+ ZW XML
+ Q $S($G(XML("reply","result"))="OK":1,1:0)
+T(TEL,L,P) 
+ D OPEN(L,P)
+ S A=$$SMS(TEL,"Провёръка отправки SMS.","SMSTEST")
+ D CLOSE
+ Q

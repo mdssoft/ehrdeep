@@ -1,0 +1,23 @@
+REDU ; Системные отчеты по услугам [ 08/24/2018  11:02 AM ]
+DELL(DS,DE,NIB,USL,OTX) ; Удаленные услуги
+ N OT,VR,DT,ID,RR,HH,OP,LP,U
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),NIB=$P(NIB," ",1)
+ D OWF^RWU(".txt")
+ D WC^RWU("Отделение|Врач|Филиал|Дата|Пациент|Услуга|Подп.|Удалено|Оператор|Сист.код")
+ S VR="" F  S VR=$O(^ZNFL(VR)) Q:VR=""  D
+ .S OT="" F  S OT=$O(^ZNFL(VR,OT)) Q:OT=""  D:OTX=""!(OTX=OT)
+ ..S DT=DS-1 F  S DT=$O(^ZNFL(VR,OT,DT)) Q:DT=""!(DT>DE)  S ID="" F  S ID=$O(^ZNFL(VR,OT,DT,ID)) Q:ID=""  D
+ ...S HH="" F  S HH=$O(^ZNFL(VR,OT,DT,ID,"pnf",HH)) Q:HH=""  D
+ ....S RR=$G(^ZNFL(VR,OT,DT,ID,"e",HH)),NI=$P(RR,"~",2) Q:RR="" 
+ ....S U=$P($P(RR,"~",3),"*",1)
+ ....I NIB'="",NI'=NIB Q 
+ ....I USL'="",USL'=U Q 
+ ....S OP=$G(^ZNFL(VR,OT,DT,ID,"log",HH))
+ ....S LP=$G(^ZNFL(VR,OT,DT,ID,"l",HH))
+ ....S RR=$S("wd"[$P(RR,"~",1):"",1:"Да")
+ ....D WC^RWU(CR_$$GOTD^YISPRAV(OT)_"|"_$$FIOSH^IKADRY(VR)_"|"_$$NAME^ICONTR(LP)_"|"_$$DT^DTUTL(DT)_"|"_NI_" "_$$FIO^IPAC(NI)_"|"_U_"|"_RR_"|"_$$DTM^DTUTL(HH)_"|"_$P(OP,"|",1)_"|"_VR_","_OT_","_DT_","_ID)
+ D C^RWU
+ Q
+REGIPROC 
+ S ^IPROC("Система","Услуги","Удаленные услуги")="DELL_REDU,1,5,d,Период услуг с,d,Период услуг по,e@pac,Пациент,s,Услуга,te@storage:otd@1,Отделение"
+ Q 

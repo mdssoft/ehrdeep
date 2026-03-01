@@ -1,0 +1,124 @@
+RBASERPF ; Упр. отчетность - Финансы [ 09/04/2018  4:38 PM ]
+LITE(DS,DE,VPDR,CABON) 
+ ; VPDR - выводить по подразделениям
+ ; CABON - абонементы сводно
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N LPU,R,X1,X2,X3,X4,DGL,TPL,U1,U2,UL1,UL2,TP
+ N TX
+ K ^BUF($J)
+ S TPL(1)="поликлиника",TPL(2)="стоматология",TPL(3)="стационар"
+ S UL1(1)="Страховые компании",UL1(2)="Розничные продажи",UL1(3)="Профмедицина"
+ S UL2(1)="Страховые компании, ФАКТ",UL2(2)="Страховые компании, АВАНС",UL2(3)="Разовые посещения",UL2(4)="Абонементы"
+ D MK^IRPRASP(DS,DE,"^BUF($J,0","LPU","time,use",1,"PROCSH^RBASERPF")
+ S R=$S(VPDR:"LPU,USER1,USER2,PTP",1:"LPU,USER1,USER2")
+ D MK^IRPUSL(DS,DE,"^BUF($J,0",R,"ppl,pls,pos,pps,sum,cnt",1,"PROCU^RBASERPF")
+ D OWF^RWU(".txt")
+ D WC^RWU("Филиал "_$$TXTP^DTUTL(DS,DE)_"|Загрузка|Пришедших|Лиц|Кол-во|Доля в|Посещений|Сумма|Доля в|Число посещ.|Услуг на|Стоимость;")
+ D WC^RWU(CR_" - канал продаж|%|лиц|первично|посещений|кол-ве посещ.|первично|услуг|сумме услуг|на обратившегося|посещение|посещения")
+ S LPU="" F  S LPU=$O(^BUF($J,0,LPU)) Q:LPU=""  D:$E(LPU,1)'=" "
+ .Q:LPU=-1  ; TODO
+ .K TX(1) S TX(1,1)=$G(^(LPU," pos")),TX(1,2)=$G(^(" sum"))
+ .D LN(1)
+ .D WC^RWU(CR_$S(LPU=-1:"ВСЕГО по сети",1:$$NAME^ICONTR(LPU))_"|"_R)
+ .S U1="" F  S U1=$O(^BUF($J,0,LPU,U1)) Q:U1=""  D:$E(U1,1)'=" "
+ ..K TX(2) S TX(2,1)=$G(^(U1," pos")),TX(2,2)=$G(^(" sum"))
+ ..D LN(2)
+ ..D WC^RWU(CR_" - "_$G(UL1(U1))_"|"_R)
+ ..S U2="" F  S U2=$O(^BUF($J,0,LPU,U1,U2)) Q:U2=""  D:$E(U2,1)'=" "
+ ...K TX(3) S TX(3,1)=$G(^(U2," pos")),TX(3,2)=$G(^(" sum"))
+ ...D LN(3)
+ ...S:U2["," X1=$$NAME^IINSC($P(U2,",",1))_", "_$$NAME^IMPRP($P(U2,",",2))
+ ...D WC^RWU(CR_"   - "_$S(U2[",":X1,1:$G(UL2(U2)))_"|"_R)
+ ...S TP="" F  S TP=$O(^BUF($J,0,LPU,U1,U2,TP)) Q:TP=""  D:$E(TP,1)'=" "
+ ....S R=$D(^(TP," ")) D LN(4)
+ ....D WC^RWU(CR_"        "_$G(TPL(TP))_"|"_R)
+ K ^BUF($J)
+ D C^RWU
+ Q
+LN(LVL) ; Line calculation
+ S X1=+$G(^(" time"))
+ S R=$S('X1:"",1:$$FN(100*$G(^(" use"))/X1))_"|"
+ S X1=+$G(^(" pos")),X2=+$G(^(" ppl")),X3=+$G(^(" sum"))
+ S X4=+$G(^(" pps"))
+ S R=R_X2_"|"_(+$G(^(" pls")))_"|"_X1_"|"
+ S R=R_$S(+$G(TX(LVL-1,1)):$$FN(100*X1/TX(LVL-1,1)),1:"")
+ S R=R_"|"_X4_"|"_$$FN(X3)_"|"
+ S R=R_$S(+$G(TX(LVL-1,2)):$$FN(100*X3/TX(LVL-1,2)),1:"")
+ S R=R_"|"_$S('X2:0,1:$$FN(X1/X2))_"|" ; pos/pipl
+ S X4=+$G(^(" cnt"))
+ S R=R_$S('X1:0,1:$$FN(X4/X1))_"|"
+ S R=R_$S('X1:0,1:$$FN(X3/X1))
+ Q
+PVU(DS,DE,CABON) ; Подразделений и видов услуг
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N LPU,R,X1,X2,X3,X4,DGL,TPL,U1,U2,UL1,UL2,TP
+ N TX
+ K ^BUF($J)
+ S TPL(1)="Поликлиника",TPL(2)="Стоматология",TPL(3)="Стационар",TPL(4)="Профмедицина"
+ S UL1(1)="Страховые компании",UL1(2)="Розничные продажи",UL1(3)="Прочее"
+ S UL2(1)="ФАКТ",UL2(2)="АВАНС",UL2(3)="Разовые посещения"
+ D MK^IRPRASP(DS,DE,"^BUF($J,0","LPU,PTP","time,use",1,"PROCSH^RBASERPF")
+ D MK^IRPUSL(DS,DE,"^BUF($J,0","LPU,PTP,USER1,USER2","ppl,pos,sum,cnt",1,"PROCU^RBASERPF")
+ D OWF^RWU(".txt")
+ D WC^RWU("Филиал "_$$TXTP^DTUTL(DS,DE)_"|Загрузка|Загрузка|Пришедших|Кол-во|Доля в|Сумма|Доля в|Число посещ.|Услуг на|Стоимость;")
+ D WC^RWU(CR_" - виды услуг|%|мощности|лиц|посещений|кол-ве посещ.|услуг|сумме услуг|на обратившегося|посещение|посещения")
+ S LPU="" F  S LPU=$O(^BUF($J,0,LPU)) Q:LPU=""  D:$E(LPU,1)'=" "
+ .K TX(1) S TX(1,1)=$G(^(LPU," pos")),TX(1,2)=$G(^(" sum"))
+ .S R=LPU D LN(1)
+ .D WC^RWU(CR_$S(LPU=-1:"ВСЕГО по сети",1:$$NAME^ICONTR(LPU))_"|"_R)
+ .S TP="" F  S TP=$O(^BUF($J,0,LPU,TP)) Q:TP=""  D:$E(TP,1)'=" "
+ ..K TX(2) S TX(2,1)=$G(^(TP," pos")),TX(2,2)=$G(^(" sum"))
+ ..S R=TP D LN(2)
+ ..D WC^RWU(CR_" "_$G(TPL(TP))_"|"_R)
+ ..S U1="" F  S U1=$O(^BUF($J,0,LPU,TP,U1)) Q:U1=""  D:$E(U1,1)'=" "
+ ...K TX(3) S TX(3,1)=$G(^(U1," pos")),TX(3,2)=$G(^(" sum"))
+ ...S R=U1 D LN(3)
+ ...D WC^RWU(CR_"   - "_$G(UL1(U1))_"|"_R)
+ ...S U2="" F  S U2=$O(^BUF($J,0,LPU,TP,U1,U2)) Q:U2=""  D:$E(U2,1)'=" "
+ ....S R=$D(^(U2," ")) D LN(4)
+ ....S:U2["," X1=$$NAME^IINSC($P(U2,",",1))_", "_$$NAME^IMPRP($P(U2,",",2))
+ ....D WC^RWU(CR_"          "_$S(U2[",":X1,1:$G(UL2(U2)))_"|"_R)
+ K ^BUF($J)
+ D C^RWU
+ Q
+LN2(LVL) 
+ S X1=+$G(^(" time"))
+ S R=$S('X1:"",1:$$FN(100*$G(^(" use"))/X1))_"||"
+ S X1=+$G(^(" pos")),X2=+$G(^(" ppl")),X3=+$G(^(" sum"))
+ S R=R_X2_"|"_X1_"|"
+ S R=R_$S(+$G(TX(LVL-1,1)):$$FN(100*X1/TX(LVL-1,1)),1:"")
+ S R=R_"|"_$$FN(X3)_"|"
+ S R=R_$S(+$G(TX(LVL-1,2)):$$FN(100*X3/TX(LVL-1,2)),1:"")
+ S R=R_"|"_$S('X2:0,1:$$FN(X1/X2))_"|" ; pos/pipl
+ S X4=+$G(^(" cnt"))
+ S R=R_$S('X1:0,1:$$FN(X4/X1))_"|"
+ S R=R_$S('X1:0,1:$$FN(X3/X1))
+ Q
+FN(X) 
+ Q $TR($FN(X,"",2),".",",")
+PROCSH ; Filter proc DSH
+ ;S NI=$P(L,"|",1)
+ Q
+PROCU ; Filter proc USL
+ S DGT=$$GETDGT^IRPUSL(CSTC,DT)
+ S X4=$D(^BTPLS("stc",CSTC))
+ I DGT=2,'X4,FLG'["|prf|",'KASS S TEST=1 Q 
+ S USER1=$S(FLG["|prf|":3,KASS!(DGT=3):2,DGT<2:1,X4:2,1:2)
+ ;I USER1="" S TEST=1 Q 
+ S:USER1=3 PTP=""
+ S USER2=$S(KASS!(DGT=3):3,DGT=0:1,DGT=1:2,CABON&X4:4,X4:CSTC_","_$$GET^IPAC(NI,"prog",DT),1:3)
+ ;I USER2="" S TEST=1 Q
+ Q
+PROCU2 
+ S DGT=$$GETDGT^IRPUSL(CSTC,DT)
+ S X4=$D(^BTPLS("stc",CSTC))
+ I DGT=2,'X4,FLG'["|prf|",FLG'["|kss|" S TEST=1 Q 
+ S PTP=$S(FLG["|prf|":4,1:PTP)
+ S USER1=$S(KASS!(DGT=3):2,DGT<2:1,1:3)
+ I PTP=4 S USER2="" Q 
+ S USER2=$S(KASS!(DGT=3):3,DGT=0:1,DGT=1:2,X4:CSTC_","_$$GET^IPAC(NI,"prog",DT),1:3)
+ Q
+REGIPROC 
+ S ^IPROC("Управленческая отчетность","Финансы","Характеристика услуг в разрезе подразделений и каналов продаж")="LITE_RBASERPF,1,4,d,Дата начала периода,d,Дата окончания периода,t@string:1/Да#0/Нет,Выводить по подразделениям,t@string:0/Нет#1/Да,Абонементы - сводно"
+ S ^IPROC("Управленческая отчетность","Финансы","Характеристика услуг в разрезе подразделений и видов услуг")="PVU_RBASERPF,1,3,d,Дата начала периода,d,Дата окончания периода,t@string:0/Нет#1/Да,Абонементы - сводно"
+ Q

@@ -1,0 +1,107 @@
+IKDLTCN ; Tecan-Magellan drv. [ 02/07/2015  0:03 AM ]
+DO(DEV,MOD) ; Обработчик драйвера
+ N DIR,FN,R
+ S MOD=+$G(MOD)
+ S DIR=$P(^LABT("DEV",DEV,"i"),"|",4)
+ D:$D(^MLABW(DEV,0)) out(DEV,DIR_"import.tpl")
+ D:MOD=2 in(DEV,DIR,"import.tpl",1)
+ D:MOD=1 in(DEV,DIR,"import.tpl")
+ D:MOD=0 inA(DEV,DIR,"import.tpl")
+ Q
+DO1(DEV) ; wrapper
+ D DO(DEV,1)
+ Q
+DO2(DEV) ; wrapper
+ D DO(DEV,2)
+ Q
+in(DEV,FN,FO,PART) 
+ N FILL,FL,IO,R,LN,POS,FX,J,F,ID,IJ,P,X,Y,Z,TAB
+ S PART=+$G(PART)
+ D DIR^FIL(FN_"*.asc","FILL")
+ ; K FILL(FO) ; w.o. export file ! .tpl
+ Q:'$D(FILL) 
+ S dbg=+$G(^cfg("lab","debugdev"))
+ K ^BUF($J)
+ S FX=$G(^LABT("DEV",DEV,"fn"))
+ ; load
+ S FL="" F  S FL=$O(FILL(FL)) Q:FL=""  D:FILL(FL)=0
+ .S IO=$$ORT^FIL(FN_FL),F=0 Q:IO=""
+ .U IO F J=1:1  R R Q:$$ST^FIL()=0  D:R'=""
+ ..I 'PART,J<11  Q ; только 2-ю часть (результат) грузим
+ ..S LN=$P(R,$C(9),1) Q:LN="<>"  Q:LN="" 
+ ..F I=2:1:13 S P=$P(R,$C(9),I) S:P'="" X=LN_(I-1),^BUF($J,X)=P,F=1,TAB(X)=P
+ .C IO
+ .D:$S(dbg:F,1:1) DEL^FIL(FN_FL)
+ ; fill
+ S IJ="" F  S IJ=$O(^MLABW(DEV,0,IJ)) Q:IJ=""  D
+ .S ID=$P($G(^(IJ)),"|",3) Q:ID="" 
+ .S P="" F  S P=$O(^MLABW(DEV,0,IJ,P))  Q:P=""  D:^(P)'=0
+ ..S R=^(P),LN=$P(R,"|",2) Q:LN="" 
+ ..S R=$G(^BUF($J,LN)) Q:R="" 
+ ..I FX'="" X "S R="_FX
+ ..D SET^IMLAB(ID,P,R,DEV)
+ ..D OKPRM^IMLABW(DEV,ID,P)
+ ; TODO - clear import
+ K ^BUF($J)
+ Q
+inA(DEV,FN,FO) ; ASTM
+ N FILL,FL,IO,R,LN,OP,NN,ID,DT,P,PP,VAR,dbg
+ D DIR^FIL(FN_"*.txt","FILL")
+ Q:'$D(FILL) 
+ S dbg=+$G(^cfg("lab","debugdev"))
+ ; load
+ S FL="" F  S FL=$O(FILL(FL)) Q:FL=""  D:FILL(FL)=0
+ .S IO=$$ORT^FIL(FN_FL),F=0 Q:IO=""
+ .S ID=""
+ .U IO F J=1:1  R R Q:$$ST^FIL()=0  D:R'=""  
+ ..S OP=$P(R,"|",1) Q:"HL"[OP 
+ ..I OP="P" S ID=$P(R,"|",4) I ID'="",'$D(^MLABI("c",ID)) S ID=""  ; TODO
+ ..Q:ID="" 
+ ..S NN=$P(R,"|",2)
+ ..I OP="R",NN>0 D  Q  ; TODO - wtf N ?
+ ...S VAR=$P(R,"|",4),PP=$P($P(R,"|",3),"^",4),P=""
+ ...S:PP'="" P=$G(^LABT("DEV",DEV,"t",PP))
+ ...S:P="" P=$O(^LABT("DEV",DEV,"t",""))
+ ...Q:P="" 
+ ...D SET^IMLAB(ID,P,VAR,DEV) S F=1
+ ...D OKPRM^IMLABW(DEV,ID,P)
+ .C IO
+ .D:$S(dbg:F,1:1) DEL^FIL(FN_FL)
+ K ^BUF($J)
+ Q
+out(DEV,FN,GEN) ; Create output file (!for one prm.!)
+ ; GEN - только пересоздать
+ ; Q:$$CHECK^FIL(FN)  ; еще есть файл
+ Q:'$P($G(^MLABW(DEV,0)),"|",3) 
+ Q:$G(^LABT("DEV",DEV,"use"))=0 
+ S GEN=$G(GEN)
+ I 'GEN D:$$CHECK^FIL(FN) DEL^FIL(FN) ; каждый раз удаляем 
+ N ID,P,NI,PRB,PRM,FIL,R,C,CR,IIP,IP,IF,LST
+ S IIP=$G(^LABT("DEV",DEV,"ud")) ; начальная плашка
+ S P=$P($G(^MLABW(DEV,0)),"|",1) ; альтернативно начальная плашка
+ S:'IIP IIP=1 S:P'="" IIP=P
+ 
+ ; Список занятых
+ S ID="" F  S ID=$O(^MLABW(DEV,0,ID)) Q:ID=""  D
+ .S P="" F  S P=$O(^MLABW(DEV,0,ID,P))  Q:P=""  S IP=$P(^(P),"|",1) S:IP'="" LST(IP)="" 
+ 
+ S (FIL,C)="",CR=$C(13,10)
+ S ID="" F  S ID=$O(^MLABW(DEV,0,ID)) Q:ID=""  D  
+ .S P="" F  S P=$O(^MLABW(DEV,0,ID,P))  Q:P=""  D  
+ ..I 'GEN,FIL="" S FIL=$$OW^FIL(FN) U FIL W "H;"_$TR($$DT2^DTUTL(+$H),".","-")_";"_$$TIME^DTUTL($H)
+ ..S PRM=^LABT("T",P,"dev",DEV)
+ ..S IP=$P(^MLABW(DEV,0,ID,P),"|",1),IF=1
+ ..S:'IP IP=IIP,IF=0
+ ..S R=$C($A("A")+((IP-1)#8))_((IP+7)\8)
+ ..W:'GEN CR_"D;1;"_ID_";"_R_";1;0"
+ ..S ^MLABW(DEV,0,ID,P)=IP_"|"_R
+ ..Q:IF  ; руч. распред.
+ ..F IIP=IIP+1:1:9999 Q:'$D(LST(IIP)) ; пропускаем занятые
+ I FIL'="" W CR_"L;" C FIL
+ S:FIL'="" $P(^MLABW(DEV,0),"|",3)=""
+ Q
+CLRPOS(DEV) ; Сбросить позиции плашек
+ N ID,P
+ S ID="" F  S ID=$O(^MLABW(DEV,0,ID)) Q:ID=""  D
+ .S P="" F  S P=$O(^MLABW(DEV,0,ID,P))  Q:P=""  S ^MLABW(DEV,0,ID,P)=""
+ Q

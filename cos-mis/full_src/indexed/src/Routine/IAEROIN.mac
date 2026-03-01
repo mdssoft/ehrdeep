@@ -1,0 +1,210 @@
+IAEROIN ; Import from Megaclinic
+IN(DIR)
+	; Структура ЛПУ
+	W !,"iSPEC(DIR)"
+	D iSPEC(DIR)
+	W !,"iOTD(DIR)"
+	D iOTD(DIR)
+	W !,"iKDR(DIR)"
+	D iKDR(DIR)
+	W !,"iSPKDR(DIR)"
+	D iSPKDR(DIR)
+	; Пациенты
+	W !,"iDGN(DIR)"
+	D iDGN(DIR)
+	W !,"iWRK(DIR)"
+	D iWRK(DIR)
+	W !,"iSTAT(DIR)"
+	D iSTAT(DIR)
+	W !,"iPAC(DIR)"
+	D iPAC(DIR)
+	W !,"iPACAN(DIR)"
+	D iPACAN(DIR)
+	W !,"iPACPL(DIR)"
+	D iPACPL(DIR)
+	W !,"iPACADR(DIR)"
+	D iPACADR(DIR)
+	Q
+iSPEC(DIR) ; Специальности
+	N II,J,IO,R,LN,F,ID
+	S II=$$NEWIDX^YISPRAV("spec")
+	S IO=$$ORT^FIL(DIR_"NSI_MedicalSpeciality.csv") Q:IO=""
+	S F=0
+ 	F J=1:1  U IO R R Q:$$ST^FIL()=0  D:R'=""  Q:F
+ 	.D DECL^ICSV(R)
+ 	.I J=1,$G(LN(1))'="Code" S F=1 Q 
+ 	.I J=1 Q 
+ 	.S ID=+LN(1)
+ 	.S ^MN(II,ID,"fname")=LN(4)
+ 	.S ^MN(II,ID,"sname")=LN(4)
+ 	.S ^MN(II,ID,"use")='LN(7)
+ 	D C^FIL(IO)
+	Q
+iOTD(DIR) ; Отделения
+	N II,J,IO,R,LN,F,ID
+	S II=$$NEWIDX^YISPRAV("otd")
+	S IO=$$ORT^FIL(DIR_"LPU_OrgUnit.csv") Q:IO=""
+	S F=0
+ 	F J=1:1  U IO R R Q:$$ST^FIL()=0  D:R'=""  Q:F
+ 	.D DECL^ICSV(R)
+ 	.I J=1,$G(LN(1))'="OrgUnitUID" S F=1 Q 
+ 	.I J=1 Q 
+ 	.S ID=LN(3)
+ 	.S ID=$S($L(ID)=3:30+ID,1:ID) ; с 00 в 30+
+ 	.S ^MN(II,ID,"fname")=LN(4)
+ 	.S ^MN(II,ID,"sname")=LN(4)
+	.S ^MN(II,ID,"use")=LN(8)
+	.S ^MN(II,ID,"ecode")=LN(1)
+	.S ^MN(II,ID,"med")=1
+ 	D C^FIL(IO)
+	Q
+iKDR(DIR) ; Кадры
+	N J,IO,R,LN,F,ID,DT
+	S IO=$$ORT^FIL(DIR_"LPU_Employee.csv") Q:IO=""
+	S F=0
+	S DT=$$DI^DTUTL("01.01.2019")
+ 	F J=1:1  U IO R R Q:$$ST^FIL()=0  D:R'=""  Q:F
+ 	.D DECL^ICSV(R)
+ 	.I J=1,$G(LN(1))'="EmployeeUID" S F=1 Q 
+ 	.I J=1 Q 
+ 	.S ID=+LN(1)
+ 	.D SET^IKADRY(ID,"f",DT,$$TRIM^TXTU(LN(4)))
+ 	.D SET^IKADRY(ID,"i",DT,$$TRIM^TXTU(LN(5)))
+ 	.D SET^IKADRY(ID,"o",DT,$$TRIM^TXTU(LN(6)))
+ 	.D SET^IKADRY(ID,"ecode",DT,LN(3))
+ 	.D SET^IKADRY(ID,"ofor",DT,$S($G(LN(10)):0,1:1))
+ 	.D SET^IKADRY(ID,"dofor",DT,$$DIISO^DTUTL($G(LN(9))))
+ 	.D SET^IKADRY(ID,"duvol",DT,$$DIISO^DTUTL($G(LN(11))))
+ 	D C^FIL(IO)
+	Q
+iSPKDR(DIR) ; Спец+отд в кадры
+	N J,IO,R,LN,F,ID,DT,OTL,X,X1,L,OT
+	S IO=$$ORT^FIL(DIR_"LPU_Position.csv") Q:IO=""
+	S J=$$NEWIDX^YISPRAV("otd")
+	S L=++$$^I("ilpu")
+	S X="" F  S X=$O(^MN(J,X)) Q:X=""  S OTL(^MN(J,X,"ecode"))=X
+	S F=0
+	S DT=$$DI^DTUTL("01.01.2019")
+ 	F J=1:1  U IO R R Q:$$ST^FIL()=0  D:R'=""  Q:F
+ 	.D DECL^ICSV(R)
+ 	.I J=1,$G(LN(1))'="PositionUID" S F=1 Q 
+ 	.I J=1 Q 
+ 	.S ID=+LN(4)
+ 	.D SET^IKADRY(ID,"spec",DT,+LN(5))
+ 	.S X=LN(3)
+ 	.S OT=$G(OTL(X))
+	.D SET^IKADRY(ID,"otd",DT,OT)
+	.D SET^IKADRY(ID,"rates",DT,L_","_OT_",1:"_LN(8))
+ 	.;D SET^IKADRY(ID,"sptext",DT,)
+ 	.D SET^IKADRY(ID,"certs",DT,$$TRIM^TXTU(LN(10)_" "_LN(11)))
+ 	.D SET^IKADRY(ID,"up_kv",DT,LN(12))
+ 	.D SET^IKADRY(ID,"up_kvd",DT,"")
+ 	.D SET^IKADRY(ID,"up_kv_d",DT,$$DIISO^DTUTL(LN(13)))
+ 	D C^FIL(IO)
+	Q
+iPRG(DIR) ; Программы
+	Q
+iDGN(DIR) ; Договора
+	N J,IO,R,LN,F,ID,DT
+	S IO=$$ORT^FIL(DIR_"NSI_SMO.csv") Q:IO=""
+	S DT=$$DI^DTUTL("01.01.19")
+	S F=0
+ 	F J=1:1  U IO R R Q:$$ST^FIL()=0  D:R'=""  Q:F
+ 	.D DECL^ICSV(R)
+ 	.I J=1,$G(LN(1))'="SMOUID" S F=1 Q 
+ 	.I J=1 Q 
+ 	.S ID=+LN(1)
+	.D SET^YNDOG(ID,"ndog",DT,ID)
+	.D SET^YNDOG(ID,"ecode",DT,LN(3))
+	.D SET^YNDOG(ID,"oname",DT,LN(4))
+	.D SET^YNDOG(ID,"shortname",DT,LN(5))
+	.D SET^YNDOG(ID,"dvid",DT,0)
+	.D SET^YNDOG(ID,"use",DT,LN(6))
+	.D SET^YNDOG(ID,"ogrn",DT,LN(14))
+ 	D C^FIL(IO)
+	Q
+iWRK(DIR) ; Место работы
+	N J,IO,R,LN,F
+	S IO=$$ORT^FIL(DIR_"Patient_Organisation.csv") Q:IO=""
+	S F=0
+ 	F J=1:1  U IO R R Q:$$ST^FIL()=0  D:R'=""  Q:F
+ 	.D DECL^ICSV(R)
+ 	.I J=1,$G(LN(1))'="OrganisationUID" S F=1 Q 
+ 	.I J=1 Q 
+ 	.S ^M(5,LN(1))=LN(5) ; TODO LN(4) - num code
+ 	D C^FIL(IO)
+	Q
+iSTAT(DIR) ; Социальные статусы
+	N J,IO,R,LN,F
+	S IO=$$ORT^FIL(DIR_"NSI_SocialStatus.csv") Q:IO=""
+	S F=0
+ 	F J=1:1  U IO R R Q:$$ST^FIL()=0  D:R'=""  Q:F
+ 	.D DECL^ICSV(R)
+ 	.I J=1,$G(LN(1))'="Code" S F=1 Q 
+ 	.I J=1 Q 
+ 	.S ^M(1,+LN(1))=LN(2)
+ 	D C^FIL(IO)
+	Q
+iPAC(DIR) ; Пациенты (обычные)
+	N J,IO,R,LN,F,ID,DT,X,I,WRK
+	S IO=$$ORT^FIL(DIR_"Patient_Patient.csv") Q:IO=""
+	S X="" F  S X=$O(^M(5,X)) Q:X=""  S WRK(^M(5,X))=X
+	S F=0
+ 	F J=1:1  U IO R R Q:$$ST^FIL()=0  D:R'=""  Q:F
+ 	.D DECL^ICSV(R)
+ 	.I J=1,$G(LN(1))'="PatientUID" S F=1 Q 
+ 	.I J=1 Q 
+ 	.S ID=+LN(1)
+ 	.S DT=$$DIISO^DTUTL($P(LN(27)," ",1))
+ 	.D SET^IPAC(ID,"ofor",DT,1)
+ 	.D SET^IPAC(ID,"dofor",DT,DT)
+ 	.D SET^IPAC(ID,"fiof",DT,$$TRIM^TXTU(LN(3)))
+ 	.D SET^IPAC(ID,"fioi",DT,$$TRIM^TXTU(LN(4)))
+ 	.D SET^IPAC(ID,"fioo",DT,$$TRIM^TXTU(LN(5)))
+ 	.D SET^IPAC(ID,"datar",DT,$$DIISO^DTUTL(LN(6)))
+ 	.; 7 BirthPlace
+ 	.D SET^IPAC(ID,"pol",DT,LN(8))
+ 	.S X=LN(9)
+ 	.D:X'="" SET^IPAC(ID,"status",DT,+X)
+ 	.D SET^IPAC(ID,"snils",DT,LN(15))
+ 	.D SET^IPAC(ID,"tel1",DT,LN(17))
+ 	.D SET^IPAC(ID,"tel2",DT,LN(18))
+ 	.D SET^IPAC(ID,"pager",DT,LN(19))
+ 	.S X=LN(20) ; Work
+ 	.D SET^IPAC(ID,"work",DT,$G(WRK(+X)))
+ 	.D SET^IPAC(ID,"text",DT,LN(32))
+ 	.D SET^IPAC(ID,"email",DT,LN(33))
+ 	D C^FIL(IO)
+	Q
+iPACAN(DIR) ; Пациенты (номера ИБ)
+	N J,IO,R,LN,F,ID,DT,X,I
+	S IO=$$ORT^FIL(DIR_"EHR_Book.csv") Q:IO=""
+	S F=0
+ 	F J=1:1  U IO R R Q:$$ST^FIL()=0  D:R'=""  Q:F
+ 	.D DECL^ICSV(R)
+ 	.I J=1,$G(LN(1))'="BookUID" S F=1 Q 
+ 	.I J=1 Q 
+ 	.S ID=+LN(2) Q:'$D(^BTN(ID)) 
+ 	.S DT=$$CREATED^IPAC(ID)
+ 	.D SET^IPAC(ID,"anib",DT,LN(4))
+ 	D C^FIL(IO)
+	Q
+iPACPL(DIR) ; Пациенты (полис)
+	N J,IO,R,LN,F,ID,DS,DE,X1,X2,I
+	S IO=$$ORT^FIL(DIR_"Patient_Policy.csv") Q:IO=""
+	S F=0
+ 	F J=1:1  U IO R R Q:$$ST^FIL()=0  D:R'=""  Q:F
+ 	.D DECL^ICSV(R)
+ 	.I J=1,$G(LN(1))'="PolicyUID" S F=1 Q 
+ 	.I J=1 Q 
+ 	.S ID=+LN(2)
+ 	.S DT=$$DIISO^DTUTL($P(LN(9)," ",1))
+ 	.D SET^IPAC(ID,"stc",DT,LN(2))
+ 	.S X1=LN(4),X2=LN(5)
+ 	.S X1=X1_$S(X1="":"",X2="":"",1:" ")
+ 	.D SET^IPAC(ID,"polis",DT,X1)
+ 	; TODO - State
+ 	D C^FIL(IO)
+	Q
+iPACADR(DIR) ; Пациенты (адрес)
+	Q

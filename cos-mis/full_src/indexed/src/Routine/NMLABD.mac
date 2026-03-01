@@ -1,0 +1,73 @@
+NMLABD ; Сопутствующие документы КДЛ [ 04/30/2020  0:15 AM ]
+SPLL(DS,DE) ; Перечень сопроводительных листов
+ N DTP,DOC,X,LP,A
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S DTP=$$FNDUID^YDOCTP("kdl-aclst") Q:DTP="" 
+ S LP=$$^I("ilpu"),A=""
+ D OWF^RWU(".txt")
+ S DOC=(DS-1)_",0" F  S DOC=$O(^CDOCI("type",DTP,DOC)) Q:DOC=""  D
+ .S X=$P(DOC,",",1),U="" Q:X<DS!(X>DE)
+ .I LP'="",$$GET^YDOCS(DOC,"lpu")'=LP Q
+ .D WC^RWU(A_DOC_"|"_$$GET^YDOCS(DOC,"nm")) S A=CR
+ D C^RWU
+ Q
+SPL(DOC) ; Вывод сопроводительного листа
+ N NI,ID,FYDOCS,IDX,B
+ D OWF^RWU(".txt")
+ D WC^RWU("П.п.|Штрихкод|Код заявки|Код пациента|Ф.И.О.|Тестов|Пробирок")
+ D ORSTR^YDOCS
+ S IDX=1
+ F  S ID=$$RSTR^YDOCS(DOC) Q:FYDOCS=""  D:ID'=""
+ .Q:'$D(^MLABI("c",ID))
+ .S NI=^MLABI("c",ID)
+ .S A=IDX_"|"_$$GETBAR^IMLAB(NI,ID)_"|"_ID_"|"_NI_"|"_$$FIOSH^IPAC(NI)
+ .S A=A_"|"_$P($$TCNT^IMLAB(NI,ID),"|",1)_"|" ; TODO - пробирок
+ .D WC^RWU(CR_A)
+ .S IDX=IDX+1
+ D C^RWU
+ Q
+IsID(DOC,ID) ; Проверить что идентификатор есть в документе
+ Q:DOC=""  Q:ID="" 
+ N F,I,FYDOCS
+ D ORSTR^YDOCS
+ S F=0 F  S I=$$RSTR^YDOCS(DOC) Q:FYDOCS=""  I I=ID S F=1 Q 
+ Q F
+SPLMK(NM) ; Создать
+ N DOC
+ S DOC=$$MKDOCNM^YDOCS(NM,"Сопроводительный лист","КДЛ","kdl-aclst")
+ D:DOC'="" SET^YDOCS(DOC,"lpu",$$^I("ilpu"))
+ D MSG^RWU(DOC)
+ Q
+SPLADD(DOC,BAR) ; Добавить в лист+заявку "в работу"
+ N NI,ID
+ Q:DOC="" 
+ S ID=$$BARID^IMLAB(BAR) 
+ I ID="" G SPLADDe
+ S NI=$P(ID,"|",2),ID=$P(ID,"|",1)
+ I $P($G(^MLAB(NI,ID,"s3")),"|",1) G SPLADDe 
+ I $$IsID(DOC,ID) G SPLADDe 
+ D SETSTAT^IMLAB(NI,ID,3,1)
+ D:'$P($G(^MLAB(NI,ID,"s4")),"|",1) SETSTAT^IMLAB(NI,ID,4,0) ; статус отправки
+ D WSTR^YDOCS(DOC,ID)
+SPLADDe D SPL(DOC) ; show table
+ Q
+SPLM ; Создать сопроводительный лист
+ N %J,A,A1,NI,DOC,npB,DC
+ S A="Сопроводительный лист",A1=A_" от "_$$DT2^DTUTL(+$H)
+ S DC=+$G(^cfg("lab","spldays"))
+ S npB=$$LCL^IUSER("lab","noprnbar"),DOC=""
+ D ORH^RWU
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  D
+ .Q:A=""  Q:'$D(^MLABI("c",A)) 
+ .S NI=^(A)
+ .Q:$$IsSTATE^IMLAB(NI,A,4) 
+ .Q:'$$IsSTATE^IMLAB(NI,A,31)
+ .Q:(+^MLAB(NI,A))<(+$H-DC)  ; DC дней назад
+ .D SETSTAT^IMLAB(NI,A,4,1)
+ .S:DOC="" DOC=$$MKDOCNM^YDOCS(A1,A,"КДЛ","kdl-aclst") Q:DOC="" 
+ .I npB=3,'$$IsSTATE^IMLAB(NI,A,3) D SETSTAT^IMLAB(NI,A,3,1) ; to work
+ .D WSTR^YDOCS(DOC,A)
+ D CR^RWU
+ D:DOC'="" SET^YDOCS(DOC,"lpu",$$^I("ilpu"))
+ D MSG^RWU(DOC)
+ Q

@@ -1,0 +1,52 @@
+RKONTS ; Статистика по контингенту [ 10/29/2023  11:34 PM ]
+BYOP(DS,DE) ; По операторам
+ N NI,M,LL,DX,D,R,OP,K,F
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ K ^BUF($J)
+ S NI="" F  S NI=$$NEXT^IPAC(NI) Q:NI=""  D
+ .D GETM^IPAC(NI,"opfio","M")
+ .Q:'$D(M)
+ .S F=1
+ .S DX="" F  S DX=$O(M(DX)) Q:DX=""  D
+ ..S R=M(DX),D=$P(R,"|",2)
+ ..Q:+D<DS  Q:+D>DE 
+ ..S OP=$P($P(R,"|",1),"@",1) Q:OP="" 
+ ..I F S DC=$$CREATED^IPAC(NI),F=0 S:+D=DC ^(2)=$G(^BUF($J,OP,2))+1
+ ..S ^(1)=$G(^BUF($J,OP,1))+1
+ D OWF^RWU(".txt")
+ D WC^RWU("Операторы "_$$TXTP^DTUTL(DS,DE)_"|Изменений всего|Создано пациентов")
+ S OP="" F  S OP=$O(^BUF($J,OP)) Q:OP=""  D
+ .S K=$G(^LOG(OP,"kadry"))
+ .S K=$S(K="":OP,1:$$FIO^IKADRY(K))
+ .D WC^RWU(CR_K_"|"_$G(^BUF($J,OP,1))_"|"_$G(^BUF($J,OP,2)))
+ D C^RWU
+ Q
+BYOPL(DS,DE,USR,FLX) ; По операторам, список
+ N NI,M,LL,DX,D,R,OP,K,F,FF,FLi,H
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S FLi=$S(FLX="":"",1:$$PLIDX^IPAC(FLX))
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|№ И.б.|Ф.И.О. пациента "_$$TXTP^DTUTL(DS,DE)_"|Дата, время|Новый|Оператор")
+ S NI="" F  S NI=$$NEXT^IPAC(NI) Q:NI=""  D
+ .D GETM^IPAC(NI,"opfio","M")
+ .Q:'$D(M)
+ .S F=1
+ .S DX="" F  S DX=$O(M(DX)) Q:DX=""  D
+ ..S R=M(DX),D=$P(R,"|",2)
+ ..Q:+D<DS  Q:+D>DE 
+ ..S OP=$P($P(R,"|",1),"@",1) Q:OP="" 
+ ..I USR'="",OP'=USR Q
+ ..S FF=0
+ ..I FLi S H=(+D)_",0" F  S H=$O(^BTNL(NI,FLi,DX,H)) Q:H=""!(+H>DE)  S FF=1
+ ..I FLi,'FF Q 
+ ..S FF=0
+ ..I F S DC=$$CREATED^IPAC(NI),F=0 S:+D=DC FF=1
+ ..S K=$G(^LOG(OP,"kadry"))
+ ..S K=$S(K="":OP,1:$$FIO^IKADRY(K))
+ ..D WC^RWU(CR_NI_"|"_NI_"|"_$$FIO^IPAC(NI)_"|"_$$DTM^DTUTL(D)_"|"_$S(FF:"+",1:"")_"|"_K)
+ D C^RWU
+ Q
+REGIPROC 
+ S ^IPROC("Отчеты по пациентам","Служебные","Статистика по операторам")="BYOP_RKONTS,1,2,d,Начальная дата изменений,d,Конечная дата изменений"
+ S ^IPROC("Отчеты по пациентам","Служебные","Список по операторам")="BYOPL_RKONTS,100,4,d,Начальная дата изменений,d,Конечная дата изменений,s,Пользователь,s,Имя измененного поля"
+ Q

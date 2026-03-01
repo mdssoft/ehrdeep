@@ -1,0 +1,35 @@
+RRSUSL ; Отчеты по рекламе и услугам [ 09/04/2018  4:33 PM ]
+DHTP(DS,DE,LPUX) ; Доход по видам носителей
+ N TABLE,RSpac,RSpos,CNT,I,R,TP
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),LPUX=$G(LPUX)
+ S FF=+$$FR^I()
+ S:'FF LPUX=$$^I("ilpu")
+ D MKAPPRC^IUSLSC(DS,DE,1,"","PRGprc^RRSUSL","","PRGpac^RRSUSL",'FF)
+ D OWF^RWU(".txt")
+ D WC^RWU("Источник|Число|Сумма|Число|Сумма|Услуг;")
+ D WC^RWU(CR_"рекламы|пациентов|услуг|услуг|по кассе|по кассе")
+ S TP="" F  S TP=$O(TABLE(TP)) Q:TP=""  D
+ .S R=$$NAME^ISPRAV("rsource",TP)
+ .F I=1:1:5 S R=R_"|"_$TR(+$G(TABLE(TP,I)),".",",")
+ .D WC^RWU(CR_R)
+ D C^RWU
+ Q
+PRGpac ; patient filter
+ s RSpac=$$GET^IPAC(NIB,"rsource",DE)
+ I RSpac="" S TEST=0 Q 
+ S RSpos=1
+ Q
+PRGprc 
+ I LPUX'="",LPUX'=LPU Q 
+ S CNT=UL(U)
+ S SUMM=$S($L(SUMM):SUMM,1:$$PRICEH^IPRICE(U,PRC,DT)*KSKD)*CNT
+ I RSpos S RSpos=0,TABLE(RSpac,1)=$G(TABLE(RSpac,1))+1
+ I KASS S TABLE(RSpac,4)=$G(TABLE(RSpac,4))+SUMM,TABLE(RSpac,5)=$G(TABLE(RSpac,5))+CNT Q
+ S TABLE(RSpac,2)=$G(TABLE(RSpac,2))+SUMM
+ S TABLE(RSpac,3)=$G(TABLE(RSpac,3))+CNT
+ Q
+REGIPROC ;
+ N FF
+ S FF=+$$FR^I()
+ S ^IPROC("Центр обработки вызовов","Суммы по видам рекламных носителей")="DHTP_RRSUSL,1,"_$S(FF:3,1:2)_",d,Начальная дата,d,Конечная дата"_$S(FF:",t@storage:lpu,Филиал",1:"")
+ Q

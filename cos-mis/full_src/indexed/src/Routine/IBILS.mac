@@ -1,0 +1,175 @@
+IBILS ; Субсчета пациентов [ 06/22/2020  10:38 PM ]
+USE(NIB) ; Используется счет
+ Q:'$D(^BILS(NIB)) 0 Q 1
+NOW(NI,SC) ; Состояние на текущий момент
+ S SC=$G(SC)
+ I SC'="" Q $G(^BILS(NI,SC))
+ N S
+ S S=0 F  S SC=$O(^BILS(NI,SC)) Q:SC=""  S S=S+^(SC)
+ Q S
+ADD(NIB,SC,DTH,SUM,TXT,COM) ; Прибавить
+ ; SC - счет, TXT - служебный текст, COM - пользоват. коммент.
+ Q:NIB="" "" Q:SC="" ""
+ 
+ N K,DTM,DL,PNI,LOG
+ S:DTH'["," DTH=$H S DTM=$P(DTH,",",2)
+ S SUM=+$TR(SUM,",","."),DTH=+DTH
+ S LOG=$$USR^IUSER()
+ S K="+|"_SUM_"|"_LOG
+ S:$G(TXT)'="" $P(K,"|",4)=TXT
+ S:$G(COM)'="" $P(K,"|",5)=COM
+ 
+ F  Q:'$D(^BILS(NIB,SC,DTH,DTM))  S DTM=DTM+1
+ S ^(DTM)=K
+ L +^BILS(NIB,SC)
+ S K=$G(^BILS(NIB,SC))+SUM,^(SC)=K
+ L -^BILS(NIB,SC)
+ 
+ D GLZ^IEXCH("^BILS",NIB,SC,DTH,DTM)
+ D GLZ^IEXCH("^BILS",NIB,SC)
+ D DO^ITRIG("bils","add")
+ Q NIB_","_SC_","_DTH_","_DTM
+SUB(NIB,SC,DTH,SUM,TXT,COM) ; Вычесть (прибавить если отрицат.)
+ ; TXT - системное примечание
+ ; COM - текстовое примечание
+ Q:NIB="" ""
+ N K,DTM,DL,PNI,X,LP,LOG,AR
+ S:DTH'["," DTH=$H S DTM=$P(DTH,",",2),DTH=+DTH
+ S SUM=+$TR(SUM,",","."),LP=$$^I("ilpu")
+ S LOG=$G(%LOG)_$S($L(LP):"@"_LP,1:"")
+ S K="|"_$S(SUM<0:"+"_(0-SUM),1:"-"_SUM)_"|"_LOG
+ S:$G(TXT)'="" $P(K,"|",4)=TXT
+ S:$G(COM)'="" $P(K,"|",5)=COM
+ L +^BILS(NIB,SC)
+ S X=$G(^BILS(NIB,SC))
+ F  Q:'$D(^BILS(NIB,SC,DTH,DTM))  S DTM=DTM+1 ; Next free
+ S ^(DTM)=K
+ S K=X-SUM,^BILS(NIB,SC)=K
+ L -^BILS(NIB,SC)
+ ;D UPD^IEXCH("IBILS",NIB_","_(+DTH))
+ D GLZ^IEXCH("^BILS",NIB,SC,DTH,DTM)
+ D GLZ^IEXCH("^BILS",NIB,SC)
+ D DO^ITRIG("bils","sub")
+ Q NIB_","_SC_","_DTH_","_DTM
+REFBALS(NI,SC,DT) 
+ N S,R,TM
+ S S=0,DT=$G(DT)-1 F  S DT=$O(^BILS(NI,SC,DT)) Q:DT=""  D
+ .S TM="" F  S TM=$O(^BILS(NI,SC,DT,TM)) Q:TM=""  S R=^(TM),O=$P(R,"|",1) S:O="+"!(O="-")!(O="") S=S+$P(R,"|",2)
+ S ^BILS(NI,SC)=S
+ Q
+REFBAL(NI,DT) 
+ N SC
+ S DT=$G(DT),SC="" F  S SC=$O(^BILS(NI,SC)) Q:SC=""  D REFBALS(NI,SC,DT)
+ Q
+REIDX ; Обновление балансов и служебных индексов
+ N NI
+ S NI="" F  S NI=$O(^BILS(NI)) Q:NI=""  D REFBAL(NI,"")
+ Q
+SCSUM(NI,SC,MOD) ; Сумма транзакций по счету
+ ; MOD - 0/1 = зачисление/списание
+ N S,R,TM,DT
+ S S=0,DT="" F  S DT=$O(^BILS(NI,SC,DT)) Q:DT=""  D
+ .S TM="" F  S TM=$O(^BILS(NI,SC,DT,TM)) Q:TM=""  S R=^(TM),O=$P(R,"|",1) D
+ ..I 'MOD,O="+"!(O="-") S S=S+$P(R,"|",2)
+ ..I MOD,O="" S S=S-$P(R,"|",2)
+ Q S
+RXCH ; data exchange input
+ N NI,K,%J,R,DT,UD,A,N,D
+ D ORH^RWU
+ S (UD,DT)=""
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  D
+ .S D=$P(A,"|",3)
+ .I %J=1 S NI=$P(A,"|",1),DT=$P(A,"|",2),K=+D I $E(NI)="-" K:$O(^BILL($E(NI,2,99),""))="" ^BILL($E(NI,2,99)) 
+ .Q:%J=1
+ .I $E(A,1)="R" S ^BILL(NI,"R")=D Q 
+ .S NI=$P(A,"|",2),DT=$P(A,"|",3)
+ .S UD=$S(UD="":DT,UD>DT:DT,1:UD)
+ .I $E(A,1)="B" S ^BILL(NI,DT,$P(A,"|",4))=$P(A,"|",5,99) Q 
+ .I $E(A,1)="I" S ^BILLI(DT,$P(A,"|",4),NI)=$P(A,"|",5,99) Q 
+ .I $E(A,1)="l" S ^BILL(NI,"L",DT,$P(A,"|",4))=$P(A,"|",5,99) Q
+ .I $E(A,1)="r" S ^BILL(NI,"R",DT,$P(A,"|",4))=$P(A,"|",5,99) Q
+ D CR^RWU
+ Q:'$D(NI) 
+ S UD=$S(UD="":DT,UD>DT:DT,1:UD)
+ D:UD'="" REFBAL(NI,UD)
+ Q
+WXCH(NI) ; data exchange output
+ N DT S DT=$P(NI,",",2),NI=$P(NI,",",1)
+ I NI="",DT="" S ^ERLOG("IBILL",$H)="<ERR> in param:"_NI_","_DT Q 
+ D OWF^RWU("exp.nb-data")
+ I DT="",$O(^BILL(NI,""))="" D W^RWU("-"_NI) G WXCHe ; чистка если нет платежей
+ G:DT="" WXCHe
+ G:'$D(^BILL(NI)) WXCHe G:'+DT WXCHe
+ D W^RWU(NI_"|"_DT_"|"_+$G(^BILL(NI)))
+ N X,TM,TML S TM=""
+ F  S TM=$O(^BILL(NI,DT,TM)) Q:TM=""  S X=$G(^(TM)),TML(TM)="" D W^RWU(CR_"B|"_NI_"|"_DT_"|"_TM_"|"_X)
+ S TM=""
+ F  S TM=$O(TML(TM)) Q:TM=""  S X=$G(^BILLI(DT,TM,NI)) D:$L(X) W^RWU(CR_"I|"_NI_"|"_DT_"|"_TM_"|"_X)
+ D:$D(^BILL(NI,"L"))
+ .D W^RWU(CR_"L|"_NI_"|"_$G(^BILL(NI,"L")))
+ .S TM=""
+ .F  S TM=$O(^BILL(NI,"L",DT,TM)) Q:TM=""  D W^RWU(CR_"l|"_NI_"|"_DT_"|"_TM_"|"_^(TM))
+ D:$D(^BILL(NI,"R"))
+ .D W^RWU(CR_"R|"_NI_"|"_$G(^BILL(NI,"R")))
+ .S TM=""
+ .F  S TM=$O(^BILL(NI,"R",DT,TM)) Q:TM=""  D W^RWU(CR_"r|"_NI_"|"_DT_"|"_TM_"|"_^(TM))
+WXCHe D C^RWU
+ Q
+TRGBAL() ; Триггер обновления бонусного баланса
+ N N1
+ S N1=$G(N) 
+ S:N1="" N1=NI
+ D UPDBAL(NI)
+ Q
+UPDBAL(NI) 
+ N DS,DT,TM,NI,L,R,KEY,OT,STOTD,SCOTD,SUM,TO,BAL,SS,MAX,SK,ID
+ S DS=$H-1
+ S MAX=3000
+ D MKSCOTD^IEDE
+ S DT=DS-1 F  S DT=$O(^BILL(NI,DT)) Q:DT=""!(+DT'=DT)  S TM="" F  S TM=$O(^BILL(NI,DT,TM)) Q:TM=""  D
+ .S L=$G(^BILL(NI,DT,TM)) Q:L=""
+ .Q:$P(L,"|",1)'=""  ; OPE
+ .S KEY=$P($P(L,"|",6),"/",1),R=$P(KEY,":",1)
+ .Q:R'="ZNF"&(R'="ZND")
+ .S OT=+$P(KEY,":",3),ID=$P($P($P(L,"|",6),"/",2),":",3)
+ .S SUM=-$P(L,"|",2),L=+$P($P(L,"|",5),"@",2) Q:SUM=0 
+ .Q:$D(SCOTD(OT)) 
+ .Q:$$NOW^IBILL(NI)<0 
+ .Q:$D(SCOTD(OT)) 
+ .S SK=$$GETSKD^IUSL($P(KEY,":",2),$P(KEY,":",4),OT,ID) Q:SK>10 
+ .S TO=$D(STOTD(OT))
+ .S SS=$$SCSUM(NI,$S(TO=1:2,1:1),0) Q:SS=MAX 
+ .S SUM=+$J(SUM/10,"",2)
+ .I SUM+SS>MAX S SUM=MAX-SS Q:SUM'>0 
+ .I TO=0 D:'$D(^BILS(NI,1,DT,TM)) ADD(NI,1,DT_","_TM,SUM,"","")
+ .I TO=1 D:'$D(^BILS(NI,2,DT,TM)) ADD(NI,2,DT_","_TM,SUM,"","")
+ d REGL^IEXCH("^BILS",NI)
+ Q
+CALC ; 
+ N DS,DE,DT,TM,NI,L,R,KEY,OT,STOTD,SCOTD,SUM,TO,BAL,SS,MAX,SK,ID
+ S DS=$H-4,DE=DS
+ ;S DS=$$DI^DTUTL("15.12.16")
+ S MAX=3000
+ D MKSCOTD^IEDE
+ S DT=DS-1 F  S DT=$O(^BILLI(DT)) Q:DT=""!(DT>DE)  S TM="" F  S TM=$O(^BILLI(DT,TM)) Q:TM=""  S NI="" F  S NI=$O(^BILLI(DT,TM,NI)) Q:NI=""  D
+ .S L=$G(^BILL(NI,DT,TM)) Q:L=""
+ .Q:$P(L,"|",1)'=""  ; OPE
+ .S KEY=$P($P(L,"|",6),"/",1),R=$P(KEY,":",1)
+ .Q:R'="ZNF"&(R'="ZND")
+ .S OT=+$P(KEY,":",3),ID=$P($P($P(L,"|",6),"/",2),":",3)
+ .S SUM=-$P(L,"|",2),L=+$P($P(L,"|",5),"@",2) Q:SUM=0 
+ .Q:$D(SCOTD(OT)) 
+ .Q:$$NOW^IBILL(NI)<0 
+ .Q:$D(SCOTD(OT)) 
+ .S SK=$$GETSKD^IUSL($P(KEY,":",2),$P(KEY,":",4),OT,ID) Q:SK>10 
+ .S TO=$D(STOTD(OT))
+ .S SS=$$SCSUM(NI,$S(TO=1:2,1:1),0) Q:SS=MAX 
+ .S SUM=+$J(SUM/10,"",2)
+ .I SUM+SS>MAX S SUM=MAX-SS Q:SUM'>0 
+ .I TO=0 D:'$D(^BILS(NI,1,DT,TM)) ADD(NI,1,DT_","_TM,SUM,"","") ; TODO - LOG from original LOG
+ .I TO=1 D:'$D(^BILS(NI,2,DT,TM)) ADD(NI,2,DT_","_TM,SUM,"","")
+ .;W SUM_" "
+ Q
+INITDB 
+ S ^MN("root","bilsc")="Дополнительные счета пациентов"
+ Q

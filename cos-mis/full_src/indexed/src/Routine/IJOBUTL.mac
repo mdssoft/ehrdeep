@@ -1,0 +1,33 @@
+IJOBUTL ; Утилиты управления процессами
+LIST ; Список процессов
+ Set Rset = ##class(%ResultSet).%New("%SYS.ProcessQuery:ListPids")
+ d Rset.Execute()
+ While Rset.Next() {
+	 s job=Rset.GetData(1)
+	 s Process=##CLASS(%SYS.ProcessQuery).%OpenId(job)
+	 W !,job_"  "_Process.Routine
+ }
+ d Rset.Close()
+ Q
+COUNTNM(NM) ; Число процессов по имени программы
+ N Rset,Process,job,cnt
+ s cnt=0
+ Set Rset = ##class(%ResultSet).%New("%SYS.ProcessQuery:ListPids")
+ d Rset.Execute()
+ While Rset.Next() {
+	 s job=Rset.GetData(1)
+	 if job {
+	  s Process=##CLASS(%SYS.ProcessQuery).%OpenId(job)
+	  I Process,NM=Process.Routine s cnt=cnt+1
+	 }
+ }
+ d Rset.Close()
+ Q cnt
+ISNM(NM) ; Есть такой процесс
+ N Rset,Process,cnt
+ s cnt=0
+ Set Rset = ##class(%ResultSet).%New("%SYS.ProcessQuery:ListPids")
+ d Rset.Execute()
+ F  Q:'Rset.Next()  s Process=##CLASS(%SYS.ProcessQuery).%OpenId(Rset.GetData(1)) I Process,NM=Process.Routine s cnt=1 Q 
+ d Rset.Close()
+ Q cnt

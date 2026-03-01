@@ -1,0 +1,65 @@
+IASTM ; ASTM KDL routines [ 02/06/2015  11:59 PM ]
+inA(DEV,FN,FO) ; ASTM
+ N FILL,FL,IO,R,LN,OP,NN,ID,DT,P,PP,VAR,NP,dbg
+ D DIR^FIL(FN_"*.txt","FILL")
+ Q:'$D(FILL) 
+ S dbg=+$G(^cfg("lab","debugdev"))
+ ; load
+ S FL="" F  S FL=$O(FILL(FL)) Q:FL=""  D:FILL(FL)=0
+ .S IO=$$ORT^FIL(FN_FL),F=0 Q:IO=""
+ .S ID=""
+ .U IO F J=1:1  R R Q:$$ST^FIL()=0  D:R'=""  
+ ..S OP=$P(R,"|",1) Q:"HL"[OP 
+ ..I OP="P" S ID=$P(R,"|",4) I ID'="",'$D(^MLABI("c",ID)) S ID=""  ;TODO
+ ..Q:ID="" 
+ ..S NN=+$P(R,"|",2)
+ ..I OP="R",NN>0 D  Q  ; TODO - wtf N ?
+ ...S VAR=$P(R,"|",4),PP=$P($P(R,"|",3),"^",4),P=""
+ ...S:PP'="" P=$G(^LABT("DEV",DEV,"t",PP))
+ ...Q:P="" 
+ ...D SET^IMLAB(ID,P,VAR,DEV) S F=1
+ ...D OKPRM^IMLABW(DEV,ID,P)
+ .C IO
+ .D:$S(dbg:F,1:1) DEL^FIL(FN_FL)
+ K ^BUF($J)
+ Q
+UNI(DEV,TXT) ; Unidirectional
+ N RR,R,I,M,LN,SSN,PWD,PID,LPID,P,ID,P1,PP,VAL,X,DTM,NL,NH,LDEV
+ ; PID - patient ID, LPID - lab patient ID
+ ; ID - заявка, P - тест(код)
+ ; NL - норма низкая, NH - норма высокая
+ S RR=""
+ ;F  U DEV R R#1 Q:R=""  D
+ N J
+ F J=1:1:$L(TXT) S R=$E(TXT,J) D
+ .;I $A(R)=5 H 2 W $C(6) Q  ; ENQ -> ACK
+ .S RR=RR_R Q:RR'[$C(10)
+ .; W $C(6) ; ACK
+ .S RR=$TR(RR,$C(2,3,10),"") ; STX,ETX,LF
+ .S LN=$P(RR,$C(13),1),X=$P(RR,$C(13),2) ; TODO check X-checksumm
+ .S I=$E(LN,1),M=$E(LN,2),RR="" ; I=0..7
+ .I M="H" S SSN=$P(LN,"|",5),PWD=$P(LN,"|",4),LDEV=$$DFUID^IMLABS(SSN) Q
+ .I M="P" S PID=$P(LN,"|",5),LPID=$P(LN,"|",4) Q
+ .I M="O" S ID=$P(LN,"|",3),P=$P($P(LN,"|",5),"^",4) Q
+ .I M="R" D 
+ ..S P1=$P($P(LN,"|",3),"^",4),VAL=$P(LN,"|",4)
+ ..S X=$P(LN,"|",6)
+ ..S NL=$P($P(X,"^",1),"\",1),NH=$P($P(X,"^",2),"\",1)
+ ..S DTM=$$redt($P(LN,"|",13))
+ ..Q:$P(LN,"|",9)'="F"  ; not final
+ ..;U 0 W !,"PID="_PID_" , ID="_ID
+ ..;W !,P1_"="_VAL_" ("_NL_" - "_NH_"), at "_$$DTM^DTUTL(DTM)
+ ..Q:LDEV=""  q 
+ ..Q:ID="" 
+ ..Q:'$D(^MLABI("c",$E(ID,1,128))) 
+ ..S PP=$G(^LABT("DEV",LDEV,"t",P1)) Q:PP=""
+ ..D SET^IMLAB(ID,PP,VAL,LDEV)
+ ..D OKPRM^IMLABW(LDEV,ID,PP)
+ Q
+send(LN) 
+ W LN
+ Q
+redt(X) ; Преобразование ASTM даты
+ S X=$$DI^DTUTL($E(X,7,8)_"."_$E(X,5,6)_"."_$E(X,1,4))_","_$$TI^DTUTL($E(X,9,10)_":"_$E(X,11,12)_":"_$E(X,13,14))
+ Q:X'="," X
+ Q ""

@@ -1,0 +1,212 @@
+NPRICEG ; Groups of price [ 12/15/2020  12:36 PM ]
+LGRP 
+ D NMLST^NSPRAV("gprice",2)
+ Q
+FND(NM,TOP) ; Найти по имени
+ ; TOP - вышестоящий элемент
+ Q:NM="" 
+ N I,X,R,F
+ S NM=$$LU^TXTU(NM),I=+$G(^MN("gprice")),TOP=$G(TOP),F='$L(TOP)
+ S X="" F  S X=$O(^MN(I,X)) Q:X=""  S R=^(X) I F!($P(R,"|",2)=TOP),$$LU^TXTU($P(R,"|",1))=NM Q 
+ Q X
+ADD(NM,TOP,ID) ; добавить
+ ; NM- name, TOP - top item ID, ID - sort index
+ N I,X
+ S I=$$NEWIDX^YISPRAV("gprice") Q:I="" ""
+ S:$G(TOP)'="" $P(NM,"|",2)=TOP
+ S:$G(ID)'="" $P(NM,"|",3)=ID
+ S X=$O(^MN(I,""),-1)+1,^(X)=NM
+ D UPD^IEXCH("YISPRAV","gprice")
+ Q X
+NAME(ID) ; Get name
+ Q:ID="" ""
+ Q $P($G(^(+$G(^MN("gprice")),ID)),"|",1)
+FLG(ID) ; Get name
+ Q:ID="" ""
+ Q $P($G(^(+$G(^MN("gprice")),ID)),"|",4)
+MKLST(VAR,JST,FLG,NFLG,ORD) ; Создать список-дерево в переменной
+ ; JST - сортировать(1)/нет(0)/по порядку(2) ровно по кодам
+ ; FLG - флаг вывода
+ ; NFLG - флаг невывода
+ ; ORD - следовать древовидному порядку групп (ID из числа в строку с ~)
+ N I,A,ID,R,X,F
+ S I=+$G(^MN("gprice"))
+ S JST=+$G(JST),FLG=$G(FLG),NFLG=$G(NFLG),ORD=+$G(ORD)
+ S:FLG'="" FLG="~"_FLG_"~"
+ S:NFLG'="" NFLG="~"_NFLG_"~"
+ S ID="" F  S ID=$O(^MN(I,ID)) Q:ID=""  D
+ .S R=^(ID),OO=$P(R,"|",3),A=$S(JST=1:$$J(ID),JST=2:$$J(OO)_","_ID,1:ID),F=$P(R,"|",4)
+ .I FLG'="" Q:("~"_F_"~")'[FLG
+ .I NFLG'="" Q:("~"_F_"~")[NFLG
+ .F  S X=$P(R,"|",2) Q:X=""  S A=$S(JST=1:$$J(X),JST=2:$$J(OO)_","_X,1:X)_"~"_A,R=$G(^MN(I,X))
+ .I ORD,A'["~" S A=A_"~"
+ .S @VAR@(ID)=A
+ Q
+MKLLST(VAR,FLG,NFLG) ; Создать линейный список в переменной
+ N I,ID,R,X,F
+ S I=+$G(^MN("gprice")),FLG=$G(FLG),NFLG=$G(NFLG)
+ S:FLG'="" FLG="~"_FLG_"~"
+ S:NFLG'="" NFLG="~"_NFLG_"~"
+ S ID="" F  S ID=$O(^MN(I,ID)) Q:ID=""  D
+ .S R=^(ID),F=$P(R,"|",4)
+ .I FLG'="" Q:("~"_F_"~")'[FLG
+ .I NFLG'="" Q:("~"_F_"~")[NFLG
+ .S @VAR@(ID)=""
+ Q
+J(X) ; Number justify
+ Q $TR($J(X,4)," ",0)
+TREEL(MODE) 
+ D OWF^RWU(".txt")
+ D TREEsys(MODE,"",1)
+ D C^RWU
+ Q
+TREE(MODE) 
+ D OWF^RWU(".txt")
+ D TREEsys(MODE)
+ D C^RWU
+ Q
+TREEsys(MODE,FLG,vF,AFPRI,RFN,HAR) ; Вывод дерева групп прайса (системно)
+ ; MODE - 0-линейная структура, 1-древовидная
+ ; FLG - filter by FLG
+ ; vF - view w. flags
+ ; AFPRI - class filter priority
+ ; RFN - вызов функции с результатом найдено(1)/нет(0)
+ ; HAR - скрывать архивные
+ N I,A,ID,K,R,X,L,T,F,FL,N,Z,Y,ORD,NFL,AFL,AR
+ S I=+$G(^MN("gprice")),FLG=$G(FLG),vF=+$G(vF),HAR=$G(HAR)
+ S:$G(AFPRI) AFL=FLG
+ S:$G(AFL)="" AFL=$$LCL^IUSER("price","grp-flg")
+ S:AFL="" AFL=$G(^cfg("price","grp-flg")) S:AFL'="" AFL="~"_AFL_"~"
+ S NFL=$$LCL^IUSER("price","grp-nflg")
+ S:NFL="" NFL=$G(^cfg("price","grp-nflg")) S:NFL'="" NFL="~"_NFL_"~"
+ S:FLG'="" FLG="~"_FLG_"~"
+ S ID="" F  S ID=$O(^MN(I,ID)) Q:ID=""  D
+ .S R=^(ID),K=$P(R,"|",1),F=$P(R,"|",4),AR=$P(R,"|",5),FL=""
+ .I HAR,AR Q 
+ .S:F'="" FL="~"_F_"~"
+ .I FLG'="",FL'[FLG Q 
+ .I AFL'="",FL'[AFL Q 
+ .I NFL'="",FL[NFL Q 
+ .S ORD=$P(R,"|",3),A=$$ord(ORD,3)_$$ord(ID,4)
+ .F  S X=$P(R,"|",2) Q:X=""  S R=$G(^MN(I,X)),ORD=$P(R,"|",3),A=$$ord(ORD,3)_$$ord(X,4)_"~"_A
+ .D:FLG'="" reTREE(A)
+ .S L(A)=ID_$S(vF:"@"_F_"@"_AR,1:"")_"|"_K
+ 
+ N LL M LL=L K L
+ S K="" F  S K=$O(LL(K)) Q:K=""  S L("~"_K)=LL(K)
+ S (X,K)="" F  S X=$O(L(X)) Q:X=""  D
+ .S ID=$E(X,5,99)
+ .S A=$TR(ID,"~1234567890|",$C(9))
+ .S:MODE A=$P(L(X),"|",1)_"|"_A_$P(L(X),"|",2)
+ .S:'MODE A=A_L(X)
+ .D WC^RWU(K_A) S K=CR
+ 
+ Q:$G(RFN) $S($D(L):1,1:0)
+ Q
+LSTsys(FLG,vF) 
+ ; FLG - filter by FLG, vF - view w. flags
+ N I,ID,K,R,X,T,F,N,Z,NFL,AFL
+ S I=+$G(^MN("gprice")),FLG=$G(FLG),vF=+$G(vF)
+ S AFL=$$LCL^IUSER("price","grp-flg")
+ S:AFL="" AFL=$G(^cfg("price","grp-flg")) S:AFL'="" AFL="~"_AFL_"~"
+ S NFL=$$LCL^IUSER("price","grp-nflg")
+ S:NFL="" NFL=$G(^cfg("price","grp-nflg")) S:NFL'="" NFL="~"_NFL_"~"
+ S:FLG'="" FLG="~"_FLG_"~"
+ S (T,ID)="" F  S ID=$O(^MN(I,ID)) Q:ID=""  D
+ .S R=^(ID),K=$P(R,"|",1),F=$P(R,"|",4)
+ .I FLG'="" Q:("~"_F_"~")'[FLG
+ .I AFL'="" Q:("~"_F_"~")'[AFL
+ .I NFL'="" Q:("~"_F_"~")[NFL
+ .D WC^RWU(T_ID_"|"_K) S T=CR
+ Q
+reTREE(A) 
+ F Z=1:1:$L(A,"~")-1 S Y=+$E($P(A,"~",Z),4,7),N=$P(A,"~",1,Z) S:'$D(L(N)) L(N)=Y_"|"_$P($G(^MN(I,Y)),"|",1)
+ Q
+ord(X,L) ; for order
+ Q $TR($J(X,L,0)," ",0)
+SAVE ; Save tree
+ N ID,A,X,I,NM,T,J,TL,F,LT,AR
+ D ORH^RWU
+ S I=$$NEWIDX^YISPRAV("gprice")
+ L +^MN(I)
+ S LT=$O(^MN(I,""),-1)
+ K ^MN(I)
+ F J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D
+ .F X=1:1:32 Q:$E(A,X)'=$C(9)
+ .S X=X-1,A=$$DBLSP^TXTU($E(A,X+1,999))
+ .S NM=$P(A,"|",1),ID=$P(A,"|",2),T=$G(TL(X-1))
+ .S F=$P(ID,"@",2),AR=$P(ID,"@",3),ID=$P(ID,"@",1)
+ .S A=NM_"|"_T_"|"_J
+ .S:F'="" $P(A,"|",4)=F
+ .S:AR $P(A,"|",5)=1
+ .I ID="" S ID=LT+1,LT=ID,%L=ID
+ .S ^MN(I,ID)=A,TL(X)=ID
+ L -^MN(I)
+ D CR^RWU
+ D UPD^IEXCH("YISPRAV","gprice")
+ Q
+CHKUSE(ID) ; Проверить использование группы в прайсе
+ N N,P,F
+ S N="",F=0
+ F  S N=$O(^CNE(N)) Q:N=""!F  S P="" F  S P=$O(^CNE(N,P)) Q:P=""  I $$ANYDTV^IPRICE(N,"grp",P,ID) S F=1 Q 
+ D MSG^RWU(F)
+ Q
+MOVE(ID,TO) ; Переместить все услуги с группы на другую и уд. исходн.
+ I $$IsPARENT(ID) D MSG^RWU("Можно переностить только оконечные элементы.") Q 
+ N N,P,D,F
+ S N=""
+ F  S N=$O(^CNE(N)) Q:N=""  S P="" F  S P=$O(^CNE(N,P)) Q:P=""  D
+ .S D="",F=0
+ .F  S D=$O(^CNE(N,P,"grp",D)) Q:D=""  S:^(D)=ID ^(D)=TO,F=1
+ .D:F REGL^IEXCH("^CN",N,P,"grp")
+ S N=+$G(^MN("gprice")) Q:'N 
+ K ^MN(N,ID)
+ D UPD^IEXCH("YISPRAV","gprice")
+ Q
+IsPARENT(X) ; Элемент для кого-то является родительским
+ N I,N
+ S I=+$G(^MN("gprice")) Q:'I 0
+ S N="" F  S N=$O(^MN(I,N)) Q:N=""  I $P(^(N),"|",2)=X Q 
+ Q:N="" 0
+ Q 1
+IsCHILD(X,TOP) ; Эл-т является дочерним к TOP
+ Q:X="" 0 Q:TOP="" 0 
+ N F,I,T
+ S I=+$G(^MN("gprice")),F=0 Q:'I 0
+ F  S T=$P($G(^MN(I,X)),"|",2) Q:T=""  S X=T I T=TOP S F=1 Q  
+ Q F
+getTOP(X) ; Получить самый верхний элемент для текущего
+ Q:X="" ""
+ N I,T
+ S I=+$G(^MN("gprice")) Q:'I ""
+ F  S T=$P($G(^MN(I,X)),"|",2) Q:T=""  S X=T
+ Q X
+getALL(X) ; Получить строку из вышестоящих кодов
+ Q:X="" ""
+ N I,T,R
+ S I=+$G(^MN("gprice")) Q:'I ""
+ S R=X F  S T=$P($G(^MN(I,X)),"|",2) Q:T=""  S X=T,R=R_"|"_T
+ Q R
+JSON ; Export to JSON format
+ N I,N,R,F
+ D OWF^RWU(".txt"),W^RWU("[")
+ S I=+$G(^MN("gprice"))
+ S N="",F=0 F  S N=$O(^MN(I,N)) Q:N=""  D
+ .S R=^(N) Q:R="" 
+ .Q:$P(R,"|",5) 
+ .D B^IJSON()
+ .D W^IJSON("id",N)
+ .D W^IJSON("name",$P(R,"|",1))
+ .S R=$P(R,"|",2)
+ .D:R'="" W^IJSON("parent",R)
+ .D WC^RWU($S(F:",",1:"")_$$E^IJSON())
+ .S F=1
+ D W^RWU("]"),C^RWU
+ Q
+INITDB 
+ S ^MN("root","gprice")="Группы прейскуранта"
+ S ^MN("root","gprice","fcode")="name|parent_id|order|flg|arch"
+ S ^MN("root","gprice","arch")=5
+ S ^MN("root","gpriceflg")="Флаги групп прейскуранта"
+ S ^MN("root","gpriceflg","kname")="Флаг",^("ktype")="S"
+ Q

@@ -1,0 +1,37 @@
+RSSMCEM4 ; Из пред.статистики [ 10/09/2012  3:08 AM ]
+mkc ; Общая статистика
+ N DYS,DYS0,DYE0,DYT,MM,STAT,X,C,LP,RR,DC
+ S DYS=$$DI^DTUTL("01.01."_$$YEAR^DTUTL(+$H))
+ S DYS0=$$DI^DTUTL("01.01."_($$YEAR^DTUTL(+$H)-1))
+ S DYE0=DYS-1,MM=1,DC=DYS0
+ S DT=DYS0-1 F  S DT=$O(^TSTAT("common",DT)) Q:DT=""!(DT>DE)  D
+ .S DYT=$S(DT<DYS:1,1:0),X=$$MONTH^DTUTL(DT)
+ .S:'$D(^BUF($J,"din",DYT)) ^(DYT)=$$YEAR^DTUTL(DT)
+ .I MM'=X S C=$$dcmn(DC),^BUF($J,"din",DYT,MM,1)=7*$G(STAT(1))/C,^(2)=7*$G(STAT(2))/C K STAT S MM=X
+ .S LP=""
+ .F  S LP=$O(^TSTAT("common",DT,LP)) Q:LP=""  D:LPUX=""!(LPUX=LP)
+ ..S RR=$G(^(LP,"dv")) Q:RR="" 
+ ..S STAT(1)=$G(STAT(1))+$P(RR,"|",1)
+ ..S STAT(2)=$G(STAT(2))+$P(RR,"|",5)
+ .S DC=DT
+ Q:'$D(STAT) 
+ S C=$$dcmn(DC)
+ S ^BUF($J,"din",DYT,MM,1)=7*$G(STAT(1))/C,^(2)=7*$G(STAT(2))/C
+ Q
+dcmn(DT) ; Дней в месяце даты
+ S DT=$$DI^DTUTL("01."_$P($$DT^DTUTL(DT),".",2,3))
+ Q $$AFTERMN^DTUTL(DT)-DT
+mkk ; КДЛ
+ N DYS,DGT,DV,RR,RRK,MM
+ S DYS=$$DI^DTUTL("01.01."_$$YEAR^DTUTL(+$H))
+ S DT=DYS-1 F  S DT=$O(^TSTAT("kdl",DT)) Q:DT=""!(DT>DS)  D
+ .S MM=$$MONTH^DTUTL(DT)
+ .S RRK=$G(^TSTAT("kdl",DT,"dk"))
+ .S DV="" F  S DV=$O(^TSTAT("kdl",DT,DV)) Q:DV=""  D:DV'="dv"
+ ..S RR=^(DV)
+ ..S DGT=$S(DV="dv0":1,"dv1":2,1:0) Q:'DGT 
+ ..S ^(1)=$G(^BUF($J,"kdl",MM,DGT,1))+($P(RR,"|",2)-$P(RRK,"|",2))
+ ..S ^(2)=$G(^BUF($J,"kdl",MM,DGT,2))+($P(RR,"|",1)-$P(RRK,"|",1))
+ .S ^(1)=$G(^BUF($J,"kdl",MM,3,1))+$P(RRK,"|",2)
+ .S ^(2)=$G(^BUF($J,"kdl",MM,3,2))+$P(RRK,"|",1)
+ Q

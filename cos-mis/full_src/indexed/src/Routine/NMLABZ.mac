@@ -1,0 +1,847 @@
+NMLABZ ; Лабораторные заявки [ 08/19/2021  4:38 PM ]
+INIT ; Init
+ N R,X,I,PL
+ S R=""
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<nnlab><zname>")
+ D LSTFLsys^YCONTR("cli","prt",,1) ; клиент или партнер 
+ D W^RWU("</zname>")
+ D:$$CHKSPR^ISPRAV("labrestp") ; Тип результата
+ .D W^RWU("<restype>")
+ .D LSTs^NMLABS("RT",1)
+ .D W^RWU("</restype>")
+ S R=$$LCL^IUSER("ed","def-stc")
+ S:R="" R=$G(^cfg("def-stc"))
+ D WTAGU^RWU("stc",R)
+ S R=$$LCL^IUSER("lab","zhide")
+ I R'="" F I=1:1:$L(R,"|") S X=$P(R,"|",I) D W^RWU("<"_X_" visible=""no""/>")
+ S R=$G(^cfg("lab","barpprn"))
+ D:R'="" WTAGD^RWU("pprn",R)
+ S R=$G(^cfg("lab","nnrestype")) S:R="" R=1
+ D WTAGU^RWU("restype",R)
+ D W^RWU("</nnlab></nb_console>"),C^RWU
+ Q
+NEW ; Новый пациент
+ N R,I,X,PL
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<nnlab>")
+ S R=$$LCL^IUSER("ed","def-stc")
+ S:R="" R=$G(^cfg("def-stc"))
+ D WTAGD^RWU("stc",R)
+ S R=$$LCL^IUSER("lab","zset")
+ I R'="" F I=1:1:$L(R,$C(9)) S X=$P(R,$C(9),I),PL=$P(X,"=",1),X=$P(X,"=",2,99) D WTAGDC^RWU(PL,X)
+ D W^RWU("</nnlab></nb_console>"),C^RWU
+ Q
+LPAC(NI) ; Паспортная часть пациента
+ Q:NI="" 
+ I $$LCL^IUSER("lab","z-any-rasp"),$$PACFTM^IRASP2(NI,+$$^I("ilpu"),+$H)="" D msg^NISUTL("Пациент не внесен в расписание клиники.") Q 
+ N PL,R,FFL
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<nnlab>")
+ D WTAGDC^RWU("hist",NI)
+ D LPACs(NI)
+ D W^RWU("</nnlab></nb_console>"),C^RWU
+ Q
+LPACs(NI) ; Паспортная часть пациента
+ Q:NI="" 
+ N PL,R
+ S FFL("email")=$$GET^IPAC(NI,$S($G(^cfg("lab","pemail")):"pemail",1:"email"))
+ F PL="fiof","fioi","fioo","pol","stc","prog","polis","pager","tel1","tel2","street","typedoc","pasp","pasp_dan","email" D WTAGDC^RWU(PL,$S($D(FFL(PL)):FFL(PL),1:$$GET^IPAC(NI,PL)))
+ S R=$S($D(FFL("skd")):FFL("skd"),1:$$GET^IPAC(NI,"skd"))
+ D WTAGC^RWU("skd",R_"|"_$$NAME^IDSCN(R))
+ D WTAGC^RWU("status",$TR($$GET^IPAC(NI,"status"),"|",","))
+ F PL="datar","dog_from","dog_to" D WTAGDC^RWU(PL,$$GETE^IPAC(NI,PL))
+ Q
+L(ID,DIR) ; Загрузка направления
+ ; DIR - direction, направление ="-1" - назад, "1" - вперед 
+ N NI,PL,R,DT,I,P,S,S1,U,UL,DGN,VID,PRC,Z,A,K,SUMM,wNUM,vO,OW,FFL,vCD,CON,CNL,CO,CC,UC,BAR
+ s wNUM=$G(^cfg("lab","znpp"))
+ s vCD=+$G(^cfg("price-lpo-cod"))
+ s vO=$$LCL^IUSER("lab","vowner")
+ S DIR=+$G(DIR),SUMM=0,OW=$$USR^IUSER()
+ I DIR=1 F  S ID=$O(^MLABI("c",ID)) Q:ID=""  Q:$$IsView(ID)  ; next
+ I DIR=-1 F  S ID=$O(^MLABI("c",ID),-1) Q:ID=""  Q:$$IsView(ID)  ; forw
+ I 'DIR,'$$IsView(ID) S ID="" 
+ I $S(ID="":1,'$D(^MLABI("c",ID)):1,1:0) Q 
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<nnlab>")
+ D WTAGDC^RWU("id",ID)
+ G:ID="" L2e
+ S NI=^MLABI("c",ID),S1=^MLAB(NI,ID,"s1")
+ D WTAGDC^RWU("hist",NI)
+ S A=$G(^MLAB(NI,ID,"prc"))
+ S:$P(A,"|",2)'="" FFL("stc")=$P(A,"|",2)
+ S:$P(A,"|",3)'="" FFL("skd")=$P(A,"|",3)
+ S:$P(A,"|",4)'="" FFL("skdnn")=$P(A,"|",4)
+ D LPACs(NI)
+ S A=$P(S1,"|",2)
+ D WTAGD^RWU("indate",$$DT2^DTUTL(+A))
+ D WTAGD^RWU("intime",$$TM^DTUTL($P(A,",",2)))
+ D WTAGD^RWU("cito",+$G(^MLAB(NI,ID,"ci")))
+ D WTAGDC^RWU("bar",$G(^MLAB(NI,ID,"bar")))
+ S A=$G(^MLAB(NI,ID,"zi")),I=$P(A,"|",1)
+ D:I'="" ZSELsys(I) ; загрузка сотр. и отделений по ЛПУ
+ D WTAGDC^RWU("zname",I)
+ D WTAGDC^RWU("zotd",$P(A,"|",2))
+ D WTAGDC^RWU("zsotr",$P(A,"|",3))
+ D WTAGDC^RWU("zid",$P(A,"|",4))
+ D WTAGDC^RWU("znapr",$P(A,"|",5))
+ S A=$G(^MLAB(NI,ID,"rt"))
+ D:A'="" WTAGC^RWU("restype",A) ; if not set - default
+ S A=$G(^MLAB(NI,ID,"nt"))
+ D WTAGDC^RWU("diag",$P(A,"|",1))
+ D WTAGDC^RWU("comm",$P(A,"|",2))
+ ; произвольные поля
+ S PL="" 
+ F  S PL=$O(^MLAB(NI,ID,"fl",PL)) Q:PL=""  D WTAGDC^RWU(PL,^(PL))
+ ; S A=$G(^MLAB(NI,ID,"pr")),R=""
+ ; F I=1:1:$L(A,"|") S P=$P(A,"|",I) Q:P=""  S R=$S(R="":"",1:R_CR)_P_"|"_$$NAMEPM^IMLABS(P)
+ ; D WTAGC^RWU("tests",R)
+ S DT=+$P(S1,"|",2),A="" S:'DT DT=+$H
+ S R=$G(^MLAB(NI,ID,"prc"))
+ S PRC=$P(R,"|",1),DGN=$P(R,"|",2)
+ S:DGN="" DGN=$$GET^IPAC(NI,"stc",DT)
+ S:PRC="" PRC=$$GET^IINSC(DGN,"price",DT)
+ S VID=$$GET^IINSC(DGN,"dvid",+DT)
+ S PRC=$S(PRC="":$$PRC^IINSC(DGN,NI,DT),1:$$CORCP^IPRICET(PRC))
+ S UL=$G(^MLAB(NI,ID,"ul")),R=""
+ F Z=1:1 S U=$P(UL,"|",Z) Q:U=""  D
+ .S S=$P(U,":",3),U=$P(U,":",1),UC=$P(U,"*",2),U=$P(U,"*",1)
+ .S R=$S(R="":"",1:R_CR)_"@"_U_"@"
+ .S R=R_$S(S:S_"@"_S,1:$$PRICEH^IPRICE(U,PRC,DT))_"|"
+ .S R=R_$S(wNUM:Z_". ",1:"")_$S(vCD:U_" ",1:"")_$$NAMEH^IPRICE(U,PRC,DT)
+ .S:UC'="" R=R_" ("_UC_" шт.)"
+ .S CON=$$GET2IDX^YNPRICE(U,"con",PRC,DT) Q:CON="" 
+ .S CNL(CON)=""
+ D WTAGC^RWU("tests",R)
+ 
+ S Z="" F  S Z=$O(^MLAB(NI,ID,"mi",Z)) Q:Z=""  D
+ .S R=^(Z)
+ .S UC=$P(R,"|",1),U=$P(R,"|",3),R=$P(R,"|",2)
+ .F I=1:1:$S(R'["@":1,UC<2:1,1:UC) D   ; только по числу ШК
+ ..S K=Z,BAR=$P(R,"@",I)
+ ..S:BAR'="" $P(K,"@",2)=BAR
+ ..S:U'="" $P(K,"@",3)=U ; locus
+ ..S:I>1 $P(K,"@",4)=I ; num
+ ..S CO=$G(^LABT("M",Z,"cont")),CC=""
+ ..S:CO'="" CO=$G(^LABT("CONT",CO)),CC=$P(CO,"|",2),CO=$P(CO,"|",1)
+ ..S A=$S(A="":"",1:A_CR)_K_"|"_$G(^LABT("M",Z))
+ ..S:BAR'="" A=A_$S(I>1:"#"_I,1:"")_"="_BAR
+ ..S:CO'="" A=A_" ("_CO_$S(CC>1:" "_CC_" шт.",1:"")_")"
+ D WTAGC^RWU("matt",A)
+ 
+ G:UL="" Le
+ I VID'=3,("|"_$G(FLG)_"|"'["|kss|") G Le
+ S SUMM=$$SUMM^IMLAB(NI,ID,DT) ; только по кассе
+Le S:SUMM A=$$NOW^IBILL(NI)
+ S A=$S('SUMM:0,A>SUMM:SUMM_"|0",A<0:SUMM_"|"_SUMM,1:SUMM_"|"_(SUMM-A))
+ ; сумма|к оплате
+ D WC^RWU("<summ data=""Итого "_SUMM_" руб."" userdata="""_A_"""/>")
+ D WTAGD^RWU("id",ID)
+ D WTAGDC^RWU("idtext",ID_" от "_$$DT^DTUTL(+DT))
+ S U=""" split=""line"" break=""no""/>"
+ S (R,A,I)=""
+ F  S I=$O(CNL(I)) Q:I=""  S R=$S(R="":"",1:R_", ")_$$NAME^ICONTR(I)
+ S:R'="" A="<field name=""con"" color=""#EE9900"" title="""_$$TKAV^TXTU(R)_U
+ S R=$P(S1,"|",5),Z=$$FIO^IKADRY(R)
+ S A=A_"<field name=""owner"" title="""_$$TKAV^TXTU(Z)_U
+ S R=$$DTM^DTUTL($P($S($D(^MLAB(NI,ID,"s9")):^("s9"),$D(^("s3")):^("s3"),$D(^("s2")):^("s2"),1:S1),"|",2))
+ S A=A_"<field name=""changed"" title="""_R_U
+ S R=$$IDTXT^NMLAB(NI,ID)
+ S:R'="" A=A_"<field name=""status"" title="""_R_U
+ D WC^RWU("<info>"_A_"</info>")
+L2e 
+ D W^RWU("</nnlab></nb_console>"),C^RWU
+ Q
+IsView(ID) ; Заявка разрешена для просмотра
+ I ID'="",$G(^MLABI("c",ID))="" Q 0
+ N NI,S1,X
+ S NI=$S(ID="":"",1:^MLABI("c",ID)),S1=$S(NI="":"",1:^MLAB(NI,ID,"s1"))
+ I $$LCL^IUSER("lab","clpu"),$$^I("ilpu")'="",$$^I("ilpu")'=$P(S1,"|",4) Q 0
+ S X=$$LCL^IUSER("lab","seldgn")
+ I X'="",$$STC^IMLAB(NI,ID)'=X Q 0
+ I vO,$P(S1,"|",3)'=OW Q 0
+ Q 1
+CHKPAC ; Проверить пациентов на существующих
+ N PL,XML,R,NI,FF,FI,FO,BD,SX,REZ
+ D RBUFH^YIXMLRR(1)
+ S FF=$G(XML("nb_console","nnlab","fiof"))
+ S FI=$G(XML("nb_console","nnlab","fioi"))
+ S FO=$G(XML("nb_console","nnlab","fioo"))
+ S BD=$$DI^DTUTL($G(XML("nb_console","nnlab","datar")))
+ S SX=$G(XML("nb_console","nnlab","pol"))
+ S REZ=$$GETNIB^IPACFND(FF,FI,FO,BD,SX,1)
+ I REZ="" Q 
+ I REZ'=-1 D LPAC(REZ) Q 
+ Q  ; TODO
+ D OWF^RWU(".txt")
+ D FNDNIBi^YIFINDN(FF,FI,FO,BD,$G(XML("nb_console","nnlab","stc")),$G(XML("nb_console","nnlab","polis")),$G(XML("nb_console","nnlab","tel1")),$G(XML("nb_console","nnlab","pasp")),$G(^cfg("xpac","nf-nodatar")))
+ D C^RWU
+ Q
+SPAC ; Сохранить только данные по пациенту
+ N PL,XML,R,XML1,NI,PTI,PR,REE
+ D RBUFH^YIXMLRR(1)
+ Q:$G(XML("nb_console","nnlab","hist"))'="" 
+ S:$G(^cfg("lab","pemail")) REE("email")="pemail"
+ F PL="fiof","fioi","fioo" S XML1("patients",PL)=$$NRMFAM^YIFAM($G(XML("nb_console","nnlab",PL)))
+ F PL="pol","stc","prog","polis","pager","tel1","tel2","street","typedoc","pasp","pasp_dan","datar","dog_from","dog_to","status","email" M XML1("patients",$S($D(REE(PL)):REE(PL),1:PL))=XML("nb_console","nnlab",PL)
+ 
+ S R=$P($G(XML("nb_console","nnlab","skd")),"|",1)
+ I '$G(^cfg("lab","nopskd")) S:R'="" XML1("patients","skd")=R
+ S R=$TR($G(XML("nb_console","nnlab","status")),",/\; ","||||")
+ S:R'="" XML1("patients","status")=$$READPRG^NPSPIS(R)
+ S R=$$DI^DTUTL($G(XML("nb_console","nnlab","indate"))) S:R="" R=+$H
+ S XML1("patients","savedate")=$$DT^DTUTL(R)
+ K XML M XML=XML1 K XML1
+ S NI=$G(XML("patients","hist"))
+ S:NI="" NI=$$NEW^IPAC(1,9999999),XML("patients","hist")=NI ; TODO
+ D W^YIPACN
+ D MSG^RWU(^PP(0,1)_"<nb_console><nnlab><hist>"_NI_"</hist></nnlab></nb_console>",".xmlb")
+ Q
+SPAC1 ; Сохранить только данные по пациенту
+ N PL,R,XML1,XML2,NI,REE
+ S NI=$G(XML("nb_console","nnlab","hist"))
+ S:NI'=""&('$$EXIST^IPAC(NI)) NI=""
+ I NI'="",$$LCL^IUSER("lab","z-any-rasp"),$$PACFTM^IRASP2(NI,+$$^I("ilpu"),+$H) D MSG^RWU("Пациент не внесен в расписание клиники.") Q 
+ Q:NI'="" 
+ S:$G(^cfg("lab","pemail")) REE("email")="pemail"
+ F PL="fiof","fioi","fioo" S XML1("patients",PL)=$$NRMFAM^YIFAM($G(XML("nb_console","nnlab",PL)))
+ F PL="pol","stc","prog","polis","pager","tel1","tel2","street","typedoc","pasp","pasp_dan","datar","dog_from","dog_to","status" M XML1("patients",$S($D(REE(PL)):REE(PL),1:PL))=XML("nb_console","nnlab",PL)
+ S R=$P($G(XML("patients","skd")),"|",1)
+ S:R'="" XML1("patients","skd")=R
+ S R=$$DI^DTUTL($G(XML("nb_console","nnlab","indate"))) S:R="" R=+$H
+ S XML1("patients","savedate")=$$DT^DTUTL(R)
+ M XML2=XML
+ K XML M XML=XML1 K XML1
+ S NI=$G(XML("patients","hist"))
+ S:NI="" NI=$$NEW^IPAC(1,999999),XML("patients","hist")=NI ; TODO
+ D W^YIPACN
+ 
+ K XML,%L,%B M XML=XML2
+ S XML("nb_console","nnlab","hist")=NI
+ Q
+SEPAC ; Save data for exists patient
+ N NI,R,P,PL,X,ID,DT,REE
+ S NI=$G(XML("nb_console","nnlab","hist"))
+ Q:NI="" 
+ I $$LCL^IUSER("patients"," save")=0 D MSG^RWU("Изменение данных пациента запрещено.") Q  
+ S:$G(^cfg("lab","pemail")) REE("email")="pemail"
+ S ID=$G(XML("nb_console","nnlab","id"))
+ I ID'="",$G(^MLABI("c",ID))'=NI D  Q:X 
+ .S X=0
+ .I '$$LCL^IUSER("lab","movpac") D MSG^RWU("Изменение пациента в заявке запрещено.") S X=1 Q 
+ .S X=$G(^MLABI("c",ID)) Q:X="" 
+ .D MOVPAC^IMLAB(X,NI,ID)
+ .S X=0
+ I ID'="",$P($G(^MLAB(NI,ID,"s2")),"|",1),'$$LCL^IUSER("lab","sbseditz") Q 
+ S DT=$$DI^DTUTL($G(XML("nb_console","nnlab","indate"))) S:DT="" DT=+$H
+ S X=$G(XML("nb_console","nnlab","stc"))
+ I $$PIDXN^IPAC(NI,X,DT)=-1 S P=$$LCL^IUSER("lab","corrstc") D:P SET^IPAC(NI,"stc",DT,X,1) S:'P XML("nb_console","nnlab","stc")=$$GET^IPAC(NI,"stc",DT) ; TODO - изменение договора в рамках дня 
+ F P="tel1","tel2","pager","email","pol" D
+ .S R=$G(XML("nb_console","nnlab",P))
+ .Q:R=""
+ .S PL=$S($D(REE(P)):REE(P),1:P)
+ .Q:$$GET^IPAC(NI,PL,DT)=R 
+ .D SET^IPAC(NI,PL,DT,R,1)
+ S R=$$DI^DTUTL($G(XML("nb_console","nnlab","datar")))
+ I R'="",$$GET^IPAC(NI,"datar",DT)'=R D SET^IPAC(NI,"datar",DT,R,1)
+ S R=$TR($G(XML("nb_console","nnlab","status")),",/\; ","||||")
+ I R'="" S P=$$GET^IPAC(NI,"status",DT) I P'=R D SET^IPAC(NI,"status",DT,R,1)
+ Q
+S ; Сохранить
+ N PL,R,ID
+ D RBUFH^YIXMLRR(1)
+ D sCHK
+ Q:$$IsMSG^RWU() 
+ D SEPAC
+ D SPAC1
+ Q:$$IsMSG^RWU()
+ F PL="fiof","fioi","fioo","pol","prog","polis","pager","tel1","tel2","street","typedoc","pasp","pasp_dan","datar","dog_from","dog_to","email" K XML("nb_console","nnlab",PL)
+ S ID=""
+ D W
+ Q:ID=""  Q:$$IsMSG^RWU()  
+ D L(ID,0)
+ Q
+sCHK ; Проверка полей
+ N R,X,I,A
+ S R=$$LCL^IUSER("lab","nnullz"),A=""
+ I R'="" F I=1:1:$L(R,"|") S X=$P(R,"|",I) I X'="",$G(XML("nb_console","nnlab",X))="" S A=$S(A="":"",1:A_"|")_X
+ I A'="" D MSG^RWU("nnull:"_A) Q 
+ Q
+W ; Записать
+ N NB,FRM,DT,TM,NI,LPU,L,H,PRMS,USL,BAR,Z,A,SUMM,DGN,U,UL,P,LAB
+ N FLG,DGN,PRC,SKD,OUSL,T,S,sED,SBS
+ S NB="nb_console",FRM="nnlab",LPU=$$^I("ilpu"),SUMM=0
+ S ID=$G(XML(NB,FRM,"id"))
+ S NI=$G(XML(NB,FRM,"hist"))
+ Q:NI="" 
+ I ID'="",$$LCL^IUSER("lab","eowner") D  I ID="" D MSG^RWU("Изменение чужих заявок запрещено") Q  ; изменение чужих
+ .S A=$$USR^IUSER(),Z=$G(^MLAB(NI,ID,"s1")) Q:Z="" 
+ .S:$P(Z,"|",3)'=A ID=""
+ S DT=$$DI^DTUTL($G(XML(NB,FRM,"indate"))) S:DT="" DT=+$H
+ 
+ I ID'="",NI'="",$G(^MLABI("c",ID))'=NI,$G(^(ID))'="" D MSG^RWU("Указанный код заявки уже используется.") Q 
+ 
+ s sED=$$LCL^IUSER("lab","sbseditz")
+ S DGN=$G(XML(NB,FRM,"stc")) S:DGN=$$GET^IPAC(NI,"stc",DT) DGN=""
+ S A=$P($G(XML(NB,FRM,"skd")),"|",1),SKD=""
+ S T=$$GET^IPAC(NI,"skd",DT)
+ F Z=1:1:$L(A,CR) S U=$P($P(A,CR,Z),"|",1) S:U'=T SKD=$S(SKD="":"",1:SKD_"|")_U ; все за искл. скидки по умолч.
+ S PRC="" S:DGN'="" PRC=$$PRC^IINSC(DGN,NI,DT)
+ S TM=+$$TI^DTUTL($G(XML(NB,FRM,"intime")))
+ S:'TM TM=$P($H,",",2) S DT=DT_","_TM
+ S SBS=$S(ID="":0,$G(^MLABI("c",ID))="":0,1:$P($G(^MLAB(NI,ID,"s2")),"|",1))
+ I SBS,'sED G We
+ I SBS S L=$$LCL^IUSER("lab","sbseditz-days") I L,($H-DT)'<L D MSG^RWU("Превышен период редактирования подписанной заявки") Q 
+ I SBS S L=$$LCL^IUSER("lab","sbseditz-st") I L,$$IsSTATE^IMLAB(NI,ID,L) D MSG^RWU("Вы не вправе менять заявку в статусе """_$$STXTI^NMLAB(L)_"""") Q 
+ 
+ S L=$$GID^I(LPU)
+ S H=DT_"|"_$G(%LOG)_"|"_LPU_"|"_$$KDR^IUSER
+ I ID="" D
+ .L +^MLABI("c")
+ .S ID=$$NNUMZ^IMLAB(),^MLABI("c",ID)=NI
+ .L -^MLABI("c")
+ .K:$D(^QUOTA("^MLAB",ID)) ^(ID)
+ 
+ I ID'="",$G(^MLABI("c",ID))="",$D(^QUOTA("^MLAB",ID)) K ^(ID) 
+ 
+ S:$G(^MLABI("c",ID))="" ^MLABI("c",ID)=NI
+ S ^MLAB(NI,ID,"s1")="1|"_H
+ 
+ S A=$G(XML(NB,FRM,"tests")),USL=""
+ S OUSL=$G(^MLAB(NI,ID,"ul"))
+ K UL
+ F I=1:1:99 S Z=$P($P(A,CR,I),"|",1) Q:Z=""  S S=$P(Z,"@",4),P=$P(Z,"@",5),Z=$S(Z["@":$P(Z,"@",2),1:Z) I Z'="" S UL(Z)=$G(UL(Z))+1 S:S'="" UL(Z,1)=S S:P'="" UL(Z,2)=P
+ ; убираем ранее введеные
+ ; TODO - количество
+ I OUSL'="" F I=1:1:$L(OUSL,"|") D
+ .S T=$P(OUSL,"|",I),Z=$P(T,":",1),T=$P(T,":",2,9)
+ .Q:Z="" 
+ .I +$P(T,":",1)=0,'$D(UL(Z)) Q  ; удалили
+ .I sED,+$P(T,":",1),'$D(UL(Z)) D RMUREF^IMLAB(NI,ID,Z) Q ; удаление подписанных
+ .S UL(Z)=$G(UL(Z))-1
+ .K:'UL(Z) UL(Z)
+ .S USL=$S(USL="":"",1:USL_"|")_Z_$S(T'="":":"_T,1:"")
+ ; добавляем новые
+ S Z="" F  S Z=$O(UL(Z)) Q:Z=""  F I=1:1:UL(Z) S P=Z S:$D(UL(Z,1)) $P(P,":",3)=$D(UL(Z,1)) S:$D(UL(Z,2)) $P(P,":",4)=$D(UL(Z,2)) S USL=$S(USL="":"",1:USL_"|")_P
+ 
+ S:USL'="" ^MLAB(NI,ID,"ul")=USL
+ S PRMS=$$MKPRMS^IMLAB(NI,ID)
+ 
+ S ^MLAB(NI,ID,"lab")=$$LPUCLAB^IMLAB($$^I("ilpu"),$P(USL,":",1))
+ 
+ S A=$$RECODE^YMKB10($G(XML(NB,FRM,"diag")))
+ S Z=$G(XML(NB,FRM,"comm")) S:Z'="" $P(A,"|",2)=Z
+ S:A'="" ^MLAB(NI,ID,"nt")=A ; только диагн., без комм.
+ K:A="" ^MLAB(NI,ID,"nt")
+ S A=$G(XML(NB,FRM,"bar"))
+ I A'="" S ^MLAB(NI,ID,"bar")=A,^MLABI("bar",A,ID)=NI
+ I A="" K ^MLAB(NI,ID,"bar")
+ I $$LCL^IUSER("lab","zcito-ed")'=0 S A=+$G(XML(NB,FRM,"cito")) S:A>0 ^MLAB(NI,ID,"ci")=A K:A=0 ^("ci")
+ 
+ S A=$G(XML(NB,FRM,"dcl"))
+ S:A'="" ^MLAB(NI,ID,"fl","dcl")=A  K:A="" ^MLAB(NI,ID,"fl","dcl")
+ S A=$G(XML(NB,FRM,"ndbr"))
+ S:A'="" ^MLAB(NI,ID,"fl","ndbr")=A  K:A="" ^MLAB(NI,ID,"fl","ndbr")
+ S A=$G(XML(NB,FRM,"sutdd"))
+ S:A'="" ^MLAB(NI,ID,"fl","sutdd")=A  K:A="" ^MLAB(NI,ID,"fl","sutdd")
+ 
+ S A=+$G(^MLAB(NI,ID))
+ I A K ^MLABI("d",A,ID) D KGL^IEXCH("^MLABI","d",A,ID)
+ S ^MLAB(NI,ID)=DT,^(ID,"s2")="0|"_H
+ S:$P($G(^MLAB(NI,ID,"up")),"|",1)=2 $P(^MLAB(NI,ID,"up"),"|",1)=0 ; unsbs
+ S DT=+DT,^MLABI("d",DT,ID)=NI
+ S Z=""
+ S A=$G(XML(NB,FRM,"zname")) S:A=-1 A="" S:A'="" $P(Z,"|",1)=A
+ S A=$G(XML(NB,FRM,"zotd")) S:A>0 $P(Z,"|",2)=A
+ S A=$G(XML(NB,FRM,"zsotr")) S:A>0 $P(Z,"|",3)=A
+ S A=$G(XML(NB,FRM,"zid")) S:A'="" $P(Z,"|",4)=A
+ S A=$G(XML(NB,FRM,"znapr")) S:A'="" $P(Z,"|",5)=A
+ S:Z'="" ^MLAB(NI,ID,"zi")=Z
+ K:Z="" ^MLAB(NI,ID,"zi")
+ S A=PRC
+ S:DGN'=""!($P(A,"|",2)'="") $P(A,"|",2)=DGN
+ S:SKD'=""!($P(A,"|",3)'="") $P(A,"|",3)=SKD
+ S L=$G(XML(NB,FRM,"skdnn"))
+ S:L'=""!($P(A,"|",4)'="") $P(A,"|",4)=L
+ D:L'=""  ; TODO
+ .S ^BCARD(L,+$H)="3|"_$$USRH^IUSER()_"|"_$G(^DSCN(SKD,"kcert"))
+ .S ^BCARD(L,+$H,"n")=NI
+ S:A'="" ^MLAB(NI,ID,"prc")=A I A="",$D(^MLAB(NI,ID,"prc")) K ^("prc")
+ S A=$G(XML(NB,FRM,"restype"))
+ S:A'="" ^MLAB(NI,ID,"rt")=A I A="",$D(^MLAB(NI,ID,"rt")) K ^("rt")
+ ; материалы
+ K UL
+ F L=1:1 S K=$P(PRMS,"|",L) Q:K=""  D
+ .S A=$P(K,"@",2),K=$P(K,"@",1)
+ .I A'="" s UL(A)=$P($G(^LABT("T",K,"b",A)),"|",1) Q  ; один материал
+ .M UL=^LABT("T",K,"b")
+ S L="" F  S L=$O(^MLAB(NI,ID,"mi",L)) Q:L=""  K:'$D(UL(L)) ^MLAB(NI,ID,"mi",L)
+ S L="" F  S L=$O(UL(L)) Q:L=""  I '$D(^MLAB(NI,ID,"mi",L)) S ^(L)=UL(L)
+ ; число материалов
+ S (A,L)="" F  S L=$O(^MLAB(NI,ID,"mi",L)) Q:L=""  S A=A+1
+ S ^MLAB(NI,ID,"mi")=A
+ 
+ D GL^IEXCH("^MLABI","d",DT,ID)
+ D GL^IEXCH("^MLABI","c",ID)
+ D GL^IEXCH("^MLAB",NI,ID)
+ S:$$LCL^IUSER("lab","autosbs") L=$$SBS^IMLAB(ID)
+ Q
+We 
+ D OWF^RWU(".xmlb"),W^RWU("<nnlab>")
+ D WC^RWU("<summ data=""Итого "_SUMM_" руб."" userdata="""_SUMM_"""/>")
+ D WTAGD^RWU("id",ID)
+ D WTAGDC^RWU("idtext",ID_" от "_$$DT^DTUTL(+DT))
+ S U=""" split=""line"" break=""no""/>"
+ S A=$P($G(^MLAB(NI,ID,"s1")),"|",5),Z=$$FIO^IKADRY(A)
+ S A="<info><field name=""owner"" title="""_Z_U
+ D WC^RWU(A_"</info>")
+ D W^RWU("</nnlab></nb_console>"),C^RWU
+ Q
+SBS(ID) ; Подпись
+ I $$LCL^IUSER("lab","sbsz")=0 D MSG^RWU("Недостаточно прав") Q 
+ N A
+ S A=$$SBS^IMLAB(ID)
+ I A'="" D MSG^RWU(A) Q 
+ D L(ID)
+ Q
+RESBS(ID) ; Повторная отправка на подпись услуг (при доп. вопросах)
+ D RESBS^IMLAB(ID)
+ D L(ID)
+ Q
+DEL(ID) ; Удалить
+ Q:ID="" 
+ N X
+ I $$LCL^IUSER("lab","del")=0 D MSG^RWU("Недостаточно прав") Q 
+ S X=$$LCL^IUSER("lab","delnst")
+ I X'="",$$IsSTATE^IMLAB("",ID,X) D MSG^RWU("Удаление невозможно - заявка в статусе """_$$STXTI^NMLAB(X)_"""") Q
+ I '$$LCL^IUSER("lab","delall"),$$IsSTATE^IMLAB("",ID,2) D MSG^RWU("Удаление невозможно - материал взят") Q 
+ S X=$$LCL^IUSER("lab","deldays")
+ I X'="",(+$H-$$CREATED^IMLAB("",ID))>X D MSG^RWU("Недостаточно прав") Q 
+ D DEL^IMLAB("",ID)
+ Q
+MATPROF(ID) ; Получить информацию по материалу
+ N A
+ S A=$G(^LABT("M",+ID,"c"))
+ S $P(A,"|",2)=^LABT("M",ID)_": "_$P(A,"|",2)
+ D MSG^RWU(A)
+ Q
+SETMAT(ID,MT,BAR,LOC) ; Присвоить код материала
+ ; BAR - BAR@Num 
+ Q:ID=""  Q:+MT=0 
+ N NI,R,NB,X
+ S NI=^MLABI("c",ID)
+ S LOC=$G(LOC),MT=$P(MT,"@",1),BAR=$$WD^TXTU(BAR)
+ S NB=$P(BAR,"@",2),BAR=$P(BAR,"@",1)
+ S:'NB NB=1
+ I $$CHK1LOC^IMLAB(MT,BAR,LOC) D MSG^RWU("Не указан локус.") Q 
+ S R=$G(^MLAB(NI,ID,"mi",MT)),X=$P(R,"|",2)
+ S $P(X,"@",NB)=BAR,$P(R,"|",2)=X
+ S:LOC'="" $P(R,"|",3)=LOC
+ S ^MLAB(NI,ID,"mi",MT)=R 
+ D L(ID)
+ Q
+ZSEL(ID) ; Выбор заказчика
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<nnlab>")
+ D ZSELsys(ID)
+ D W^RWU("</nnlab></nb_console>"),C^RWU
+ Q
+ZSELsys(ID) 
+ D W^RWU("<zotd>")
+ ; TODO - otd
+ D W^RWU("</zotd><zsotr>")
+ D LSTSTAF^ICONTR(ID,+$H)
+ D W^RWU("</zsotr>")
+ Q
+ZOTD(ID) ; Список подразделений
+ N X,A S X="",A="|"
+ F  S X=$O(^M("zlpu",ID,X)) Q:X=""  S A=A_CR_X_"|"_^(X)
+ D MSG^RWU(A)
+ Q
+SETSUM(ID,SUM) ; Присвоить заявке фиксированную сумму
+ N NI,R,PRC,DGN,DT,VID,Z,S,U,SS,UL,LL
+ S NI=$G(^MLABI("c",ID)) Q:NI=""
+ S DT=+$P(^MLAB(NI,ID,"s1"),"|",2)
+ S R=$G(^MLAB(NI,ID,"prc"))
+ S PRC=$P(R,"|",1),DGN=$P(R,"|",2)
+ S:DGN="" DGN=$$GET^IPAC(NI,"stc",+DT)
+ S:PRC="" PRC=$$GET^IINSC(DGN,"price",+DT)
+ S VID=$$GET^IINSC(DGN,"dvid",+DT)
+ S PRC=$S(PRC="":$$PRC^IINSC(DGN,NI,+DT),1:$$CORCP^IPRICET(PRC))
+ S UL=$G(^MLAB(NI,ID,"ul")),SS=0
+ F Z=1:1 S U=$P(UL,"|",Z) Q:U=""  D
+ .S S=$P(U,":",3),U=$P(U,":",1)
+ .S S=$S(S:S,1:$$PRICEH^IPRICE(U,PRC,DT))
+ .S LL(Z)=S,SS=SS+S
+ 
+ I SS=SUM D L(ID) Q 
+ 
+ S R=0,Z=""
+ F  S Z=$O(LL(Z)) Q:Z=""  S S=+$J(LL(Z)*SUM/SS,"",2),R=R+S,LL(Z)=S
+ S R=SUM-R
+ ; коррекция
+ I R S Z=$O(LL(Z)) S LL(Z)=LL(Z)+R
+ F Z=1:1 S U=$P(UL,"|",Z) Q:U=""  S $P(U,":",3)=LL(Z),$P(UL,"|",Z)=U
+ S ^MLAB(NI,ID,"ul")=UL ; TODO UPD
+ D L(ID)
+ Q
+ZLPROF(ID) ; Перечень профилей в заявке
+ N NI,KX,I,X,LL
+ S NI=$G(^MLABI("c",ID)) Q:NI="" 
+ S KX=$G(^MLAB(NI,ID,"ul")) Q:KX="" 
+ F I=1:1:$L(KX,"|") S X=$P($P(KX,"|",I),":",4) S:X'="" LL(X)=""
+ D OWF^RWU(".txt")
+ S (X,I)="" F  S I=$O(LL(I)) Q:I=""  D WC^RWU(X_I_"|"_$P(^LABT("PU",I),"|",1)) S X=CR
+ D C^RWU
+ Q
+LSTPROF(NI,GEND) ; Список профилей
+ ; GEND - пол пациента
+ N ID,C,R,G
+ D OWF^RWU(".txt")
+ S (ID,C)="",G=$S($G(GEND)="":$$GET^IPAC($G(NI),"pol"),1:GEND)
+ F  S ID=$O(^LABT("PU",ID)) Q:ID=""  S R=^(ID) D
+ .Q:$P(R,"|",4)
+ .I $P(R,"|",6)'="",$P(R,"|",6)'=G Q 
+ .D WC^RWU(C_"PRO-"_ID_"|"_$P(R,"|",1)) S C=CR
+ D C^RWU
+ Q
+CHKTEST(NI,ID,SKSEL) ; Проверка/добавление
+ N U,A,S,R,X,IX,SS,SC,DGN,LL,SK,iSK,LP,SKS,SKP
+ S %L=""
+ S DGN=$$GET^IPAC(NI,"stc"),LP=$$^I("ilpu"),SKSEL=$G(SKSEL)
+ S A=$G(^LABTI("CT",ID))
+ I $P(A,"|",1)="P" S ID="PRO-"_$P(A,"|",2)
+ I $E(ID,1,4)="PRO-" S ID=$E(ID,5,99) I $D(^LABT("PU",ID)) D  Q
+ .S R=$G(^(ID))
+ .Q:$P(R,"|",4)  ; not used
+ .S U="",SS=$P(R,"|",3),iSK=$P(R,"|",5),SKS=$P(R,"|",7),SC=0
+ .I SKS'="" S SKS=$$PROFSSK^IMLABS(SKSEL,NI,DGN) S:SKS'="" iSK=0
+ .F  S U=$O(^LABT("PU",ID,U)) Q:U=""  D
+ ..S S=^(U)
+ ..D UNAME^YNPRICE(U,NI,DGN,"@")
+ ..I SKS'="" S SK=$$GETID^IDSCN(NI,DGN)
+ ..I S,iSK S SK=$$CALC^IDSCN(NI,,U,DGN,,1,LP) S:SK S=$TR(+$J(S*(100-SK)/100,"",2),".",",")
+ ..S:S'="" R=$P(%L,"|",1),$P(R,"@",2)=S,$P(R,"@",3)=S,$P(R,"@",4)=ID,$P(%L,"|",1)=R
+ ..S LL(U)=%L
+ ..S:SS SC=SC+$P($P(%L,"|",1),"@",2)
+ .S:SKS'="" SC=SKS ; фиксированная сумма по скидке
+ .I SS,SC,SS'=SC S U="" F  S U=$O(LL(U)) Q:U=""  D
+ ..S R=LL(U),A=$P(R,"|",1),S=+$J($P(A,"@",2)*SC/SS,"",4)
+ ..I iSK S SK=$$CALC^IDSCN(NI,,U,DGN,,1,LP) S:SK S=+$J(S*(100-SK)/100,"",2)
+ ..S $P(A,"@",2)=S,$P(A,"@",3)=S,$P(R,"|",1)=A,LL(U)=R ; подгон цены
+ .S (U,A)="" F  S U=$O(LL(U)) Q:U=""  S A=$S(A="":"",1:A_CR)_"@"_LL(U)
+ .S %L=A
+ ; TEMP - профосмотры
+ I $E(ID,1,2)="V:" S ID=$TR($E(ID,3,99),"; ",",") D  Q
+ .S IX=$$GET302^IPROFVR(ID),A=""
+ .F X=1:1:$L(IX,"|") S U=$P(IX,"|",X) D:U'=""
+ ..D UNAME^YNPRICE(U,NI,DGN,"@")
+ ..S A=$S(A="":"",1:A_CR)_"@"_%L_" "_U
+ .D MSG^RWU(A)
+ 
+ D UNAME^YNPRICE(ID,NI,DGN,"@")
+ Q:%L="" 
+ S %L="@"_%L
+ ; @код услуги@сумма@сумм.изменена
+ Q
+MKUNIQ(NI,DT) ; Создать уникальное направление на дату
+ N R,ID
+ S ID="" F  S ID=$O(^MLAB(NI,ID)) Q:ID=""  S R=^(ID) I +R=DT Q 
+ Q:ID'="" ID
+ S ID=$O(^MLABI("c",""),-1)+1
+ S ^MLABI("c",ID)=NI,^MLAB(NI,ID)=$H
+ Q ID
+NNTXT(NI) ; 
+ N ID
+ S ID=$$MKUNIQ^NMLABZ(NI,+$H)
+ D MSG^RWU("Лабораторный номер "_ID)
+ Q
+LABINIT ; Инициализация списка параметров
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<labprm><lab>")
+ D LABSW^NMLABU
+ D W^RWU("</lab><issls"_$S($$LCL^IUSER("lab","nnfixisl"):" userdata=""1""",1:"")_">")
+ D TREEsys^NPRICEG(0,"lab")
+ D W^RWU("</issls></labprm></nb_console>"),C^RWU
+ Q
+LABPRM(ID,NIB,DGN,LAB,NALLU,TXT,SKD,KSS) ; Список параметров/услуг по анализу
+ N MPR,ORD,labPRC,tG,HH
+ S NALLU=+$G(NALLU),SKD=$P($G(SKD),"|",1),HH=+$H
+ S LAB=$S($P(LAB,"|",2)=0:$$^I("ilpu"),1:$P(LAB,"|",2)) ; ЛПУ или юр.л.
+ S MPR=$$GET^IPAC(NIB,"prog"_$$PIDX^IPAC(NIB,DGN,HH))
+ s ORD=$G(^cfg("lab","servsort")),TXT=$G(TXT),KSS=$G(KSS)
+ S tG=$$LCL^IUSER("lab","uslsgr")
+ I DGN'="",'KSS,$$GET^IINSC(DGN,"dvid",HH)=3 S KSS=1
+ S:KSS NALLU=0
+ S labPRC=$$PRC^IINSC(DGN,NIB,HH,KSS)
+ D LPSPG^YNPRICE(NIB,"",ID,DGN,"@",LAB,"$$LABPRMp^NNAZN()",TXT,KSS,ORD,SKD,tG)
+ S ^JOB(%JOB,"lab","selprice")=labPRC ; текущий прайс
+ Q
+LABPRMp 
+ Q:'NALLU 0
+ Q:'$$CHKUVA^YMPRP(MPR,+$H,COD) 1
+ Q:$$CHKUA^YMPRP(MPR,+$H,COD)<0 1
+ S labPRC=VI
+ Q 0
+LABPNM(ID,NIB,DGN,SKD) ; имя одного параметра
+ D UNAME^YNPRICE(ID,NIB,DGN,"@",,$G(SKD))
+ Q
+CONLST(ID) ; Список контрагентов по заявке
+ N NI,A,L,C,PRC,DGN,UL,Z,U,DT
+ S NI=$G(^MLABI("c",ID)) Q:NI=""
+ S DT=$P(^MLAB(NI,ID,"s1"),"|",2)
+ S A=$G(^MLAB(NI,ID,"prc")),PRC=$P(A,"|",1),DGN=$P(A,"|",2)
+ S:DGN="" DGN=$$GET^IPAC(NI,"stc",+DT)
+ S:PRC="" PRC=$$PRC^IINSC(DGN,NI,+DT)
+ S PRC=$$CORCP^IPRICET(PRC)
+ S UL=$G(^MLAB(NI,ID,"ul"))
+ 
+ F Z=1:1 S U=$P($P(UL,"|",Z),":",1) Q:U=""  S C=$$GET2IDX^YNPRICE(U,"con",PRC,+DT,"") S:C'="" L(C)=""
+ 
+ S (A,C)=""
+ F  S C=$O(L(C)) Q:C=""  S A=$S(A="":"",1:A_CR)_C_"|"_$$NAME^ICONTR(C)
+ D MSG^RWU(A)
+ Q
+PRN(ID,PI,CON,EXT) ; Печать заявки
+ ; PI - индекс документа
+ ; CON - контрагент
+ ; EXT - вариант для внешнего контрагента
+ N NI,R,A,I,S1,DT,W,Wc,S,G,DGN,PRC,UL,CL,Z,U,MT,LC,YY,LST,C,C0,cSM,cCON,COM,BIO,R1,R2,RR,AETEXT,FLL,K,SECT,TSEL,nL
+ S W="85|30|30|20|25",Wc="l|c|c|c|c",(SECT,TSEL)="",EXT=$G(EXT)
+ s cCON=$G(^cfg("lab","conzprn"))
+ S:'cCON cCON=$$LCL^IUSER("lab","conzprn")
+ S:EXT cCON=1
+ s cSM=$G(^cfg("lab","z-used-bio"))
+ 
+ S NI=$G(^MLABI("c",ID)) Q:NI=""  
+ S S1=^MLAB(NI,ID,"s1"),DT=+$P(S1,"|",2)
+ S CON=$G(CON) S:CON'="" CON="|"_CON_"|"
+ S PI=$G(PI)
+ S:PI="" PI=$$LCL^IUSER("lab","prn-z")
+ S:PI="" PI=$$FPRNIDP^IMLABU("z",$$ZID^IMLAB(NI,ID),$$STC^IMLAB(NI,ID,+$H))
+ S:PI="" PI=$$FPRNID^IMLABU("z")
+ S AETEXT=$$PRNFL^IMLABU(PI,"aetext") ; текст после подписи
+ D PRNfll^NMLABR
+ D OWF^RWU(".xml")
+ D OPEN^ISTREP("Лабораторная заявка")
+ S R1=$$PRNFL^IMLABU(PI,"logow") S:R1="" R1=300
+ S R2=$$PRNFL^IMLABU(PI,"logoh") S:R2="" R2=115
+ S nL=0 S:R1=0!(R2=0)!$$PRNFL^IMLABU(DOC,"nologo") nL=1
+ D FIELD^ISTREP("i","logo",,R1,R2,"href")
+ S A="" F  S A=$O(FLL(A)) Q:A=""  D FIELD^ISTREP("n",A)
+ D ENDFLD^ISTREP()
+ S R=$$PRNFL^IMLABU(PI,"logo") S:R="" R="logol.bmp"
+ D W^RWU("<data>")
+ D:'nL WTAG^RWU("logo",R)
+ S A="" F  S A=$O(FLL(A)) Q:A=""  D WTAGC^RWU(A,FLL(A))
+ D W^RWU("</data>")
+ S R=$$PRNFL^IMLABU(PI,"font") S:R="" R=10
+ D FONT^ISTREP(1,"Times New Roman",R)
+ D FONT^ISTREP(2,"Times New Roman",R,"b")
+ D FONT^ISTREP(3,"Times New Roman",14,"b")
+ D FONT^ISTREP(4,"Times New Roman",12)
+ D FONT^ISTREP(5,"Times New Roman",12,"b")
+ D FONT^ISTREP(6,"Times New Roman",8)
+ D FONT^ISTREP(7,"Times New Roman",8,"b")
+ D CSTART^ISTREP("p")
+ S R=$$PRNFL^IMLABU(PI,"footer") ; подвал документа
+ S:EXT R=""
+ D:R'="" WC^RWU(CR_"<footer><d f=""6"" b=""t"">"_$$TAG^TXTU(R)_"</d></footer>")
+ 
+ S A=$G(^MLAB(NI,ID,"prc")),PRC=$P(A,"|",1),DGN=$P(A,"|",2)
+ S:DGN="" DGN=$$GET^IPAC(NI,"stc",+DT)
+ S:PRC="" PRC=$$PRC^IINSC(DGN,NI,+DT)
+ S PRC=$$CORCP^IPRICET(PRC)
+ S UL=$G(^MLAB(NI,ID,"ul"))
+ S COM=$P($G(^MLAB(NI,ID,"nt")),"|",2,99)
+ 
+ ; filter by contragent
+ F Z=1:1 S U=$P($P(UL,"|",Z),":",1) Q:U=""  D
+ .S C=$$GET2IDX^YNPRICE(U,"con",PRC,+DT,"")
+ .I CON'="",CON'[("|"_C_"|") Q  ; отдельный контрагент
+ .S A=+$S(cCON:C,1:0)
+ .S CL(A,U)=""
+ S:'$D(CL) CL(0)="" ; для пустого бланка
+ 
+ S C="",C0=0 F  S C=$O(CL(C)) Q:C=""  D
+ .D:C0 NPG^ISTREP() 
+ .D PRNb("",nL)
+ .D PRNhc(ID,"")
+ .D PRNh
+ .D H^ISTREP(2)
+ .D PRNu(C)
+ .D:COM'="" LNPRMP^ISTREP("Примечание",COM)
+ .D H^ISTREP(10)
+ .D PRNe
+ .S C0=C0+1
+ 
+ D CEND^ISTREP,CLOSE^ISTREP
+ D C^RWU
+ Q
+PRNb(PAGE,NLG) 
+ ; PAGE - тип страницы
+ ; NLG - без логотипа
+ N R,RR
+ S RR=$$PRNFL^IMLABU(PI,"begindoc-pg"_PAGE),NLG=$G(NLG)
+ S:RR="" RR=$$PRNFL^IMLABU(PI,"begindoc")
+ I RR'="" D WC^RWU(RR) Q 
+ D WC^RWU("<l b=""tlrb"" l=""10"" w=""190""><d w=""1""/>"_$S(NLG:"",1:"<d w=""130"" h=""8f""><l h=""1""/><l><f>logo</f></l></d>"))
+ S R=$$PRNFL^IMLABU(PI,"rtheader")
+ D:R'="" WC^RWU("<d w=""60"" h=""8f"" b=""l"" l=""10"" a=""c"">"_R_"</d>")
+ D W^RWU("</l>")
+ Q
+PRNhc(ID,PAGE) ; header common	
+ D H^ISTREP(2)
+ S RR=$$PRNFL^IMLABU(PI,"infodoc-pg"_PAGE)
+ S:RR="" RR=$$PRNFL^IMLABU(PI,"infodoc")
+ I RR'="" D WC^RWU(RR) Q 
+ D LD^ISTREP("Заявка № "_ID,3,"c")
+ D H^ISTREP(2)
+ I EXT S R=$$EID^IMLABS(C,$$^I("ilpu")) D:R'="" WC^RWU(CR_"<l><d>Код учреждения: </d><d f=""2"">"_R_"</d></l>")
+ S R=$$DT2^DTUTL(DT)
+ D WC^RWU(CR_"<l><d w=""100""><d>Пациент: </d><d f=""2"">"_$$FIO^IPAC(NI)_"</d></d><d>Дата забора: </d><d f=""2"">"_R_"</d></l>")
+ S R=$$GETE^IPAC(NI,"datar")
+ S R="<l><d w=""100""><d>Дата рождения: </d><d f=""2"">"_R_"</d></d>"
+ S R1=$S($G(^cfg("lab","pemail")):"pemail",1:"email")
+ S:'EXT R=R_"<d>E-mail: </d><d f=""2"">"_$$GET^IPAC(NI,R1)_"</d>"
+ S R=R_"</l>"
+ D WC^RWU(CR_R)
+ Q:EXT  ; без контактных данных !
+ S R=$$TELS^IPAC(NI)
+ D WC^RWU(CR_"<l><d>Контакты: </d><d f=""2"">"_R_"</d></l>")
+ Q
+PRNh 
+ G:EXT PRNh1
+ S A=$G(^MLAB(NI,ID,"zi")),R=""
+ S:$P(A,"|",1)'="" R=$$NAME^ICONTR($P(A,"|",1))
+ S:$P(A,"|",3)'="" R=$S(R="":"",1:R_", ")_$$FIOSHF^TXTU($$FIO^NPEOPL($P(A,"|",3)))
+ S:$P(A,"|",4)'="" R=$S(R="":"",1:R_", ")_$P(A,"|",4)
+ S A=$P(A,"|",5)
+ S:A'="" R=$S(R="":"",1:R_", ")_"по направлению № "_A
+ 
+ D:R'="" WC^RWU(CR_"<l><d>Заказчик: </d><d f=""2"">"_$$TAG^TXTU(R)_"</d></l>")
+ S R=$$NAME^IDSCN($$SKD^IMLAB(NI,ID,DT))
+ D:R'="" WC^RWU(CR_"<l><d>Скидка: </d><d f=""2"">"_$$TAG^TXTU(R)_"</d></l>")
+PRNh1 
+ S R=$G(^MLAB(NI,ID,"fl","dcl"))
+ S:R'="" R="<d>День цикла:</d><d f=""2"">"_R_"</d>"
+ S R1=$G(^MLAB(NI,ID,"fl","ndbr"))
+ S:R1'="" R1="<d>Неделя беременности:</d><d f=""2"">"_R1_"</d>"
+ S:R1'="" R=R_$S(R="":"",1:"<d>, </d>")_R1
+ S R1=$G(^MLAB(NI,ID,"fl","sutdd"))
+ S:R1'="" R1="<d>Суточный диурез:</d><d f=""2"">"_R1_"</d>"
+ S:R1'="" R=R_$S(R="":"",1:"<d>, </d>")_R1
+ D:$L(R) WC^RWU(CR_"<l>"_R_"</l>")
+ ;S R=$P($G(^MLAB(NI,ID,"nt")),"|",2)
+ ;D:R'="" WC^RWU(CR_"<l><d>Примечание:</d></l><l><d>"_$$TAG^TXTU(R)_"</d></l>")
+ S R=$P($G(^MLAB(NI,ID,"s1")),"|",2)
+ D:R'="" LNPRM^ISTREP("Дата взятия биоматериала",$$DTM^DTUTL(R),,2)
+ 
+ S (R,I)="" F  S I=$O(^MLAB(NI,ID,"mi",I)) Q:I=""  D
+ .S A=^(I) Q:$P(A,"|",1)="" 
+ .S BIO(I)=$P(A,"|",3),A=$P(A,"|",2) Q:A="" 
+ .S R=$S(R="":"",1:R_", ")_A
+ D:R'="" LNPRM^ISTREP("Номера пробирок",R)
+ Q
+PRNu(CON) 
+ N FP,WK
+ S WK=$$PRNFL^IMLABU(PI,"ucode")
+ ; CON - контрагент
+ S R=$$PRNFL^IMLABU(PI,"tabview")
+ S Z="Услуга|"_$S(R=1:"Локус",R=2:"",1:"Биоматериал|Локус")
+ S W=$S(R=1:"110|30|20|30",R=2:"135|25|30",1:"85|30|30|20|25")
+ S Wc=$S(R=1:"l|c|c|c",R=2:"l|c|c",1:"l|c|c|c|c")
+ D TAB^ISTREP(Z_"|Цена|Срок",W,"f","","#EEEEEE")
+ 
+ S UL=$G(^MLAB(NI,ID,"ul")),R=""
+ 
+ F Z=1:1 S U=$P($P(UL,"|",Z),":",1) Q:U=""  D:$D(CL(CON,U))
+ .S G=+$$GET^IPRICE(U,"grp",PRC,DT),LST(G,U)=""
+ 
+ S G="",Z=1 F  S G=$O(LST(G)) Q:G=""  D
+ .S FP=0
+ .S U="" F  S U=$O(LST(G,U)) Q:U=""  D:$D(CL(CON,U))
+ ..I 'FP D TLN^ISTREP($$NAME^NPRICEG(G),W,2,"","","c") S FP=1
+ ..S R=$$GET^IPRICE(U,"aname",PRC,DT)
+ ..S:R="" R=$$NAMEH^IPRICE(U,PRC,DT)
+ ..S S=$S(EXT:"-",1:$$PRICEH^IPRICE(U,PRC,DT))
+ ..S (MT,LC,YY)=""
+ ..S MT=$$getBIO(U,"BIO",cSM),YY=$$getAGE(U)
+ ..S LC=$P(MT,"|",2),MT=$P(MT,"|",1)
+ ..S K=$S(EXT:$P($$GET2^IPRICE(U,"con",CON,PRC,DT),"|",2),WK=1:U,1:Z_".")
+ ..S:K'="" K=K_" "
+ ..D TAB^ISTREP(K_R_"|"_MT_"|"_LC_"|"_S_"|"_YY,W,"",4,"",Wc)
+ ..S Z=Z+1
+ 
+ Q:EXT 
+ Q:$$PRNFL^IMLABU(PI,"nosumm") 
+ S S=$$SUMM^IMLAB(NI,ID,DT,$S(cCON:CON,1:""))
+ D:S WC^RWU("<l f=""4""><d w=""115""/><d w=""30"" a=""r"">Итого</d><d w=""20"" a=""c"" f=""5"">"_S_"</d><d f=""5"">руб.</d></l>")
+ Q
+PRNe 
+ Q:EXT 
+ S RR=$$PRNFL^IMLABU(PI,"enddoc")
+ I RR'="" D WC^RWU(CR_RR) G PRNe1
+ S RR=$$PRNFL^IMLABU(PI,"sbscd")
+ S:RR="" RR="Администратор"
+ D WC^RWU(CR_"<l><d w=""100""><d>Клиент</d><d h=""f"" w=""35"" b=""b""/></d><d>"_RR_"</d><d h=""f"" w=""35"" b=""b""/></l>")
+ D:$$PRNFL^IMLABU(PI,"bar") WC^RWU("<l h=""3""/><l><bar s=""c128"" h=""6"">bar</bar></l>")
+PRNe1 Q:AETEXT=""
+ D H^ISTREP(5)
+ D TXT^ISTREP(AETEXT)
+ Q
+getBIO(U,GL,STRICT) ; Биоматериал услуги
+ ; STRICT - только используемые материалы
+ N R,P,B,L,M
+ S STRICT=$G(STRICT)
+ S P="" F  S P=$O(^LABTI("CT",U,P)) Q:P=""  S B="" F  S B=$O(^LABT("T",P,"b",B)) Q:B=""  I $S('STRICT:1,$P($G(^MLAB(NI,ID,"mi",B)),"|",2)'="":1,1:0),$S(GL="":1,1:$D(@GL@(B))) S L(B)=@GL@(B)
+ S (R,B,M)=""
+ F  S B=$O(L(B)) Q:B=""  S P=L(B),R=$S(R="":"",1:R_", ")_^LABT("M",B) S:P'="" M=$S(M="":"",1:M_", ")_^LABT("LOC",P)
+ Q R_"|"_M
+getAGE(U) ; Срок годности по тестам услуги
+ N R,P
+ S (R,P)="" F  S P=$O(^LABTI("CT",U,P)) Q:P=""  S R=$G(^LABT("T",P,"tl")) I $P(R,"|",3)'="" S R=$P(R,"|",3) Q 
+ Q R
+CHKU(NIB,DGN,USL,TP,FLG) ; Проверка добавляемой услуги
+ S %L="",%B=".txt",FLG=$G(FLG)
+ N X,Y,CHK
+ I NIB'="",DGN="" S DGN=$$GET^IPAC(NIB,"stc",+$H)
+ I $L(FLG),"|"_FLG_"|"["|grn|",$$GET^IINSC(DGN,"ngrnl",+$H) D MSG^RWU("!Данному пациенту не могут быть оказаны услуги по гарантийному письму") Q
+ N X,Y,CHK
+ S Y=$$CHKPER^NPACSC(NIB,USL),Y=$P(Y,"|",1)
+ S:Y>7 Y="" ; TODO - через настройку
+ S TP="",CHK=0
+ S:$L(Y) TP="Услуга была выполнена "_$S('Y:"сегодня",1:Y_" дней назад.")
+ I $$GET^IINSC(DGN,"dvid",+$H)=3 S %L="$"_%L Q
+ D:'$L(FLG) CHKUSLT^YNED(NIB,DGN,USL)
+ I $L(%L),%L["платно" S CHK=1
+ S:$L(TP) %L=$$DW^TXTU("?"_TP)_$S(%L="":"",1:CR_%L)
+ I CHK S %L="$"_%L Q
+ Q
+LDATA(KEY) 
+ N I,C
+ D OWF^RWU(".txt")
+ S (C,I)="" F  S I=$O(^LABT(KEY,I)) Q:I=""  D WC^RWU(CR_I_"|"_$P(^(I),"|",1)) S C=CR
+ D C^RWU
+ Q
+UINF(DGN,USL,CEN,PRC) ; Информация по услуге
+ N PRM,X,I,R,A
+ S PRC=$G(PRC),USL=$$DW^TXTU(USL)
+ S:PRC="" PRC=$G(^JOB(%JOB,"lab","selprice"))
+ S:PRC="" PRC=$$PRC^IINSC(DGN,"",+$H)
+ S PRM=$$PRMSFU^IMLAB(USL)
+ D OWF^RWU(".htm")
+ D WC^RWU("<!DOCTYPE HTML PUBLIC ""-//W3C//DTD HTML 4.01 Transitional//EN""><html><head>")
+ D WC^RWU(CR_"<meta http-equiv=""Content-Type"" content=""text/html; charset=windows-1251""></head><body>")
+ D WC^RWU(CR_"<font size=""4"" color=""#000000""><b>"_$$TAG^TXTU($$NAME^IPRICE(USL,PRC))_"</b></font><hr>")
+ S X=CEN
+ S:X="" X=$$PRICE^IPRICE(USL,PRC)
+ D WC^RWU(CR_"<b>Цена:</b> "_X)
+ G:PRM="" UINFe
+ D WC^RWU(CR_"<hr><b>Выполняемые тесты:</b>")
+ S R="" F I=1:1:$L(PRM,"|") S X=$P($P(PRM,"|",I),"@",1),R=R_CR_"<br>"_$$TAG^TXTU($$NAMEPM^IMLABS(X))
+ D WC^RWU(R)
+ S A=$$BIOFPRM^IMLAB(PRM)
+ G:PRM="" UINFe
+ D WC^RWU(CR_"<br><b>Биоматериалы:</b>")
+ S R="" F I=1:1:$L(A,"|") S X=$P(A,"|",I),R=R_CR_"<br>"_$$TAG^TXTU($$NAMEBI^IMLABS(X))
+ D WC^RWU(R)
+UINFe 
+ D WC^RWU("</body></html>")
+ D C^RWU
+ Q

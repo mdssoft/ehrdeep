@@ -1,0 +1,152 @@
+NFILES ; manage files in DB [ 07/17/2015  10:31 PM ]
+DIRS 
+ N TTB,I,X,L,PI,R,TBB,K,F
+ S TBB=$C(9),PI="^FILES("""")"
+ D OWF^RWU(".txt")
+ F I=1:1:99 S TBB=TBB_$C(9)
+ S I="^FILES" F  S I=$Q(@I) Q:I=""  D
+ .S L=$QL(I),X=$G(@I),F=0
+ .I $P(X,"|",1)="F" S I=$D(@I@(999999)),I=$ZREFERENCE Q  ; перескакиваем
+ .Q:$P(X,"|",1)'="D"  Q:$QS(I,L)=" " 
+ .F K=1:1:L-1 S:$QS(PI,K)'=$QS(I,K) F=1 D:F=1 WC^RWU($E(TBB,1,K-1)_$QS(I,K)_"||"_CR)
+ .D WC^RWU($E(TBB,1,L-1)_$QS(I,L)_"||"_CR)
+ .S PI=I
+ D C^RWU
+ Q
+FILES(PATH) 
+ Q:PATH=""  
+ S PATH=$$WD^TXTU(PATH)
+ N I,X,K
+ S:$E(PATH)'="/" PATH="/"_PATH
+ S I="^FILES(" F X=2:1:99 S K=$P(PATH,"/",X) Q:K=""  S I=I_$S(X>2:",",1:"")_""""_K_""""
+ S I=I_")"
+ D OWF^RWU(".txt")
+ F  S X=$O(@I@(X)) Q:X=""  I X'=" " S K=$G(^(X)) D:$P(K,"|",1)="F" WC^RWU(CR_X_"|"_$$DTM^DTUTL($P(K,"|",4))_"|"_$P(K,"|",2))
+ D C^RWU
+ Q
+FILESVAR(PATH,VAR) ; Список файлов в каталоге в переменную
+ Q:PATH=""  
+ N I,X,K
+ S:$E(PATH)'="/" PATH="/"_PATH
+ S I="^FILES(" F X=2:1:99 S K=$P(PATH,"/",X) Q:K=""  S I=I_$S(X>2:",",1:"")_""""_K_""""
+ S I=I_")"
+ F  S X=$O(@I@(X)) Q:X=""  I X'=" " S K=$G(^(X)) S:$P(K,"|",1)="F" @VAR@(X)="" 
+ Q
+FIRSTF(PATH) ; первый файл в каталоге
+ S PATH=$TR($$WD^TXTU(PATH),"\","/")
+ N I,X,K
+ S:$E(PATH)'="/" PATH="/"_PATH
+ S I="^FILES(" F X=2:1:99 S K=$P(PATH,"/",X) Q:K=""  S I=I_$S(X>2:",",1:"")_""""_K_""""
+ Q $O(@(I_","""")"))
+LASTF(PATH) ; последний файл в каталоге
+ S PATH=$TR($$WD^TXTU(PATH),"\","/")
+ N I,X,K
+ S:$E(PATH)'="/" PATH="/"_PATH
+ S I="^FILES(" F X=2:1:99 S K=$P(PATH,"/",X) Q:K=""  S I=I_$S(X>2:",",1:"")_""""_K_""""
+ Q $O(@(I_","""")"),-1)
+EXISTFN(PATH,FN) ; файл существует (путь,имя файла)
+ S PATH=$$WD^TXTU(PATH),FN=$$WD^TXTU(FN)
+ Q $$EXISTFN^IDBFIL(PATH,FN)
+EXIST(PATH) ; файл существует
+ S PATH=$$WD^TXTU(PATH)
+ Q $$EXIST^IDBFIL(PATH)
+LEN(PATH) ; Размер файла
+ S PATH=$$WD^TXTU(PATH)
+ Q $$LEN^IDBFIL(PATH)
+MKTDIR(PATH,DIR) 
+ S PATH=$P(PATH,"/",1,$L(PATH,"/")-2)
+ G MKDIR+1
+MKDIR(PATH,DIR) 
+ N I,X,K
+ S PATH=$$WD^TXTU(PATH),DIR=$$WD^TXTU(DIR)
+ S I="^FILES(",X=0
+ I PATH'="" F X=2:1:99 S K=$P(PATH,"/",X) Q:K=""  S I=I_$S(X>2:",",1:"")_""""_K_""""
+ S I=I_$S(X:",",1:"")_""""_DIR_""")",@I="D|0|0|"_$H_"|"_$H
+ D UGL^IEXCH(I)
+ Q
+RMDIR(PATH) 
+ N I,X,K
+ S PATH=$$WD^TXTU(PATH)
+ S:$E(PATH)'="/" PATH="/"_PATH
+ S I="^FILES(" F X=2:1:99 S K=$P(PATH,"/",X) Q:K=""  S I=I_$S(X>2:",",1:"")_""""_K_""""
+ S I=I_")"
+ I $D(@I)=11 D MSG^RWU("Вначале удалите подкаталоги и файлы.") Q
+ K @I
+ D UGL^IEXCH("-"_I)
+ Q
+RMFILE(PATH,FN) 
+ S PATH=$$WD^TXTU(PATH),FN=$$WD^TXTU(FN)
+ D RMFILE^IDBFIL(PATH,FN)
+ Q
+SETFILE(PATH) 
+ S PATH=$$WD^TXTU(PATH)
+ Q:$G(%JOB)=""
+ S ^JOB(%JOB,"db-files-path")=PATH
+ Q
+POST 
+ N I,X,K,P,II
+ S I="^FILES(",P=$G(^JOB(%JOB,"db-files-path")) Q:P="" 
+ F X=2:1:99 S K=$P(P,"/",X) Q:K=""  D
+ .I $L(I)>7,'$D(@(I_")")) S @(I_")")="D"
+ .S I=I_$S(X>2:",",1:"")_""""_K_""""
+ D ORH^RWU
+ S K=0,II=I,I=I_")"
+ F X=1:1 S P=$$RA^RWU Q:%IFN["Z"  S @I@(X)=P,K=K+$L(P)
+ D CR^RWU
+ S @I="F|"_K_"|"_(X-1)_"|"_$H_"|"_$H ; todo
+ D UGL^IEXCH("-"_I),UGL^IEXCH(II)
+ K ^JOB(%JOB,"db-files-path")
+ Q
+OW(FN) ; Open write file
+ N X,K,I
+ S I="^FILES("
+ F X=2:1:99 S K=$P(FN,"/",X) Q:K=""  D
+ .I $L(I)>7,'$D(@(I_")")) S @(I_")")="D" ; if no exist - create dir
+ .S I=I_$S(X>2:",",1:"")_""""_K_""""
+ S %nfX=1,%nfL=0,%nfI=I_")",@%nfI="F"
+ Q
+W(P) ; write file
+ Q:'$D(%nfI) 
+ S @%nfI@(%nfX)=P,%nfL=%nfL+$L(P),%nfX=%nfX+1
+ Q
+CW ; close write
+ S @%nfI="F|"_%nfL_"|"_(%nfX-1)_"|"_$H_"|"_$H ; todo
+ D UGL^IEXCH("-"_%nfI),UGL^IEXCH($E(%nfI,1,$L(%nfI)-1)) ; w.o. last ')'
+ K %nfI,%nfL,%nfX
+ Q
+OR(FN) ; Open read file
+ N X,K,I
+ S I="^FILES("
+ F X=2:1:99 S K=$P(FN,"/",X) Q:K=""  D
+ .I $L(I)>7,'$D(@(I_")")) S @(I_")")="D" ; if no exist - create dir
+ .S I=I_$S(X>2:",",1:"")_""""_K_""""
+ S %nfI=I_")",%nfX=$O(@%nfI@(""))
+ I %nfX="" K %nfI,%nfL,%nfX Q 0
+ Q 1
+R() ; write file
+ Q:'$D(%nfI) ""
+ I %nfX="" K %nfI,%nfL,%nfX Q ""
+ N X S X=%nfX,%nfX=$O(@%nfI@(%nfX))
+ Q @%nfI@(X)
+CR ; close read
+ K %nfI,%nfL,%nfX
+ Q
+GET(PATH) 
+ N I,X,K
+ S PATH=$$WD^TXTU(PATH)
+ S I="^FILES(" F X=2:1:99 S K=$P(PATH,"/",X) Q:K=""  S I=I_$S(X>2:",",1:"")_""""_K_""""
+ S I=I_")" I '$D(@I) S %L="" Q 
+ S X=$P(@I,"|",3)
+ D OWF^RWU(".bin")
+ F K=1:1:X D W^RWU(@I@(K))
+ D C^RWU
+ Q
+OUTPUT(PATH) ; Output to default device
+ N I,X,K
+ S PATH=$$WD^TXTU(PATH)
+ S I="^FILES(" F X=2:1:99 S K=$P(PATH,"/",X) Q:K=""  S I=I_$S(X>2:",",1:"")_""""_K_""""
+ S I=I_")" I '$D(@I) S %L="" Q 
+ S X=$P(@I,"|",3)
+ F K=1:1:X W @I@(K)
+ Q
+ 

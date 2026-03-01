@@ -1,0 +1,111 @@
+RLPURDG ; По разделам договоров [ 09/04/2018  4:41 PM ]
+BYLPU(DS,DE) ; По учреждению
+ N R,I,A,FF,TABLE,STOTD,LP,TXT,DGL,TP,X1,X2,TE
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S FF='+$$FR^I()
+ K ^BUF($J)
+ M STOTD=^cfg("stom-otd")
+ S:$G(^cfg("stom-otd")) STOTD(^cfg("stom-otd"))=""
+ D MKALLPRC^IUSLSC(DS,DE,1,"BYLPUp^RLPURDG","",FF)
+ S I=$G(^MN("dgtype")),(R,A,TE)=""
+ F  S A=$O(^MN(I,A)) Q:A=""  S R=R_"|"_$P(^(A),"|",1),TE=A+1
+ S R=R_"|Всего",TE=TE+1
+ D OWF^RWU(".txt")
+ D WC^RWU("ЛПУ "_$S(DS=DE:"на "_$$DT^DTUTL(DS),1:"с "_$$DT2^DTUTL(DS)_" по "_$$DT2^DTUTL(DE))_R)
+ S TXT(1)="Обратилось лиц всего"
+ S TXT(2)="Обратилось лиц первично"
+ S TXT(3)="Посещений всего"
+ S TXT(4)="Посещений первично"
+ S TXT(5)="Число услуг на обратившегося"
+ S TXT(6)="Число услуг"
+ S TXT(7)="Число услуг по кассе"
+ S TXT(8)="Сумма услуг"
+ S TXT(9)="Сумма услуг по кассе"
+ S LP=+$$^I("ilpu")
+ S FF="" F  S FF=$O(TABLE(LP,FF)) Q:FF=""  D
+ .D WC^RWU(CR_$S(FF=1:"Поликлиника",FF=2:"Стоматология",1:"Всего"))
+ .S I="" F  S I=$O(TABLE(LP,FF,I)) Q:I=""  S TP=90 F  S TP=$O(TABLE(LP,FF,I,TP),-1) Q:TP=""  S TABLE(LP,FF,I,99)=$G(TABLE(LP,FF,I,99))+TABLE(LP,FF,I,TP)
+ .S TP="" F  S TP=$O(TABLE(LP,FF,1,TP)) Q:TP=""  S X1=TABLE(LP,FF,1,TP),X2=$G(TABLE(LP,FF,6,TP))+$G(TABLE(LP,FF,7,TP)),TABLE(LP,FF,5,TP)=+$J(X2/X1,"",2)
+ .S I="" F  S I=$O(TABLE(LP,FF,I)) Q:I=""  D
+ ..S A="   "_TXT(I),TP=""
+ ..F  S TP=$O(TABLE(LP,FF,I,TP)) Q:TP=""  S $P(A,"|",$S(TP=99:TE,1:TP+1))=$TR(TABLE(LP,FF,I,TP),".",",")
+ ..D WC^RWU(CR_A)
+ D C^RWU
+ k ^BUF($J)
+ Q
+BYLPUp 
+ Q:$D(ERR) 
+ N X,CC,Z,L,O,T
+ S L=+$G(LPU),Z=VR_","_DT_","_NI,CSTC=+CSTC
+ S T=$$GETDGT(CSTC,DT) S:'T T=1
+ S O=$S($D(STOTD(OTD)):2,1:1)
+ S CC=$G(UL(U))
+ S X=$S($D(UL(U,1)):UL(U,1),1:$$PRICEH^IPRICE(U,PRC,DT)*KSKD*CC),X1=0
+ S:KASS X1=1 
+ S TABLE(L,O,6+X1,T)=$G(TABLE(L,O,6+X1,T))+CC
+ S TABLE(L,O,8+X1,T)=$G(TABLE(L,O,8+X1,T))+X
+ S Z=L_","_O
+ I '$D(^BUF($J,"l",Z,NI)) S ^(NI)="",TABLE(L,O,1,T)=$G(TABLE(L,O,1,T))+1 I $O(^PNF(NI,DT),-1)="" S TABLE(L,O,2,T)=$G(TABLE(L,O,2,T))+1
+ S Z=VR_","_DT_","_NI
+ I '$D(^BUF($J,"p",Z)) S ^(Z)="",TABLE(L,O,3,T)=$G(TABLE(L,O,3,T))+1 I $$GET^IPRICE(U,"cls",PRC,DT)["|pervp|" S TABLE(L,O,4,T)=$G(TABLE(L,O,4,T))+1
+ ; $$IsFPOS^IUSL(NI,OTD,VR,DT,ID)
+ Q
+GETDGT(DG,DT) ; Получить тип договора
+ Q:DG="" 3 Q:$D(DGL(+DG)) DGL(+DG)
+ S DT=+$$GET^IINSC(DG,"tp",DT),DGL(DG)=DT
+ Q DT
+BYOTD(DS,DE,OTDX) ; По отделениям
+ N R,I,A,FF,TABLE,LP,TXT,DGL,TP,X1,X2,TE
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),OTDX=+OTDX
+ S FF='+$$FR^I()
+ K ^BUF($J)
+ D MKAPPRC^IUSLSC(DS,DE,1,"BYOTDsp^RLPURDG","BYOTDp^RLPURDG","","",FF)
+ S I=$G(^MN("dgtype")),(R,A,TE)=""
+ F  S A=$O(^MN(I,A)) Q:A=""  S R=R_"|"_$P(^(A),"|",1),TE=A+1
+ S R=R_"|Всего",TE=TE+1
+ D OWF^RWU(".txt")
+ D WC^RWU($$GOTD^YISPRAV(OTDX)_" "_$S(DS=DE:"на "_$$DT^DTUTL(DS),1:"с "_$$DT2^DTUTL(DS)_" по "_$$DT2^DTUTL(DE))_R)
+ S TXT(1)="Обратилось лиц всего"
+ S TXT(2)="Обратилось лиц первично"
+ S TXT(3)="Посещений всего"
+ S TXT(4)="Посещений первично"
+ S TXT(5)="Число услуг на обратившегося"
+ S TXT(6)="Число услуг"
+ S TXT(7)="Число услуг по кассе"
+ S TXT(8)="Сумма услуг"
+ S TXT(9)="Сумма услуг по кассе"
+ S LP=+$$^I("ilpu")
+ S FF="" F  S FF=$O(TABLE(LP,FF)) Q:FF=""  D
+ .D WC^RWU(CR_$S(FF="z":"Всего по отделению",1:$$FIOSH^YIKADRY(FF)))
+ .I FF'="z" S I="" F  S I=$O(TABLE(LP,FF,I)) Q:I=""  S TP=90 F  S TP=$O(TABLE(LP,FF,I,TP),-1) Q:TP=""  S TABLE(LP,FF,I,99)=$G(TABLE(LP,FF,I,99))+TABLE(LP,FF,I,TP)
+ .S TP="" F  S TP=$O(TABLE(LP,FF,1,TP)) Q:TP=""  S X1=TABLE(LP,FF,1,TP),X2=$G(TABLE(LP,FF,6,TP))+$G(TABLE(LP,FF,7,TP)),TABLE(LP,FF,5,TP)=+$J(X2/X1,"",2)
+ .S I="" F  S I=$O(TABLE(LP,FF,I)) Q:I=""  D
+ ..S A="   "_TXT(I),TP=""
+ ..F  S TP=$O(TABLE(LP,FF,I,TP)) Q:TP=""  S X1=TABLE(LP,FF,I,TP),$P(A,"|",$S(TP=99:TE,1:TP+1))=$TR(TABLE(LP,FF,I,TP),".",",") I FF'="z",I'=5 S TABLE(LP,"z",I,TP)=$G(TABLE(LP,"z",I,TP))+X1
+ ..D WC^RWU(CR_A)
+ D C^RWU
+ k ^BUF($J)
+ Q
+BYOTDsp ; pre filter
+ I OTDX'=OTD S TEST=0 Q
+ S TEST=1
+ Q
+BYOTDp 
+ Q:$D(ERR) 
+ N X,CC,Z,L,O,T
+ S L=+$G(LPU),Z=VR_","_DT_","_NI,CSTC=+CSTC
+ S T=$$GETDGT(CSTC,DT) S:'T T=1
+ S O=VR,CC=$G(UL(U))
+ S X=$S($D(UL(U,1)):UL(U,1),1:$$PRICEH^IPRICE(U,PRC,DT)*KSKD*CC),X1=0
+ S:KASS X1=1 
+ S TABLE(L,O,6+X1,T)=$G(TABLE(L,O,6+X1,T))+CC
+ S TABLE(L,O,8+X1,T)=$G(TABLE(L,O,8+X1,T))+X
+ S Z=L_","_O
+ I '$D(^BUF($J,"l",Z,NI)) S ^(NI)="",TABLE(L,O,1,T)=$G(TABLE(L,O,1,T))+1 I $O(^PNF(NI,DT),-1)="" S TABLE(L,O,2,T)=$G(TABLE(L,O,2,T))+1
+ S Z=VR_","_DT_","_NI
+ I '$D(^BUF($J,"p",Z)) S ^(Z)="",TABLE(L,O,3,T)=$G(TABLE(L,O,3,T))+1 I $$GET^IPRICE(U,"cls",PRC,DT)["|pervp|" S TABLE(L,O,4,T)=$G(TABLE(L,O,4,T))+1
+ Q
+REGIPROC ;
+ S ^IPROC("Отчеты ЛПУ","Сводные","Показатели работы ЛПУ по разделам договоров")="BYLPU_RLPURDG,1,2,d,Период с,d,Период по"
+ S ^IPROC("Отчеты ЛПУ","Сводные","Показатели работы отделений по разделам договоров")="BYOTD_RLPURDG,1,3,d,Период с,d,Период по,te@storage:otd,Отделение"
+ Q

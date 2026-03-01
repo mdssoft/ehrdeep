@@ -1,0 +1,61 @@
+NPROFU ; Утилиты профосмотров [ 10/10/2016  0:52 AM ]
+IN302LT ; Загрузка списка профвредностей
+ N %J,A
+ D ORH^RWU
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D:%J>1
+ .S A=$$TRIM^TXTU($$DBLSP^TXTU(A))
+ .S ID=$P(A,"|",2),COD=$P(A,"|",1),PP=$P(A,"|",3)
+ .S NM=$P(A,"|",4),COMM=$P(A,"|",6),DC=$P(A,"|",7)
+ .S:$E(ID,$L(ID))="." ID=$E(ID,1,$L(ID)-1)
+ .S ^PROFV("v302",ID)=DC_"|"_NM_"|"_PP
+ D CR^RWU
+ Q
+P302LST ; Список кратких пунктов приказа
+ N A,ID,R,C
+ D OWF^RWU(".txt")
+ S (A,ID,C)="" F  S ID=$O(^PROFV("v302",ID)) Q:ID=""  D
+ .S R=^(ID),R=$S($P(R,"|",3)="":ID,1:$P(R,"|",3))
+ .S LST("0"_ID)=ID_"|"_R
+ S ID="" F  S ID=$O(LST(ID)) Q:ID=""  D
+ .D WC^RWU(C_LST(ID))
+ .S C=CR
+ D C^RWU
+ Q
+DECODE(ST) ; Вывести описание по пунктам приказа
+ Q:ST="" 
+ N ID,I,X,A,R
+ S A=""
+ F I=1:1:$L(ST,"|") S X=$P(ST,"|",I) D:X'="" 
+ .S R=^PROFV("v302",X)
+ .S A=$S(A="":"",1:A_CR)_$P(R,"|",3)_" - "_$P(R,"|",2)
+ D MSG^RWU(A)
+ Q
+LOKDTP ; Загрузка профессий по кодам ОКДТП
+ K ^PROFF
+ D ORH^RWU
+ N A,%J,R,I
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D:%J>1
+ .S A=$$DBLSP^TXTU(A) Q:A=""
+ .S I=$P(A,"|",1),A=$P(A,"|",2) Q:$L(I)<4  ; базовые коды не грузим
+ .S ^PROFF(I)=A_"|1|"_I
+ D CR^RWU
+ Q
+LLMK ; Загрузка параметров ЛМК
+ N %J,A,UL,ML,I,X,ID,U,M
+ D ORH^RWU
+ K ^PROFM("lmk")
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D:%J>1
+ .S A=$$TRIM^TXTU($$DBLSP^TXTU(A))
+ .I %J=2 D  Q  ; Услуги
+ ..F I=3:1:$L(A,"|") S X=$P(A,"|",I),UL(I)=X
+ .I %J=3 D  Q  ; Условия по продлению
+ ..F I=3:1:$L(A,"|") S X=$P(A,"|",I),ML(I)=X
+ .S ID=$P(A,"|",1) Q:ID="" 
+ .S ^PROFM("lmk",ID)=$P(A,"|",2)
+ .F I=3:1:$L(A,"|") S X=$P(A,"|",I) D:X'="" 
+ ..S U=$G(UL(I)),M=$G(ML(I))
+ ..Q:U="" 
+ ..S ^PROFM("lmk",ID,U)=1
+ ..S:M'="" ^PROFM("lmk",ID,U,"m",M)=1
+ D CR^RWU
+ Q

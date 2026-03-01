@@ -1,0 +1,245 @@
+RSSMCEM ; Шаблонные отчеты по медицине [ 10/06/2015  10:46 AM ]
+DO(DTT,DTE,NNUL,REMI,LPUX) ; Расчет отчета
+ N DS,DE,DT,DWKL,DWKLR,I,TITL,LST,X1,X2,X3,X4,X5,X6,X7,X8,A,B
+ N I1,I2,I3,I4,I5,K1,K2,K3,K4,K5,SS
+ S DTT=$$DIH^DTUTL(DTT)
+ S DTE=$$DI^DTUTL(DTE)
+ S DS=$S(DTE="":$$DI^DTUTL("01."_$P($$DT^DTUTL(DTT),".",2,3)),1:DTT)
+ S DE=$S(DTE="":$$AFTERMN^DTUTL(DS,1)-1,1:DTE)
+ S I=1 F DT=DS:1:DE S DWKL(DT)=I I DT<DE S:$$DWEEK^DTUTL(DT)=7 I=I+1,DWKLR(I)=DT+1
+ S DWKLR(1)=DS ; 1-я дата - 1-я неделя
+ K ^BUF($J)
+ S TITL(1)="1 выручка",TITL(2)="2 динамика",TITL(3)="3 отделения",TITL(4)="Анализ направлений",TITL(5)="5 зарузка оборудования"
+ S TITL(6)="глубина записи",TITL(7)="Доплаты по СК",TITL(8)="6 продажи",TITL(9)="Вакцинация",TITL(10)="7 диагностика",TITL(11)="8 врачебный персонал"
+ S TITL(12)="Гинекология",TITL(13)="Терапия,Кардиология и т.д.",TITL(14)="ЛОР",TITL(15)="Неврология",TITL(16)="УЗИ",TITL(17)="Хирургия Урология"
+ S TITL(18)="Офтальмология",TITL(19)="Массаж",TITL(20)="Прочее"
+ S TITL(21)="Дерматология",TITL(22)="Педиатрия"
+ 
+ D mku^RSSMCEM1 ; услуги
+ ;D mkkon^RSSMCEM2 ; контингент
+ D mkabon^RSSMCEM2 ; абонементы
+ D naz^RSSMCEM1 ; назначения
+ D mkgz^RSSMCEM3 ; Глубина записи
+ D mkc^RSSMCEM4 ; предистория
+ D mkk^RSSMCEM4 ; предистория по кдл
+ 
+ D OWF^RWU(".txt")
+ S X2=$$DT^DTUTL(DS)
+ S X7=$$MNNM^DTUTL(+$P(X2,".",2)),X8=$P(X2,".",3)
+ S X1=X7_" "_X8
+ S X2=$$DT2^DTUTL(DS)
+ S X3=$$DT2^DTUTL($G(DWKLR(2)))
+ S X4=$$DT2^DTUTL($G(DWKLR(3)))
+ S X5=$$DT2^DTUTL($G(DWKLR(4)))
+ S X6=$$DT2^DTUTL($G(DWKLR(5)))
+ S A=TITL(1)_":B:2:"_X1
+ S A=A_CR_TITL(1)_":E:3:"_X2_CR_TITL(1)_":F:3:"_X3
+ S A=A_CR_TITL(1)_":G:3:"_X4_CR_TITL(1)_":H:3:"_X5_CR_TITL(1)_":I:3:"_X6
+ D WC^RWU(A)
+ ; выручка (1)
+ 
+ S I1="" F  S I1=$O(^BUF($J,"cc",I1)) Q:I1=""  D:I1
+ .S I2="" F  S I2=$O(^BUF($J,"cc",I1,I2)) Q:I2=""  D:I2
+ ..S X1=$G(^(I2,"sum")),X2=$G(^("cnt")),X3=$G(^("pos"))
+ ..S X4=$G(^("ppl")),X5=$G(^("fpl"))
+ ..S I3=$S(I1=1:6,I1=2:7,I1=3:9,I1=4:10,1:11)
+ ..S B=$C($A("D")+I2)
+ ..S A=CR_TITL(1)_":"_B_":"_I3_":"_$$fn(X1/1000) ; тыс руб
+ ..I 'I1 D WC^RWU(A) Q ; прочие
+ ..S B=$C($A("C")+I2)
+ ..S I3=I3+12
+ ..S A=A_CR_TITL(1)_":"_B_":"_I3_":"_$$fn(X3)
+ ..S I3=I3+24
+ ..S A=A_CR_TITL(1)_":"_B_":"_I3_":"_$$fn(X2)
+ ..S B=$C($A("L")+I2),I3=$S(I1=1:30,I1=2:31,I1=3:33,I1=4:34,1:0)
+ ..S:X5&I3 A=A_CR_TITL(1)_":"_B_":"_I3_":"_$$fn(X5)
+ ..S B=$C($A("J")+I2),I3=$S(I1=1:55,I1=2:56,I1=3:58,I1=4:59,1:0)
+ ..S:X4&I3 A=A_CR_TITL(1)_":"_B_":"_I3_":"_$$fn(X2/X4)
+ ..S B=$C($A("J")+I2),I3=$S(I1=1:67,I1=2:68,I1=3:70,I1=4:71,1:0)
+ ..S:X2&I3 A=A_CR_TITL(1)_":"_B_":"_I3_":"_$$fn(X1/X2)
+ ..D WC^RWU(A)
+ ; выручка (1) - прикрепление
+ S K3=DWKL(DTT)
+ ;S I1="" F  S I1=$O(^BUF($J,"kon",I1)) Q:I1=""  D
+ ;.S I2="" F  S I2=$O(^BUF($J,"kon",I1,I2)) Q:I2=""  D
+ ;..S K1=$S(I1=0:"B",I1=1:"D",I1=2:"E",I1=3:"F",I1=4:"G",I1=5:"H",1:"")
+ ;..S K2=I2+29
+ ;..S A=CR_TITL(1)_":"_K1_":"_K2_":"_$$fn(^BUF($J,"kon",I1,I2))
+ ;..D WC^RWU(A)
+ ;..Q:K3'=I1 
+ ;..S $P(A,":",2)="B"
+ ;..D WC^RWU(A) ; текущая неделя
+ S I1="" F  S I1=$O(^BUF($J,"cc",I1)) Q:I1=""  D
+ .S I2="" F  S I2=$O(^BUF($J,"cc",I1,I2)) Q:I2=""  D
+ ..S K1=$S(I2=0:"B",I2=1:"D",I2=2:"E",I2=3:"F",I2=4:"G",I2=5:"H",1:"")
+ ..Q:K1="" 
+ ..S K2=$S(I1=1:30,I1=2:31,I1=3:33,I1=4:34,I1=0:28,1:0) Q:'K2 
+ ..S A=CR_TITL(1)_":"_K1_":"_K2_":"_$$fn(^BUF($J,"cc",I1,I2,"ppl"))
+ ..D WC^RWU(A)
+ ; динамика (2)
+ S I1="" F  S I1=$O(^BUF($J,"din",I1)) Q:I1=""  D
+ .S A=CR_TITL(2)_":A:"_(4+I1)_":"_^BUF($J,"din",I1)
+ .S A=A_CR_TITL(2)_":A:"_(24+4+I1)_":"_^BUF($J,"din",I1)
+ .D WC^RWU(A) ; года
+ .S I2="" F  S I2=$O(^BUF($J,"din",I1,I2)) Q:I2=""  D
+ ..S I3="" F  S I3=$O(^BUF($J,"din",I1,I2,I3)) Q:I3=""  D
+ ...S B=$C($A("A")+I2),K1=4+I1+((I3-1)*24)
+ ...S X1=^BUF($J,"din",I1,I2,I3)
+ ...S X1=$S(I3=1:X1/1000000,1:X1)
+ ...D WC^RWU(CR_TITL(2)_":"_B_":"_K1_":"_$$fn(X1))
+ ; отделения (3)
+ S I1="" F  S I1=$O(^BUF($J,"p3",I1)) Q:I1=""  D
+ .S I2="" F  S I2=$O(^BUF($J,"p3",I1,I2)) Q:I2=""  D
+ ..S I3="" F  S I3=$O(^BUF($J,"p3",I1,I2,I3)) Q:I3=""  D
+ ...S K1=$S(I2=1:"B",I2=2:"F",I2=3:"J",I2=4:"N",1:"R")
+ ...S K2=$C($A(K1)+I3-1)
+ ...S A=CR_TITL(3)_":"_K2_":"_I1_":"_$$fn(^BUF($J,"p3",I1,I2,I3)) 
+ ...D WC^RWU(A)
+ ; направления (4)
+ S I3=4
+ S I1="" F  S I1=$O(^BUF($J,"np",I1)) Q:I1=""  D
+ .S I2="" F  S I2=$O(^BUF($J,"np",I1,I2)) Q:I2=""  D
+ ..S X1=$G(^(I2,"pos")),X2=$G(^("fpos")),X3=$G(^("naz"))
+ ..S X4=$G(^("nazo")),X5=$G(^("nazs")),X6=$G(^("nazps"))
+ ..S A=CR_TITL(4)_":A:"_I3_":"_$$GSPEC^YISPRAV(I1)
+ ..S A=A_CR_TITL(4)_":B:"_I3_":"_$$FIOSH^IKADRY(I2)
+ ..S A=A_CR_TITL(4)_":C:"_I3_":"_$$fn(X1)
+ ..S A=A_CR_TITL(4)_":D:"_I3_":"_$$fn(X2)
+ ..S A=A_CR_TITL(4)_":E:"_I3_":"_$$fn(X3)
+ ..S A=A_CR_TITL(4)_":F:"_I3_":"_$$fn(X4)
+ ..S A=A_CR_TITL(4)_":H:"_I3_":"_$$fn(X6)
+ ..S A=A_CR_TITL(4)_":I:"_I3_":"_$$fn(X5)
+ ..;S A=A_CR_TITL(4)_":J:"_I3_":"_$S('X1:0,1:$$fn(X3/X1))
+ ..;S A=A_CR_TITL(4)_":K:"_I3_":"_$S('X2:0,1:$$fn(X3/X2))
+ ..S X1=$G(^BUF($J,"np",I1,I2,"lnaz"))
+ ..S X2=$G(^("lnazo")),X3=$G(^("lnazs"))
+ ..S A=A_CR_TITL(4)_":M:"_I3_":"_$$fn(X1)
+ ..S A=A_CR_TITL(4)_":N:"_I3_":"_$$fn(X2)
+ ..S A=A_CR_TITL(4)_":O:"_I3_":"_$$fn(X3)
+ ..S X1=$G(^BUF($J,"np",I1,I2,"unaz"))
+ ..S X2=$G(^("unazo")),X3=$G(^("unazs"))
+ ..S A=A_CR_TITL(4)_":P:"_I3_":"_$$fn(X1)
+ ..S A=A_CR_TITL(4)_":Q:"_I3_":"_$$fn(X2)
+ ..S A=A_CR_TITL(4)_":R:"_I3_":"_$$fn(X3)
+ ..S X1=$G(^BUF($J,"np",I1,I2,"snaz"))
+ ..S X2=$G(^("snazo")),X3=$G(^("snazs"))
+ ..S A=A_CR_TITL(4)_":J:"_I3_":"_$$fn(X1)
+ ..S A=A_CR_TITL(4)_":K:"_I3_":"_$$fn(X2)
+ ..S A=A_CR_TITL(4)_":L:"_I3_":"_$$fn(X3)
+ ..S X1=$G(^BUF($J,"np",I1,I2,"onaz"))
+ ..S X2=$G(^("onazo")),X3=$G(^("onazs"))
+ ..S A=A_CR_TITL(4)_":S:"_I3_":"_$$fn(X1)
+ ..S A=A_CR_TITL(4)_":T:"_I3_":"_$$fn(X2)
+ ..S A=A_CR_TITL(4)_":U:"_I3_":"_$$fn(X3)
+ ..D WC^RWU(A)
+ ..S I3=I3+1
+ ; оборудование (5)
+ S I2=6
+ S I1="" F  S I1=$O(^BUF($J,"eq",I1)) Q:I1=""  D
+ .S X1=$G(^BUF($J,"eq",I1,0,1))
+ .S A=CR_TITL(5)_":A:"_I2_":"_$$NAME^NEQUIP(I1)
+ .S A=A_CR_TITL(5)_":B:"_I2_":"_$$fn(X1)
+ .D WC^RWU(A)
+ .S B=$A("H"),X4=0,X5=0
+ .S I3=0 F  S I3=$O(^BUF($J,"eq",I1,I3)) Q:I3=""  D
+ ..S X2=$G(^(I3,2)),X3=$G(^(3)),X4=X4+X2,X5=X5+X3
+ ..S A=CR_TITL(5)_":"_$C(B+((I3-1)*2))_":"_I2_":"_$$fn(X2)
+ ..S A=A_CR_TITL(5)_":"_$C(B+((I3-1)*2)+1)_":"_I2_":"_$$fn(X3/1000)
+ ..D WC^RWU(A)
+ .S A=CR_TITL(5)_":C:"_I2_":"_$S('X1:0,1:$$fn(X4/X1))
+ .S A=A_CR_TITL(5)_":D:"_I2_":"_$S('X1:0,1:$$fn(X5/X1))
+ .S A=A_CR_TITL(5)_":E:"_I2_":"_$$fn(X4)
+ .S A=A_CR_TITL(5)_":F:"_I2_":"_$$fn(X5/1000)
+ .S A=A_CR_TITL(5)_":G:"_I2_":"_$S('X4:0,1:$$fn(X5/X4))
+ .D WC^RWU(A)
+ .S I2=I2+1
+ ; глубина записи (6)
+ S I1="" F  S I1=$O(^BUF($J,"gsp",I1)) Q:I1=""  D  ; sp
+ .S I2="" F  S I2=$O(^BUF($J,"gsp",I1,I2)) Q:I2=""  D
+ ..S X1=$G(^(I2,0)) ;,X2=$G(^(2))
+ ..S B=$A("B") ;+((I2-1)*2)
+ ..S A=CR_TITL(6)_":"_$C(B)_":"_I1_":"_$$fn(X1)
+ ..;S A=A_CR_TITL(6)_":"_$C(B+1)_":"_I1_":"_$$fn(X2)
+ ..D WC^RWU(A)
+ ; доплаты по СК (7)
+ S I1="" F  S I1=$O(^BUF($J,"dsk",I1)) Q:I1=""  D
+ .S I2="" F  S I2=$O(^BUF($J,"dsk",I1,I2)) Q:I2=""  D
+ ..S X1=$G(^BUF($J,"dsk",I1,I2,1,1)),X2=$G(^(2))
+ ..S X3=$G(^BUF($J,"dsk",I1,I2,2,1)),X4=$G(^(2))
+ ..S X5=$G(^BUF($J,"dsk",I1,I2,3,1)),X6=$G(^(2))
+ ..S K1=$S(I1=1:18,I1=2:32,I1=3:50,I1=4:66,1:82)+I2-4
+ ..S A=CR_TITL(7)_":B:"_K1_":"_X1
+ ..S A=A_CR_TITL(7)_":C:"_K1_":"_X2
+ ..S A=A_CR_TITL(7)_":E:"_K1_":"_X3
+ ..S A=A_CR_TITL(7)_":F:"_K1_":"_X4
+ ..S A=A_CR_TITL(7)_":H:"_K1_":"_X5
+ ..S A=A_CR_TITL(7)_":I:"_K1_":"_X6
+ ..D WC^RWU(A)
+ ; абонементы (8)
+ S I2=6
+ S I1="" F  S I1=$O(^BUF($J,"ab",I1)) Q:I1=""  D
+ .S A=CR_TITL(8)_":A:"_I2_":"_$G(^BTPLS("t",I1,"name"))
+ .D WC^RWU(A)
+ .S I3="" F  S I3=$O(^BUF($J,"ab",I1,I3)) Q:I3=""  D
+ ..S K1=$C($A("B")+((I3-1)*2)),K2=$C($A(K1)+1)
+ ..S X1=$G(^BUF($J,"ab",I1,I3,1)),X2=$G(^(2))
+ ..S A=CR_TITL(8)_":"_K1_":"_I2_":"_$$fn(X1)
+ ..S A=A_CR_TITL(8)_":"_K2_":"_I2_":"_$$fn(X2)
+ ..D WC^RWU(A)
+ .S I2=I2+1
+ ; вакцинация (9)
+ ; КДЛ (10)
+ S I1="" F  S I1=$O(^BUF($J,"kdl",I1)) Q:I1=""  D
+ .S X4=$G(^BUF($J,"kdl",I1,0,3))
+ .S B=$C($A("B")+I1)
+ .D WC^RWU(CR_TITL(10)_":"_B_":13:"_$$fn(X4))
+ .S I2=0 F  S I2=$O(^BUF($J,"kdl",I1,I2)) Q:I2=""  D
+ ..S X1=$G(^BUF($J,"kdl",I1,I2,1)),X2=$G(^(2)),X3=$G(^(3))
+ ..S A=CR_TITL(10)_":"_B_":"_(5+I2)_":"_$$fn(X2)
+ ..S A=A_CR_TITL(10)_":"_B_":"_(9+I2)_":"_$$fn(X1)
+ ..S A=A_CR_TITL(10)_":"_B_":"_(13+I2)_":"_$$fn(X3)
+ ..D WC^RWU(A)
+ ; вкладки специальностей (12-22)
+ S I1="" F  S I1=$O(^BUF($J,"px",I1)) Q:I1=""  D
+ .K LST
+ .S K3=TITL(I1)
+ .S I5=0
+ .S I2="" F  S I2=$O(^BUF($J,"pxv",I1,I2)) Q:I2=""  D
+ ..S I3="" F  S I3=$O(^BUF($J,"pxv",I1,I2,I3)) Q:I3=""  D
+ ...S I4="" F  S I4=$O(^BUF($J,"pxv",I1,I2,I3,I4)) Q:I4=""  I '$D(LST(I4)) S LST(I4)=I5,I5=I5+1
+ .
+ .S I2="" F  S I2=$O(^BUF($J,"px",I1,I2)) Q:I2=""  D
+ ..S I3="" F  S I3=$O(^BUF($J,"px",I1,I2,I3)) Q:I3=""  D
+ ...S X1=$G(^(I3,4)),X2=$G(^(14)),X3=$G(^(19)),X4=$G(^(29))
+ ...S K1=$S('I2:"G",1:$C($A("A")+I2)),K2=I3
+ ...S A=$S(I2:CR_K3_":"_K1_":"_(4+K2)_":"_$$fn(X1/1000),1:"")
+ ...S:I2 A=A_CR_K3_":"_K1_":"_(9+K2)_":"_$S(X2:$$fn((X1/X2)),1:0)
+ ...S:I2 A=A_CR_K3_":"_K1_":"_(14+K2)_":"_$$fn(X2)
+ ...S:I2 A=A_CR_K3_":"_K1_":"_(19+K2)_":"_$$fn(X3)
+ ...S:I2 A=A_CR_K3_":"_K1_":"_(24+K2)_":"_$S(X2:$$fn(X3/X2),1:0)
+ ...S A=A_CR_K3_":"_K1_":"_(29+K2)_":"_$$fn(X4)
+ ...S:I2 A=A_CR_K3_":"_K1_":"_(34+K2)_":"_$S(X4:$$fn(X2/X4),1:0)
+ ...D WC^RWU(A)
+ ...S I4=""
+ ...F  S I4=$O(^BUF($J,"pxv",I1,I2,I3,I4)) Q:I4=""  D  ; VR
+ ....S X1=$G(^(I4,4)),X2=$G(^(14)),X3=$G(^(19)),X4=$G(^(29))
+ ....S I5=LST(I4),I5=39+(I5*38)
+ ....S K2=I5+I3
+ ....S A=$S(I2:CR_K3_":"_K1_":"_(4+K2)_":"_$$fn(X1/1000),1:"")
+ ....S:I2 A=A_CR_K3_":"_K1_":"_(9+K2)_":"_$S(X2:$$fn((X1/X2)),1:0)
+ ....S:I2 A=A_CR_K3_":"_K1_":"_(14+K2)_":"_$$fn(X2)
+ ....S:I2 A=A_CR_K3_":"_K1_":"_(19+K2)_":"_$$fn(X3)
+ ....S:I2 A=A_CR_K3_":"_K1_":"_(24+K2)_":"_$S(X2:$$fn(X3/X2),1:0)
+ ....S A=A_CR_K3_":"_K1_":"_(29+K2)_":"_$$fn(X4)
+ ....S:I2 A=A_CR_K3_":"_K1_":"_(34+K2)_":"_$S(X4:$$fn(X2/X4),1:0)
+ ....D WC^RWU(A)
+ .S I4="" F  S I4=$O(LST(I4)) Q:I4=""  D  ; врачи
+ ..S I5=LST(I4),I5=40+(I5*38)
+ ..D WC^RWU(CR_K3_":B:"_I5_":"_$$FIO^IKADRY(I4))
+ D C^RWU
+ Q
+fn(X) 
+ Q $TR(+$J(X,"",2),".",",")
+REGIPROC 
+ S ^IPROC("ССМЦ","Ежемесячный отчет клиники")="DO_RSSMCEM,8,5,d,Дата отчета,d,Дата по,t@string:0/Нет#1/Да,Исключить нулевые услуги,te@storage:dog@1,Договор,t@storage:lpu,Филиал,,,,/ssmc/ssmc-med.xls"
+ Q

@@ -1,0 +1,5 @@
+INBU ; утилиты NetBase [ 04/11/2013  2:21 PM ]
+VIS(TAG,VAR) ; Скрыть/показать элемент
+ S VAR=$S(VAR:"yes",1:"no")
+ D W^RWU("<"_TAG_" visible="""_VAR_"""/>")
+ Q

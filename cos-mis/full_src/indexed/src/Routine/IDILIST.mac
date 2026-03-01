@@ -1,0 +1,15 @@
+IDILIST ; Списки диагнозов [ 08/13/2012  0:52 AM ]
+IsLST(ID,DIA) ; Диагноз есть в списке
+ Q:$D(^DILST(ID,"l",DIA)) 1
+ Q 0
+GETUF(ID,DIA,FL) ; Получить поле диагноза
+ Q $G(^DILST(ID,"l",DIA,FL))
+GET(ID,FL) ; Получить поле списка
+ Q $G(^DILST(ID,"f",FL))
+NEXT(ID,X,IDX) ; Итератор
+ S IDX=$S($G(IDX)="":"l",IDX="usl":"l",1:"f")
+ Q $O(^DILST(ID,IDX,X))
+FNDBYFL(FL,X) ; Поиск по совпадению поля
+ N ID
+ S ID="" F  S ID=$O(^DILST(ID)) Q:ID=""  I $D(^(ID,"f",FL)),^(FL)=X Q
+ Q ID

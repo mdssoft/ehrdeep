@@ -1,0 +1,157 @@
+RMFORM ; Медицинские формы (медстатистика) [ 02/09/2018  3:51 AM ]
+F16(DS,DE) 
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ K ^BUF($J)
+ ; DIA,POL)=days|events|15-19|20-24|25-29|30-34|35-39|40-44|45-49|50-54|55-59|60-..
+ N DT,R,NI,AGE,DI,D,I,X,K,SEX,TP,D1,D2
+ ; Предварительный расчет
+ S DT=DS-1 F  S DT=$O(^MNTRI("d",DT)) Q:DT=""!(DT>DE)  S NI="" F  S NI=$O(^MNTRI("d",DT,NI)) Q:NI=""  D
+ .S ID="" F  S ID=$O(^MNTRI("d",DT,NI,ID)) Q:ID=""  D
+ ..S R=^MNTR(NI,ID) Q:R=""  S DI=$P(R,"|",7) Q:DI="" 
+ ..Q:$P(R,"|",11)=""
+ ..Q:$P(R,"|",2)'=""  ; с продлением 
+ ..S TP=$P(R,"|",11),D=$$ADAYS^NNETRS(NI,ID)
+ ..S AGE=+$$AGE^IPAC(NI,DT),SEX=+$$GET^IPAC(NI,"pol",DT)
+ ..S:'SEX SEX=1
+ ..S R=$G(^BUF($J,"w",DI,SEX))
+ ..S I=$S(AGE>59:12,AGE>54:11,AGE>49:10,AGE>44:9,AGE>39:8,AGE>34:7,AGE>29:6,AGE>24:5,AGE>19:4,AGE>14:3,1:"")
+ ..Q:I=""
+ ..S $P(R,"|",1)=$P(R,"|",1)+D
+ ..S $P(R,"|",2)=$P(R,"|",2)+1,$P(R,"|",I)=$P(R,"|",I)+1
+ ..S ^(SEX)=R
+ ..S R=$G(^BUF($J,"t",TP,SEX))
+ ..S $P(R,"|",1)=$P(R,"|",1)+D
+ ..S $P(R,"|",2)=$P(R,"|",2)+1,$P(R,"|",I)=$P(R,"|",I)+1
+ ..S ^(SEX)=R
+ ; Утрамбовываем по разделам формы
+ S I="" F  S I=$O(^MFORM("16VN",I)) Q:I=""  D
+ .S SEX=$$LU^TXTU($G(^(I,"p"))),SEX=$S(SEX="М":1,SEX="Ж":2,1:"")
+ .I $D(^MFORM("16VN",I,"t")) S TP=^("t") D  Q ; по типу
+ ..S X=$G(^BUF($J,"r",I))
+ ..I SEX'="" S ^BUF($J,"r",I)=$$F16SUM(X,$G(^BUF($J,"t",TP,SEX))) Q 
+ ..S X=$$F16SUM(X,$G(^BUF($J,"t",TP,1)))
+ ..S ^BUF($J,"r",I)=$$F16SUM(X,$G(^(1)))
+ .I $D(^("d")) S D=^("d") D  Q ; по диагнозам
+ ..S X=$G(^BUF($J,"r",I))
+ ..F K=1:1:99 D  Q:R=""  ; выделение периодов и послед. диагнозов
+ ...S R=$$TRIM^TXTU($P(D,",",K)) Q:R=""
+ ...S D1=$P(R,"-",1),D2=$P(R,"-",2)
+ ...I D2'="",$L(D2)<3 S D2=$P(D1,".",1)_"."_D2
+ ...I D2="",D1'["." S D2=$$LASTS^YMKB10(D1)
+ ...S:D2="" D2=D1
+ ...S:D2'["." D2=$$LASTS^YMKB10($S(D2="":$P(D1,".",1),1:D2))
+ ...S DD=D1 F  D:$D(^BUF($J,"w",DD))  Q:DD=D2  S DD=$$NEXT^YMKB10(DD) Q:DD=""
+ ....I SEX'="" S X=$$F16SUM(X,$G(^BUF($J,"w",DD,SEX))) Q
+ ....S X=$$F16SUM(X,$G(^BUF($J,"w",DD,1))),X=$$F16SUM(X,$G(^(1)))
+ ..S ^BUF($J,"r",I)=X
+ .I $D(^("s")) S D=^("s") D  Q ; суммы
+ ..S X=$G(^BUF($J,"r",I))
+ ..F K=1:1:99 S R=$P(D,",",K) Q:R=""  D  ; периоды и последовательности
+ ...S D1=$P(R,"-",1),D2=$P(R,"-",2) S:D2="" D2=D1
+ ...F R=D1:1:D2 D
+ ....I SEX'="" S TP=$TR($G(^MFORM("16VN",R,"p")),"МЖ","12")'=SEX 
+ ....S X=$$F16SUM(X,$G(^BUF($J,"r",R)))
+ ..S ^BUF($J,"r",I)=X
+ D F16TXT
+ K ^BUF($J)
+ Q
+F16TXT ; write to table
+ D OWF^RWU(".txt")
+ S D1=""
+ D WC^RWU("Причина нетрудоспособности|МКБ-10|Пол|N стр.|Дней|Случаев|15-19|20-24|25-29|30-34|35-39|40-44|45-49|50-54|55-59|более 60")
+ S I="" F  S I=$O(^MFORM("16VN",I)) Q:I=""  D
+ .S R=$G(^(I)),D=$G(^(I,"d"))
+ .S:D1=D (R,D)=""
+ .S D=$$OWF^TXTU(D,90)
+ .S R=$$OWF^TXTU(R,88)_"|"_D_"|"_$G(^("p"))_"|"_I_"|"_$G(^BUF($J,"r",I))
+ .S D1=D
+ .D WC^RWU(CR_R)
+ D C^RWU
+ Q
+F16EXCEL ; write to excel
+ Q
+F16SUM(X1,X2) 
+ N I F I=1:1:12 S $P(X1,"|",I)=$P(X1,"|",I)+$P(X2,"|",I)
+ Q X1
+F16E(DS,DE) ; Форма 16вн в excel
+ D OWF^RWU(".txt")
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N A,B,C
+ S B="Титул",C=$$^I("iglvr")
+ ;S A=B_":C:24:"_$$YEAR^DTUTL(DE)_CR_
+ S A=B_":H:18:"_$P(C," ",1)_CR
+ S A=A_B_":H:19:"_$P(C," ",2)_CR_B_":H:20:"_$P(C," ",3)_CR
+ S A=A_B_":H:21:"_$$^I("itel")_CR_B_":H:22:"_$E($$^I("ifname"),1,50)_CR
+ S A=A_B_":H:23:"_$E($$^I("iaddr"),1,50)
+ D WC^RWU(A)
+ D MK^IMFORM16(DS,DE)
+ D C^RWU
+ Q
+F12(DS,DE) 
+ N ARR
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S ^MFORM12T("year")=$$YEAR^DTUTL(DE)
+ S ^MFORM12T("lpuname")=$$^I("iname")
+ D MAKE^IDOCGEN("f12v1.docx","^MFORM12T")
+ Q
+ D OWF^RWU(".txt")
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N A,B,C
+ S B="Титул",C=$$^I("iglvr")
+ ;S A=B_":C:24:"_$$YEAR^DTUTL(DE)_CR_
+ S A=B_":H:18:"_$P(C," ",1)_CR
+ S A=A_B_":H:19:"_$P(C," ",2)_CR_B_":H:20:"_$P(C," ",3)_CR
+ S A=A_B_":H:21:"_$$^I("itel")_CR_B_":H:22:"_$E($$^I("ifname"),1,50)_CR
+ S A=A_B_":H:23:"_$E($$^I("iaddr"),1,50)
+ D WC^RWU(A)
+ D MK^IMFORM12(DS,DE)
+ D C^RWU
+ Q
+F57(DS,DE) 
+ N ARR
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S ARR("year")=$$YEAR^DTUTL(DE)
+ S ARR("lpuname")=$$^I("iname")
+ D MAKE^IDOCGEN("f57a.docx","ARR")
+ Q
+F9(DS,DE) 
+ Q
+F17(DS,DE) 
+ Q
+F30(DS,DE) 
+ D OWF^RWU(".txt")
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N A,B,C
+ S B="Справка",C=$$^I("iglvr")
+ ;S A=B_":C:16:"_$$YEAR^DTUTL(DE)_CR_
+ S A=B_":C:19:"_$P(C," ",1)_CR
+ S A=A_B_":C:20:"_$P(C," ",2)_CR_B_":C:21:"_$P(C," ",3)_CR
+ S A=A_B_":C:22:"_$$^I("itel")_CR_B_":B:24:"_$E($$^I("ifname"),1,50)_CR
+ S A=A_B_":B:26:"_$E($$^I("iaddr"),1,50)
+ D WC^RWU(A)
+ D C^RWU
+ Q
+F7(DS,DE) 
+ Q
+F7T(DS,DE) 
+ Q
+F8(DS,DE) 
+ Q
+F14DS(DS,DE) 
+ Q
+REGIPROC 
+ S ^IPROC("Медстатистика","Таблица Ф-16вн")="F16_RMFORM,1,2,d,Начальная дата периода,d,Конечная дата периода"
+ ;S ^IPROC("Медстатистика","Ф-12")="F12_RMFORM,8,2,d,Начальная дата периода,d,Конечная дата периода,,,,/mforms/f12.xls"
+ S ^IPROC("Медстатистика","Ф-16вн")="F16E_RMFORM,8,2,d,Начальная дата периода,d,Конечная дата периода,,,,/mforms/f12vn.xls"
+ ;S ^IPROC("Медстатистика","Ф-57")="F57_RMFORM,8,2,d,Начальная дата периода,d,Конечная дата периода,,,,/mforms/f57.xls"
+ S ^IPROC("Медстатистика","Ф-9")="F9_RMFORM,8,2,d,Начальная дата периода,d,Конечная дата периода,,,,/mforms/f9.xls"
+ S ^IPROC("Медстатистика","Ф-7")="F7_RMFORM,8,2,d,Начальная дата периода,d,Конечная дата периода,,,,/mforms/f7.xls"
+ S ^IPROC("Медстатистика","Ф-7 травматизм")="F7_RMFORM,8,2,d,Начальная дата периода,d,Конечная дата периода,,,,/mforms/f7t.xls"
+ S ^IPROC("Медстатистика","Ф-8")="F8_RMFORM,8,2,d,Начальная дата периода,d,Конечная дата периода,,,,/mforms/f8.xls"
+ S ^IPROC("Медстатистика","Ф-17")="F17_RMFORM,8,2,d,Начальная дата периода,d,Конечная дата периода,,,,/mforms/f17.xls"
+ S ^IPROC("Медстатистика","Ф-14 ДС")="F14DS_RMFORM,8,2,d,Начальная дата периода,d,Конечная дата периода,,,,/mforms/f14ds.xls"
+ S ^IPROC("Медстатистика","Ф-30")="F30_RMFORM,8,2,d,Начальная дата периода,d,Конечная дата периода,,,,/mforms/f30.xls"
+ 
+ S ^IPROC("Медстатистика","Форма 12")="F12_RMFORM,15,2,d,Начальная дата периода,d,Конечная дата периода"
+ S ^IPROC("Медстатистика","Форма 57")="F57_RMFORM,15,2,d,Начальная дата периода,d,Конечная дата периода"
+ Q

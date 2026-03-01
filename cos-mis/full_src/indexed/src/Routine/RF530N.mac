@@ -1,0 +1,55 @@
+RF530N ; Формы по приказу 530 [ 04/07/2023  1:12 AM ]
+F1(DS,DE) 
+ N ARR,I,DT,ID,R,A,B,NI,T
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S ARR("iname")=$$^I("iname")
+ S ARR("iaddr")=$$^I("iaddr")
+ S ARR("iogrn")=$$^I("iogrn")
+ S ARR("df")=$$DT^DTUTL(DS),ARR("dt")=$$DT^DTUTL(DE)
+ 
+ S I=1
+ S DT=DS-1 F  S DT=$O(^HOSP(DT)) Q:DT=""!(DT>DE)  D
+ .S ID="" F  S ID=$O(^HOSP(DT,ID)) Q:ID=""  D
+ ..S R=$G(^(ID)) Q:R=""
+ ..S A=1
+ ..S NI=$P(R,"|",1),T=$P(R,"|",4)
+ ..S A=A_"|"_$$DT^DTUTL(T)_"|"_$$TM^DTUTL(T)_"|"_$$FIO^IPAC(NI)
+ ..S A=A_"|"_$$GETE^IPAC(NI,"datar",DT)_"|"_$$GETE^IPAC(NI,"pol",DT)
+ ..S A=A_"|"_$$GET^IPAC(NI,"pasp",DT)_"|"_$$GET^IPAC(NI,"ctz",DT)
+ ..S A=A_"|"_$$GET^IPAC(NI,"street",DT)_"|"
+ ..S A=A_"|"_$$GET^IPAC(NI,"snils",DT)_"|"_$$GET^IPAC(NI,"polis",DT)
+ ..S A=A_"|"_$P($G(^HOSP(DT,ID,"e")),"|",2)_"|"_$P(R,"|",2)
+ ..S T=$P(R,"|",7)
+ ..S B=T_"|"_$S("ST"[$E(T):T,1:"")_"|"
+ ..S B=B_"|"_$$GOTD^YISPRAV($P($G(^HOSP(DT,ID,"h",1)),"|",2))
+ ..S B=B_"|"_$$DTM^DTUTL($P(R,"|",5)) ; TODO - тип
+ ..S B=B_"||||"
+ ..S ARR("ta",I)=A,ARR("tb",I)=B,I=I+1
+ 
+ D MAKE^IDOCGEN("f001_530.docx","ARR")
+ Q
+F7(DS) 
+ N ARR,I,DT,ID,R,A,B,NI,T
+ S DS=$$DIH^DTUTL(DS)
+ S ARR("iname")=$$^I("iname")
+ S ARR("iaddr")=$$^I("iaddr")
+ S ARR("iogrn")=$$^I("iogrn")
+ S ARR("dt")=$$DT^DTUTL(DS)
+ 
+ D MAKE^IDOCGEN("f007_530.docx","ARR")
+ Q
+F16(DS,DE) 
+ N ARR,I,DT,ID,R,A,B,NI,T
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S ARR("iname")=$$^I("iname")
+ S ARR("iaddr")=$$^I("iaddr")
+ S ARR("iogrn")=$$^I("iogrn")
+ S ARR("df")=$$DT^DTUTL(DS),ARR("dt")=$$DT^DTUTL(DE)
+ 
+ D MAKE^IDOCGEN("f016_530.docx","ARR")
+ Q
+REGIPROC 
+ S ^IPROC("Медстатистика","Стационар","Форма 001у")="F1_RF530N,15,2,d,Начальная дата периода,d,Конечная дата периода"
+ S ^IPROC("Медстатистика","Стационар","Форма 007у")="F7_RF530N,15,1,d,Дата отчета"
+ S ^IPROC("Медстатистика","Стационар","Форма 016у")="F16_RF530N,15,2,d,Начальная дата периода,d,Конечная дата периода"
+ Q

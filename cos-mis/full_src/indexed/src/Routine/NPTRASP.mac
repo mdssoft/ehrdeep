@@ -1,0 +1,55 @@
+A ; Doctor shedule pattern's [ 05/22/2020  10:26 PM ]
+GPAT ; ВЫВОД ШАБЛОНОВ РАСПИСАНИЯ
+ N I,NC
+ S I=$$NEWIDX^ISPRAV("rpat"),NC=""
+ D OWF^RWU(".txt"),W^RWU(CR)
+ F  S NC=$O(^MN(I,NC)) Q:NC=""  D WC^RWU(NC_"|"_$P(^(NC),"~",1)_CR)
+ D C^RWU
+ Q
+GPATLT ; Список для использования в расписаниях
+ N I,NC,A,R
+ S I=$$NEWIDX^ISPRAV("rpat")
+ S A="|Нет",NC=""
+ F  S NC=$O(^MN(I,NC)) Q:NC=""  S R=^(NC) I '$P(R,"~",7) S A=A_CR_NC_"|"_$P(R,"~",1)
+ D MSG^RWU(A)
+ Q
+NPAT ; Create
+ N I,N
+ S I=$$NEWIDX^YISPRAV("rpat"),N=$O(^MN(I,""),-1)+1,^MN(I,N)=""
+ D MSG^RWU(N)
+ Q
+DPAT(N) ; Delete
+ K ^MN($$NEWIDX^YISPRAV("rpat"),N)
+ Q
+LPAT(N) ; Load
+ N I,L
+ S I=$$NEWIDX^YISPRAV("rpat"),N=+N
+ Q:'$D(^MN(I,N)) 
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<raspatt>")
+ D WTAG^RWU("id",N)
+ S L=$TR(^MN(I,N),"""","'")
+ D WTAGDC^RWU("tname",$P(L,"~",1))
+ D WTAG^RWU("tn",$P(L,"~",2))
+ D WTAG^RWU("otd",$P(L,"~",3))
+ D WTAG^RWU("spec",$P(L,"~",4))
+ D WTAG^RWU("cab",$P(L,"~",8))
+ D WTAG^RWU("arch",$P(L,"~",7))
+CCC D W^RWU("</raspatt></nb_console>")
+ D C^RWU
+ Q
+SPAT ; Save
+ N I,N,%J,A
+ S I=$$NEWIDX^YISPRAV("rpat")
+ N @$$NEWVAR^YIXMLRR()
+ D RBUFH^YIXMLRR(1)
+ K A M A=XML("nb_console","raspatt") K XML,XMLR
+ S N=$G(A("id")) S:N="" N=$O(^MN(I,""),-1)+1
+ S ^MN(I,N)=$G(A("tname"))_"~"_$G(A("tn"))_"~"_$G(A("otd"))_"~"_$G(A("spec"))_"~"_$$USR^IUSER()_"~"_$H_"~"_$G(A("arch"))_"~"_$G(A("cab"))
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<raspatt>")
+ D WTAG^RWU("id",N)
+ D W^RWU("</raspatt></nb_console>")
+ D C^RWU
+ Q
+INITDB 
+ S ^MN("root","rpat")="Шаблон выбора сотрудников в расписании"
+ Q

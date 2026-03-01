@@ -1,0 +1,92 @@
+RSTCWP ; Отчет по договору и местам работы [ 08/12/2017  5:12 PM ]
+POS(DGN,DS,DE,PRG,byP,uMOD,sLPU) ; Посещения
+ S:DGN=9999 DGN=""
+ S:PRG'="" PRG="|"_PRG_"|"
+ S sLPU=$G(sLPU) S:sLPU=9999 sLPU="" 
+ S uMOD=$G(uMOD)
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N SST,FR,cWRK,cNIB,cDT,L,R,SC,NI,X,XO,XP
+ S FR=+$$FR^I()
+ S (cWRK,cNIB,cDT)=""
+ K ^BUF($J,"swp"),^BUF($J,"spc")
+ D MKAPPRC^IUSLSC(DS,DE,1,"POSPRE^RSTCWP","POSPRC^RSTCWP","","",'FR)
+ D MKPIPL
+ K ^BUF($J,"swp")
+ D OWF^RWU(".txt")
+ D WC^RWU("По "_$S(DGN="":"всем договорам",1:"договору "_$$NAMEH^YNDOG(DGN,DE))_" за период "_$$DT2^DTUTL(DS)_"-"_$$DT2^DTUTL(DE)_"|"_$S(byP:"Ф.И.О.|",1:"")_"Прикреплено|Обратилось|Посещений|Кол-во|Сумма|Сумма на|Сумма на;")
+ D WC^RWU(CR_" - место работы"_$S(PRG="":"",1:" (программа "_$$NAME^IMPRP($P(PRG,"|",2))_")")_$S(byP:"|пациентов",1:"")_"|на "_$$DT2^DTUTL(DE)_"|лиц||услуг|услуг|обращение|посещение")
+ S SC="" F  S SC=$O(SST(SC)) Q:SC=""  D
+ .S X=$$wsti(-1,4),XO=$$wsti(-1,2),XP=$$wsti(-1,5)
+ .D WC^RWU(CR_$$NAMEH^YNDOG(SC,DE)_$S(byP:"|",1:"")_"|"_$$wsti(-1,1)_"|"_XO_"|"_XP_"|"_$$wst(-1,3)_"|"_$$FN(X)_"|"_$S(XO:$$FFN(X/XO),1:0)_"|"_$S(XP:$$FFN(X/XP),1:0))
+ .S cWRK=-1 F  S cWRK=$O(SST(SC,cWRK)) Q:cWRK=""  D
+ ..S R=CR_" - "_$S(+cWRK=0:"неработающие",1:$G(^M(5,cWRK)))_$S(byP:"|",1:"")
+ ..S X=$$wsti(cWRK,4),XO=$$wsti(cWRK,2),XP=$$wsti(cWRK,5)
+ ..D WC^RWU(R_"|"_$$wsti(cWRK,1)_"|"_XO_"|"_XP_"|"_$$wst(cWRK,3)_"|"_X_"|"_$S(XO:$$FFN(X/XO),1:0)_"|"_$S(XP:$$FFN(X/XP),1:0))
+ ..Q:'byP 
+ ..S NI="" F  S NI=$O(^BUF($J,"spc",SC,cWRK,NI)) Q:NI=""  D
+ ...S X=$$wpst(4),XP=$$wpst(5)
+ ...D WC^RWU(CR_"|"_NI_" "_$$FIOSH^IPAC(NI,DE)_"|||"_XP_"|"_$$wpst(3)_"|"_$$FN(X)_"||"_$S(XP:$$FFN(X/XP),1:0))
+ D C^RWU
+ K ^BUF($J,"spc")
+ Q
+wst(X,Y) 
+ Q $$FN(+$G(SST(SC,X,Y)))
+wsti(X,Y) 
+ Q +$G(SST(SC,X,Y))
+wpst(X) 
+ Q +$G(^BUF($J,"spc",SC,cWRK,NI,X))
+MKPIPL 
+ D:'$D(TZRBTNs) PRETZR^IPAC
+ N iO,iW,PIDX
+ S iO=$G(TZRBTN("ofor")),iW=$G(TZRBTN("work")),NI=""
+ 
+ I DGN'="" F  S NI=$O(^BTI(" s",DGN,NI)) Q:NI=""  D
+ .Q:$$GETTZ^IPAC(NI,iO,DE)'=1
+ .S PIDX=$$PIDXN^IPAC(NI,DGN,DE)
+ .D MKPIPLp
+ 
+ I DGN="" F  S NI=$$NEXT^IPAC(NI) Q:NI=""  D
+ .Q:$$GETTZ^IPAC(NI,iO,DE)'=1
+ .F PIDX="",1,2 S DGN=$$GET^IPAC(NI,"stc"_PIDX,DE) D:DGN'="" MKPIPLp
+ Q
+MKPIPLp ; Internal proc
+ Q:'$$CHECKIDX^IPAC(NI,DE,PIDX) 
+ S R=+$$GETTZ^IPAC(NI,iW,DE)
+ S SST(DGN,R,1)=$G(SST(DGN,R,1))+1,SST(DGN,-1,1)=$G(SST(DGN,-1,1))+1
+ Q:byP'=2
+ S:'$D(^BUF($J,"spc",DGN,R,NI)) ^(NI)=""
+ Q
+POSPRE 
+ S TEST=1 
+ I cNIB=NIB,cDT=DT Q  ; не менялось не NI не DT
+ I sLPU'="",sLPU'=LPU S TEST=0 Q 
+ I PRG'="","|"_$$GET^IPAC(NIB,"prog",DT)_"|"'[PRG S TEST=0 Q 
+ S cWRK=+$$GET^IPAC(NIB,"work",DT)
+ Q
+POSPRC 
+ I DGN'="",CSTC'=DGN Q 
+ I uMOD,$S(uMOD=1:STAT=2,1:STAT'=2) Q  ; касса/не касса
+ N CC,X,K
+ S K=VR_"|"_DT
+ S CC=$G(UL(U)),X=$S(SUMM="":$$PRICEH^IPRICE(U,PRC,DT)*KSKD,1:SUMM)*CC
+ S:'$D(^BUF($J,"swp",NI,CSTC)) ^(CSTC)="",SST(CSTC,-1,2)=$G(SST(CSTC,-1,2))+1
+ S:'$D(^(CSTC,cWRK)) ^(cWRK)="",SST(CSTC,cWRK,2)=$G(SST(CSTC,cWRK,2))+1
+ S:'$D(^(cWRK,K)) ^(K)="",SST(CSTC,cWRK,5)=$G(SST(CSTC,cWRK,5))+1,SST(CSTC,-1,5)=$G(SST(CSTC,-1,5))+1
+ S SST(CSTC,cWRK,3)=$G(SST(CSTC,cWRK,3))+CC
+ S SST(CSTC,-1,3)=$G(SST(CSTC,-1,3))+CC
+ S SST(CSTC,cWRK,4)=$G(SST(CSTC,cWRK,4))+X
+ S SST(CSTC,-1,4)=$G(SST(CSTC,-1,4))+X
+ Q:'byP
+ S ^(3)=$G(^BUF($J,"spc",CSTC,cWRK,NI,3))+CC
+ S ^(4)=$G(^(4))+X
+ S:'$D(^BUF($J,"spc",CSTC,cWRK,NI,5,K)) ^(K)="",^(5)=$G(^BUF($J,"spc",CSTC,cWRK,NI,5))+1
+ Q
+FN(X) 
+ Q $TR(X,".",",")
+FFN(X) 
+ Q $TR($FN(X,"",2),".",",")
+REGIPROC 
+ N F,D
+ S F=+$$FR^I(),D=$S(F:",t@storage:lpu,Филиал",1:"")
+ S ^IPROC("Отчеты по страховым компаниям","Посещения по договору и местам работы")="POS_RSTCWP,1,"_$S(F:7,1:6)_",te@storage:dog,Договор,d,Дата начала периода,d,Дата окончания периода,te@net:LSTS_YMPRP("""")@1,Программа,t@string:0/Нет#1/Пришедшим#2/Прикрепленным и пришедшим,Подробно по пациентам,t@string:1/По договору#2/По кассе#0/Все услуги,Вид услуг"_D
+ Q

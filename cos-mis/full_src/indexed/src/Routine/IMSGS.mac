@@ -1,0 +1,60 @@
+IMSGS ; System messages [ 02/27/2016  1:31 AM ]
+ADD(USR,PROC,PRM) 
+ Q:'$D(^LOG(USR)) 
+ N X
+ L +^MSGS(USR)
+ S X=$O(^MSGS(USR,""),-1)+1,^(X,"h")=$H
+ L -^MSGS(USR)
+ S ^MSGS(USR,X,"x")=PROC_$S(PRM'="":"("_PRM_")",1:"")
+ Q
+AIP(USR,PROC,PRM) 
+ Q:$D(^LOG(USR))  ; NOT equal IP and User names
+ N X
+ L +^MSGS(USR)
+ S X=$O(^MSGS(USR,""),-1)+1,^(X,"h")=$H
+ L -^MSGS(USR)
+ S ^MSGS(USR,X,"x")=PROC_$S(PRM'="":"("_PRM_")",1:"")
+ Q
+ADDIP(USR,IP,PROC,PRM) ; w. IP address
+ Q:'$D(^LOG(USR)) 
+ N X
+ L +^MSGS(USR)
+ S X=$O(^MSGS(USR,""),-1)+1,^(X,"h")=$H
+ L -^MSGS(USR)
+ S ^MSGS(USR,X,"x")=PROC_$S(PRM'="":"("_PRM_")",1:"")
+ S ^MSGS(USR,X,"ip")=IP
+ Q
+DOSTART(USR,NEW) ; write one item to ^BUFH
+ K:$G(NEW)=1 %IMSGS Q:USR="" 0
+ N X,I S X=$O(^MSGS(USR,$G(%IMSGS(2)))),%IMSGS(2)=X
+ I X="" K %IMSGS Q 0
+ S I=$G(^MSGS(USR,X,"ip"))
+ I I'="" Q:$D(%JOB)=0 0 Q:$G(^JOB(%JOB,6))'=I 0
+ N PROC S PROC=$G(^MSGS(USR,X,"x"))
+ I PROC="" L +^MSGS(USR) K ^MSGS(USR,X) L -^MSGS(USR) Q 0
+ S %IMSGS(1)=USR,%IMSGS(2)=X
+ N ZT S ZT=$ZT,$ZT="ZT^IMSGS"
+ K ^BUFH(%JOB),%L D @PROC
+DOSTRTE S $ZT=ZT
+ Q 1
+CHECK(USR) ; Check, if data present
+ Q:USR="" 0 Q $S($D(^MSGS(USR))=0:0,1:1)
+DOCHUNK ; rewrite data to socket (HTTP chunk)
+ I $D(%L) D WU^RWU(%L) K %L,%B Q
+ N FNN,N S FNN=$O(^BUFH(%JOB,""))
+ I FNN'="" S N="" F  S N=$O(^BUFH(%JOB,FNN,N)) Q:N=""  D WU^RWU(^(N))
+ K ^BUFH(%JOB,FNN)
+ Q
+ISEND() ; Check iteration OK
+ Q $S($D(%IMSGS(2))=0:1,1:0)
+DOEND ; End successfylli iteration
+ Q:'$D(%IMSGS)  Q:($G(%IMSGS(1))="")!($G(%IMSGS(2))="") 
+ L +^MSGS(%IMSGS(1)) K ^MSGS(%IMSGS(1),%IMSGS(2)) L -^MSGS(%IMSGS(1))
+ Q
+ZT ; Error handler
+ N ZE S ZE=$ZE
+ S ^ERLOG("MSGS-"_$G(PROC),+$H,$P($H,",",2))=ZE
+ G DOSTRTE
+SENDRUN(X) ; Send text to NB Console for executing
+ S %L=^PP(0,2)_"<run>"_X_CR_"</run></nb_console>",%B=".xmlb",FN=%B
+ Q

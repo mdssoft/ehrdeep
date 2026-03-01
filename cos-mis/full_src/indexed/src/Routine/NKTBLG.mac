@@ -1,0 +1,87 @@
+NKTBLG ; Графики работы сотрудников [ 11/11/2017  4:59 PM ]
+LST 
+ N MODE S MODE=1 G TAB1
+TAB ; Table
+ N MODE S MODE=0
+TAB1 N ID,R,C
+ D OWF^RWU(".txt")
+ S (ID,C)=""
+ I '$G(MODE) D WC^RWU("Наименование") S C=CR
+ F  S ID=$O(^KDRM("graf",ID)) Q:ID=""  D WC^RWU(C_ID_"|"_$P(^(ID),"|",1)) S C=CR
+ D C^RWU
+ Q
+S ; Save
+ I '$$LCL^IUSER("staffgraf","save")=0 D MSG^RWU("Нет прав") Q
+ N %J,A
+ K XML,XMLR
+ D ORH^RWU
+ F %J=1:1 S A=$$R13^RWU,A=$$WD^TXTU(A) Q:%IFN["Z"  D XML^YIXMLRR
+ D CR^RWU
+ D W
+ D CLOSE^YIXMLRR
+ Q
+W ; Write from XML
+ N ID,PL,R,I,A
+ S ID=$G(XML("nb_console","kadrygr","id")),R="",I=1
+ F PL="nm","hours","we","days" S A=$TR($G(XML("nb_console","kadrygr",PL)),"|","") S $P(R,"|",I)=A,I=I+1
+ S A=$G(XML("nb_console","kadrygr","times"))
+ F I=2:1:99 S PL=$P(A,CR,I) Q:PL=""  S R=R_"|"_$P(PL,"|",2)_"@"_$$TI($P(PL,"|",3))_"@"_$P(PL,"|",4)_"@"_$$TI($P(PL,"|",5))
+ I ID="" L +^KDRM("graf") S ID=$O(^KDRM("graf",""),-1)+1,^(ID)=R L -^KDRM("graf") G We
+ S ^KDRM("graf",ID)=R
+ S ^KDRM("graf",ID,"log")=$$USRH^IUSER()
+We 
+ D REGL^IEXCH("^KDRM","graf",ID)
+ S ^KDRM("graf")=$H
+ D MSG^RWU(^PP(0,2)_"<kadrygr><id data="""_ID_"""/></kadrygr></nb_console>",".xmlb")
+ Q
+TI(X) 
+ Q:X="" ""
+ I X?1.N Q X*3600
+ Q $$TI^DTUTL(X)
+L(ID) ; Load
+ D OWF^RWU(".xmlb")
+ D W^RWU($G(^PP(0,2))_"<kadrygr>")
+ G:ID="" Le
+ N I,R,D,C,A,X S R=$G(^KDRM("graf",ID))
+ D WTAGD^RWU("id",ID)
+ D WTAGDC^RWU("nm",$P(R,"|",1))
+ D WTAGD^RWU("hours",$P(R,"|",2))
+ D WTAGD^RWU("we",$$TM^DTUTL($P(R,"|",3)))
+ S D=$P(R,"|",4),C=D,A="" S:C="" C=7
+ D WTAGDC^RWU("days",D)
+ F I=1:1:C S X=$P(R,"|",4+I),A=A_CR_$S(D="":$$DWKNM^DTUTL(I),1:"День "_I)_"|"_$P(X,"@",1)_"|"_$$TM^DTUTL($P(X,"@",2))_"|"_$P(X,"@",3)_"|"_$$TM^DTUTL($P(X,"@",4))
+ D WTAGC^RWU("times",A)
+Le D W^RWU("</kadrygr></nb_console>"),C^RWU
+ Q
+DEL(ID) ; Delete
+ Q:ID="" 
+ I '$$LCL^IUSER("staffgraf","del") D MSG^RWU("Нет прав") Q 
+ D K^ISSG("^KDRM(""graf"","_ID_")")
+ K ^KDRM("graf",ID)
+ D KGL^IEXCH("^KDRM","graf",ID)
+ Q
+NAME(ID) 
+ Q:ID="" ""
+ Q $P($G(^KDRM("graf",ID)),"|",1)
+TMTP(ID) ; Имя типа времени
+ Q:ID="" ""
+ Q $P($G(^KDRM("tmtp",ID)),"|",1)
+TMTPLST ; Список типа времени
+ D OWF^RWU(".txt")
+ D LSTsys("tmtp")
+ D C^RWU
+ Q
+GRLST ; Список графиков
+ D OWF^RWU(".txt")
+ D LSTsys("graf")
+ D C^RWU
+ Q
+LSTsys(NM) 
+ N X,C S (X,C)=""
+ F  S X=$O(^KDRM(NM,X)) Q:X=""  D WC^RWU(C_X_"|"_$P(^(X),"|",1)) S C=CR
+ Q
+REGLCLI 
+ K ^LCLI("staffgraf")
+ S ^LCLI("staffgraf","save")="Изменение графиков"
+ S ^LCLI("staffgraf","del")="Удаление графиков"
+ Q

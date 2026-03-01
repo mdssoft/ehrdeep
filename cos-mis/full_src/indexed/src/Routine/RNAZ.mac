@@ -1,0 +1,350 @@
+RNAZ ; Отчеты по назначениям [ 10/05/2019  9:52 PM ]
+DAYS(DS,DE,TP,PAYT,VRx,TPN,VOTD) ; Назначения за период
+ ; PAYT - оплата назначения
+ ; OTX - TODO
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),TP=+$G(TP)
+ N ID,R,U,I,LPU,K,Z,A,NI,S,P,VR,SP,PRC,D,FF,LP,ST,KEY,DT,LE,OTX,KS,F,OT
+ S LPU=$$^I("ilpu"),FF=+$$FR^I(),VRx=$G(VRx),LE=$RE(LPU)
+ D PRETZR^IPAC
+ D OWF^RWU(".txt")
+ D WC^RWU("nzlist:env:pac|№ И.б.|Ф.И.О. пациента "_$$TXTP^DTUTL(DS,DE)_"|Назначил|"_$S(TP:"От специалиста|",1:"")_"Тип назначения"_$S(TP:"|Услуга|Специальность|Выполнил|Дата|Сумма",1:"|Сумма|Оплачено|Статус")_$S(FF:"|Филиал",1:""))
+ S D=DS-1 F  S D=$O(^NAZI("d",D)) Q:D=""!(D>DE)  D
+ .S ID="" F  S ID=$O(^NAZI("d",D,ID)) Q:ID=""  D:FF!($P(ID,".",2)=LE) 
+ ..I TPN'="",$P(^(ID),"|",1)'=TPN Q 
+ ..S R=$G(^NAZ(ID,"i")) Q:R=""  
+ ..S ST=$P($G(^("e")),"|",1)
+ ..Q:ST[289 
+ ..S KS=$G(^("k")),S=$P(KS,"|",1)
+ ..I PAYT Q:(+S=0)  Q:(PAYT=1)&(S'=$P(KS,"|",2))  Q:(PAYT=2)&(S=$P(KS,"|",2))
+ ..S K=$G(^("a")),Z=$P(K,"|",4),K=$P(K,"|",1)
+ ..I K="",$L(Z) S K=$P($G(^NAZM("pt",Z)),"|",1)
+ ..S K=$S(K="":$$TPLST^NNAZN($P(R,"|",1)),1:K)
+ ..S NI=$P(R,"|",2),VR=$P(R,"|",3)
+ ..I $L(VRx),VR'=VRx Q  ; по одному врачу
+ ..S OTX=$P(R,"|",10),SPX=$P(R,"|",11)
+ ..S:SPX="" SPX=$$SPEC^IKADRY(VR)
+ ..I VOTD,$S(OTX'="":VOTD'=OTX,1:'$$IsOTD^IKADRY(VR,VOTD,D)) Q 
+ ..S A=NI_"|"_NI_"|"_$$FIO^IPAC(NI)_"|"_$$FIOSH^IKADRY(VR)
+ ..S:TP A=A_"|"_$$GSPEC^YISPRAV(SPX)
+ ..S A=A_"|"_K
+ ..S:'TP A=A_"|"_$$FN($$SUMM^INAZN(ID))_"|"_$$FN(S)
+ ..S I=+$P(R,"|",4),LP=$S(FF&I:"|"_$$NAME^ICONTR(I),1:"")
+ ..I 'TP D WC^RWU(CR_A_"|"_$$TSTATE^INAZN(ST)_LP) Q 
+ ..S PRC=$$GET^IINSC($$GETTZ^IPAC(NI,TZRBTNs,D),"price",D)
+ ..S PRC=$$CORCP^IPRICET(PRC)
+ ..S I="" F  S I=$O(^NAZ(ID,"a",I)) Q:I=""  D
+ ...S R=$G(^(I)),U=$P(R,"|",5),P=$P(R,"|",6),KEY=$P(R,"|",11) Q:R="" 
+ ...S VR=$P(KEY,"@",2),DT=$P(KEY,"@",3),OT=$P(KEY,"@",1),SP=$P(R,"|",2)
+ ...I KEY="",$D(^(I,"uk")) S KEY=$O(^("uk",""))
+ ...I KEY="",$P(R,"|",12)'="" S DT=+$P(R,"|",12),VR=$$UKDR^IUSER($P(R,"|",13))
+ ...S:P="" P=PRC
+ ...S U=$$OWF^TXTU($S(U="":U,1:U_" "_$$CNAMEH^IPRICE(U,P,D)),99)
+ ...S R=U_"|"
+ ...S R=R_$S(SP="":"",1:$$GSPEC^YISPRAV(SP))_"|"_$$FIOSH^IKADRY(VR)_"|"
+ ...S R=R_$$DT2^DTUTL(DT)_"|"
+ ...S:KEY'="" R=R_$$FN($$GETSUM^IUSL(VR,DT,OT,$P(KEY,"@",4),1))
+ ...D WC^RWU(CR_A_"|"_R_LP)
+ D C^RWU
+ Q
+EEXE(DS,DE,PAYT,VRx,TPN,LPU) ; Внешнее закрытие направлений
+ ; PAYT - оплата назначения
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N ID,R,U,I,LPU,K,Z,A,NI,S,P,VR,SP,PRC,D,FF,LP,ST,KEY,DT,LE
+ S LPU=$$^I("ilpu"),FF=+$$FR^I(),VRx=$G(VRx),LE=$RE(LPU)
+ D OWF^RWU(".txt")
+ D WC^RWU("nzlist:env:pac|№ И.б.|Ф.И.О. пациента "_$$TXTP^DTUTL(DS,DE)_"|Назначил|Дата|Выполнено в|Назначено|Дата выполнения|Закрыл"_$S(FF:"|Филиал",1:""))
+ S D=DS-1 F  S D=$O(^NAZI("d",D)) Q:D=""!(D>DE)  D
+ .S ID="" F  S ID=$O(^NAZI("d",D,ID)) Q:ID=""  D:FF!($P(ID,".",2)=LE) 
+ ..I TPN'="",$P(^(ID),"|",1)'=TPN Q 
+ ..S R=$G(^NAZ(ID,"i")) Q:R=""  
+ ..S ST=$P($G(^("e")),"|",1)
+ ..Q:ST[289 
+ ..S S=$P($G(^("k")),"|",1)
+ ..I PAYT Q:(PAYT=1)&('S)  Q:(PAYT=2)&S 
+ ..S NI=$P(R,"|",2),VR=$P(R,"|",3)
+ ..I VRx'="",VR'=VRx Q  ; по одному врачу
+ ..S I=+$P(R,"|",4),LP=$S(FF&I:"|"_$$NAME^ICONTR(I),1:""),A=""
+ ..S I="" F  S I=$O(^NAZ(ID,"a",I)) Q:I=""  D
+ ...S R=^(I),U=$P(R,"|",5),P=$P(R,"|",6),KEY=$P(R,"|",11)
+ ...Q:KEY'="-"
+ ...D:A=""
+ ....S A=NI_"|"_NI_"|"_$$FIO^IPAC(NI)_"|"_$$FIOSH^IKADRY(VR)_"|"_$$DT^DTUTL(D)
+ ....S PRC=$$CORCP^IPRICET($$GET^IINSC($$GET^IPAC(NI,"stc",D),"price",D))
+ ...S DT=+$P(R,"|",12),VR=$$UKDR^IUSER($P(R,"|",13)),SP=$P(R,"|",2)
+ ...S:P="" P=PRC
+ ...S U=$$OWF^TXTU($S(SP'="":$$GSPEC^YISPRAV(SP),U="":U,1:U_" "_$$CNAMEH^IPRICE(U,P,D)),99)
+ ...S R=$P(R,"|",15)_"|"_U_"|"_$$DT2^DTUTL(DT)_"|"_$$FIOSH^IKADRY(VR)
+ ...D WC^RWU(CR_A_"|"_R_LP)
+ D C^RWU
+ Q
+HOSP(DS,DE,VRx) ; Направления на госпитализацию
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N ID,R,U,I,LPU,K,Z,A,NI,S,P,VR,SP,D,FF,LP,ST,KEY,DT,LE,UK
+ S LPU=$$^I("ilpu"),FF=+$$FR^I(),VRx=$G(VRx),LE=$RE(LPU)
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|№ И.б.|Ф.И.О. Пациента|Назначил|Дата|Повод|Статус|Выполнено|Диагноз"_$S(FF:"|Филиал",1:""))
+ S D=DS-1 F  S D=$O(^NAZI("d",D)) Q:D=""!(D>DE)  D
+ .S ID="" F  S ID=$O(^NAZI("d",D,ID)) Q:ID=""  I FF!($P(ID,".",2)=LE),$P(^(ID),"|",1)="h" D 
+ ..S R=$G(^NAZ(ID,"i")) Q:R=""  
+ ..S ST=$P($G(^("e")),"|",1)
+ ..Q:ST[289 
+ ..S K=$G(^("a"))
+ ..S NI=$P(R,"|",2),VR=$P(R,"|",3)
+ ..I $L(VRx),VR'=VRx Q  ; по одному врачу
+ ..S A=NI_"|"_NI_"|"_$$FIO^IPAC(NI)_"|"_$$FIOSH^IKADRY(VR)_"|"
+ ..S A=A_$$DT^DTUTL(D)_"|"_$P(K,"|",3)_"|"_$$TSTATE^INAZN(ST)_"|"
+ ..S UK=$P($O(^NAZ(ID,"a",1,"uk","")),"@",3)
+ ..S A=A_$$DT^DTUTL(UK)_"|"
+ ..S A=A_$$NAME^YMKB10($P(K,"|",2),50)
+ ..S I=+$P(R,"|",4),LP=$S(FF&I:"|"_$$NAME^ICONTR(I),1:"")
+ ..D WC^RWU(CR_A_LP) 
+ D C^RWU
+ Q
+STOM(DS,DE,VRx,TP,LPU) ; Планы лечения
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N ID,R,U,I,LPU,K,Z,A,NI,S,P,VR,SP,PRC,D,FF,LP,ST,LE
+ S LPU=$G(LPU),FF=+$$FR^I(),VRx=$G(VRx)
+ S:'FF LPU=$$^I("ilpu")
+ S LE=$RE(LPU)
+ D OWF^RWU(".txt")
+ D WC^RWU("nzstom:env:pac|№ И.б.|Ф.И.О. Пациента|Дата|Назначил|Сумма|Примечание"_$S(FF:"|Филиал",1:""))
+ S D=DS-1 F  S D=$O(^NAZI("d",D)) Q:D=""!(D>DE)  D
+ .S ID="" F  S ID=$O(^NAZI("d",D,ID)) Q:ID=""  I $P(^(ID),"|",1)="z",LPU=""!($P(ID,".",2)=LE) D
+ ..S R=$G(^NAZ(ID,"i")) Q:R=""  
+ ..S ST=$P($G(^("e")),"|",1)
+ ..Q:ST[289 
+ ..I TP=1,$D(^("v")) Q 
+ ..I TP=2,'$D(^("v")) Q
+ ..S S=$P($G(^("k")),"|",1)
+ ..S K=$G(^("a")),Z=$P(K,"|",4),K=$P(K,"|",1)
+ ..I K="",$L(Z) S K=$P($G(^NAZM("pt",Z)),"|",1)
+ ..S NI=$P(R,"|",2),VR=$P(R,"|",3)
+ ..I $L(VRx),VR'=VRx Q  ; по одному врачу
+ ..S:S="" S=$$SUMM^INAZN(ID)
+ ..S A=NI_"|"_NI_"|"_$$FIO^IPAC(NI)_"|"
+ ..S A=A_$$DT2^DTUTL(D)_"|"_$$FIOSH^IKADRY(VR)_"|"_S
+ ..S I=+$P(R,"|",4),LP=$S(FF&I:"|"_$$NAME^ICONTR(I),1:"")
+ ..D WC^RWU(CR_A_"|"_$G(^NAZ(ID,"c"))_LP)
+ D C^RWU
+ Q
+OTDsys(DS,DE,OTD,VRx,cLPU) ; 
+ N ID,R,U,I,LPU,K,Z,A,NI,S,P,VR,SP,PRC,D,FF,LP,DT,OT
+ S LPU=+$G(cLPU),FF=+$$FR^I(),VRx=$G(VRx)
+ S:'+$$FR^I() cLPU=$$^I("ilpu")
+ S D=DS-1 F  S D=$O(^NAZI("d",D)) Q:D=""!(D>DE)  D
+ .S ID="" F  S ID=$O(^NAZI("d",D,ID)) Q:ID=""  D:'cLPU!($P(ID,".",2)=cLPU) 
+ ..S R=$G(^NAZ(ID,"i")) Q:R=""   
+ ..Q:$P($G(^("e")),"|",1)[289 
+ ..S K=$G(^("a")),Z=$P(K,"|",4),K=$P(K,"|",1)
+ ..S NI=$P(R,"|",2),VR=$P(R,"|",3),DT=+$P(R,"|",5),OT=$P(R,"|",10)
+ ..I $L(OTD),$S(OT="":$$OTD^IKADRY(VR),1:OT)'=OTD Q ; по отделению
+ ..I $L(VRx),VR'=VRx Q  ; по одному врачу
+ ..S A=$$DT^DTUTL(DT)_"|"_NI_" "_$$FIOSH^YIPACN(NI)
+ ..S VR=$$FIOSH^IKADRY(VR)
+ ..S I=+$P(R,"|",4) ;,LP=$S(FF&I:"|"_$$NAME^ICONTR(I),1:"")
+ ..S PRC=$$GET^IINSC($$GET^IPAC(NI,"stc",D),"price",D)
+ ..S PRC=$$CORCP^IPRICET(PRC)
+ ..S I="" F  S I=$O(^NAZ(ID,"a",I)) Q:I=""  D
+ ...S R=^(I),U=$P(R,"|",5),P=$P(R,"|",6),SP=$P(R,"|",2)
+ ...S:P="" P=PRC
+ ...S R=$S($L(U):$$NAMEH^IPRICE(U,P,D),$L(SP):$$GSPEC^YISPRAV(SP),1:"")_"|1||"
+ ...S R=R_$S(U="":"",1:$$PRICEH^IPRICE(U,P,D))_"|"_$S($L(VRx):"",1:"|")
+ ...D WC^RWU(CR_A_"|"_R_VR)
+ Q
+CNTVRs(DS,DE,OTD,LPU,MOD,VMOD,DVID) ; Число назначений за период по врачу
+ ; DVID - вид договора
+ ; RESULT(LPU,OTD,VR)=CNT
+ N DT,ID,VR,OT,R,F,E,I,L,NI,SC,DTP,DTPL
+ S OTD=$G(OTD),LPU=$G(LPU),MOD=$G(MOD),VMOD=$G(VMOD),DVID=$G(DVID)
+ D:'$D(STOTD) MKSCOTD^IEDE
+ S DT=DS-1 F  S DT=$O(^NAZI("d",DT)) Q:DT=""!(DT>DE)  D
+ .S ID="" F  S ID=$O(^NAZI("d",DT,ID)) Q:ID=""  D
+ ..S L=$RE($P(ID,".",2))
+ ..I LPU,L'=LPU Q 
+ ..S E=$P($G(^NAZ(ID,"e")),"|",1)
+ ..Q:E[289 
+ ..S R=$G(^("i")) Q:R=""   
+ ..S VR=$P(R,"|",3) Q:VR="" 
+ ..S OT=$P(R,"|",10) S:OT="" OT=$$OTD^IKADRY(VR,DT)
+ ..I OTD'="",OT'=OTD Q 
+ ..I VMOD,'$$SMOD^IEDE(VMOD,OT) Q  
+ ..I DVID'="" D  Q:DVID'=DTP 
+ ...S SC=$P(R,"|",9) S:SC="" SC=$$GET^IPAC($P(R,"|",2),"stc",DT)
+ ...Q:SC="" 
+ ...I '$D(DTPL(SC,DT)) S DTP=+$$GET^IINSC(SC,"dvid",DT),DTPL(SC,DT)=DTP
+ ...E  S DTP=DTPL(SC,DT)
+ ..S R=+L,OT=+OT
+ ..S RESULT(R,OT,VR)=$G(RESULT(R,OT,VR))+1
+ ..Q:'MOD 
+ ..I E=1 S RESULT(R,OT,VR,1)=$G(RESULT(R,OT,VR,1))+1 Q
+ ..S F=0,I=""
+ ..F  S I=$O(^NAZ(ID,"a",I)) Q:I=""  I $P($G(^(I)),"|",1)=1 S F=1 Q  ; TODO
+ ..Q:'F 
+ ..S RESULT(R,OT,VR,1)=$G(RESULT(R,OT,VR,1))+1
+ Q
+STAT(DS,DE,TPX,MOD,OTX,LPU) ; Статистика по назначениям за период
+ ; TPX - 0/1/2=все/выполнено/нет
+ ; MOD - 1/2/3/4/5=услуги/врач/отделение/диагноз/филиал
+ N DT,ID,DI,NI,R,F,E,I,K1,REZ,VR,OT
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S LPU=$G(LPU),MOD=$G(MOD)
+ k ^BUF($J)
+ S DT=DS-1 F  S DT=$O(^NAZI("d",DT)) Q:DT=""!(DT>DE)  D
+ .S ID="" F  S ID=$O(^NAZI("d",DT,ID)) Q:ID=""  D
+ ..I LPU,$P(ID,".",2)'=LPU Q 
+ ..S E=$P($G(^NAZ(ID,"e")),"|",1)
+ ..Q:E[289 
+ ..Q:$S(TPX=1:E=1,TPX=2:E'=1,1:0) 
+ ..S R=$G(^("i")),NI=$P(R,"|",2),VR=$P(R,"|",3),OT=$P(R,"|",10)
+ ..S:OT="" OT=$$OTD^IKADRY(VR,DT)
+ ..S K1=$S(MOD=2:VR,MOD=3:OT,MOD=4:$P($G(^("a")),"|",2),MOD=5:+$P(R,"|",4),1:"")
+ ..I OTX'="",OTX'=OT Q  
+ ..S I="" F  S I=$O(^NAZ(ID,"a",I)) Q:I=""  D
+ ...S R=^(I)
+ ...S:MOD=1 K1=$P(R,"|",5)
+ ...S:K1="" K1="-"
+ ...S REZ(K1,1)=$G(REZ(K1,1))+1
+ ...I TPX'=1,$P(R,"|",1)=1 S REZ(K1,4)=$G(REZ(K1,4))+1
+ ...S:'$D(^BUF($J,K1,2,ID)) ^(ID)="",REZ(K1,2)=$G(REZ(K1,2))+1
+ ...S:'$D(^BUF($J,K1,3,NI)) ^(NI)="",REZ(K1,3)=$G(REZ(K1,3))+1
+ D OWF^RWU(".txt")
+ D WC^RWU($S(MOD=4:"Диагноз",MOD=3:"Отделение",MOD=2:"Врач",MOD=5:"Филиал",1:"Услуга")_" "_$$TXTP^DTUTL(DS,DE)_"|Назначено"_$S(TPX=1:"",1:"|Выполнено")_"|Назначений|Пациентов")
+ S K1="" F  S K1=$O(REZ(K1)) Q:K1=""  D
+ .S:MOD=1 I=$$STARTTP^IPRICE(K1,DE),R=K1_" "_$$NAMEH^IPRICE(K1,I,DE)
+ .S:MOD=2 R=$$FIODT^IKADRY(K1,DT)
+ .S:MOD=3 R=$$GOTD^YISPRAV(K1)
+ .S:MOD=4 R=$$NAME^YMKB10(K1)
+ .S:MOD=5 R=$$NAME^ICONTR(K1)
+ .S:R="" R="Не указано"
+ .D WC^RWU(CR_R_"|"_$G(REZ(K1,1))_$S(TPX=1:"",1:"|"_$G(REZ(K1,4)))_"|"_$G(REZ(K1,2))_"|"_$G(REZ(K1,3)))
+ D C^RWU
+ Q
+FNBU(DS,DE,UUX,TPX,OTX,USL,DVD) ; Поиск назначений по услуге или отделению
+ ; TPX - 0/1 группировать по врачу (0), пациенту (1)
+ ; UUX - выполнение (0-все,1-выполнены,2-не выполнены) 
+ ; DVD - вид договора
+ N DT,ID,IX,R,E,LLU,U,P,I,STAT,NI
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),DVD=$G(DVD)
+ S USL=$TR($$WD^TXTU(USL),"|;/: ",",,,,")
+ F I=1:1:$L(USL,",") S R=$P(USL,",",I) S:R'="" LLU(R)=""
+ D PRETZR^IPAC
+ 
+ S DT=DS-1 F  S DT=$O(^NAZI("d",DT)) Q:DT=""!(DT>DE)  D
+ .S ID="" F  S ID=$O(^NAZI("d",DT,ID)) Q:ID=""  D
+ ..;I LPU,$P(ID,".",2)'=LPU Q 
+ ..S E=$P($G(^NAZ(ID,"e")),"|",1)
+ ..Q:E[289 
+ ..S R=$G(^("i")),IX=$P(R,"|",$S(TPX=1:2,1:3)) ; NI/VR
+ ..Q:IX="" 
+ ..I DVD'="" S NI=$P(R,"|",2) Q:$$GET^IINSC($$GETTZ^IPAC(NI,TZRBTNs,DT),"dvid",DT)'=DVD 
+ ..S I="" F  S I=$O(^NAZ(ID,"a",I)) Q:I=""  D
+ ...S R=^(I)
+ ...I UUX,$S(UUX=1:'+$P(R,"|",1),1:$P(R,"|",1)) Q 
+ ...S U=$P(R,"|",5) Q:U=""  
+ ...I $D(LLU),'$D(LLU(U)) Q 
+ ...S P=$P(R,"|",6)
+ ...I OTX'="" S:P="" P=$$STARTTP^IPRICE(U,DT,1) I ("|"_$$GET^IPRICE(U,"otd",P,DT)_"|")'[("|"_OTX_"|") Q 
+ ...S STAT(IX,U)=$G(STAT(IX,U))+1
+ D OWF^RWU(".txt")
+ D WC^RWU($S(TPX:"№ И.Б.|Пациент",1:"Сотрудник|Специальность")_"|Услуга|Количество")
+ S IX="" F  S IX=$O(STAT(IX)) Q:IX=""  D
+ .S U="" F  S U=$O(STAT(IX,U)) Q:U=""  D
+ ..S R=$S(TPX:IX_"|"_$$FIO^IPAC(IX),1:$$FIO^IKADRY(IX)_"|"_$$GSPEC^YISPRAV($$SPEC^IKADRY(IX)))
+ ..S R=R_"|"_$$NAMEH^IPRICE(U,$$STARTTP^IPRICE(U,DE,0),DE)
+ ..D WC^RWU(CR_R_"|"_$G(STAT(IX,U)))
+ D C^RWU
+ Q
+PNS(DS,DE) ; Сводный отчет по программам назначений
+ N DT,ID,TP,R,E,T,K,K1,K2,STAT
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S DT=DS-1 F  S DT=$O(^NAZI("d",DT)) Q:DT=""!(DT>DE)  D
+ .S ID="" F  S ID=$O(^NAZI("d",DT,ID)) Q:ID=""  D
+ ..S TP=$P(^(ID),"|",3) Q:TP="" 
+ ..S E=$G(^NAZ(ID,"e")),T=$P(E,"|",1)
+ ..Q:T[289 
+ ..S STAT(TP,1)=$G(STAT(TP,1))+1
+ ..S K=$G(^NAZ(ID,"k")),K1=$P(K,"|",1),K2=$P(K,"|",2)
+ ..S STAT(TP,2)=$G(STAT(TP,2))+K1
+ ..I K1,K1=K2 S STAT(TP,3)=$G(STAT(TP,3))+1
+ ..S:K2 STAT(TP,4)=$G(STAT(TP,4))+K2
+ ..S:T=1 STAT(TP,5)=$G(STAT(TP,5))+1,STAT(TP,6)=$G(STAT(TP,6))+K1
+ D OWF^RWU(".txt")
+ D WC^RWU("Программа "_$$TXTP^DTUTL(DS,DE)_"|Кол-во|Сумма к оплате|Оплачено|На сумму|Выполнено|На сумму")
+ S ID="" F  S ID=$O(STAT(ID)) Q:ID=""  D
+ .S R=$P($G(^NAZM("pt",ID)),"|",1)
+ .F T=1:1:5 S R=R_"|"_$$FN($G(STAT(ID,T)))
+ .D WC^RWU(CR_R)
+ D C^RWU
+ Q
+PTPRP(DS,DE,TPZ,PAYT,VOTD,VRx,MINS) ; Предоплатные назначения за период
+ ; TPZ - код шаблона
+ ; PAYT - оплата назначения
+ ; VOTD - выполнено в отделении
+ ; MINS - минимальная сумма
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),TP=+$G(TP)
+ N ID,R,U,I,LPU,K,Z,A,NI,S,Se,P,VR,OT,SP,PRC,D,FF,LP,ST,KEY,DT,LE,SPX,OTX,KS,F,DGN,SKD,SKDD,DV
+ S LPU=$$^I("ilpu"),FF=+$$FR^I(),VRx=$G(VRx),LE=$RE(LPU)
+ S MXS=$$NNUM^TXTU(MINS)
+ D OWF^RWU(".txt")
+ D WC^RWU("nzlist:env:pac|№ И.б.|Ф.И.О. пациента "_$$TXTP^DTUTL(DS,DE)_"|Назначил|От специалиста|Тип назначения|Cумма|Оплачено|Услуга|Стоимость|Выполнил|Специальность|Дата")
+ S D=DS-1 F  S D=$O(^NAZI("d",D)) Q:D=""!(D>DE)  D
+ .S ID="" F  S ID=$O(^NAZI("d",D,ID)) Q:ID=""  D:FF!($P(ID,".",2)=LE) 
+ ..S R=$G(^NAZ(ID,"i")) Q:R=""  
+ ..S KS=$G(^("k")) Q:KS="" 
+ ..S ST=$P($G(^("e")),"|",1)
+ ..Q:ST[289 
+ ..S S=$P(KS,"|",1),SE=$P(KS,"|",2)
+ ..I PAYT Q:(+S=0)  Q:(PAYT=1)&(S'=SE)  Q:(PAYT=2)&(S=SE) 
+ ..I MINS,S<MINS Q 
+ ..S K=$G(^("a")),Z=$P(K,"|",4),K=$P(K,"|",1)
+ ..I TPZ'="",TPZ'=Z Q 
+ ..I K="",$L(Z) S K=$P($G(^NAZM("pt",Z)),"|",1)
+ ..S K=$S(K="":$$TPLST^NNAZN($P(R,"|",1)),1:K)
+ ..S NI=$P(R,"|",2),VR=$P(R,"|",3)
+ ..I $L(VRx),VR'=VRx Q  ; по одному врачу
+ ..S DGN=$P(R,"|",9),OTX=$P(R,"|",10),SPX=$P(R,"|",11)
+ ..S:SPX="" SPX=$$SPEC^IKADRY(VR)
+ ..I VOTD,$S(OTX'="":VOTD'=OTX,1:'$$IsOTD^IKADRY(VR,VOTD,D)) Q 
+ ..S A=NI_"|"_NI_"|"_$$FIO^IPAC(NI)_"|"_$$FIOSH^IKADRY(VR)_"|"_$$GSPEC^YISPRAV(SPX)
+ ..S A=A_"|"_K_"|"_$$FN(S)_"|"_$$FN(SE)
+ ..S I=+$P(R,"|",4),LP=$S(FF&I:"|"_$$NAME^ICONTR(I),1:"")
+ ..S:DGN="" DGN=$$GET^IPAC(NI,"stc",D)
+ ..S DV=$$GET^IINSC(DGN,"dvid",D)
+ ..S SKD=$$GET^IDSCN(NI,D,DGN) ; базовая скидка
+ ..S SKDD=$$GET^IINSC(DGN,"skd",D)
+ ..S PRC=$$CORCP^IPRICET($$GET^IINSC(DGN,"price",D))
+ ..S I="" F  S I=$O(^NAZ(ID,"a",I)) Q:I=""  D
+ ...S R=$G(^(I)),U=$P(R,"|",5),P=$P(R,"|",6),KEY=$P(R,"|",11) Q:R="" 
+ ...S VR=$P(KEY,"@",2),DT=$P(KEY,"@",3),OT=$P(KEY,"@",1),SP=$P(R,"|",2)
+ ...I KEY="",$D(^(I,"uk")) S KEY=$O(^("uk",""))
+ ...I KEY="",$P(R,"|",12)'="" S DT=+$P(R,"|",12),VR=$$UKDR^IUSER($P(R,"|",13))
+ ...S:P="" P=PRC
+ ...S U=$$OWF^TXTU($S(U=""&(SP'=""):$$GSPEC^YISPRAV(SP),U="":U,1:U_" "_$$CNAMEH^IPRICE(U,P,D)),99)
+ ...S R=U_"|"_$$FN($$SUMMLT^INAZN(ID,I,NI,D,DGN,P,DV,SKD,SKDD))_"|",SP=""
+ ...S:KEY'="" SP=$$GETSP^IUSL(VR,DT,OT,$P(KEY,"@",4))
+ ...S R=R_$$FIOSH^IKADRY(VR)_"|"_$S(SP="":"",1:$$GSPEC^YISPRAV(SP))_"|"_$$DT2^DTUTL(DT)
+ ...D WC^RWU(CR_A_"|"_R_LP)
+ D C^RWU
+ Q
+FN(X) 
+ Q $TR(X,".",",")
+REGIPROC 
+ N A,F,D,FF,NN,TP,OT,VR
+ S F=$$FR^I()
+ S D="d,Начальная дата периода,d,Конечная дата периода"
+ S NN="Направления"
+ S FF=$S(F:",t@storage:lpu,Филиал",1:"")
+ S TP="t@string:/Нет#c/Консультативно-диагностическое#d/Процедурное#l/В лабораторию#h/На госпитализацию#a/Комплексное,Тип"
+ S OT="te@storage:otd@1,Отделение"
+ S VR="te@net:FLST_NVFIND(""""),Сотрудник"
+ S A="DAYS_RNAZ,100,7,"_D_",t@string:0/Список пациентов#1/Подробный,Вид отчета,t@string:0/Не имеет значения#1/Только оплаченные#2/Неоплаченные,Оплата назначений,"_VR_","_TP_","_OT
+ S ^IPROC("Отчеты по пациентам",NN,"Направления за период")=A
+ S ^IPROC("Отчеты по услугам",NN,"Направления за период")=A
+ S ^IPROC("Отчеты по пациентам",NN,"Внешнее выполнение направлений")="EEXE_RNAZ,100,5,"_D_",t@string:0/Не имеет значения#1/Только оплаченные#2/Неоплаченные,Оплата назначений,"_VR_","_TP
+ S ^IPROC("Отчеты по пациентам",NN,"Направления на госпитализацию")="HOSP_RNAZ,100,3,"_D_","_VR
+ S ^IPROC("Стоматология","Планы лечения за период")="STOM_RNAZ,100,"_$S(F:5,1:4)_","_D_","_VR_",t@string:0/Все планы лечения#1/Непросмотренные планы#2/Просмотренные планы,Показывать"_FF
+ S ^IPROC("Отчеты ЛПУ","Сводные","Сводка по направлениям")="STAT_RNAZ,1,"_$S(F:6,1:5)_","_D_",t@string:0/Все#1/Завершенные#2/Не выполненные,Показывать направления,t@string:1/Услугам#2/Направившему врачу#3/Отделению#4/Диагнозам#5/Филиалу,Группировать по,"_OT_FF
+ S ^IPROC("Отчеты по услугам","Направления по услугам")="FNBU_RNAZ,1,7,"_D_",t@string:0/Все#1/Выполненные#2/Не выполненные,Показывать направления,t@string:0/врачу#1/пациенту,Группировать по,"_OT_",s,Перечень кодов услуг,t@net:NMLST_NSPRAV(""dvid"")@1,Вид договора"
+ S ^IPROC("Отчеты ЛПУ","Сводные","Сводный отчет по программам назначений")="PNS_RNAZ,1,2,"_D
+ S ^IPROC("Отчеты по пациентам",NN,"Направления по предоплате")="PTPRP_RNAZ,100,7,"_D_",te@net:LST_NNAZPT()@1,Шаблон направления,t@string:0/Не имеет значения#1/Только оплаченные#2/Неоплаченные,Оплата назначений,"_OT_","_VR_",s,Минимальная сумма назначения"
+ Q

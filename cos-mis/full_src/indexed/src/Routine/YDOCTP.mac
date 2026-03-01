@@ -1,0 +1,112 @@
+YDOCTP ; Типы общих документов [ 12/23/2013  9:54 PM ]
+SDT ; Сохранить
+ N NS1,%J,A,N,NB,CD,PL,P
+ S NS1=0
+ D RBUFH^YIXMLRR(1)
+ S NB="nb_console",CD="cdtype",N=$G(XML(NB,CD,"id"))
+ I N="" L ^CDT S N=$O(^CDT(""),-1)+1,^CDT(N)=$H L -^CDT 
+ K XML(NB,CD,"id")
+ S PL="" F  S PL=$O(XML(NB,CD,PL)) Q:PL=""  S R=XML(NB,CD,PL),P=PL D
+ .S:P="tparent" P="parent" S:P="tname" P="name" S:P="tfile" P="file"
+ .S:P="parent"&(R="-1") R=""
+ .S:P="uindex" R=$TR(R,"; ","|")
+ .I R="" K ^CDT(N,P) Q
+ .S ^CDT(N,P)=R 
+ D CLOSE^YIXMLRR
+ D:N'="" REGL^IEXCH("^CDT",N)
+ D MSG^RWU(N)
+ Q
+FNDTP(NM) ; Find by name
+ S ID="" F  S ID=$O(^CDT(ID)) Q:ID=""  Q:NM=$G(^CDT(ID,"name")) 
+ Q ID
+FNDUID(UID) ; Find by UID
+ S ID="" F  S ID=$O(^CDT(ID)) Q:ID=""  Q:UID=$G(^CDT(ID,"uid")) 
+ Q ID
+MKTP(NM,EXT,FLD,UID) ; Create type by name/uid
+ N NUM
+ S UID=$G(UID)
+ S NUM=$S(UID="":$$FNDTP(NM),1:$$FNDUID(UID))
+ Q:NUM'="" NUM
+ L ^CDT S NUM=$O(^CDT(""),-1)+1,^CDT(NUM)=$H L -^CDT
+ S:FLD="" FLD=0
+ S:FLD&('$D(^CFLD(FLD))) FLD=0
+ S ^CDT(NUM,"name")=NM,^("folder")=FLD
+ S:EXT'="" ^("ext")=EXT
+ S:UID'="" ^("uid")=UID
+ S ^CDT=$H
+ D GL^IEXCH("^CDT",NUM)
+ Q NUM
+TPFLD(TP) ; Folder by type
+ Q:TP="" ""
+ Q $G(^CDT(TP,"folder"))
+LDT(N) ; Загрузить
+ N POLE,R,PL
+ S N=+N
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<cdtype>"),WTAG^RWU("id",N)
+ I '$D(^CDT(N)) S N="" G LDTEND
+ S POLE=""
+ F  S POLE=$O(^CDT(N,POLE)) Q:POLE=""  D
+ .S PL=POLE
+ .S:PL="parent" PL="tparent"
+ .S:PL="name" PL="tname"
+ .S:PL="file" PL="tfile"
+ .S R=$G(^CDT(N,POLE))
+ .S:PL="uindex" R=$TR(R,"|",";")
+ .D WTAGDC^RWU(PL,R)
+LDTEND D W^RWU("</cdtype></nb_console>"),C^RWU
+ Q
+LTDT ; Перечень в таблицу
+ N ID,FLD,PID,A
+ D OWF^RWU(".txt"),W^RWU(" ")
+ S ID="" F  S ID=$O(^CDT(ID)) Q:ID=""  D
+ .S FLD=$G(^CDT(ID,"folder")),FLD=FLD_" "_$G(^CFLD(+FLD))
+ .S PID=$G(^CDT(ID,"parent")),PID=PID_" "_$G(^CDT(PID,"name"))
+ .S A=ID_"|"_$G(^CDT(ID,"name"))_"|"_FLD_"|"_PID
+ .D WC^RWU(CR_A)
+ D C^RWU
+ Q
+DDT(N) ; Удалить документ
+ K ^CDT(N)
+ D K^ISSG("^CDT("_N_")")
+ D KGL^IEXCH("^CDT",N)
+ Q
+LFT ; Вывести папки
+ N ID
+ D OWF^RWU(".txt"),W^RWU("0|")
+ S ID="" F  S ID=$O(^CFLD(ID)) Q:ID=""  D WC^RWU(CR_ID_"|"_^(ID))
+ D C^RWU
+ Q
+AFT(NM) ; Добавить папку
+ N ID
+ S NM=$$WD^TXTU(NM)
+ L ^CFLD S ID=$O(^CFLD(""),-1)+1,^(ID)=NM L -^CFLD
+ D KGL^IEXCH("^CFLD",ID)
+ D LFT
+ Q
+DFT(ID) ; Удалить папку
+ N I,F
+ S F=0,I=""
+ F  S I=$O(^CDT(I)) Q:I=""  I $G(^(I,"folder"))=ID S F=1 Q 
+ I F D MSG^RWU("Папка используется в документах ("_I_")") Q 
+ K ^CFLD(ID)
+ D K^ISSG("^CFLD("_ID_")")
+ D KGL^IEXCH("^CFLD",ID)
+ Q
+NFT(ID,NM) ; Переименовать папку
+ S NM=$$WD^TXTU(NM)
+ S ^CFLD(ID)=NM
+ D GL^IEXCH("^CFLD",ID)
+ D LFT
+ Q
+FNDFLD(NM) ; Find folder by name
+ N ID S ID="" F  S ID=$O(^CFLD(ID)) Q:ID=""  Q:NM=$G(^(ID))
+ Q ID
+MKFLD(NM,PFN) ; Make folder(Name,Parent folder num)
+ Q:NM="" 0
+ N NUM,PFN
+ S NUM=$$FNDFLD(NM) Q:NUM'="" NUM
+ L ^CFLD S NUM=$O(^CFLD(""),-1)+1 S ^CFLD(NUM)=NM L -^CFLD
+ S PFN=+$G(PFN) S:$D(^CFLD(PFN)) ^CFLD(NUM,"parent")=PFN
+ S ^CFLD=$H
+ D GL^IEXCH("^CFLD",NUM)
+ Q NUM

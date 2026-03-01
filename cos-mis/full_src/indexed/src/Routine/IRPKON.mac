@@ -1,0 +1,114 @@
+IRPKON ; Отчеты по контингенту [ 06/13/2017  3:08 PM ]
+ ; CSTC - Компания
+ ; WRK - Место работы
+ ; USER1,USER2 - пользовательские параметры
+ ; NI - пациент
+MK(DS,DE,REZ,SEQ,VARS,SMR,FLT,OFOR) 
+ ; REZ - глобаль для результата
+ ; SEQ - порядок следования индексов
+ ; VARS - нужные значения, через ',', в индексе - пробел+имя
+ ;      kon - в штуках, dgsum - сумма договора
+ ; SMR - подсчет итогов по индексам
+ ; FLT - выражение (функция) фильтра, var TEST=1 - не счит.
+ ; OFOR - только оформленных
+ Q:REZ="" 
+ S OFOR=+$G(OFOR)
+ N lvl,var,lvv,lvn,v
+ N I,R,X,L,T,V,CSTC,NI,DT,TEST,WRK,stcI,stcI1,stcI2,wrkI,dfI,dtI,pOF
+ S pOF=+$$PLIDX^IPAC("ofor")
+ S stcI=+$$PLIDX^IPAC("stc"),stcI1=+$$PLIDX^IPAC("stc1"),stcI2=+$$PLIDX^IPAC("stc2")
+ D PRETZR^IPAC
+ S wrkI=$G(TZRBTN("work"))
+ S dfI=$G(TZRBTN("dog_from")),dtI=$G(TZRBTN("dog_to"))
+ ; make vars
+ F I=1:1 S X=$P(VARS,",",I) Q:X=""  S var(X)=" "_X
+ ; make levels
+ S R=REZ
+ S:R["(" R=R_"," S:R'["(" R=R_"("
+ F I=1:1 S X=$P(SEQ,",",I) Q:X=""  D
+ .S R=R_$S(I=1:"",1:",")_X
+ .S lvl(I)=R_")",lvn(I)=X,lvv(X)=""
+ S:$D(lvv("CSTC")) lvv("NI")=""
+ S lvl=I-1
+ ; main loop
+ S:DS="" DS=+$H S:DE="" DE=+$H
+ S FLT=$G(FLT),NI=""
+ F  S NI=$$NEXT^IPAC(NI) Q:NI=""  D
+ .I OFOR S R=$$GETTZ^IPAC(NI,pOF,DE) I R'="",R'=1 Q 
+ .S:$D(lvv("CSTC")) CSTC=$$GETTZ^IPAC(NI,stcI,DE) ; todo
+ .S:$D(lvv("WRK")) WRK=$$GETTZ^IPAC(NI,wrkI,DE) ; todo
+ .I FLT'="" S TEST=0 D @FLT Q:TEST
+ .D PROC
+ Q
+PROC 
+ N E,S,T,OS,OE
+ S OS=$$GETTZ^IPAC(NI,dfI,DE),OE=$$GETTZ^IPAC(NI,dtI,DE)
+ I OFOR  Q:OS>DE  Q:OE&(OE<DE)  ; on end of period
+ I $D(var("dgsum"))!$D(var("dtsum"))!$D(var("dtssum")) S X=$$GET^IPAC(NI,"psumm",DE),X=$S(X'="":X,1:$$GET^IINSC($$GETTZ^IPAC(NI,stcI,DE),"psumm",DE))
+ F I=1:1:lvl D:@lvn(I)'=""
+ .S R=lvl(I)
+ .S V="" F  S V=$O(var(V)) Q:V=""  D
+ ..S v=" "_V
+ ..I V="kon" S ^(v)=$G(@R@(v))+1 Q 
+ ..I V="dgsum" S ^(v)=$G(@R@(v))+X Q
+ ..S S=OS,E=OE
+ ..S T=S S:DS>S S=DS S:DE<E E=DE
+ ..I V="dtsum" S:S<E ^(v)=$G(@R@(v))+(X*(E-S)/365) Q 
+ ..I V="dtssum" S ^(v)=$G(@R@(v))+(X*(S-T)/365) Q 
+ Q
+LOOP(DS,DE,DGN,WRK,PROC,MOD) ; Выборка пациентов по условию
+ ; DGN - по договору
+ ; WRK - фильтр по месту работы (TODO)
+ ; PROC - вызываемая процедура
+ ; MOD - =1-учитывать полные даты прикрепления в диапазоне
+ N NIB,M,MM,MD,X,PX,K,D,F,PIDX,DDS,DDE,PK
+ S MOD=+$G(MOD)
+ S NIB="" F  S NIB=$$NEXT^IPAC(NIB,"stc",DGN) Q:NIB=""  D  
+ .K MM,MD
+ .D cstc("") S PIDX=""
+ .I '$D(MM) D cstc(1) S PIDX=1
+ .I '$D(MM) D cstc(2) S PIDX=2
+ .Q:'$D(MM)
+ .S X="" F  S PX=X,X=$O(MM(X)) S:PX'="" K=MM(PX),MM(PX)=$S(K'="":K,X="":DE,1:X) Q:X=""  ; DG period
+ .S DDS=$O(MM("")),DDE=$O(MM(""),-1),DDE=MM(DDE) S:DDE="" DDE=DE
+ .; строим периоды
+ .D GETM^IPAC(NIB,"dog_from"_PIDX,"M")
+ .I DDS'="",'$D(M(DDS)) S M(DDS)=DDS ; если нет начального периода
+ .S X=$O(M(DDS+1),-1),K="",F=1 ; F - самый начальный период
+ .F  D:X'=""  S X=$O(M(X)) Q:X=""!(X>DDE)  S:K'=""&(X<PX) MD(K)=X-1 ; пересеч. периода
+ ..S K=M(X) Q:K=""  Q:$D(ME(X)) 
+ ..S K=$S(F:K,K<DDS:DDS,1:K),PX=$$gmm(K)
+ ..S D=$$GET^IPAC(NIB,"dog_to"_PIDX,K)
+ ..S:D="" D=$$GET^IPAC(NIB,"dog_to"_PIDX,X)
+ ..S PX=$S(D>DDE:$S(MOD:D,1:DDE),PX<D&(PX>K):PX,1:D),MD(K)=PX
+ .S:'$D(MD) MD(DDS)=DDE ; if no "from"
+ .D GETM^IPAC(NIB,"dog_to"_PIDX,"M")
+ .S X=DDS-1 ; ограничение "по" (по последн. значению)
+ .F  S X=$O(M(X)) Q:X=""!(X>DDE)  I '$D(ME(X)) S K=M(X),D=$O(MD(X+1),-1),D1=$O(MD(X-1)),D=$S(D1="":D,MD(D1)=K:D1,1:D) S:D'="" MD(D)=$S(K="":X-1,K>DDE&('MOD):DDE,1:K)
+ .D GETM^IPAC(NIB,"ofor","M")
+ .S X=$O(M(DDS+1),-1)-1 ; лимиты по оформлению
+ .F  S X=$O(M(X)) Q:X=""!(X>DDE)  I M(X)'=1 S D=$O(MD(X+1),-1) I D'="",MD(D)<X S MD(D)=X
+ .; непересечение периодов
+ .S X="" F  S K=X,X=$O(MD(X),-1) Q:X=""  I K'="",MD(X)>K S MD(X)=K-1
+ .; common
+ .S X="" F  S X=$O(MD(X)) Q:X=""  S DDS=X,DDE=MD(X) I DDE'<DS,DDS'>DE,DDS'>DDE D @PROC
+ Q
+cstc(PIDX) ; Проверить договор
+ D GETM^IPAC(NIB,"stc"_PIDX,"M")
+ K ME
+ S X=$O(M(DS+1),-1),PX=X,(K,PK)=""
+ F  S K=$S(X="":"",1:M(X)),PX=$S(K=DGN:X,1:PX) D  Q:X=""!(X>DE)
+ .I K=DGN s PX=$S(MOD:X,X<DS:DS,1:X),MM(PX)=""
+ .I K'=DGN,PK=DGN,PX,PX<X S MM(PX)=X-1,PX=""
+ .I K'=DGN,X'="" S ME(X)="" ; исключаем периоды с другим договором
+ .S X=$O(M(X))
+ Q
+gmm(DT) ; get from MM
+ S D=$O(MM(DT+1),-1) Q:D="" ""
+ Q MM(D)
+P 
+ W !,NIB_" "_$$DT^DTUTL(DDS)_"-"_$$DT^DTUTL(DDE)
+ Q
+PLSTG(NI,DS,DE,REZ) ; Список договоров-периодов по пациенту
+ ; TODO
+ Q

@@ -1,0 +1,156 @@
+NVACC ; Вакцинации [ 09/03/2016  0:22 AM ]
+LSTSP 
+ D OWF^RWU(".txt")
+ D WC^RWU(CR_"vacgrp|Группа вакцин")
+ D WC^RWU(CR_"vacmet|Метод вакцинации")
+ D WC^RWU(CR_"vacrea|Реакция на вакцину")
+ D WC^RWU(CR_"vacotv|Медотвод")
+ D WC^RWU(CR_"vaccin|Вакцины")
+ D WC^RWU(CR_"vaccal|Календарь прививок")
+ D WC^RWU(CR_"vacprp|Препараты")
+ D C^RWU
+ Q
+LSTTAB(SP) 
+ N HH,P
+ I SP="vacgrp" S HH="Наименование группы",P="t" G LSTTAB1
+ I SP="vacmet" S HH="Наименование метода",P="t" G LSTTAB1
+ I SP="vacrea" S HH="Наименование реакции",P="t" G LSTTAB1
+ I SP="vacotv" S HH="Медотвод|Вакцина",P="t,vaccin" G LSTTAB1
+ I SP="vaccin" S HH="Наименование|Показания|Вакцинаций|Ревакцин.|Серия|Результат|Отвод|Группа",P="t,t,n,n,c,c,c,vacgrp" G LSTTAB1
+ I SP="vacprp" S HH="Наименование|Производитель|Вакцина",P="t,t,vaccin" G LSTTAB1
+ I SP="vaccal" S HH="Вакцина|12 час.|3-7 дней|1 мес.|2 мес.|3 мес.|4.5 мес.|6 мес.|12 мес.|18 мес.|20 мес.|6 лет|7 лет|14 лет",P="vacgrp,c,c,c,c,c,c,c,c,c,c,c,c,c" G LSTTAB1
+LSTTAB1 
+ N I,R,ID,X,A,K
+ S X=+$G(^MN(SP))
+ D OWF^RWU(".txt")
+ D WC^RWU(P_"|"_HH)
+ S ID="" F  S ID=$O(^MN(X,ID)) Q:ID=""  D
+ .S A=ID,K=^(ID)
+ .F I=1:1:9 S R=$P(P,",",I) Q:R=""  S A=A_"|"_$S("tn"[R:$P(K,"|",I),R="c":$S($P(K,"|",I):"+",1:""),1:$P($G(^MN(+$G(^MN(R)),+$P(K,"|",I))),"|",1))
+ .D WC^RWU(CR_A)
+ D C^RWU
+ Q
+ADDSP(SP,NM) 
+ I SP="" D MSG^RWU("ERR") Q 
+ N I,ID
+ S I=$$NEWIDX^YISPRAV(SP),ID=$O(^MN(I,""),-1)+1
+ S ^MN(I,ID)=$$WD^TXTU(NM)
+ D UPD^IEXCH("YISPRAV",SP)
+ D MSG^RWU(ID)
+ Q
+DELSP(SP,ID) 
+ I SP=""!(ID="") D MSG^RWU("ERR") Q 
+ N I S I=$$NEWIDX^YISPRAV(SP)
+ K ^MN(I,ID)
+ D UPD^IEXCH("YISPRAV",SP)
+ Q
+CNGSP(SP,ID,NM,COL) 
+ I SP=""!(ID="") Q
+ N R S SP=+$G(^MN(SP))
+ S R=$G(^MN(SP,ID)),$P(R,"|",COL)=$$WD^TXTU(NM),^MN(SP,ID)=R
+ D UPD^IEXCH("YISPRAV",SP)
+ Q
+LSTNMS(SP,TAB) ; Список имен
+ I SP="" Q 
+ N ID,C S SP=+$G(^MN(SP)),C=$S($G(TAB):CR,1:"")
+ D OWF^RWU(".txt")
+ S ID="" F  S ID=$O(^MN(SP,ID)) Q:ID=""  D WC^RWU(C_ID_"|"_$P(^(ID),"|",1)) S C=CR
+ D C^RWU
+ Q
+VCINIT ; Справочники для учета вакцинаций
+ N I,X,R
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<vaccin><vcc>|")
+ S I=+$G(^MN("vaccin")),X=""
+ F  S X=$O(^MN(I,X)) Q:X=""  D WC^RWU(CR_X_"|"_$P(^(X),"|",1))
+ D W^RWU("</vcc><prp>|</prp><metod>|")
+ S I=+$G(^MN("vacmet")),X=""
+ F  S X=$O(^MN(I,X)) Q:X=""  D WC^RWU(CR_X_"|"_$P(^(X),"|",1))
+ D W^RWU("</metod><stage>"_CR_"</stage><res>|")
+ S I=+$G(^MN("vacrea")),X=""
+ F  S X=$O(^MN(I,X)) Q:X=""  D WC^RWU(CR_X_"|"_$P(^(X),"|",1))
+ D W^RWU("</res><otv>|")
+ S I=+$G(^MN("vacotv")),X=""
+ F  S X=$O(^MN(I,X)) Q:X=""  D WC^RWU(CR_X_"|"_$P(^(X),"|",1))
+ D W^RWU("</otv></vaccin></nb_console>"),C^RWU
+ Q
+SELV(VC) ; Выбрать вакцину
+ I VC="" Q 
+ N I,X,R
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<vaccin><prp>|")
+ S I=+$G(^MN("vacprp")),X=""
+ F  S X=$O(^MN(I,X)) Q:X=""  S A=^(X) D:$P(A,"|",3)=VC WC^RWU(CR_X_"|"_$P(A,"|",1))
+ S I=+$G(^MN("vaccin")),X=$G(^MN(I,VC)),A=""
+ F I=1:1:$P(X,"|",3) S A=A_$S(A="":"",1:CR)_I
+ F I=1:1:$P(X,"|",4) S A=A_$S(A="":"",1:CR)_"R"_I
+ S:A="" A=CR
+ D W^RWU("</prp><stage>"_A_"</stage></vaccin></nb_console>")
+ D C^RWU
+ Q
+S(NI,KEY,T) ; Сохранить вакцинацию
+ I KEY=""!(T="") Q 
+ N VR,OT,DT,ID,NM,X
+ S VR=$P(KEY,"|",1),OT=$P(KEY,"|",2)
+ S DT=$$DIH^DTUTL($P(KEY,"|",4)),ID=$P(KEY,"|",5)
+ S:ID["@" VR=$P(ID,"@",2),DT=$P(ID,"@",3),OT=$P(ID,"@",4),ID=$P(ID,"@",1)
+ Q:KEY=""!(ID="") 
+ S X=$$SETPL^IUSL(VR,DT,OT,ID,"vp",$$WD^TXTU(T))
+ S NM="Лист вакцинопрофилактики",ID=$$FIND^YIMHS(NM)
+ D:ID=""
+ .S DT=$$ADDF^YIMHS("Долговременная информация о больном")
+ .S ID=$$ADDT^YIMHS(NM,DT,"tab")
+ .D SET^YIMHS(ID,"rproc","MHDC^NVACC")
+ .D SET^YIMHS(ID,"rights","rrr")
+ .D SET^YIMHS(ID,"ext","tab")
+ .D SET^YIMHS(ID,"bdoc",1)
+ .D SET^YIMHS(ID,"uid","base/vaccin")
+ .D MKIDX^IMHS(ID)
+ S:$$FNDTP^IEPR(NI,ID)="" ID=$$MKDOC^IEPR(NI,ID,"",1)
+ Q
+MHDC 
+ N KX,R,D,VR,OT,ID,V,M
+ N @$$NEWVAR^IUSL
+ S V=+$G(^MN("vaccin")),M=+$G(^MN("vacotv"))
+ D WC^RWU("Дата|Возраст|Этап|Вакцина|Доза|Медотвод")
+ S D="" F  S D=$O(^PNF(N,D)) Q:D=""  D
+ .S KX="" F  S KX=$O(^PNF(N,D,KX)) Q:KX=""  D
+ ..S VR=$P(KX,"|",1),OT=$P(KX,"|",2),ID=$P(KX,"|",3)
+ ..Q:VR=""!(OT="")!(ID="") 
+ ..Q:'$D(^ZNF(VR,OT,D,ID,"vp"))  ; todo - subscribe
+ ..S R=^("vp"),ID=$$DT2^DTUTL(D)_"|"_$$AGE^IPAC(N,D)_"|"_$P(R,"|",2)
+ ..S ID=ID_"|"_$P($G(^MN(V,+$P(R,"|",1))),"|",1)
+ ..S ID=ID_"|"_$P(R,"|",5)_"|"_$P($G(^MN(M,+$P(R,"|",8))),"|",1)
+ ..D WC^RWU(CR_ID)
+ Q
+MHCAL 
+ N KX,R,D,VR,OT,ID,V,M,G,X,LVA
+ N @$$NEWVAR^IUSL
+ S V=+$G(^MN("vaccin")),M=+$G(^MN("vacgrp"))
+ 
+ S D="" F  S D=$O(^PNF(N,D)) Q:D=""  D
+ .S KX="" F  S KX=$O(^PNF(N,D,KX)) Q:KX=""  D
+ ..S VR=$P(KX,"|",1),OT=$P(KX,"|",2),ID=$P(KX,"|",3)
+ ..Q:VR=""!(OT="")!(ID="") 
+ ..Q:'$D(^ZNF(VR,OT,D,ID,"vp"))  ; todo - subscribe
+ ..S R=^("vp"),G=$P($G(^MN(M,+$P(R,"|",8))),"|",1) Q:'G
+ ..S LVA(G)=$G(LVA(G))+1
+ 
+ S V=+$G(^MN("vaccal"))
+ D WC^RWU("Вакцина|12 час.|3-7 дней|1 мес.|2 мес.|3 мес.|4.5 мес.|6 мес.|12 мес.|18 мес.|20 мес.|6 лет|7 лет|14 лет")
+ S KX="" F  S KX=$O(^MN(V,KX)) Q:KX=""  D
+ .S R=^(KX),ID=+$P(R,"|",1)
+ .F D=2:1:14 S X=$P(R,"|",D) I X S $P(R,"|",D)=$S($G(LVA(ID)):"+",1:"?") S:$G(LVA(ID)) LVA(ID)=LVA(ID)-1
+ .S $P(R,"|",1)=$P($G(^MN(M,ID)),"|",1)
+ .D WC^RWU(CR_R)
+ Q
+INITDB 
+ S ^MN("root","vacgrp")="Группа вакцин"
+ S ^MN("root","vacmet")="Метод вакцинации"
+ S ^MN("root","vacrea")="Реакция на вакцину"
+ S ^MN("root","vacotv")="Медотвод (вакцинация)"
+ S ^MN("root","vaccin")="Вакцины"
+ S ^MN("root","vaccin","ie")=1
+ S ^MN("root","vacprp")="Препараты (вакцинация)"
+ S ^MN("root","vacprp","ie")=1
+ S ^MN("root","vaccal")="Календарь прививок"
+ S ^MN("root","vaccal","ie")=1
+ Q

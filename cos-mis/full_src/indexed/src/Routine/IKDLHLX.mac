@@ -1,0 +1,683 @@
+IKDLHLX ; Routines for Helix
+SETUP
+	S ^cfg("lab","hlx",1,"server")="ex2.helix.ru"
+	S ^cfg("lab","hlx",1,"port")=21
+	S ^cfg("lab","hlx",1,"user")="MisMedexis"
+	S ^cfg("lab","hlx",1,"passwd")="1N}n1PL2q"
+	S ^cfg("lab","hlx",1,"pre")="hlx" ; prefix
+	S ^cfg("lab","hlx",1,"debug")=0
+	S ^cfg("lab","hlx",1,"contract")="C000077084"
+	S ^cfg("lab","hlx",1,"noprnbar")=1
+	S ^cfg("lab","hlx",1,"path")="E:\node\helixftp"
+	Q
+DOSEND ; Отправка заявок
+	N DT,NI,ID,S3,CT,LAB,LP,NW,LID
+	S CT=$G(^cfg("lab","noprnbar"))
+	
+	S DT=$H-20 F  S DT=$O(^MLABI("d",DT)) Q:DT=""  D  
+	.S ID="" F  S ID=$O(^MLABI("d",DT,ID)) Q:ID=""  D
+	..S NI=^(ID) ;Q:NI'=2237403   
+	..S LAB=$P($G(^MLAB(NI,ID,"lab")),"|",1) Q:'LAB  q:LAB'=10
+	..Q:$G(^LABC(LAB,"uid"))'="hlx" 
+	..S LID=$G(^LABC(LAB,"id")) Q:LID="" 
+	..S CT=$G(^cfg("lab","hlx",LID,"noprnbar"))
+	..;w 1_" "_ID
+	..S S3=$P($G(^MLAB(NI,ID,"s3")),"|",1) Q:'S3  
+	..;w !,2
+	..Q:'$P($G(^("s31")),"|",1) 
+	..;w !,3
+	..I CT,'$P($G(^("s3")),"|",1) Q 
+	..;w !,4
+	..Q:$P($G(^("s4")),"|",1)=2
+	..;w !,5
+	..Q:$P($G(^("s9")),"|",1)
+	..S LP=$P($G(^("s1")),"|",4)
+	..Q:'$$MKSEND(NI,ID)
+	..D SETSTAT^IMLAB(NI,ID,4,2) ; у контрагента
+	Q
+DORECV(IDX) ; Получение исследований по всем лабораториям
+	; запуск из IMSGHUB
+	;S ^KKKH=$H
+	D DOSEND
+	
+	N LST,I,LAB,X,MOD
+	S LAB="" F  S LAB=$O(^LABC(LAB)) Q:LAB=""  I $G(^(LAB,"uid"))="hlx" D  
+	.S X=$G(^("id"))
+	.S:X'="" LST(LAB,X)=""
+	.S I="" F  S I=$O(^LABC(LAB,"lpu",I)) Q:I=""  S X=$G(^(I,"id")) S:X'="" LST(LAB,X)=""
+	
+	S LAB="" F  S LAB=$O(LST(LAB)) Q:LAB=""  D
+	.S I="" F  S I=$O(LST(LAB,I)) Q:I=""  D GETALL(LAB,I)
+	Q
+MKSEND(NI,ID) ; Формирование и отправка сообщения
+	N MID,EID,RR,DTT,X,R,R1,R2,RU,BAR,LAB,ALAB,LPU,FL,S2,BIO,BIO1,I,J,U,C,UUL,a,uu,k,cul,RM,RC,FLL,B,IB,NB,UB,RH,allowpd
+	
+	S LAB=$P($G(^MLAB(NI,ID,"lab")),"|",1)
+	S S2=$G(^MLAB(NI,ID,"s2"))
+	S LPU=$P(S2,"|",4) S:LPU="" LPU=$$^I("ilpu")
+	
+	S ALAB=$G(^LABC(LAB,"lpu",LPU,"id"))
+	S:ALAB="" ALAB=$G(^LABC(LAB,"id"))
+	S:ALAB="" ALAB=LAB
+	
+	if $$PIDXN^IPAC(NI,818,+$H)>-1 S ALAB=2
+	
+	S cul=$S($G(^LABC(LAB,"CN"))="i":1,1:0) ; по услугам
+	
+	S DTT=+$G(^MLAB(NI,ID))
+	S:'DTT DTT=+$H
+	
+	S EID=$G(^LABC(LAB,"lpu",LPU,"eid"))
+	S MID=(EID_"00000000")+$$GET^IINKR("helix")
+	S RR="<?xml version=""1.0"" encoding=""utf-8""?>"
+	S RR=RR_CR_"<OrderMessage message_id="""_MID_""" created_on="""_$$DTMISO24^DTUTL($H,"03")_""">"
+	
+	S RR=RR_CR_"<Order created_on="""_$$DTMISO24^DTUTL($G(^MLAB(NI,ID)),"03")_""" "
+	S RR=RR_"first_name="""_$$TKAV^TXTU($$GET^IPAC(NI,"fioi",DTT))_""" "
+	S RR=RR_"middle_name="""_$$TKAV^TXTU($$GET^IPAC(NI,"fioo",DTT))_""" "
+	S X=$$GET^IPAC(NI,"pol",DTT)
+	S RR=RR_"last_name="""_$$TKAV^TXTU($$GET^IPAC(NI,"fiof",DTT))_""" gender="""_$S(X=1:"M",X=2:"F",1:"U")_""" "
+	S RR=RR_"account_id="""_EID_""" contract_id="""_$G(^cfg("lab","hlx",ALAB,"contract"))_""" "
+	S RR=RR_"contact_phone="""" contact_email="""_$S($G(^cfg("lab","pemail")):$$DECMAIL^TXTU($$GET^IPAC(NI,"pemail",DTT)),1:"")_""""
+	
+	;F FL="X_CELL_PHONE_NUMBER" D  ; TODO
+	;.S RR=RR_$$fillf(FL)
+	
+	; rules
+	s allowpd='$G(^cfg("lab","hlx",1,"nopers"))
+	S R=^MLAB(NI,ID,"ul")
+	F I=1:1:$L(R,"|") d
+	.S U=$P($P(R,"|",I),":",1),C=$P(U,"*",2),U=$P(U,"*",1) Q:U="" 
+	.I $G(^LABCM(LAB,"SPD",U)) s allowpd=1
+	.S a=$S(cul:U,1:$G(^LABTI("LAB",LAB,"CN",U))) Q:a="" 
+	.M FLL=^LABCM(LAB,"RULE",a,"R")
+	
+	S BIO="" F  S BIO=$O(^MLAB(NI,ID,"mi",BIO)) Q:BIO=""  D
+	.S NB="" F  S NB=$O(^MLAB(NI,ID,"mi",BIO,"hlx",NB)) Q:NB=""  D
+	..S R=$P(^(NB),"|",4)
+	..F I=1:1:$L(R,"@") M FLL=^LABCM(LAB,"RULE",$P(R,"@",I),"R")
+	
+	; write rules
+	S FL="" F  S FL=$O(FLL(FL)) Q:FL=""  S RR=RR_$$fillf(FL,allowpd)
+	
+	i %LOG="sys1" zw FLL w !,RR Q 
+	
+	S X=$$GETE^IPAC(NI,"datar",DTT)
+	S RR=RR_" birth_day="""_$P(X,".",1)_""" birth_month="""_$P(X,".",2)_""" birth_year="""_$P(X,".",3)_""" "
+	S RR=RR_"mis_order_id="""_ID_""">"
+	S RR=RR_CR_"<Services></Services>"
+	S RR=RR_CR_"<AttachmentFiles></AttachmentFiles>"
+	S RR=RR_CR_"<Samples>"
+	
+	S BIO="" F  S BIO=$O(^MLAB(NI,ID,"mi",BIO)) Q:BIO=""  D
+	.S BIO1=$S(cul:BIO,1:$$fndBIO^IMLABS(LAB,BIO)) Q:BIO1="" 
+	.S R1=$P($G(^LABT("M",BIO,"cont")),"|",1)
+	.S R1=$S(R1="":"",1:$$fndCONT^IMLABS(LAB,R1))
+	.S RC=R1,RM=BIO1
+	.I 'cul S RM=$P($G(^LABC(LAB,"M",BIO1)),"|",3),RC=$P(BIO1,".",1)
+	.S BAR=$$GETBAR^IMLAB(NI,ID,BIO,"-")
+	.F NB=1:1:$L(BAR,"@") D 
+	..S B=$P(BAR,"@",NB) Q:B="" 
+	..S RH=$G(^MLAB(NI,ID,"mi",BIO,"hlx",NB))
+	..S RC=$P(RH,"|",3)
+	..I $D(^MLAB(NI,ID,"mi",BIO,"hlx")) S RR=RR_CR_"<Sample sample_type="""_BIO1_""" container_type="""_RC_""" mis_sample_id="""_B_""">"
+	..I '$D(^MLAB(NI,ID,"mi",BIO,"hlx")) S RR=RR_CR_"<Sample sample_type="""_$P(BIO,".",3)_""" container_type="""_$P(BIO,".",2)_""" mis_sample_id="""_B_""">"
+	..S RR=RR_CR_"<Items>"
+	..S R=$P(RH,"|",4)
+	..I R'="" F I=1:1:$L(R,"@") S uu=$P(R,"@",I) S RR=RR_CR_"<Item rule_id="""_uu_"""/>" ; услуги-правила LAB !ADD
+	..S R=^MLAB(NI,ID,"ul")
+	..i '$D(^MLAB(NI,ID,"mi",BIO,"hlx")) F I=1:1:$L(R,"|") d  ; TODO v0
+	...S U=$P(R,"|",I),IB=$P($P(U,":",5),"@",2),UB=$P($P(U,":",5),"@",1)
+	...I UB'="",UB'=BIO Q  ; биоматериал
+	...I IB>1,IB'=NB Q  ; номер ШК
+	...S U=$P(U,":",1),C=$P(U,"*",2),U=$P(U,"*",1) Q:U="" 
+	...I cul I '$$UisBIO^IMLABS(U,BIO) q  ; если без соответствия справочников ЛИС
+	...;w !,"NoB "_U_" B="_BIO
+	...S a=$S(cul:U,1:$G(^LABTI("LAB",LAB,"CN",U))) Q:a="" 
+	...Q:$D(UUL(U))  S UUL(U)="" ; уже передано
+	...S:'C C=1
+	...;w !,"OK "_U_" B="_BIO
+	...F k=1:1:$L(a,"|") s uu=$P(a,"|",k) D
+	....S RU=$O(^LABC(10,"CN",uu,"b",BIO1,""))
+	....S uu=$S(RU="":uu,uu["-":RU,1:uu)
+	....F J=1:1:C S RR=RR_CR_"<Item rule_id="""_uu_"""/>" ; услуги-правила LAB !ADD
+	..S RR=RR_CR_"</Items>"_CR_"</Sample>"
+	
+    S RR=RR_CR_"</Samples>"
+	S RR=RR_CR_"</Order>"
+	S RR=RR_CR_"</OrderMessage>"
+	
+	N FIL
+	S FIL=$G(^cfg("lab","hlx",ALAB,"path"))
+	;u 0 w !,"Path="_FIL_", ALAB="_ALAB,!
+	Q:FIL="" 0
+	S FIL=$$OW^FIL(FIL_"/out/"_ID_"-"_$TR($H,",","-")_".xml")
+	I FIL'="" U FIL W $$WU8^TXTU(RR) C:FIL'="" FIL
+	Q 1
+fillf(NM,allowpd) ; Заполнить поле заголовка заявки
+	N X
+	I NM="X_PATIENT_ADDRESS" Q " X_PATIENT_ADDRESS="""_$S('allowpd:"нет",1:$$TKAV^TXTU($$ADR^YIPACN(NI)))_""""
+	I NM="X_PATIENT_ADDRESS_FACT" Q " X_PATIENT_ADDRESS_FACT="""_$S('allowpd:"",1:$$TKAV^TXTU($$GET^IPAC(NI,"paddress",DTT)))_""""
+	; TODO - prof
+	I NM="X_PATIENT_REG_ADDRESS" D  Q " X_PATIENT_REG_ADDRESS="""_$S('allowpd:"",1:$$TKAV^TXTU(X))_""""
+	.S X=$$GET^IPROF(NI,"vstreet",DTT) S:X="-" X=""
+	.S:X="" X=$$ADR^YIPACN(NI) ; TODO ^IPAC
+	.S:$G(^cfg("lab","hlx",1,"nopers")) X=""
+	I NM="X_PERSONAL_ID_NUMBER" D  Q X
+	.S R=$$GET^IPAC(NI,"pasp",DTT)
+	.I R["№" S R1=$P(R,"№",1),R2=$P(R,"№",2,99)
+	.I R'["№" S R1=$P(R," ",1),R2=$P(R," ",2,99)
+	.S:$G(^cfg("lab","hlx",1,"nopers")) (R1,R2)=""
+	.S X=" X_PERSONAL_ID_SERIES="""_$S(R2="":"Нет",1:R1)_""" X_PERSONAL_ID_NUMBER="""_$S(R2="":R,1:R2)_""""
+	I NM="X_PERSONAL_ID_TYPE" D  Q " X_PERSONAL_ID_TYPE="""_X_""""
+	.S X=$$GET^IPAC(NI,"typedoc",DTT)
+	.S X=$S(X=0:1,X=1:5,X=2:10,X=3:13,X=4:6,1:5)
+	I NM="X_PERSONAL_ID_DATE" D  Q X
+	.S R=$$GET^IPAC(NI,"pasp_dan",DTT),R1=$$DI^DTUTL($P(R," ",1))
+	.S:$G(^cfg("lab","hlx",1,"nopers")) (R,R1)="" ; запрет
+	.S X=" X_PERSONAL_ID_DATE="""_$S(R1>20000:$$DTMISO24^DTUTL(R1_",0"),1:"")_""""
+	.S X=X_" X_PERSONAL_ID_GIVER="""_$$TKAV^TXTU($P(R," ",2,99))_""" "
+	I NM="X_PATIENT_JOBTITLE" Q " X_PATIENT_JOBTITLE="""_$$TKAV^TXTU($$GETE^IPAC(NI,"jobtitle",DTT))_""""
+	I NM="X_PATIENT_WORKPLACE_NAME" D  Q " X_PATIENT_WORKPLACE_NAME="""_$$TKAV^TXTU(X)_""""
+	.S X=$$GETE^IPAC(NI,"work",DTT)
+	.S:X=""!(X=0) X="Не работает"
+	I NM="X_PATIENT_WORKPLACE_ADDRESS" D  Q " X_PATIENT_WORKPLACE_ADDRESS="""_$$TKAV^TXTU(X)_""""
+	.S X=$$GET^IPROF(NI,"worka",DTT)
+	.S:X=""!(X="-") X="Отсутствует"
+	I NM="X_PATIENT_WORKPLACE_PHONE" Q " X_PATIENT_WORKPLACE_PHONE="""_$S('allowpd:"",1:$$phn($$GET^IPAC(NI,"tel2",DTT)))_""""
+	
+	I NM="X_CELL_PHONE_NUMBER" Q " X_CELL_PHONE_NUMBER="""_$S('allowpd:"",1:$$phn($$GET^IPAC(NI,"pager",DTT)))_""""
+	
+	I NM="X_EMAIL" Q " X_EMAIL="""_$S($G(^cfg("lab","pemail")):$$DECMAIL^TXTU($$GET^IPAC(NI,"pemail",DTT)),1:"")_""""
+	I NM="X_CLINICAL_DIAGNOSIS" D  Q " X_CLINICAL_DIAGNOSIS="""_X_""""
+	.S X=$$GETDI^IMLAB(NI,ID) S:X="" X="Z00.0"
+	
+	I NM="X_MENSTR_CYC" D  Q " X_MENSTR_CYC="""_X_""""
+	.S X="UND"
+	I NM="X_PREGN_WEEK" D  Q " X_PREGN_WEEK="""_X_""""
+	.S X=$G(^MLAB(NI,ID,"fl","ndbr"))
+	.S X=$S(X="":"0",1:+X)
+	I NM="X_MENOPAUSE_START_AGE" D  Q " X_MENOPAUSE_START_AGE="""_X_""""
+	.S X="0"
+	I NM="X_GET_ANTIBACTERIA" D  Q " X_GET_ANTIBACTERIA="""_X_""""
+	.S X="U"
+	I NM="X_HEIGHT" D  Q " X_HEIGHT="""_X_""""
+	.S X="0"
+	I NM="X_WEIGTH" D  Q " X_WEIGTH="""_X_""""
+	.S X="0"
+	I NM="X_AGE" D  Q " X_AGE="""_X_""""
+	.S X=$$AGE^IPAC(NI)
+	I NM="X_GET_ANTIKOAGULANTS" D  Q " X_GET_ANTIKOAGULANTS="""_X_""""
+	.S X="U"
+	I NM="X_PREV_DRUGS" D  Q " X_PREV_DRUGS="""_X_""""
+	.S X="нет"
+	I NM="X_BIOMATERIAL_LOCATION" D  Q " X_BIOMATERIAL_LOCATION="""_X_""""
+	.S X="U"
+	I NM="X_BIOPSY_TYPE" D  Q " X_BIOPSY_TYPE="""_X_""""
+	.S X="PRIMARY"
+	I NM="X_SURGERY_KIND" D  Q " X_SURGERY_KIND="""_X_""""
+	.S X="-"
+	I NM="X_SURGERY_DATE" D  Q " X_SURGERY_DATE="""_X_""""
+	.S X=$$DTMISO24^DTUTL((+$H)_",0")
+	I NM="X_MADE_THREATMENT" D  Q " X_MADE_THREATMENT="""_X_""""
+	.S X="манипуляция"
+	I NM="X_DIURESIS" D  Q " X_DIURESIS="""_X_""""
+	.S X="0"
+	I NM="X_GZT" D  Q " X_GZT="""_X_""""
+	.S X="U"
+	I NM="X_ECO" D  Q " X_ECO="""_X_""""
+	.S X="U"
+	I NM="X_FDAY_LMENSTR" D  Q " X_FDAY_LMENSTR="""_X_""""
+	.S X=$G(^MLAB(NI,ID,"fl","dcl"))
+	.S X=$S(X="":"",1:$$DTMISO24^DTUTL((+$H-X)_",0"))
+	I NM="X_HIV_CONT" D  Q " X_HIV_CONT="""_X_""""
+	.S X="000"
+	I NM="X_ABSTINENCE_DAYS_NUMBER" D  Q " X_ABSTINENCE_DAYS_NUMBER="""_X_""""
+	.S X="0"
+	
+	I NM="X_VACCINATION" D  Q " X_VACCINATION="""_X_""""
+	.S X="НЕ_ВАКЦИН"
+	I NM="X_COVID_VACCINE" D  Q " X_COVID_VACCINE="""_X_""""
+	.S X="НЕ_ПРИМЕН"
+	I NM="X_FIRST_VACCINE_DATE" D  Q " X_FIRST_VACCINE_DATE="""_X_""""
+	.S X=""
+	I NM="X_SECOND_VACCINE_DATE" D  Q " X_SECOND_VACCINE_DATE="""_X_""""
+	.S X=""
+	I NM="X_UPLOAD_PERSONAL_DATA_TO_GOSUSLUGI" D  Q " X_UPLOAD_PERSONAL_DATA_TO_GOSUSLUGI="""_X_""""
+	.S X="true"
+	
+	Q ""
+phn(X) ; Преобразование телефона
+	S X=$$MPHN^TXTU(X)
+	S:X=""!(X="-")!($L(X)<4) X="Отсутствует"
+	S:$E(X,1,2)="+7" X=$E(X,2,99)
+	Q $$TKAV^TXTU(X)
+GETALL(LAB,LID)
+	N FN,FILL,FL,i
+	S FN=$G(^cfg("lab","hlx",1,"path")) Q:FN="" 
+	w !,FN_"\in\*.xml"
+	D DIR^FIL(FN_"\in\*.xml","FILL")
+	Q:'$D(FILL) 
+	; load
+	S FL="" F  S FL=$O(FILL(FL)) Q:FL=""  D:FILL(FL)=0 GET(LAB,FN_"\in\"_FL)
+	Q
+GET(LAB,FN) ; Загрузить один файл с результатом
+	N A,F,R,K,xNI,xID,ST,STS,DTM,MDTM,LID,RR,msgid,lpu,mpref,IsOK,mnnew,tname
+	N bar,prm,prmx,COM,VAL,VH,VL,unit,COMR,pnm,pnmi,CVAL,NVAL,rPRM,T,TP,X,RX,%XM
+	N FF,FI,FO,lisid,%LOG
+	
+	s lpu=$$^I("ilpu"),%LOG="sys"
+	S mpref=$S($G(^LABC(LAB,"CN"))="i":"",1:"hlx.") ; встроенная лаб.
+	S (xNI,xID,bar,IsOK)=""
+	
+	S mknew=1
+	
+	S F=$$OR^FIL(FN),K=""
+	D OEV^XMLR("otgTS^IKDLHLX","otgTD^IKDLHLX","otgTE^IKDLHLX")
+	F  U F R R#1 Q:$$ST^FIL()=0  S K=K_R ;I $L(K)>1000 D REV^XMLR($$U8W^TXTU(K)) S K=""
+	C F
+	;u 0 w !,$$U8Wt^TXTU(K),!
+	;Q
+	;s ^KKXX=$$U8W^TXTU(K)
+	;D:K'="" REV^XMLR($$U8W^TXTU(K))
+	D:K'="" REV^XMLR(K)
+	
+	I IsOK=-1 D DEL^FIL(FN) Q 
+	
+ 	I xID'="",bar'="",IsOK D
+ 	.u 0 w !,"xID="_xID_",bar="_bar_",IsOK="_IsOK
+ 	.s ^KKKHLX(xID)=$H
+ 	.s ^KKKHLX(xID,1)=K
+ 	.S:'$D(^MLAB(xNI,xID,"s9")) ^("s9")="0|"_$H
+	.D SBREZ^NMLABR(xID,1)
+	.;D DEL^FIL(FN)
+	.D MOVE^FIL(FN,FN_".r")
+	.;S X=$$SBS^IMLAB(xID)
+	Q
+otgTS
+	S A=%XM(2)
+	I A="response" S MDTM=$$IISO^DTUTL($G(%XM(2,"p","created_on"))),msgid=$G(%XM(2,"p","response_id"))
+	I A="Order" D
+	.S xNI=$G(%XM(2,"p","mis_patient_id"))
+	.S xID=$G(%XM(2,"p","mis_order_id"))
+	.S ST=$G(%XM(2,"p","status"))
+	.I xID="",mknew D
+	..S FF=$G(%XM(2,"p","last_name"))
+	..S FI=$G(%XM(2,"p","first_name"))
+	..S FO=$G(%XM(2,"p","middle_name"))
+	..S RX=$$IISO^DTUTL($G(%XM(2,"p","birthdate")))
+	..Q:FF=""  Q:FI=""  Q:FO="" 
+	..S xNI=$$GETNIB^IPACFND(FF,FI,FO,+RX,"",1)
+	..S:xNI=-1 xNI=""
+	..;W:FF="ЛЕОНОВА" !,FF_" "_FI_" "_FO_" "_RX_"="_xNI_","_xID
+	..Q:xNI=-1  Q:xNI="" 
+	..S DTM=$$IISO^DTUTL($G(%XM(2,"p","created_on")))
+	..S lisid=$G(%XM(2,"p","lis_order_id"))
+	.Q:xID="" 
+	.I xNI="" S xNI=$G(^MLABI("c",xID))
+	
+	I A="Sample" D
+	.S bar=$G(%XM(2,"p","mis_sample_id"))
+	.S LID=$G(%XM(2,"p","lis_sample_id"))
+	.S STS=$G(%XM(2,"p","status")) ; A/X
+	.I STS="X" S IsOK=-1 Q 
+	.I xID="",bar'="",STS="A" s R=$$BARID^IMLAB(bar) I R'="" S xID=$P(R,"|",1),xNI=$P(R,"|",2)
+	.I xID="",xNI'="",STS="A",mknew S xID=$$MK^IMLAB(xNI,DTM,"",LAB,lisid) ; create new clear record
+	.I xID="" s IsOK=0 Q 
+	.S:xNI="" xNI=$G(^MLABI("c",xID)) Q:xNI="" 
+	.S IsOK=$S(STS="X":-1,xID="":0,xNI="":0,STS="A":1,1:0) ; TODO - отмена
+	.;u 0 w !,"xID="_xID_", IsOK="_IsOK_", bar="_bar
+	.I '$D(^MLAB(xNI,xID)) S (xNI,xID)="" Q 
+	.S:'$D(^MLAB(xNI,xID,"s5")) ^("s5")="0|"_$H
+	.S DTM=$$IISO^DTUTL($G(%XM(2,"p","authorized_on")))
+	
+	Q:IsOK=-1  
+	
+	I A="Test" D  ; v1 result
+	.S prm=$G(%XM(2,"p","Item_code"))
+	.S COM=$$TGA^TXTU($G(%XM(2,"p","Comment")))
+	.S tname=$$TGA^TXTU($G(%XM(2,"p","Reported_name")))
+	I A="TestMicroorganism" D  ; v2 result 
+	.S prm=$G(%XM(2,"p","Item_code"))
+	.S COM=$$TGA^TXTU($G(%XM(2,"p","Comment")))
+	.S tname=$$TGA^TXTU($G(%XM(2,"p","Reported_name")))
+	
+	I A="Result" D
+	.S VAL=$$TGA^TXTU($G(%XM(2,"p","Value")))
+	.S VH=$G(%XM(2,"p","ref_hi"))
+	.S VL=$G(%XM(2,"p","ref_lo"))
+	.S CVAL=$$TGA^TXTU($G(%XM(2,"p","CountValue"))) ; counting of value (additional with val)
+	.S NVAL=$$TGA^TXTU($G(%XM(2,"p","NormValue"))) ; text refs
+	.S COMR=$$TGA^TXTU($G(%XM(2,"p","Comment")))
+	.S pnm=$$TGA^TXTU($G(%XM(2,"p","Reported_name")))
+	.S pnmi=$$TGA^TXTU($G(%XM(2,"p","Name")))
+	.S unit=$$TGA^TXTU($G(%XM(2,"p","UnitName")))
+	.D setprm
+	
+	Q
+otgTD
+	Q
+otgTE
+	Q
+setprm
+	Q:xID=""  Q:xNI=""  Q:IsOK'=1 
+	s ^KKLL=$G(bar)_"|"_$G(prm)_"|"_$G(pnmi)
+	s pnmi=$S(pnmi="":0,1:$$RSH^IHASH(pnmi)#65536)
+	s prmx=mpref_$TR(prm,".- ","__ ")_"."_$TR($$UL^TXTU($E(pnm,1,16)),":;- ","____")_"."_pnmi ; свертка с кодом услуги и укароченным наименованием
+	s pnm=pnm_" ("_tname_")" ; уточнение + имя исследования, т.к. имя теста не всегда отражает параметр
+	s rPRM=$$CHKAP^IMLABS(prmx,pnm,unit)
+	D CHKNM^IMLABS(prmx,pnm)
+	
+	S RR=$$NNUM^TXTU(VL)_"|"_$$NNUM^TXTU(VH)_"|"_NVAL
+	;u 0 w !,xNI_","_xID_",""d"","_prm_"/"_rPRM_"="_pnm_"="_VAL_" "_unit_"/"_RR_"/"
+	Q:rPRM="" 
+	
+	;I rPRM="hlx.09-185.932" zw %XM
+	
+	S T=$G(^LABT("T",rPRM,"t"))
+	D:T'=""
+	.S TP=$P(T,"|",1),X=$P(T,"|",2)
+	.S:TP="T" VAL=$$TRIM^TXTU(VAL)
+	.I TP="N"!(TP="") S VAL=+$TR(VAL,",",".") S:X'="" VAL=$J(VAL,"",X) ; формат
+	
+	S:VAL="" VAL=CVAL ; TODO - проверить правильность
+	
+	S RX=$TR(VAL_"|"_$P(RR,"|",1)_"|"_$P(RR,"|",2)_$S($P(RR,"|",3)="":"",1:"|||"_$P(RR,"|",3)),$C(0),"")
+	
+	S:COMR="" COMR=COM
+	S:COMR'="" $P(RX,"|",6)=$S($P(RX,"|",6)="":"",1:$P(RX,"|",6)_"; ")_COMR
+	;w !,"RX="_RX
+	
+	; Compare witch prev date of changing
+	
+	I $D(^MLAB(xNI,xID,"d",rPRM)),^(rPRM)'=RX S ^MLABE(xNI,xID,"d",rPRM,$H)=^MLAB(xNI,xID,"d",rPRM)
+	S ^MLAB(xNI,xID,"d",rPRM)=RX
+	S RR=$G(^MLAB(xNI,xID,"d",rPRM,"s"))
+	S RR=1 ; subs. TODO
+	S $P(RR,"|",2)=DTM,$P(RR,"|",4)=lpu,$P(RR,"|",8)=LAB
+	S ^MLAB(xNI,xID,"d",rPRM,"s")=RR
+	S:'$D(^MLAB(xNI,xID,"s8")) ^("s8")="1|"_$H
+	D GL^IEXCH("^MLAB",xNI,xID,"d",rPRM)
+	Q
+UPDA ; Update all refs 
+	K ^LABC(10,"CN"),^LABTI("LAB",10,"CN")
+	D LMAP("")
+	D SPR("")
+	D UPDA^IEXCH("GL","-^LABC(10,""CN"")",+$$^I("ilpu"),40)
+	D UPDA^IEXCH("GL","-^LABCM(10)",+$$^I("ilpu"),40)
+	D UPDA^IEXCH("GL","-^LABTI(""LAB"",10,""CN"")",+$$^I("ilpu"),40)	
+	D UPDA^IEXCH("GL","^LABC(10,""CN""",+$$^I("ilpu"),40)	
+	D UPDA^IEXCH("GL","^LABCM(10",+$$^I("ilpu"),40)
+	D UPDA^IEXCH("GL","^LABTI(""LAB"",10,""CN"")",+$$^I("ilpu"),40)
+	D UPDA^IEXCH("ZEXEC","d MKLABCI^NMLABU",+$$^I("ilpu"),40)
+	Q
+LMAP(DIR) ; Load mapping ref
+	N A,F,R,COD,NM,CR,cCON,cM,I,J,COD1
+	; ^LABC(X,"CN",nomenclature,"b",sampleType)=rule
+	K ^BUF("M"),^BUF("CONT")
+	S CR=$C(13,10)
+	S DIR="E:\node\helixftp\dictionaries\"
+	
+	K ^BUF("HMAP"),^BUF("HMAPL")
+	
+	S FN=DIR_"NomenclatureMapping.xml"
+	S F=$$OR^FIL(FN),K=""
+	D OEV^XMLR("mapTS^IKDLHLX","mapTD^IKDLHLX","mapTE^IKDLHLX")
+	F  U F R R#1 Q:$$ST^FIL()=0  S K=K_R
+	I $L(K) D REV^XMLR($$U8W^TXTU(K))
+	C F
+	Q
+SPR(DIR)
+	N A,F,R,COD,NM,CR,cCON,cM,I,J,COD1,V,X
+	; ^LABC(X,"CN",nomenclature,"b",sampleType)=rule
+	K ^BUF("M"),^BUF("CONT")
+	S CR=$C(13,10)
+	S DIR="E:\node\helixftp\dictionaries\"
+	
+	S FN=DIR_"ContainerTypes.xml"
+	S F=$$OR^FIL(FN),K=""
+	D OEV^XMLR("conTS^IKDLHLX","conTD^IKDLHLX","conTE^IKDLHLX")
+	F  U F R R#1 Q:$$ST^FIL()=0  S K=K_R
+	I $L(K) D REV^XMLR($$U8W^TXTU(K))
+	C F
+	
+	S FN=DIR_"SampleTypes.xml"
+	S F=$$OR^FIL(FN),K=""
+	D OEV^XMLR("samTS^IKDLHLX","samTD^IKDLHLX","samTE^IKDLHLX")
+	F  U F R R#1 Q:$$ST^FIL()=0  S K=K_R
+	I $L(K) D REV^XMLR($$U8W^TXTU(K))
+	C F
+	
+	S FN=DIR_"Rules.xml"
+	S F=$$OR^FIL(FN),K=""
+	D OEV^XMLR("rulTS^IKDLHLX","rulTD^IKDLHLX","rulTE^IKDLHLX")
+	F  U F R R#1 Q:$$ST^FIL()=0  S K=K_R I $L(K)>20,K[CR D REV^XMLR($$U8W^TXTU(K)) S K=""
+	I $L(K) D REV^XMLR($$U8W^TXTU(K))
+	C F
+	
+	D MKLABCI^NMLABU
+	Q
+mapTS
+	Q
+mapTD
+	S A=%XM(2)
+	D:A="MappingItem"
+	.S COD=$$TGA^TXTU($G(%XM(2,"p","foreignCode")))
+	
+	D:A="Hxid"
+	.S COD1=$$TGA^TXTU($G(%XM(2,"p","code")))
+	.I COD'="",COD1'="" S ^BUF("HMAP",COD,COD1)="",^BUF("HMAPL",COD1,COD)=""
+	
+	Q
+mapTE
+	Q
+conTS
+	Q
+conTD
+	S A=%XM(2) Q:A'="ROW" 
+	S COD=$$TGA^TXTU($G(%XM(2,"p","NAME")))
+	S NM=$$TGA^TXTU($G(%XM(2,"p","DESCRIPTION")))
+	Q:COD="" 
+	S ^BUF("CONT",COD)=NM_"|"_$$TGA^TXTU($G(%XM(2,"p","VOLUME")))
+	Q
+conTE
+	Q
+samTS
+	Q
+samTD
+	S A=%XM(2) Q:A'="ROW" 
+	S COD=$$TGA^TXTU($G(%XM(2,"p","NAME")))
+	S NM=$$TGA^TXTU($G(%XM(2,"p","DESCRIPTION")))
+	Q:COD="" 
+	S ^BUF("M",COD)=NM
+	Q
+samTE
+	Q
+rulTS
+	Q
+rulTD
+	S A=%XM(2) Q:A'="ROW" 
+	S RUL=$$TGA^TXTU($G(%XM(2,"p","COST_ITEM_RULE_ID"))) Q:RUL="" 
+	S USL=$$TGA^TXTU($G(%XM(2,"p","ITEM_CODE")))
+	
+	I USL'="",$D(^BUF("HMAPL",USL)) D rulV3 Q 
+	
+	Q
+	
+	I $$TGA^TXTU($G(%XM(2,"p","SAMPLE_GROUP")))'="СЕМЕЙНАЯ",'$D(^LABCM(10,"RULE_ALLOW",RUL)) Q 
+	u 0 w "."
+	I $D(^LABCM(10,"RULE_ALLOW",RUL)) S USL=^(RUL)
+	I $P(USL,"-",1)'=43,'$D(^LABCM(10,"RULE_ALLOW",RUL)) Q 
+	u 0 w "_"_USL
+	S M=$$TGA^TXTU($G(%XM(2,"p","SAMPLE_TYPE")))
+	S CONT=$$TGA^TXTU($G(%XM(2,"p","CONTAINER_TYPE")))
+	S MM=CONT_"."_M
+	
+	K:$D(^LABC(10,"CN",RUL)) ^LABC(10,"CN",RUL)
+	I $D(^LABCM(10,"RULE_ALLOW",RUL)) s ^LABC(10,"CN",RUL)=USL_"|"_RUL
+	E  s ^LABC(10,"CN",RUL)="002."_USL_"|"_RUL
+	s ^LABC(10,"CN",RUL,"b",MM)=1 ; CONT !NOT! M in this case
+	
+	
+	I $D(^LABC(10,"CONT",CONT)) S I=$P(^LABC(10,"CONT",CONT),"|",1),cCON=$P(I,".",1)
+	I '$D(^LABC(10,"CONT",CONT)) S cCON=$P($O(^LABT("CONT",""),-1),".",1)+1,I=cCON_"."_CONT
+	S T=$P(^BUF("CONT",CONT),"|",1),V=$P(^BUF("CONT",CONT),"|",2)
+	S ^LABT("CONT",I)=T,^LABT("CONT",I,"v")=V
+	S ^LABC(10,"CONT",CONT)=I_"|"_$P(^BUF("CONT",CONT),"|",1)_"|"_V
+	
+	;I '$D(^LABC(10,"M",M)) S cM=$P($O(^LABT("M",""),-1),".",1)+1,^LABC(10,"M",M)=cM_"."_M_"|"_^BUF("M",M)
+	
+	; complex M+CONT as M
+	D:'$D(^LABC(10,"M",MM))
+	.S cM=$P($O(^LABT("M",""),-1),".",1)+1
+	.S mm=^BUF("M",M)_", "_^BUF("CONT",CONT)
+	.S ^LABC(10,"M",MM)=cM_"."_MM_"|"_mm_"|"_M
+	.s ^LABT("M",cM_"."_MM)=mm
+	
+	K ^LABCM(10,"RULE",RUL)
+	S ^LABCM(10,"RULE",RUL)=M_"|"_CONT
+	S A=$$TGA^TXTU($G(%XM(2,"p","REQUIRED_FIELDS")))
+	I A'="" F I=1:1:$L(A,",") S J=$P(A,",",I) I J'="" S ^LABCM(10,"RULE",RUL,"R",J)=""
+	
+	Q
+rulTE
+	Q
+rulV3
+	N UU
+	U 0 W "#"
+	S M=$$TGA^TXTU($G(%XM(2,"p","SAMPLE_TYPE")))
+	S CONT=$$TGA^TXTU($G(%XM(2,"p","CONTAINER_TYPE")))
+	
+	Q:$$TGA^TXTU($G(%XM(2,"p","DESCRIPTION")))["(педиатрическая)"  ; TODO
+	
+	;S MM=CONT_"."_M
+	S MM=M
+	
+	I $D(^LABC(10,"CONT",CONT)) S I=$P(^LABC(10,"CONT",CONT),"|",1),cCON=$P(I,".",1)
+	I '$D(^LABC(10,"CONT",CONT)) S cCON=$P($O(^LABT("CONT",""),-1),".",1)+1,I=cCON_"."_CONT
+	S T=$P(^BUF("CONT",CONT),"|",1),V=$P(^BUF("CONT",CONT),"|",2)
+	S ^LABT("CONT",I)=T,^LABT("CONT",I,"v")=V
+	S ^LABC(10,"CONT",CONT)=I_"|"_$P(^BUF("CONT",CONT),"|",1)_"|"_V
+	
+	; complex M+CONT as M
+	D:$D(^LABC(10,"M",MM))
+	.S mm=^BUF("M",M) ;_", "_^BUF("CONT",CONT)
+	.Q:$P(^LABC(10,"M",MM),"|",2)=mm
+	.S $P(^LABC(10,"M",MM),"|",2)=mm,^LABT("M",$P(^LABC(10,"M",MM),"|",1))=mm
+	
+	D:'$D(^LABC(10,"M",MM))
+	.S cM=$P($O(^LABT("M",""),-1),".",1)+1
+	.S mm=^BUF("M",M) ;_", "_^BUF("CONT",CONT)
+	.S ^LABC(10,"M",MM)=cM_"."_MM_"|"_mm_"|"_M
+	.s ^LABT("M",cM_"."_MM)=mm
+	
+	K ^LABCM(10,"RULE",RUL)
+	S ^LABCM(10,"RULE",RUL)=M_"|"_CONT_"|"_$G(%XM(2,"p","PREF_VOLUME"))_"|"_$G(%XM(2,"p","DEAD_VOLUME"))_"|"_$G(%XM(2,"p","SAMPLE_PROTOCOL"))_"|"_$G(%XM(2,"p","DESTRUCTIVE"))_"|"_$G(%XM(2,"p","REQUIRED"))_"|"_$G(%XM(2,"p","SAMPLE_GROUP"))_"|"_$G(%XM(2,"p","SAMPLE_PREP"))
+	S A=$$TGA^TXTU($G(%XM(2,"p","REQUIRED_FIELDS")))
+	I A'="" F I=1:1:$L(A,",") S J=$P(A,",",I) I J'="" S ^LABCM(10,"RULE",RUL,"R",J)=""
+	
+	S (A,UU)="" F  S UU=$O(^BUF("HMAPL",USL,UU)) Q:UU=""  S A=$$STFLG^TXTU(A,UU)
+	S UU=$TR(A,"|","@")
+	
+	s ^LABC(10,"CN",USL)=UU_"|"_USL
+	s ^LABC(10,"CN",USL,"b",MM)=1 ; CONT !NOT! M in this case
+	s ^LABC(10,"CN",USL,"b",MM,RUL)=CONT
+	
+	Q
+MAP(USLS) ; Маппинг услуг
+	Q
+ADDCITO ; Сконвертировать стрые по CITO с кодами-правилами
+	S C="" F  S C=$O(^LABC(10,"CN",C)) Q:C=""  D
+	.Q:C["-"   Q:C["."
+	.S B="" F  S B=$O(^LABC(10,"CN",C,"b",B)) Q:B=""  D
+	..S B1=B
+	..I B["." S B1=$P(B,".",2) K ^LABC(10,"CN",C,"b",B) S ^LABC(10,"CN",C,"b",B1)=""
+	..S ^LABC(10,"CN",C,"b",B1,C)=""
+	Q
+UTOU(USL) ; Услуги во внутренние услуги
+	N U,I,J,LABEU,KX,KU
+	S LABEU=""
+	F I=1:1:$L(USL,"|") S U=$P($P(USL,"|",I),":",1) D
+	.S KX=$G(^LABTI("LAB",10,"CN",U)) Q:KX="" 
+ 	.F J=1:1:$L(KX,"|") S KU=$P(KX,"|",J) S LABEU=$$STFLG^TXTU(LABEU,KU)
+	Q LABEU
+PREANL(USLS,VBIO,DBG) ; Правила преаналитики
+	; VBIO(биоматериал,номер пробирки)=тип пробирки|правило@..
+	N I,KX,USL,M,CON,VCON,DV,RUL,RR,RK,LCON,LCONS,CJ,XK,CI,SG,F
+	
+	S USLS=$TR(USLS,"@;","||")
+	
+	F I=1:1:$L(USLS,"|") S USL=$P(USLS,"|",I ) S KX="" F  S KX=$O(^LABC(10,"CN",USL,"b",KX)) Q:KX=""  D
+	.S RUL="" F  S RUL=$O(^LABC(10,"CN",USL,"b",KX,RUL)) Q:RUL=""  D
+	..Q:'$D(^LABCM(10,"RULE",RUL))  Q:$D(^LABCM(10,"DRULE",RUL)) 
+	..S RR=^LABCM(10,"RULE",RUL)
+	..S M=$P(RR,"|",1),CON=$P(RR,"|",2),SG=$P(RR,"|",8,9)_"|"_$P(RR,"|",5) ; bio, container sample group 
+	..S DV=$P(RR,"|",4) ; dead volume
+	..S XK=M_"|"_CON_"|"_SG
+	..I $P(RR,"|",6)="T" S CJ=+$O(LCONS(XK,""),-1)+1,LCONS(XK,CJ)=RUL_$S($P(RR,"|",7)="T":"|1",1:"") Q  ; separated conttainer
+	..S CJ=+$O(LCON(XK,""),-1) ; last container+bio
+	..S VCON=$P(^LABC(10,"CONT",CON),"|",3) ; max volume
+	..S RK=$G(LCON(XK,CJ))
+	..I $P(RK,"|",2)<DV S $P(RK,"|",2)=DV ; max dead volume
+	..S DV=$P(RK,"|",2)
+	..I $G(DBG) w !,"V("_CON_")="_VCON_"="_($P(RK,"|",1)+$P(RR,"|",3))_"+"_DV
+	..I VCON,($P(RK,"|",1)+$P(RR,"|",3)+DV)>VCON S CJ=CJ+1,RK=$G(LCON(XK,CJ)) W:$G(DBG) ">" // max volume
+	..S $P(RK,"|",1)=$P(RK,"|",1)+$P(RR,"|",3)
+	..S LCON(XK,CJ)=RK,LCON(XK,CJ,RUL)=$S($P(RR,"|",7)="T":1,1:"")
+	
+	I $G(DBG) w !,"LCON",! zw LCON
+	I $G(DBG) w !,"LCONS",! zw LCONS
+	
+	K @VBIO
+	
+	S KX="" F  S KX=$O(LCON(KX)) Q:KX=""  D
+	.S M=$P(KX,"|",1) ; bio
+	.S CJ="" F  S CJ=$O(LCON(KX,CJ)) Q:CJ=""  D
+	..S F=0
+	..S (RR,RK)="" F  S RK=$O(LCON(KX,CJ,RK)) Q:RK=""  S RR=$S(RR="":"",1:RR_"@")_RK S:LCON(KX,CJ,RK) F=1 ; rules + REQ TODO (only one)
+	..S CI=$O(@VBIO@(M,""),-1)+1 ; last
+	..S @VBIO@(M,CI)=$P(KX,"|",2)_"|"_RR_$S(F:"|1",1:"")
+	
+	S KX="" F  S KX=$O(LCONS(KX)) Q:KX=""  D
+	.S M=$P(KX,"|",1) ; bio
+	.S CJ="" F  S CJ=$O(LCONS(KX,CJ)) Q:CJ=""  D
+	..S RR=LCONS(KX,CJ),F=$P(RR,"|",2),RR=$P(RR,"|",1) ; only one rule
+	..S CI=$O(@VBIO@(M,""),-1)+1 ; last
+	..S @VBIO@(M,CI)=$P(KX,"|",2)_"|"_RR_$S(F:"|1",1:"")
+	
+	I $G(DBG) w !,"BIO:",! zw @VBIO w "----",!
+	Q
+MK(NIB,LID,USLS,BIO,PREF,LEN) ; Досоздать в заявке дополнительные поля
+	; Fill rules by BIO + gen barcodes
+	N VB,MM,M,CON,BAR,BARS,CONTS,CI,RR,JJ
+	
+	D PREANL(USLS,"VB")
+	
+	S MM="" F  S MM=$O(VB(MM)) Q:MM=""  D
+	.S (CONTS,BARS)="",JJ=0
+	.S M=$P($G(^LABC(10,"M",MM)),"|",1)
+	.S CI="" F  S CI=$O(VB(MM,CI)) Q:CI=""  D
+	..I $P(VB(MM,CI),"|",3)'=1 Q:BIO'=M  ; if not REQ
+	..S BAR=$$bar(PREF,LEN)
+	..S BARS=$S(BARS="":"",1:BARS_"@")_BAR
+	..S CON=$P(VB(MM,CI),"|",1)
+	..S CON=$P($G(^LABC(10,"CONT",CON)),"|",1)
+	..S CONTS=$S(CONTS="":"",1:CONTS_"@")_CON
+	..S JJ=JJ+1
+	..Q:$D(^MLAB(NIB,LID,"mi",M,"hlx",JJ)) 
+	..S ^MLAB(NIB,LID,"mi",M,"hlx",JJ)=BAR_"|"_CI_"|"_VB(MM,CI)
+	..S ^MLABI("bar",BAR,LID)=NIB
+	..D GL^IEXCH("^MLABI","bar",BAR,LID)
+	.q:CONTS="" 
+	.S RR=$G(^MLAB(NIB,LID,"mi",M))
+	.S $P(RR,"|",1)=JJ
+	.S $P(RR,"|",2)=BARS
+	.S $P(RR,"|",4)=CONTS
+	.S ^MLAB(NIB,LID,"mi",M)=RR
+	Q
+bar(PREF,LEN)
+	N BAR
+	S BAR=$$GET^IINKR("labbarcode")
+	S:LEN BAR=PREF_$TR($J(BAR,LEN-$L(PREF),0)," ",0)
+	S:'LEN BAR=PREF_BAR
+	Q BAR

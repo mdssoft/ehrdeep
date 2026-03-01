@@ -1,0 +1,468 @@
+IEPR ; EPR routines [ 09/11/2024  2:10 PM ]
+ ; Electronic Patient Records
+ISPRN(NIB,ID) ; Документ печатали
+ N H,Q
+ S Q=0,H=""
+ F  S H=$O(^EPRLOG(N,ID,"e",H)) Q:H=""  I $P(^(H),"|",1)=P S Q=1 Q 
+ Q Q
+ISSBS(NIB,ID) ; Документ подписан ?
+ Q:NIB=""!(ID="") 0
+ ; todo - multi subscribe
+ Q +$P($G(^EPR(NIB,ID,"s")),"|",1)
+ISDOUSB(NIB,ID) ; Документ был расподписан
+ N I
+ S I="" F  S I=$O(^EPRLOG(NI,ID,"e",I)) Q:I=""  I $P(^(I),"|",1)="U" Q 
+ Q $S(I="":0,1:1)
+ISDATA(NIB,ID,FL) ; Есть ли поле структурированного документа (или txt)
+ Q:NIB=""!(ID="")!(FL="") 0
+ I $L(FL) Q:$D(^EPRD(NIB,ID,FL)) 1 Q 0 ; rpt
+ I FL="" Q:$D(^EPRD(NIB,ID)) 1 Q 0 ; txt, rtf
+ Q 0
+ANYOW(VR) ; У сотрудника есть документы
+ N N,DT,ID,F
+ S F=0
+ S N="" F  S N=$O(^EPRI("nd",N)) Q:N=""  D  Q:F
+ .S DT="" F  S DT=$O(^EPRI("nd",N,DT),-1) Q:DT=""  D  Q:F
+ ..S ID="" F  S ID=$O(^EPRI("nd",N,DT,ID)) Q:ID=""  I $P(^(ID),"|",2)=VR S F=1 Q 
+ Q F
+CHKDT(NIB,VR,DT,SBS) ; Проверить есть док. у врача на дату
+ ; SBS - только подписанные
+ N ID,R,X
+ S (ID,X)="",SBS=+$G(SBS)
+ F  S ID=$O(^EPRI("nd",NIB,DT,ID)) Q:ID=""  I $P(^(ID),"|",2)=VR,$D(^EPR(NIB,ID)),$P($G(^(ID,"dt")),",",1)=DT S X=ID Q:'SBS  S X="" I 12[+$P($G(^("s")),"|",1) S X=ID Q 
+ Q X
+CHKVDTS(VR,DS,DE,LPU,SBS)    ; Проверить есть док. у врача за период
+ ; SBS - только подписанные
+ N DT,NI,ID,F
+ S F=0,DT=DS-1,LPU=$G(LPU),SBS=+$G(SBS)
+ F  S DT=$O(^EPRI("dt",DT)) Q:DT=""!(DT>DE)  D  Q:F
+ .S NI="" F  S NI=$O(^EPRI("dt",DT,NI)) Q:NI=""  D  Q:F 
+ ..S ID=""
+ ..F  S ID=$O(^EPRI("nd",NI,DT,ID)) Q:ID=""  I $P(^(ID),"|",2)=VR,$D(^EPR(NI,ID)),$P($G(^(ID,"dt")),",",1)=DT,$S(LPU="":1,1:$P($G(^("o")),"|",3)=LPU) S F=1 Q:'SBS  S F=0 I 12[+$P($G(^("s")),"|",1) S F=1 Q
+ Q F
+CHKTP(NIB,TP,SBS) ; Проверить/получить док. определенного типа
+ ; SBS - только подписанные
+ Q:TP="" ""
+ N ID,X
+ S (ID,X)="",SBS=+$G(SBS)
+ F  S ID=$O(^EPRI("t",NIB,TP,ID)) Q:ID=""  S X=ID Q:'SBS  S X="" I 12[+$P($G(^EPR(NIB,ID,"s")),"|",1) S X=ID Q
+ Q X
+CHKTPDT(NIB,TP,DT,SBS) ; Проверить есть док. этого типа на дату
+ ; SBS - только подписанные
+ N ID,R,X
+ S (ID,X)="",SBS=+$G(SBS)
+ F  S ID=$O(^EPRI("nd",NIB,DT,ID)) Q:ID=""  I $P(^(ID),"|",1)=TP,$D(^EPR(NIB,ID)),$P($G(^(ID,"dt")),",",1)=DT S X=ID Q:'SBS  S X="" I 12[+$P($G(^("s")),"|",1) S X=ID Q
+ Q X
+SETOW(NIB,ID,VR,OT,SP,LP,UPD) ; Изменить владельца-врача
+ ; NIB - пациент
+ ; ID - код документа
+ ; VR - врач
+ ; OT - отделение
+ ; SP - специальность
+ ; LP - филиал
+ ; UPD - обновлять по сети
+ N R
+ S R=$G(^EPR(NIB,ID,"o"))
+ S:$P(R,"|",1)'="D" $P(R,"|",1)="D"
+ S:$G(VR)'="" $P(R,"|",2)=VR
+ S:$G(LP)'="" $P(R,"|",3)=LP
+ S:$G(SP)'="" $P(R,"|",4)=SP
+ S:$G(OT)'="" $P(R,"|",5)=OT
+ S ^EPR(NIB,ID,"o")=R
+ D:$G(UPD) UPD^YIMH(NIB,ID)
+ Q
+OWNER(NIB,ID) ; Владелец документа
+ ; NIB - пациент
+ ; ID - код документа
+ Q $P($G(^EPR(NIB,ID,"o")),"|",1,2)
+KDR(NIB,ID) ; Сотрудник, создавший документ
+ ; NIB - пациент
+ ; ID - код документа
+ S ID=$G(^EPR(NIB,ID,"o"))
+ I $P(ID,"|",1)'="D" Q ""
+ Q $P(ID,"|",2)
+SET(NIB,ID,PL,R,UPD) ; Установить значение поля
+ ; NIB - пациент
+ ; ID - код документа
+ ; LP - филиал
+ ; R - значение
+ ; UPD - обновлять по сети
+ Q:NIB=""  Q:ID=""  
+ S ^EPR(NIB,ID,PL)=R
+ D:$G(UPD) UPD^YIMH(NIB,ID)
+ Q
+SET2(NIB,ID,PL,IDX,R,UPD) ; Установить значение поля с индексом
+ ; PL - имя поля
+ ; IDX - дополнительный индекс
+ Q:NIB=""  Q:ID=""  
+ S ^EPR(NIB,ID,PL,IDX)=R
+ D:$G(UPD) UPD^YIMH(NIB,ID)
+ Q
+GET(NIB,ID,PL) ; Получить значение поля
+ Q:NIB=""!(ID="") ""
+ Q $G(^EPR(NIB,ID,PL))
+GET2(NIB,ID,PL,IDX) ; Получить значение поля с индексом
+ Q:NIB=""!(ID="") ""
+ Q $G(^EPR(NIB,ID,PL,IDX))
+KILL(NIB,ID,PL) ; Удалить значение поля
+ Q:NIB=""!(ID="") ""
+ K ^EPR(NIB,ID,PL)
+ Q
+DEL(N,ID) ; Системное удаление
+ N FL,R,X,K,T,D
+ G DELsys^YIMH
+SETDT(NIB,ID,NDT) ; Изменить дату документа
+ N D,X
+ S D=+$P($G(^EPR(NIB,ID,"dt")),",",1)
+ S X=$G(^EPRI("nd",NIB,D,ID))
+ K ^(ID)
+ D KGL^IEXCH("^EPRI","nd",NIB,D,ID)
+ S $P(^EPR(NIB,ID,"dt"),",",1)=NDT
+ S ^EPRI("nd",NIB,NDT,ID)=X
+ S X=$G(^EPRI("dt",D,NIB,ID))
+ K ^(ID)
+ D KGL^IEXCH("^EPRI","dt",D,NIB,ID)
+ S ^EPRI("dt",NDT,NIB,ID)=X
+ D GL^IEXCH("^EPR",NIB,ID,"dt"),GL^IEXCH("^EPRI","nd",NIB,NDT,ID),GL^IEXCH("^EPRI","dt",NDT,NIB,ID)
+ I $D(^EPRD(NIB,ID,"date")) S ^("date")=$$DT^DTUTL(NDT) D GL^IEXCH("^EPRD",NIB,ID,"date")
+ Q
+CommCNT(N,ID)   ; Число комментариев документа
+ N I,S S I="",S=0
+ F  S I=$O(^EPRLOG(N,ID,"c",I)) Q:I=""  S S=S+1
+ Q S
+DIGEST(N,ID,FLL) ; Get digest of record
+ ; FLL - fields list (delimiter - |)
+ N X,FL,I,J,D
+ S X=$G(^EPR(N,ID,"dt"))_"|",FLL=$G(FLL)
+ S:FLL'="" FLL="|"_FLL_"|"
+ S FL="" F  S FL=$O(^EPRD(N,ID,FL)) Q:FL=""  D
+ .Q:$E(FL,1,2)="__"  ; system field
+ .I FLL'="",FLL'[("|"_FL_"|") Q 
+ .S X=X_FL_"|"
+ .S D=$D(^EPRD(N,ID,FL))
+ .S:D'[0 X=X_^(FL)
+ .Q:D>1  ; no subnodes
+ .S J="" F  S J=$O(^EPRD(N,ID,FL,J)) Q:J=""  S X=X_^(J)
+ Q $$BASE64E^WWWCLI($$CALC^IMD5(X))
+CHKDIG(N,ID) ; Check digest
+ Q:N="" 0 Q:ID="" 0
+ Q $G(^EPRD(N,ID,"__d"))=$$DIGEST(N,ID)
+MOVPAC(FNIB,TNIB) ; Переместить с одного на другого пациента
+ N X,T
+ S X="" F  S X=$O(^EPR(FNIB,X)) Q:X=""  S T=$$MOVID(FNIB,X,TNIB)
+ Q
+MOVID(FNIB,ID,TNIB) ; Переместить документ на другого пациента
+ N Y,L,LP
+ S LP=$$^I("ilpu"),L=$$GID^I(LP)
+ S Y=ID
+ L +^EPR(TNIB)
+ F  Q:'$D(^EPR(TNIB,Y))  S Y=$S(L="":Y+1,1:($E(Y,1,$L(Y)-3)+1)_L) 
+ M ^EPR(TNIB,Y)=^EPR(FNIB,ID)
+ L -^EPR(TNIB)
+ D:$D(^EPRLOG(FNIB,ID))
+ .M ^EPRLOG(TNIB,Y)=^EPRLOG(FNIB,ID)
+ .K ^EPRLOG(FNIB,ID)
+ .D KGL^IEXCH("^EPRLOG",FNIB,ID),GL^IEXCH("^EPRLOG",TNIB,Y)
+ D:$D(^FPR(FNIB,ID))
+ .M ^FPR(TNIB,Y)=^FPR(FNIB,ID)
+ .K ^FPR(FNIB,ID)
+ .D KGL^IEXCH("^FPR",FNIB,ID),GL^IEXCH("^FPR",TNIB,Y)
+ D:$D(^EPRD(FNIB,ID))  ; нет данных
+ .M ^EPRD(TNIB,Y)=^EPRD(FNIB,ID)
+ .K ^EPRD(FNIB,ID)
+ .D KGL^IEXCH("^EPRD",FNIB,ID)
+ D:$D(^EPRBK(FNIB,ID))  ; нет данных
+ .M ^EPRBK(TNIB,Y)=^EPRD(FNIB,ID)
+ .K ^EPRBK(FNIB,ID)
+ .D KGL^IEXCH("^EPRBK",FNIB,ID),GL^IEXCH("^EPRBK",TNIB,Y)
+ K ^EPR(FNIB,ID,"f") ; remove file descriptor (not del files)
+ K ^EPR(FNIB,ID,"sys-exec") ; remove actions 
+ D DEL(FNIB,ID) ; w. update
+ D MKIDX(TNIB,Y,1),UPD^YIMH(TNIB,Y)
+ Q Y
+CPYID(FNIB,ID,TNIB) ; Копировать документ на другого (тогоже) пациента
+ N Y,L,LP
+ S LP=$$^I("ilpu"),L=$$GID^I(LP)
+ S Y=ID
+ L +^EPR(TNIB)
+ F  Q:'$D(^EPR(TNIB,Y))  S Y=$S(L="":Y+1,1:($E(Y,1,$L(Y)-3)+1)_L) 
+ M ^EPR(TNIB,Y)=^EPR(FNIB,ID)
+ L -^EPR(TNIB)
+ D:$D(^EPRD(FNIB,ID))  ; нет данных
+ .M ^EPRD(TNIB,Y)=^EPRD(FNIB,ID)
+ .D KGL^IEXCH("^EPRD",FNIB,ID)
+ K ^EPR(TNIB,ID,"s") ; remove subscr
+ D MKIDX(TNIB,Y,1),UPD^YIMH(TNIB,Y)
+ Q Y
+RMIDX(NI,ID) ; Удалить индексы
+ N TP,OW,DT
+ S TP=$G(^EPR(NI,ID,"t"))
+ S DT=+$P($G(^("dt")),"|",1),OW=$P($G(^("o")),"|",2)
+ I TP K ^EPRI("t",NI,TP,ID) D KGL^IEXCH("^EPRI","t",NI,TP,ID)
+ I DT K ^EPRI("dt",DT,NI,ID) D KGL^IEXCH("^EPRI","dt",DT,NI,ID)
+ I DT K ^EPRI("nd",NI,DT,ID) D KGL^IEXCH("^EPRI","nd",NI,DT,ID)
+ Q
+MKIDX(NI,ID,NU) ; Создать индексы
+ ; NU - без обновления по сети
+ N TP,OW,DT,OO
+ S TP=$G(^EPR(NI,ID,"t")),NU='+$G(NU)
+ S DT=+$P($G(^("dt")),"|",1),OO=$G(^("o")),OW=$P(OO,"|",2)
+ I TP S ^EPRI("t",NI,TP,ID)=OW D:NU GL^IEXCH("^EPRI","t",NI,TP,ID)
+ I DT S ^EPRI("dt",DT,NI,ID)=$P(OO,"|",3) D:NU GL^IEXCH("^EPRI","dt",DT,NI,ID)
+ I DT S ^EPRI("nd",NI,DT,ID)=TP_"|"_OW D:NU GL^IEXCH("^EPRI","nd",NI,DT,ID)
+ Q
+REIDX(NU) ; Полная переиндексация
+ ; NU - без обновления по сети
+ N NI,ID
+ S NU=$G(NU)
+ K ^EPRI
+ S NI="" F  S NI=$O(^EPR(NI)) Q:NI=""  D
+ .S ID="" F  S ID=$O(^EPR(NI,ID)) Q:ID=""  D MKIDX(NI,ID,NU)
+ Q
+MKIDXs(N,ID,TP,DT,OW,LP,UPD) ; system call
+ S:TP ^EPRI("t",N,TP,ID)=OW
+ S:DT ^EPRI("dt",DT,N,ID)=LP
+ S:DT ^EPRI("nd",N,DT,ID)=TP_"|"_OW
+ Q
+MOVVR(FVR,TVR) ; Переместить все на другого врача
+ N NI,ID,X,R
+ S NI="" F  S NI=$O(^EPRI("t",NI)) Q:NI=""  D
+ .S X="" F  S X=$O(^EPRI("t",NI,X)) Q:X=""  D
+ ..S ID="" F  S ID=$O(^EPRI("t",NI,X,ID)) Q:ID=""  D:^(ID)=FVR
+ ...S ^(ID)=TVR
+ ...D GL^IEXCH("^EPRI","t",NI,X,ID)
+ ...S R=$G(^EPR(NI,ID,"o"))
+ ...I $P(R,"|",1)="D",$P(R,"|",2)=FVR S $P(^EPR(NI,ID,"o"),"|",2)=TVR D GL^IEXCH("^EPR",NI,ID,"o")
+ ...I $P($G(^EPR(NI,ID,"s")),"|",3)=FVR S $P(^EPR(NI,ID,"s"),"|",3)=TVR D GL^IEXCH("^EPR",NI,ID,"s")
+ ...S R=+$P($G(^EPR(NI,ID,"dt")),"|",1)
+ ...I R S $P(^EPRI("nd",NI,R,ID),"|",2)=TVR D GL^IEXCH("^EPRI","nd",NI,R,ID)
+ ; TODO ^EPRLOG
+ Q
+FNDTP(NIB,TP) ; Поиск по типу
+ Q:TP=""!(NIB="") ""
+ Q $O(^EPRI("t",NIB,TP,""))
+FNDUID(NIB,UID,IDX) ; Поиск по UID типа документа
+ N TP S TP=$$FNDUID^YIMHS(UID) Q:TP="" ""
+ S IDX=+$G(IDX) S:'IDX IDX=1
+ Q $O(^EPRI("t",NIB,TP,""),IDX)
+FNDNM(NIB,NM) ; Поиск по имени
+ N ID S ID=""
+ F  S ID=$O(^EPR(NIB,ID)) Q:ID=""  Q:$G(^(ID,"n"))=NM 
+ Q ID
+FNDTMTP(NIB,DTM,TP) ; По дате и типу
+ Q:NIB=""!(TP="") ""
+ N ID S ID=""
+ F  S ID=$O(^EPRI("t",NIB,TP,ID)) Q:ID=""  Q:$P($G(^EPR(NIB,ID,"dt")),"|",1)=DTM 
+ Q ID
+FNDFL(NIB,FL,SBS,DIR,DCNT,DS) ; Поиск первого/последнего поля в документах по имени
+ ; FL - имя поля
+ ; SBS - подписанный документ
+ ; DIR - направление поиска 1 - с начала, 0 или "" с конца
+ ; DCNT - дней поиска
+ ; DS - начальная дата поиска
+ Q:FL="" ""
+ S SBS=+$G(SBS)
+ S:$G(DIR)'=1 DIR=-1
+ S:$G(DS)="" DS=+$H
+ N ID,DT,IR,DE
+ S IR="",DT=$S($G(DCNT):DS-DCNT-1,1:""),DE=99999
+ S:DIR=-1 DE=DT,DT=""
+ F  S DT=$O(^EPRI("nd",NIB,DT),DIR) Q:$S(DT="":1,DIR=1:DT>DE,1:DT<DE)  D  Q:IR'="" 
+ .S ID="" F  S ID=$O(^EPRI("nd",NIB,DT,ID),DIR) Q:ID=""  D  Q:IR'=""
+ ..I SBS,'$$ISSBS(NIB,ID) Q 
+ ..S:$D(^EPRD(NIB,ID,FL)) IR=ID
+ Q IR
+FNDFLD(NIB,FL,SBS,DIR,DCNT,DS,DGT) ; Поиск первого/последнего поля в документах по имени с выводом данных
+ ; FL - имя поля
+ ; SBS - подписанный документ
+ ; DIR - направление поиска 1 - с начала, 0 или "" с конца
+ ; DCNT - дней поиска
+ ; DGT - тип документа
+ Q:FL="" ""
+ S SBS=+$G(SBS)
+ S:$G(DIR)'=1 DIR=-1
+ S:$G(DS)="" DS=+$H
+ N ID,DT,IR,DE
+ S IR="",DT=$S($G(DCNT):DS-DCNT-1,1:""),DE=99999,DGT=$G(DGT)
+ S:DIR=-1 DE=DT,DT=""
+ F  S DT=$O(^EPRI("nd",NIB,DT),DIR) Q:$S(DT="":1,DIR=1:DT>DE,1:DT<DE)  D  Q:IR'="" 
+ .S ID="" F  S ID=$O(^EPRI("nd",NIB,DT,ID),DIR) Q:ID=""  D  Q:IR'=""
+ ..I SBS,'$$ISSBS(NIB,ID) Q 
+ ..I DGT'="",$G(^EPR(NIB,ID,"t"))'=DGT Q 
+ ..S:$D(^EPRD(NIB,ID,FL)) IR=^(FL)
+ Q IR
+GDSTR(ID) ; Строка создания нового документа
+ N R,C,N
+ S R="~"_ID_"~"_$G(^DTYPE(ID,"ext"))_"~"_$G(^("pfile"))
+ S:$D(^("profiles")) R=R_"~~1"
+ S C=$G(^("cap")),N=$G(^("tname"))
+ I C'="",C'=N S R=C_R
+ Q N_"|"_R
+ICOID(EXT) ; Get icon ID by ext
+ Q $S(EXT="rtf":3,EXT="rep":4,EXT="tab":5,EXT="frm"!(EXT="evt"):6,EXT="jpg"!(EXT="bmp")!(EXT="tif")!(EXT="png"):7,EXT="amr"!(EXT="wav")!(EXT="mp3"):9,EXT="exe":10,1:2)
+MKDOC(NIB,TP,NAME,SBSC,DT,KDR) ; Создать документ на основе типа
+ ; SBSC - подписанный
+ ; DT - от даты
+ ; KDR - от сотрудника
+ Q:'$D(^DTYPE(TP)) "" Q:NIB="" ""
+ N N,ID,P,EPR,L,H,K
+ S N=NIB,L=$$^I("ilpu")
+ S H=$S($G(DT):DT,1:$H),K=$S($L($G(KDR)):KDR,1:$$KDR^IUSER())
+ S:$P(H,",",2)="" H=H_","_$P($H,",",2)
+ M EPR=^DTYPE(TP,"pattern")
+ S P=$$USR^IUSER()
+ S EPR("dt")=H_"|"_P_"|"_$H,EPR("dt",H)=P,EPR("v")=1
+ S:$L(NAME) EPR("n")=NAME
+ S:$D(SBSC) EPR("s")=(+SBSC)_"|"_H ; подписанный
+ S EPR("o")="D|"_K_$S(+L:"|"_L,1:"")
+ S EPR("ur")=$$GET^IINKR("epr","uidrec")
+ L +^EPR(N)
+ S ID=$$NNUM(N)
+ M ^EPR(N,ID)=EPR K EPR
+ L -^EPR(N)
+ ; index
+ D MKIDXs(N,ID,TP,+H,K,L)
+ D UPD^YIMH(N,ID)
+ Q ID
+NNUM(NI) ; Получить новый номер
+ N ID,U
+ S U=$$GID^I($$^I("ilpu"))
+ S ID=$O(^EPR(NI,""),-1),ID=$S(U="":ID+1,1:($E(ID,1,$L(ID)-3)+1)_U) 
+ Q ID
+UID(NI,ID) ; Get global unique ID
+ N R
+ S R=$G(^EPR(NI,ID,"ur")) Q:R="" ""
+ Q $$EHRID^I()_$TR($J(R,8)," ",0)
+DIAG(NI,ID) ; Получить диагноз из разного типа полей
+ Q:$G(^EPR(NI,ID,"e"))'="rpt" ""
+ N R,T,I,DI
+ S T=$G(^EPR(NI,ID,"t")) Q:T="" ""
+ S R=$G(^EPRD(NI,ID,"diag")),T=$S(R["|":0,1:1) ; for 'cpl' use |
+ S DI=""
+ I T D  Q DI
+ .S T="QWERTYUIOPASDFGHJKLZXCVBNM0123456789., "
+ .S R=$TR(R,$TR(R,T,""),""),R=$$TRIM^TXTU($$DBLSP^TXTU($TR(R,","," ")))
+ .F I=1:1:$L(R," ") S T=$P(R," ",I) S:$$CHECK^YMKB10(T) DI=$S(DI="":"",1:DI_",")_T
+ F I=1:1:$L(R,$C(13,10)) S T=$P($$TRIM^TXTU($P($P(R,$C(13,10),I),"|",1))," ",1) S:T'="" DI=$S(DI="":"",1:DI_",")_T
+ Q DI
+EXPORT(NI,ID) ; Внешний экспорт
+ N X,KEY,UID
+ S KEY=NI_"@"_ID
+ S UID=$$CHKSEND^IMSGHUB("iepr",KEY)
+ Q:UID=-1
+ S X=$$ADDSEND^IMSGHUB("iepr",UID,"","",KEY)
+ Q
+REGLCL ; Register description of available rights
+ K ^LCLI("epr")
+ S ^LCLI("epr")="Электронная история болезни"
+ S ^LCLI("epr","hist_old")="Просмотр истории болезни"
+ S ^LCLI("epr","hist_new")="Создание документа истории болезни"
+ S ^LCLI("epr","serv_edit")="Ввод услуг"
+ S ^LCLI("epr","serv_count")="Ввод количества услуг"
+ S ^LCLI("epr","view")="Вход для просмотра"
+ S ^LCLI("epr","edit")="Вход для редактирования"
+ S ^LCLI("epr","nokvt")="Доступ к квитанции"
+ S ^LCLI("epr","unsbsc")="Возможность убрать подпись документа (1 - любых, 2 - только своих)"
+ S ^LCLI("epr","unsbs_prn")="Возможность убрать подпись до печати"
+ S ^LCLI("epr","unsbs_days")="Число дней, в течении которых можно снять подпись"
+ S ^LCLI("epr","unsbs_time")="Число минут, в течении которых можно снять подпись"
+ S ^LCLI("epr","unsbs_cnt")="Максимальное число снятия подписи"
+ S ^LCLI("epr","delusbs")="Удаление расподписанного документа"
+ S ^LCLI("epr","noautokv")="Не спрашивать о печати квитанции"
+ S ^LCLI("epr","edit_coder")="Изменение справочников документа ЭИБ"
+ S ^LCLI("epr","priv_coder")="Изменение только своих справочников"
+ S ^LCLI("epr","speak")="Голосовое подтверждение (1-ФИО,2- +события)"
+ S ^LCLI("epr","sbsall")="По умолчанию подпись всего документа"
+ S ^LCLI("epr","nnflt")="Вывод при создании всех типов документов"
+ S ^LCLI("epr","new")="Запрет создания новых документов"
+ S ^LCLI("epr","sbsc")="Возможность подписи документов"
+ S ^LCLI("epr","show")="Вывод дерева ЭИБ"
+ S ^LCLI("epr","estimation")="Оценка документа =0 - запрет, =1 - оценка, прочее - просмотр оценки"
+ S ^LCLI("epr","iscomm")="Комментирование документа"
+ S ^LCLI("epr","del")="Удаление документа"
+ S ^LCLI("epr","evlog")="Просмотр лога событий карты =0 - запрет"
+ S ^LCLI("epr","autonaz")="Если нет назначений предлагать создать от"
+ S ^LCLI("epr","rasp-info-ovt")="Предупреждать о приходе не в свое время"
+ S ^LCLI("epr","rasp-any")="Пациент должен быть записан хоть к кому"
+ S ^LCLI("epr","rasp-only")="Пациент должен быть записан к врачу"
+ S ^LCLI("epr","rasp-prp")="Предоплатный пациент должен быть в расписании"
+ S ^LCLI("epr","chk-pac")="Проверка реквизитов пациента при выборе"
+ S ^LCLI("epr","raspshnow")="Выбор из поиска расписания только сегодня"
+ S ^LCLI("epr","raspdblsp")="Черезстрочный вывод в поиске расписания"
+ S ^LCLI("epr","raspnall")="Запрет показа расписания всех по клинике"
+ S ^LCLI("epr","shnow")="Выбор из поиска всех журналов только сегодня"
+ S ^LCLI("epr","shallus")="Показывать неподписанные документы из всех филиалов"
+ S ^LCLI("epr","pat-del")="Удаление шаблона заполнения"
+ S ^LCLI("epr","pat-cdel")="Удаление общего шаблона заполнения"
+ S ^LCLI("epr","pat-cnmk")="Запрет создания общего шаблона заполнения"
+ S ^LCLI("epr","uslcols")="Шаблон колонок таблицы услуг"
+ S ^LCLI("epr","kssalert")="Предупреждение о кассовой услуге"
+ S ^LCLI("epr","awdoc")="Показывать чужие рабочие документы"
+ S ^LCLI("epr","kvprint")="Шаблон печати квитанции (процедура)"
+ S ^LCLI("epr","lastdiag")="Запоминать последний диагноз (=1), очищать при вводе услуги (=2)"
+ S ^LCLI("epr","nazdiag")="Устанавливать по умолчанию диагноз из назначения"
+ S ^LCLI("epr","singleserv")="Услуга в списке у врача может присутствовать только раз,=2 - вместе с № зуба только раз"
+ S ^LCLI("epr","pnaz-pbill")="Прием по шаблонным назначениям возможен только при положительном балансе"
+ S ^LCLI("epr","waview")="Просмотр и не своих рабочих документов"
+ S ^LCLI("epr","swnazvr")="Показывать при выборе пациента ФИО назначившего"
+ S ^LCLI("epr","selvr")="Произвольный выбор врача"
+ S ^LCLI("epr","curms")="Пользователь - как медсестра по умолчанию"
+ S ^LCLI("epr","findtype")="Вид поиска по умолчанию 0/1/2 - пациенты/расписание/журнал"
+ S ^LCLI("epr","find-otd")="Поиск в журнале отделения"
+ S ^LCLI("epr","find-user")="Аналитический пользовательский поиск"
+ S ^LCLI("epr","find-var")="Произвольный поиск ='заголовок|функция'"
+ S ^LCLI("epr","find-usbs-al")="Поиск неподписанных документов по всем ЛПУ"
+ S ^LCLI("epr","fnd-dsh-otd")="Поиск всех в расписании только по своему отделению"
+ S ^LCLI("epr","fstate")="Начальное состояние 0-услуги, 1-просмотр, 2-документ"
+ S ^LCLI("epr","uinfo_prg")="Процедура отображения информации по обслуживанию"
+ S ^LCLI("epr","selsbs")="Возможность подписи 1 - за себя или автора, 2 - за любого сотрудника, 3 - плюс альтернативный сотрудник"
+ S ^LCLI("epr","altvsbs")="ID альтернативного сотрудника для подписи"
+ S ^LCLI("epr","vpovp")="Показывать повторных пациентов в паспортной части"
+ S ^LCLI("epr","prnnosbs")="Возможность печати черновика"
+ S ^LCLI("epr","prnnoall")="Запретить выбор в печати одновременно всех шаблонов"
+ S ^LCLI("epr","pat-all")="Показывать шаблоны заполнения всех сотрудников"
+ S ^LCLI("epr","seldate")="Возможность выбора предыдущих дат приема (=1 - 3 дня, 2 - любой день с Ctrl)"
+ S ^LCLI("epr","tasksbs")="Создание заявки на отмену подписи"
+ S ^LCLI("epr","no-priv-fl")="Отображать все приватные поля документа"
+ S ^LCLI("epr","sw-day-wrk")="Показывать чужие неподписанные док-ты за сегодня"
+ S ^LCLI("epr","sw-wrk")="Показывать чужие неподписанные док-ты"
+ S ^LCLI("epr","prndlg")="Показывать диалог печати при печати документа"
+ S ^LCLI("epr","viewsort")="Прямая/обратная сортировка при просмотре по датам"
+ S ^LCLI("epr","epradm")="Администрирование документов (=2 - плюс перемещение)"
+ S ^LCLI("epr","docclipb")="Копирование текстовых полей в буфер обмена системы"
+ S ^LCLI("epr","dochtml")="Возможность экспорта rpt в html формате в просмотре"
+ S ^LCLI("epr","btns-replace")="Назначение свойств кнопок имя:заголовок:изображение:процедура"
+ S ^LCLI("epr","new-doc-tp")="ID типа нового документа для автоматического открытия"
+ S ^LCLI("epr","show-prog-dsc")="Показывать в меню информации описание программы обслуживания отдельно"
+ S ^LCLI("epr","clpu")="Показывать документы только по текущему ЛПУ"
+ S ^LCLI("epr","clpult")="Показывать краткую историю только по текущему ЛПУ"
+ S ^LCLI("epr","clpuvr")="Контролировать соответствие ЛПУ сотрудника (1-только предупреждение,2-редактирование, 3-и просмотр)"
+ S ^LCLI("epr","servsort")="Сортировка услуг по умолчанию (0-по коду, 1-по имени)"
+ S ^LCLI("epr","onlyone")="Разрешено создание только одного док-та каждого типа в день на пац."
+ S ^LCLI("epr","htitlefl")="Скрыть поля в начальном выборе пациента"
+ S ^LCLI("epr","atitlefl")="Дополнительные поля в начальном выборе пациента (через |: nnpay или $ф-ция:сообщение)"
+ S ^LCLI("epr","ddfview")="Период по умолчанию для просмотра ЭИБ"
+ S ^LCLI("epr","nopin")="Не контролировать персональный pin-код пациента при входе"
+ S ^LCLI("epr","unsbs_olp")="Убирать подпись только для карт из текущего ЛПУ"
+ S ^LCLI("epr","in-opersh")="Проверять наличие пациента среди операций"
+ S ^LCLI("epr","in-pnd")="Проверять пациента в журнале ПНД"
+ S ^LCLI("epr","ssumcls")="Изменение суммы допустимо только для класса услуги ssum, если >1 - с контролем сумма>базовой цены"
+ S ^LCLI("epr","ro_nzub")="Ввод номера зуба только через диалог"
+ S ^LCLI("epr","clr_nzub")="Очищать ввод номера зуба после добавления услуги"
+ S ^LCLI("epr","clipbrd_pset")="Копировать в буфер обмена ФИО пациента при его выборе"
+ S ^LCLI("epr","rasp-come")="Разрешать прием только ""пришедших"" пациентов"
+ S ^LCLI("epr","splash")="Показывать(1) или нет на весь экран информацию при начале раб. с пациентом"
+ S ^LCLI("epr","in-kfund")="Возможность приема при наличии пациента в коечном фонде"
+ S ^LCLI("epr","in-cms")="Возможность приема при наличии пациента в списке задач"
+ S ^LCLI("epr","acclevel")="Числовой уровень доступа к документам ЭМК"
+ S ^LCLI("epr","accdays")="Число дней за которые разрешен доступ к документам ЭМК"
+ S ^LCLI("epr","coder_ins_tp")="Тип вставки по умолчанию из справочника 0-в конец, 2-в позицию курсора"
+ S ^LCLI("epr","pat-sys")="Показывать системные шаблоны"
+ S ^LCLI("epr","no-prev-month")="Запрет приема пациента в прошедшем месяце (при выборе предыдущей даты)"
+ S ^LCLI("epr","sw-ovlimit")="Показывать только привышение лимита суммы"
+ S ^LCLI("epr","stom")="Стоматологический профиль вкл=1"
+ S ^LCLI("epr","medguide")="Ссылка на внешний справочник лекарств"
+ S ^LCLI("epr","setowsb")="Устанавливать при подписи подписавшего создателем документа"
+ S ^LCLI("epr","eprvw")="Предупреждение о контроле просмотра данной истории, перечисление договоров"
+ S ^LCLI("epr","editdoc")="Редактор полей документа"
+ Q

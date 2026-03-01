@@ -1,0 +1,51 @@
+IKDLU ; Утилиты КДЛ [ 06/15/2020  3:23 PM ]
+ADDBIO(NM,LAB,LABM) ; Добавить биоматериал
+ ; LAB - сторонняя лаборатория
+ ; LABM - код материала в лаб.
+ N I
+ S I=$O(^LABT("M",""),-1)+1
+ F I=I:1:I+9999 Q:'$D(^LABT("M",I)) 
+ S ^LABT("M",I)=NM
+ D GL^IEXCH("^LABT","M",I)
+ I $G(LAB)'="",$G(LABM)'="" S ^LABC(LAB,"M",LABM)=I_"|"_NM D GL^IEXCH("^LABC",LAB,"M",LABM)
+ Q I
+FNDBIO(NM) ; Поиск биоматериала по имени
+ S NM=$$UL^TXTU(NM)
+ N I
+ S I="" F  S I=$O(^LABT("M",I)) Q:I=""  I $$UL^TXTU(^(I))=NM Q
+ Q I
+ADDCON(NM,LAB,LABCO) ; Добавить контейнер
+ ; LAB - сторонняя лаборатория
+ ; LABCO - код материала в лаб.
+ N I
+ S I=$O(^LABT("CONT",""),-1)+1
+ F I=I:1:I+9999 Q:'$D(^LABT("CONT",I)) 
+ S ^LABT("CONT",I)=NM
+ D GL^IEXCH("^LABT","CONT",I)
+ I $G(LAB)'="",$G(LABCO)'="" S ^LABC(LAB,"CONT",LABCO)=I_"|"_NM D GL^IEXCH("^LABC",LAB,"CONT",LABCO)
+ Q I
+FNDCON(NM) ; Поиск контейнера по имени
+ S NM=$$UL^TXTU(NM)
+ N I
+ S I="" F  S I=$O(^LABT("CONT",I)) Q:I=""  I $$UL^TXTU(^(I))=NM Q
+ Q I
+FNDGRP(NM) ; Поиск группы по имени
+ S NM=$$UL^TXTU(NM)
+ N I
+ S I="" F  S I=$O(^LABT("G",I)) Q:I=""  I $$UL^TXTU(^(I))=NM Q
+ Q I
+FNDLBIO(LAB,NM) ; Поиск биоматериала в внешней лаб. по имени
+ S NM=$$UL^TXTU(NM)
+ N I,R
+ S I="" F  S I=$O(^LABC(LAB,"M",I)) Q:I=""  S R=^(I) I $$UL^TXTU($P(^(I),"|",2))=NM Q
+ Q:I="" ""
+ Q $P(R,"|",1)
+WDBLTM ; Найти и вывести дубли тестов в методиках
+ N DEV,LST,P,R
+ S DEV="" F  S DEV=$O(^LABT("DEV",DEV)) Q:DEV=""  D
+ .Q:$G(^(DEV,"use"))=0
+ .S P="" F  S P=$O(^LABT("DEV",DEV,"t",P)) Q:P=""  D
+ ..S R=$P($G(^(P)),"|",1)  Q:R=""
+ ..I $D(LST(R)) W !,^LABT("DEV",DEV)_": "_^LABT("T",R)_" in "_^LABT("DEV",LST(R)) Q
+ ..S LST(R)=DEV
+ Q

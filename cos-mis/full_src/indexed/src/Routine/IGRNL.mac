@@ -1,0 +1,222 @@
+IGRNL ; Гарантийные письма [ 03/15/2021  4:34 PM ]
+GETID(NIB,DT,DGN) ; Получить ID/DT подходящего письма
+ ; DGN - договор
+ Q:'$D(^GRNL(NIB)) ""
+ N D,X,F
+ S D=DT+1,F=0,DGN=$G(DGN)
+ F  S D=$O(^GRNL(NIB,D),-1) Q:D=""  D  Q:F
+ .S X=$G(^(D)) I X'="",X<DT Q 
+ .Q:$G(^(D,"agr"))=1 
+ .I DGN'="",$D(^("s")),^("s")'="",^("s")'=DGN Q 
+ .S F=1
+ Q D
+GETIDL(NIB,DT,DGN,IsSUM) ; Получить список ID/DT писем, через |
+ ; DGN - договор
+ ; IsSUM - есть ограничение по сумме
+ Q:'$D(^GRNL(NIB)) ""
+ N D,X,L
+ S D=DT+1,L="",DGN=$G(DGN),IsSUM=$G(IsSUM)
+ F  S D=$O(^GRNL(NIB,D),-1) Q:D=""  D  
+ .S X=$G(^(D)) I X'="",X<DT Q 
+ .Q:$G(^(D,"agr"))=1 
+ .I IsSUM,$G(^("smm"))="" Q 
+ .I DGN'="",$D(^("s")),^("s")'="",^("s")'=DGN Q 
+ .S L=D_$S(L="":"",1:"|"_L) ; в начало
+ Q L
+USE(NIB,DT,OT,SP,DIA,USL,DGN) ; Если подходит - возврат 1 (полс. действ.)
+ Q:NIB="" 0 Q:'$D(^GRNL(NIB)) 0
+ S DGN=$G(DGN)
+ N D S D=$$GETID(NIB,DT,DGN) Q:D="" 0
+ Q $$USEID(NIB,D,DT,OT,SP,"",DIA,USL,DGN)
+USEALL(NIB,DT,OT,SP,VR,DIA,USL,DGN,PRGID,MOD) ; По всем действующим
+ ; PRGID - индекс или код программы (с =)
+ ; MOD - запрет детальной проверки программ
+ Q:NIB="" 0 Q:'$D(^GRNL(NIB)) 0
+ N D,X,F
+ S D=DT+1,F=0,PRGID=$G(PRGID),MOD=+$G(MOD)
+ F  S D=$O(^GRNL(NIB,D),-1) Q:D=""  D  Q:F
+ .S X=$G(^(D)) I X'="",X<DT Q 
+ .I DGN'="",$D(^(D,"s")),^("s")'="",^("s")'=DGN Q 
+ .S:$$USEID(NIB,D,DT,OT,SP,VR,DIA,USL,DGN,MOD) F=D
+ .I 'MOD,$$APRGID(NIB,D),'$$CHKPRG^IUSL(NIB,DT,OT,SP,DIA,USL,,PRGID,$$DT(NIB,D),1) S F=0
+ Q F
+USEID(NIB,ID,DT,OT,SP,VR,DIA,USL,DGN,MOD)   ; Если подходит - возврат 1 (по ID)
+ ; MOD - 1 - облегч. режим
+ N D,X
+ S MOD='$G(MOD)
+ I OT'="",$D(^GRNL(NIB,ID,"otd")) Q:'$D(^("otd",OT)) 0
+ I SP'="",$D(^GRNL(NIB,ID,"spc")) Q:'$D(^("spc",SP)) 0
+ I DIA'="",$D(^GRNL(NIB,ID,"dia")) Q:'$D(^("dia",DIA)) 0
+ I $D(^GRNL(NIB,ID,"u")) Q:USL="" 0 Q:'$D(^("u",USL)) 0
+ I $D(^GRNL(NIB,ID,"inf")) Q:^("inf") 0 ; информац. письмо
+ I $D(^("orapp")) Q:^("orapp") 0 ; согл.
+ I $G(^("agr"))=1 Q 0
+ I $D(^GRNL(NIB,ID,"prg")) N K,Q,DS,S S Q=0 D  Q:Q 0
+ .S K=^("prg")
+ .I USL'="",'$$CHKUVA^YMPRP(K,DT,USL) S Q=1 Q  ; not vis
+ .I MOD S DS=$G(^GRNL(NIB,ID)) I '$$CHKPRG^IUSL(NIB,DT,OT,SP,DIA,USL,,"="_K,DS,1) S Q=1 Q  
+ .Q:MOD 
+ .I USL'="",$$CHKUA^YMPRP(K,DT,USL,DIA)<0 S Q=1 Q 
+ .I OT'="",$$CHKOA^YMPRP(K,DT,OT)<0 S Q=1 Q 
+ .I SP'="",$$CHKSA^YMPRP(K,DT,SP)<0 S Q=1 Q 
+ .Q:DIA="" 
+ .I +$G(^cfg("allow-pdia")),$$TSTDIA^IUSL(NIB,DIA,+$G(^cfg("allow-vusl"))) Q 
+ .S:$$CHKDA^YMPRP(K,DT,DIA)<0 Q=1 
+ Q 1
+CHECK(NIB,DT,DGN) ; Проверка на дату
+ Q:NIB="" 0 Q:'$D(^GRNL(NIB)) 0
+ N D,X,F
+ S D=DT+1,F=0,DGN=$G(DGN)
+ F  S D=$O(^GRNL(NIB,D),-1) Q:D=""  D  Q:F
+ .S X=$G(^(D)) I X'="",X<DT Q 
+ .Q:$G(^(D,"agr"))=1 
+ .I DGN'="",$D(^("s")),^("s")'="",^("s")'=DGN Q 
+ .S F=1
+ Q F
+APRG(NIB,DT,DGN) ; Проверять ещё на станд. программы обслуживания
+ Q:NIB="" 0 Q:'$D(^GRNL(NIB)) 0
+ S DT=$$GETID(NIB,DT,$G(DGN)) Q:DT="" 0
+ Q:$G(^GRNL(NIB,DT,"up")) 1
+ Q 0
+APRGID(NIB,ID) ; Проверять ещё на станд. программы обслуживания по ID
+ Q:NIB="" 0 Q:ID="" 0
+ Q:$G(^GRNL(NIB,ID,"up")) 1
+ Q 0
+GETDLST(NIB,DT,VAR,ALL) ; Получить список договоров писем
+ ; ALL - и не действующие
+ Q:'$D(^GRNL(NIB)) 
+ N D,X,DG
+ S D=DT+1,F=0,ALL=$G(ALL)
+ F  S D=$O(^GRNL(NIB,D),-1) Q:D=""  D  
+ .I 'ALL S X=$G(^(D)) I X'="",X<DT Q 
+ .Q:$G(^(D,"agr"))=1 
+ .S DG=$G(^("s")) S:DG'="" @VAR@(DG)=D 
+ Q
+DGN(NIB,DT) ; Договор по ID ГП (если нестандартный)
+ Q:NIB="" "" Q:DT="" "" Q:'$D(^GRNL(NIB,DT)) ""
+ Q $G(^(DT,"s"))
+PRC(NIB,DT) ; Прейскурант по ГП (если нестандартный)
+ Q:NIB="" "" Q:DT="" "" Q:'$D(^GRNL(NIB,DT)) ""
+ Q $G(^(DT,"prc"))
+PRG(NIB,DT) ; Программы по ГП (если нестандартный)
+ Q:NIB="" "" Q:DT="" "" Q:'$D(^GRNL(NIB,DT)) ""
+ Q $G(^(DT,"prg"))
+CPRG(NIB,DT,OT,SP,DIA,USL,DGN) 
+ Q
+GET(NIB,DT,PL) ; Получть значение поля
+ Q:NIB="" "" Q:DT="" "" Q:'$D(^GRNL(NIB,DT)) ""
+ Q $G(^(DT,PL))
+NEXT(NIB,DT) ; Итератор
+ Q:NIB="" "" Q:DT="" "" Q:'$D(^GRNL(NIB)) ""
+ ;S:DT="" 
+ ;N D S D=$S(DT=""$O(^(NIB,DT+1),-1)
+ ;F  S DT=$O(^(D),-1) Q:+^(D)'<DT  Q:DT=""
+ Q
+IsCOMM(NIB,DT) ; Есть текстовый комментарий
+ Q:NIB="" 0 Q:DT="" 0
+ Q:$D(^GRNL(NIB,DT,"c")) 1
+ Q 0
+IsIMG(NIB,DT) ; Есть изображение письма
+ Q:NIB="" 0 Q:DT="" 0
+ Q:$D(^GRNL(NIB,DT,"img")) 1
+ Q 0
+IsPRG(NIB,DT) ; Есть программа обслуживания
+ Q:NIB="" 0 Q:DT="" 0
+ Q:$G(^GRNL(NIB,DT,"prg"))'="" 1
+ Q 0
+IMG(NIB,DT) ; Изображение письма
+ Q:NIB="" 0 Q:DT="" 0
+ Q $G(^GRNL(NIB,DT,"img"))
+TDSC(NIB,ID) ; Текстовая свертка (имя)
+ Q:'$D(^GRNL(NIB,ID)) ""
+ N R,X S R=$G(^GRNL(NIB,ID,"n"))
+ Q:R="" "от "_$$DT^DTUTL($P(ID,".",1))
+ S X=$P(R,"|",2)
+ Q $S(X="":"",1:"№ "_X_" ")_"от "_$$DT2^DTUTL($P(R,"|",1))
+DT(NIB,ID) ; Получить дату действия
+ Q $P(ID,".",1)
+DTO(NIB,ID) ; Срок действия ГП по
+ Q:NIB="" "" Q:ID="" ""
+ Q $P($G(^GRNL(NIB,ID)),"|",1)
+TXTLN(NIB,ID,IDX) ; Строка текстового описания
+ Q $G(^GRNL(NIB,ID,"c",+IDX))
+CHKSUM(NIB,DT,ID,DGN,ASUM,SVR) ; Проверить по лимиту суммы
+ ; ASUM - добавочная сумма
+ ; SVR - +по данному врачу неподписанные услуги
+ Q:'$D(^GRNL(NIB)) ""
+ N D,X,F,SMM,SM,DS,DE,S,REZ
+ S D=DT+1,F=0,DGN=$G(DGN),ASUM=$G(ASUM),SVR=$G(SVR),SM=-9999999,REZ=""
+ I ID'="" S D=ID,DE=$G(^GRNL(NIB,D)),SMM=$G(^(D,"smm")) Q:'SMM "" D CHKSprc Q REZ
+ F  S D=$O(^GRNL(NIB,D),-1) Q:D=""  D  Q
+ .S DE=$G(^(D)) I DE'="",DE<DT Q 
+ .Q:$G(^(D,"inf"))
+ .Q:$G(^("orapp")) 
+ .Q:$G(^("agr"))=1
+ .S SMM=$G(^("smm")) Q:'SMM 
+ .I DGN'="",$D(^("s")),^("s")'="",^("s")'=DGN Q 
+ .D CHKSprc
+ Q REZ
+CHKSprc ; for CHKSUM
+ S DS=$P(D,".",1)
+ S S=$$SUMMUSL^IUSL(NIB,DS,DE,DGN,1,D,1,1,SVR)+ASUM
+ I SMM-S>SM S SM=SMM-S,REZ=SMM_"|"_S ; max остаток
+ Q
+NAME(NIB,ID) ; Текстовое наименование Г.П.
+ Q:NIB="" "" Q:ID="" ""
+ S NIB=$G(^GRNL(NIB,ID,"n")),ID=$P(ID,"|",1)
+ Q $P(NIB,"|",2)_$S(ID="":"",1:" от "_$$DT^DTUTL(ID))
+NNUM(NIB,DT) ; Получить новый индекс для даты
+ I $D(^GRNL(NIB,DT)) N I F I=1:1:99 S DT=$P(DT,".",1)_"."_I Q:'$D(^GRNL(NIB,DT)) 
+ Q DT
+MK(NIB,NUM,DGN,DS,DE,INF) ; Создать ГП
+ N DT
+ S DT=$$NNUM(NIB,DS)
+ S ^GRNL(NIB,DT)=DE
+ S ^GRNL(NIB,DT,"n")=DS_"|"_NUM
+ S ^GRNL(NIB,DT,"log")=$$USR^IUSER()_"|"_$H
+ S:$G(INF) ^GRNL(NIB,DT,"inf")=1
+ S:$G(DGN)'="" ^GRNL(NIB,DT,"s")=DGN
+ D GL^IEXCH("^GRNL",NIB,DT)
+ Q
+END(NIB,DGN,DT) ; Завершить все г.п. по договору указанной датой
+ N X,D
+ S D="" F  S D=$O(^GRNL(NIB,D)) Q:D=""  D 
+ .S X=$G(^(D)) I X'="",X<DT Q 
+ .Q:$D(^(D,"agr"))=1
+ .I DGN'="",$D(^("s")),^("s")'="",^("s")'=DGN Q 
+ .S ^GRNL(NIB,D)=DT
+ .D GL^IEXCH("^GRNL",NIB,D)
+ Q
+MOVPAC(FNIB,TNIB) ; Перемещение с одного пациента на другого
+ Q:'$D(^GRNL(FNIB)) 
+ ; TODO - пересечение DT
+ M ^GRNL(TNIB)=^GRNL(FNIB)
+ K ^GRNL(FNIB)
+ D KGL^IEXCH("^GRNL",FNIB),GL^IEXCH("^GRNL",TNIB)
+ Q
+REGLCL 
+ K ^LCLI("grnl")
+ S ^LCLI("grnl")="Гарантийные письма"
+ S ^LCLI("grnl","new")="Создание нового"
+ S ^LCLI("grnl","save")="Сохранение существующего"
+ S ^LCLI("grnl","del")="Удаление"
+ S ^LCLI("grnl","ncnum")="Запрет изменения номера и даты письма"
+ S ^LCLI("grnl","fxstc")="Договор только по умолчанию"
+ S ^LCLI("grnl","wowner")="Может изменять только автор"
+ S ^LCLI("grnl","chkdtnn")="Обязателен ввод дат"
+ S ^LCLI("grnl","chkpolis")="Обязателен ввод полиса когда есть договор"
+ S ^LCLI("grnl","wdays")="Число дней с момента создания, доступных для изменения"
+ S ^LCLI("grnl","setstc")="При изменении договора - меняется у пациента"
+ S ^LCLI("grnl","setprc")="Разрешить изменение прейскуранта"
+ S ^LCLI("grnl","setpac")="Перечень полей у.к. через tab поле=<@>данные, если изменился договор"
+ S ^LCLI("grnl","prgbystc")="Программы только указанные в выбранном договоре"
+ S ^LCLI("grnl","prcbystc")="Прейскуранты только указанные в выбранном договоре"
+ S ^LCLI("grnl","pacflnn")="Не нулевые поля пациента (через ;) при сохранении ГП"
+ S ^LCLI("grnl","setfields")="Поля Г.П., устанавливаемые по умолчанию через tab поле=<@>данные"
+ S ^LCLI("grnl","lkfields")="Заблокированные поля"
+ S ^LCLI("grnl","chkfields")="Проверка полей перед сохранением поле$C(9)<условие>$C(9)<сообщение>"
+ S ^LCLI("grnl","basepolis")="Приоритет полиса из У.К. пациента (присваивать в случае необходимости)"
+ S ^LCLI("grnl","setpolis")="Присваивать полис в карту пациента если одинаковые договора"
+ S ^LCLI("grnl","setpolisof")="Статус оформления при присваивании полиса"
+ Q
+ 

@@ -1,0 +1,205 @@
+IMLABS ; Справочники КДЛ [ 11/12/2023  8:23 PM ]
+NAMEPM(PM,NRM) ; Имя параметра
+ ; NRM - обычное, =0 - полное
+ Q:PM="" ""
+ Q:$G(NRM) $G(^LABT("T",PM))
+ S NRM=$P($G(^LABT("T",PM,"n")),"|",1)
+ Q:NRM="" $G(^LABT("T",PM)) Q NRM
+NAMEPMS(PM,ST) ; Краткое имя параметра
+ Q:PM="" ""
+ N X S X=$P($G(^LABT("T",PM,"n")),"|",2)
+ Q:X'="" X ; если есть
+ Q:$G(ST) "" ; строго краткое наименование
+ Q $G(^LABT("T",PM))
+MEANPM(PM) ; Единицы измерения парам.
+ Q:PM="" ""
+ Q $P($G(^LABT("T",PM,"m")),"|",1)
+CHKPM(PM) ; Проверка параметра на наличие
+ Q:PM="" 0
+ Q:$D(^LABT("T",PM)) 1 Q 0
+USEPM(PM) ; Параметр используется
+ Q:PM="" 0
+ Q:'$D(^LABT("T",PM)) 0
+ Q:$G(^(PM,"d"))=1 0 Q 1
+NAMEBI(BIO) ; Наименование биоматериала
+ Q:BIO="" ""
+ Q $P($G(^LABT("M",BIO)),"|",1)
+FNDABI(NM) ; Найти/добавить биоматериал
+ N M
+ S M="" F  S M=$O(^LABT("M",M)) Q:M=""  I ^(M)=NM Q
+ Q:M'="" M
+ S M=$O(^LABT("M",""),-1)+1
+ S ^LABT("M",M)=NM
+ D GL^IEXCH("^LABT","M",M)
+ Q M
+GETTS(PRMS,REZ,REZ1) ; Получить тест-системы по параметру
+ S REZ1=$G(REZ1)
+ K @REZ K:REZ1'="" @REZ1
+ N PRM,I,J,X,LST,TS,T,T1,TL,ALT,ADD,F,M
+ F I=1:1:$L(PRMS,"|") S PRM=$P(PRMS,"|",I) D
+ .S TS=$G(^LABT("T",PRM,"ts")) Q:TS=""
+ .F J=1:1:$L(TS,"|") S T=$P(TS,"|",J) D
+ ..S:T["+" ADD($P(T,"+",1))=$TR($P(T,"+",2,9),"+","|"),T=$P(T,"+",1),ADD(T,PRM)="" ; добавочные
+ ..S TL(T,PRM)=""
+ ..S LST(PRM,T)=""
+ ; частота встречаемости
+ S T="" F  S T=$O(TL(T)) Q:T=""  D
+ .S I=0,PRM="" F  S PRM=$O(TL(T,PRM)) Q:PRM=""  S I=I+1
+ .S TL(T)=I
+ ; альтернативы
+ S T="" F  S T=$O(TL(T)) Q:T=""  D
+ .S T1="" F  S T1=$O(TL(T1)) Q:T1=""  D:T1'=T 
+ ..S F=1 ; любой не совпадает - сброс
+ ..S PRM="" F  S PRM=$O(TL(T,PRM)) Q:PRM=""  S:'$D(TL(T1,PRM)) F=0
+ ..S:F ALT(T)=$$STFLG^TXTU($G(ALT(T)),T1)
+ ; чистка меньших альтернативных
+ S T="" F  S T=$O(ALT(T)) Q:T=""  D
+ .S X=ALT(T),M=+$G(TL(T)),J=T
+ .F I=1:1:$L(X,"|") S T1=$P(X,"|",I) S:$G(TL(T1))>M J=T1,M=TL(T1)
+ .I M>$G(TL(T)) K TL(T)
+ .F I=1:1:$L(X,"|") S T1=$P(X,"|",I) K:$G(TL(T1))<M TL(T1)
+ ; в результат
+ S T="" F  S T=$O(TL(T)) Q:T=""  D
+ .S M=$G(ADD(T))
+ .S PRM="" F  S PRM=$O(TL(T,PRM)) Q:PRM=""  D
+ ..S F=T S:M'="" F=F_"|"_M
+ ..Q:$D(@REZ@(PRM))  ; если уже есть
+ ..I REZ1'="" S @REZ1@(PRM)=$S($D(ADD(T,PRM)):F,1:T)
+ ..S @REZ@(PRM)=F
+ ;W ! W  W !
+ Q
+CHKAP(PRM,NM,MEAN) ; Проверить или добавить параметр
+ Q:NM="" "" Q:PRM="" ""
+ I $D(^LABT("T",PRM)),$G(^(PRM))=NM,$G(^(PRM,"m"))=MEAN Q PRM
+ S ^LABT("T",PRM)=NM,^(PRM,"n")=NM
+ S ^("m")=MEAN
+ D GL^IEXCH("^LABT","T",PRM)
+ Q PRM
+CHKNM(PRM,NM) ; Проверить/изменить имя параметра
+ Q:$G(^LABT("T",PRM))=NM
+ S ^(PRM)=NM,^(PRM,"n")=NM
+ D GL^IEXCH("^LABT","T",PRM)
+ Q
+CHKMCO(MCO,NM) ; Проверить/изменить имя микроорганизма
+ Q:$P($G(^LABT("MCO",MCO)),"|",1)=NM
+ S ^(MCO)=NM
+ D GL^IEXCH("^LABT","MCO",MCO)
+ Q
+CHKANT(ANT,NM) ; Проверить/изменить имя антибиотика
+ Q:$P($G(^LABT("ANT",ANT)),"|",1)=NM
+ S ^(ANT)=NM
+ D GL^IEXCH("^LABT","ANT",ANT)
+ Q
+MCO(MCO) ; Микроорганизм
+ Q:MCO="" ""
+ Q $P($G(^LABT("MCO",MCO)),"|",1)
+ANT(ANT) ; Антибиотик
+ Q:ANT="" ""
+ Q $P($G(^LABT("ANT",ANT)),"|",1)
+GETHC(PRM,BIO) ; Получить код обмена по параметру+биоматериал
+ N X
+ S X="",PRM=$P(PRM,"@",1)
+ S:$G(BIO)'="" X=$G(^LABT("T",PRM,"hc",BIO))
+ Q:X'="" X
+ Q $G(^LABT("T",PRM,"hc"))
+DFUID(UID) ; Find DEV by UID
+ N R,M
+ S (R,M)=""
+ F  S M=$O(^MLABW(M)) Q:M=""  I $G(^LABT("DEV",M,"uid"))="pcr" S R=$S(R="":"",1:R_"|")_M
+ Q R
+fndBIO(LAB,M) ; Найти биоматериал в сторонней лаборатории
+ N X
+ S X="" F  S X=$O(^LABC(LAB,"M",X)) Q:X=""  Q:$P(^(X),"|",1)=M
+ Q X
+UisBIO(U,BIO) ; В услуге используется этот биоматериал
+ N F,T,B,I
+ S F=0
+ F I=1:1:9 S B=$P(BIO,"|",I) Q:B=""  D  Q:F 
+ .S T="" F  S T=$O(^LABTI("CT",U,T)) Q:T=""  I $D(^LABT("T",T,"b",B)) S F=1 Q 
+ Q F
+fndCONT(LAB,M) ; Найти контейнер в сторонней лаборатории
+ N X
+ S X="" F  S X=$O(^LABC(LAB,"CONT",X)) Q:X=""  Q:$P(^(X),"|",1)=M
+ Q X
+MAXHC() ; Получить максимальное значение кода обмена
+ N H,T,M,X
+ s (H,T)="" F  S T=$O(^LABT("T",T)) Q:T=""  S X=$G(^(T,"hc")) S:X>H H=X S M="" F  S M=$O(^LABT("T",T,"hc",M)) Q:M=""  S X=^(M) S:X>H H=X
+ Q H
+REDEVP(DEV,PRM,VAL) ; Преобразовать значение параметра для методики
+ Q:VAL="" ""
+ S PRM=$G(^LABT("T",PRM,"dev",DEV)) Q:PRM="" VAL
+ Q:'$D(^LABT("DEV",DEV,"t",PRM,"rlist",VAL)) VAL
+ Q ^(VAL)
+TXTNRM(NRM) ; Привести текст норм к читаемому виду
+ Q:NRM="" ""
+ Q:NRM="-" ""
+ I $P(NRM,"-",1)="" Q "до "_$P(NRM,"-",2)
+ I $P(NRM,"-",2)="" Q "более "_$P(NRM,"-",1)
+ Q NRM
+EID(CON,LPU) ; Получить код учреждения от контрагента-лаб.
+ N I,R
+ S (I,R)="",LPU=+$G(LPU)
+ F  S I=$O(^LABC(I)) Q:I=""  I $P($G(^(I)),"|",1)=CON D  Q 
+ .S R=$G(^LABC(I,"lpu",LPU,"eid")) Q:R'="" 
+ .S R=$G(^LABC(I,"eid"))
+ Q R
+FLAB(LPU) ; Получить первую активную лабораторию
+ ; LPU - по филиалу
+ N LAB
+ S LPU=$G(LPU),LAB=""
+ F  S LAB=$O(^LABC(LAB)) Q:LAB=""  I '$P($G(^(LAB)),"|",3),$S(LPU="":'$D(^(LAB,"lpu")),1:$D(^LABC(LAB,"lpu",LPU))) Q 
+ Q LAB
+PROFSSK(LN,SKD,NI,DGN,DT) ; Сумма фикс. скидки по профилю и скидке
+ ; LN - условия по скидкам "$P(R,"|",7)"
+ ; SKD - скидка или несколько через |
+ N I,X,X1,SS,SD
+ S:SKD="" SKD=$$GETID^IDSCN(NI,DGN,$G(DT))
+ S (SS,SD)=""
+ F I=1:1:$L(LN,";") S X=$P(LN,";",I),X1=$P(X,":",1) S:X1="*" SD=$P(X,":",2) S:$$FLinFL^TXTU(SKD,X1) SS=$P(X,":",2) Q:SS'="" 
+ Q $S(SS="":SD,1:SS)
+GRPNM(ID) ; Наименование группы
+ Q:ID="" ""
+ Q $P($G(^LABT("G",ID)),"|",1)
+MKULST(LNU,VAL) ; Создать список услуг с параметром уникальности
+ N U,ULi,I,X
+ F I=1:1:$L(LNU,"|") S X=$P(LNU,"|",I) D:X'=""
+ .S U=$P(X,"@",1)
+ .S ULi(U)=$S('$P(X,"@",2):1,1:$G(ULi(U))+1)
+ M @VAL=ULi
+ Q
+MOVM(F,T,NIDX) ; Переместить код биоматериала с .. на
+ ; F - исходный
+ ; T - результирующий
+ ; NIDX - не индексировать
+ Q:F=""  Q:T="" 
+ N X,Z,R,ff,fub
+ S fub=0 ; индекс по ub 
+ ; Анализы
+ S X="" F  S X=$O(^LABT("I",X)) Q:X=""  D
+ .Q:$G(^LABT("I",X,"m"))'=F  
+ .S ^LABT("I",X,"m")=T
+ .D GL^IEXCH("^LABT","I",X,"m")
+ ; Тесты
+ S X="" F  S X=$O(^LABT("T",X)) Q:X=""  D
+ .F Z="ub","b","hc" D
+ ..I $D(^LABT("T",X,Z,F)) S ^(T)=^(F) K ^(F) D KGL^IEXCH("^LABT","T",X,Z,F),GL^IEXCH("^LABT","T",X,Z,T)  S:Z="ub" fub=1
+ .I $D(^LABT("T",X,"dev")) D
+ ..S ff=0,Z=""
+ ..F  S Z=$O(^LABT("T",X,"dev",Z)) Q:Z=""  I $D(^LABT("T",X,"dev",Z,F)) S ^(T)=^(F),ff=1 K ^(F)
+ ..D:ff REGL^IEXCH("^LABT","T",X,"dev")
+ ; Контейнеры
+ S X="" F  S X=$O(^LABT("CONT",X)) Q:X=""  D
+ .S ff=0
+ .S Z="" F  S Z=$O(^LABT("CONT",X,"sup",Z)) Q:Z=""  I $D(^LABT("T",X,"sup",Z,F)) S ^(T)=^(F),ff=1 K ^(F)
+ .D:ff REGL^IEXCH("^LABT","T",X,"sup")
+ ; Методики
+ S X="" F  S X=$O(^LABT("DEV",X)) Q:X=""  D
+ .Q:'$D(^LABT("DEV",X,"b",F))
+ .S ^(T)=^(F) K ^(F)
+ .D KGL^IEXCH("^LABT","DEV",X,"b",F),GL^IEXCH("^LABT","DEV",X,"b",T)
+ ; Сам биоматриал
+ M ^LABT("M",T)=^LABT("M",F) K ^LABT("M",F)
+ D GL^IEXCH("^LABT","M",T),KGL^IEXCH("^LABT","M",F)
+ 
+ I fub,$G(NIDX) D MKLABTI^NMLABS
+ Q

@@ -1,0 +1,337 @@
+IFAXMAIL ; Fax-email messages
+DOSEND(ID)
+	Q
+DORECV(ID)
+	D DORECVf(ID)
+	Q
+DORECVm(ID)
+	N Addr,Login,Pass,Area,Proc
+	S Addr=$G(^MSGHUB("faxmail",ID,"server")),Login=$G(^("login"))
+	Q:Addr="" 
+	S Pass=$G(^("passwd")),Area=$G(^("area"))
+	S Proc=$G(^("proc"))
+	S:Area="" Area="default"
+	D INMAILp(ID,Addr,Login,Pass,Area,Proc)
+	Q
+INMAILp(iConf,Addr,Login,Pass,Area,Proc)
+	N mailserver,status,pstatus,from,to,date,subject,messagesize,m,hdrs,key,uid,mailMsg,idt,coun,size
+	N ID,A,DOC,del,exe,vrinf,ff,dbg,ecnt
+	S mailserver=##class(%Net.POP3).%New()
+	S mailserver.AttachDir="e:\fax\"
+	S mailserver.Debug=0
+	S mailserver.StoreAttachToFile=1
+	
+	;Set server.StoreAttachToFile=1
+	;Set server.StoreInlineToFile=1
+	;Set server.AttachDir="c:\DOWNLOADS\"
+	
+	S del='$G(^MSGHUB("faxmail",iConf,"nodel")) ; not delete mail after receive
+	S exe=$G(^MSGHUB("faxmail",iConf,"preexec")) ; procedure after recv.
+	s vrinf=$G(^MSGHUB("faxmail",iConf,"infomsg")) ; send info to vr, if received data
+	
+	s dbg=$G(^MSGHUB("faxmail",iConf,"debug"))
+	
+	set status=mailserver.Connect(Addr,Login,Pass)
+	I dbg u 0 w !,"Connect="_Addr_","_Login_","_Pass_", status="_$System.Status.GetErrorText(status)
+	I $P(status," ",1)=0 S ^ERLOG("IMSGHUB-IFAXMAIL",+$H,$P($H,",",2))="Connect("_Addr_","_Login_","_Pass_"): "_$System.Status.GetErrorText(status)
+	set status=$P(status," ",1)
+	set pstatus=status,ff=0,date=""
+	Set status=mailserver.GetMailBoxStatus(.count,.size)
+	I $P(status," ",1)=0 S ^ERLOG("IMSGHUB-IFAXMAIL",+$H,$P($H,",",2))="GetMailBoxStatus: "_$System.Status.GetErrorText(status)
+	I dbg u 0 w !,"mailCount="_count_", status="_$System.Status.GetErrorText(status)
+	I 'count set status=mailserver.QuitAndCommit() D mailserver.%Close() Q 
+	K ^BUF($J,"f")
+	S ecnt=count S:ecnt>32 ecnt=32
+	I status>0 F ID=1:1:ecnt D  Q:$P(status," ",1)=0  
+	.s pstatus=status
+	.Set status=mailserver.GetMessageUID(ID,.uid)
+	.I dbg u 0 w !,"GetMessageUID, status="_$System.Status.GetErrorText(status)_", src="_status_", uid="_$G(uid)
+	.I $P(status," ",1)=0 S ^ERLOG("IMSGHUB-IFAXMAIL",+$H,$P($H,",",2))="GetMessageUID: "_$System.Status.GetErrorText(status) Q 
+	.I $D(^ISLOG("IFAXMAIL","skip",uid)) Q 
+	.S ^ISLOG("IFAXMAIL","skip",uid)=$H
+	.S status=mailserver.FetchMessage(ID,.from,.to,.date,.subject,.messagesize,.hdrs,.mailMsg)
+	.I dbg u 0 w !,"FetchMessage, status="_$System.Status.GetErrorText(status)_", src="_status_", from="_$G(from)
+	.I $P(status," ",1)=0 S ^ERLOG("IMSGHUB-IFAXMAIL",+$H,$P($H,",",2))="FetchMessage: "_$System.Status.GetErrorText(status) Q
+	.I dbg u 0 W !,date_":"_$C(9)_from_" > "_$$OWF^TXTU(to,100)_" uid="_uid_" subject="_subject
+	.I exe'="" x exe
+	.S DOC=$$NEWDOC(iConf,mailMsg,uid,from,to,date,subject,Area)
+	.I dbg,DOC="" w !,"ERR(DOC)=new("_iConf_","_mailMsg_","_uid_","_from_","_$$OWF^TXTU(to,100)_","_date_","_subject_","_Area_")"
+	.D:$L(DOC)
+	..D DumpMailAttachments(Area,mailMsg,1)
+	..S:$D(^MSGSTOR(Area,$P(DOC,",",1),$P(DOC,",",1),"data")) ^("data")="f"
+	..s ff=1
+	.D mailMsg.%Close()
+	.I dbg u 0 w !,">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
+	.S del=1
+	.I del s status=mailserver.DeleteMessage(ID)
+	.I del,$P(status," ",1)=0 S ^ERLOG("IMSGHUB-IFAXMAIL",+$H,$P($H,",",2))="DeleteMessage: "_$System.Status.GetErrorText(status) Q
+	.K ^ISLOG("IFAXMAIL","skip",uid)
+	H 3
+	D:pstatus>0 mailserver.QuitAndCommit()
+	D:'pstatus mailserver.QuitAndRollback()
+	H 3
+	D mailserver.%Close()
+	i ff,vrinf'="" d MSGVR^NISUTL($P(vrinf,"|",1),$P(vrinf,"|",2))
+	Q
+getMsg(ID,dbg)
+	N iConf
+	S iConf=$O(^MSGHUB("faxmail","")) Q:iConf="" 
+	S Addr=$G(^MSGHUB("faxmail",iConf,"server")),Login=$G(^("login"))
+	Q:Addr="" 
+	S Pass=$G(^("passwd")),Area=$G(^("area"))
+	S Proc=$G(^("proc"))
+	S:Area="" Area="default"
+	
+	N mailserver,status,pstatus,from,to,date,subject,messagesize,m,hdrs,key,uid,mailMsg,idt,coun,size
+	N A,DOC,del,exe,vrinf,ff,ecnt
+	S mailserver=##class(%Net.POP3).%New()
+	S mailserver.AttachDir=""
+	S mailserver.Debug=0
+	S mailserver.StoreAttachToFile=1
+	
+	;Set server.StoreAttachToFile=1
+	;Set server.StoreInlineToFile=1
+	;Set server.AttachDir="c:\DOWNLOADS\"
+	
+	S del='$G(^MSGHUB("faxmail",iConf,"nodel")) ; not delete mail after receive
+	S exe=$G(^MSGHUB("faxmail",iConf,"preexec")) ; procedure after recv.
+	s vrinf=$G(^MSGHUB("faxmail",iConf,"infomsg")) ; send info to vr, if received data
+	
+	set status=mailserver.Connect(Addr,Login,Pass)
+	I dbg u 0 w !,"Connect="_Addr_","_Login_","_Pass_", status="_$System.Status.GetErrorText(status)
+	
+	Set status=mailserver.GetMessageUID(ID,.uid)
+	I dbg u 0 w !,"GetMessageUID, status="_$System.Status.GetErrorText(status)_", src="_status_", uid="_$G(uid)
+	I $P(status," ",1)=0 S ^ERLOG("IMSGHUB-IFAXMAIL",+$H,$P($H,",",2))="GetMessageUID: "_$System.Status.GetErrorText(status) Q 
+	I $D(^ISLOG("IFAXMAIL","skip",uid)) Q 
+	S ^ISLOG("IFAXMAIL","skip",uid)=$H
+	S status=mailserver.FetchMessage(ID,.from,.to,.date,.subject,.messagesize,.hdrs,.mailMsg)
+	s ^KKKF1($H)=from
+	I dbg u 0 w !,"FetchMessage, status="_$System.Status.GetErrorText(status)_", src="_status_", from="_$G(from)
+	I $P(status," ",1)=0 S ^ERLOG("IMSGHUB-IFAXMAIL",+$H,$P($H,",",2))="FetchMessage: "_$System.Status.GetErrorText(status) Q
+	I dbg u 0 W !,date_":"_$C(9)_from_" > "_$$OWF^TXTU(to,100)_" uid="_uid_" subject="_subject
+	I exe'="" x exe
+	S DOC=$$NEWDOC(iConf,mailMsg,uid,from,to,date,subject,Area)
+	I dbg,DOC="" w !,"ERR(DOC)=new("_iConf_","_mailMsg_","_uid_","_from_","_$$OWF^TXTU(to,100)_","_date_","_subject_","_Area_")"
+	D:$L(DOC)
+	.D DumpMailAttachments(Area,mailMsg,1)
+	.S:$D(^MSGSTOR(Area,$P(DOC,",",1),$P(DOC,",",1),"data")) ^("data")="f"
+	.s ff=1
+	D mailMsg.%Close()
+	I dbg u 0 w !,">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
+	S del=1
+	;I del s status=mailserver.DeleteMessage(ID)
+	;H 3
+	;D:status>0 mailserver.QuitAndCommit()
+	;D:'status mailserver.QuitAndRollback()
+	
+	D mailserver.QuitAndCommit()
+	H 3
+	D mailserver.%Close()
+	Q
+NEWDOC(iConf,msg,iUID,from,to,date,subject,Area) ;
+	N I,LP,L,D,U,UDT,DOC,UPD,ML,PTR
+	S I=$$IsByID^IMSGHUB(Area,iUID)
+	; TODO - if 'nodel' always exit
+	I I'="" S D=$P(I,",",1),I=$P(I,",",2) K ^MSGSTOR(Area,D,I,"data") D KGL^IEXCH("^MSGSTOR",Area,D,I,"data") Q D_","_I
+	
+	S LP=$$^I("ilpu"),L=LP,D=+$H
+	S:L'="" L=$E("00",1,3-$L(L))_L
+	I $L(to)>512,$P(to,",",1)'="" S to=$P(to,",",1)
+ 	S I=$O(^MSGSTOR(Area,D,""),-1),I=$S(L="":I+1,1:($E(I,1,$L(I)-3)+1)_L)
+ 	S UDT=$$IGMT^DTUTL(date)
+ 	S ML=$$DECMAIL^TXTU(from,0)
+ 	S U=iUID_"|"_UDT_"|"_from_"|"_to,DOC=""
+ 	I $D(^MSGSTOR(Area,D)) S DOC=$O(^MSGSTOR(Area,D,"")) S:DOC'="" DOC=$G(^MSGSTOR(Area,D,DOC,"doc"))
+ 	I DOC="" S DOC=$$MKDOCNM^YDOCS("Факсы от "_$$DT^DTUTL(+UDT),"Журнал приема факсов","Внешние сообщения")
+ 	
+ 	D:DOC="" 
+ 	.S DOC=$$MKDOCNM^YDOCS("Факсы от "_$$DT^DTUTL(+UDT),"Журнал приема факсов","Внешние сообщения")
+	.D SETDEF^YDOCS(DOC)
+	.D SET^YDOCS(DOC,"ext","tab")
+	.D SET^YDOCS(DOC,"lnk",1)
+	.D SET^YDOCS(DOC,"rproc","ODOC^IMSGHUB")
+
+	D SETD^YDOCS(DOC,I,Area_"|"_D_","_I)
+	S ^MSGSTOR(Area,D,I,"doc")=DOC
+ 	S ^MSGSTOR(Area,D,I)=$H_"|Z|sys|"_LP
+ 	S ^MSGSTOR(Area,D,I,"uh")=U
+ 	
+	S PTR=""
+	I ML'="",$D(^GLOIDX("mail",ML)) S PTR=$O(^GLOIDX("mail",ML,"")),ML="" ; full mail
+	I ML'="" S ML=$P(ML,"@",2) I ML'="",$D(^GLOIDX("www",ML)) S PTR=$O(^GLOIDX("www",ML,"")),ML="" ; domain only 	
+	S:PTR'="" ^MSGSTOR(Area,D,I,"uptr",1)=PTR
+	
+	S:subject'="" ^MSGSTOR(Area,D,I,"ud","com")=subject
+ 	S ^MSGSTORI(Area,"uid",iUID,D_","_I)=""
+ 	D:$G(^MSGHUB("faxmail",iConf,"exch")) GL^IEXCH("^MSGSTOR",Area,D,I),GL^IEXCH("^MSGSTORI",Area,"uid",iUID,D_","_I)
+	Q D_","_I
+DumpMailAttachments( Area, msg , deep )
+	N index,i,l,value,DT,ID,fn,lfn,fn1,fn2,dir,iX,stream,ostream,ext
+	I dbg u 0 w !,"DumpMailAttachments="_msg_"   "_deep
+	if msg.IsMultiPart {
+  		for i=1:1:msg.Parts.Count() {
+   			do DumpMailAttachments(Area,msg.Parts.GetAt(i),deep_"."_i)
+		}
+	}
+	
+	I from["rgs.ru"!(from["renins") S ^KKKF(uid_"|"_$H,deep)=$H_"|S:"_from_"|"_msg.FileName_"|"_msg.IsBinary_"|"_msg.ContentType
+	
+	Q:msg.FileName="" 
+
+	S DT=$P(DOC,",",1),ID=$P(DOC,",",2),iX=1
+	set fn=msg.FileName,lfn=$$UL^TXTU(fn),ext=""
+	
+	I dbg u 0 w !,"DumpMailAttachments, fn="_fn
+	
+	I from["rgs.ru" S ^KKKF(uid_"|"_$H,fn)=$H
+
+	I (fn[".xls")!(fn[".doc"),fn'[".docx" S ^MSGSTOR(Area,DT,ID,"ud","com")="Ошибочный формат" Q  
+	I lfn'[".tif",lfn'[".pdf",lfn'[".txt",lfn'[".rtf",lfn'[".jpg",lfn'[".png",lfn'[".docx",'msg.IsBinary S ^MSGSTOR(Area,DT,ID,"ud","com")="Ошибочный формат" Q  
+	; TODO - png
+	
+	S i=1,l=0,iX=1
+	set:msg.IsBinary stream=msg.BinaryData
+	set:'msg.IsBinary stream=msg.TextData
+	set dir=stream.Directory
+	s stream.RemoveOnClose=1
+	do stream.Rewind()
+	
+	I from["rgs.ru" S ^KKKF(uid_"|"_$H,fn,1)=stream.Size
+	
+	I lfn[".jpg"!(lfn[".jpeg"),stream.Size<65536 Q  ; for small files
+	I lfn[".png",stream.Size<16000 Q  ; for small files
+	
+	I from["rgs.ru" S ^KKKF(uid_"|"_$H,fn,2)="ok"
+
+	; Convert pdf to tiff
+	I $$UL^TXTU(fn)[".pdf" D  
+	.s fn1=dir_"faxmail.pdf",fn2=dir_"faxmail.tiff"
+	.s ostream=##class(%FileBinaryStream).%New()
+	.s ostream.Filename=fn1
+	.s ostream.RemoveOnClose=1
+	.d ostream.CopyFrom(stream)
+	.d EXEBIN^ISUTL("pdf2tif.cmd """_fn1_""" """_fn2_"""") ; use Ghost Script
+	.d ostream.Clear()
+	.d stream.Clear()
+	.s stream=##class(%FileBinaryStream).%New() ; read tiff
+	.s stream.Filename=fn2
+	.s stream.RemoveOnClose=1
+	.d stream.Rewind()
+	.s ext="tif"
+	
+	; Convert docx to html
+	I $$UL^TXTU(fn)[".docx" D 
+	.s ^KKKDOC=from
+	.s fn1=dir_"faxmail.docx",fn2=dir_"faxmail.html"
+	.s ostream=##class(%FileBinaryStream).%New()
+	.s ostream.Filename=fn1
+	.s ostream.RemoveOnClose=1
+	.d ostream.CopyFrom(stream)
+	.d EXEBIN^ISUTL("docx2html.cmd """_fn1_""" """_fn2_"""") ; use mammoth
+	.d ostream.Clear()
+	.d stream.Clear()
+	.s stream=##class(%FileBinaryStream).%New() ; read tiff
+	.s stream.Filename=fn2
+	.s stream.RemoveOnClose=1
+	.d stream.Rewind()
+	.s ext="html"
+	.s ^KKKDOC(2)=$H
+	
+	; Resize jpeg
+	I $$UL^TXTU(fn)[".jpg" D  
+	.s fn1=dir_"in.jpg",fn2=dir_"out.jpg"
+	.s ostream=##class(%FileBinaryStream).%New()
+	.s ostream.Filename=fn1
+	.s ostream.RemoveOnClose=1
+	.d ostream.CopyFrom(stream)
+	.d EXEBIN^ISUTL("jpg2jpg.cmd") ; use websphoto
+	.d ostream.Clear()
+	.d stream.Clear()
+	.s stream=##class(%FileBinaryStream).%New() ; read tiff
+	.s stream.Filename=fn2
+	.s stream.RemoveOnClose=1
+	.d stream.Rewind()
+	.s ext="jpg"
+	
+	; Convert rtf to txt
+	I $$UL^TXTU(fn)[".rtf" D  
+	.s fn1=dir_"faxmail.rtf",fn2=dir_"faxmail.txt"
+	.S fn3=stream.Filename
+	.d stream.%Save()
+	.s stream.RemoveOnClose=0
+	.D DEL^FIL(fn1),DEL^FIL(fn2)
+	.D MOVE^FIL(fn3,fn1)
+	.d EXEBIN^ISUTL("blb2txt.exe -f """_fn1_""" -v """_dir_""" -p ""faxmail""")
+	.d stream.Clear()
+	.D DEL^FIL(fn1)
+	.s stream=##class(%FileBinaryStream).%New() ; read txt
+	.s stream.Filename=fn2
+	.s stream.RemoveOnClose=1
+	.d stream.Rewind()
+	.s ext="txt"
+
+	set len=8192
+	while 'stream.AtEnd {
+		S A=stream.Read(.len)
+		S ^MSGSTOR(Area,DT,ID,"data",fn,iX)=A
+	  	S i=i+1,l=l+$L(A),iX=iX+1
+	}
+	
+	I from["rgs.ru" S ^KKKF(uid_"|"_$H,fn,3)=l_"|"_ext
+
+	S:l ^MSGSTOR(Area,DT,ID,"data",fn)=l
+	S:ext'="" ^MSGSTOR(Area,DT,ID,"ext")=ext
+	d stream.Clear()
+	Q
+DORECVf(iConf)
+	N Addr,Login,Pass,Area,Proc,DIR,FILL,R,IO,FL,J,RR
+	S DIR=$G(^MSGHUB("faxmail",iConf,"path")),Area=$G(^("area"))
+	S:Area="" Area="default"
+
+	D DIR^FIL(DIR_"*.json","FILL")
+	
+	S FL="" F  S FL=$O(FILL(FL)) Q:FL=""  D:FILL(FL)=0  
+	.S IO=$$ORT^FIL(DIR_FL) Q:IO=""
+	.S RR=""
+	.U IO F J=1:1  R R Q:$$ST^FIL()=0  S RR=RR_R
+	.C IO
+	.Q:RR="" 
+	.S JS=$$FS^IJSON(RR)
+	.D readMail(.JS)
+	.D DEL^FIL(DIR_FL)
+
+	Q
+readMail(JS)
+	N DOC,uid,from,to,date,subject,stream,fn,ext,i,l,len,iX,A,DT,ID
+	
+	S uid=JS.uid,from=$$U8W^TXTU(JS.from),to=$$U8W^TXTU(JS.to),date=$$DTI^DTUTL(JS.date),subject=$$U8W^TXTU(JS.subject),fn=JS.file
+	S ext=$P(fn,".",$L(fn,"."))
+	
+	S DOC=$$NEWDOC(iConf,"",uid,from,to,$$GMT^DTUTL(date,0),subject,Area)
+	S DT=$P(DOC,",",1),ID=$P(DOC,",",2),iX=1
+	
+	I fn="" S ^MSGSTOR(Area,DT,ID,"ud","com")="Ошибочный формат" Q  
+	
+	s stream=##class(%FileBinaryStream).%New() ; read file
+	s stream.Filename=fn
+	s stream.RemoveOnClose=1
+	d stream.Rewind()
+	
+	S fn=$TR(fn,"/","\"),fn=$P(fn,"\",$L(fn,"\")) ; last fila name
+
+	set len=8192,i=0,l=0
+	while 'stream.AtEnd {
+		S A=stream.Read(.len)
+		S ^MSGSTOR(Area,DT,ID,"data",fn,iX)=A
+	  	S i=i+1,l=l+$L(A),iX=iX+1
+	}
+	
+	I l S ^MSGSTOR(Area,DT,ID,"data",fn)=l D GL^IEXCH("^MSGSTOR",Area,DT,ID,"data")
+	I ext'="" S ^MSGSTOR(Area,DT,ID,"ext")=ext d GL^IEXCH("^MSGSTOR",Area,DT,ID,"ext")
+	d stream.Clear()
+	Q
+INITDB
+	S ^MSGHUB("faxmail")="IFAXMAIL"
+	S ^MSGHUB("faxmail",1)=""
+	Q

@@ -1,0 +1,116 @@
+RSSMCST ; Отчеты стоматологов [ 04/18/2018  1:17 PM ]
+TR(DS,DE,MOD,DVX,DEX,LPUX) ; Контроль работы врачей-стоматологов
+ ; DEX - сключить договора
+ N VR,OT,SP,DT,LP,KX,STOTD,SCOTD,SCSPC,STSPC,NI,I,R,RR,ID,U,CNT,ACU,DTPL,DTP,DEXL,DG,QF
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S DEX=$$DBLSP^TXTU($TR(DEX,",/;","   "))
+ I DEX'="" F I=1:1:$L(DEX," ") S R=$P(DEX," ",I) S:R'="" DEXL(R)=""
+ S:'$$FR^I() LPUX=$$^I("ilpu")
+ D MKSCOTD^IEDE,MKSCSPC^IEDE
+ k ^BUF($J)
+ D ITERATE^IRASPR("TRdsh^RSSMCST",DS,DE,1,LPUX)
+ ; ЭМК
+ S DT=DS-1 F  S DT=$O(^EPRI("dt",DT)) Q:DT=""!(DT>DE)  D
+ .S NI="" F  S NI=$O(^EPRI("dt",DT,NI)) Q:NI=""  D
+ ..S ID="" F  S ID=$O(^EPRI("dt",DT,NI,ID)) Q:ID=""  D
+ ...S LP=$P(^(ID),"|",1) I LPUX'="",LP'=LPUX Q 
+ ...S R=$G(^EPR(NI,ID,"o"))
+ ...Q:$P(R,"|",1)'="D" 
+ ...S SP=$P(R,"|",4) Q:SP=""  Q:'$D(STSPC(SP)) 
+ ...S IDX=$S(MOD=2:LP_"|"_$P(R,"|",2),MOD=5:LP_"|"_$P(R,"|",2)_"|"_NI_"|"_DT,1:LP)
+ ...Q:$D(^BUF($J,IDX,3,NI_"|"_DT))
+ ...S DG=+$$GET^IPAC(NI,"stc",DT)
+ ...I $D(DEXL),$D(DEXL(DG)) Q 
+ ...I DVX'="" Q:$$TRdtp(DG,DT)'=DVX 
+ ...S ^BUF($J,IDX,3,NI_"|"_DT)=""
+ ...S ^BUF($J,IDX,3)=$G(^BUF($J,IDX,3))+1
+ 
+ ; Планы лечения
+ S DT=DS-1 F  S DT=$O(^NAZI("d",DT)) Q:DT=""!(DT>DE)  D
+ .S ID="" F  S ID=$O(^NAZI("d",DT,ID)) Q:ID=""  D
+ ..S R=^(ID) Q:$P(R,"|",1)'="z" 
+ ..S RR=$G(^NAZ(ID,"i")) Q:RR="" 
+ ..S VR=$P(RR,"|",3),LP=$P(RR,"|",4),NI=$P(RR,"|",2)
+ ..I LPUX'="",LP'=LPUX Q 
+ ..S IDX=$S(MOD=2:LP_"|"_VR,MOD=5:LP_"|"_VR_"|"_NI_"|"_DT,1:LP)
+ ..Q:$D(^BUF($J,IDX,6,NI_"|"_DT))
+ ..S DG=+$$GET^IPAC(NI,"stc",DT) 
+ ..I $D(DEXL),$D(DEXL(DG)) Q  
+ ..I DVX'="" Q:$$TRdtp(DG,DT)'=DVX 
+ ..S ^BUF($J,IDX,6,NI_"|"_DT)=""
+ ..S ^BUF($J,IDX,6)=$G(^BUF($J,IDX,6))+1
+ 
+ D ITERATE^IUSLD("TRu^RSSMCST(VR,OT,DT,ID)",DS,DE,,,LPUX)
+ 
+ D OWF^RWU(".txt")
+ D WC^RWU("Филиал "_$$TXTP^DTUTL(DS,DE)_"|"_$S(MOD=2:"Врач|",MOD=5:"Врач|Пациент|Дата|",1:"")_"Записано пациентов|Пришло|ЭМК|Услуги|Первичных ФЛ|План лечения|Дальнейшее назначение|Имплантаты (все)|Имплантаты Astra Tech|ZOOM|Вкладки|Гигиена")
+ S IDX="" F  S IDX=$O(^BUF($J,IDX)) Q:IDX=""  D
+ .S RR=""
+ .S I="" F  S I=$O(^BUF($J,IDX,I)) Q:I=""  S $P(RR,"|",I)=^BUF($J,IDX,I)
+ .S NI=$P(IDX,"|",3)
+ .S RR=$$NAME^ICONTR($P(IDX,"|",1))_$S(MOD=2:"|"_$$FIO^IKADRY($P(IDX,"|",2)),MOD=5:"|"_$$FIO^IKADRY($P(IDX,"|",2))_"|"_NI_" "_$$FIO^IPAC(NI)_"|"_$$DT^DTUTL($P(IDX,"|",4)),1:"")_"|"_RR
+ .D WC^RWU(CR_RR)
+ D C^RWU
+ k ^BUF($J)
+ Q
+TRdtp(CSTC,DT) ; тип договора
+ Q:DVX="" "" Q:CSTC="" ""
+ I '$D(DTPL(CSTC,DT)) S DTP=+$$GET^YNDOG(CSTC,"dvid",DT),DTPL(CSTC,DT)=DTP
+ E  S DTP=DTPL(CSTC,DT)
+ Q DTP
+TRdsh 
+ Q:'$D(STOTD(OT)) 
+ S NI=$P(R,"|",1) Q:NI=""  
+ S IDX=$S(MOD=2:LP_"|"_VR,MOD=5:LP_"|"_VR_"|"_NI_"|"_DT,1:LP)
+ Q:$D(^BUF($J,IDX,1,NI_"|"_DT))
+ S DG=+$$GET^IPAC(NI,"stc",DT) 
+ I $D(DEXL),$D(DEXL(DG)) Q  
+ I DVX'="" Q:$$TRdtp(DG,DT)'=DVX 
+ S ^BUF($J,IDX,1,NI_"|"_DT)=""
+ S ^BUF($J,IDX,1)=$G(^BUF($J,IDX,1))+1
+ Q:$P($G(^DSH(LP,OT,VR,SP,DT,TM,"c")),"|",1)=""  
+ S ^BUF($J,IDX,2)=$G(^BUF($J,IDX,2))+1 ; пришел
+ I $O(^DSHP(NI,DT))'="" S ^BUF($J,IDX,7)=$G(^BUF($J,IDX,7))+1 ; следующие записи есть
+ Q
+TRu(VR,OT,DT,ID) 
+ Q:'$D(STOTD(OT)) 
+ Q:"wd"[$$GETSTAT^IUSL(VR,DT,OT,ID) 
+ 
+ D GET^IUSL(VR,DT,OT,ID,1)
+ 
+ S DG=$S($G(ISTC):ISTC,1:$$GET^IPAC(NI,"stc",DT)) 
+ I $D(DEXL),$D(DEXL(DG)) Q  
+ I DVX'="" Q:$$TRdtp(DG,DT)'=DVX  
+ 
+ S LP=$$GETLPU^IUSL(VR,DT,OT,ID)
+ S IDX=$S(MOD=2:LP_"|"_VR,MOD=5:LP_"|"_VR_"|"_NI_"|"_DT,1:LP)
+ 
+ S QF=0
+ S U="" F  S U=$O(UL(U)) Q:U=""  D
+ .S CNT=UL(U) S:'CNT CNT=1
+ .S ACU=$$GET^IPRICE(U,"acu",PRC,DT)
+ .I $P(ACU,".",5)="I" S ^(8)=$G(^BUF($J,IDX,8))+CNT ; импланты
+ .I $P(ACU,".",5)="V" S ^(11)=$G(^BUF($J,IDX,11))+CNT ; вкладки
+ .I $P(ACU,".",5)="G" S ^(12)=$G(^BUF($J,IDX,12))+CNT ; гигиена
+ .I $P(ACU,".",5)="Z" S ^(10)=$G(^BUF($J,IDX,10))+CNT ; zoom
+ .I $P(ACU,".",5)="I",$P(ACU,".",6)="A" S ^(9)=$G(^BUF($J,IDX,9))+CNT ; astra
+ .I $P(ACU,".",5)="R" S QF=1 Q  ; рентген
+ .I $P(ACU,".",5)="Or" S QF=1 Q  ; рентген
+ Q:QF 
+ 
+ Q:$D(^BUF($J,IDX,4,NI_"|"_DT))
+ S ^(NI_"|"_DT)=""
+ S ^BUF($J,IDX,4)=$G(^BUF($J,IDX,4))+1 ; есть услуги
+ I $$TRdtp(DG,DT)=3,$O(^PNF(NI,DT),-1)="" S ^BUF($J,IDX,5)=$G(^BUF($J,IDX,5))+1 ; абсолютно первичные TODO - kss
+ Q
+DET(DS,DE,LPU) 
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D OWF^RWU(".txt")
+ D C^RWU
+ Q
+REGIPROC 
+ N F,FF
+ S F=$$FR^I()
+ S FF=$S(F:",t@storage:lpu,Филиал",1:"")
+ S ^IPROC("ССМЦ","Стоматология","Контроль работы врачей-стоматологов")="TR_RSSMCST,1,"_$S(F:6,1:5)_",d,Дата отчета,d,Дата по,t@string:0/По клиникам#2/По клинике и врачам#5/По клинике врачам пациентам,Вид отчета,t@net:NMLCR_NSPRAV(""dvid"")@1,Вид договора,s,Исключить договора"_FF
+ Q

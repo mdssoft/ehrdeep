@@ -1,0 +1,273 @@
+IKDLLIT ; Литех routines [ 03/12/2018  4:43 PM ]
+DOSEND ; Отправка заявок
+ N DT,NI,ID,S3,CT,LAB,LP,NW,LID
+ S CT=$G(^cfg("lab","noprnbar"))
+ S DT=$H-2 F  S DT=$O(^MLABI("d",DT)) Q:DT=""  D  
+ .S ID="" F  S ID=$O(^MLABI("d",DT,ID)) Q:ID=""  D
+ ..S NI=^(ID) 
+ ..S LAB=$P($G(^MLAB(NI,ID,"lab")),"|",1) Q:'LAB
+ ..Q:$G(^LABC(LAB,"uid"))'="lit" 
+ ..S LID=$G(^LABC(LAB,"id")) Q:LID="" 
+ ..S CT=$G(^cfg("lab","lit",LID,"noprnbar"))
+ ..S S3=$P($G(^MLAB(NI,ID,"s3")),"|",1) Q:'S3  
+ ..Q:'$P($G(^("s31")),"|",1) 
+ ..I CT,'$P($G(^("s3")),"|",1) Q 
+ ..Q:$P($G(^("s4")),"|",1)=2
+ ..Q:$P($G(^("s9")),"|",1)
+ ..S LP=$P($G(^("s1")),"|",4)
+ ..Q:'$$MKSEND(NI,ID)
+ ..D SETSTAT^IMLAB(NI,ID,4,2) ; у контрагента
+ Q
+DORECV(IDX) ; Получение исследований
+ ; запуск из IMSGHUB
+ D DOSEND
+ N LST,I,LAB,X,MOD
+ S LAB="" F  S LAB=$O(^LABC(LAB)) Q:LAB=""  I $G(^(LAB,"uid"))="lit" D  
+ .S X=$G(^("id"))
+ .S:X'="" LST(LAB,X)=""
+ .S I="" F  S I=$O(^LABC(LAB,"lpu",I)) Q:I=""  S X=$G(^(I,"id")) S:X'="" LST(LAB,X)=""
+ 
+ S LAB="" F  S LAB=$O(LST(LAB)) Q:LAB=""  D
+ .S I="" F  S I=$O(LST(LAB,I)) Q:I=""  D GETALL(LAB,I)
+ Q
+MKSEND(NI,ID) 
+ N LAB,ALAB,I,J,R,C,U,a,req,pac,order,VR,LPU,DT,RV,X,%J,SID,LID,DTT,BIO,PRC
+ N USR
+ S LAB=$P($G(^MLAB(NI,ID,"lab")),"|",1)
+ Q:'LAB 0
+ S DTT=+$G(^MLAB(NI,ID))
+ S:'DTT DTT=+$H
+ S R=$G(^MLAB(NI,ID,"s1"))
+ S VR=$P(R,"|",5),LPU=+$P(R,"|",4)
+ S ALAB=$G(^LABC(LAB,"lpu",LPU,"id"))
+ S:ALAB="" ALAB=$G(^LABC(LAB,"id"))
+ S:ALAB="" ALAB=LAB
+ Q:'$D(^cfg("lab","lit",ALAB)) 0
+ S RV=$G(^LABC(LAB,"lpu",LPU,"eid"))
+ S:RV="" RV=$G(^LABC(LAB,"eid"))
+ S USR=$G(^cfg("lab","lit",ALAB,"user"))
+ S DT=$$DTM^DTUTL($H)
+ S PRC=$$PRC^IINSC("",NI,DTT,0,"","","")
+ 
+ S RR="<?xml version=""1.0"" encoding=""windows-1251""?><root><Header>"
+ S RR=RR_"<FileDate>"_$$DTISO^DTUTL($H)_"</FileDate>"
+ S RR=RR_"<FileTime>"_$$TIME^DTUTL($H)_"</FileTime>"
+ S RR=RR_"<FileType>Order</FileType>"
+ S RR=RR_"<Version>1</Version>"
+ S:RV="" RV="LITEX|Litex"
+ S RR=RR_"<LaboratoryID>"_$P(RV,"|",1)_"</LaboratoryID>"
+ S RR=RR_"<LaboratoryName>"_$P(RV,"|",2)_"</LaboratoryName>"
+ S RR=RR_"<ClinicID>"_USR_"</ClinicID>"
+ S RR=RR_"<Direction>FromOrganization</Direction>"
+ S RR=RR_"</Header>"
+ 
+ S RR=RR_"<Order OrderID="""_ID_""">"
+ S RR=RR_"<Patient PatientID="""_NI_""">"
+ 
+ S X=$G(^MLAB(NI,ID,"fl","ndbr"))
+ S:X RR=RR_"<PREGNANCY>"_X_"/<PREGNANCY>"
+ S X=$G(^MLAB(NI,ID,"fl","dcl"))
+ S:X RR=RR_"<CYCLE>"_X_"</CYCLE>"
+ S X=$G(^MLAB(NI,ID,"fl","sutdd"))
+ ;S:X RR=RR_" DiuresisMl="""_X_""" "
+ S:$G(^MLAB(NI,ID,"ci")) RR=RR_" Cito=""true"" "
+ ;S X=$G(^MLAB(NI,ID,"nt"))
+ ;S:$P(X,"|",1)'="" RR=RR_" DiagnosisCode="""_$$HTML^TXTU($P(X,"|",1))_""" "
+ ;S:$P(X,"|",2)'="" RR=RR_" Comment="""_$$HTML^TXTU($P(X,"|",2))_""" "
+ 
+ S RR=RR_"<LastName>"_$$TAG^TXTU($$FIO^IPAC(NI,DTT))_"</LastName>"
+ ;S RR=RR_"<FirstMiddleName>"_$$TAG^TXTU($$GET^IPAC(NI,"fioi",DTT)_" "_$$GET^IPAC(NI,"fioo",DTT))_"</FirstMiddleName>"
+ S RR=RR_"<DOB>"_$$DTISO^DTUTL($$GET^IPAC(NI,"datar",DTT))_"</DOB>"
+ S R=$$GET^IPAC(NI,"pol",+$H)
+ S RR=RR_"<Sex>"_$S(R=1:"M",R=2:"F",1:"U")_"</Sex>"
+ S RR=RR_"</Patient>"
+ 
+ S RR=RR_"<Tests>"
+ S BIO="" F  S BIO=$O(^MLAB(NI,ID,"mi",BIO)) Q:BIO=""  D
+ .S LOC=$$fndBIO^IMLABS(LAB,BIO) Q:LOC="" 
+ .S R=^MLAB(NI,ID,"ul")
+ .F I=1:1:$L(R,"|") d
+ ..S U=$P($P(R,"|",I),":",1),C=$P(U,"*",2),U=$P(U,"*",1)
+ ..S a=^LABTI("LAB",LAB,"CN",U)
+ ..S:'C C=1
+ ..F J=1:1:C D
+ ...S RR=RR_"<Test TestID="""_a_"""><TestName>"_$$NAME^IPRICE(U,PRC)_"</TestName>"
+ ...S RR=RR_"<BarCode>"_$$GETBAR^IMLAB(NI,ID,BIO)_"</BarCode>"
+ ...S RR=RR_"</Test>"
+ S RR=RR_"</Tests>"
+ S RR=RR_"</Order></root>"
+ 
+ ;D POST("127.0.0.1",$TR($H,",","-")_".xml",RR)
+ 
+ N FIL
+ S FIL=$G(^cfg("lab","lit",ALAB,"path"))
+ ;u 0 w !,"Path="_FIL_", ALAB="_ALAB,!
+ Q:FIL="" 0
+ S FIL=$$OW^FIL(FIL_"/out/"_ID_"-"_$TR($H,",","-")_".xml")
+ I FIL'="" U FIL W RR C:FIL'="" FIL
+ Q 1
+POST(IP,FN,TXT) 
+ N NET,X
+ S NET=$$OPEN^WWWCLI(IP,5051) Q:NET="" 
+ D OWBUF^WWWCLI(NET)
+ D WBUF^WWWCLI(NET,$$WU8^TXTU(TXT))
+ D CBUF^WWWCLI(NET)
+ D SETHDR^WWWCLI(NET,"Content-type","application/octet-stream")
+ S X=$$POST^WWWCLI(NET,"/"_FN)
+ D CLOSE^WWWCLI(NET)
+ Q
+GETALL(LAB,LID)
+ N FN,FILL,FL,i
+ S FN=$G(^cfg("lab","lit",1,"path")) Q:FN="" 
+ D DIR^FIL(FN_"\in\*.xml","FILL")
+ Q:'$D(FILL) 
+ ; load
+ S FL="" F  S FL=$O(FILL(FL)) Q:FL=""  D:FILL(FL)=0 GET(LAB,FN_"\in\"_FL)
+ Q
+GET(LAB,FN) ; Загрузить данные по пациенту из файла
+ N A,F,R,K,xNI,xID,ST,STS,DTM,LID,RR,msgid,lpu,mpref,IsOK,mnnew
+ N bar,prm,COM,VAL,VH,VL,unit,COMR,pnm,NVAL,rPRM,T,TP,X,RX,%XM
+ N FF,FI,FO,lisid,%LOG
+ 
+ ;w !,FN
+ 
+ s lpu=$$^I("ilpu"),%LOG="sys"
+ S mpref=$S($G(^LABC(LAB,"CN"))="i":"",1:"lit.") ; встроенная лаб.
+ S (xNI,xID,bar,IsOK,DTM)=""
+ 
+ S mknew=1
+ 
+ S F=$$OR^FIL(FN),K=""
+ F  U F R R#1 Q:$$ST^FIL()=0  S K=K_R
+ C F
+ 
+ S M=-1
+ D OEV^XMLR("LDDts^IKDLLIT","LDDt^IKDLLIT","LDDte^IKDLLIT")
+ D:K'="" REV^XMLR(K)
+ 
+ I xID'="",xNI'="",bar'="",IsOK D
+ .u 0 w !,"xID="_xID_",bar="_bar_",IsOK="_IsOK
+ .S:'$D(^MLAB(xNI,xID,"s9")) ^("s9")="0|"_$H
+ .D SBREZ^NMLABR(xID,1)
+ .S X=$$SBS^IMLAB(xID)
+ .D DEL^FIL(FN)
+ Q
+LDDts
+ I %XM(2)="Header" S M=0 Q 
+ I %XM(2)="Order" S M=1,xID=$G(%XM(2,"p","OrderID")) Q 
+ I M=1 I %XM(2)="Tests" S M=4 Q
+ I M=4,$D(%XM(2,"p","IsDone")) s IsOK=%XM(2,"p","IsDone")
+ I M=4,$D(%XM(2,"p","BarCode")) s bar=$P(%XM(2,"p","BarCode"),"~",1)
+ I M=4 I %XM(2)="Result" S M=5,prm=$G(%XM(2,"p","id")),(pnm,NVAL,unit,VAL)="" Q
+ Q
+LDDt
+ I M=0,%XM(2)="FileDate" S $P(DTM,",",1)=$$DIISO^DTUTL(%XD) Q 
+ I M=0,%XM(2)="FileTime" S $P(DTM,",",2)=$$TI^DTUTL(%XD) Q 
+ 
+ D:M=5
+ .I %XM(2)="Title" S pnm=pnm_%XD Q 
+ .I %XM(2)="norm" S NVAL=NVAL_%XD Q 
+ .I %XM(2)="quant" S unit=unit_%XD Q 
+ .I %XM(2)="res" S VAL=VAL_%XD Q 
+ Q
+LDDte
+ I M=5,%XM(2)="Result" S M=4 D:VAL'="*" setprm Q 
+ I %XM(2)="Order" S M=0
+ Q
+setprm
+ Q:xID=""!(bar="")  Q:IsOK'=1 
+ I bar'="",xID'="" D  Q:xID="" 
+ .I $D(^MLABI("bar",bar,xID)) Q  ; all correct
+ .I $D(^MLABI("bar",bar)),'$D(^MLABI("bar",bar,xID)) s xID=$O(^MLABI("bar",bar,""),-1) Q  ; only by bar
+ .S (bar,xID)="" 
+ 
+ S xNI=$G(^MLABI("c",xID)) Q:xNI="" 
+ S pnmi="lt."_prm
+ s rPRM=$$CHKAP^IMLABS(pnmi,pnm,unit)
+ D CHKNM^IMLABS(pnmi,pnm)
+ ;w !,"pnmi="_pnmi_",pnm="_pnm_",unit="_unit_",rPRM="_rPRM
+ 
+ S RR=$$RENORM^IMLABU(NVAL)
+ ;u 0 w !,xNI_","_xID_",""d"","_prm_"/"_rPRM_"="_pnm_"="_VAL_" "_unit_"/"_RR_"/"
+ Q:rPRM="" 
+ 
+ S T=$G(^LABT("T",rPRM,"t"))
+ D:T'=""
+ .S TP=$P(T,"|",1),X=$P(T,"|",2)
+ .S:TP="T" VAL=$$TRIM^TXTU(VAL)
+ .I TP="N"!(TP="") S VAL=+$TR(VAL,",",".") S:X'="" VAL=$J(VAL,"",X) ; формат
+ 
+ S RX=$TR(VAL_"|"_$P(RR,"|",1)_"|"_$P(RR,"|",2)_$S($P(RR,"|",3)="":"",1:"|||"_$P(RR,"|",3)),$C(0),"")
+ 
+ ; Compare witch prev date of changing
+ 
+ I $D(^MLAB(xNI,xID,"d",rPRM)),^(rPRM)'=RX S ^MLABE(xNI,xID,"d",rPRM,$H)=^MLAB(xNI,xID,"d",rPRM)
+ S ^MLAB(xNI,xID,"d",rPRM)=RX
+ S RR=$G(^MLAB(xNI,xID,"d",rPRM,"s"))
+ S RR=1 ; subs. TODO
+ S $P(RR,"|",2)=DTM,$P(RR,"|",4)=lpu,$P(RR,"|",8)=LAB
+ S ^MLAB(xNI,xID,"d",rPRM,"s")=RR
+ S:'$D(^MLAB(xNI,xID,"s8")) ^("s8")="1|"_$H
+ D GL^IEXCH("^MLAB",xNI,xID,"d",rPRM)
+ Q
+SPR(LAB,FN)
+ N F,K,M,II,L,code,U1,U2
+ S F=$$OR^FIL(FN),K="",M=0
+ D OEV^XMLR("sprTS^IKDLLIT","sprTD^IKDLLIT","sprTE^IKDLLIT")
+ F  U F R R#1 Q:$$ST^FIL()=0  S K=K_R I $L(K)>1000 D REV^XMLR(K) S K=""
+ C F
+ Q
+sprTS
+ u 0 w !,%XM(2) ; TODO won't work w. ':'
+ I %XM(2)="Row" S M=0,(code,U1,U2)="" u 0 w "#" Q
+ I %XM(2)="Cell" S M=M+1 Q
+ Q
+sprTD
+ I M=1 S code=code_%XD
+ I M=3 S U1=U1_%XD
+ I M=5 S U2=U2_%XD
+ Q
+sprTE
+ I %XM(2)="Row" D  Q
+ .u 0 w !,code_" "_U1_" "_U2
+ .S M=0
+ Q
+LOADLM(LAB) ; load LAB_menu.xml
+ N %J,A,T,NM,M,MNM,CO,CONM,rM,rC
+ D ORH^RWU
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D:%J>1
+ .S T=$P(A,"|",1),CO=$P(A,"|",3),CONM=$P(A,"|",4),M=$P(A,"|",5),MNM=$P(A,"|",6),NM=$P(A,"|",9)
+ .Q:T="" 
+ .S T="lt."_T
+ .S ^LABT("T",T)=NM
+ .S (rM,rC)=""
+ .I M'="",$P($G(^LABC(LAB,"M",M)),"|",2)'=MNM D
+ ..S rM=$$FNDBIO^IKDLU(MNM)
+ ..S:rM'="" ^LABC(LAB,"M",M)=rM_"|"_MNM
+ ..S:rM="" rM=$$ADDBIO^IKDLU(MNM,LAB,M)
+ .I rM="",M'="" S rM=$P($G(^LABC(LAB,"M",M)),"|",1)
+ .I CO'="",$P($G(^LABC(LAB,"CONT",CO)),"|",2)'=CONM D
+ ..S rC=$$FNDCON^IKDLU(CONM)
+ ..S:rC'="" ^LABC(LAB,"CONT",M)=rM_"|"_MNM
+ ..S:rC="" rC=$$ADDCON^IKDLU(CONM,LAB,CO)
+ .I rC="",CO'="" S rC=$P($G(^LABC(LAB,"M",CO)),"|",1)
+ .S:rM'="" ^LABT("T",T,"b",rM)="1|"_rC
+ D CR^RWU
+ Q
+LOADRM(LAB) ; load REG_menu.xml
+ ; заменить в колонке 4 символ | на @
+ N %J,A,U1,U2,U3,code,T,M
+ D ORH^RWU
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D:%J>1
+ .S code=$P(A,"|",1),U1=$P(A,"|",3),T=$P($P(A,"|",4),"@",1),U2=$P(A,"|",5)
+ .Q:code=""  Q:U1="" 
+ .S:U2="" U2=U1
+ .I $D(^BUF("lit")) Q:'$D(^BUF("lit",U1))  S U2=^BUF("lit",U1) ; соответствие кода ЛПУ коду Литеха
+ .S T="lt."_T,M=$O(^LABT("T",T,"b",""))
+ .S ^LABC(LAB,"CN",code)=U2_"|"_U1
+ .Q:M=""  
+ .S M=$$fndBIO^IMLABS(LAB,M) Q:M=""  
+ .S ^LABC(LAB,"CN",code,"b",M)=""
+ D CR^RWU
+ D MKLABTI^NMLABU,MKLABCI^NMLABU
+ Q

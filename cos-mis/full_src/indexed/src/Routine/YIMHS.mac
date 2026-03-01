@@ -1,0 +1,889 @@
+YIMHS ; Вспомогательные программы ЭИБ [ 05/26/2023  0:53 AM ]
+ Q
+NDT ; Новый номер
+ N N S N=$O(^DTYPE(""),-1)+1
+ S ^DTYPE(N,"tname")="",^("pattern","t")=N
+ D MSG^RWU(N)
+ Q
+NDTF(ID) ; Новый номер из старого
+ N N S N=$O(^DTYPE(""),-1)+1
+ M ^DTYPE(N)=^DTYPE(ID)
+ K ^DTYPE(N,"ver")
+ S ^DTYPE(N,"pattern","t")=N
+ D LDT(N)
+ Q
+LDT(N) ; ЗАГРУЗКА
+ S N=+N
+ S:'$D(^DTYPE(N)) N=""
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2))
+ D WC^RWU("<mdtype><id>"_N_"</id>")
+ N PL,R,I,A
+ S PL="" F  S PL=$O(^DTYPE(N,PL)) Q:PL=""  D
+ .Q:PL="pattern"!(PL="list")!(PL="fields")!(PL="subscr") 
+ .S R=$G(^(PL))
+ .I PL="otd" S:R="*" R=999
+ .I PL="spec" S:R="*" R=999
+ .I PL="tn" S A=R,R="" F I=1:1:$L(A,"|") S R=$S(R="":"",1:R_CR)_$P(A,"|",I)_"|"_$$FIO^IKADRY($P(A,"|",I))
+ .I PL="sbproc" S (I,R)="" F  S I=$O(^DTYPE(N,PL,I)) Q:I=""  S R=$S(R="":"",1:R_CR)_I
+ .I PL="autofields" S (I,R)="" F  S I=$O(^DTYPE(N,PL,I)) Q:I=""  S R=$S(R="":"",1:R_CR)_I_"="_^(I)
+ .I PL="print" D  Q 
+ ..D W^RWU("<print>")
+ ..S I="" F  S I=$O(^DTYPE(N,PL,I)) Q:I=""  D WC^RWU($$TAG^TXTU(^DTYPE(N,PL,I)))
+ ..D W^RWU("</print>")
+ .S:PL="use" R='R
+ .I PL="otd"!(PL="spec") D WTAG^RWU(PL,R) Q
+ .I PL="tn" D WTAGC^RWU(PL,R) Q 
+ .D WTAGDC^RWU(PL,$$DBLSLH^TXTU(R))
+ I $G(^DTYPE(N,"ext"))="rpt" D
+ .
+ I $G(^DTYPE(N,"ext"))'="rpt" D
+ .D W^RWU("<list>") S R=""
+ .S I="" F  S I=$O(^DTYPE(N,"list",I)) Q:I=""  D WC^RWU(R_$G(^DTYPE(N,"list",I))) S R=CR
+ .D W^RWU("</list>")
+ S R=$$DTM^DTUTL($P($G(^DTYPE(N,"log")),"|",2))
+ D WTAGDC^RWU("info","Ver."_(+$G(^DTYPE(N,"ver")))_$S($L(R):" , "_R,1:""))
+ D W^RWU("</mdtype></nb_console>")
+ D C^RWU
+ Q
+LSBC(N) ; Subscribe
+ Q
+LLSTL(N) ; list of 'lists'
+ Q
+LPLL(N,ALL) ; field list
+ S N=+N,ALL=+$G(ALL)
+ N PL,R,LST,I,NM,Z,A
+ S PL="" F  S PL=$O(^DTYPE(N,"fields",PL)) Q:PL=""  D
+ .S I=+$G(^(PL)) Q:'I 
+ .S NM=$G(^(PL,"@tit"))
+ .I 'ALL Q:$G(^("@tp"))="n"  Q:$G(^("@sw"))=0 
+ .S LST(I)=PL_"|"_NM
+ S (I,A)=""
+ F  S I=$O(LST(I)) Q:I=""  S A=$S($L(A):A_CR,1:"")_LST(I)
+ D MSG^RWU(A)
+ Q
+SDT ; СОХРАНЕНИЕ 
+ N PL,NBC,C,N,%J,TR,R,K,X
+ S NBC="nb_console"
+ N @$$NEWVAR^YIXMLRR()
+ D RBUFH^YIXMLRR(0)
+ S N=$G(XML(NBC,"mdtype","id"))
+ D:N'="" RMIDX^IMHS(N)
+ S:N="" N=$O(^DTYPE(""),-1)+1
+ K XML(NBC,"mdtype","id")
+ S:$G(XML(NBC,"mdtype","parent"))=-1 XML(NBC,"mdtype","parent")=""
+ S:$G(XML(NBC,"mdtype","sendto"))=0 XML(NBC,"mdtype","sendto")=""
+ S:$G(XML(NBC,"mdtype","bdoc"))=0 XML(NBC,"mdtype","bdoc")=""
+ S:$G(XML(NBC,"mdtype","mu"))=0 XML(NBC,"mdtype","mu")=""
+ S:$G(XML(NBC,"mdtype","hidden"))=0 XML(NBC,"mdtype","hidden")=""
+ S:$G(XML(NBC,"mdtype","urgent"))=0 XML(NBC,"mdtype","urgent")=""
+ S:$G(XML(NBC,"mdtype","rights"))="" XML(NBC,"mdtype","rights")="aaa"
+ S XML(NBC,"mdtype","use")='+$G(XML(NBC,"mdtype","use"))
+ S:$G(XML(NBC,"mdtype","cmm"))=0 XML(NBC,"mdtype","cmm")=""
+ S PL="" F  S PL=$O(XML(NBC,"mdtype",PL)) Q:PL=""  D
+ .I PL'="print" S R=$$WD^TXTU($G(XML(NBC,"mdtype",PL)))
+ .I PL="otd" S:R[999 R="*"
+ .I PL="spec" S:R[999 R="*"
+ .I PL="tn" S R=$TR(R,$C(10,13),"|")
+ .I PL="altid" S R=$TR(R,";\|/:. ",",,,,,,") ; w.o. space
+ .I PL="sbproc" D  Q
+ ..K ^DTYPE(N,PL)
+ ..F %J=1:1:9999 S K=$$WD^TXTU($P(R,CR,%J)) Q:K=""  S:K'="" ^DTYPE(N,PL,K)=""
+ .I PL="autofields" D  Q
+ ..K ^DTYPE(N,PL)
+ ..F %J=1:1:9999 S K=$$WD^TXTU($P(R,CR,%J)) Q:K=""  S X=$P(K,"=",1) S:X'="" ^DTYPE(N,PL,X)=$P(K,"=",2,999)
+ .I PL="print" K ^DTYPE(N,PL) D  Q 
+ ..F %J=1:1024:32768 S K=$$WD^TXTU($E($G(XML(NBC,"mdtype",PL)),%J,%J+1023)) Q:K=""  S ^DTYPE(N,PL,(%J-1)/1024+1)=K
+ .I PL="list" D:$G(XML(NBC,"mdtype","ext"))'="rpt"  Q 
+ ..K ^DTYPE(N,PL) S R=$G(XML(NBC,"mdtype",PL))
+ ..F %J=1:1:9999 S K=$$WD^TXTU($P(R,CR,%J)) Q:K=""  S ^DTYPE(N,PL,%J)=K
+ .Q:$G(^DTYPE(N,PL))=R
+ .I R="" D KD^ISSG("^DTYPE("_N_","""_PL_""")") K ^DTYPE(N,PL) Q 
+ .D KD^ISSG("^DTYPE("_N_","""_PL_""")")
+ .S ^DTYPE(N,PL)=R
+ S ^("ver")=$G(^DTYPE(N,"ver"))+1
+ S ^DTYPE(N,"log")=$$USRH^IUSER()
+ D MKPAT(N)
+ D REGL^IEXCH("^DTYPE",N)
+ S C="" F  S C=$O(^DTYPE(N,"fields",C)) Q:C=""  S ^DTYPEI("fields",C,N)="" D GL^IEXCH("^DTYPEI","fields",C,N)
+ D MKIDX^IMHS(N)
+ S R=$G(^DTYPE(N,"uid")) Q:R=""
+ S (K,C)="" F  S C=$O(^DTYPE(C)) Q:C=""  D:C'=N  Q:K'=""
+ .S PL=$G(^(C,"uid")) Q:PL="" 
+ .S:PL=R K=C
+ D:K'="" MSG^RWU("UID продублирован с "_CR_K_" "_$G(^DTYPE(K,"tname")))
+ Q
+SDTP ; СОХРАНЕНИЕ ПЕЧАТИ
+ N PL,NBC,C,N,%J,R,K,NM
+ S NBC="nb_console"
+ D RBUFH^YIXMLRR(0)
+ S N=$G(XML(NBC,"mdtype","id"))
+ I N="" Q 
+ K XML("nb_console","mdtype","id")
+ S NM=$G(XML("nb_console","mdtype","printname"))
+ S PL="print"
+ I NM="" K ^DTYPE(N,PL) F %J=1:1024:32768 S K=$$WD^TXTU($E($G(XML(NBC,"mdtype",PL)),%J,%J+1023)) Q:K=""  S ^DTYPE(N,PL,(%J-1)/1024+1)=K
+ D:$L(NM) 
+ .I $G(^DTYPE(N,PL))'="m" K ^DTYPE(N,PL) S ^DTYPE(N,PL)="m"
+ .S %J=$G(^DTYPE(N,PL,NM)) K ^DTYPE(N,PL,NM) S ^(NM)=%J ; save name
+ .F %J=1:1024:32768 S K=$$WD^TXTU($E($G(XML(NBC,"mdtype",PL)),%J,%J+1023)) Q:K=""  S ^DTYPE(N,PL,NM,(%J-1)/1024+1)=K
+ S ^("ver")=$G(^DTYPE(N,"ver"))+1
+ S ^DTYPE(N,"log")=$$USRH^IUSER()
+ D REGL^IEXCH("^DTYPE",N,"print")
+ D GL^IEXCH("^DTYPE",N,"log"),GL^IEXCH("^DTYPE",N,"ver")
+ Q
+TSTPRN(TP,PRNI) ; Шаблон печати с тестовыми полями
+ ; TP - тип документа
+ ; PRNI - код шаблона печати
+ N FL,P,A,D
+ D OWF^RWU(".xml")
+ D W^RWU("<?xml version=""1.0"" encoding=""Windows-1251""?>")
+ D WC^RWU("<streport nm="""_$G(^DTYPE(TP,"tname"))_""" id=""1""><fields>")
+ S (A,D)=""
+ S FL="" F  S FL=$O(^DTYPE(TP,"fields",FL)) Q:FL=""  D
+ .S A=A_"<field nm="""_FL_""""
+ .S P="" F  S P=$O(^DTYPE(TP,"fields",FL,P)) Q:P=""  S A=A_" "_$E(P,2,99)_"="""_$$TURLLT^TXTU(^(P))_""""
+ .S A=A_"/>"
+ .S D=D_"<"_FL_">"_FL_"-test</"_FL_">"
+ D WC^RWU(A_"</fields><data>"_D_"</data>")
+ D W^RWU("<print>")
+ I PRNI="" F A=1:1 S P=$G(^DTYPE(TP,"print",A)) Q:P=""  D WC^RWU(P)
+ I PRNI'="" F A=1:1 S P=$G(^DTYPE(TP,"print",PRNI,A)) Q:P=""  D WC^RWU(P)
+ D W^RWU("</print></streport>")
+ D C^RWU
+ Q
+SSBS ; Сохранение подписи
+ N PL,NBC,C,N,%J,R,K,NM
+ S NBC="nb_console"
+ N @$$NEWVAR^YIXMLRR()
+ D RBUFH^YIXMLRR(0)
+ S N=$G(XML(NBC,"mdsbsc","id"))
+ I N="" Q 
+ K XML("nb_console","mdsbsc","id")
+ S NM=$G(XML("nb_console","mdsbsc","altv"))
+ S:NM'="" ^DTYPE(N,"altvsbs")=NM
+ K:NM="" ^DTYPE(N,"altvsbs")
+ S ^DTYPE(N,"log")=$$USRH^IUSER()
+ D REGL^IEXCH("^DTYPE",N)
+ Q
+LSBS(ID) ; Загрузить данные по подписям
+ N A
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2))
+ S A=$G(^DTYPE(+ID,"altvsbs"))
+ D WC^RWU("<mdsbsc><altv data="""_A_"""/>")
+ D W^RWU("</mdsbsc></nb_console>")
+ D C^RWU
+ Q
+MKPAT(N) ; make 'pattern' section
+ K ^DTYPE(N,"pattern")
+ S ^DTYPE(N,"pattern","t")=N
+ M ^DTYPE(N,"pattern","n")=^DTYPE(N,"tname")
+ M ^DTYPE(N,"pattern","o")=^DTYPE(N,"owner")
+ M ^DTYPE(N,"pattern","p")=^DTYPE(N,"folder")
+ M ^DTYPE(N,"pattern","r")=^DTYPE(N,"rights")
+ M ^DTYPE(N,"pattern","fil")=^DTYPE(N,"pfile")
+ M ^DTYPE(N,"pattern","mu")=^DTYPE(N,"mu")
+ M ^DTYPE(N,"pattern","bd")=^DTYPE(N,"bdoc")
+ M ^DTYPE(N,"pattern","ur")=^DTYPE(N,"urgent")
+ M ^DTYPE(N,"pattern","e")=^DTYPE(N,"ext")
+ M ^DTYPE(N,"pattern","h")=^DTYPE(N,"hidden")
+ M ^DTYPE(N,"pattern","al")=^DTYPE(N,"aclevel")
+ M ^DTYPE(N,"pattern","cm")=^DTYPE(N,"cmm") ; common
+ 
+ K:$G(^DTYPE(N,"pattern","r"))="aaa" ^("r") ; default
+ Q
+FIND(NM) ; Найти по имени тип
+ N ID S ID="" F  S ID=$O(^DTYPE(ID)) Q:ID=""  Q:$G(^(ID,"tname"))=NM
+ Q ID
+FPTRN(PTRN) ; Найти по имени файла шаблона
+ N ID S ID=""
+ F  S ID=$O(^DTYPE(ID)) Q:ID=""  Q:$G(^(ID,"pfile"))=PTRN
+ Q ID
+FNDUID(UID) ; Найти тип по его UID
+ S UID=$TR($$TRANSLIT^TXTU(UID)," ","_")
+ N ID S ID=$G(^DTYPEI("uid",UID)) Q:ID'="" ID
+ F  S ID=$O(^DTYPE(ID)) Q:ID=""  Q:$G(^(ID,"uid"))=UID
+ Q ID
+FINDF(NM) ; Найти по имени папку
+ N ID S ID=""
+ F  S ID=$O(^DFLD(ID)) Q:ID=""  Q:$G(^(ID,"name"))=NM
+ Q ID
+FINDFU(UID) ; Найти по UID папку
+ S UID=$TR($$TRANSLIT^TXTU(UID)," ","_")
+ N ID S ID=""
+ F  S ID=$O(^DFLD(ID)) Q:ID=""  Q:$G(^(ID,"uid"))=UID
+ Q ID
+ADDT(NAME,FLD,EXT,UID) ; Добавить тип по имени (с проверкой)
+ N ID S ID=$$FIND(NAME)
+ I ID="" L +^DTYPE S ID=$O(^DTYPE(""),-1)+1,^(ID,"tname")=NAME L -^DTYPE
+ D:$L(FLD) SET(ID,"folder",FLD)
+ D:$L($G(EXT)) SET(ID,"ext",EXT)
+ D:$L($G(UID)) SET(ID,"uid",UID)
+ D MKPAT(ID)
+ Q ID
+ADDF(NAME,UID) ; Добавить папку с проверкой по имени
+ N ID
+ S UID=$G(UID),ID=$S(UID'="":$$FINDFU(UID),1:$$FINDF(NAME))
+ I ID="" L +^DFLD S ID=$O(^DFLD(""),-1)+1 S ^(ID,"name")=NAME S:UID'="" ^("uid")=UID L -^DFLD
+ Q ID
+SET(N,PL,R) ; Установить поле типа документа
+ Q:PL=""!(N="") 
+ I PL="otd" S:R["999" R="*"
+ I PL="spec" S:R["999" R="*"
+ Q:$G(^DTYPE(N,PL))=R  
+ I R="" K ^DTYPE(N,PL) D KD^ISSG("^DTYPE("_N_","""_PL_""")") Q
+ S ^DTYPE(N,PL)=R
+ D WD^ISSG("^DTYPE("_N_","""_PL_""")")
+ D MKPAT(N)
+ D GL^IEXCH("^DTYPE",N)
+ Q
+GET(N,PL) ; Поле типа документа
+ Q $G(^DTYPE(N,PL))
+LTXTDT(TXT,FLi,Fv) ; ; Список типов для редактора с поиском
+ ; FLi - папка , Fv - только видимые (не sys и не use=0)
+ N ID,IDD,FLD,PID,R,BUF,L,KX
+ S TXT=$$LU^TXTU($$WD^TXTU($G(TXT))),FLi=$G(FLi),Fv=$G(Fv)
+ D OWF^RWU(".txt")
+ S L=$L(TXT)
+ I L>3,$E(TXT,1,3)="VR=",$$CHECK^IKADRY($E(TXT,4,99)) G LTDTVR
+ I L>3,$E(TXT,1,3)="FL=" G LTDTFL
+ I L>1,$E(TXT)="=",$D(^DTYPE($E(TXT,2,99))) S ID=$E(TXT,2,99),BUF($G(^(ID,"tname"))_"|"_ID)="" G LTDT2
+ G LTDT1
+LTDTVR ; По сотруднику (отделению/специальности)
+ N TN,SP,OTD,TNX
+ S TN=$E(TXT,4,99),SP=$$SPEC^IKADRY(TN),OTD=$$OTD^IKADRY(TN)
+ S OTD="|"_OTD_"|",SP="|"_SP_"|",TNX="|"_TN_"|"
+ S ID=0 F  S ID=$O(^DTYPE(ID)) Q:ID=""  D
+ .I 'Fv Q:$G(^(ID,"use"))=0   Q:$G(^("h")) 
+ .I $D(^DTYPE(ID,"otd")) S R=^("otd") I R'="*",$L(R) Q:"|"_R_"|"'[OTD
+ .I $D(^("tn")) S R=^("tn") I R'="*",$L(R) Q:"|"_R_"|"'[TNX 
+ .I $D(^("spec")) S R=^("spec") I R'="*",$L(R) Q:"|"_R_"|"'[SP 
+ .S R=$G(^("owner")) I $L(R) Q:R'=TN 
+ .S R=$G(^("rights")) Q:"aw"'[$E(R,1)&("aw"'[$E(R,3)) 
+ .S BUF($G(^("tname"))_"|"_ID)=""
+ G LTDT2
+LTDTFL ; По имени поля
+ S KX=$$UL^TXTU($E(TXT,4,99))
+ G:KX="" LTDT2
+ S ID=0 F  S ID=$O(^DTYPE(ID)) Q:ID=""  D
+ .I 'Fv Q:$G(^(ID,"use"))=0   Q:$G(^("h"))
+ .Q:'$D(^DTYPE(ID,"fields",KX)) 
+ .S BUF($G(^DTYPE(ID,"tname"))_"|"_ID)=""
+ G LTDT2
+LTDTFN ; Краткий список типов
+ N ID,R,C
+ D OWF^RWU(".txt")
+ S (C,ID)="" F  S ID=$O(^DTYPE(ID)) Q:ID=""  D
+ .S R=$G(^(ID,"tname")) Q:R="" 
+ .D WC^RWU(C_ID_"|"_R)
+ .S C=CR
+ D C^RWU
+ Q
+LTDT ; Список типов для редактора
+ N TXT,FLi,Fv S (TXT,FLi)="",Fv=0
+LTDT1 D OWF^RWU(".txt")
+ S ID="" F  S ID=$O(^DTYPE(ID)) Q:ID=""  D
+ .S FLD=$G(^(ID,"tname"))
+ .I $L(TXT) Q:$$LU^TXTU(FLD)'[TXT 
+ .S FLD=$$OWF^TXTU(FLD,42)
+ .I $L(FLi) Q:FLi'=$G(^("folder"))
+ .I Fv Q:$G(^("use"))=0  Q:$G(^("hidden")) 
+ .S BUF(FLD_"|"_ID)=""
+LTDT2 S IDD="" F  S IDD=$O(BUF(IDD)) Q:IDD=""  D
+ .S ID=$P(IDD,"|",2),R=$P(IDD,"|",1)
+ .S FLD=$G(^DTYPE(ID,"folder")),PID=$G(^("parent"))
+ .;S:PID<0 PID="" S PID=$S(+PID:ID_" "_$G(^DTYPE(PID,"tname")),1:"")
+ .S FLD=FLD_" "_$G(^DFLD(FLD,"name"))
+ .D WC^RWU(CR_ID_"|"_R_" "_ID_"|"_FLD) ; "|"_PID
+ D C^RWU
+ Q
+LSTNM(TXT) ; Список имен документов
+ N FLD,ID
+ S TXT=$$UL^TXTU($$WD^TXTU($G(TXT)))
+ D OWF^RWU(".txt")
+ S ID="" F  S ID=$O(^DTYPE(ID)) Q:ID=""  D
+ .S FLD=$G(^(ID,"tname"))
+ .I TXT'="",$$LU^TXTU(FLD)'[TXT Q 
+ .D WC^RWU(CR_ID_"|"_FLD_" ("_ID_")")
+ D C^RWU
+ Q
+LFT ; Список папок
+ D OWF^RWU(".txt"),W^RWU("|")
+ N ID S ID=""
+ F  S ID=$O(^DFLD(ID)) Q:ID=""  D WC^RWU(CR_ID_"|"_$G(^(ID,"name")))
+ D C^RWU
+ Q
+DELDT(ID) ; Удалить тип документа
+ Q:ID=""
+ N N,F
+ S N="",F=0 F  S N=$O(^EPRI("t",N)) Q:N=""  I $D(^(N,ID)) S F=1 Q 
+ I F D MSG^RWU("По данному шаблону уже созданы документы.") Q 
+ S N="" F  S N=$O(^EPRPT(N)) Q:N=""  I $D(^(N,ID)) K ^(ID) D KGL^IEXCH("^EPRPT",N,ID)
+ D K^ISSG("^DTYPE("_ID_")")
+ D RMIDX^IMHS(ID)
+ K ^DTYPE(ID)
+ D KGL^IEXCH("^DTYPE",ID)
+ Q
+FLRPT(TP) ; Fileds of 'rpt' type report
+ Q:TP=""  
+ D OWF^RWU(".txt")
+ N FL,A,L,X
+ S FL="" F  S FL=$O(^DTYPE(TP,"fields",FL)) Q:FL=""  D
+ .S A=$G(^(FL)) S:A="" A=999
+ .S A=$E("000",1,4-$L(A))_A,L(A_" "_FL)=FL
+ .;S A=$G(^(FL)),A=$S(A="":FL,1:A),L(A)=FL
+ S X="" F  S X=$O(L(X)) Q:X=""  D
+ .S FL=L(X),A=$G(^DTYPE(TP,"fields",FL))
+ .S A=A_"|"_FL_"|"_$G(^(FL,"@tit"))_"|"_$G(^("@tp"))_"|"
+ .S A=A_$G(^("@src"))_"|"_$G(^("@lst"))_"|"_$G(^("@br"))_"|"
+ .S A=A_$G(^("@ro"))_"|"_$G(^("@sw"))_"|"_$G(^("@sv"))_"|"
+ .S A=A_$G(^("@nn"))_"|"
+ .S A=A_$G(^("@w"))_"|"_$G(^("@h"))_"|"_$G(^("@mode"))_"|"
+ .S A=A_$G(^("@rows"))_"|"_$TR($G(^("@cols")),"|","#")
+ .S A=A_"|"_$G(^("@grp"))_"|"_$G(^("@npt"))_"|"_$G(^("@c"))
+ .D WC^RWU(CR_A)
+ D C^RWU
+ Q
+SRPTGEN ; Save report and generate print, if fields changed
+ D FSRPT
+ ; todo
+ Q
+FSRPT ; Save fields of 'rpt' type report
+ N %J,A,R,ID,NBC,I,K,PL,X,TP,ULST
+ N @$$NEWVAR^YIXMLRR()
+ D RBUFH^YIXMLRR(1)
+ S NBC="nb_console"
+ S ID=$G(XML(NBC,"mdfield","id")) Q:ID=""  ; todo - show err
+ K XML(NBC,"mdfield","id")
+ S R=$G(XML(NBC,"mdfield","table"))
+ F I=1:1:999 S K=$P(R,CR,I) Q:K=""  D:I>1   
+ .S PL=$TR($P(K,"|",2)," "_$C(28,29,30,31),"_"),TP=""
+ .S:PL="" PL=$TR($P(K,"|",3)," ","") Q:PL="" 
+ .S ULST(PL)=""
+ .F X="@tit","@tp","@src","@lst","@br","@ro","@sw","@sv","@nn","@w","@h","@mode","@rows","@cols","@grp" K ^DTYPE(ID,"fields",PL,X)
+ .S X=$P(K,"|",3) S:$L(X) ^DTYPE(ID,"fields",PL,"@tit")=X
+ .S X=$P(K,"|",4) S:X="" X="n" S ^DTYPE(ID,"fields",PL,"@tp")=X,TP=X
+ .S X=$P(K,"|",5) S:$L(X) ^DTYPE(ID,"fields",PL,"@src")=X
+ .S X=$P(K,"|",6) S:$L(X) ^DTYPE(ID,"fields",PL,"@lst")=X
+ .S X=$$fbool($P(K,"|",7)) S:X=0 ^DTYPE(ID,"fields",PL,"@br")=0
+ .S X=$$fbool($P(K,"|",8)) S:+X'=0 ^DTYPE(ID,"fields",PL,"@ro")=X
+ .S X=$$fbool($P(K,"|",9)) S:X=0 ^DTYPE(ID,"fields",PL,"@sw")=0
+ .S X=$$fbool($P(K,"|",10)) S:X=0 ^DTYPE(ID,"fields",PL,"@sv")=0
+ .S X=$$fbool($P(K,"|",11)) S:X=1 ^DTYPE(ID,"fields",PL,"@nn")=1
+ .S X=$P(K,"|",12) S:$L(X)!(X?.N.":".N) ^DTYPE(ID,"fields",PL,"@w")=X
+ .S X=$P(K,"|",13) S:+X'=0!(X="v")!(X="n") ^DTYPE(ID,"fields",PL,"@h")=X
+ .S X=$P(K,"|",14) S:$L(X) ^DTYPE(ID,"fields",PL,"@mode")=X
+ .S X=$P(K,"|",15) S:$L(X) ^DTYPE(ID,"fields",PL,"@rows")=X ; row count
+ .S X=$P(K,"|",16) S:$L(X) ^DTYPE(ID,"fields",PL,"@cols")=$TR(X,"#","|") ; cols
+ .S X=$P(K,"|",17) S:$L(X) ^DTYPE(ID,"fields",PL,"@grp")=$$TRIM^TXTU(X)
+ .S X=$P(K,"|",1) S:TP="n" X="" S:$L(X) ^DTYPE(ID,"fields",PL)=X
+ S PL="" F  S PL=$O(^DTYPE(ID,"fields",PL)) Q:PL=""  K:'$D(ULST(PL)) ^DTYPE(ID,"fields",PL)
+ S ^("ver")=$G(^DTYPE(ID,"ver"))+1
+ S ^DTYPE(ID,"log")=$$USRH^IUSER()
+ D KGL^IEXCH("^DTYPE",ID,"fields")
+ D GL^IEXCH("^DTYPE",ID,"fields")
+ Q
+fbool(X) ; from boolean text
+ Q:X="yes" 1
+ Q:X="no" 0
+ Q X
+LRLSTE(TP,KEY) ; Load private lists for 'rpt'
+ ; TP - тип документа
+ ; KEY - врач@шаблон
+ Q:TP="" 
+ N P,R,I,A,BB,VR,PTP
+ S KEY=$$WD^TXTU(KEY),VR=$P(KEY,"@",1),PTP=$P(KEY,"@",2)
+ S:VR="" VR=" "
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<mdslist><list>")
+ D:PTP="" LRLSTd
+ D:PTP'="" LRLSTe(VR,PTP)
+ D W^RWU("</list></mdslist></nb_console>")
+ D C^RWU
+ Q
+CPYRLST(TP,SVR,VR,PL) ; Копировать на врача
+ ; TP - код шаблона
+ ; SVR - исходный врач(шаблон) VR@PTP
+ ; VR - куда копировать
+ ; PL - поле
+ Q:TP=""  Q:VR=""  Q:PL=""
+ N PTP
+ S PTP=$P(SVR,"@",2),SVR=$P(SVR,"@",1)
+ S:SVR="" SVR=" " S:PTP="" PTP="default"
+ S PTP=$$WD^TXTU(PTP),PL=$$WD^TXTU(PL)
+ 
+ I SVR=" ",PTP="default" D 
+ .K ^EPRPT(VR,TP,PTP," list",PL)
+ .M ^EPRPT(VR,TP,PTP," list",PL)=^DTYPE(TP,"list",PL)
+ .D REGL^IEXCH("^EPRPT",VR,TP,PTP," list",PL)
+ 
+ I (SVR'=" ")!(PTP'="default") D
+ .K ^EPRPT(VR,TP,PTP," list",PL)
+ .M ^EPRPT(VR,TP,PTP," list",PL)=^EPRPT(SVR,TP,PTP," list",PL)
+ .D REGL^IEXCH("^EPRPT",VR,TP,PTP," list",PL)
+ 
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<mdslist><idv>")
+ D LRLSTidv
+ D W^RWU("</idv></mdslist></nb_console>")
+ D C^RWU
+ Q
+LRLST(TP) ; Load lists for 'rpt'
+ ; TP - тип документа 
+ Q:TP="" 
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<mdslist><idv>")
+ D LRLSTidv
+ D W^RWU("</idv><list>")
+ 
+ D WTAGC^RWU("id",TP)
+ D LRLSTd
+ D W^RWU("</list></mdslist></nb_console>")
+ D C^RWU
+ Q
+LRLSTidv 
+ N P,R,I,A,BB,VR,PTP,C
+ S (C,VR)="" F  S VR=$O(^EPRPT(VR)) Q:VR=""  D:$D(^EPRPT(VR,TP))
+ .S PTP="" F  S PTP=$O(^EPRPT(VR,TP,PTP)) Q:PTP=""  D:$D(^EPRPT(VR,TP,PTP," list"))
+ ..S A=$S(VR=" ":"",1:VR)_"@"_PTP
+ ..S A=A_"|"_$S(PTP="default":"По умолчанию",1:PTP)_$S(VR=" ":"",1:" ("_VR_" "_$$FIO^IKADRY(VR)_")")
+ ..D WC^RWU(C_A)
+ ..S C=CR
+ 
+ Q
+LRLSTd ; Общий справочник
+ N P,R,I,A,BB,VR,PTP,C
+ S P="" F  S P=$O(^DTYPE(TP,"list",P)) Q:P=""  D
+ .D WC^RWU("<"_P_">") S A=""
+ .F I=1:1:$O(^DTYPE(TP,"list",P,""),-1) D WC^RWU(A_$$TAG^TXTU(^DTYPE(TP,"list",P,I))) S A=CR
+ .D WC^RWU("</"_P_">")
+ .D WTAGC^RWU("____"_P,$G(^DTYPE(TP,"list",P))) ; config
+ Q
+LRLSTe(VR,PTP) ; Частный справочник
+ N S,E
+ S P="" F  S P=$O(^EPRPT(VR,TP,PTP," list",P)) Q:P=""  D
+ .D WC^RWU("<"_P_">") S A=""
+ .S S=$O(^EPRPT(VR,TP,PTP," list",P,"")),E=$O(^(""),-1)
+ .F I=S:1:E D WC^RWU(A_$$TAG^TXTU(^EPRPT(VR,TP,PTP," list",P,I))) S A=CR
+ .D WC^RWU("</"_P_">")
+ .D WTAGC^RWU("____"_P,$G(^DTYPE(TP,"list",P))) ; config (из общего)
+ Q
+SRLST ; Save lists for 'rpt'
+ N %J,A,ID,I,N,F,KEY,VR,PTP
+ S (ID,BB,KEY,VR,PTP)=""
+ K ^BUF($J,"eprpt")
+ D ORH^RWU,OEV^XMLR("TGLS^YIMHS","TGLD^YIMHS","TGLE^YIMHS")
+ F %J=1:1 S A=$$RA^RWU Q:%IFN["Z"  D REV^XMLR(A)
+ D CEV^XMLR,CR^RWU
+ 
+ I ID'="",PTP="" K ^DTYPE(ID,"list") M ^DTYPE(ID,"list")=^BUF($J,"eprpt") D REGL^IEXCH("^DTYPE",ID,"list")
+ I ID'="",PTP'="" K ^EPRPT(VR,ID,PTP," list") M ^EPRPT(VR,ID,PTP," list")=^BUF($J,"eprpt") D REGL^IEXCH("^EPRPT",VR,ID,PTP," list")
+ Q
+TGLS 
+ S A=%XM(2)
+ Q:A="xml"!(A="nb_console")!(A="mdslists")!(A="list")!(A="id")!($E(A,1,4)="____")!(A="_k")  
+ S BB=""
+ Q
+TGLD 
+ S A=%XM(2)
+ Q:A="xml"!(A="nb_console")!(A="mdslists")!(A="list")!(A="")
+ I A="id" S ID=ID_%XD Q 
+ I A="_k" S KEY=KEY_%XD Q 
+ I $E(A,1,4)="____" S A=$E(A,5,99),^BUF($J,"eprpt",A)=$G(^BUF($J,"eprpt",A))_%XD Q 
+ Q:ID=""  
+ S I=$O(^BUF($J,"eprpt",A,""),-1)+1,BB=BB_%XD
+ S:I=0 I=1
+ F  S F=BB[CR Q:'F  S N=$P(BB,CR,1),BB=$P(BB,CR,2,9999),^(I)=$G(^BUF($J,"eprpt",A,I))_N,I=I+F
+ Q
+TGLE 
+ S A=%XM(2)
+ Q:A="xml"!(A="nb_console")!(A="mdslists")!(A="list")!(A="") 
+ I A="_k" S VR=$P(KEY,"@",1),PTP=$P(KEY,"@",2) S:VR="" VR=" " Q 
+ I A="id" Q 
+ Q:BB="" 
+ S I=+$O(^BUF($J,"eprpt",A,""),-1)+1,^(I)=$G(^(I))_BB,BB=""
+ Q
+SRLSTF ; Save list for one field
+ I $$LCL^NUSER("epr","edit_coder")=0 D MSG^RWU("Изменение справочника запрещено.") Q 
+ N %J,A,ID,PL,LS,E,VR,PT,V,H,LC,MSG,FE
+ S (PL,LS,ID,E,PT)="",H=$H,V=$$KDR^IUSER()
+ S LC=+$$LCL^NUSER("epr","priv_coder"),MSG=0 ; только личн.
+ D ORH^RWU
+ S FE=0
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D  Q:FE
+ .S ^ISLOG("MHLIST",V,H,%J)=A S:%J=1 ^ISLOG("MHLIST",V,H,%J,"l")=$$USR^IUSER() ; debug
+ .I %J=1 S PT=$P(A,"|",2),ID=$P(A,"|",1),E=($G(^DTYPE(ID,"ext"))="rpt"),VR=$P(PT,"@",1),PT=$P(PT,"@",2) S:LC&(VR="") VR=V,PT="default",MSG=1 Q 
+ .I %J=2 S PL=A Q 
+ .I %J=3 S LS=A Q:ID=""!(LS="")  D  Q 
+ ..I PT'="" K ^EPRPT(VR,ID,PT," list",LS) Q 
+ ..I E S A=$G(^DTYPE(ID,"list",LS)) K ^DTYPE(ID,"list",LS) S:A'="" ^DTYPE(ID,"list",LS)=A
+ ..I 'E S A=$G(^DTYPE(ID,"list")) K ^DTYPE(ID,"list") S:A'="" ^DTYPE(ID,"list")=A
+ ..S FE=+$P(A,"|",2)
+ ..I FE D MSG^RWU("Изменение справочника запрещено") ; из настроек спр.
+ .Q:ID="" 
+ .I PT'="" Q:VR=""  Q:LS=""  S ^EPRPT(VR,ID,PT," list",LS,%J-2)=A Q  ;for pattern
+ .Q:E&(LS="") 
+ .S:E ^DTYPE(ID,"list",LS,%J-3)=A
+ .S:'E ^DTYPE(ID,"list",%J-3)=A
+ D CR^RWU
+ D:PT="" ; если обычно, не по шаблону
+ .D:E KGL^IEXCH("^DTYPE",ID,"list",LS),GL^IEXCH("^DTYPE",ID,"list",LS)
+ .D:'E KGL^IEXCH("^DTYPE",ID,"list"),GL^IEXCH("^DTYPE",ID,"list")
+ ; проверка ссылки на справочник
+ I ID'="",PL'="",LS'="" D 
+ .S:$G(^DTYPE(ID,"fields",PL,"@lst"))'=LS ^("@lst")=LS
+ .D GL^IEXCH("^DTYPE",ID,"fields",PL,"@lst")
+ ; по текстовому шаблону
+ D:$L(PT)&$L(LS) KGL^IEXCH("^EPRPT",VR,ID,PT," list",LS),GL^IEXCH("^EPRPT",VR,ID,PT," list",LS)
+ i MSG=1 D MSG^RWU("!prv") Q  ; переключение на личный
+ Q
+SRLSTFr(V,H) ; Restore list for one field
+ N %J,A,ID,PL,LS,E,VR,PT
+ S (PL,LS,ID,E,PT)=""
+ F %J=1:1 Q:'$D(^ISLOG("MHLIST",V,H,%J))  S A=$G(^ISLOG("MHLIST",V,H,%J))  D
+ .I %J=1 S PT=$P(A,"|",2),ID=$P(A,"|",1),E=($G(^DTYPE(ID,"ext"))="rpt"),VR=$P(PT,"@",1),PT=$P(PT,"@",2) Q 
+ .I %J=2 S PL=A Q 
+ .I %J=3 S LS=A Q:ID=""!(LS="")  D  Q 
+ ..K:$L(PT) ^EPRPT(VR,ID,PT," list",LS)
+ ..I PT="" K:E ^DTYPE(ID,"list",LS) K:'E ^DTYPE(ID,"list") 
+ .I $L(PT) Q:LS=""  S ^EPRPT(VR,ID,PT," list",LS,%J-2)=A Q  ; for pattern
+ .I E,ID=""!(LS="") Q  
+ .S:E ^DTYPE(ID,"list",LS,%J-3)=A
+ .S:'E ^DTYPE(ID,"list",%J-3)=A
+ D:PT="" ; если обычно, не по шаблону
+ .D:E KGL^IEXCH("^DTYPE",ID,"list",LS),GL^IEXCH("^DTYPE",ID,"list",LS)
+ .D:'E KGL^IEXCH("^DTYPE",ID,"list"),GL^IEXCH("^DTYPE",ID,"list")
+ .Q:ID=""!(PL="")!(LS="") 
+ .S:$G(^DTYPE(ID,"fields",PL,"@lst"))'=LS ^("@lst")=LS
+ .D GL^IEXCH("^DTYPE",ID,"fields",PL,"@lst")
+ ; по текстовому шаблону
+ D:$L(PT)&$L(LS) KGL^IEXCH("^EPRPT",VR,ID,PT," list",LS),GL^IEXCH("^EPRPT",VR,ID,PT," list",LS)
+ Q
+LOGSRL(VR,DS,DE) ; Log изменений по справочнику
+ ; VR - 
+ ; DS - 
+ ; DE - 
+ ; TODO
+ Q
+GETFLG(VR,OTD,SP,NIB) ; Получить флаги регистрации услуг
+ N ID,X,A,G,L,I,E,F,LPU
+ S SP="|"_SP_"|",OTD="|"_OTD_"|",LPU="|"_$$^I("ilpu")_"|"
+ S ID="" F  S ID=$O(^EPRSP("flg",ID)) Q:ID=""  D
+ .Q:+$G(^(ID,"g"))>0  S I=ID S:$D(^("i")) I=^("i")_"-i"
+ .Q:$$GTFLGC()  
+ .S E=$G(^EPRSP("flg",ID,"eh")) X:$L(E) "S E="_E Q:+E   
+ .S L(I)=ID_"|"_$G(^EPRSP("flg",ID,"nf"))_$S($D(^("n")):"~"_^("n"),1:"")
+ S G="" F  S G=$O(^EPRSP("flgg",G)) Q:G=""  D:$D(^EPRSP("flg",G))
+ .S I=G
+ .S:$D(^EPRSP("flg",G,"i")) I=^("i")_"-i"
+ .S E=$G(^("eh")) X:$L(E) "S E="_E Q:+E
+ .S A="|"_$S($D(^EPRSP("flg",G)):$G(^(G,"nf")),1:"")
+ .S ID="" F  S ID=$O(^EPRSP("flgg",G,ID)) Q:ID=""  S:'$$GTFLGC() A=A_"@"_ID_"|"_$G(^EPRSP("flg",ID,"nf"))_$S($D(^("n")):"~"_^("n"),1:"")
+ .Q:A'["@"  ; нет разрешенных подэлементов
+ .S L(I)=A
+ S (A,G,X)="" F  S X=$O(L(X)) Q:X=""  S A=A_G_L(X),G=CR
+ D MSG^RWU(A)
+ Q
+GETFLGS(VR,OTD,SP,NIB) ; Получить перечень флагов регистрации услуг
+ N ID,X,A,G,L,I,E,F,LPU
+ S SP="|"_SP_"|",OTD="|"_OTD_"|",LPU="|"_$$^I("ilpu")_"|"
+ S ID="" F  S ID=$O(^EPRSP("flg",ID)) Q:ID=""  D
+ .Q:+$G(^(ID,"g"))>0  S I=ID S:$D(^("i")) I=^("i")
+ .Q:$$GTFLGC()  
+ .S E=$G(^EPRSP("flg",ID,"eh")) X:$L(E) "S E="_E Q:+E   
+ .S L(ID)=""
+ S G="" F  S G=$O(^EPRSP("flgg",G)) Q:G=""  D:$D(^EPRSP("flg",G))
+ .S I=G
+ .S:$D(^EPRSP("flg",G,"i")) I=^("i")
+ .S E=$G(^("eh")) X:$L(E) "S E="_E Q:+E
+ .S ID="" F  S ID=$O(^EPRSP("flgg",G,ID)) Q:ID=""  S:'$$GTFLGC() L(ID)=""
+ 
+ S (A,X)="" F  S X=$O(L(X)) Q:X=""  S A=$S(A="":"",1:A_"|")_X
+ Q A
+GTFLGC() ; for GETFLG
+ S X=$G(^EPRSP("flg",ID,"otd","a")) I X'="","|"_X_"|"'[OTD Q 1
+ S X=$G(^("d")) I X'="","|"_X_"|"[OTD Q 1
+ S X=$G(^EPRSP("flg",ID,"spec","a")) I X'="","|"_X_"|"'[SP Q 1
+ S X=$G(^("d")) I X'="","|"_X_"|"[SP Q 1
+ S X=$G(^EPRSP("flg",ID,"lpu","a")) I X'="","|"_X_"|"'[LPU Q 1
+ S X=$G(^("d")) I X'="","|"_X_"|"[LPU Q 1
+ Q 0
+FLGLST(VR,OTD,SP,LST,FULNM,NCHK) ; Получить флаги регистрации услуг (список)
+ N ID,X,L,LPU
+ S FULNM=+$G(FULNM)
+ S SP="|"_SP_"|",OTD="|"_OTD_"|"
+ S FULNM=$S(FULNM=1:"nf",FULNM=2:"ne",1:"nm")
+ S LPU="|"_$$^I("ilpu")_"|",NCHK=+$G(NCHK)
+ K @LST
+ S ID="" F  S ID=$O(^EPRSP("flg",ID)) Q:ID=""  D
+ .Q:$G(^EPRSP("flg",ID,"d"))  ; disable all
+ .I 'NCHK,$$GTFLGC() Q 
+ .S X=$G(^EPRSP("flg",ID,FULNM)) S:$L(X) L(ID)=X
+ M @LST=L
+ Q
+FLGLN(VR,OTD,SP,NCHK) ; Получить ID флагов регистрации услуг(линейно)
+ N ID,L,X,R,LPU
+ S SP="|"_SP_"|",OTD="|"_OTD_"|",LPU="|"_$$^I("ilpu")_"|",NCHK=+$G(NCHK)
+ S (ID,R)="" F  S ID=$O(^EPRSP("flg",ID)) Q:ID=""  D
+ .I 'NCHK,$$GTFLGC() Q 
+ .S R=$S(R="":"",1:R_"|")_ID
+ Q R
+FLGNMS(FLGS) ; Получить имена из флагов
+ N I,R,X S R=""
+ F I=1:1:$L(FLGS,"|") S X=$P(FLGS,"|",I) S:X'="" R=R_$S(R="":"",1:",")_$S($G(^EPRSP("flg",X,"nm"))="":X,1:^EPRSP("flg",X,"nm"))
+ Q R
+FLGLIST(NFIN) ; Перечень статусов
+ ; NFIN - без финансовых (grn,kss)
+ N TFL,I,A
+ D FLGLST^YIMHS("","","","TFL",1,1)
+ I $G(NFIN) F I="kss","grn","rkl","nop" K TFL(I)
+ S (A,I)=""
+ F  S I=$O(TFL(I)) Q:I=""  S A=A_$S(A="":A,1:CR)_I_"|"_TFL(I)
+ D MSG^RWU(A)
+ Q
+LPRNPAT ; Load print pattern
+ N ID,R
+ D OWF^RWU(".xmlb")
+ D W^RWU($G(^PP(0,2))_"<mdppat><list>")
+ S ID="" F  S ID=$O(^EPRSP("dtype","print",ID)) Q:ID=""  D WC^RWU("<"_ID_">"),WC^RWU($$TAG^TXTU(^EPRSP("dtype","print",ID))),WC^RWU("</"_ID_">")
+ D W^RWU("</list></mdppat></nb_console>"),C^RWU
+ Q
+SPRNPAT ; Save print pattern
+ N @$$NEWVAR^YIXMLRR()
+ D RBUFH^YIXMLRR(1)
+ K ^EPRSP("dtype","print")
+ M ^EPRSP("dtype","print")=XML("list")
+ D REGL^IEXCH("^EPRSP","dtype","print")
+ Q
+MKPRN(ID) ; Make print from pattern for doc.type 
+ N PL,TP,R,K,L,I,X,G,PG,GH
+ D OWF^RWU(".txt") G:ID="" MKPRNe
+ S GH=$G(^EPRSP("dtype","print","grouphdr"))
+ S:GH="" GH="<l h=""2""/><l w=""110"" b=""b""><d>%NAME%</d></l>"
+ S R=$G(^EPRSP("dtype","print","start"))
+ S K=$G(^DTYPE(ID,"tname"))
+ F  S I=$F(R,"%NAME%") Q:I=0  S $E(R,I-6,I-1)=K
+ D WC^RWU(R)
+ S PL="" F  S PL=$O(^DTYPE(ID,"fields",PL)) Q:PL=""  D
+ .S I=$G(^(PL)),TP=$G(^(PL,"@tp")) Q:TP=""!(TP="n") 
+ .Q:$G(^("@sw"))=0  ; only visible
+ .S G=$G(^("@grp"))
+ .S:I="" I="999"_PL S L(I)=TP_"|"_G_"|"_PL
+ S (PG,X)="" F  S X=$O(L(X)) Q:X=""  D
+ .S PL=$P(L(X),"|",3,99),TP=$P(L(X),"|",1),G=$P(L(X),"|",2)
+ .I G'=PG S PG=G D WC^RWU(CR_$$TRT^TXTU(GH,"%NAME%",G))
+ .S K=$S($D(^EPRSP("dtype","print","type-"_TP)):"type-"_TP,$D(^EPRSP("dtype","print","type-default")):"type-default",1:"")
+ .S K=$S($D(^EPRSP("dtype","print","name-"_PL)):"name-"_PL,1:K)
+ .Q:K="" 
+ .S R=^(K) Q:R=""
+ .F  S I=$F(R,"%NAME%") Q:I=0  S $E(R,I-6,I-1)=PL
+ .S K=$G(^DTYPE(ID,"fields",PL,"@tit"))
+ .F  S I=$F(R,"%TITLE%") Q:I=0  S $E(R,I-7,I-1)=K
+ .D WC^RWU(CR_R)
+ D WC^RWU($G(^EPRSP("dtype","print","end")))
+MKPRNe D C^RWU
+ Q
+LPROFS(TP,TAB) ; Вывести список профилей документа
+ ; TAB - режим таблицы
+ N ID,R,A
+ S (A,ID)="",TAB=+$G(TAB)
+ Q:TP="" 
+ F  S ID=$O(^DTYPE(TP,"profiles",ID)) Q:ID=""  S R=$G(^(ID)),A=$S(A="":"",1:A_CR)_ID_$S(TAB:"",1:"@"_$P(R,"|",2))_"|"_$P(R,"|",1)
+ D MSG^RWU($S(TAB:CR,1:"")_A)
+ Q
+REG ; Document autoregistration
+ N P,X S P=""
+ F  S P=$O(^$R(P)) Q:P=""  I P'["." X "S X=$T(REGIMHS^"_P_")" D:$L(X) @("REGIMHS^"_P)
+ Q
+DPROF(TP,ID) ; Удалить профиль
+ I TP=""!(ID="") D LPROFS(TP,1) Q 
+ K ^DTYPE(TP,"profiles",ID)
+ D KGL^IEXCH("^DTYPE",TP,"profiles",ID)
+ D LPROFS(TP,1)
+ Q
+LPROF(TP,ID) ; Вывести профиль
+ N R,P
+ D OWF^RWU(".xmlb")
+ D W^RWU(^PP(0,2)_"<mdprofil>")
+ S R=$G(^DTYPE(TP,"profiles",ID))
+ D WTAGDC^RWU("id",ID)
+ D WTAGDC^RWU("nm",$P(R,"|",1))
+ D WTAGDC^RWU("nmd",$P(R,"|",2))
+ S (R,P)=""
+ F  S P=$O(^DTYPE(TP,"profiles",ID,"fields",P)) Q:P=""  S:$G(^(P,"u"))=0 R=$S($L(R):R_"|",1:"")_P
+ D WTAGC^RWU("uf",R)
+ D W^RWU("</mdprofil></nb_console>"),C^RWU
+ Q
+SPROF ; Сохранить профиль
+ N %J,A,I,R,TP,ID
+ N @$$NEWVAR^YIXMLRR()
+ D RBUFH^YIXMLRR(1)
+ S %J="nb_console"
+ S ID=$G(XML(%J,"mdprofil","id"))
+ S TP=$G(XML(%J,"mdprofil","tp"))
+ S R=$G(XML(%J,"mdprofil","nm"))
+ S A=$G(XML(%J,"mdprofil","nmd"))
+ S:A="" A=R
+ S:ID="" ID=$O(^DTYPE(TP,"profiles",""),-1)+1
+ K ^DTYPE(TP,"profiles",ID)
+ S ^DTYPE(TP,"profiles",ID)=R_"|"_A
+ S R=$G(XML(%J,"mdprofil","uf"))
+ I $L(R) F I=1:1:$L(R) S A=$P(R,"|",I) S:$L(A) ^DTYPE(TP,"profiles",ID,"fields",A,"u")=0
+ D MSG^RWU(^PP(0,2)_"<mdprofil><id data="""_ID_"""/></mdprofil></nb_console>",".xmlb")
+ D KGL^IEXCH("^DTYPE",TP,"profiles",ID)
+ D GL^IEXCH("^DTYPE",TP,"profiles",ID)
+ Q
+FIELDS(TP) ; Получить имена полей документа
+ N P,A
+ S (P,A)=""
+ F  S P=$O(^DTYPE(TP,"fields",P)) Q:P=""  S A=$S(A="":"",1:A_CR)_P
+ D MSG^RWU(A)
+ Q
+EXPORT(ID,VPT) ; Экспорт документа с шаблонами в XGL 
+ ; VPT - экспортировать шаблоны по врачам
+ N R,F,A,GL,UID
+ S VPT=+$G(VPT)
+ D:'$D(^DTYPE(ID,"uid"))
+ .S R=$G(^("tname")),R=$TR(R,",.|;:<>?'[]{}\","")
+ .S F=$G(^("folder"))
+ .I $L(F) S F=$G(^DFLD(F,"uid")) S:F="" F=$G(^("name"))
+ .S F=$TR(F," ,.|;:<>?'[]{}\","_")
+ .S A=$$UL^TXTU($$TRANSLIT^TXTU(F)_"/"_$$TRANSLIT^TXTU(R))
+ .S A=$TR(A," ","_")
+ .S ^DTYPE(ID,"uid")=A
+ S F=$G(^("uid")),UID=F
+ K ^DATAEXCH(F)
+ M ^DATAEXCH(F,"DTYPE")=^DTYPE(ID)
+ M ^DATAEXCH(F,"EPRPT")=^EPRPT(" ",ID) ; только общие шаблоны
+ ; прочие шаблоны - если указано по врачу или специальные
+ S R=""
+ F  S R=$O(^EPRPT(R)) Q:R=""  I R'=" ",R[" "!VPT,$D(^EPRPT(R,ID)) D
+ .M ^DATAEXCH(F,"EPRPTA",R,ID)=^EPRPT(R,ID) 
+ S GL(1)="-^DATAEXCH("""_F_""")"
+ S GL(2)="^DATAEXCH("""_F_""""
+ S GL(3)="UID"
+ D S^XGUNET("GL",".bin")
+ K ^DATAEXCH(F)
+ Q
+IMPORT ; Импорт документа из XGL
+ N UID,TP,X
+ D R^XGUNET("hpar",0) ; ! no reencode
+ I '$D(UID) D MSG^RWU("Ошибка при импорте файла") Q
+ S TP=$$FNDUID(UID)
+ I TP="" S TP=$G(^DATAEXCH(UID,"DTYPE","pattern","t")) I $L(TP),$G(^DATAEXCH(UID,"DTYPE","tname"))'=$G(^DTYPE(TP,"tname")) S TP=""
+ S:TP="" TP=$O(^DTYPE(""),-1)+1
+ K ^DTYPE(TP),^EPRPT(" ",TP)
+ M ^DTYPE(TP)=^DATAEXCH(UID,"DTYPE")
+ M ^EPRPT(" ",TP)=^DATAEXCH(UID,"EPRPT")
+ S X="" F  S X=$O(^DATAEXCH(UID,"EPRPTA",X)) Q:X=""  K ^EPRPT(X,TP)
+ M ^EPRPT=^DATAEXCH(UID,"EPRPTA")
+ D MKPAT(TP)
+ K ^DATAEXCH(UID)
+ D MKIDX^IMHS(TP)
+ D REGL^IEXCH("^DTYPE",TP)
+ Q
+PRNTP(TP) ; Виды печати
+ I $G(^DTYPE(+TP,"print"))'="m" D MSG^RWU("|По умолчанию") Q
+ N I,C,A
+ S (I,C,A)=""
+ F  S I=$O(^DTYPE(TP,"print",I)) Q:I=""  S A=A_C_I_"|"_$G(^(I)),C=CR
+ D MSG^RWU(A)
+ Q
+PRNTPs(TP) ; Виды печати - system
+ I $G(^DTYPE(+TP,"print"))'="m" Q ""
+ N I,C,L S (I,C,L)=""
+ F  S I=$O(^DTYPE(TP,"print",I)) Q:I=""  S L=L_C_I_"|"_$G(^(I)),C=CR
+ Q L
+PRNADD(TP,NM) 
+ I $G(^DTYPE(TP,"print"))'="m" K ^DTYPE(TP,"print")
+ N ID
+ S NM=$$WD^TXTU(NM),^DTYPE(TP,"print")="m"
+ S ID=$O(^DTYPE(TP,"print",""),-1)+1,^(ID)=NM
+ D WD^ISSG("^DTYPE("_TP_",""print"","_ID_")")
+ D KGL^IEXCH("^DTYPE",TP,"print",ID)
+ D GL^IEXCH("^DTYPE",TP,"print")
+ D PRNTP(TP)
+ Q
+PRNCNG(TP,ID,NM) ; Переименовать шаблон печати
+ Q:ID="" 
+ S ^DTYPE(TP,"print",ID)=$$WD^TXTU(NM)
+ D WD^ISSG("^DTYPE("_TP_",""print"","_ID_")")
+ D GL^IEXCH("^DTYPE",TP,"print",ID)
+ D PRNTP(TP)
+ Q
+PRNDEL(TP,ID) ; Удалить шаблон печати
+ Q:ID=""  
+ D KD^ISSG("^DTYPE("_TP_",""print"","_ID_")")
+ K ^DTYPE(TP,"print",ID)
+ D KGL^IEXCH("^DTYPE",TP,"print",ID)
+ D PRNTP(TP)
+ Q
+PRNLOAD(TP,ID) ; Загрузить шаблон печати
+ N R,I
+ D OWF^RWU(".txt")
+ S I=""
+ I ID="" F  S I=$O(^DTYPE(TP,"print",I)) Q:I=""  D WC^RWU(^(I))
+ I $L(ID) F  S I=$O(^DTYPE(TP,"print",ID,I)) Q:I=""  D WC^RWU(^(I))
+ D C^RWU
+ Q
+AFT(NM) ; Добавить папку
+ N ID
+ S NM=$$WD^TXTU(NM)
+ L +^DFLD S ID=$O(^DFLD(""),-1)+1,^(ID,"name")=NM L -^DFLD
+ D REGL^IEXCH("^DFLD",ID)
+ D LFT
+ Q
+DFT(ID) ; Удалить папку
+ N I,F
+ S F=0,I=""
+ F  S I=$O(^DTYPE(I)) Q:I=""  I $G(^(I,"folder"))=ID S F=1 Q
+ I F D MSG^RWU("Папка используется в документах ("_I_")") Q 
+ K ^DFLD(ID)
+ D K^ISSG("^DFLD("_ID_")")
+ D KGL^IEXCH("^DFLD",ID)
+ Q
+NFT(ID,NM) ; Переименовать папку
+ S NM=$$WD^TXTU(NM)
+ S ^DFLD(ID,"name")=NM
+ D REGL^IEXCH("^DFLD",ID)
+ D LFT
+ Q
+INEPRDL ; Список документов импорта
+ N A,ID
+ S A="|"
+ S ID=0 F  S ID=$O(^DTYPE(ID)) Q:ID=""  D
+ .Q:'$G(^(ID,"iml")) 
+ .S A=A_CR_ID_"|"_$G(^DTYPE(ID,"tname"))
+ D MSG^RWU(A)
+ Q
+ESTIM ; Список оценок документа
+ N I,A
+ S A="",I=$G(^cfg("epr","estimmax")) S:I="" I=10
+ F I=1:1:I S A=$S(A="":"",1:A_CR)_I
+ D MSG^RWU(A)
+ Q
+CPPTV(TP,FL,FVR,TVR) ; Перенести справочник по полю с врача на врача
+ N PP
+ S PP="" F  S PP=$O(^EPRPT(FVR,TP,PP)) Q:PP=""  D:$D(^(PP," list"))
+ .Q:'$D(^(" list",FL))
+ .M ^EPRPT(TVR,TP,PP," list",FL)=^EPRPT(FVR,TP,PP," list",FL)
+ .D GL^IEXCH("^EPRPT",TVR,TP,PP," list",FL)
+ Q
+EXPFLG ; Экспорт статусов
+ N F,R,X
+ D OWF^RWU(".txt")
+ D WC^RWU("Код|Краткое имя|Полное имя|Системное|Индекс|Группа|Отделение (a)|Отделение (d)|ЛПУ (a)|ЛПУ (d)|Служебный|Информационный")
+ S F="" F  S F=$O(^EPRSP("flg",F)) Q:F=""  D
+ .S R=F_"|"_$G(^EPRSP("flg",F,"nm"))
+ .S R=R_"|"_$G(^EPRSP("flg",F,"nf"))
+ .S R=R_"|"_$G(^EPRSP("flg",F,"ns"))
+ .S R=R_"|"_$G(^EPRSP("flg",F,"i"))
+ .S R=R_"|"_$G(^EPRSP("flg",F,"g"))
+ .S R=R_"|"_$TR($G(^EPRSP("flg",F,"otd","a")),"|",";")
+ .S R=R_"|"_$TR($G(^EPRSP("flg",F,"otd","d")),"|",";")
+ .S R=R_"|"_$TR($G(^EPRSP("flg",F,"lpu","a")),"|",";")
+ .S R=R_"|"_$TR($G(^EPRSP("flg",F,"lpu","d")),"|",";")
+ .S R=R_"|"_(+$G(^EPRSP("flg",F,"rc")))
+ .S R=R_"|"_(+$G(^EPRSP("flg",F,"c")))
+ .D WC^RWU(CR_R)
+ D C^RWU
+ Q
+REGIPROC 
+ S ^IPROC("Система","Экспорт статусов услуг")="EXPFLG_YIMHS,1,0"
+ Q

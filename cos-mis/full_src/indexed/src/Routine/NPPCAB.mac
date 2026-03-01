@@ -1,0 +1,294 @@
+NPPCAB ; Личный кабинет пациента [ 07/24/2024  1:01 PM ]
+CHK(LOG,PAS) ; Логин пациента
+ I LOG="" Q
+ S LOG=$$WD^TXTU($E(LOG,1,128)),PAS=$$WD^TXTU(PAS)
+ S LOG=$$UL^TXTU(LOG)
+ I '$D(^PPCAB(LOG)) Q 
+ I $G(^PPCAB(LOG))="" Q 
+ I $G(^PPCAB(LOG))'=PAS Q
+ N X,A,NI
+ S NI=$G(^PPCAB(LOG,"n")),X=""
+ I NI'="",$$GET^IPAC(NI,"pplock") Q 
+ S:NI'="" X=$$FIO^IPAC(NI)
+ S:X="" X=$G(^PPCAB(LOG,"fio"))
+ S ^PPCAB(LOG,"log")=$H
+ S A="id|"_NI_CR_"name|"_X_CR_"login|"_LOG_CR_"passwd|"_PAS
+ D MSG^RWU(A)
+ Q
+REG(NI,LOG,PAS) ; Регистрация
+ Q:LOG=""  
+ N X
+ S LOG=$$WD^TXTU(LOG),PAS=$$WD^TXTU(PAS)
+ S LOG=$$UL^TXTU(LOG)
+ S X=$G(^PPCAB(LOG,"n")) 
+ I X'="",X'=NI D MSG^RWU("ERR:Указанное имя пользователя занято") Q 
+ S X=$$GET^IPAC(NI,"pplogin")
+ I X'="",X'=LOG D MSG^RWU("ERR:Пациент уже зарегистрирован с другим именем") Q
+ I LOG=PAS D MSG^RWU("ERR:Имя пользователя не может совпадать с паролем") Q
+ S ^PPCAB(LOG)=PAS
+ I NI'="" S ^(LOG,"n")=NI D SET^IPAC(NI,"pplogin",+$H,LOG,1)
+ D MSG^RWU("OK")
+ Q
+REGPHN(F,I,O,PHN) ; Регистрация с SMS на телефон
+ N LOG,PAS,X,NI
+ S PHN=$TR(PHN,"-() ","")
+ I $L(PHN)<7 D phnER() Q
+ I $L(PHN)>12 D phnER() Q 
+ S LOG=PHN
+ S:$E(LOG,1,2)="+7" $E(LOG,1,2)=8
+ I $L(PHN)>7,$E(PHN)=8 S $E(PHN)="+7"
+ S LOG=$TR(LOG,$TR(LOG,1234567890,""),"")
+ I $D(^PPCAB(LOG)) D MSG^RWU("ERR:Указанный телефон уже зарегистрирован в системе") Q 
+ S PAS=1000+$R(8999)
+ S F=$$WD^TXTU(F),I=$$WD^TXTU(I),O=$$WD^TXTU(O)
+ S NI=$$FNDPHN^IPACFND(F,PHN) ; пробуем найти пациента
+ S X=$$GET^IPAC(NI,"pplogin")
+ I X'="",X'=LOG D MSG^RWU("ERR:Вы уже зарегистрированы с другим именем") Q
+ S ^PPCAB(LOG)=PAS
+ S ^PPCAB(LOG,"tm")=$H,^("fio")=F_" "_I_" "_O,^("phn")=PHN,^("reg")=1
+ I NI'="" S ^("n")=NI D SET^IPAC(NI,"pplogin",+$H,LOG,1)
+ S X="Регистрация в личном кабинете клиники."_CR_"Логин: "_LOG_CR_"Пароль: "_PAS
+ S X=$$ADDSEND^IMSGHUB("sms","ppcab","",PHN,X,"")
+ D MSG^RWU("OK")
+ Q
+phnER() 
+ D MSG^RWU("ERR:Неправильный формат номера телефона. Должен быть указан номер мобильного телефона в формате 8(901)123-4567.")
+ Q
+REGFIO(LOG,PAS,NI,F,I,O,BD) ; Регистрация по совпадению с ФИО
+ I NI="" Q 
+ S LOG=$E($$WD^TXTU(LOG),1,99),PAS=$E($$WD^TXTU(PAS),1,99)
+ S LOG=$$UL^TXTU(LOG)
+ I $D(^PPCAB(LOG)),$G(^PPCAB(LOG,"n"))'=NI D MSG^RWU("ERR:Указанное имя пользователя занято") Q 
+ S F=$$WD^TXTU(F),I=$$WD^TXTU(I),O=$$WD^TXTU(O)
+ S BD=$$DI^DTUTL(BD) I BD="" D regfER() Q 
+ I $$LU^TXTU($$GET^IPAC(NI,"fiof"))'=$$LU^TXTU(F) D regfER() Q 
+ I $$LU^TXTU($$GET^IPAC(NI,"fioi"))'=$$LU^TXTU(I) D regfER() Q
+ I $$LU^TXTU($$GET^IPAC(NI,"fioo"))'=$$LU^TXTU(O) D regfER() Q
+ I $$GET^IPAC(NI,"datar")'=BD D regfER() Q 
+ S X=$$GET^IPAC(NI,"pplogin")
+ I X'="",X'=LOG D MSG^RWU("ERR:Вы уже зарегистрированы с другим именем") Q
+ I $L(PAS)<3 D MSG^RWU("ERR:Пароль должен быть не менее 3-х символов.") Q
+ D SET^IPAC(NI,"pplogin",+$H,LOG,1)
+ S ^PPCAB(LOG)=PAS,^(LOG,"n")=NI
+ D CHK(LOG,PAS)
+ Q
+REGCODE(USR,CODE,BD,PHN,REFP) 
+ ; CODE - временный код
+ ; BD - дата рождения
+ ; PHN - телефон
+ I CODE="" D MSG^RWU("ERR") Q 
+ N L,NI
+ S NI=$G(^PPCOD(CODE)),BD=$$DI^DTUTL(BD),PHN=$$MPHN^TXTU(PHN)
+ I NI="" Q 
+ I $$GET^IPAC(NI,"datar")'=BD,$$MPHN^TXTU($$GET^IPAC(NI,"pager"))'=PHN D MSG^RWU("ERR") Q 
+ S L=REFP_"@"_NI,^PPCAB(L,"n")=NI,^PPCAB(L,"refpid",USR)=REFP
+ S ^PPCABI("refpid",USR,REFP)=NI
+ K ^PPCOD(CODE)
+ D SET^IPAC(NI,"pplogin",+$H,L,1)
+ ;D MSG^RWU("OK")
+ Q
+VRDAY(KEY,MOD) ; ; Получить информацию и времена для записи
+ N OT,SP,LP
+ S OT=$P(KEY,",",2),SP=$P(KEY,",",4),LP=$P(KEY,",",1)
+ I $$FLinFL^TXTU($$GETPL^ISPRAV("otd",OT,"flg"),"nwebzp") D vrdm Q 
+ I $$FLinFL^TXTU($$GETPL^ISPRAV("spec",SP,"flg"),"nwebzp") D vrdm Q 
+ I $$FLinFL^TXTU($$GET^ICONTR(LP,"flg"),"nwebzp") D vrdm Q
+ I $$FLinFL^TXTU($$CABFL^IPLPU(LP,$$GETCAB^IRASP2(KEY),"cls"),"nwebzp") Q 
+ D VRDAY^NSRASP(KEY,1,1,$G(MOD))
+ Q
+vrdm 
+ N A,R,VR,DT,LP
+ S LP=$P(KEY,",",1),VR=$P(KEY,",",3),DT=$P(KEY,",",5)
+ Q:OT=""  Q:SP=""  Q:VR=""  
+ Q:'$D(^DSH(LP,OT,VR,SP,DT)) 
+ S R=$P($G(^DSH(LP,OT,VR,SP,DT)),"|",2) ; cab
+ S A=$$GET^ICONTR(LP,"mname")
+ S A=KEY_"|"_$S(A="":$$NAME^ICONTR(LP),1:A)_"|"_$$GOTD^YISPRAV(OT)_"|"_$$GSPEC^YISPRAV(SP)_"|"_$$VFIO^IRASP2(VR)_"|"_R_"|"_$$DT^DTUTL(DT)_"|"_$$TIMEST^IRASP2(LP,OT,VR,SP,DT)
+ S A=A_"|Запись к этому специалисту производится только по телефону."
+ D MSG^RWU(A)
+ Q
+ZPS(LOG,KEY,TIME,EID) ; Записать в расписание
+ ; EID - внешний идентификатор
+ N R,DT,LL,NI,X,LP,VR,SP,CLPU,fCEX
+ I LOG="" D MSG^RWU("Вы неавторизованы.") Q
+ S NI=$G(^PPCAB(LOG,"n")),TIME=$P(TIME,",",1),KEY=$TR(KEY,",","~")
+ I NI="" D MSG^RWU("ERR") Q 
+ S DT=$P(KEY,"~",5),LP=$P(KEY,"~",1),VR=$P(KEY,"~",3),SP=$P(KEY,"~",4)
+ 
+ I DT<(+$H) D MSG^RWU("Запись на прошедшее время запрещена.") Q
+ 
+ ; check server activity
+ S fCEX=+$G(^cfg("callc","chk-online")),CLPU=$$^I("ilpu")
+ I fCEX,LP'=CLPU,$$TMBTW^DTUTL($H,$G(^EXCFG("log",LP)))>fCEX D MSG^RWU("Запись временно недоступна.") Q 
+ 
+ S X=$G(^cfg("ppcab","rec-per-day")) S:'X X=5
+ I ($$PACRCNT^IRASP2(NI,DT,LP)+1)>X D MSG^RWU("Вы можете записаться только к "_X_" спецалист"_$$NUMET^TXTU(X,"у","ам","ам")_" в день.") Q 
+ S X=$G(^cfg("ppcab","rec-by-spec"))
+ I X,($$PACRCNT^IRASP2(NI,$H+1,LP,SP,99999)+1)>X D MSG^RWU("Запись невозможна. Превышен лимит Ваших записей к этому специалисту.") Q  ; next day from now
+ S R=$$PACINV^IRASP2(NI,LP,$P(KEY,"~",2),VR,SP,DT,1)
+ I R D MSG^RWU("Запись на указанную дату невозможна,<br> Вы уже записаны к этому врачу на "_$$TM^DTUTL(R)_", "_$$DT^DTUTL(DT)_".") Q
+ 
+ I $P(VR,".",1)'="X" D  Q:$$IsMSG^RWU() 
+ .S X=$$GET^IKADRY(VR,"flg",DT)
+ .I $$FLinFL^TXTU(X,"nwww") D MSG^RWU("Запись только через регистратуру.") Q
+ .I $$FLinFL^TXTU(X,"nwebzp") D MSG^RWU("Запись только через регистратуру.") Q
+ 
+ I $G(^DSH($P(KEY,"~",1),$P(KEY,"~",2),VR,$P(KEY,"~",4),DT,TIME))'="" D MSG^RWU("Время уже занято") Q 
+ S LL=$G(%LOG),%LOG="usr",EID=$G(EID)
+ S:EID="" EID=0
+ D ZPS^NSPRASP(KEY,$$DT^DTUTL(DT),TIME,NI,"",EID,1,1)
+ S %LOG=LL
+ I $E($G(%L))="?" D MSG^RWU("Самостоятельная запись невозможна, обратитесь в регистратуру.") Q
+ I $G(%L)="" D MSG^RWU("Вы успешно записаны к врачу "_$$DT^DTUTL(DT)_" на "_TIME_".<br>Специальность: "_$$TAG^TXTU($$GSPEC^YISPRAV(SP))_"<br>Ф.И.О. врача: "_$$TAG^TXTU($$FIO^IKADRY(VR)))
+ Q
+ZPSA(KEY,TM,PAC,COMM,REF,REFP,USR) 
+ ; PAC=nib|fiof|fioi|fioo|sex|born|phone|polis
+ ; REFP - идентификатор внешнего пациента
+ ; REF - идентификатор внешней записи
+ ; USR - внешний пользователь
+ N DT,NI,%LOG,LPU,CLPU,X,P,VR,SP,fCEX,cSTC
+ S KEY=$TR(KEY,",","~")
+ S DT=$P(KEY,"~",5),VR=$P(KEY,"~",3),LPU=$P(KEY,"~",1),SP=$P(KEY,"~",4)
+ S X=TM,TM=$S(TM[":":$$TI^DTUTL(TM),1:TM)
+ S REF=$E($G(REF),1,128),REFP=$G(REFP),USR=$G(USR)
+ S:REF'="" REF=USR_"@"_REF
+ I REFP'="",$P(PAC,"|",1)="" S $P(PAC,"|",1)=$G(^PPCABI("refpid",USR,REFP)) I $P(PAC,"|",1)="" D MSG^RWU("refpid not found") Q   
+ I REF'="",$D(^DSHE("eid",REF)) D MSG^RWU("ref already used") Q 
+ I 'TM S ^ERLOG("NPPCAB",+$H,$P($H,",",2))=KEY_"#"_TM_"/"_X_"#"_PAC_"#"_REF_"#"_REFP_"#"_USR
+ S NI=$$DBLSP^TXTU($$TRIM^TXTU($TR($P(PAC,"|",2,4),"|"," ")))
+ I $TR(NI," ","")="" D MSG^RWU("patient is null") Q 
+ 
+ ; check server activity
+ S fCEX=+$G(^cfg("callc","chk-online")),CLPU=$$^I("ilpu")
+ I fCEX,LPU'=CLPU,$$TMBTW^DTUTL($H,$G(^EXCFG("log",LPU)))>fCEX D MSG^RWU("Service temporarily unavailable") Q 
+ 
+ S cSTC=$S(USR="":"",1:$G(^DSHM("api",USR,"config","cstc"))),P=$P(PAC,"|",8)
+ S:cSTC="" cSTC=$$LCL^IUSER("patients"," stc")
+ ; TODO - несколько одинаковых полисов
+ S X=""
+ I P'="",cSTC'="" S X=$$NIBYPL^YIFINDN(P,cSTC,DT) S:X'="" $P(NI,"|",1)=X
+ I cSTC'="",USR'="",X="" D MSG^RWU("Пациент не идентифицирован.") Q 
+ 
+ I $G(^cfg("ppcab","api-phone")),$P(PAC,"|",7)="" D MSG^RWU("phone not found") Q
+ I $G(^DSH(LPU,$P(KEY,"~",2),VR,SP,DT,TM))'="" D MSG^RWU("Time already reserved") Q 
+ I '$D(^DSH(LPU,$P(KEY,"~",2),VR,SP,DT,TM)) D MSG^RWU("Schedule not defined") Q 
+ I $P(VR,".",1)'="X" D  Q:$$IsMSG^RWU() 
+ .S X=$$GET^IKADRY(VR,"flg",DT)
+ .I $$FLinFL^TXTU(X,"nwww") D MSG^RWU("Запись только через регистратуру.") Q 
+ .I $$FLinFL^TXTU(X,"nwebzp") D MSG^RWU("Запись только через регистратуру.") Q
+ ; разрешены внутренние номера
+ I $G(^cfg("ppcab","api-nib"))!$S(USR="":0,1:$G(^DSHM("api",USR,"config","api-nib"))) S X=$P(PAC,"|",1) I $$EXIST^IPAC(X),$$UL^TXTU($P(PAC,"|",2))=$$UL^TXTU($$GET^IPAC(X,"fiof")) S NI=X
+ I NI'="",$G(^cfg("ppcab","ctrl-cnt")),$$PACRCNT^IRASP2(NI,+$H,LPU,SP,+$H+^cfg("ppcab","ctrl-cnt"))>0 D MSG^RWU("Вы уже записаны к этому специалисту.") Q 
+ I NI="",$$TELINV^IRASP2($TR($P(PAC,"|",2,4),"|"," "),$P(PAC,"|",7),LPU,OT,VR,SP,DT) D MSG^RWU("Вы уже записаны к этому специалисту.") s ^ISLOG("NPPCAB",$H)="CNT:"_KEY_"#"_TM_"/"_X_"#"_PAC_"#"_REF_"#"_REFP_"#"_USR Q 
+ S NI=NI_"|"_COMM_"||"_$P(PAC,"|",7)
+ S X=$$DI^DTUTL($P(PAC,"|",6)) ; borndate
+ S:X'="" $P(NI,"|",9)=X
+ S X=$$GENDER^TXTU($P(PAC,"|",5))
+ S:X'="" $P(NI,"|",10)=X
+ S:REF="" REF=0
+ S %LOG="api" S:USR'="" %LOG="api"_USR
+ S:$G(^cfg("ppcab","debug")) ^ISLOG("NPPCAB",$H)=KEY_"#"_TM_"/"_X_"#"_PAC_"#"_REF_"#"_REFP_"#"_USR
+ D ZPS^NSPRASP(KEY,$$DT^DTUTL(DT),$$TM^DTUTL(TM),NI,"",REF,1,1)
+ I $G(%L)'="",$G(^cfg("ppcab","debug")) S ^ISLOG("NPPCAB",$H,"r")=%L
+ I $E($G(%L))="?" D MSG^RWU("Запись только через регистратуру.") Q
+ Q
+ZPDEL(REF,USR) ; Удалить запись по внешнему коду
+ N PID,F,DS,DT,TM,VR,LP,OT,SP,R
+ S REF=$E($G(REF),1,128),USR=$G(USR),REF=USR_"@"_REF
+ S DS=$H-$S($G(^cfg("ppcab","deloldapi")):40,1:1),F=0
+ S PID="" F  S PID=$O(^DSHE("eid",REF,PID)) Q:PID=""  D  Q:F
+ .S DT=DS F  S DT=$O(^DSHP(PID,DT)) Q:DT=""  D  Q:F
+ ..S TM="" F  S TM=$O(^DSHP(PID,DT,TM)) Q:TM=""  D  Q:F
+ ...S VR="" F  S VR=$O(^DSHP(PID,DT,TM,VR)) Q:VR=""  D  Q:F
+ ....S R=^(VR)
+ ....S LP=$P(R,"|",1),OT=$P(R,"|",2),SP=$TR($P(R,"|",3),"@","|")
+ ....Q:$G(^DSH(LP,OT,VR,SP,DT,TM,"l"))'=REF 
+ ....D DEL^IRASP2(OT,VR,SP,DT,TM,LP)
+ ....S F=1
+ I 'F,$G(REZ)="" S REZ="Записи не найдены"
+ S:'F ^ERLOG("NPPCAB",+$H,$P($H,",",2))="DEL="_REF_" "_USR_"#"_$G(%L)_"#"_$G(REZ)
+ D MSG^RWU($S(F:"",1:"ERR"_REF_" "_USR_"|"_$G(REZ)))
+ Q
+ZPSTAT(REF,USR) ; Статус записи
+ N PID,F,DS,DT,TM,VR,LP,OT,SP,R,B,C,MSG
+ S REF=$E($G(REF),1,128),USR=$G(USR),REF=USR_"@"_REF
+ S DS=$H-40,F=0,MSG=""
+ S PID="" F  S PID=$O(^DSHE("eid",REF,PID)) Q:PID=""  D  Q:F
+ .S DT=DS F  S DT=$O(^DSHP(PID,DT)) Q:DT=""  D  Q:F
+ ..S TM="" F  S TM=$O(^DSHP(PID,DT,TM)) Q:TM=""  D  Q:F
+ ...S VR="" F  S VR=$O(^DSHP(PID,DT,TM,VR)) Q:VR=""  D  Q:F
+ ....S R=^(VR)
+ ....S LP=$P(R,"|",1),OT=$P(R,"|",2),SP=$TR($P(R,"|",3),"@","|")
+ ....Q:$G(^DSH(LP,OT,VR,SP,DT,TM,"l"))'=REF 
+ ....S B=$G(^("b")),C=$G(^("c"))
+ ....S MSG=LP_","_OT_","_VR_","_$TR(SP,"|","@")_","_DT
+ ....S MSG=MSG_"|"_TM
+ ....S MSG=MSG_"|"_$$DTM^DTUTL($P(B,"|",1)) ; call
+ ....S MSG=MSG_"|"_$$DTM^DTUTL($P(C,"|",1)) ; come
+ ....S F=1
+ D MSG^RWU(MSG)
+ Q
+MYDSH(LOG) ; Расписание пациента
+ Q:LOG="" 
+ N dTP
+ S dTP=$G(^cfg("ppcab","dsh-delall"))
+ D OWF^RWU(".txt")
+ D PACSys^NKRASP($G(^PPCAB(LOG,"n")),"","","",0,-1,1,"MYDSHp^NPPCAB")
+ D C^RWU
+ Q
+MYDSHp ; Write proc
+ S A="|"_A
+ I +$H<DTT,$S(dTP:1,1:$P($$GETLOG^IRASP2(LP,OT,VR,SP,DTT,TM),"@",1)="usr") S A=LP_"~"_OT_"~"_VR_"~"_SP_"~"_DTT_"~"_TM_A
+ D WC^RWU(CR_A)
+ Q
+DELDSH(LOG,KEY) ; Удалить запись
+ Q:LOG=""
+ N NI,LP,OT,VR,SP,DT,TM
+ S NI=$G(^PPCAB(LOG,"n")) G:NI="" DELDSHe
+ S LP=$P(KEY,"~",1),OT=$P(KEY,"~",2),VR=$P(KEY,"~",3)
+ S SP=$P(KEY,"~",4),DT=$P(KEY,"~",5),TM=$P(KEY,"~",6)
+ I $$GETNIB^IRASP2(LP,OT,VR,SP,DT,TM)'=NI G DELDSHe
+ N %LOG S %LOG="usr"
+ D DEL^IRASP2(OT,VR,SP,DT,TM,LP)
+DELDSHe ;D MYDSH(LOG)
+ Q
+EPR(LOG,DS,DE) ; Вывести назначения/направления из ЭМК пациента
+ S LOG=$G(^PPCAB(LOG,"n"))
+ I LOG="" D MSG^RWU("[]") Q 
+ N FLL
+ S FLL="назначения|направления|рекомендации|консультации|notifydt"
+ D DO^ITRIG("ppcab","epr")
+ D JSON^YIMHH(LOG,$G(DS),$G(DE),1,1,FLL)
+ Q
+EPRAPI(REFP,DS,DE,USR) ; ЭМК для API 
+ S REFP=$G(^PPCABI("refpid",USR,REFP))
+ I REFP="" D MSG^RWU("[]") Q
+ S DS=$$DI^DTUTL($G(DS)),DE=$$DI^DTUTL($G(DE))
+ N FLL
+ S FLL="назначения|направления|рекомендации|консультации|notifydt"
+ D DO^ITRIG("ppcab","eprapi")
+ D JSON^YIMHH(REFP,$G(DS),$G(DE),1,1,FLL)
+ Q
+CDLAPI(REFP,DS,DE,USR) ; Данные КДЛ API
+ S REFP=$G(^PPCABI("refpid",USR,REFP))
+ I REFP="" D MSG^RWU("[]") Q 
+ I $$FLinFL^TXTU($$GET^IPAC(REFP,"state",+$H),"nwww") D MSG^RWU("[]") Q 
+ D JSONA^NMLABR(REFP,$G(DS),$G(DE))
+ Q
+regfER() 
+ D MSG^RWU("ERR:Указаны неправильные реквизиты или Вы не обслуживаетесь в учреждении.")
+ Q
+DEL(NIB) ; Удалить аккаунт по NIB
+ N L
+ S L="" F  S L=$O(^PPCAB(L)) Q:L=""  I $G(^(L,"n"))=NIB K ^PPCAB(L)
+ D:$$GET^IPAC(NIB,"pplogin")'="" SET^IPAC(NIB,"pplogin",+$H,"",1)
+ Q
+MOVPAC(FNIB,TNIB) ; Переместить пациента
+ N L
+ S L=$$GET^IPAC(FNIB,"pplogin",+$H) Q:L="" 
+ S ^PPCAB(L,"n")=TNIB
+ ;D GL^IEXCH("^PPCAB",L,"n")
+ Q
+INITDB 
+ S ^MN("root","cabflg")="Статусы кабинетов"
+ Q

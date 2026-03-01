@@ -1,0 +1,13 @@
+%ZSTOP ; User shutdown routine.   ; Compiled December 2, 2006 19:59:16
+    ; cannot be invoked directly
+    quit
+SYSTEM ; Cache stopping
+    ZN "USER"
+    D ZSTO^WWWSRV
+    quit
+LOGIN ; a user logs out of Cache (user account or telnet)
+    quit
+JOB ; JOB'd process exits. 
+    quit
+CALLIN ; process exits via CALLIN interface. 
+    quit

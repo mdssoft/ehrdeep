@@ -1,0 +1,112 @@
+NMEDMONE ; Телемониторинг, выгрузка [ 04/25/2012  10:55 PM ]
+TABLT(DAYS,VI,PAC) ; Вывод таблицы данных
+ N I,A,II,IC,IM,X,FTL,TL,TP,TTP,TTX,DTT,DTM,DT,NI,F,K,R,FIO,ID,IX
+ N X,X1,X2,X3,X4,EV,V,DS,DE
+ S:DAYS="" (DS,DE)=+$H
+ S:DAYS'="" DE=+$H,DS=+$H-DAYS+1
+ S PAC=$G(PAC)
+ I VI=""!(VI="bpp") S X=$$FNDUID^YIMHS("med_mon/bpp") S:X FTL(X)=1
+ I VI=""!(VI="cardio") S X=$$FNDUID^YIMHS("med_mon/cardio") S:X FTL(X)=2
+ I VI=""!(VI="diabet") S X=$$FNDUID^YIMHS("med_mon/diabet") S:X FTL(X)=3
+ I VI=""!(VI="oxi") S X=$$FNDUID^YIMHS("med_mon/oxi") S:X FTL(X)=4
+ I VI=""!(VI="weight") S X=$$FNDUID^YIMHS("med_mon/weight") S:X FTL(X)=5
+ I VI=""!(VI="bread") S X=$$FNDUID^YIMHS("med_mon/bread") S:X FTL(X)=8
+ I VI=""!(VI="diary") S X=$$FNDUID^YIMHS("med_mon/diary") S:X FTL(X)=6
+ I VI=""!(VI="event") S X=$$FNDUID^YIMHS("med_mon/event") S:X FTL(X)=7
+ D OWF^RWU(".txt")
+ ; ключ|дата,время|тип|данные|пациент
+ s DT=DE+1 F  S DT=$O(^EPRI("dt",DT),-1) Q:DT=""!(DT<DS)  D
+ .S DTT=$$DT^DTUTL(DT)
+ .s NI="" F  S NI=$O(^EPRI("dt",DT,NI)) Q:NI=""  D:$S(PAC="":1,1:PAC=NI)
+ ..S F=0,K="" F  S K=$O(FTL(K)) Q:K=""  I $D(^EPRI("t",NI,K)) S F=1 Q
+ ..Q:'F  ; нет нужных типов
+ ..S FIO=$$FIO^YIPACN(NI)
+ ..S IX="" F  S IX=$O(^EPRI("dt",DT,NI,IX)) Q:IX=""  D
+ ...S TP=$G(^EPR(NI,IX,"t")) Q:TP=""  Q:'$D(FTL(TP)) 
+ ...Q:$G(^("bd")) 
+ ...S ID=IX
+ ...S TTP=$G(FTL(TP)),TTX="|"_$$txtTP(TTP)_"|"
+ ...I 315[TTP S ID=$$FNDTP^IEPR(NI,TP) Q:ID="" 
+ ...I TTP=1 D  Q  ; АД
+ ....S DTM="" F  S DTM=$O(^EPRD(NI,ID,DT,DTM),-1) Q:DTM=""  D
+ .....S X=^(DTM),EV=$G(^MHMON(NI,"e",DT,DTM)),V=$P(EV,"|",2)
+ .....S R=$$DT^DTUTL(DT)_", "_$$TM^DTUTL(DTM)_TTX
+ .....S R=R_$P(X,"|",1)_"/"_$P(X,"|",2)_", пульс "_$P(X,"|",3)
+ .....S X1=$P(EV,"|",1)
+ .....D wROW(NI_"@"_ID_"@"_DT_","_DTM_"@g",R_"|"_FIO)
+ ...I TTP=3 D  Q  ; глюкоза
+ ....S DTM="" F  S DTM=$O(^EPRD(NI,ID,DT,DTM),-1) Q:DTM=""  D
+ .....S X=^(DTM),EV=$G(^MHMON(NI,"e",DT,DTM)),V=$P(EV,"|",2)
+ .....S R=$$DT^DTUTL(DT)_", "_$$TM^DTUTL(DTM)_TTX
+ .....S R=R_$P(X,"|",2)_" млмоль/мл"_"|"
+ .....S X1=$P(EV,"|",1)
+ .....D wROW(NI_"@"_ID_"@"_DT_","_DTM_"@g",R_FIO)
+ ...I TTP=5 D  Q  ; вес
+ ....S DTM="" F  S DTM=$O(^EPRD(NI,ID,DT,DTM),-1) Q:DTM=""  D
+ .....S X=^(DTM),EV=$G(^MHMON(NI,"e",DT,DTM)),V=$P(EV,"|",2)
+ .....S R=$$DT^DTUTL(DT)_", "_$$TM^DTUTL(DTM)_TTX
+ .....S R=R_($P(X,"|",1)/10)_" Кг. , BMI "_$J(($P(X,"|",1)/10)/(1.75*1.75),"",2)_"|"
+ .....S X1=$P(EV,"|",1)
+ .....D wROW(NI_"@"_ID_"@"_DT_","_DTM_"@g",R_FIO)
+ ...I TTP=8 D  Q  ; калории
+ ....S DTM="" F  S DTM=$O(^EPRD(NI,ID,DT,DTM),-1) Q:DTM=""  D
+ .....S X=^(DTM),EV=$G(^MHMON(NI,"e",DT,DTM)),V=$P(EV,"|",2)
+ .....S R=$$DT^DTUTL(DT)_", "_$$TM^DTUTL(DTM)_TTX
+ .....S X1=$P(X,"|",4)
+ .....S R=R_$P(X,"|",3)_" ХЕ" S:X1 R=R_", "_X1_" ККал"_"|"
+ .....S X1=$P(EV,"|",1)
+ .....D wROW(NI_"@"_ID_"@"_DT_","_DTM_"@g",R_FIO)
+ ...I TTP=2 D  Q  ; экг
+ ....S DTM=$P($P(^EPR(NI,ID,"dt"),"|",1),",",2)
+ ....S EV=$G(^MHMON(NI,"e",DT,DTM)),V=$P(EV,"|",2)
+ ....S R=$$DT^DTUTL(DT)_", "_$$TM^DTUTL(DTM)_TTX
+ ....S R=R_"-"_"|"
+ ....S X1=$P(EV,"|",1)
+ ....D wROW(NI_"@"_ID_"@"_DT_","_DTM_"@ecg",R_FIO)
+ ...I TTP=4 D  Q  ; оксиметр
+ ....S DTM=$P($P(^EPR(NI,ID,"dt"),"|",1),",",2)
+ ....S EV=$G(^MHMON(NI,"e",DT,DTM)),V=$P(EV,"|",2)
+ ....S R=$$DT^DTUTL(DT)_", "_$$TM^DTUTL(DTM)_TTX
+ ....S R=R_"-"_"|"
+ ....S X1=$P(EV,"|",1)
+ ....D wROW(NI_"@"_ID_"@"_DT_","_DTM_"@f",R_FIO)
+ ...I TTP=6 D  Q  ; дневник
+ ....S DTM=$P($P(^EPR(NI,ID,"dt"),"|",1),",",2)
+ ....S EV=$G(^MHMON(NI,"e",DT,DTM)),V=$P(EV,"|",2)
+ ....S R=$$DT^DTUTL(DT)_", "_$$TM^DTUTL(DTM)_TTX
+ ....S R=R_"-"_"|"
+ ....S X1=$P(EV,"|",1)
+ ....D wROW(NI_"@"_ID_"@"_DT_","_DTM_"@f",R_FIO)
+ D C^RWU
+ Q
+wROW(K,R) 
+ D WC^RWU(CR_K_"|"_R)
+ Q
+txtTP(X) 
+ Q:X=1 "Арт.давление"
+ Q:X=2 "Кардиограмма"
+ Q:X=3 "Уровень глюкозы"
+ Q:X=4 "Пульсоксиметрия"
+ Q:X=5 "Вес"
+ Q:X=6 "Дневник"
+ Q:X=7 "Событие"
+ Q:X=8 "Калории"
+ Q ""
+CHART(KEY) ; График
+ N NI,ID,TP,UID,UC,DT,L,LE
+ S NI=$P(KEY,"@",1),ID=$P(KEY,"@",2)
+ S TP=$G(^EPR(NI,ID,"t"))
+ S UID=$$GET^YIMHS(TP,"uid"),UC=$P(UID,"/",2,9)
+ Q:UC="" 
+ D OWF^RWU(".txt")
+ D WC^RWU($$FIO^IPAC(NI))
+ D WC^RWU(CR_$$UID2NM^IMEDMON(UC))
+ S L=$$chHH^IMEDMON(UID),LE=$L(L,"|")
+ D WC^RWU(CR_L)
+ S DT="" F  S DT=$O(^EPRD(NI,ID,DT)) Q:DT=""  S TM="" F  S TM=$O(^EPRD(NI,ID,DT,TM)) Q:TM=""  D
+ .S L=^(TM)
+ .S:UID="med_mon/bread" L=$P(L,"|",3,7)
+ .F J=1:1:$L(L) S:$P(L,"|",J)="" $P(L,"|",J)=0
+ .D WC^RWU(CR_$$DTISO^DTUTL(DT)_" "_$$TMISO^DTUTL(TM)_"|"_$P(L,"|",1,LE))
+ D C^RWU
+ Q

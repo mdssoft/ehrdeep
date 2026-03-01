@@ -1,0 +1,765 @@
+NWRH ; Складской учет [ 11/17/2021  11:50 AM ]
+OPEN ; Инициализация
+ N A,I,R,C,K
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<wrh>")
+ D W^RWU("<bt_nmlst visible="""_$S($$LCL^IUSER("wrh","nomenclature")=0:"no",1:"yes")_"""/>")
+ D W^RWU("<bt_sett visible="""_$S($$LCL^IUSER("wrh","settings")=0:"no",1:"yes")_"""/>")
+ D W^RWU("<cfg>")
+ D W^RWU("simpledprn="_+$$LCL^IUSER("wrh","simpledprn"))
+ D W^RWU("simplejprn="_+$$LCL^IUSER("wrh","simplejprn"))
+ D W^RWU("</cfg><wrhn>")
+ D STKLSTs^NWRHS($G(^cfg("wrh","stksort")))
+ D W^RWU("</wrhn>")
+ S K=$$LCL^IUSER("wrh","useddoc") S:K'="" K=","_$TR(K," ","")_","
+ S A="<docs>",(C,I)="" F  S I=$O(^WRHM("doc",I)) Q:I=""  D
+ .I K'="",K'[(","_I_",") Q 
+ .S R=^(I),A=A_C_$P(R,"|",2)_"|"_$P(R,"|",1),C=CR
+ D WC^RWU(A_"</docs><users>"_CR)
+ D LSTsys^NUSERS
+ D W^RWU("</users></wrh></nb_console>"),C^RWU
+ Q
+TAB(STK,TP,DS,DE,USR,TXT) ; Вывод табличных данных
+ N NML,R,Z,ID,H,X,DT,A,TPx,T,C,S,SS,ES,I,Is,Ie,U,OP,O,fMN,PM,PMN,NN,Nm,Np,fRS,fDM,fO,fRD,Ix,ffO,SE
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),TPx=$P(TP,"_",1)
+ S TXT=$$LU^TXTU($$WD^TXTU($G(TXT)))
+ S I="</item><item>",Is="<row><key>",Ie="</item></row>",Z=""
+ S ID="" F  S ID=$O(^WRHM("doc",ID)) Q:ID=""  S R=^(ID),X=$P(R,"|",2) S:X'="" NML(X)=$P(R,"|",3) S:X=TP Z=$P(R,"|",1)
+ S fMN=$$LCL^IUSER("wrh","defmean") ; единицы по умолчанию
+ S fDM=$G(^cfg("wrh","dtmdoc")) ; дата/время
+ S fO=$G(^cfg("wrh","docorder")) ; сортировка doc/dtm/name
+ S fSPKU=$G(^cfg("wrh","sw-pku"))
+ S fRS=$$LCL^IUSER("wrh","retailss")
+ S fRD=$$LCL^IUSER("wrh","round")
+ S Ix=1,ffO=0
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<wrh>")
+ G:$P(TP,"_",2)="d" TABd G:TP="ost_r" TABost G:TP="req_j" TABr
+ S OP=$S(TPx="in":"+",TPx="out":"-",1:"")
+ ;D WTAGDC^RWU("l_table",Z)
+ S H=$S(OP="+":"От кого",OP="-":"Кому",1:"Движение")
+ S A=$S(fDM:",время",1:"")
+ D WC^RWU("<table><titles><item>Документ"_I_"Дата"_A_I_I_"Наименование"_I_"Кол-во"_I_"Единиц"_I_$S(fRS:"В розницу",1:"Стоимость")_I_"Пользователь"_I_H_I_"На основании</item></titles>")
+ K ^BUF($J,"wrh")
+ S ID=99999 F  S ID=$O(^WRH(STK,ID),-1) Q:ID=""  D  ; только склад
+ .S PM=$S(fMN:$$MEANCNT^IWRHS(ID,fMN),1:0),PMN=fMN S:'PM PM=1,PMN=0
+ .S (Nm,Np)=""
+ .S DT=DS_",0" F  S DT=$O(^WRH(STK,ID,DT)) Q:DT=""!(+DT>DE)  D
+ ..S R=^(DT),U=$P(R,"|",5),O=$P(R,"|",2)
+ ..I $L(OP),O'=OP Q 
+ ..I $L(USR),$P(U,"@",1)'=USR Q 
+ ..S NN=$P(R,"|",4)
+ ..I NN'="" S A=$P($G(^WRHD(NN)),"|",3) S:A'="" NN=A
+ ..S Ix=Ix+1
+ ..S:Nm="" Nm=$$NAMENM^IWRHS(ID)
+ ..S:Np="" Np=+$$PKU^IWRHS(ID)
+ ..I TXT'="",NN'=TXT,$$LU^TXTU(Nm)'[TXT Q 
+ ..S SE=$P(R,"|",12)
+ ..S A=Is_":"_ID_":"_STK_"@"_ID_"@"_DT_"</key><item>"
+ ..S A=A_NN_I_$S(fDM:$$DTM2^DTUTL(DT),1:$$DT2^DTUTL(+DT))
+ ..S X=+$P(R,"|",1)
+ ..S A=A_"</item><item class="""_$S(X>5:"3",X>0:"2",1:"1")_""">"_I
+ ..I SE'="" S SE=$$GETSN^IWRH(SE,ID,Np,fSPKU) S:SE'="" SE=" №"_SE
+ ..S A=A_$$TAG^TXTU($$OWF^TXTU(Nm,100))_SE_I_$TR(+$J($P(R,"|",3)/PM,"",4),".",",")
+ ..S A=A_I_$$TAG^TXTU($$MEANNM^IWRHS(ID,PMN))
+ ..S SS=$P(R,"|",14)
+ ..S:'fRS A=A_I_$TR($J(SS,"",2),".",",")
+ ..I fRS S ES=$P(R,"|",22) S:'ES ES=$$CCENN^IWRHS("",ID,+DT,SS) S A=A_I_$TR($J(ES,"",2),".",",")
+ ..S A=A_I_U_I
+ ..S A=A_$S(OP="+":$$CTRNM2^IWRHS($P(R,"|",7),$P(R,"|",8),DT),OP="-":$$CTRNM2^IWRHS($P(R,"|",9),$P(R,"|",10),DT),O="+":"Приход",O="-":"Расход",1:"")
+ ..S X=$S(fO="doc":$E("00000000",1,8-$L(NN))_NN,fO="dtm":DT,fO="name":$E(Nm,1,64),1:"")
+ ..S A=A_I_$$TAG^TXTU($P(R,"|",13))
+ ..I X="" D WC^RWU(CR_A_Ie) Q
+ ..S ^BUF($J,"wrh",X_"."_Ix)=A,ffO=1
+ I ffO S I="" F  S I=$O(^BUF($J,"wrh",I)) Q:I=""  D WC^RWU(CR_^(I)_Ie)
+ ;K ^BUF($J,"wrh")
+ D W^RWU("</table></wrh></nb_console>"),C^RWU
+ Q
+TABd 
+ N fcNM,NX
+ S fcNM='$G(^cfg("wrh","fndstrinctdoc"))
+ S A=$S(fDM:",время",1:"")
+ D WC^RWU("<table><titles><item>Документ"_I_"Дата"_A_I_"Наименование"_I_"Пользователь"_I_$S(fRS:"",1:"Стоимость"_I)_"Поставщик"_I_"Получатель"_I_"Документ</item></titles>")
+ S ID=""
+ F  S ID=$O(^WRHI("n",ID)) Q:ID=""  S NN=$G(^(ID)),T=$P(NN,"|",1) D:T=TPx
+ .S X=$O(^(ID,"")),DT=+$P(X,"|",1) Q:DT<DS  Q:DT>DE  
+ .I TPx'="inr",$P(X,"|",3)'=STK Q 
+ .S NX=$G(^WRHD(ID))
+ .I TPx="inr",$P(NN,"|",4,5)'=("W|"_STK) Q 
+ .S NN=$P(NX,"|",3) S:NN="" NN=ID ; № док-та
+ .I TXT'="",NN'=TXT,$S(fcNM:'$$chkNames(ID,TXT),1:1) Q 
+ .S R=$G(^WRH($P(X,"|",3),$P(X,"|",2),$P(X,"|",1)))
+ .I USR'="" Q:$P($P(R,"|",5),"@",1)'=USR 
+ .S A=Is_ID_"</key><item>"_NN_I
+ .S A=A_$S(fDM:$$DTM2^DTUTL($P(X,"|",1)),1:$$DT^DTUTL(DT))_I_$G(NML(T_"_d"))
+ .S A=A_"</item><item"_$S(+$P(R,"|",1):" class=""4""",1:"")_">"_$P(R,"|",5)
+ .S Z=I_$$CTRNM2^IWRHS($P(R,"|",7),$P(R,"|",8),DT)_I_$$CTRNM2^IWRHS($P(R,"|",9),$P(R,"|",10),DT)
+ .S T=$$TDOC^IWRHS($P(NX,"|",8))
+ .S X=$P(NX,"|",9),T=$S(X="":T,T="":X,1:X_" ("_T_")")
+ .S X=$P(NX,"|",10)
+ .S:X'="" T=$S(T="":X,1:T_", "_X)
+ .S Z=Z_I_$$TAG^TXTU(T),C=0
+ .I 'fRS S X="" F  S X=$O(^WRHI("n",ID,X)) Q:X=""  D
+ ..S R=$G(^WRH(STK,$P(X,"|",2),$P(X,"|",1)))
+ ..S C=C+$P(R,"|",14)
+ .D WC^RWU(CR_A_$S(fRS:"",1:I_$TR(C,".",","))_Z_Ie)
+ D W^RWU("</table></wrh></nb_console>"),C^RWU
+ Q
+chkNames(DOC,TXT) ; Проверить на совпадение имен
+ Q:TXT="" 0
+ N KX,F
+ S KX="",F=0 F  S KX=$O(^WRHI("n",DOC,KX)) Q:KX=""  I $$LU^TXTU($$NAMENM^IWRHS($P(KX,"|",2)))[TXT S F=1 Q 
+ Q F
+TABr ; Заявки
+ D WC^RWU("<table><titles><item>Документ</item><item>Дата</item><item>Заказчик</item><item>Пользователь</item><item>Позиций</item></titles>")
+ S ID="" F  S ID=$O(^WRHZI(ID)) Q:ID=""  D
+ .S X=$O(^(ID,"")),DT=+$P(X,"|",1) Q:DT<DS  Q:DT>DE  
+ .S R=$G(^WRHZ($P(X,"|",2),$P(X,"|",1))),U=$P(R,"|",4)
+ .I USR'="" Q:$P(U,"@",1)'=USR 
+ .S A=Is_ID_"</key><item>"_ID_I_$$DT^DTUTL(DT)_I
+ .S A=A_$$CTRNM2^IWRHS($P(R,"|",7),$P(R,"|",8),DT)_I_U_I,C=1
+ .F  S X=$O(^WRHZI(ID,X)) Q:X=""  S C=C+1
+ .D WC^RWU(CR_A_C_Ie)
+ D W^RWU("</table></wrh></nb_console>"),C^RWU
+ Q
+TABost ; Остатки по складу 
+ K ^BUF($J,"ost")
+ S ID=99999 F  S ID=$O(^WRH(STK,ID),-1) Q:ID=""  D
+ .I TXT'="",$$LU^TXTU($$NAMENM^IWRHS(ID))'[TXT Q
+ .S Z="" F  S Z=$O(^WRH(STK,ID,Z)) Q:Z=""  D
+ ..S R=^(Z) Q:'+$P(R,"|",1)  
+ ..S C=+$P(R,"|",3),OP=$P(R,"|",2)
+ ..I OP="+" S ^(1)=$G(^BUF($J,"ost",ID,1))+C,^(2)=$G(^(2))+$P(R,"|",14)
+ ..I OP="-" S ^(3)=$G(^BUF($J,"ost",ID,3))+C,^(4)=$G(^(4))+$P(R,"|",14)
+ D WC^RWU("<table><titles><item>Наименование</item><item>Остаток</item><item>Единиц</item><item>"_$S(fRS:"В розницу",1:"Стоимость")_"</item></titles>")
+ S ID="" F  S ID=$O(^BUF($J,"ost",ID)) Q:ID=""  D
+ .S C=+$G(^BUF($J,"ost",ID,1))
+ .S R=+$G(^(2))
+ .S X=+$G(^(3)),X=C-X
+ .Q:'X  
+ .S S=$S($G(^(4)):R-^(4),C=0!(X<0):0,1:X*(R/C))
+ .S PM=$S(fMN:$$MEANCNT^IWRHS(ID,fMN),1:0),PMN=fMN S:'PM PM=1,PMN=0
+ .S A=Is_"inf:"_ID_"</key><item>"
+ .S A=A_$$TAG^TXTU($$OWF^TXTU($$NAMENM^IWRHS(ID),100))_I
+ .S A=A_$TR(+$J(X/PM,"",4),".",",")
+ .S A=A_I_$$MEANNM^IWRHS(ID,PMN)_I
+ .S:'fRS A=A_$TR($J(S,"",2),".",",")
+ .S:fRS A=A_$TR($J($$CENN^IWRHS(ID,+$H),"",2),".",",")
+ .S A=A_Ie
+ .D WC^RWU(CR_A)
+ D W^RWU("</table></wrh></nb_console>"),C^RWU
+ K ^BUF($J,"ost")
+ Q
+IDOC(TP,STK) ; Инициализация документа
+ N V,R,F,Z
+ S:TP="akti_d"!(TP="akto_d") V("from")=1,V("to")=1
+ S:TP="ini_d"!(TP="outi_d")!(TP="akti_d")!(TP="akto_d") V("extdoc")=1,V("sf")=1,V("sfd")=1,V("invoice")=1,V("invoiced")=1
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<wrhd>")
+ 
+ ; параметры номенклатуры
+ S F=""
+ I TP="outi_d"!(TP="ini_d")!(TP="akto_d")!(TP="out_d"),$$LCL^IUSER("wrh","dchkstock") S F="check" ; проверка наличия на складе
+ I TP="outi_d"!(TP="ini_d") S F=F_"summ" ; TODO - другие типы док-в
+ I TP="in_d" S F=F_"ccenn" ; проверка на ненулевую стоимость
+ 
+ S R=$G(V("from")),Z=1
+ D TAGUnVis("l_from",R,F),TAGnVis("from_sel",R)
+ I TP="out_d"!(TP="outi_d")!(TP="aktm_d") D TAGUVis("from","W"_STK,$$NAME^IWRHS("stock",STK)) S Z=0
+ D:Z TAGDnVis("from",R,$S(TP="akto_d":"W"_STK,1:""),$S(TP="akto_d":$$NAME^IWRHS("stock",STK),1:"")) 
+ 
+ S R=$G(V("to"))
+ D TAGDnVis("to",R),TAGnVis("l_to",R),TAGnVis("to_sel",R)
+ D:TP="in_d"!(TP="ini_d") TAGUVis("to","W"_STK,$$NAME^IWRHS("stock",STK))
+ S R=$G(V("ndoc")) D TAGDnVis("ndoc",R),TAGnVis("l_ndoc",R)
+ S R=$G(V("tdoc")) D TAGDnVis("tdoc",R),TAGnVis("l_tdoc",R)
+ S R=$G(V("sf")) D TAGDnVis("sf",R),TAGDnVis("sfd",R),TAGnVis("l_sf",R)
+ S R=$G(V("invoice")) D TAGDnVis("invoice",R),TAGDnVis("invoiced",R),TAGnVis("l_invoice",R)
+ S R=$G(V("extdoc")) D TAGDnVis("extdoc",R),TAGnVis("l_extdoc",R)
+ D WTAGDC^RWU("label",$$DOCNM^IWRHS(TP))
+ D WTAGD^RWU("dt",$$DT^DTUTL(+$H))
+ D TAGnVis("btn_save",0),TAGnVis("btn_acc",0),TAGnVis("btn_del",1)
+ ; права на изменение даты
+ S R=$$LCL^IUSER("wrh","ddate")
+ S:'R R=$S($E(TP,1,2)="in"!($E(TP,1,4)="akti"):$$LCL^IUSER("wrh","ddatei"),1:$$LCL^IUSER("wrh","ddateo"))
+ D TAGnVis("sd",'R)
+ D TAGnVis("btn_sys",'$$LCL^IUSER("wrh","dsysmenu"))
+ D W^RWU("</wrhd></nb_console>"),C^RWU
+ Q
+TAGnVis(PL,R) 
+ D W^RWU("<"_PL_" visible="""_$S(R:"no",1:"yes")_"""/>")
+ Q
+TAGDnVis(PL,R,X,TIT) 
+ D WC^RWU("<"_PL_" visible="""_$S(R:"no",1:"yes")_""" data="""_$G(X)_""""_$S($G(TIT)="":"",1:" title="""_$$TKAV^TXTU(TIT)_"""")_"/>")
+ Q
+TAGUnVis(PL,R,X) 
+ D W^RWU("<"_PL_" visible="""_$S(R:"no",1:"yes")_""" userdata="""_$G(X)_"""/>")
+ Q
+TAGUVis(PL,R,T) 
+ D WC^RWU("<"_PL_" visible=""yes"" userdata="""_R_""" title="""_$$TKAV^TXTU(T)_"""/>")
+ Q
+TAGDVis(PL,R) 
+ D WC^RWU("<"_PL_" visible=""yes"" data="""_R_"""/>")
+ Q
+TAGnVisL(PL,R) ; for %L
+ Q "<"_PL_" visible="""_$S(R:"no",1:"yes")_"""/>"
+DDOC(ID) ; Удалить документ
+ Q:ID="" 
+ N KX,H,N,SK,R,OWS,F,FD,RF,sDT,sTM
+ S F=0,FD=$$LCL^IUSER("wrh","ddela")
+ I $$LCL^IUSER("wrh","ddel")=0,'FD D MSG^RWU("Удаление документа запрещено.") Q 
+ S sDT=$$LCL^IUSER("wrh","sysdays")
+ S sTM=$$LCL^IUSER("wrh","systimes")*60
+ S KX="" F  S KX=$O(^WRHI("n",ID,KX)) Q:KX=""  D  Q:F 
+ .S H=$P(KX,"|",1),N=$P(KX,"|",2),SK=$P(KX,"|",3)
+ .S R=$G(^WRH(SK,N,H)) Q:R="" 
+ .I 'FD,$P(R,"|",1) S F=1 D MSG^RWU("Удаление документа запрещено.") Q
+ .I sDT,+H+sDT>+$H S F=1 D MSG^RWU("Превышен период для удаления.") Q
+ .I sTM,$S(+$H'=(+H):1,1:$P(H,",",2)+sTM>$P($H,",",2)) S F=1 D MSG^RWU("Превышено время для удаления.") Q
+ .I sTM
+ .S RF=$P(R,"|",20)
+ .K ^WRH(SK,N,H)
+ .D KGL^IEXCH("^WRH",SK,N,H)
+ .K:RF'="" ^WRH(SK,N,RF,H)
+ .D:RF'="" KGL^IEXCH("^WRH",SK,N,RF,H)
+ .S OWS=$S($P(R,"|",2)="+":$P(R,"|",7,8),1:$P(R,"|",9,10)) ; владелец
+ .S OWS=$S($P(OWS,"|",1)="W":$P(OWS,"|",2),1:OWS) ; приним.склад
+ .Q:OWS="|"!(OWS="")  
+ .Q:'$D(^WRH(OWS,N,H)) 
+ .K ^WRH(OWS,N,H)
+ .D KGL^IEXCH("^WRH",OWS,N,H)
+ Q:F 
+ K ^WRHI("n",ID)
+ D KGL^IEXCH("^WRHI","n",ID)
+ K ^WRHD(ID)
+ D KGL^IEXCH("^WRHD",ID)
+ Q
+CDDOC(ID,DT) ; Изменить дату документа
+ I '$$LCL^IUSER("wrh","cdate") D MSG^RWU("Изменение даты документа запрещено.") Q
+ S DT=$$DI^DTUTL(DT) Q:DT="" 
+ D MOVDD^IWRH(ID,DT)
+ Q
+REDOC(ID) ; Убрать проводку с документа
+ Q:ID="" 
+ I '$$LCL^IUSER("wrh","dann") D MSG^RWU("Отмена проводки документа запрещена.") Q 
+ N KX,H,N,SK,R,OWS,sDT,sTM,F
+ S sDT=$$LCL^IUSER("wrh","sysdays")
+ S sTM=$$LCL^IUSER("wrh","systimes")*60
+ S F=0,KX="" F  S KX=$O(^WRHI("n",ID,KX)) Q:KX=""  D  Q:F
+ .S H=$P(KX,"|",1),N=$P(KX,"|",2),SK=$P(KX,"|",3)
+ .S R=^WRH(SK,N,H)
+ .I sDT,+H+sDT>+$H S F=1 D MSG^RWU("Превышен период для изменения.") Q
+ .I sTM,$S(+$H'=(+H):1,1:$P(H,",",2)+sTM>$P($H,",",2)) s F=1 D MSG^RWU("Превышено время для изменения.") Q
+ .S ^WRH(SK,N,H)=0_"|"_$P(R,"|",2,99)
+ .D GL^IEXCH("^WRH",SK,N,H)
+ .S OWS=$S($P(R,"|",2)="+":$P(R,"|",7,8),1:$P(R,"|",9,10)) ; владелец
+ .S OWS=$S($P(OWS,"|",1)="W":$P(OWS,"|",2),1:OWS) ; приним.склад
+ .Q:OWS="|"!(OWS="")  
+ .Q:'$D(^WRH(OWS,N,H)) 
+ .K ^WRH(OWS,N,H) ; "зеркало" удаляем
+ .D KGL^IEXCH("^WRH",OWS,N,H)
+ Q
+SDOC ; Сохранить документ
+ N @$$NEWVAR^YIXMLRR()
+ D RBUFH^YIXMLRR(1)
+ D W
+ Q
+SCDOC ; Сохранить и "провести"
+ N @$$NEWVAR^YIXMLRR()
+ D RBUFH^YIXMLRR(1)
+ S XML("nb_console","wrhd","state")=1
+ D W
+ Q
+W ; Write data
+ N NB,FM,R,RR,N,OP,ID,ST,STE,H,SD,X,T,LI,HH,TP,STT,OW,OWS,SI,CNT,AA,LP,PM,PC,NDt,LST,DOC,NN,FP,FPS,LBL,L,STF,SSN,SG
+ S NB="nb_console",FM="wrhd"
+ S TP=$P($G(XML(NB,FM,"tp")),"_",1),ST=$G(XML(NB,FM,"st")),R=TP
+ S STT=+$G(XML(NB,FM,"state")),ID=$G(XML(NB,FM,"id")),H=$H
+ S NDt=$G(^cfg("wrh","numdoc")),LP=$$^I("ilpu")
+ S STE=$G(XML(NB,FM,"from"))
+ S LST=$G(XML(NB,FM,"lst"))
+ S SD=$$DI^DTUTL($G(XML(NB,FM,"sd"))) S:SD'="" $P(H,",",1)=SD
+ S STF=$G(XML(NB,FM,"to"))
+ 
+ I TP'="akti",TP'="akto",STE=STF D MSG^RWU("Указаны одинаковые контрагенты.") Q 
+ 
+ I $E(STE)="W",$E(STF)="W",'$$ALLOWSTK^IWRHS($E(STE,2,99),$E(STF,2,99)) D MSG^RWU("Вы не можете проводить операции с указанным складом") Q 
+ S:$E(STE)="W" STE=$E(STE,2,99)
+ 
+ I ID'="",$P($G(^WRHD(ID)),"|",2)'=SD D MOVDD^IWRH(ID,SD)
+ 
+ ; проверка серийных номеров
+ S AA=0
+ I TP="akti"!(TP="in") F %J=2:1:999 S X=$P(LST,CR,%J) Q:X=""  D  Q:AA 
+ .S N=$P(X,"|",1) Q:N=""
+ .S SSN=$P(N,"@",4),N=$P(N,"@",1)
+ .;S ^KKK=N_","_SSN_","_ID
+ .I $$PKU^IWRHS(N)=3,'$$CHKUSN^IWRH(N,SSN,ID) S AA=1 D MSG^RWU("Серийный номер "_SSN_" уже использовался") Q 
+ Q:AA 
+ ; Проверка остатков
+ I $E(STE)?1N,$$LCL^IUSER("wrh","chkrest") S AA=0 D  Q:AA 
+ .F %J=2:1:999 S X=$P(LST,CR,%J) Q:X=""  D
+ ..S N=$P(X,"|",1) Q:N=""
+ ..S PM=$P(N,"@",2),SSN=$P(N,"@",4),N=$P(N,"@",1)
+ ..S PC=$$MEANCNT^IWRHS(N,PM)
+ ..S:PC="" PM=0,PC=1
+ ..S CNT=$TR($P(X,"|",4),", ",".")*PC Q:'CNT 
+ ..S L(N_"|"_SSN)=$G(L(N_"|"_SSN))+CNT
+ .S NN="" F  S NN=$O(L(NN)) Q:NN=""  D  Q:AA 
+ ..S CNT=L(NN),N=$P(NN,"|",1),SSN=$P(NN,"|",2)
+ ..I CNT<0 D WC^RWU("Отрицательное кол-во недопустимо") Q 
+ ..S S=$$RESTS^IWRH(STE,N,SSN) Q:S'<CNT 
+ ..S AA=1
+ ..S PM=$$MEANNM^IWRHS(N)
+ ..S X=$$NAMENM^IWRHS(N)_" ("_CNT_" "_PM_")"_CR
+ ..D MSG^RWU(X_"Превышает фактический остаток на складе ("_S_" "_PM_")"_$S(SSN="":"",1:", "_$$NMSNUM^IWRHS(N,SSN)))
+ .K L
+ 
+ S NN="" I ID'="" S NN=$P(^WRHD(ID),"|",3)
+ I ID="" D
+ .S X=$$RGID^I(LP),N=""
+ .L +^WRHI("n")
+ .S:NDt NN=$$GET^IINKR("wrhd",$S(NDt=2:TP,NDt=3:STE_":"_TP,1:""))
+ .S ID=$P($O(^WRHI("n",""),-1),".",1)+1_$S(+X:"."_X,1:"")
+ .S ^(ID)=TP_$S(TP="akto_d":"|"_ST,1:"")
+ .L -^WRHI("n")
+ D GL^IEXCH("^WRHI","n",ID)
+ S SI=$S(R="in"!(R="inr")!(R="ini")!(R="akti"):"+",R="out"!(R="outr")!(R="outi")!(R="akto"):"-",1:"")
+ S R=$G(%LOG)_$S(LP="":"",1:"@"_LP)
+ S A=STT_"|"_SI_"||"_ID_"|"_R_"||"
+ S R=$G(XML(NB,FM,"from")),A=A_$E(R,1)_"|"_$E(R,2,99)_"|"
+ S R=$G(XML(NB,FM,"to")) S:R'="" A=A_$E(R,1)_"|"_$E(R,2,99)_"|"
+ S DOC=TP_"|"_$S(SD="":+$H,1:SD)_"|"_NN_"|"
+ S DOC=DOC_$P(A,"|",7)_"|"_$P(A,"|",8)_"|"_$P(A,"|",9)_"|"_$P(A,"|",10)
+ S R=$G(XML(NB,FM,"tdoc")) S:R'="" $P(DOC,"|",8)=R
+ S R=$G(XML(NB,FM,"ndoc"))
+ I R="",$$LCL^IUSER("wrh","dautonn") S R=$$GET^IINKR("wrhd","nn")
+ S:R'="" $P(DOC,"|",9)=R
+ S R=$G(XML(NB,FM,"extdoc")) S:R'="" $P(DOC,"|",10)=R
+ S R=$$DI^DTUTL($G(XML(NB,FM,"dtedoc"))) S:R'="" $P(DOC,"|",11)=R
+ 
+ S R=$G(XML(NB,FM,"sf")) S:R'="" $P(DOC,"|",12)=R
+ S R=$$DI^DTUTL($G(XML(NB,FM,"sfd"))) S:R'="" $P(DOC,"|",13)=R
+ S R=$G(XML(NB,FM,"invoice")) S:R'="" $P(DOC,"|",14)=R
+ S R=$$DI^DTUTL($G(XML(NB,FM,"invoiced"))) S:R'="" $P(DOC,"|",15)=R
+ 
+ S ^WRHD(ID)=DOC
+ S R=$G(XML(NB,FM,"comm"))
+ S:R'="" ^WRHD(ID,"c")=R
+ K:R="" ^WRHD(ID,"c")
+ S ^WRHD(ID,"l",$H)=$$USR^IUSER()
+ D REGL^IEXCH("^WRHD",ID)
+ 
+ F %J=2:1:9999 S X=$P(LST,CR,%J) Q:X=""  D
+ .S N=$P(X,"|",1) Q:N=""  
+ .;S A=$P(A,"|",1,5) ; clear
+ .S SSN=$P(N,"@",4) ; учетный номер
+ .S SG=$P(N,"@",7) S:SG'="" SG=$$DI^DTUTL(SG) ; срок годности
+ .S HH=$P(N,"@",3),PM=$P(N,"@",2),N=$P(N,"@",1)
+ .I HH'="",$P(HH,",",1)'=SD S $P(HH,",",1)=SD
+ .S AA=$S(HH="":"",1:$G(^WRH(ST,N,HH)))
+ .S:SSN'="" $P(A,"|",12)=SSN
+ .S PC=$$MEANCNT^IWRHS(N,PM) S:PM=3 PM="" ; доз->null
+ .S:PC="" PM=0,PC=1
+ .S FP=$$GET^IWRHS(N,"pku")
+ .S FPS=$$IsSER^IWRHS(N)!FP
+ .S T=$P(X,"|",5) S:T="**" T=""
+ .S S=+$TR(T,", ","."),CNT=$TR($P(X,"|",4),", ",".")*PC
+ .S:S<0 S=0 ; отрицательная сумма, не кол-во
+ .K LBL
+ .I STT,SI="-",'+S,$P(A,"|",7)="W" S S=+$J($$RESTWS^IWRH(ST,N,CNT,HH,$S(FPS:"LBL",1:""),SSN),"",8)  ;$$BASECNN^IWRH(ST,N,CNT) ; из склада - вычисляем цену, если 0 - TODO
+ .S $P(A,"|",3)=CNT,$P(A,"|",14)=S
+ .S T=$P(X,"|",6) S:T="**" T=""
+ .S:T'="" $P(A,"|",15)=T
+ .S:$P(AA,"|",21)'="" $P(A,"|",21)=$P(AA,"|",21)
+ .S:SG'="" $P(A,"|",21)=SG ; перезапись срока годности
+ .I FP,STT,SI="+",$P(A,"|",12)="" S $P(A,"|",12)=$$GET^IINKR("wrhd","pku")
+ .I 'FP,FPS ; серия - TODO проверять факт. остатки
+ .S:'FPS $P(A,"|",12)=""
+ .S:PM $P(A,"|",19)=PM
+ .S OW=$S(SI="+":$P(A,"|",7,8),1:$P(A,"|",9,10)) ; владелец
+ .S OWS=$S($P(OW,"|",1)="W":$P(OW,"|",2),1:OW) ; приним.склад
+ .I SI'="-" D Wprcs Q  ; не списание
+ .S:'$D(LBL) LBL(0)="" ; нет меток - обычн. списание
+ .S L="" F  S L=$O(LBL(L)) Q:L=""  D
+ ..I L S R=LBL(L),RR=^WRH(ST,N,L),CNT=$P(R,"|",1),S=$P(R,"|",2),$P(A,"|",3)=CNT,$P(A,"|",14)=S,$P(A,"|",12)=$P(RR,"|",12),$P(A,"|",20)=L,$P(A,"|",21)=$P(RR,"|",21)
+ ..D Wprcs
+ ..Q:'L
+ ..S ^WRH(ST,N,L,HH)=CNT
+ ..D GL^IEXCH("^WRH",ST,N,L,HH),MKIPART^IWRH(ST,N,L)
+ ..S HH=""
+ ; delete unused
+ S X="" F  S X=$O(^WRHI("n",ID,X)) Q:X=""  D:'$D(LI(X))
+ .S HH=$P(X,"|",1),N=$P(X,"|",2),ST=$P(X,"|",3)
+ .S L=$P(^WRH(ST,N,HH),"|",20)
+ .K ^WRHI("n",ID,X)
+ .K ^WRHI("h",HH,N,ST)
+ .K ^WRH(ST,N,HH)
+ .K:L'="" ^WRH(ST,N,L,HH) ; ссылка
+ .D KGL^IEXCH("^WRHI","n",ID,X)
+ .D KGL^IEXCH("^WRHI","h",HH,N,ST)
+ .D KGL^IEXCH("^WRH",ST,N,HH)
+ .D:L'="" KGL^IEXCH("^WRH",ST,N,L,HH)
+ S L=^PP(0,2)_"<wrhd><id data="""_ID_"""/>"_$$TAGnVisL("btn_save",+ST)
+ S L=L_$$TAGnVisL("btn_acc",+ST)_$$TAGnVisL("btn_del",+ST)
+ S L=L_"</wrhd></nb_console>"
+ D MSG^RWU(L,".xmlb")
+ Q
+Wprc ; internal proc for W
+ Q
+Wprcs 
+ N SSN
+ S SSN=$P(A,"|",12) ; TODO
+ I SSN'="",$$PKU^IWRHS(N)=3 S ^WRHI("sn",N,SSN)=ID 
+ L +^WRH(ST,N)
+ I HH="" F X=$P($H,",",2):1:99999 S HH=+H_","_X Q:'$D(^WRH(ST,N,HH)) 
+ S $P(A,"|",6)=HH
+ S ^WRH(ST,N,HH)=A,^WRHI("h",HH,N,ST)=$P(A,"|",1,3)
+ L -^WRH(ST,N)
+ ; todo - "v" - version
+ S X=HH_"|"_N_"|"_ST,^WRHI("n",ID,X)="",LI(X)=""
+ D GL^IEXCH("^WRH",ST,N,HH)
+ D GL^IEXCH("^WRHI","h",HH,N,ST),GL^IEXCH("^WRHI","n",ID,X)
+ 
+ Q:'STT  Q:OWS="|" 
+ S AA=$P(A,"|",1,10),$P(AA,"|",2)=$S(SI="+":"-",1:"+")
+ S:$P(A,"|",12)'="" $P(AA,"|",12)=$P(A,"|",12)
+ S:$P(A,"|",21)'="" $P(AA,"|",21)=$P(A,"|",21)
+ S:S $P(AA,"|",14)=S
+ L +^WRH(OWS,N)
+ S ^WRH(OWS,N,HH)=AA
+ L -^WRH(OWS,N)
+ D GL^IEXCH("^WRH",OWS,N,HH) ; по контрагенту "наоборот" от склада todo UID наоборот
+ Q
+LDOC(TP,ID) ; Загрузить документ
+ Q:ID="" 
+ N R,A,X,V,Z,D,F,PM,PC,NN,ST,DOC,K,IDS,Np,Nss,SE,SG
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<wrhd>")
+ S ST="" ; S ST=$P($G(^WRHI("n",ID)),"|",2) TODO
+ S X=$O(^WRHI("n",ID,""))
+ S Z=$P(X,"|",1),D=$P(Z,",",1),A=""
+ S:ST="" ST=$P(X,"|",3)
+ S DOC=^WRHD(ID)
+ S NN=$P(DOC,"|",3) S:NN="" NN=$P(ID,".",1)
+ I X'="" S A=$G(^WRH($P(X,"|",3),$P(X,"|",2),Z))
+ S:TP="akti_d"!(TP="akto_d") V("from")=1,V("to")=1
+ S:TP="ini_d"!(TP="outi_d")!(TP="akti_d")!(TP="akto_d") V("extdoc")=1
+ S R=$G(V("from")),Z=$P(A,"|",7)_$P(A,"|",8)
+ 
+ ; параметры номенклатуры
+ S F=""
+ I TP="outi_d"!(TP="ini_d")!(TP="akto_d")!(TP="out_d"),$$LCL^IUSER("wrh","dchkstock") S F="check" ; проверка наличия на складе
+ I TP="outi_d"!(TP="ini_d") S F=F_"summ" ; TODO - другие типы док-в
+ I TP="in_d" S F=F_"ccenn" ; проверка на ненулевую стоимость
+ 
+ S Nss=$$LCL^IUSER("wrh","noswsum")
+ 
+ D TAGUnVis("l_from",R,F),TAGnVis("from_sel",R)
+ D:R TAGDnVis("from",R,$S(TP="akto_d":"W"_ST,1:""),$S(TP="akto_d":$$NAME^IWRHS("stock",ST),1:""))
+ D:'R TAGUVis("from",Z,$$CTRNM^IWRHS(Z,+$P(X,"|",1)))
+ 
+ S R=$G(V("to")),Z=$P(A,"|",9)_$P(A,"|",10)
+ D TAGnVis("l_to",R),TAGnVis("to_sel",R) D:R TAGDnVis("to",R)
+ D:'R TAGUVis("to",Z,$$CTRNM^IWRHS(Z,+$P(X,"|",1)))
+ 
+ S R=$G(V("ndoc")) D TAGnVis("l_ndoc",R) D:R TAGDnVis("ndoc",R)
+ D:'R TAGDVis("ndoc",$P(DOC,"|",9))
+ S R=$G(V("tdoc")) D TAGnVis("l_tdoc",R) D:R TAGDnVis("tdoc",R)
+ D:'R TAGDVis("tdoc",$P(DOC,"|",8))
+ S R=$G(V("extdoc")) D TAGnVis("l_extdoc",R) D:R TAGDnVis("extdoc",R)
+ D:'R TAGDVis("extdoc",$P(DOC,"|",10))
+ S R=$G(V("dtedoc")) D TAGnVis("l_dtedoc",R) D:R TAGDnVis("dtedoc",R)
+ D:'R TAGDVis("dtedoc",$$DT^DTUTL($P(DOC,"|",11)))
+ 
+ S R=$G(V("sf")) D TAGnVis("l_sf",R) D:R TAGDnVis("sf",R),TAGDnVis("sfd",R)
+ D:'R TAGDVis("sf",$P(DOC,"|",12)),TAGDVis("sfd",$$DT^DTUTL($P(DOC,"|",13)))
+ S R=$G(V("invoice")) D TAGnVis("l_invoice",R) D:R TAGDnVis("invoice",R),TAGDnVis("invoiced",R)
+ D:'R TAGDVis("invoice",$P(DOC,"|",14)),TAGDVis("invoiced",$$DT^DTUTL($P(DOC,"|",15)))
+ 
+ 
+ D TAGnVis("btn_sys",'$$LCL^IUSER("wrh","dsysmenu"))
+ 
+ D WTAGDC^RWU("comm",$G(^WRHD(ID,"c")))
+ D WTAGDC^RWU("label",$$DOCNM^IWRHS(TP)_" №"_NN)
+ D WTAGDC^RWU("num",NN)
+ D WTAGDC^RWU("st",ST)
+ D WTAGD^RWU("dt",$$DT^DTUTL(D))
+ D WTAGD^RWU("sd",$$DT^DTUTL(D))
+ ; buttons
+ S V=+$P(A,"|",1)
+ D TAGnVis("btn_save",$S($$LCL^IUSER("wrh","dsave")=0:1,1:V))
+ D TAGnVis("btn_acc",$S($$LCL^IUSER("wrh","dacc")=0:1,1:V))
+ D TAGnVis("btn_del",$S($$LCL^IUSER("wrh","ddela"):0,$$LCL^IUSER("wrh","ddel")=0:1,1:V))
+ D TAGnVis("sd",'$$LCL^IUSER("wrh","ddate"))
+ 
+ D W^RWU("<lst>")
+ S (ST,R,X)="" F  S X=$O(^WRHI("n",ID,X)) Q:X=""  D
+ .S ST=$P(X,"|",3),V=$P(X,"|",2),IDS=$P(X,"|",1)
+ .S A=$G(^WRH(ST,V,IDS))
+ .S PM=$P(A,"|",19),SE=$P(A,"|",12),SG=$P(A,"|",21),PC=1,R=""
+ .S:PM PC=$$MEANCNT^IWRHS(V,PM)
+ .S Np=$$PKU^IWRHS(V)
+ .S:'PC PM=0,PC=1
+ .S K=V_"@"_$S(PM:PM,1:"")_"@"_IDS ; nomencl.+units+$H
+ .S:SE'="" $P(K,"@",4)=SE ; serial
+ .S $P(K,"@",5)=ST,$P(K,"@",6)=Np ; stock + pku
+ .S:SG'="" $P(K,"@",7)=$$DI^DTUTL(SG)
+ .S R=R_CR_K
+ .S R=R_"|"_$$NAMENM^IWRHS(V)
+ .S SE=$P(A,"|",12)
+ .I SE'="" S SE=$$GETSN^IWRH(SE,V,Np) S:SE'="" R=R_", №"_SE
+ .S R=R_"|"_$$MEANNM^IWRHS(V,PM)
+ .S R=R_"|"_$TR($P(A,"|",3)/PC,".",",")_"|"_$S(Nss:"**|**",1:$P(A,"|",14,15))
+ .D WC^RWU($$TAG^TXTU(R))
+ D W^RWU("</lst>")
+ S R=$S((+ST=ST)!($E(ST)="W"):$$GOTD^YISPRAV($$STKOTD^IWRHS(ST)),1:"")
+ D WTAGDC^RWU("otd",R)
+ S R=$O(^WRHD(ID,"l","")),R=$S(R="":"",1:$$FIO^IUSER(^WRHD(ID,"l",R),1))
+ D WTAGDC^RWU("opfio",$$FIOSH^IKADRY(R))
+ D W^RWU("</wrhd></nb_console>"),C^RWU
+ Q
+BASECNN(WRH,ID,CNT) ; Базовая цена на партию при списании со склада
+ S CNT=+$TR(CNT,",",".")
+ D MSG^RWU($$BASECNN^IWRH(WRH,ID,CNT))
+ Q
+LTOST(STK) ; Вывод номенклатуры остатков
+ S:$E(STK)="W" STK=$E(STK,2,99)
+ K ^BUF($J,"ost")
+ N ID,Z,R,C,OP
+ S ID="" F  S ID=$O(^WRH(STK,ID)) Q:ID=""  D
+ .S Z="" F  S Z=$O(^WRH(STK,ID,Z)) Q:Z=""  D
+ ..S R=^(Z) Q:'+$P(R,"|",1)  
+ ..S C=+$P(R,"|",3),OP=$P(R,"|",2)
+ ..I OP="+" S ^(ID)=$G(^BUF($J,"ost",ID))+C Q
+ ..I OP="-" S ^(ID)=$G(^BUF($J,"ost",ID))-C
+ 
+ S (R,ID)="" F  S ID=$O(^BUF($J,"ost",ID)) Q:ID=""  D
+ .S C=^(ID) Q:'C 
+ .S R=R_CR_ID_"|"_$$NAMENM^IWRHS(ID)_"|"_$$MEANNM^IWRHS(ID)_"|"_C
+ K ^BUF($J,"ost")
+ D MSG^RWU(R)
+ Q
+LREQ(ID) ; Вывод заявки
+ N R,A,X,V,Z,DT
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<wrhr>")
+ S X=$O(^WRHZI(ID,"")),A="",DT=+$P(X,"|",1)
+ I X'="" S A=$G(^WRHZ($P(X,"|",2),$P(X,"|",1)))
+ S Z=$P(A,"|",7)_$P(A,"|",8)
+ D TAGUVis("from",Z,$$CTRNM^IWRHS(Z,DT))
+ S Z=$P(A,"|",8)
+ D TAGUVis("to",Z,$$NAME^IWRHS("stock",Z))
+ D WTAGDC^RWU("tdoc",$P(A,"|",10))
+ D WTAGDC^RWU("ndoc",$P(A,"|",11))
+ D WTAGDC^RWU("comm",$P(A,"|",12))
+ ; todo D TAGnVis("btn_save",'+$P(A,"|",1)),TAGnVis("btn_acc",'+$P(A,"|",1))
+ S R="" F  D  S X=$O(^WRHZI(ID,X)) Q:X=""  S A=$G(^WRHZ($P(X,"|",2),$P(X,"|",1)))
+ .S V=$P(X,"|",2)
+ .S R=R_CR_V_"@"_$P(X,"|",1)_"|"_$$NAMENM^IWRHS(V)_"|"_$$MEANNM^IWRHS(V)
+ .S R=R_"|"_$P(A,"|",2)_"|"_$P(A,"|",6)
+ D WC^RWU("<lst>"_$$TAG^TXTU(R))
+ D W^RWU("</lst></wrhr></nb_console>"),C^RWU
+ Q
+SREQ 
+ N @$$NEWVAR^YIXMLRR()
+ D RBUFH^YIXMLRR(1)
+ G SRend
+SCREQ 
+ N @$$NEWVAR^YIXMLRR()
+ D RBUFH^YIXMLRR(1)
+ S XML("nb_console","wrhr","state")=1
+SRend D WREQ
+ Q
+WREQ 
+ N NB,FM,R,N,OP,ID,H,X,LI,HH,LP,NDt,NN
+ S NB="nb_console",FM="wrhr"
+ S ID=$G(XML(NB,FM,"id")),H=$H,LP=$$^I("ilpu"),NN=""
+ S NDt=$G(^cfg("wrh","numdoc"))
+ I ID="" D
+ .S X=$$RGID^I(LP)
+ .L +^WRHZI
+ .S NN=$S(NDt:$$GET^IINKR("wrhd",$S(NDt=2:"req",1:"")),1:"")
+ .S ID=$P($O(^WRHZI(9999999),-1),".",1)+1_$S(+X:"."_X,1:"")
+ .S ^(ID)=NN
+ .L -^WRHZI
+ S R=$G(%LOG)_$S(LP="":"",1:"@"_LP)
+ S A=(+$G(XML(NB,FM,"state")))_"||"_ID_"|"_R_"|||"
+ S R=$G(XML(NB,FM,"from")),A=A_$E(R,1)_"|"_$E(R,2,99)
+ S $P(A,"|",9)=$G(XML(NB,FM,"to"))
+ S $P(A,"|",10)=$G(XML(NB,FM,"tdoc"))
+ S $P(A,"|",11)=$G(XML(NB,FM,"ndoc"))
+ S $P(A,"|",12)=$G(XML(NB,FM,"comm"))
+ S R=$G(XML(NB,FM,"lst"))
+ F %J=2:1:999 S X=$P(R,CR,%J) D:X'=""
+ .S N=$P(X,"|",1) Q:N=""  
+ .S HH=$P(N,"@",2),N=$P(N,"@",1)
+ .S $P(A,"|",2)=$P(X,"|",4),$P(A,"|",6)=$P(X,"|",5)
+ .L +^WRHZ(N)
+ .I HH="" F X=$P(H,",",2):1:99999 S HH=(+H)_","_X Q:'$D(^WRHZ(N,HH)) 
+ .S $P(A,"|",5)=HH
+ .S ^WRHZ(N,HH)=A ; todo - "v" - version
+ .L -^WRHZ(N)
+ .S X=HH_"|"_N,^WRHZI(ID)=NN_"|"_$P(A,"|",9),^(ID,X)="",LI(X)=""
+ .D GL^IEXCH("^WRHZ",N,HH)
+ .D GL^IEXCH("^WRHZI",ID)
+ ; delete unused
+ S X="" F  S X=$O(^WRHZI(ID,X)) Q:X=""  D:'$D(LI(X))
+ .S N=$P(X,"|",2),HH=$P(X,"|",1)
+ .K ^WRHZI(ID,X)
+ .K ^WRHZ(N,HH)
+ .D KGL^IEXCH("^WRHZI",ID,X)
+ .D KGL^IEXCH("^WRHZ",N,HH)
+ D MSG^RWU($G(^PP(0,2))_"<wrhr><id data="""_ID_"""/></wrhr></nb_console>",".xmlb")
+ Q
+DREQ(ID) ; Удалить заявку
+ N KX,N,HH
+ Q:ID="" 
+ S KX="" F  S KX=$O(^WRHZI(ID,KX)) Q:KX=""  D
+ .S N=$P(KX,"|",2),HH=$P(KX,"|",1)
+ .K ^WRHZ(N,HH)
+ .D KGL^IEXCH("^WRHZ",N,HH)
+ D KGL^IEXCH("^WRHZI",ID)
+ K ^WRHZI(ID)
+ Q
+CTRTP(TP) ; Список типов контрагентов
+ N C,I,D,A
+ S (C,I,A)=""
+ S:TP["ini_d"!(TP["outi_d") (D("O"),D("D"),D("C"),D("L"))=""
+ S:TP="in_d,to" (D("O"),D("D"),D("C"),D("L"))=""
+ S:TP="out_d,from" (D("O"),D("D"),D("C"),D("L"))=""
+ S:TP="out_d,to" (D("W"),D("C"))=""
+ S:TP="inr_d,to" D("W")=""
+ S:TP="inr_d,from" (D("O"),D("D"),D("C"),D("L"))=""
+ S:TP="outr_d,to" D("W")=""
+ S:TP="outr_d,from" (D("O"),D("D"),D("C"),D("L"))=""
+ S:TP["req_d" (D("W"),D("C"))=""
+ F  S I=$O(^WRHM("ctp",I)) Q:I=""  S:'$D(D(I)) A=A_C_I_"|"_^(I),C=CR
+ D MSG^RWU(A)
+ Q
+LSTCTR(ID,STR) ; Список контрагентов
+ I ID="O" D OTDLSRT^NSPRAV(STR,1) Q 
+ I ID="W" D LSTFND^NWRHS("stock",STR) Q 
+ I ID="D" D FLST^NVFIND(STR,0) Q 
+ I ID="C" D DF^YCONTR(STR,"sup",1,0,1) Q 
+ I ID="L" D OWF^RWU(".txt"),W^RWU(CR),LSTFIsys^YCONTR(STR),C^RWU Q 
+ D MSG^RWU(CR)
+ Q
+ADDCTR(ID,STR) ; Добавить нового контрагента
+ N X
+ S X="",STR=$$WD^TXTU(STR)
+ I ID="C" S X=$$ADD^ICONTR(STR,STR,+$H-7,"sup") ; неделю назад
+ D MSG^RWU(X)
+ Q
+DITEM(ID) ; Удалить единицу из списания
+ N R,ST,H,NN,S,OWS,RF,sDT,sTM
+ S ST=$P(ID,"@",1),H=$P(ID,"@",3),ID=$P(ID,"@",2)
+ 
+ S sDT=$$LCL^IUSER("wrh","sysdays")
+ S sTM=$$LCL^IUSER("wrh","systimes")*60
+ I sDT,+H+sDT>+$H D MSG^RWU("Превышен период для удаления.") Q
+ I sTM,$S(+$H'=(+H):1,1:$P(H,",",2)+sTM>$P($H,",",2)) D MSG^RWU("Превышено время для удаления.") Q
+ 
+ S R=^WRH(ST,ID,H),S=$P(R,"|",1),NN=$P(R,"|",4)
+ I 'S,NN'="",$$LCL^IUSER("wrh","ddel")=0 D MSG^RWU("Удаление из документа запрещено.") Q 
+ I S,NN'="",'$$LCL^IUSER("wrh","ddela") D MSG^RWU("Удаление из проведенного документа запрещено.") Q
+ I NN="",'$$LCL^IUSER("wrh","delitem") D MSG^RWU("Удаление расхода запрещено.") Q
+ I $P(R,"|",2)="+",$$LCL^IUSER("wrh","chkrest"),($$RESTS^IWRH(ST,ID)-$P(R,"|",3))<0 D MSG^RWU("Удаление невозможно - отрицательные остатки запрещены.") Q 
+ 
+ D DEL^IWRH(ST,ID,H)
+ Q
+DOCPTR(ID) ; Указатель на документ из элемента
+ N R,ST,H,NN
+ S ST=$P(ID,"@",1),H=$P(ID,"@",3),ID=$P(ID,"@",2)
+ S R=^WRH(ST,ID,H),NN=$P(R,"|",4)
+ I NN="" D MSG^RWU("") Q 
+ D MSG^RWU(NN_"|"_$P($g(^WRHI("n",NN)),"|",1)_"_d|"_ST)
+ Q
+LSTSN(ST,ID,ADD) ; Список серий и номеров в остатке на складе
+ N HH,R,CNT,SN,LL,K,OP,PKU,C,SG
+ S PKU=$$PKU^IWRHS(ID),ADD=$G(ADD)
+ Q:'PKU 
+ D OWF^RWU(".txt")
+ S:$E(ST)="W" ST=$E(ST,2,99)
+ 
+ S HH="" F  S HH=$O(^WRH(ST,ID,HH)) Q:HH=""  D
+ .S R=^(HH),SN=$P(R,"|",12) Q:'+$P(R,"|",1)  Q:SN="" 
+ .S OP=$P(R,"|",2),SG=$P(R,"|",21)
+ .I OP="+" S LL(SN)=$G(LL(SN))+$P(R,"|",3) S:SG LL(SN,1)=SG
+ .I OP="-" S LL(SN)=$G(LL(SN))-$P(R,"|",3) S:SG LL(SN,1)=SG
+ 
+ ; TODO - only scan with 'r' index
+ 
+ I ADD S K="" F  S K=$O(^WRHE(ID,"ser",K)) Q:K=""  I '$D(LL(K)) S LL(K)=0
+ S (C,SN)="" F  S SN=$O(LL(SN)) Q:SN=""  D:$S(ADD:1,1:LL(SN)>0)
+ .S R=$S(PKU=1:SN,1:$$GETSN^IWRH(SN,ID,PKU)),SG=""
+ .I PKU=2,SN'="" S SG=$P($G(^WRHE(ID,"ser",SN)),"|",4)
+ .S:$G(LL(SN,1)) SG=LL(SN,1)
+ .D WC^RWU(C_SN_"|№"_R_", Остаток: "_LL(SN)_$S(SG="":"",1:" , годен до: "_$$DT2^DTUTL(SG)))
+ .S C=CR
+ 
+ I ADD,$G(^cfg("wrh","dynser")) D WC^RWU(C_"+|Добавить серию")
+ 
+ D C^RWU
+ Q
+SERITEM(ID,SER) ; Установить серию номенклатуры
+ N ST,H
+ S ST=$P(ID,"@",1),H=$P(ID,"@",3),ID=$P(ID,"@",2)
+ S SER=$$TRIM^TXTU($TR(SER,CR," "))
+ I SER'="" Q:'$D(^WRHE(ID,"ser",SER))
+ S $P(^WRH(ST,ID,H),"|",12)=SER
+ D GL^IEXCH("^WRH",ST,ID,H)
+ ; TODO - проверить взаимосвязи
+ Q
+GSGITEM(ID) ; Получить срок годности
+ N ST,H,SI,TP
+ S ST=$P(ID,"@",1),H=$P(ID,"@",3),ID=$P(ID,"@",2),SI=$P(ID,"@",4)
+ S TP=$$PKU^IWRHS(ID)
+ I TP=2 Q:SI=""&(H="")  S:SI="" SI=$P($G(^WRH(ST,ID,H)),"|",12) I SI'="" D MSG^RWU($$DT^DTUTL($P(^WRHE(ID,"ser",SI),"|",4))) Q 
+ Q:ST=""!(ID="")!(H="")   
+ D MSG^RWU($$DT^DTUTL($P(^WRH(ST,ID,H),"|",21)))
+ Q
+SGITEM(ID,DT) ; Установить индивидуальный срок годности
+ N ST,H,SI,TP
+ S ST=$P(ID,"@",1),H=$P(ID,"@",3),ID=$P(ID,"@",2),SI=$P(ID,"@",4)
+ I ST=""!(ID="")!(H="") D MSG^RWU("SET") Q 
+ S DT=$$DI^DTUTL(DT) Q:DT="" 
+ S TP=$$PKU^IWRHS(ID)
+ I TP=2 D  Q  ; серии 
+ .I SI="",H=""  D MSG^RWU("Невозможно установить срок годности") Q 
+ .S:SI="" SI=$P(^WRH(ST,ID,H),"|",12)
+ .I SI="" D MSG^RWU("Не установлена серия") Q 
+ .D SETSGSER^IWRHS(ID,SI,DT),MSG^RWU("SET")
+ S $P(^WRH(ST,ID,H),"|",21)=DT ; сер.номера/партии
+ D GL^IEXCH("^WRH",ST,ID,H)
+ D MSG^RWU("SET")
+ Q
+REGLCL ; Регистрация прав
+ K ^LCLI("wrh")
+ S ^LCLI("wrh")="Складской учет"
+ S ^LCLI("wrh","settings")="Доступ к настройкам склада"
+ S ^LCLI("wrh","nomenclature")="Доступ к номенклатуре склада"
+ S ^LCLI("wrh","dnew")="Создание документа"
+ S ^LCLI("wrh","ddel")="Удаление непроведенного документа"
+ S ^LCLI("wrh","dann")="Отмена проводки документа"
+ S ^LCLI("wrh","ddela")="Удаление любого документа"
+ S ^LCLI("wrh","delitem")="Удаление расхода вне документа"
+ S ^LCLI("wrh","sysdays")="Число дней, разрешенных для коррекции"
+ S ^LCLI("wrh","systimes")="Число минут, разрешенных для коррекции"
+ S ^LCLI("wrh","dacc")="Проводка документа"
+ S ^LCLI("wrh","dsave")="Сохранение документа"
+ S ^LCLI("wrh","priv-stock")="Показывать только личный склад (1-по сотруднику,2-скрывать не личные склады,3-текущее ЛПУ)"
+ S ^LCLI("wrh","all-priv-stock")="Показывать все личные склады"
+ S ^LCLI("wrh","dautonn")="Автоприсваивание № внешнего документа"
+ S ^LCLI("wrh","dchkstock")="Проверка наличия товара на складе (в документах)"
+ S ^LCLI("wrh","ddate")="Возможность выбора произвольной даты документа"
+ S ^LCLI("wrh","ddatei")="Возможность выбора произвольной даты документа прихода"
+ S ^LCLI("wrh","ddateo")="Возможность выбора произвольной даты документа списания"
+ S ^LCLI("wrh","useddoc")="Используемые документы склада (ID через запятую)"
+ S ^LCLI("wrh","defmean")="Единицы по умолчанию в складских операциях: 1-упаковка"
+ S ^LCLI("wrh","chkrest")="Проверять остатки на складе при вводе документов"
+ S ^LCLI("wrh","simpledprn")="Печать документов склада без запроса"
+ S ^LCLI("wrh","simplejprn")="Печать журналов склада без запроса"
+ S ^LCLI("wrh","hideae")="Скрывать архивную номенклатуру в в справочнике"
+ S ^LCLI("wrh","chknmprof")="Проверять поля в номенклатуре"
+ S ^LCLI("wrh","dsysmenu")="Системное меню документа"
+ S ^LCLI("wrh","cdate")="Возможность изменение даты документа после проводки"
+ S ^LCLI("wrh","noswsum")="Не показывать сумму в документах"
+ S ^LCLI("wrh","retailss")="Показывать в таблицах розничную цену"
+ S ^LCLI("wrh","round")="Округлять сумму при выводе таблиц"
+ Q

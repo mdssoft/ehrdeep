@@ -1,0 +1,23 @@
+RCCST ; Отчеты по выставленным счетам [ 04/23/2017  11:35 PM ]
+LSTR(DS,DE) 
+ N DTP,DOC,X,CCR,A,U,SS,TP
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S DTP=$$FNDTP^YDOCTP("Приложение к счету"),CCR=""
+ D OWF^RWU(".txt")
+ D WC^RWU("Счет|Договор|Код договора|Раздел|Сумма")
+ I $L(DTP) S DOC="" F  S DOC=$O(^CDOCI("type",DTP,DOC)) Q:DOC=""  D
+ .S X=$P(DOC,",",1) Q:X<DS!(X>DE) 
+ .S DG=$$GET^YDOCS(DOC,"dog")
+ .;I DGN'="",DG'=DGN Q 
+ .I $$GET^YDOCS(DOC,"del") Q  
+ .S U=$$GET^YDOCS(DOC,"user")
+ .;I LPU'="",U["@",$P(U,"@",2)'=LPU Q 
+ .S A=$$DT2^DTUTL($$GET^YDOCS(DOC,"date"))_", "_U
+ .S SS=$$GET^YDOCS(DOC,"scsumm")
+ .S TP=$$GET^IINSC(DG,"tp",X)
+ .D WC^RWU(CR_$$GET^YDOCS(DOC,"nm")_"|"_$$NAME^IINSC(DG)_"|"_$$GET^IINSC(DG,"dognum",X)_"|"_$$NAME^ISPRAV("dgtype",TP)_"|"_$TR(SS,".",","))
+ D C^RWU
+ Q
+REGIPROC 
+ S ^IPROC("Отчеты по страховым компаниям","Реестр счетов")="LSTR_RCCST,1,2,d,Дата начала периода,d,Дата окончания периода"
+ Q

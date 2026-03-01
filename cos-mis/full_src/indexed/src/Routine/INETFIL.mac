@@ -1,0 +1,26 @@
+INETFIL ; Net file for MSGHUB [ 04/27/2015  3:09 PM ]
+DOSEND(ID) 
+ N IP,NET,X,IDX,TO,R
+ S IP=$G(^MSGHUB("netfile",ID,"ip"))
+ S:IP="" IP=$G(^MSGHUB("netfile",ID,"server"))
+ Q:IP="" 
+ S IDX="" F  S IDX=$O(^MSGOUT("netfile",ID,IDX)) Q:IDX=""  D
+ .S R=^(IDX),TO=$P(R,"|",2)
+ .Q:$G(^(IDX,"chkfn"))'=""  Q:$G(^("wait")) 
+ .Q:$$timeout^IMSGHUB("netfile",ID,IDX) 
+ .S NET=$$OPEN^WWWCLI(IP,9099)
+ .Q:NET="" 
+ .D OWBUF^WWWCLI(NET)
+ .S I="" F  S I=$O(^MSGOUT("netfile",ID,IDX,"data",I)) Q:I=""  D WBUF^WWWCLI(NET,^(I))
+ .D CBUF^WWWCLI(NET)
+ .S X=$$POST^WWWCLI(NET,"/"_TO)
+ .D CLOSE^WWWCLI(NET)
+ .Q:X'=200
+ .D endsend^IMSGHUB("netfile",ID,IDX)
+ Q
+DORECV(ID) 
+ ; in INETFIL^NMSGSTOR
+ Q
+INITDB 
+ S ^MSGHUB("netfile")="INETFIL"
+ Q

@@ -1,0 +1,74 @@
+IKDLINV ; Invitro driver [ 10/24/2010  7:50 PM ]
+DO(DEV,CMD) ; Обработчик драйвера
+ ; TODO
+ Q
+INLOAD
+ N FILL,FN,FL,IO,R,A,lab,Lid,ZID,Lprex,Fmov
+ S FN=$G(^cfg("lab","invitro","dir"))
+ s lab=$G(^cfg("lab","invitro","id"))
+ s Lprex=$G(^cfg("lab","invitro","pre")) ; префикс тестов
+ s Fmov=$G(^cfg("lab","invitro","fmove")) ; перемещать обраб. файлы в указ. дир.
+ D DIR^FIL(FN_"*.xml","FILL")
+ S FL="" F  S FL=$O(FILL(FL)) Q:FL=""  D:FILL(FL)=0
+ .S IO=$$ORT^FIL(FN_FL) Q:IO="" 
+ .S A=""
+ .U IO F  R R Q:$$ST^FIL()=0  S:R'="" A=A_R
+ .C IO
+ .S A=$E(A,3,33000) ; 2 lead bytes (utf)
+ .Q:'$$DEC(A) 
+ .I Fmov D MOV^FIL(FN_FL,Fmov_FL) Q 
+ .D DEL^FIL(FN_FL)
+ Q
+DEC(A)
+ N F,NIB,DT
+ S F=0,(NIB,DT,Lid,ZID)=""
+ D OEV^XMLR("TGs^IKDLINV","","")
+ D REV^XMLR(A)
+ D CEV^XMLR
+ I ZID'="",NIB'="" S ^MLAB(NIB,ZID,"s9")=0 D SBREZ^NMLABR(ZID,1) S F=1
+ Q F
+TGs
+ N LVL,N,TG,X,ID,R,D,F,O
+ S LVL=$O(%XM(4,""),-1),TG=%XM(2)
+ I LVL=3,TG="Patient" D  Q
+ .S NIB=$$deNIB($G(%XM(2,"p","ReservePatientID")))
+ .I '$$EXIST^IPAC(NIB) S NIB=""  
+ .S X=$G(%XM(2,"p","Sex")),X=$S(X="M":1,X="F":2,1:"")
+ .I X'="",$$GET^YIPACN(NIB,"pol")'=X S NIB=""
+ .S F=$$TRIM^TXTU($$DBLSP^TXTU($TR($G(%XM(2,"p","Surname")),$C(9)," ")))
+ .S O=$$TRIM^TXTU($$DBLSP^TXTU($TR($G(%XM(2,"p","FirstName")),$C(9)," ")))
+ .S F=$$DBLSP^TXTU(F_" "_O)
+ .S D=$G(%XM(2,"p","BirthDate")),D=$$DI^DTUTL($E(D,7,8)_"."_$E(D,5,6)_"."_$E(D,1,4))
+ .S:NIB="" NIB=$$GETNIB^YIFINDN($P(F," ",1),$P(F," ",2),$P(F," ",3),D,X,0)
+ Q:NIB="" 
+ I LVL=4,TG="Sample" S X=$G(%XM(2,"p","DrawTime")),DT=$$DI^DTUTL($E(X,7,8)_"."_$E(X,5,6)_"."_$E(X,1,4)),Lid=$G(%XM(2,"p","LaboratoryID")) Q 
+ Q:LVL'=5 
+ I $G(%XM(2,"p","AnaName"))["НЕпечатный" Q 
+ I ZID="" S ZID=$$MK^IMLAB(NIB,DT,,lab,Lid)
+ S X=$G(%XM(2,"p","TestMethodCode"))
+ S ID=Lprex_X
+ D aTEST(ID,$G(%XM(2,"p","AnaName")),"",$G(%XM(2,"p","Unit")),lab,X)
+ S R=$G(%XM(2,"p","Value"))
+ S X=$G(%XM(2,"p","RefMin"))
+ S:X'="" $P(R,"|",2)=X
+ S X=$G(%XM(2,"p","RefMax"))
+ S:X'="" $P(R,"|",3)=X
+ S X=$G(%XM(2,"p","RefText"))
+ S:X'="" $P(R,"|",5)=X
+ S R=$$GT^TXTU(R)
+ S ^MLAB(NIB,ZID,"d",ID)=R,^(ID,"s")="0|||||"_lab
+ Q
+deNIB(X)
+ N I,N
+ S N=""
+ F I=1:1:$L(X) Q:$E(X,I)'?1.N  S N=N_$E(X,I)
+ Q N
+aTEST(ID,NM,NL,MM,LAB,CC)
+ Q:$D(^LABT("T",ID)) 
+ S NM=$$GT^TXTU(NM),NL=$$GT^TXTU(NL),MM=$$GT^TXTU(MM)
+ S ^LABT("T",ID)=NM
+ S ^LABT("T",ID,"n")=NM_$S(NL="":"",1:"|"_NL)
+ S ^LABT("T",ID,"m")=MM
+ Q:'$G(LAB) 
+ S:$G(CC)'="" ^LABT("T",ID,"cn",LAB)=CC
+ Q

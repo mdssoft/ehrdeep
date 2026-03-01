@@ -1,0 +1,24 @@
+RPACEV ; Журналы и события по пациентам [ 01/14/2015  1:22 PM ]
+SYSF(DT,ROF,PRN) ; По системным статусам
+ N NI,A,R,OK,ST
+ S DT=$$DIH^DTUTL(DT),ROF=+$G(ROF),PRN=+$G(PRN)
+ D OWF^RWU(".txt")
+ D WC^RWU("№ И.Б.|Ф.И.О. пациента"_$S(ROF:"|Расч. в оф.",1:"")_$S(PRN:"|Печать",1:"")_"|Статусы|На счету|Договор|Комментарий")
+ S NI=-1 F  S NI=$$NEXT^YIPACN(NI) Q:$$EOF^YIPACN(NI)  D
+ .S R=$$GET^IPAC(NI,"state",DT) Q:R="" 
+ .S OK=1,R="|"_R_"|"
+ .I ROF,R["|ofbill|" S OK=0,ST(1)="+"
+ .I PRN,R["|prn|" S OK=0,ST(2)="+"
+ .Q:OK
+ .S A=$S(ROF:"|"_$G(ST(1)),1:"")_$S(PRN:"|"_$G(ST(2)),1:"")
+ .S A=A_"|"_$$GETE^IPAC(NI,"status",DT)_"|"_$$NOW^IBILL(NI)_"|"_$$GETE^IPAC(NI,"stc",DT)
+ .S A=A_"|"_$TR($E($$GET^IPAC(NI,"text",DT),1,255),$C(9)_CR," ")
+ .D WC^RWU(CR_NI_"|"_$$FIO^IPAC(NI,DT)_A)
+ .K ST
+ D C^RWU
+ Q
+REGIPROC 
+ N D,S
+ S D="Отчеты по пациентам",S="Журналы событий"
+ S ^IPROC(D,S,"Системные статусы")="SYSF_RPACEV,1,3,d,Дата формирования списка,t@string:0/Нет#1/Да,Расчет в офисе,t@string:0/Нет#1/Да,Печатные документы"
+ Q

@@ -1,0 +1,109 @@
+RSSMCET ; Отчет ССМЦ по загрузке [ 08/25/2014  6:23 PM ]
+FOR(DS,DE,OTP,TMF,TTP,XSUM,LPUX) ; Фонд рабочего времени
+ ; OTP - 0/1/2/3=все/пол/стом/стац
+ ; TMF - формат времени
+ ; TTP - тип времени, факт/запись
+ ; XSUM - итоги по клиникам
+ N I,DT,DWKL,DWKLR,A,B,Z,X1,X2,X3,IDX,TIT,LP,VR,DW,SP,OTL,OTX,ESUM
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),LPUX=$G(LPUX)
+ S I=1 F DT=DS:1:DE S DWKL(DT)=I I DT<DE S:$$DWEEK^DTUTL(DT)=7 I=I+1,DWKLR(I)=DT+1
+ S DWKLR(1)=DS ; 1-я дата - 1-я неделя
+ I OTP=1!(OTP=2) M OTL=^cfg("stom-otd") S R=$G(^cfg("stom-otd")) S:R'="" OTL(R)=""
+ I OTP=1!(OTP=3) M OTL=^cfg("stac-otd")
+ I OTP=1 M OTX=OTL K OTL S R="" F  S R=$$NEXT^ISPRAV("otd",R) Q:R=""  S:'$D(OTX(R)) OTL(R)=""
+ K OTX
+ K ^BUF($J) 
+ S TTP=$S(TTP:" use",1:" come")
+ D MK^IRPRASP(DS,DE,"^BUF($J,0","LPU,SP,VR,USER1","time,use,come",1,"FORp^RSSMCET")
+ S TIT="Лист1"
+ D OWF^RWU(".txt")
+ D WC^RWU(TIT_":A:1:Фонд рабочего времени "_$$TXTP^DTUTL(DS,DE))
+ 
+ S IDX=0,A="",Z=$O(DWKLR(""),-1)
+ F I=1:1:Z S X1=DWKLR(I),X2=$S(I=Z:DE,1:DWKLR(I+1)),A=A_CR_TIT_":"_$C($A("D")+((I-1)*4))_":4:"_$P($$DT^DTUTL(X1),".",1,2)_"-"_$P($$DT^DTUTL(X2),".",1,2)
+ D WC^RWU(A)
+ 
+ S IDX=5
+ S LP="" F  S LP=$O(^BUF($J,0,LP)) Q:LP=""  I LP'=-1 D:LP'[" "
+ .K ESUM
+ .S SP="" F  S SP=$O(^BUF($J,0,LP,SP)) Q:SP=""  D:SP'[" "
+ ..S VR="" F  S VR=$O(^BUF($J,0,LP,SP,VR)) Q:VR=""  D:VR'[" "
+ ...S IDX=IDX+1,B=":"_IDX_":"
+ ...S I="" F  S I=$O(^BUF($J,0,LP,SP,VR,I)) Q:I=""  D:I'[" "
+ ....S X1=$G(^(I," time"))*60,X2=$G(^(TTP))*60
+ ....D fww
+ ...S X1=$G(^BUF($J,0,LP,SP,VR," time"))*60,X2=$G(^(TTP))*60
+ ...S I=7
+ ...D fww
+ .I $D(ESUM) S IDX=IDX+1,B=":"_IDX_":" D fweline K ESUM
+ 
+ D C^RWU
+ K ^BUF($J)
+ Q
+fww 
+ N DW
+ S DW=(I-1)*4 
+ S X3=$S('X1:0,1:$J(X2*100/X1,"",2)) 
+ S A=CR_TIT_":A"_B_$$NAME^ICONTR(LP)
+ S A=A_CR_TIT_":B"_B_$$GSPEC^YISPRAV(SP)
+ S A=A_CR_TIT_":C"_B_$$FIO^IKADRY(VR)
+ S Z=$C($A("D")+DW)
+ S A=A_CR_TIT_":"_Z_B_$$ZKTM^RRASP(X1,TMF)
+ S Z=$C($A("D")+DW+1)
+ S A=A_CR_TIT_":"_Z_B_$$ZKTM^RRASP(X2,TMF)
+ S Z=$C($A("D")+DW+3)
+ S A=A_CR_TIT_":"_Z_B_$TR(X3,".",",")
+ S:XSUM ESUM(I,1)=$G(ESUM(I,1))+X1,ESUM(I,2)=$G(ESUM(I,2))+X2
+ D WC^RWU(A)
+ Q
+fweline ; Строка "ИТОГО"
+ N I,A,DW
+ S A=CR_TIT_":A"_B_"ИТОГО:"
+ S I="" F  S I=$O(ESUM(I)) Q:I=""  D
+ .S X1=ESUM(I,1),X2=ESUM(I,2),X3=$S('X1:0,1:$J(X2*100/X1,"",2))
+ .S DW=(I-1)*4
+ .S Z=$C($A("D")+DW)
+ .S A=A_CR_TIT_":"_Z_B_$$ZKTM^RRASP(X1,TMF)
+ .S Z=$C($A("D")+DW+1)
+ .S A=A_CR_TIT_":"_Z_B_$$ZKTM^RRASP(X2,TMF)
+ .S Z=$C($A("D")+DW+3)
+ .S A=A_CR_TIT_":"_Z_B_$TR(X3,".",",")
+ D WC^RWU(A)
+ Q
+FORp 
+ I LPUX'="",LPUX'=LPU S TEST=1 Q
+ I '$D(OTL(OT)) S TEST=1 Q 
+ S USER1=DWKL(DT)
+ Q
+LSTK(DS,DE,LPU) ; Запись пациентов по клиникам
+ N FC
+ S FC=0
+ ; FC - все/пришедшие/не пришедшие
+ N SP,OT,TM,DT,K,LN,VR,O,A,IF,EI,PH,IX
+ S LPU=$S(+$$FR^I():$G(LPU),1:+$$^I("ilpu"))
+ S:LPU="" LPU=+$$^I("ilpu")
+ S USRX=$$UL^TXTU(USRX)
+ S DS=$$DIH^DTUTL($G(DS)),DE=$$DIH^DTUTL($G(DE)),MOD=+$G(MOD)
+ D OWF^RWU(".txt"),WC^RWU("Клиника|Адрес|Пациент|Телефон|Дата|Время|Врач|Специальность")
+ S OT="" F  S OT=$O(^DSH(LPU,OT)) Q:OT=""  S VR="" F  S VR=$O(^DSH(LPU,OT,VR)) Q:VR=""  D
+ .S SP="" F  S SP=$O(^DSH(LPU,OT,VR,SP)) Q:SP=""  S DT=DS-1 F  S DT=$O(^DSH(LPU,OT,VR,SP,DT)) Q:DT=""!(DT>DE)  D
+ ..S TM="" F  S TM=$O(^DSH(LPU,OT,VR,SP,DT,TM)) Q:TM=""  D
+ ...S K=$G(^(TM)) Q:K=""  Q:K="*" 
+ ...S NI=$P(K,"|",1)
+ ...S IF=$G(^(TM,"i")),EI=$G(^("l"))
+ ...I FC,$S(FC=1:'$D(^("c")),FC=2:$D(^("c")),1:0) Q   
+ ...S LN=CR_$$NAME^ICONTR(LPU)_"|"_$$ADDR^ICONTR(LPU,DT,1)_"|"
+ ...S IX=$$EXIST^IPAC(NI)
+ ...I 'IX S LN=LN_NI_"|"_$P(IF,"|",1)
+ ...I IX S LN=LN_$$FIO^IPAC(NI)_"|"_NI_"|"_$S($P(IF,"|",1)="":$$TELS^IPAC(NI),1:$P(IF,"|",1))
+ ...S LN=LN_$$DT^DTUTL(DT)_"|"_$$TM^DTUTL(TM)_"|"_$$FIOSH^IKADRY(VR)_"|"_$$SPEC^ISPRAV(SP)
+ ...D WC^RWU(CR_LN)
+ D C^RWU
+ Q
+REGIPROC 
+ S ^IPROC("ССМЦ","Фонд рабочего времени")="FOR_RSSMCET,8,7,d,Начальная дата периода,d,Конечная дата периода,t@string:0/Все#1/Поликлиника#2/Стоматология#3/Стационар,Подразделения,t@string:0/Часы-минуты#1/Десятичный,Формат представления времени,t@string:0/по факту#1/по записи,Вывод занятого времени,t@string:0/Нет#1/Да,Итоги по клиникам,t@storage:lpu,Филиал,,,,/ssmc/ssmc-for.xls"
+ 
+ N FF
+ S FF=+$$FR^I()
+ S ^IPROC("ССМЦ","Выгрузка расписания")="LSTK_RSSMCET,1,"_$S(FF:3,1:2)_",d@4,Дата с,d@4,Дата по"_$S(FF:",t@storage:lpu,Филиал",1:"")
+ Q

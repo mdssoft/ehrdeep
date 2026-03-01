@@ -1,0 +1,91 @@
+ISNMPSP ; Справочники СНМП [ 03/18/2012  6:10 PM ]
+GETGRP(ID,FL,DTM) ; Получить значение поля бригады
+ S:$G(DTM)="" DTM=$H
+ S DTM=$P(DTM,",",1)_","_($P(DTM,",",2)+1)
+ S ID=$O(^EMGRP(ID,FL,DTM),-1)
+ Q:ID="" ""
+ Q ^(ID)
+SETGRP(ID,FL,DTM,R) ; Сохранить значение поля бригады
+ S:$G(DTM)="" DTM=$H
+ N DT
+ S DT=$P(DTM,",",1)_","_($P(DTM,",",2)+1)
+ S DT=$O(^EMGRP(ID,FL,DT),-1)
+ I DT'="",^(DT)=R Q
+ S ^(DTM)=R
+ D GL^IEXCH("^EMGRP",ID,FL,DTM)
+ Q
+CNGFGRP(ID,FL,DTM) ; Получить последнее изменение поля бригады
+ S:$G(DTM)="" DTM=$H
+ S DTM=$P(DTM,",",1)_","_($P(DTM,",",2)+1)
+ S ID=$O(^EMGRP(ID,FL,DTM),-1)
+ Q:ID="" ""
+ Q ID
+FIOGRP(ID,DTM) ; ФИО состава бригады
+ S:$G(DTM)="" DTM=$H
+ N A,F,X
+ S DTM=$P(DTM,",",1)_","_($P(DTM,",",2)+1),A=""
+ S DTM=$O(^EMGRP(ID,"kadry",DTM),-1)
+ Q:DTM="" ""
+ F F="vr","fl","vd" S X=$G(^EMGRP(ID,"kadry",DTM,F)) S:X'="" A=$S(A="":"",1:A_", ")_$$FIOSH^IKADRY(^(F))
+ S F="" F  S F=$O(^EMGRP(ID,"kadry",DTM,F)) Q:F=""  I F'="vr",F'="fl",F'="vd" S X=^(F) S:X'="" A=$S(A="":"",1:A_", ")_$$FIOSH^IKADRY(^(F))
+ Q A
+VRGRP(ID,FL,DTM) ; Код сотрудника бригады
+ S:$G(DTM)="" DTM=$H
+ S DTM=$P(DTM,",",1)_","_($P(DTM,",",2)+1)
+ S DTM=$O(^EMGRP(ID,"kadry",DTM),-1)
+ Q:DTM="" ""
+ Q $G(^EMGRP(ID,"kadry",DTM,FL))
+UAVGRP(ID,DTM) ; Освободить машину от бригады
+ N AV,G
+ S AV=$$GETGRP(ID,"auto",DTM) Q:AV=""
+ D SETGRP(ID,"auto",DTM,"")
+ D SETGRP(ID,"stat",DTM,5) ; No avto - wait auto
+ S G="" F  S G=$O(^EMGRP(G)) Q:G=""  I G'=ID,$$GETGRP(G,"auto",DTM)=AV,$$GETGRP(ID,"use",DTM)'=0 S AV="" Q  ; поиск других с такой же машиной
+ Q:AV=""  
+ D SETAVT(AV,"stat",DTM,1)
+ Q
+REAVGRP(ID,DTM,AV,NAV) ; Изменить транспорт у бригады
+ ; NAV - без А\М
+ N A0
+ S A0=$$GETGRP(ID,"auto",DTM),NAV=$G(NAV)
+ D:A0'="" AVTSTAT(A0,DTM,1) ; auto free
+ I AV'="",$$GETAVT(AV,"stat",DTM)=1 D AVTSTAT(AV,DTM,2) ; auto online
+ I AV'=""!NAV,$$GETGRP(ID,"stat",DTM)=5 D SETGRP(ID,"stat",DTM,1) ; ready
+ I AV="",'NAV D SETGRP(ID,"stat",DTM,5) ; No avto - wait auto
+ D SETGRP(ID,"auto",DTM,$S(NAV:"",1:AV))
+ Q
+GETAVT(ID,FL,DTM) ; Получить значение поля автотранспорта
+ S:$G(DTM)="" DTM=$H
+ S DTM=$P(DTM,",",1)_","_($P(DTM,",",2)+1)
+ S ID=$O(^EAVT(ID,FL,DTM),-1)
+ Q:ID="" ""
+ Q ^(ID)
+SETAVT(ID,FL,DTM,R) ; Сохранить значение поля автотранспорта
+ S:$G(DTM)="" DTM=$H
+ N DT
+ S DT=$P(DTM,",",1)_","_($P(DTM,",",2)+1)
+ S DT=$O(^EAVT(ID,FL,DT),-1)
+ I DT'="",^(DT)=R Q
+ S ^(DTM)=R
+ D GL^IEXCH("^EAVT",ID,FL,DTM)
+ Q
+AVTSTAT(ID,DTM,X) ; Set auto status
+ Q:ID=""  Q:'$D(^EAVT(ID))
+ D SETAVT(ID,"stat",DTM,X)
+ Q
+SHTIME(DTM,SH) ; Получить дату/время для графика
+ Q:SH="" DTM
+ N RT,T1,T2,D,T
+ S RT=$G(^EMSH(SH,"tm"))
+ Q:RT="" DTM
+ S T1=$P(RT,"|",1),T2=$P(RT,"|",2)
+ S D=$P(DTM,",",1),T=$P(DTM,",",2)
+ S RT=$S(T1<T2:$S(T<T1:"",T>T2:"",1:D_","_T1),T>T1:D_","_T1,1:(D-1)_","_T1)_"|"
+ S RT=RT_$S(T1<T2:$S(T<T1:"",T>T2:"",1:D_","_T2),T<T2:D_","_T2,1:(D+1)_","_T2)
+ Q RT
+INITDB 
+ D:'$D(^EMM("emgkdr"))
+ .S ^EMM("emgkdr","vr")="Врач"
+ .S ^EMM("emgkdr","vd")="Водитель"
+ .S ^EMM("emgkdr","fl")="Фельдшер"
+ Q

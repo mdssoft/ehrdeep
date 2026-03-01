@@ -1,0 +1,93 @@
+IRPUSL ; Отчеты по услугам [ 03/05/2022  2:40 PM ]
+ ; LPU - Филиал
+ ; OT - Отделение
+ ; VR - Врач
+ ; SP - Специальность
+ ; CSTC - Компания
+ ; DGT - Тип компании
+ ; PTP - Раздел  ЛПУ: п-ка/стом/стац.
+ ; USER,USER1,USER2 - пользовательский индекс
+ ; NI - пациент
+MK(DS,DE,REZ,SEQ,VARS,SMR,FLT,FilRP) 
+ ; SEQ - порядок следования индексов
+ ; VARS - нужные значения, через ',', в индексе - пробел+имя
+ ;      sum - сумма, cnt - кол-во услуг, kss - кассовая сумма
+ ;      scost - себестоимость, zrp - зарплата, mat - материалы
+ ;      ext - внешняя цена, mtc - стоимость материалов (TODO)
+ ;      prf - профосмотр, ppl - лиц, pos - посещений
+ ;      pps - первичных посещений, pvk - пациентов вернулось в клин.
+ ;      pls - лиц первично
+ ; FLT - выражение (функция) фильтра, var TEST=1 - не счит.
+ ; FilRP - альтернатива системной "filial-report"
+ Q:REZ=""
+ N lvl,var,lvv,lvn,lvx,v
+ N I,R,X,L,T,V,S,Z,LPU,OT,VR,SP,CSTC,NI,DT,PT,TEST,FR,CC,DGL,DGT,PTP
+ N PTP,STOTD,SCOTD,USER,USER1,USER2
+ ; make vars
+ F I=1:1 S X=$P(VARS,",",I) Q:X=""  S var(X)=" "_X
+ ; make levels
+ S R=REZ
+ S:R["(" R=R_"," S:R'["(" R=R_"("
+ F I=1:1 S X=$P(SEQ,",",I) Q:X=""  D
+ .S R=R_$S(I=1:"",1:",")_X
+ .S lvl(I)=R_")",lvn(I)=X,lvv(X)=""
+ S lvl=I-1
+ D MKSCOTD^IEDE
+ ; main loop
+ S FLT=$G(FLT) S:DS="" DS=+$H S:DE="" DE=+$H
+ S FR=+$S($D(FilRP):FilRP,1:$$FR^I())
+ K ^BUF($J,"rppos")
+ D MKAPPRC^IUSLSC(DS,DE,1,"PREPRC^IRPUSL","PROC^IRPUSL","USLER^IRPUSL","",'FR)
+ Q
+PREPRC ; Pre usl proc
+ S:$D(lvv("DGT")) DGT=$$GETDGT(CSTC,DT)
+ S:$D(lvv("PTP")) PTP=$S($D(STOTD(OTD)):2,$D(SCOTD(OTD)):3,1:1)
+ D:$D(var("zrp")) 
+ .I '$D(^ZNFE(VR,OTD,DT,ID,"zrp")) S lvx("zrp")=0 Q 
+ .S V="",S=0
+ .F  S V=$O(^ZNFE(VR,OTD,DT,ID,"zrp",V)) Q:V=""  S S=S+$P(^(V),"|",1)
+ .S lvx("zrp")=S
+ I $D(var("mat")) S lvx("mat")=$$KEYSUMM^IWRH($$GETPLE^IUSL(VR,DT,OTD,ID,"mt"))
+ I $D(var("mtc")) S lvx("mtc")=$$CENNALL^IWRHS($TR($$GETPL^IUSL(VR,DT,OTD,ID,"mt"),"|","~"),DT)
+ I $D(var("ext")) S lvx("ext")=$P($$GETPL^IUSL(VR,DT,OTD,ID,"c"),"|",1)
+ Q
+PROC ; Main event
+ N OT
+ S LPU=+$G(LPU),CC=$G(UL(U)),FLG="|"_$G(FLG)_"|",OT=OTD
+ S:$D(lvv("USER")) USER=0
+ I FLT'="" S TEST=0 D @FLT Q:TEST 
+ S:$D(var("pos")) Z=VR_","_DT_","_NI
+ S:$D(var("sum"))!$D(var("kss"))!$D(var("prf")) X=$S($L(SUMM):SUMM,1:$$PRICEH^IPRICE(U,PRC,DT)*KSKD)*CC
+ S:$D(var("scost")) lvx("scost")=$$GET^IPRICE(U,"scost",PRC,DT)*CC
+ D PROC1
+ ;I SMR S TEST=LPU,LPU=-1 D PROC1 S LPU=TEST ; todo
+ Q
+PROC1 
+ F I=1:1:lvl D:@lvn(I)'=""
+ .S R=lvl(I)
+ .S V="" F  S V=$O(var(V)) Q:V=""  D:'$D(var(V,1))
+ ..S v=" "_V
+ ..I V="sum" S ^(v)=$G(@R@(v))+X Q 
+ ..I V="kss" S:KASS ^(v)=$G(@R@(v))+X Q 
+ ..I V="prf" S:FLG["|prf|" ^(v)=$G(@R@(v))+X Q
+ ..I V="cnt" S ^(v)=$G(@R@(v))+CC Q 
+ ..I V="pos" S:'$D(@R@(" ",Z)) ^(Z)="",^(v)=$G(@R@(v))+1 Q  ; todo
+ ..I V="pls" S:$$IsPRPA^IUSL(NI,OTD,VR,DT,ID) ^(v)=$G(@R@(v))+1 Q 
+ ..I V="ppl" S:'$D(@R@(" ",NI)) ^(NI)="",^(v)=$G(@R@(v))+1 Q 
+ ..I V="pvk" I $D(@R@(" ",NI)),^(NI)="" S ^(NI)=1,^(v)=$G(@R@(v))+1 Q
+ ..I V="pvv" D  Q 
+ ...I '$D(@R@(" ",NI_","_VR)) S @R@(" ",NI_","_VR)="" Q ; перв. прих.
+ ...I $D(@R@(" ",NI_","_VR)),^(NI_","_VR)="" S ^(NI_","_VR)=1,^(v)=$G(@R@(v))+1
+ ..I V="pps" S:$$IsFPOS^IUSL(NI,OTD,VR,DT,ID) ^(v)=$G(@R@(v))+1 Q 
+ ..I V="scost" S ^(v)=$G(@R@(v))+lvx(V) Q
+ ..I V="zrp" S ^(v)=$G(@R@(v))+lvx(V) Q 
+ ..I V="mat" S ^(v)=$G(@R@(v))+lvx(V) Q
+ ..I V="mtc" S ^(v)=$G(@R@(v))+lvx(V) Q
+ ..I V="ext" S ^(v)=$G(@R@(v))+lvx(V) Q
+ Q
+GETDGT(DG,DT)   ; Получить тип договора
+ Q:DG="" 3 Q:$D(DGL(+DG)) DGL(+DG)
+ S DT=+$$GET^IINSC(DG,"dvid",DT),DGL(DG)=DT
+ Q DT
+USLER ; Error event
+ Q

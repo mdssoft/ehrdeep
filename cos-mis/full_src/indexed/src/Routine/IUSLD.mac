@@ -1,0 +1,347 @@
+IUSLD ; Процедуры ЕД учета услуг [ 09/02/2024  1:43 PM ]
+CHKSUM(NIB,DT,DGN,GRN,ASUM,SVR) ; Проверка лимитов суммы
+ ; DT - на дату
+ ; GRN - по ГП
+ ; ASUM - добавочная сумма
+ ; SVR - +по данному врачу неподписанные услуги
+ ; TODO - проверка только в рамках ГП
+ N DS,DE,PIX,X,S,E,SP,SD,SO,YL,OTL
+ S DGN=$G(DGN),DT=$G(DT),ASUM=$G(ASUM),SVR=$G(SVR),PIX="",X=1
+ S:DT="" DT=+$H
+ S:DGN="" DGN=$$GET^IPAC(NIB,"stc",DT),X=0
+ S:X PIX=$$PIDX^YIPACN(NIB,DGN,DT)
+ S SP=$$GET^IPAC(NIB,"sumlimit"_PIX,DT)
+ S YL=$$GET^IPAC(NIB,"yearslimit"_PIX,DT)
+ S:'SP SP=+$$GET^IINSC(DGN,"pipllimit",DT)
+ S:'YL YL=+$$GET^IINSC(DGN,"yearslimit",DT) ; for patient only
+ S SO=+$$GET^IINSC(DGN,"piplolimit",DT)
+ S SD=+$$GET^IINSC(DGN,"scredit",DT)
+ I 'SP,'SO,'SD Q "" ; нет ограничений
+ S OTL=$$GET^IINSC(DGN,"otdlimit",DT)
+ S (DS,DE)=""
+ S:YL DE=$P($$DT^DTUTL(DT),".",3),DS=$$DI^DTUTL("01.01."_DE),DE=$$DI^DTUTL("31.12."_DE)
+ S X=$$GET^IPAC(NIB,"fromlimit"_PIX,DT)
+ S:X DS=X
+ S:'DS DS=$$GET^IPAC(NIB,"dog_from"_PIX,DT)
+ S:'DE DE=$$GET^IPAC(NIB,"dog_to"_PIX,DT)
+ S:'DS DS=$$GET^IINSC(DGN,"dog_from",DT)
+ S:'DE DE=$$GET^IINSC(DGN,"dog_to",DT)
+ S:'DS DS=$$FLCNG^IPAC(NIB,"stc"_PIX,"",1)
+ S:'DE DE=+$H
+ S:YL=2 DGN="" ; Не учитываем договор в течении года
+ S S=$$SUMMUSL^IUSL(NIB,DS,DE,DGN,1,$G(GRN),1,1,$S(ASUM:0,1:SVR),OTL)+ASUM,(X,E)=0
+ I SP,S>SP Q S_"|"_SP_"|"_SO_"|"_SD_"|1"
+ I SD S X=$$DGSUM(DGN,DS,DE,NIB,1),E=X+S Q:E>SD E_"|"_SP_"|"_SO_"|"_SD_"|3"
+ I SO,S>SO Q S_"|"_SP_"|"_SO_"|"_SD_"|2" 
+ 
+ I SD,SP Q:(SD-E)<(SP-S) E_"||"_SO_"|"_SD Q S_"|"_SP_"|"_SO_"|"
+ 
+ Q $S('E:S,E'>SP:E,SD&(E>S):E,1:S)_"|"_SP_"|"_SO_"|"_SD
+DGSUM(DGN,DS,DE,EXNIB,NoNOP) ; Сумма по договору
+ N NI,S
+ S NI="",S=0,NoNOP=+$G(NoNOP)
+ F  S NI=$O(^BTI(" s",DGN,NI)) Q:NI=""  I NI'=EXNIB,$D(^PNF(NI)),$O(^(NI,DS-1)) S S=S+$$SUMMUSL^IUSL(NI,DS,DE,DGN,1,0,1,NoNOP)
+ Q S
+SPRCUSL(NIB,DS,DE,PPL,DGN,NKSS,GRN,NoVU,NONOP) ; Сумма услуг и поля прайса услуг за период
+ ; PPL - поле прейскуранта
+ ; NoVU - без виртуальных услуг
+ ; GRN - только по гарантийным письмам
+ ; NONOP - не учитывать неоплачиваемые услуги
+ N KX,OT,VR,ID,R,CPRC,@$$NEWVAR^IUSL(),SS,S1,DG
+ S CPRG="",SS=0,S1=0,NONOP=+$G(NONOP)
+ S DT=DS-1 F  S DT=$O(^PNF(NIB,DT)) Q:DT=""!(DT>DE)  D
+ .I DGN'="" S DG=$$GET^IPAC(NIB,"stc",DT)
+ .S CPRC=$$PRC^IINSC(DGN,NIB,DT)
+ .S KX="" F  S KX=$O(^PNF(NIB,DT,KX)) Q:KX=""  D
+ ..S R=$P(^(KX),"|",2)
+ ..I R'="",R'=DGN Q 
+ ..S VR=$P(KX,"|",1),OT=$P(KX,"|",2),ID=$P(KX,"|",3)
+ ..D GETSC^IUSL(VR,DT,OT,ID,1) 
+ ..Q:$D(ERR)  
+ ..Q:STAT="w"  Q:STAT="d"  I NKSS,STAT=2 Q  ; nokss
+ ..S ISTC=$G(ISTC),FLG="|"_$G(FLG)_"|"
+ ..I ISTC,ISTC'=DGN Q  ; no dgn
+ ..I ISTC="",DG'=DGN Q  ; no def dgn
+ ..I GRN,FLG'["|grn|" Q  
+ ..I NONOP,FLG["|nop|" Q
+ ..S R=$$SUMM^IUSL(VR,DT,OT,ID)
+ ..S SS=SS+R
+ ..S U="" F  S U=$O(UL(U)) Q:U=""  S S1=$$GET^IPRICE(U,PPL,PRC,DT)*UL(U)+S1
+ Q SS_"|"_S1
+CALCWP(NIB,VR,OTD,DTT,DGN,VID,CRFLG,CPRC,cID,UKDR,NoKV,VAL,KVN,aSBS) ; Сумма неавторизованных кассовых услуг
+ ; CRFLG - флаг возможности кредитования
+ ; UKDR - введеных указанным сотрудником
+ ; NoKV - без квитанции
+ ; VAL - переменая для сохранения индексов посчитанных услуг
+ ; aSBS - все услуги, и с подписью и без
+ N SUM,CSUM,OT,CNT,CEN,CPRG,PRC,VRX,OTX,KX,IDX,USL,U,FRP,FRS,FRPX,FRSX,DV,MS,@$$NEWVAR^IUSL
+ S CSUM=0
+ S cID=$G(cID),UKDR=$G(UKDR),NoKV=$G(NoKV),VAL=$G(VAL),aSBS=$G(aSBS)
+ S KVN=$G(KVN),CRFLG=$G(CRFLG)
+ D MKRFPS(NIB,DGN,DTT)
+ S KX="" F  S KX=$O(^PNF(NIB,DTT,KX)) Q:KX=""  D
+ .S VRX=$P(KX,"|",1),OTX=$P(KX,"|",2),IDX=$P(KX,"|",3)
+ .I VR'="",VRX'=VR Q
+ .I OTD'="",OTX'=OTD Q
+ .I $L(cID) Q:IDX'=cID  ; только по 1-й услуге
+ .I UKDR'="",$P($$GETLOG^IUSL(VRX,DTT,OTX,IDX),"|",2)'=UKDR Q 
+ .I NoKV,$$GETPL^IUSL(VRX,DTT,OTX,IDX,"kv")'="" Q 
+ .I KVN'="",$$GETPL^IUSL(VRX,DTT,OTX,IDX,"kv")'=KVN Q 
+ .D GET^IUSL(VRX,DTT,OTX,IDX) ; GETSC
+ .I 'aSBS Q:$D(ERR)!(STAT'="w")
+ .S FLG="|"_$G(FLG)_"|"
+ .Q:FLG["|nop|"
+ .S DGN=$S($G(ISTC)="":$$GET^IPAC(NIB,"stc",DTT),1:ISTC)
+ .S DV=$$GET^IINSC(DGN,"dvid",DTT)
+ .S FRPX=FRP,FRSX=FRS,U=$$GETPL^IUSL(VRX,DTT,OTX,IDX,"fr")
+ .I U'="" S FRSX=$P(U,"|",1),FRPX=$P(U,"|",2) 
+ .I FRPX="",FRSX="",FLG'["|kss|",DV'=3 Q  
+ .I CRFLG'="" S U=$$GETPL^IUSL(VRX,DTT,OTX,IDX,"kv") Q:@CRFLG=33&(U'="")  Q:@CRFLG=34&(U="")  I @CRFLG=0 S U="" F  S U=$O(UL(U)) Q:U=""  S:$$GET^IPRICE(U,"debt",PRC,DTT) @CRFLG=1
+ .S SUM=$$GETPL^IUSL(VRX,DTT,OTX,IDX,"s")
+ .S SUM=$S(SUM'="":$P(SUM,"|",1),1:$$MKSUM^IUSL(DTT))
+ .I DV'=3,FLG'["|kss|",FRSX'="" S SUM=SUM-FRSX,FRPX="" S:SUM<0 SUM=0
+ .I DV'=3,FLG'["|kss|",FRPX'="" S SUM=+$J(SUM*FRPX/100,"",2)
+ .S CSUM=CSUM+SUM
+ .S:VAL'="" @VAL@(VRX_"@"_DTT_"@"_OTX_"@"_IDX)=SUM
+ .I '$$ISPL^IUSL(VRX,DTT,OTX,IDX,"mt")!$$ISPL^IUSL(VRX,DTT,OTX,IDX,"s")  Q
+ .S U=$O(UL("")) Q:'$$GET^IPRICE(U,"msale",PRC,DTT)
+ .S MS=$$CENNALL^IWRHS($$GETPL^IUSL(VRX,DTT,OTX,IDX,"mt"),DTT) Q:'MS 
+ .S CSUM=CSUM+MS
+ .S:VAL'="" @VAL@(VRX_"@"_DTT_"@"_OTX_"@"_IDX)=SUM+MS
+ Q CSUM
+CALCKS(NIB,VR,OTD,DTT,ALL) ; Сумма подписанных неоплаченных услуг
+ ; ALL - учитывать неподписанные
+ N KX,VRX,OTX,DTX,ID,EP,CSUM,@$$NEWVAR^IUSL
+ S CSUM=0,ALL=$G(ALL)
+ S KX="" F  S KX=$O(^PNF(NIB,DTT,KX)) Q:KX=""  D
+ .S VRX=$P(KX,"|",1),OTX=$P(KX,"|",2),ID=$P(KX,"|",3)
+ .Q:VRX'=VR!(OTX'=OTD)  
+ .D GET^IUSL(VRX,DTT,OTX,ID)
+ .I 'ALL,STAT'=0,STAT'=2 Q
+ .I ALL,STAT="w" Q 
+ .S EP=+$$GETPL^IUSL(VRX,DTT,OTX,ID,"s") S:EP>0 CSUM=CSUM+EP
+ Q CSUM
+SETKV(NIB,VR,OTD,DTT,KVN,KP,ISB) ; Установить номер квитанции все кас.с услуги
+ ; KP - установить и факт платежа
+ ; ISB - только для подписанных услуг
+ N KX,VRX,OTX,DTX,ID,X,P,DGN,VID,VI,@$$NEWVAR^IUSL
+ S KP=$G(KP),ISB=$G(ISB)
+ S DGN=$$GET^IPAC(NIB,"stc",DTT)
+ S VID=$$GET^IINSC(DGN,"dvid",DTT)
+ S KX="" F  S KX=$O(^PNF(NIB,DTT,KX)) Q:KX=""  D
+ .S VRX=$P(KX,"|",1),OTX=$P(KX,"|",2),ID=$P(KX,"|",3)
+ .Q:VRX'=VR!(OTX'=OTD)  
+ .S X=$$GETPL^IUSL(VRX,DTT,OTX,ID,"kv") Q:X'=""  
+ .D GET^IUSL(VRX,DTT,OTX,ID) Q:STAT="d" 
+ .I ISB,STAT="w" Q 
+ .S FLG="|"_$G(FLG)_"|"
+ .Q:FLG["|nop|" 
+ .I (FLG'["|kss|")&(STAT'=2) Q:$S($G(ISTC)="":VID,1:$$GET^IINSC(ISTC,"dvid",DTT))'=3
+ .S X=$$SETPL^IUSL(VRX,DTT,OTX,ID,"kv",KVN)
+ .S P=$$GETPL^IUSL(VRX,DTT,OTX,ID,"p")
+ .I P'="" D SETKV^IBILL(NIB,P,KVN)
+ .S:KP X=$$SETPL^IUSL(VRX,DTT,OTX,ID,"kp",KP)
+ Q
+GETBKV(NIB,DS,DE,KV) ; Найти первую услугу по номеру квитанции
+ N DT,VR,OT,ID,KX,KEY
+ S KEY=""
+ S DT=DE+1 F  S DT=$O(^PNF(NIB,DT),-1) Q:DT=""!(DT<DS)  D  Q:KEY'="" 
+ .S KX="" F  S KX=$O(^PNF(NIB,DT,KX)) Q:KX=""  D   
+ ..S VR=$P(KX,"|",1),OT=$P(KX,"|",2),ID=$P(KX,"|",3)
+ ..Q:$$GETPL^IUSL(VR,DT,OT,ID,"kv")'=KV 
+ ..S KEY=$S(KEY="":"",1:KEY_"@")_VR_"|"_DT_"|"_OT_"|"_ID
+ Q KEY
+SETPL(NIB,VR,OTD,DTT,PL,VAR) ; Установить поле на все услуги
+ N KX,VRX,OTX,DTX,ID,X,@$$NEWVAR^IUSL
+ S KX="" F  S KX=$O(^PNF(NIB,DTT,KX)) Q:KX=""  D
+ .S VRX=$P(KX,"|",1),OTX=$P(KX,"|",2),ID=$P(KX,"|",3)
+ .Q:VRX'=VR!(OTX'=OTD)  
+ .S X=$$SETPL^IUSL(VRX,DTT,OTX,ID,PL,VAR)
+ Q 
+SBSYSC(NIB,VR,OTD,DT,CRED) ; Подпись for CREDit type 2
+ Q:CRED'=2 
+ N DTT,DGN,CPRG,CPRC,KX,VRX,OTX,EP,CSUM,ULST,ID,WDT,@$$NEWVAR^IUSL
+ S DTT=$$DIH^DTUTL(DT)
+ S DGN=$$GET^IPAC(NIB,"stc",DTT)
+ S VID=$$GET^IINSC(DGN,"dvid",DTT)
+ S CPRG=$$GET^IPAC(NIB,"prog",DTT)
+ S CPRC=+$$PRC^IINSC(DGN,NIB,DTT)
+ S ULST="ZNF:"_VR_":"_OTD_":"_DTT,CSUM=0
+ ; Предварительная подсчет:
+ S KX="" F  S KX=$O(^PNF(NIB,DTT,KX),-1) Q:KX=""  D
+ .S VRX=$P(KX,"|",1),OTX=$P(KX,"|",2),ID=$P(KX,"|",3)
+ .Q:VRX'=VR!(OTX'=OTD)  
+ .D GET^IUSL(VRX,DTT,OTX,ID) Q:STAT'=0 
+ .Q:"|"_$G(FLG)_"|"["|nop|"
+ .S EP=+$$GETPL^IUSL(VRX,DTT,OTX,ID,"s") Q:EP=0  S CSUM=CSUM+EP
+ .I EP>0 S U="" F  S U=$O(UL(U)) Q:U=""  S ULST=ULST_"/"_$G(PRC)_":"_U_$S(UL(U)=1:"",1:"*"_UL(U))_":"_ID
+ Q:CSUM=0 
+ ; Подпись:
+ D SUBD^IBILL(NIB,$H,CSUM,ULST,"WDT")
+ S KX="" F  S KX=$O(^PNF(NIB,DTT,KX),-1) Q:KX=""  D
+ .S VRX=$P(KX,"|",1),OTX=$P(KX,"|",2)
+ .Q:VRX'=VR!(OTX'=OTD) 
+ .S ID=$P(KX,"|",3)
+ .D GET^IUSL(VRX,DTT,OTX,ID) Q:STAT'=0 
+ .Q:"|"_$G(FLG)_"|"["|nop|"
+ .S A=$$SETPL^IUSL(VRX,DTT,OTX,ID,"p",$G(WDT))
+ .S A=$$SETSTAT^IUSL(VRX,DTT,OTX,ID,2)
+ D REF^IDSCN(NIB,DGN)
+ Q
+SBBILL(NIB,VR,OTD,DT,KVN,SC) ; Списание платежа с кассовых услуг
+ N DTT,DGN,CPRG,CPRC,KX,VRX,OTX,EP,CSUM,ULST,ID,WDT,@$$NEWVAR^IUSL,LL
+ S DTT=$$DIH^DTUTL(DT)
+ S DGN=$$GET^IPAC(NIB,"stc",DTT)
+ S VID=$$GET^IINSC(DGN,"dvid",DTT)
+ S CPRG=$$GET^IPAC(NIB,"prog",DTT)
+ S CPRC=+$$PRC^IINSC(DGN,NIB,DTT)
+ S ULST="ZNF:"_VR_":"_OTD_":"_DTT,CSUM=0
+ S KVN=$G(KVN)
+ ; Предварительная подсчет:
+ S KX="" F  S KX=$O(^PNF(NIB,DTT,KX),-1) Q:KX=""  D
+ .S VRX=$P(KX,"|",1),OTX=$P(KX,"|",2),ID=$P(KX,"|",3)
+ .Q:VRX'=VR!(OTX'=OTD)  
+ .Q:$$GETPL^IUSL(VRX,DTT,OTX,ID,"kp")'="" 
+ .D GET^IUSL(VRX,DTT,OTX,ID) Q:STAT'=2   
+ .Q:"|"_$G(FLG)_"|"["|nop|"
+ .S EP=+$$GETPL^IUSL(VRX,DTT,OTX,ID,"s") Q:EP=0  S CSUM=CSUM+EP
+ .S LL(KX)=1
+ .I EP>0 S U="" F  S U=$O(UL(U)) Q:U=""  S ULST=ULST_"/"_$G(PRC)_":"_U_$S(UL(U)=1:"",1:"*"_UL(U))_":"_ID
+ Q:CSUM=0 
+ ; Подпись:
+ D SUB^IBILL(NIB,$H,CSUM,ULST,"WDT",,KVN,,$G(SC))
+ S KX="" F  S KX=$O(^PNF(NIB,DTT,KX),-1) Q:KX=""  D
+ .S VRX=$P(KX,"|",1),OTX=$P(KX,"|",2)
+ .Q:'$D(LL(KX))  
+ .S ID=$P(KX,"|",3)
+ .S A=$$SETPL^IUSL(VRX,DTT,OTX,ID,"p",$G(WDT))
+ .S A=$$SETPL^IUSL(VRX,DTT,OTX,ID,"kp",1)
+ .S:KVN'="" A=$$SETPL^IUSL(VRX,DTT,OTX,ID,"kv",KVN)
+ ;D REF^IDSCN(NIB,DGN)
+ Q
+CALCNP(NI,DS,DE,ANY) ; Сумма непописанных неоплаченных каcc услуг
+ ; ANY - любое наличие суммы
+ N SUM,DT,CRD
+ S CRD=+$G(^cfg("credit")),ANY=$G(ANY),SUM=0
+ S DT=DS-1 F  S DT=$O(^PNF(NI,DT)) Q:DT=""!(DT>DE)  D  Q:ANY&SUM 
+ .S SUM=SUM+$$CALCWP(NI,"","",DT,"","","CRD","","","",1)
+ Q SUM
+IsUVR(VR,DS,DE,LPU,SBS) ; Есть ли услуги у врача за период
+ N OT,DT,ID,R,F
+ S LPU=$G(LPU),SBS=+$G(SBS),F=0
+ S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D  Q:F
+ .S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D  Q:F
+ ..I LPU,'$D(^ZNFI("l",LPU,VR,DT)) Q 
+ ..S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D  Q:F
+ ...S R=$G(^(ID,"e"))
+ ...I LPU,$G(^("l"))'=LPU Q
+ ...I 'SBS S F=1 Q 
+ ...Q:"wd"[$P(R,"~",1) 
+ ...S F=1
+ Q F
+IsUSP(NI,SP,DS,DE,LPU,SBS) ; Есть ли услуги у специальности за период
+ ; LPU - филиал
+ ; SBS - подписанные
+ N DT,KX,R,F,VR,OT,ID
+ S F=0,LPU=$G(LPU),SBS=+$G(SBS)
+ S DT=DS-1 F  S DT=$O(^PNF(NI,DT)) Q:DT=""!(DT>DE)  D  Q:F
+ .S KX="" F  S KX=$O(^PNF(NI,DT,KX)) Q:KX=""  D  Q:F
+ ..S R=^(KX)
+ ..S VR=$P(KX,"|",1),OT=$P(KX,"|",2),ID=$P(KX,"|",3)
+ ..I LPU'="",LPU'=$G(^ZNF(VR,OT,DT,ID,"l")) Q 
+ ..I SBS,"wd"[$P($G(^ZNF(VR,OT,DT,ID,"e")),"~",1) Q 
+ ..I $P(R,"|",3)=SP S F=1
+ Q F
+IsMS(VR,DT,OT,MS,LP) ; Проверить, есть эта м.с. в ЕД
+ Q:VR=""!(DT="")!(OT="") 0 Q:$D(^ZNF(VR,OT,DT))[0 0
+ N X,I,K
+ S X=$G(^ZNF(VR,OT,DT))
+ Q:$P(X,"|",1)=MS 1
+ S X=$P(X,"|",6),K="",LP=$G(LP),F=0
+ F I=1:1:$L(X,";") S K=$P(X,";",I) I $P(K,":",1)=MS,LP=""!($P(K,":",4)=LP) S F=1 Q
+ Q F
+GETSPMS(LP,VR,MS,DS,DE,ALL,LOGG,DWW) ; Получить спец. врача м.с.
+ ; ALL - all doctors
+ ; VR - search, if this VR
+ ; DWW - ежедневный лог
+ N OT,V,D,R,S,I,X,F
+ S (V,S)="",ALL=+$G(ALL),DWW=+$G(DWW),F=0
+ F  S V=$O(^ZNF(V)) Q:V=""  I VR=""!(V=VR) S OT="" F  S OT=$O(^ZNF(V,OT)) Q:OT=""!F  S D=DS-1 F  S D=$O(^ZNF(V,OT,D)) Q:D=""!(D>DE)  D  Q:F 
+ .S R=$G(^(D)) Q:R="" 
+ .I $P(R,"|",1)=MS S S=$S(S="":"",1:S_"|")_$$SPEC^IKADRY(V) I 'ALL S F=1 Q 
+ .S R=$P(R,"|",6) Q:R=""
+ .F I=1:1:$L(R,";") S X=$P(R,";",I) I $P(X,":",1)=MS,LP=""!($P(X,":",4)=LP) S S=$S(S="":"",1:S_"|")_$$SPEC^IKADRY(V) I 'ALL S F=1 Q
+ Q S
+GETVRMS(LP,VR,MS,DS,DE,ALL,LOGG,DWW) ; Получить код врача м.с.
+ ; ALL - all doctors
+ ; VR - search, if this VR
+ ; DWW - ежедневный лог
+ N OT,V,D,R,S,I,X,F
+ S (V,S)="",ALL=+$G(ALL),DWW=+$G(DWW),F=0
+ F  S V=$O(^ZNF(V)) Q:V=""  I VR=""!(V=VR) S OT="" F  S OT=$O(^ZNF(V,OT)) Q:OT=""!F  S D=DS-1 F  S D=$O(^ZNF(V,OT,D)) Q:D=""!(D>DE)  D  Q:F 
+ .S R=$G(^(D)) Q:R=""
+ .I $P(R,"|",1)=MS S S=$S(S="":"",1:S_"|")_V I 'ALL S F=1 Q
+ .S R=$P(R,"|",6) Q:R=""
+ .F I=1:1:$L(R,";") S X=$P(R,";",I) I $P(X,":",1)=MS,LP=""!($P(X,":",4)=LP) S S=$S(S="":"",1:S_"|")_V I 'ALL S F=1 Q
+ Q S
+PUIDX(VR,DT,OT,ID) ; Найти пред. запись по пациенту с сущ. услугой
+ N R,NI,F
+ S NI="",F=0
+ F  D  Q:F  S ID=$O(^ZNF(VR,OT,DT,ID),-1) Q:ID=""  
+ .S R=$G(^ZNF(VR,OT,DT,ID,"e"))
+ .S:NI="" NI=$P(R,"~",2)
+ .I $P(R,"~",3)'="",NI=$P(R,"~",2) S F=1 Q
+ Q ID
+EXPORT(VR,DT,OT,ID) ; Внешний экспорт
+ N X,KEY,UID
+ D DO^ITRIG("usl","export")
+ S KEY=VR_"@"_DT_"@"_OT_"@"_ID
+ S UID=$$CHKSEND^IMSGHUB("iusl",KEY)
+ Q:UID=-1 
+ S X=$$ADDSEND^IMSGHUB("iusl",UID,"","",KEY)
+ Q
+ITERATE(PROC,DS,DE,VRX,OTX,LPUX) ; Итератор по услугам
+ N DT,ID,VR,OT,@$$NEWVAR^IUSL
+ S VRX=$G(VRX),OTX=$G(OTX),LPUX=$G(LPUX)
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D:$S(VRX="":1,VR=VRX:1,1:0)
+ .I LPUX'="",'$D(^ZNFI("l",LPUX,VR)) Q
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D:$S(OTX="":1,OT=OTX:1,1:0)
+ ..S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ...I LPUX'="",'$D(^ZNFI("l",LPUX,VR,DT)) Q
+ ...S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D:$S(LPUX="":1,$G(^(ID,"l"))=LPUX:1,1:0) @PROC
+ Q
+GRNLL(NIB,GRN,DS,DE,VAL) ; Получить список услуг выполненных по Г.П.
+ ; NIB - и.б. пациента
+ ; GRN - код г.п.
+ ; DS - дата начала периода поиска
+ ; DE - дата окончания периода поиска
+ ; VAL - переменная для результата 
+ N KX,DT,VR,OT,ID,UU,CC
+ S DT=DS-1 F  S DT=$O(^PNF(NIB,DT)) Q:DT=""!(DT>DE)  D 
+ .S KX="" F  S KX=$O(^PNF(NIB,DT,KX)) Q:KX=""  D
+ ..S VR=$P(KX,"|",1),OT=$P(KX,"|",2),ID=$P(KX,"|",3)
+ ..Q:$G(^ZNF(VR,OT,DT,ID,"g"))'=GRN
+ ..S UU=$$GETUSLS^IUSL(VR,DT,OT,ID),CC=$P(UU,"*",2),UU=$P(UU,"*",1)
+ ..S:CC="" CC=1
+ ..S @VAL@(UU)=$G(@VAL@(UU))+CC
+ Q
+MKRFPS(NIB,DGN,DT) ; Создать переменные для франшизы
+ ; NIB - и.б. пациента
+ ; DGN - код договора
+ ; DT - на дату
+ S FRS=$$GET^IINSC(DGN,"fras",DT),FRP=$$GET^IINSC(DGN,"frap",DT)
+ S:FRS="" FRS=$$GET^IPAC(NIB,"fras",DT)
+ S:FRP="" FRP=$$GET^IPAC(NIB,"frap",DT)
+ S:FRS'="" FRP="" 
+ Q
+SETSKD(VR,DT,OT,ID,SKD) ; After GET^IUSL 
+ N SKID,U,P,S
+ S SKID=100-SKD
+ S U="" F  S U=$O(UL(U)) Q:U=""  K UL(U,1) ; reset summ
+ S P=$G(^ZNF(VR,OT,DT,ID,"p")),S=$G(^("s"))
+ K ^("s")
+ S $P(^ZNF(VR,OT,DT,ID,"e"),"~",5)=SKID
+ D SETSUM^IUSL(VR,DT,OT,ID)
+ D REMBILL^IBILL(NI,P,S-$G(^ZNF(VR,OT,DT,ID,"s")),"")
+ D UPD^IUSL(VR,OT,DT,ID,NI)
+ Q

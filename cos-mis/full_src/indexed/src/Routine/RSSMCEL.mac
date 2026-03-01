@@ -1,0 +1,169 @@
+RSSMCEL ; Отчет ССМЦ по ЛПУ [ 10/10/2018  3:17 PM ]
+DO(DTT,DTE,NNUL,REMI) ; Создать отчет
+ ; NNUL - без нулевых услуг
+ ; REMI - исключить данный договор
+ N DS,DE,DT,DWKL,DWKLR,I,TITL,LST,X1,X2,X3,X4,X5,X6,X7,X8,A,B
+ N I1,I2,I3,I4,I5,K1,K2,K3,K4,K5,SS
+ S DTT=$$DIH^DTUTL(DTT)
+ S DTE=$$DI^DTUTL(DTE)
+ S NNUL=$G(NNUL),REMI=$G(REMI)
+ S DS=$S(DTE="":$$DI^DTUTL("01."_$P($$DT^DTUTL(DTT),".",2,3)),1:DTT)
+ S DE=$S(DTE="":$$AFTERMN^DTUTL(DS,1)-1,1:DTE)
+ S I=1 F DT=DS:1:DE S DWKL(DT)=I I DT<DE S:$$DWEEK^DTUTL(DT)=7 I=I+1,DWKLR(I)=DT+1
+ S DWKLR(1)=DS ; 1-я дата - 1-я неделя
+ K ^BUF($J)
+ S TITL="1 выручка"
+ D mku
+ D OWF^RWU(".txt")
+ S X2=$$DT^DTUTL(DS)
+ S X7=$$MNNM^DTUTL(+$P(X2,".",2)),X8=$P(X2,".",3)
+ S X1=X7_" "_X8
+ S X2=$$DT2^DTUTL(DS)
+ S X3=$$DT2^DTUTL($G(DWKLR(2)))
+ S X4=$$DT2^DTUTL($G(DWKLR(3)))
+ S X5=$$DT2^DTUTL($G(DWKLR(4)))
+ S X6=$$DT2^DTUTL($G(DWKLR(5)))
+ S A=TITL_":B:2:"_X1
+ S A=A_CR_TITL_":E:3:"_X2_CR_TITL_":F:3:"_X3
+ S A=A_CR_TITL_":G:3:"_X4_CR_TITL_":H:3:"_X5_CR_TITL_":I:3:"_X6
+ D WC^RWU(A)
+ S I4=1
+ S I1="" F  S I1=$O(^BUF($J,"cc",I1)) Q:I1=""  D:I1
+ .S I2="" F  S I2=$O(^BUF($J,"cc",I1,I2)) Q:I2=""  D:I2
+ ..S X1=$G(^(I2,"sum")),X2=$G(^("cnt")),X3=$G(^("pos"))
+ ..S X4=$G(^("ppl")),X5=$G(^("fpl"))
+ ..S ^("sum")=$G(^BUF($J,"cc",0,I2,"sum"))+X1,^("cnt")=$G(^("cnt"))+X2
+ ..S I3=I4+4
+ ..S B=$C($A("D")+I2)
+ ..S A=CR_TITL_":"_B_":"_I3_":"_$$fn(X1/1000) ; тыс руб
+ ..I 'I1 D WC^RWU(A) Q ; прочие
+ ..S B=$C($A("C")+I2)
+ ..S I3=I3+16
+ ..S A=A_CR_TITL_":"_B_":"_I3_":"_$$fn(X3)
+ ..S I3=I3+32
+ ..S A=A_CR_TITL_":"_B_":"_I3_":"_$$fn(X2)
+ ..S B=$C($A("L")+I2),I3=I4+36
+ ..S:X5&I3 A=A_CR_TITL_":"_B_":"_I3_":"_$$fn(X5)
+ ..S B=$C($A("J")+I2),I3=I4+69
+ ..S:X4&I3 A=A_CR_TITL_":"_B_":"_I3_":"_$$fn(X2/X4)
+ ..S B=$C($A("J")+I2),I3=I4+85
+ ..S:X2&I3 A=A_CR_TITL_":"_B_":"_I3_":"_$$fn(X1/X2)
+ ..D WC^RWU(A)
+ .S A="",B=$$NAME^ICONTR(I1)
+ .F I3=4,20,36,52 S A=A_CR_TITL_":A:"_(I3+I4)_":"_B
+ .F I3=20,36,53,69,85 S A=A_CR_TITL_":J:"_(I3+I4)_":"_B
+ .D WC^RWU(A)
+ .S I4=I4+1
+ ; итоги - средняя стоимость
+ S I2="" F  S I2=$O(^BUF($J,"cc",0,I2)) Q:I2=""  D:I2
+ .S X1=$G(^(I2,"sum")),X2=$G(^("cnt"))
+ .S B=$C($A("J")+I2)
+ .D WC^RWU(CR_TITL_":"_B_":85:"_$S('X2:0,1:$$fn(X1/X2)))
+ ; выручка (1) - лиц
+ S I4=0
+ S I1="" F  S I1=$O(^BUF($J,"cc",I1)) Q:I1=""  D
+ .S I2="" F  S I2=$O(^BUF($J,"cc",I1,I2)) Q:I2=""  D
+ ..S K1=$S(I2=0:"B",I2=1:"D",I2=2:"E",I2=3:"F",I2=4:"G",I2=5:"H",1:"")
+ ..S K2=I4+36
+ ..S A=CR_TITL_":"_K1_":"_K2_":"_$$fn(^BUF($J,"cc",I1,I2,"ppl"))
+ ..D WC^RWU(A)
+ .S I4=I4+1
+ D C^RWU
+ Q
+DOT(DTT,DTE,NNUL,REMI) ; Создать отчет с генератором шаблонов
+ ; NNUL - без нулевых услуг
+ ; REMI - исключить данный договор
+ N DS,DE,DT,DWKL,DWKLR,I,LST,X1,X2,X3,X4,X5,X6,X7,X8,A,B
+ N I1,I2,I3,I4,I5,K1,K2,K3,K4,K5,SS,ARR
+ S DTT=$$DIH^DTUTL(DTT)
+ S DTE=$$DIH^DTUTL(DTE)
+ S NNUL=$G(NNUL),REMI=$G(REMI)
+ S DS=$S(DTE="":$$DI^DTUTL("01."_$P($$DT^DTUTL(DTT),".",2,3)),1:DTT)
+ S DE=$S(DTE="":$$AFTERMN^DTUTL(DS,1)-1,1:DTE)
+ S I=1 F DT=DS:1:DE S DWKL(DT)=I I DT<DE S:$$DWEEK^DTUTL(DT)=7 I=I+1,DWKLR(I)=DT+1
+ S DWKLR(1)=DS ; 1-я дата - 1-я неделя
+ K ^BUF($J)
+ D mku
+ D OWF^RWU(".txt")
+ S X2=$$DT^DTUTL(DS)
+ S X7=$$MNNM^DTUTL(+$P(X2,".",2)),X8=$P(X2,".",3)
+ S X1=X7_" "_X8
+ S X2=$P($$DT2^DTUTL(DS),".",1)_"-"_$P($$DT2^DTUTL($G(DWKLR(2))-1),".",1)
+ S X3=$G(DWKLR(2)),X4=$G(DWKLR(3)),X5=$G(DWKLR(4)),X6=$G(DWKLR(5))
+ S X3=$S(X3="":"--",1:$P($$DT2^DTUTL(X3),".",1)_"-"_$P($$DT2^DTUTL($S(X4="":DE,1:X4-1)),".",1))
+ S X4=$S(X4="":"--",1:$P($$DT2^DTUTL(X4),".",1)_"-"_$P($$DT2^DTUTL($S(X5="":DE,1:X5-1)),".",1))
+ S X5=$S(X5="":"--",1:$P($$DT2^DTUTL(X5),".",1)_"-"_$P($$DT2^DTUTL($S(X6="":DE,1:X6-1)),".",1))
+ S X6=$S(X6="":"--",1:$P($$DT2^DTUTL(X6),".",1)_"-"_$P($$DT2^DTUTL(DE),".",1))
+ S ARR("names","mnn")=X1,ARR("names","_wk1")=X2,ARR("names","_wk2")=X3,ARR("names","_wk3")=X4,ARR("names","_wk4")=X5,ARR("names","_wk5")=X6
+ S:$G(DWKLR(6)) X6=$$DT2^DTUTL($G(DWKLR(5))),ARR("names","_wk6")=X6
+ S I4=1
+ S I1="" F  S I1=$O(^BUF($J,"cc",I1)) Q:I1=""  D:I1
+ .S I2="" F  S I2=$O(^BUF($J,"cc",I1,I2)) Q:I2=""  D:I2
+ ..S X1=$G(^(I2,"sum")),X2=$G(^("cnt")),X3=$G(^("pos"))
+ ..S X4=$G(^("ppl")),X5=$G(^("fpl"))
+ ..S ^("sum")=$G(^BUF($J,"cc",0,I2,"sum"))+X1,^("cnt")=$G(^("cnt"))+X2
+ ..S X6=$$fj(X1/1000) ; выручка, тыс руб , from 4
+ ..S $P(ARR("names","tabv",I4),"|",I2+4)=X6
+ ..S $P(ARR("names","tabv",I4),"|",3)=$P($G(ARR("names","tabv",I4)),"|",3)+X6
+ ..I 'I1 Q ; прочие
+ ..S $P(ARR("names","tabp",I4),"|",I2)=$$fj(X3) ; посещенний
+ ..S $P(ARR("names","tabu",I4),"|",I2)=$$fj(X2) ; услуг
+ ..S $P(ARR("names","tabpp",I4),"|",I2)=$$fj(X5) ; первичные пациенты (лица)
+ ..S:X4 $P(ARR("names","tabul",I4),"|",I2)=$$fj(X2/X4) ; услуг на лицо
+ ..S:X2 $P(ARR("names","tabssu",I4),"|",I2)=$$fj(X1/X2) ; Средняя стоимость услуги
+ .S $P(ARR("names","tabv",I4),"|",1)=$$NAME^ICONTR(I1)
+ .S I4=I4+1
+ ; итоги - средняя стоимость
+ S I2="" F  S I2=$O(^BUF($J,"cc",0,I2)) Q:I2=""  D:I2
+ .S X1=$G(^(I2,"sum")),X2=$G(^("cnt"))
+ .S $P(ARR("names","tabssu",0),"|",I2)=$$fj(X1/X2) ; средняя стоимость услуги
+ ; выручка (1) - лиц
+ S I4=0
+ S I1="" F  S I1=$O(^BUF($J,"cc",I1)) Q:I1=""  D
+ .S I2="" F  S I2=$O(^BUF($J,"cc",I1,I2)) Q:I2=""  D
+ ..I I2=0 S $P(ARR("names","tabpl_",I4),"|",1)=$$fj(^BUF($J,"cc",I1,I2,"ppl")) ; посещений total
+ ..I I2>0 S $P(ARR("names","tabpl",I4),"|",I2)=$$fj(^BUF($J,"cc",I1,I2,"ppl")) ; посещений
+ .S I4=I4+1
+ 
+ ;k ^KKKM m ^KKKM=ARR
+ D MAKE^IDOCGEN("ssmc-short.xlsx","ARR","xlsx")
+ Q
+fn(X) 
+ Q $TR(+$J(X,"",2),".",",")
+mku 
+ N DGL,DGT,DWI,DGI,DGIR,CLS,CC,XX,ZZ,TT,TT1,TT2
+ N ZPOS,ZFPOS
+ N STOTD,ABO,BTPLS
+ S:$G(^cfg("stom-otd")) STOTD(^("stom-otd"))="" M STOTD=^cfg("stom-otd")
+ M BTPLS=^BTPLS("stc")
+ D MKALLPRC^IUSLSC(DS,DE,1,"prc^RSSMCEL","","","",0,"")
+ Q
+prc 
+ I $D(STOTD(OTD)) Q  ; no stom !
+ I $P(U,".",1)=36!($P(U,".",1)=37) Q  ; no stac !
+ S FLG=$G(FLG) S:FLG'="" FLG="|"_FLG_"|"
+ I REMI'="",CSTC=REMI Q  ; исключение договора
+ S DWI=DWKL(DT)
+ S CC=UL(U)
+ S XX=$S($L(SUMM):SUMM,1:$$PRICEH^IPRICE(U,PRC,DT)*KSKD)*CC
+ I NNUL,XX=0 Q  ; not null
+ S CLS="|"_$$GET^IPRICE(U,"cls",PRC,DT)_"|"
+ 
+ S ZZ=VR_","_NI_","_DT,ZPOS=0
+ S:'$D(^BUF($J,"tpos",ZZ)) ^(ZZ)="",ZPOS=1
+ S ZFPOS=$$IsFPOS^IUSL(NI,OTD,VR,DT,ID)
+ 
+ S ^("sum")=$G(^BUF($J,"cc",LPU,DWI,"sum"))+XX
+ S:ZPOS ^("pos")=$G(^("pos"))+1
+ S:ZFPOS ^("fpl")=$G(^("fpl"))+1
+ S ^("cnt")=$G(^("cnt"))+CC
+ 
+ I '$D(^BUF($J,"tccp",LPU,DWI,NI)) S ^(NI)="",^("ppl")=$G(^BUF($J,"cc",LPU,DWI,"ppl"))+1
+ I '$D(^BUF($J,"tccp",LPU,0,NI)) S ^(NI)="",^("ppl")=$G(^BUF($J,"cc",LPU,0,"ppl"))+1
+ I '$D(^BUF($J,"tccp",0,DWI,NI)) S ^(NI)="",^("ppl")=$G(^BUF($J,"cc",0,DWI,"ppl"))+1
+ I '$D(^BUF($J,"tccp",0,0,NI)) S ^(NI)="",^("ppl")=$G(^BUF($J,"cc",0,0,"ppl"))+1
+ Q
+REGIPROC 
+ S ^IPROC("ССМЦ","Сводный ежемесячный отчет")="DO_RSSMCEL,8,4,d,Дата отчета,d,Дата по,t@string:0/Нет#1/Да,Исключить нулевые услуги,te@storage:dog@1,Договор,,,,/ssmc/ssmc-short.xls"
+ Q
+ 

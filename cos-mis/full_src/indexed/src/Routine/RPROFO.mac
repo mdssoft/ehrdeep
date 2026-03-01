@@ -1,0 +1,220 @@
+RPROFO ; Output ProfEx data to xml [ 07/31/2014  11:09 PM ]
+EXP(DS,DE,DGN) 
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D MAKE(DGN,DS,DE)
+ D OWF^RWU(".xml")
+ D WC^RWU("<?xml version=""1.0"" encoding=""windows-1251""?><?MDEEPVIEW version=""0.1"" povers=""1""?>")
+ D WC^RWU("<MVLIST><HEADER FROM="""_$TR($$NAME^IINSC(DGN),"""","'")_""" TO="" DATE="""_$$REDT(+$H)_"""/>")
+ N NI,DT,SP,R,A,Hi,VF,P,V,VPF,Isp
+ S Isp=$G(^MN("spec")) Q:Isp="" 
+ S Hi="<HOSPITAL REGNUM="""_$$^I("ifss")_""" INN="""_$$^I("iinn")_""" KPP="""_$$^I("ikpp")_""" />"
+ S NI="" F  S NI=$O(^BUF($J,"pe",NI)) Q:NI=""  S DT="" F  S DT=$O(^BUF($J,"pe",NI,DT)) Q:DT=""  D
+ .S R=$G(^(DT))
+ .S A="<MVITEM ADATE="""_$$REDT(DT)_""" PDATE="""_$$REDT(DT)_""" GROUP="""_$P(R,"|",2)_""" DIAG="""_$P(R,"|",1)_""" SUMMA=""580.00"" >"_Hi
+ .S R=$G(^BUF($J,"pe",NI,DT,"r"))
+ .S A=A_"<PERSON SNILS="""_$$RESNILS($P(R,"|",6))_""" LNAME="""_$P(R,"|",1)_""" FNAME="""_$P(R,"|",2)_""" MNAME="""_$P(R,"|",3)_""" BDATE="""_$$REDT($P(R,"|",4))_""" SEX="""_$S($P(R,"|",5)=1:"М",1:"Ж")_""" />"
+ .S R=$P(R,"|",7)
+ .S A=A_"<POLICY SPOLICY="""_$E(R,1,6)_""" NPOLICY="""_$E(R,7,16)_""" />"
+ .S R=$G(^BUF($J,"pe",NI,DT,"p")),P=$P(R,"|",3),VPF=0,VF=""
+ .S V="" F  S V=$O(^PROFV("p",P,V)) Q:V=""  D
+ ..I V["-" S VPF=$P(V,".",1) Q
+ ..S VF=VF_"<FACTOR FACTOR="""_V_"""/>"
+ .S A=A_"<EXPWRK WORKV="""_VPF_""" WORKS="""_$S(+$P(R,"|",2)=0:0,1:$$AGE^DTUTL($P(R,"|",2),DT))_""" />"_VF
+ .S SP=""  F  S SP=$O(^BUF($J,"pe",NI,DT,"d",SP)) Q:SP=""  S A=A_"<DOCTOR DOCTOR ="""_$G(^MN(Isp,SP,"sp337"))_"""/>"
+ .D WC^RWU(CR_A_"</MVITEM>")
+ D WC^RWU("</MVLIST>")
+ D C^RWU
+ K ^BUF($J,"pe")
+ Q
+EXPT(DS,DE,DGN) 
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D MAKE(DGN,DS,DE)
+ D OWF^RWU(".txt")
+ D WC^RWU("По договору """_$$NAME^IINSC(DGN)_""", на "_$$DT^DTUTL(+$H)_", ")
+ D WC^RWU($$^I("iname")_", N ФСС:"_$$^I("ifss")_", ИНН:"_$$^I("iinn")_", КПП:"_$$^I("ikpp"))
+ N NI,DT,SP,R,A,VF,P,V,VPF
+ S NI="" F  S NI=$O(^BUF($J,"pe",NI)) Q:NI=""  S DT="" F  S DT=$O(^BUF($J,"pe",NI,DT)) Q:DT=""  D
+ .S R=$G(^(DT))
+ .S A="Осмотр от "_$$DT^DTUTL(DT)_", Результат:"_$P(R,"|",2)_", Диагноз:"_$P(R,"|",1)_", Сумма:580.00"
+ .S R=$G(^BUF($J,"pe",NI,DT,"r"))
+ .S A=A_CR_"Пациент - СНИЛС:"_$$RESNILS($P(R,"|",6))_", """_$P(R,"|",1)_" "_$P(R,"|",2)_" "_$P(R,"|",3)_""" Дата рожд.:"_$$DT^DTUTL($P(R,"|",4))_", Пол:"_$S($P(R,"|",5)=1:"М",1:"Ж")
+ .S R=$P(R,"|",7)
+ .S A=A_" Полис:"_$E(R,1,6)_" "_$E(R,7,16)
+ .S R=$G(^BUF($J,"pe",NI,DT,"p")),P=$P(R,"|",3),VPF=0,VF=""
+ .S V="" F  S V=$O(^PROFV("p",P,V)) Q:V=""  D
+ ..I V["-" S VPF=$P(V,".",1) Q
+ ..S VF=VF_CR_"Вредный фактор:"_V
+ .S A=A_CR_"Условия работы: "_VPF_", Лет: "_$S(+$P(R,"|",2)=0:0,1:$$AGE^DTUTL($P(R,"|",2),DT))_VF
+ .S SP=""  F  S SP=$O(^BUF($J,"pe",NI,DT,"d",SP)) Q:SP=""  S A=A_CR_"Врач-специалист: "_$$FIOSH^YIKADRY(^(SP))_", "_$$GSPEC^YISPRAV(SP)
+ .D WC^RWU(CR_CR_A)
+ D C^RWU
+ K ^BUF($J,"pe")
+ Q
+EXPH(DS,DE,DGN) 
+ N NI,DT,SP,R,A,Hi,VF,P,V,VPF,Isp
+ S DS=$$DIH^DTUTL($G(DS)),DE=$$DIH^DTUTL($G(DE))
+ S Isp=$G(^MN("spec")) Q:Isp=""
+ D MAKE(DGN,DS,DE)
+ D OWF^RWU(".htm")
+ F V=1:1:60 D
+ .S A=$E($T(HTM1+V),3,999)
+ .F  Q:A'["##"  D
+ ..S R=$P(A,"##",2),P=""
+ ..S:R="year" P=$P($$DT^DTUTL(DS),".",3),R=""
+ ..S:R="ds" P=$$DT^DTUTL(DS),R=""
+ ..S:R="de" P=$$DT^DTUTL(DE),R=""
+ ..S:R'="" P=$$GET^YNDOG(DGN,R,DE),R=""
+ ..S A=$P(A,"##",1)_P_$P(A,"##",3,99)
+ .D WC^RWU(CR_A)
+ S NI="",I=0 F  S NI=$O(^BUF($J,"pe",NI)) Q:NI=""  S DT="" F  S DT=$O(^BUF($J,"pe",NI,DT)) Q:DT=""  D
+ .S R=$G(^(DT)),I=I+1,A="<tr class=""txt""><td>"_I_"</td><td>"_$$^I("ifss")_"</td>"
+ .S A=A_"<td>"_$$^I("iinn")_"</td><td>"_$$^I("ikpp")_"</td>"
+ .S R=$G(^BUF($J,"pe",NI,DT,"r"))
+ .S A=A_"<td>"_$$FIO^IPAC(NI)_"</td><td>"_$S($P(R,"|",5)=1:"М",1:"Ж")
+ .S A=A_"</td><td>"_$$DT^DTUTL($P(R,"|",4))_"</td>"
+ .S P=$P(R,"|",7)
+ .S A=A_"<td>"_$$RESNILS($P(R,"|",6))_"</td><td>"_$E(P,1,6)
+ .S A=A_"&nbsp;</td><td>"_$E(P,7,16)_"&nbsp;</td>"
+ .S R=$G(^BUF($J,"pe",NI,DT,"p")),P=$P(R,"|",3),VPF=0,VF=""
+ .S V="" F  S V=$O(^PROFV("p",P,V)) Q:V=""  D
+ ..I V["-" S VPF=$P(V,".",1) Q
+ ..S:VF'="" VF=VF_", " S VF=VF_V
+ .S A=A_"<td>"_VPF_"&nbsp</td><td>"
+ .S A=A_$S(+$P(R,"|",2)=0:0,1:$$AGE^DTUTL($P(R,"|",2),DT))_"</td>"
+ .S A=A_"<td>"_VF_"</td><td>"_$$DT2^DTUTL($O(^PNF(NI,DE+1),-1))_"</td>"
+ .S A=A_"<td>"_$$DT2^DTUTL($O(^PNF(NI,DS-1)))_"</td>"
+ .S SP="",P=""  F  S SP=$O(^BUF($J,"pe",NI,DT,"d",SP)) Q:SP=""  S P=P_$G(^MN(Isp,SP,"sp337"))_" "
+ .S R=$G(^BUF($J,"pe",NI,DT))
+ .S A=A_"<td>"_P_"&nbsp;</td><td>"_$P(R,"|",1)_"&nbsp;</td>"
+ .S A=A_"<td>"_$P(R,"|",2)_"&nbsp;</td><td>580.00</td></tr>"
+ .D WC^RWU(CR_A)
+ F V=1:1:24 D WC^RWU(CR_$E($T(HTM2+V),3,999))
+ D C^RWU
+ K ^BUF($J,"pe")
+ Q
+MAKE(DGN,DS,DE) 
+ N @$$NEWVAR^IUSL,DT,VRX,OTX,IDX,NIB,MSTC,KX,ID,R,X,Isp
+ S Isp=$G(^MN("spec")) Q:Isp=""
+ K ^BUF($J,"pe")
+ S NIB="" F  S NIB=$$NEXT^IPAC(NIB,"stc",DGN) Q:NIB=""  D
+ .D GETM^IPAC(NIB,"stc","MSTC") Q:'$D(MSTC) 
+ .S DT=DS-1 F  S DT=$O(^PNF(NIB,DT)) Q:DT=""!(DT>DE)  D
+ ..S KX=$O(MSTC(DT+1),-1) Q:KX=""  ; no stc
+ ..Q:$G(MSTC(KX))'=DGN  Q:'$$CHECK^IPAC(NIB,DT) 
+ ..S KX="" F  S KX=$O(^PNF(NIB,DT,KX)) Q:KX=""  D
+ ...S VRX=$P(KX,"|",1),OTX=$P(KX,"|",2),ID=$P(KX,"|",3)
+ ...D GETLT^IUSL(VRX,DT,OTX,ID)
+ ...Q:STAT="w"!(STAT="d")  ; todo kss
+ ...S R=$G(^BUF($J,"pe",NIB,DT)) ; DIAG|REZ
+ ...I $G(DIA)'="" S $P(R,"|",1)=DIA
+ ...S FLG="|"_$G(FLG)_"|"
+ ...Q:FLG'["|umo|" 
+ ...S X=$S(FLG["sz":1,FLG["sz1":1,FLG["sz2":2,FLG["sz3":3,FLG["sz4":4,FLG["sz5":5,1:"")
+ ...S:X'="" $P(R,"|",2)=X S ^(DT)=R
+ ...S X=$$SPEC^IKADRY(VRX,DT) Q:X="" 
+ ...S ^BUF($J,"pe",NIB,DT,"d",X)=VRX
+ ..Q:$D(^BUF($J,"pe",NIB,DT))=0 
+ ..S ^BUF($J,"pe",NIB,DT,"r")=$$GET^IPAC(NIB,"fiof",DT)_"|"_$$GET^IPAC(NIB,"fioi",DT)_"|"_$$GET^IPAC(NIB,"fioo",DT)_"|"_$$GET^IPAC(NIB,"datar",DT)_"|"_$$GET^IPAC(NIB,"pol",DT)_"|"_$$GET^IPAC(NIB,"snils",DT)_"|"_$$GET^IPAC(NIB,"poms",DT)
+ ..S ^BUF($J,"pe",NIB,DT,"p")=$$GET^NPROF(NIB,"staj",DT)_"|"_$$GET^NPROF(NIB,"stajv",DT)_"|"_$$GET^IPAC(NIB,"profid",DT)
+ Q
+REDT(DT) 
+ S DT=$$DT^DTUTL(DT)
+ Q $P(DT,".",3)_"-"_$P(DT,".",2)_"-"_$P(DT,".",1)
+RESNILS(R) 
+ S R=$TR(R," -/","")
+ Q $E(R,1,3)_"-"_$E(R,4,6)_"-"_$E(R,7,9)_" "_$E(R,10,11)
+EXPPROC 
+ Q
+HTM1 
+ ;<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+ ;<html>
+ ;<head><title></title>
+ ;<meta http-equiv="Content-Type" content="text/html; charset=windows-1251">
+ ;<style type="text/css">
+ ;<!--
+ ;.txt {
+ ;font-family: "Times New Roman", Times, serif;
+ ;font-size: 10px;
+ ;}
+ ;.txtb {
+ ;font-family: "Times New Roman", Times, serif;
+ ;font-size: 12px;
+ ;}
+ ;.txtbu {
+ ;border-bottom-width: thin;
+ ;border-top-style: none;
+ ;border-right-style: none;
+ ;border-bottom-style: solid;
+ ;border-left-style: none;
+ ;}
+ ;--></style>
+ ;</head>
+ ;<body><table width="100%" border="0" class="txt">
+ ; <tr>
+ ;   <td width="81%"><table width="80%" border="0" cellpadding="0" cellspacing="0">
+ ;<tr class="txtb"> 
+ ;  <td width="30%">Наименование страхователя</td>
+ ;  <td width="70%" class="txtbu">##oname##&nbsp;</td>
+ ;</tr>
+ ;<tr class="txtb"><td>Рег. N ФСС</td><td class="txtbu">##fss##&nbsp;</td></tr>
+ ;<tr class="txtb"><td>ИНН</td><td class="txtbu">##inn##&nbsp;</td></tr>
+ ;<tr class="txtb"><td>КПП</td><td class="txtbu">##kpp##&nbsp;</td></tr>
+ ;</table></td><td width="19%"><p>Приложение №1<br>
+ ;УТВЕРЖДЕНА приказом<br>Фонда социального страхования<br>Российской Федерации<br>от  27.02.2007 г.</p>
+ ;</td></tr></table>
+ ;<p align="center">Форма реестра, содержащего сведения о результатах углубленных <br>
+ ;медицинских осмотров работников, занятых на работах с вредными и (или) <br>опасными
+ ;производственными факторами, проведенных в ##year## году <br>за период с ##ds## по ##de##</p>
+ ;<table width="100%" border="1" cellspacing="0" cellpadding="0">
+ ; <tr class="txt"><td>N п.п.</td>
+ ;   <td>Рег. номер в ФСС РФ мед. организации</td>
+ ;   <td>ИНН мед. организации</td>
+ ;   <td>КПП мед. организации</td>
+ ;   <td>Фамилия, Имя, Отчество</td>
+ ;   <td>Пол</td>
+ ;   <td>Дата рожд.</td>
+ ;   <td>СНИЛС</td>
+ ;   <td>серия полиса ОМС</td>
+ ;   <td>N полиса ОМС</td>
+ ;   <td>Вид работ</td>
+ ;   <td>Стаж во вредн. условиях</td>
+ ;   <td>Вредный произв. фактор</td>
+ ;   <td>Дата углубленного МО</td>
+ ;   <td>Дата ПМО</td>
+ ;   <td>Специалисты врачи, проводившие МО </td>
+ ;   <td>Диагноз МКБ-10</td>
+ ;   <td>Группа сост. здоровья</td>
+ ;   <td>Стоимость осмотра</td>
+ ; </tr>
+ 
+HTM2 
+ ;</table><br>
+ ;<table width="70%" border="0" cellspacing="0" cellpadding="0">
+ ;<tr><td width="28%" class="txtb">Руководитель организации</td>
+ ;   <td width="29%" class="txtbu">&nbsp;</td>
+ ;   <td width="43%" class="txtbu">&nbsp;</td>
+ ; </tr>
+ ;<tr> 
+ ;   <td>&nbsp;</td>
+ ;   <td class="txt">(подпись)</td>
+ ;   <td class="txt"> (Ф.И.О.)</td>
+ ; </tr>
+ ; <tr> 
+ ;   <td class="txtb">Главный бухгалтер</td>
+ ;   <td class="txtbu">&nbsp;</td>
+ ;   <td class="txtbu">&nbsp;</td>
+ ; </tr>
+ ; <tr> 
+ ;   <td>&nbsp;</td>
+ ;   <td class="txt">(подпись)</td>
+ ;   <td class="txt">(Ф.И.О.)</td>
+ ; </tr>
+ ;</table>
+ ; <p class="txtb">М.П. &quot; ___ &quot; ____________ 2007 г.</p>
+ ;</body></html>
+REGIPROC 
+ S ^IPROC("Профмедицина","Экспорт углубленного МО в XML")="EXP_RPROFO,2,3,d,Дата начала периода,d,Дата окончания периода,t@storage:dog,Договор"
+ S ^IPROC("Профмедицина","Список по углубленному МО")="EXPT_RPROFO,2,3,d,Дата начала периода,d,Дата окончания периода,t@storage:dog,Договор"
+ S ^IPROC("Профмедицина","Реестр по углубленному МО")="EXPH_RPROFO,3,3,d,Дата начала периода,d,Дата окончания периода,t@storage:dog,Договор"
+ 
+ Q

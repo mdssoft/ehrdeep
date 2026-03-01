@@ -1,0 +1,35 @@
+RSTATEXP ; Экспорт статистики в XML [ 03/30/2019  2:05 PM ]
+PPOS(DGN,DS,DE,STAT,EC,CNT) ; Посещения пациентов
+ N NI,J,R,A,ST,I,X,D,F,KX,II
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),CNT=$$NNUM^TXTU(CNT)
+ D OWF^RWU(".xml")
+ S A="<?xml version=""1.0"" encoding=""utf-8""?>"_CR
+ S A=A_"<InterchangeEnvelope version=""1.0"">"_CR
+ S A=A_"<Head><DocID>Сведения о пациентах</DocID>"
+ S A=A_"<SourceID>"_$$^I("iname")_"</SourceID>"
+ S I=$H,R=$$DTISO^DTUTL(I)
+ S A=A_"<Timestamp>"_R_"T"_$$TIME^DTUTL(I)_".000</Timestamp></Head>"
+ S A=A_CR_"<Body><Сведения_о_пациентах>"
+ D W^RWU($C(239,187,191)_$$WU8^TXTU($$DW^TXTU(A)))
+ S NI="",II=0
+ F  S NI=$$NEXT^IPAC(NI,"stc",DGN) Q:NI=""  D  I CNT,II>CNT Q 
+ .S X=$$PIDXN^IPAC(NI,DGN,DE) Q:X=-1  
+ .I STAT'="" S ST=$$GET^IPAC(NI,"status",DT) I '$$FLinFL^TXTU(ST,STAT) Q
+ .S A="<пациент>"
+ .I EC S ANI=$$GET^IPAC(NI,"anib") Q:ANI=""  S A=A_"<уникальный_код>"_$$TAG^TXTU(ANI)_"</уникальный_код>"
+ .S A=A_"<номер_карты>"_NI_"</номер_карты>"
+ .D W^RWU($$WU8^TXTU($$DW^TXTU(CR_A)))
+ .I $D(^PNF(NI)) D
+ ..S F=0,D=DS-1 F  S D=$O(^PNF(NI,D)) Q:D=""!(D>DE)  D
+ ...I 'F S A="<посещения>",F=1
+ ...S KX="" F  S KX=$O(^PNF(NI,D,KX)) Q:KX=""  S A=A_CR_"<посещение><дата>"_$$DT^DTUTL(D)_"</дата><врач>"_$P(KX,"|",1)_" "_$$FIO^IKADRY($P(KX,"|",1))_"</врач></посещение>"
+ ..D:F W^RWU($$WU8^TXTU($$DW^TXTU(CR_A_"</посещения>")))
+ .D W^RWU($$WU8^TXTU($$DW^TXTU(CR_"</пациент>")))
+ .S II=II+1
+ D W^RWU($$WU8^TXTU($$DW^TXTU(CR_"</Сведения_о_пациентах></Body>")))
+ D W^RWU($$WU8^TXTU(CR_"</InterchangeEnvelope> "))
+ D C^RWU
+ Q
+REGIPROC 
+ S ^IPROC("Система","Статистика","Выгрузка посещений пациентов")="PPOS_RSTATEXP,16,6,te@storage:dog,Договор,d,Период посещений с,d,Период посещений по,te@net:NMLCR_NSPRAV(1),Статус пациента,t@string:0/Нет#2/Да,Только с внешним кодом,s,Количество"
+ Q

@@ -1,0 +1,460 @@
+NECST ; Внешние услуги [ 02/18/2021  0:15 AM ]
+INIT 
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<ceulist><dgn_1>")
+ D LSTNFs^YCONTR("prt") ; no filials
+ D W^RWU("</dgn_1><sellpu>")
+ D LSTFIsys^YCONTR("") ; filials
+ D W^RWU("</sellpu></ceulist></nb_console>"),C^RWU
+ Q
+LST(CON,DS,DE,LPU) ; Вывод документов
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D OWF^RWU(".txt")
+ D LSTsys(CON,DS,DE,$G(LPU),1)
+ D C^RWU
+ Q
+LSTsys(CON,DS,DE,LPU,MOD) ; Documents list
+ N DTP,DOC,X,CCR,U
+ S DTP=$$FNDTP^YDOCTP("Список внешних услуг"),CCR="",MOD=+$G(MOD)
+ Q:DTP="" 
+ S DOC=(DS-1)_",0" F  S DOC=$O(^CDOCI("type",DTP,DOC)) Q:DOC=""  D
+ .S X=$P(DOC,",",1),U="" Q:X<DS!(X>DE) 
+ .I CON'="",$$GET^YDOCS(DOC,"dog")'=CON Q 
+ .I LPU'="",$$GET^YDOCS(DOC,"lpu")'=LPU Q 
+ .I MOD S U="~"_$$DT2^DTUTL($$GET^YDOCS(DOC,"date"))_", "_$$GET^YDOCS(DOC,"user")
+ .D WC^RWU(CCR_DOC_U_"|"_$$GET^YDOCS(DOC,"nm")) S CCR=CR
+ Q
+LTAB(IDX) ; Вывод приложения
+ N X,FYDOCS,DT,NI,U,ND,fH
+ D OWF^RWU(".txt")
+ G:'$$CHECK^YDOCS(IDX) LTABEND D ORSTR^YDOCS
+ S ND=IDX,fH=1 D LTABPRC
+LTABEND D C^RWU
+ Q
+ODOC ; View in doc. repository ND - document ID
+ N X,FYDOCS,DT,NI,U,fH S fH=0
+ D ORSTR^YDOCS
+ D WC^RWU("Дата|Пациент|Услуга|К-во|Сумма")
+LTABPRC 
+ N uF
+ S uF=$G(^cfg("necst","wucode"))
+ F  S X=$$RSTR^YDOCS(ND) Q:FYDOCS=""  D
+ .S DT=$P(X,"|",1),NI=$P(X,"|",5),U=$P(X,"|",6)
+ .S U=$S(uF:U_" ",1:"")_$S($D(^CNCE(+$P(X,"|",9),U)):^(U),1:$$NAMEH^IPRICE($P(X,"|",11),$P(X,"|",10),DT))
+ .D WC^RWU(CR_$$TAG^TXTU($S(fH:$TR($P(X,"|",1,4),"|","@")_"|",1:"")_$$DT^DTUTL(DT)_"|"_NI_" "_$$FIOSH^IPAC(NI,DT)_"|"_U_"|"_$P(X,"|",7)_"|"_($P(X,"|",7)*$P(X,"|",8))))
+ Q
+LDEX(IDX) 
+ N X,FYDOCS,DT,NI,U,PNI,A,VR,SU,CU,SUA,CUA,TIT,NDS,NND,UN
+ D OWF^RWU(".txt")
+ D W^RWU("<?xml version=""1.0"" encoding=""Windows-1251""?>")
+ D W^RWU("<data_exchange>"_CR_"<format>")
+ D WC^RWU("<total column=""CNT|SUMM"" name=""Кол-во|Сумма"" type=""NUM|MONEY""></total>")
+ D WC^RWU("<item column=""NIB|FAM|IM|OT"" name=""№ И.Б.|Фамилия|Имя|Отчество"" type=""NUM|CHAR(40)|CHAR(40)|CHAR(40)"">")
+ D WC^RWU("<item column=""DATA|KOD|UNAME|CNT|SUMM"" name=""Дата|Код услуги|Наименование услуги|Кол-во|Сумма"" type=""DATE|CHAR(8)|CHAR(200)|NUM|MONEY""></item>")
+ D W^RWU("</item></format><data>")
+ G:'$$CHECK^YDOCS(IDX) LDEXEND
+ S TIT=$$GET^YDOCS(IDX,"nm")
+ D WTAGC^RWU("title","Реестр полученных услуг, "_TIT)
+ D ORSTR^YDOCS
+ S PNI="",NDS=0
+ F  S X=$$RSTR^YDOCS(IDX) Q:FYDOCS=""  D
+ .Q:$P(X,"|",5)=""  ; todo - не должно быть нулевых
+ .S DT=$P(X,"|",1),NI=$P(X,"|",5),U=$P(X,"|",6),VR=$P(X,"|",2)
+ .I PNI'=NI D
+ ..I $D(SU) D WTAG^RWU("total",CU_"|"_SU),WTAGC^RWU("footer","Итого услуг "_CU_" на сумму "_SU)
+ ..S SU=0,CU=0
+ ..D WC^RWU($S(PNI'="":"</item>",1:"")_"<item>"_NI_"|"_$$GET^IPAC(NI,"fiof",DT)_"|"_$$GET^IPAC(NI,"fioi",DT)_"|"_$$GET^IPAC(NI,"fioo",DT))
+ .S UN=$S($D(^CNCE(+$P(X,"|",9),U)):^(U),1:$$NAMEH^IPRICE($P(X,"|",11),$P(X,"|",10),DT))
+ .D WTAG^RWU("item",$$DT^DTUTL(DT)_"|"_U_"|"_$$TAG^TXTU($E(UN,1,199))_"|"_$P(X,"|",7)_"|"_($P(X,"|",7)*$P(X,"|",8)))
+ .D WTAG^RWU("item",$$DT^DTUTL(DT)_"|"_U_"|"_$E($G(^CNCE(+$P(X,"|",9),U)),1,199)_"|"_$P(X,"|",7)_"|"_($P(X,"|",7)*$P(X,"|",8)))
+ .S PNI=NI,SU=$G(SU)+($P(X,"|",8)*$P(X,"|",7)),CU=$G(CU)+$P(X,"|",7)
+ .S SUA=$G(SUA)+($P(X,"|",8)*$P(X,"|",7)),CUA=$G(CUA)+$P(X,"|",7)
+ .S NND=$$GET^IPRICE(U,"nds",$P(X,"|",10),DT) Q:NND=""
+ .S NDS=$P(X,"|",8)*$P(X,"|",7)*100/NND+NDS
+ I $D(SU) D WTAGC^RWU("footer","Итого услуг "_CU_" на сумму "_SU)
+ D W^RWU("</item>")
+ D W^RWU("<footer>")
+ D WC^RWU($$^I("ifname")_CR)
+ D WC^RWU("Итоговый реестр Внешних Услуг."_CR)
+ D WC^RWU(CR_"от "_TIT_CR_CR)
+ D WC^RWU("Количество услуг: "_CUA_" шт."_CR)
+ D WC^RWU("Стоимость услуг: "_SUA_" руб."_CR)
+ D:NDS WC^RWU(", в том числе НДС: "_NDS_" руб."_CR)
+ D W^RWU(CR)
+ D:$G(^cfg("necst","igldr")) WC^RWU(CR_"Генеральный директор ________________ / "_$$^I("igldr")_" /"_CR)
+ D:$G(^cfg("necst","icmdr")) WC^RWU(CR_"Коммерческий директор ________________ / "_$$^I("icmdr")_" /"_CR)
+ D:$G(^cfg("necst","iglvr")) WC^RWU(CR_$$^I("iglvrd")_" ________________ / "_$$^I("iglvr")_" /"_CR)
+ D:$G(^cfg("necst","iglbh")) WC^RWU(CR_$$^I("iglbhd")_" ________________ / "_$$^I("iglbh")_" /"_CR)
+ D W^RWU("</footer>")
+LDEXEND D W^RWU("</data></data_exchange>"),C^RWU
+ Q
+LDEL(IDX,sCON,sDS,sDE,sLPU) ; Удаление приложения
+ N DT,VR,OT,ID,I,X,FYDOCS
+ D ORSTR^YDOCS
+ F  S X=$$RSTR^YDOCS(IDX) Q:FYDOCS=""  D
+ .S DT=$P(X,"|",1),VR=$P(X,"|",2),OT=$P(X,"|",3),ID=$P(X,"|",4)
+ .S X=$$GETPL^IUSL(VR,DT,OT,ID,"c")
+ .S $P(X,"|",2)=""
+ .S X=$$SETPL^IUSL(VR,DT,OT,ID,"c",X)
+ D DEL^YDOCS(IDX)
+ D LST(sCON,sDS,sDE,$G(sLPU))
+ Q
+LINEDEL(IDX,KEY) ; Удаление строки из созданного приложения
+ N DT,VR,OT,ID,I,X,FYDOCS,CS,SS
+ K ^BUF($J)
+ S I=0,CS=$$GET^YDOCS(IDX,"sccnt"),SS=$$GET^YDOCS(IDX,"scsumm")
+ S KEY=$TR(KEY,"@","|")
+ D ORSTR^YDOCS
+ F  S X=$$RSTR^YDOCS(IDX) Q:FYDOCS=""  D
+ .S I=I+1
+ .I $P(X,"|",1,4)'=KEY S ^BUF($J,I)=X Q 
+ .S DT=$P(X,"|",1),VR=$P(X,"|",2),OT=$P(X,"|",3),ID=$P(X,"|",4)
+ .S CS=CS-$P(X,"|",7),SS=SS-($P(X,"|",7)*$P(X,"|",8))
+ .S X=$$GETPL^IUSL(VR,DT,OT,ID,"c")
+ .S $P(X,"|",2)=""
+ .S X=$$SETPL^IUSL(VR,DT,OT,ID,"c",X)
+ K ^CDOC($P(IDX,",",1),$P(IDX,",",2),"data")
+ D SET^YDOCS(IDX,"scsumm",SS)
+ D SET^YDOCS(IDX,"sccnt",CS)
+ S I="" F  S I=$O(^BUF($J,I)) Q:I=""  D WSTR^YDOCS(IDX,^(I))
+ D REGL^IEXCH("^CDOC",$P(IDX,",",1),$P(IDX,",",2),"data")
+ K ^BUF($J)
+ D LTAB(IDX)
+ Q
+LINESUM(IDX,KEY,SUM) ; Установить новую сумму на услугу
+ N DT,VR,OT,ID,I,X,FYDOCS,CS,SS,C
+ S SUM=$$NNUM^TXTU(SUM)
+ K ^BUF($J)
+ S I=0,SS=$$GET^YDOCS(IDX,"scsumm")
+ S KEY=$TR(KEY,"@","|")
+ D ORSTR^YDOCS
+ F  S X=$$RSTR^YDOCS(IDX) Q:FYDOCS=""  D
+ .S I=I+1
+ .I $P(X,"|",1,4)'=KEY S ^BUF($J,I)=X Q 
+ .S DT=$P(X,"|",1),VR=$P(X,"|",2),OT=$P(X,"|",3),ID=$P(X,"|",4)
+ .S C=$P(X,"|",7),SS=SS-(C*$P(X,"|",8)),SS=SS+SUM
+ .S $P(X,"|",8)=+$J(SUM/C,"",2),^BUF($J,I)=X
+ .S X=$$GETPL^IUSL(VR,DT,OT,ID,"c")
+ .S X=$$SETPL^IUSL(VR,DT,OT,ID,"c",SUM_"|"_$P(X,"|",2,99))
+ D SET^YDOCS(IDX,"scsumm",SS)
+ K ^CDOC($P(IDX,",",1),$P(IDX,",",2),"data")
+ S I="" F  S I=$O(^BUF($J,I)) Q:I=""  D WSTR^YDOCS(IDX,^(I))
+ D REGL^IEXCH("^CDOC",$P(IDX,",",1),$P(IDX,",",2),"data")
+ K ^BUF($J)
+ D LTAB(IDX)
+ Q
+CHKERR(SEL,cSUM,cFLG) ; Начальное создание - проверка ошибок
+ ; SEL - CONT_DS_DE_LPU_NIB_WRK
+ N CONT,DS,DE,LPU,NIB,XN,ID,X,cCONT,iDX,CON
+ S CONT=$P(SEL,"|",1),DS=$P(SEL,"|",2),DE=$P(SEL,"|",3),iDX=1
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ K ^BUF(SEL,"sc"),^BUF(SEL,"er"),^BUF(SEL,"err")
+ D MKALLPRC^IUSLSC(DS,DE,1,"USLPRC^NECST","",0)
+ D RTAB(SEL)
+ Q
+USLPRC ; proc internal
+ Q:$$FLinFL^TXTU($G(FLG),"nsce") 
+ Q:'$D(^CNE(U,PRC,"con"))
+ N D,X
+ S D=$O(^("con",DT+1),-1) Q:D="" 
+ S X=$G(^(D,CONT)) Q:X="" 
+ S CON=$$GETPL^IUSL(VR,DT,OTD,ID,"c")
+ I $P(CON,"|",3)'="",$P(CON,"|",3)'=CONT Q  ; от другого
+ Q:$P(CON,"|",2)=3  ; уже выставлена
+ S D=$P(X,"|",2) S:D="" D=U
+ S:$P(CON,"|",1) $P(X,"|",1)=$J($P(CON,"|",1)/$S($G(UL(U)):UL(U),1:1),"",2) ; уже есть сумма
+ S ^BUF(SEL,"sc",iDX)=DT_"|"_VR_"|"_OTD_"|"_ID_"|"_NI_"|"_D_"|"_$G(UL(U))_"|"_$P(X,"|",1)_"|"_CONT_"|"_PRC_"|"_U
+ S iDX=iDX+1
+ Q
+RTAB(SEL) ; Вывод результирующего счета
+ N NIB,ID,DT,VR,X,U,A,S,I,P
+ D OWF^RWU(".txt")
+ S (NIB,I)="",S=0
+ F  S I=$O(^BUF(SEL,"sc",I)) Q:I=""  D
+ .S X=^(I)
+ .S DT=$P(X,"|",1),NI=$P(X,"|",5),U=$P(X,"|",6),P=$P(X,"|",10)
+ .S C=+$P(X,"|",9)
+ .S U=U_"|"_$S($D(^CNCE(C,U)):^(U),1:$$NAMEH^IPRICE($P(X,"|",11),P,DT))
+ .D WC^RWU(CR_$TR($P(X,"|",1,4),"|","@")_"|"_$$DT^DTUTL(DT)_"|"_U_"|"_$P(X,"|",7)_"|"_($P(X,"|",7)*$P(X,"|",8)))
+ .S S=S+($P(X,"|",7)*$P(X,"|",8))
+ D:S WC^RWU(CR_"|Итого||||"_S)
+ D C^RWU
+ Q
+CDOC(SEL) ; Создать документ приложения счета
+ N DGN,DS,DE,LPU,NIB,XN,ID,DOC,A,DT,SS,CS,VR,OT,IDX,FYDOCS
+ S DGN=$P(SEL,"|",1),DS=$P(SEL,"|",2),DE=$P(SEL,"|",3)
+ S LPU=$P(SEL,"|",4),NIB=$P(SEL,"|",5) S:LPU=-1 LPU=""
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S DOC=$$MKDOCNM^YDOCS($$NAME^ICONTR(DGN)_" за период "_$$DT^DTUTL(DS)_"-"_$$DT^DTUTL(DE),"Список внешних услуг","Контрагенты")
+ D SETDEF^YDOCS(DOC)
+ D SET^YDOCS(DOC,"dog",DGN)
+ D SET^YDOCS(DOC,"df",DS)
+ D SET^YDOCS(DOC,"dt",DE)
+ D SET^YDOCS(DOC,"ext","tab")
+ D SET^YDOCS(DOC,"rproc","ODOC^NECST")
+ S LPU=$P(SEL,"|",4) S:LPU=-1 LPU="" D:LPU'="" SET^YDOCS(DOC,"lpu",LPU)
+ S NIB=$P(SEL,"|",5) D:NIB'="" SET^YDOCS(DOC,"pac",NIB)
+ S SS=0,CS=0,I=""
+ F  S I=$O(^BUF(SEL,"sc",I)) Q:I=""  D
+ .S X=^(I)
+ .S DT=$P(X,"|",1),S=$P(X,"|",7)*$P(X,"|",8),CS=CS+$P(X,"|",7),SS=SS+S
+ .D WSTR^YDOCS(DOC,X)
+ .S VR=$P(X,"|",2),OT=$P(X,"|",3),IDX=$P(X,"|",4)
+ .S A=$$SETPL^IUSL(VR,DT,OT,IDX,"c",S_"|"_3_"|"_DGN)
+ D SET^YDOCS(DOC,"scsumm",SS)
+ D SET^YDOCS(DOC,"sccnt",CS)
+ D SET^YDOCS(DOC,"scnds",0) ; todo
+ K ^BUF(SEL)
+ Q
+CLR(SEL) ; Clear buffers
+ K ^BUF(SEL)
+ Q
+SRKL(DOC,KX,TP,SYS) ; Установить рекламацию по услуге
+ G:KX=""!(DOC="") SRKLE
+ N DT,VR,OT,ID,I,X,FYDOCS,CS,SS
+ S DT=$P(KX,"@",1),VR=$P(KX,"@",2),OT=$P(KX,"@",3),ID=$P(KX,"@",4)
+ S KX=$TR(KX,"@","|")
+ S X=$$SETSTAT^IUSL(VR,DT,OT,ID,$S(TP=1:0,TP=2:"d",TP=3:"w",1:4))
+ D ORSTR^YDOCS
+ K ^BUF($J)
+ S I=0,CS=$$GET^YDOCS(DOC,"sccnt"),SS=$$GET^YDOCS(DOC,"scsumm")
+ D ORSTR^YDOCS
+ F  S X=$$RSTR^YDOCS(DOC) Q:FYDOCS=""  D
+ .S I=I+1 I KX'=$P(X,"|",1,4) S ^BUF($J,I)=X Q 
+ .S CS=CS-$P(X,"|",7),SS=SS-($P(X,"|",7)*$P(X,"|",8))
+ K ^CDOC($P(DOC,",",1),$P(DOC,",",2),"data")
+ D SET^YDOCS(DOC,"scsumm",SS)
+ D SET^YDOCS(DOC,"sccnt",CS)
+ S I="" F  S I=$O(^BUF($J,I)) Q:I=""  D WSTR^YDOCS(DOC,^(I))
+ K ^BUF($J)
+SRKLE D:'$G(SYS) LTAB(DOC)
+ Q
+LTLST(CON,DS,DE) ; Список документов по текущему ЛПУ
+ N DTP,DOC,X,CCR,VR,NI,A,LPU,FF
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),LPU=+$$^I("ilpu"),FF='$$FR^I()
+ S DTP=$$FNDTP^YDOCTP("Список внешних услуг"),CCR=""
+ Q:DTP="" 
+ D OWF^RWU(".txt")
+ S DOC=(DS-1)_",0" F  S DOC=$O(^CDOCI("type",DTP,DOC)) Q:DOC=""  D
+ .S X=$P(DOC,",",1) Q:X<DS!(X>DE) 
+ .I CON'="",$$GET^YDOCS(DOC,"dog")'=CON Q 
+ .I FF,LPU'="",$$GET^YDOCS(DOC,"lpu")'=LPU Q 
+ .S VR=$$GET^YDOCS(DOC,"vr"),VR=$$FIOSH^IKADRY(VR),A=""
+ .S:$$GET^YDOCS(DOC,"pay")'="" A=" - оплачен"
+ .D WC^RWU(CCR_"D;"_DOC_"|"_$$GET^YDOCS(DOC,"nm")_$C(9)_VR_A)
+ .S CCR=CR
+ D C^RWU
+ Q
+LOADLST(KEY) ; Загрузить документ
+ N NI,VR,DF,DT,FYDOCS,X,U,PRC,A,SEL,K,I,BL,PY,PT,S,SS
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<extsuppli>")
+ S SS=0
+ G:$P(KEY,";",1)="D" LOADLdoc
+ ; из счета
+ S NI=$P(KEY,";",2),VR=$P(KEY,";",3),SEL=$TR($P(KEY,";",5,7),";","|")
+ S K=NI_"|"_VR_$S($P(KEY,";",4)="":"",1:"|"_$P(KEY,";",4))
+ S BL=$$NOW^IBILL(NI),DT=$P(SEL,"|",3)
+ D WTAGDC^RWU("docdates",$P(SEL,"|",2)_"-"_DT)
+ D WTAGDC^RWU("docinfo",$$FIO^IPAC(NI)_$S(BL:", на счету "_BL,1:"")_", врач "_$$FIOSH^IKADRY(VR))
+ S X=$P(SEL,"|",1),DT=$$DI^DTUTL(DT)
+ S PT=$$GET^ICONTR(X,"paytype",DT)
+ S X=$S(BL<0:"quest",1:"")_"|"_$S(PT=-9:"",PT=-5:"sel",1:PT)
+ S I=+$$LCL^IUSER("ecst","paynobal")
+ D W^RWU("<bt_pay visible="""_$S('I&(BL<0):"no",1:"yes")_""" userdata="""_X_"""/>")
+ D WC^RWU("<bt_save visible=""yes""/><table>|Дата|Услуга|К-во|Сумма|Наряд")
+ S I="" F  S I=$O(^BUF(SEL,"sc",K,I)) Q:I=""  D
+ .S X=^(I)
+ .S DT=$P(X,"|",1),NI=$P(X,"|",5),U=$P(X,"|",6)
+ .S C=$P(X,"|",9),PRC=$P(X,"|",10)
+ .S A=$S($D(^CNCE(C,U)):^(U),1:$$NAMEH^IPRICE($P(X,"|",11),PRC,DT))
+ .S U=U_" "_$$TAG^TXTU(A),S=$P(X,"|",7)*$P(X,"|",8),SS=SS+S
+ .S A=$S($$ISPL^IUSL($P(X,"|",2),DT,$P(X,"|",3),$P(X,"|",4),"sln"):"+",1:"")
+ .D WC^RWU(CR_I_"|"_$$DT^DTUTL(DT)_"|"_U_"|"_$TR($P(X,"|",7),".",",")_"|"_S_"|"_A)
+ G LOADLend
+LOADLdoc ; из документа
+ S KEY=$P(KEY,";",2)
+ S NI=$$GET^YDOCS(KEY,"pac"),VR=$$GET^YDOCS(KEY,"vr")
+ S DF=$$GET^YDOCS(KEY,"df"),DT=$$GET^YDOCS(KEY,"dt")
+ S BL=$$GET^YDOCS(KEY,"bill")
+ S PY=$$GET^YDOCS(KEY,"pay")
+ S X=$$GET^YDOCS(KEY,"dog")
+ S A=$S(PY="":"",1:", оплачен "_$$DTM^DTUTL($P(PY,"|",2)))
+ S PY=(PY'="")
+ D WTAGDC^RWU("docinfo",$$FIO^IPAC(NI)_", врач "_$$FIOSH^IKADRY(VR)_A)
+ D WTAGDC^RWU("docdates",$$DT2^DTUTL(DF)_"-"_$$DT2^DTUTL(DT))
+ D WTAGD^RWU("docid",KEY)
+ S PT=$$GET^ICONTR(X,"paytype",DT)
+ S X=$S(BL<0:"quest",1:"")_"|"_$S(PT=-9:"",PT=-5:"sel",1:PT)
+ S I=+$$LCL^IUSER("ecst","paynobal")
+ D W^RWU("<bt_pay visible="""_$S(PY:"no",'I&(BL<0):"no",1:"yes")_""" userdata="""_X_"""/>")
+ D ORSTR^YDOCS
+ D WC^RWU("<bt_save visible=""no""/><table>|Дата|Услуга|К-во|Сумма|Наряд")
+ I KEY'="" F  S X=$$RSTR^YDOCS(KEY) Q:FYDOCS=""  D
+ .S DT=$P(X,"|",1),NI=$P(X,"|",5),U=$P(X,"|",6)
+ .S C=+$P(X,"|",9),PRC=$P(X,"|",10)
+ .S A=$S($D(^CNCE(C,U)):^(U),1:$$NAMEH^IPRICE($P(X,"|",11),PRC,DT))
+ .S U=U_" "_$$TAG^TXTU(A),S=$P(X,"|",7)*$P(X,"|",8),SS=SS+S
+ .S A=$S($$ISPL^IUSL($P(X,"|",2),DT,$P(X,"|",3),$P(X,"|",4),"sln"):"+",1:"")
+ .D WC^RWU(CR_"|"_$$DT^DTUTL(DT)_"|"_U_"|"_$TR($P(X,"|",7),".",",")_"|"_S_"|"_A)
+LOADLend 
+ D:SS WC^RWU(CR_"||||"_SS)
+ D WC^RWU("</table></extsuppli></nb_console>"),C^RWU
+ Q
+MKLST(CONT,DS,DE) ; Начальное создание - проверка ошибок
+ ; SEL - DGN_DS_DE_LPU_NIB_WRK
+ N LPU,NIB,XN,ID,X,cCONT,iDX,SEL,DT,VR,U,A,S,I,P,C,NI,LSTV,ByD,ZZ,CON
+ S SEL=CONT_"|"_DS_"|"_DE,iDX=1
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S ByD=$$LCL^IUSER("ecst","byday")
+ K ^BUF(SEL,"sc"),^BUF(SEL,"er"),^BUF(SEL,"err")
+ D MKALLPRC^IUSLSC(DS,DE,1,"MKLSTPRC^NECST","",1) ; this LPU
+ 
+ D OWF^RWU(".txt")
+ S (C,I)="" F  S I=$O(LSTV(I)) Q:I=""  D
+ .S NI=$P(I,"|",1),VR=$P(I,"|",2),DT=$P(I,"|",3)
+ .S A="K;"_NI_";"_VR_";"_DT_";"_$TR(SEL,"|",";")
+ .D WC^RWU(C_A_"|"_$$FIO^IPAC(NI)_$C(9)_"Врач "_$$FIOSH^IKADRY(VR)_$S(DT:" ,"_$$DT2^DTUTL(DT),1:""))
+ .S C=CR
+ D C^RWU
+ Q
+MKLSTPRC ; proc internal
+ Q:$$FLinFL^TXTU($G(FLG),"nsce") 
+ Q:'$D(^CNE(U,PRC,"con"))
+ N D,X S D=$O(^("con",DT+1),-1) Q:D="" 
+ S X=$G(^(D,CONT)) Q:X="" 
+ S CON=$$GETPL^IUSL(VR,DT,OTD,ID,"c")
+ I $P(CON,"|",3)'="",$P(CON,"|",3)'=CONT Q  ; от другого
+ I $P(CON,"|",2)=3 Q ; уже выставлена, не рекл.
+ S D=$P(X,"|",2),ZZ=NI_"|"_VR_$S(ByD:"|"_DT,1:"")
+ S:D="" D=U
+ S:$P(CON,"|",1) $P(X,"|",1)=$J($P(CON,"|",1)/$S($G(UL(U)):UL(U),1:1),"",2) ; уже есть сумма
+ S ^BUF(SEL,"sc",ZZ,iDX)=DT_"|"_VR_"|"_OTD_"|"_ID_"|"_NI_"|"_D_"|"_$G(UL(U))_"|"_$P(X,"|",1)_"|"_CONT_"|"_PRC_"|"_U
+ S LSTV(ZZ)=""
+ S iDX=iDX+1
+ Q
+PAYLST(DOC,PT) ; Оплатить счет
+ ; I $P(KEY,";",1)'="D" D MSG^RWU("Ошибка") Q
+ N SUM,WH,CON,PTP,LP,H
+ S LP=+$$^I("ilpu"),H=$H
+ S CON=$$GET^YDOCS(DOC,"dog")
+ S PTP=$$GET^ICONTR(CON,"paytype",+H)
+ S SUM=$$GET^YDOCS(DOC,"scsumm")
+ I SUM=0 G PAYLSTe
+ I PT="",PTP<0!(PTP="") G PAYLSTe 
+ ; I PTP<1 D MSG^RWU("Счет предназначен для безналичной оплаты.") Q
+ G:PTP'=1 PAYLSTc
+ I SUM>$$RESTS^IBILL(LP,+H,$P(H,",",2),"") D MSG^RWU("Сумма превышает имеющуюся в кассе.") Q
+ I $$LCL^IUSER("ecst","cknpays"),SUM>$$RESTS^IBILL(LP,+H,$P(H,",",2),H) D MSG^RWU("Сумма превышает имеющуюся в кассе на сегодня.") Q 
+PAYLSTc 
+ S CON=$$NAME^ICONTR(CON)
+ D OUTSUM^IBILL("",SUM,PTP,"Оплата по "_CON,"CDOC:"_DOC,"WH")
+ D SET^YDOCS(DOC,"bill",WH)
+PAYLSTe 
+ D SET^YDOCS(DOC,"pay",$$USRH^IUSER())
+ S PT=$$GET^YDOCS(DOC,"type")
+ I PT'="" S H=$G(^CDT(PT,"uindex")) I '$$FLinFL^TXTU(H,"ready") S ^CDT(PT,"uindex")=$$STFLGS^TXTU(H,"ready|contr") D GL^IEXCH("^CDT",PT,"uindex") ; auto set index
+ D SET^YDOCS(DOC,"ready",1) ; for update
+ Q
+SAVELST(KEY) ; Сохранить счет
+ I $P(KEY,";",1)="D" D MSG^RWU("Выбран уже сохраненный счет.") Q 
+ N %J,A,SEL,PTP,STR,SS,CS,LP,R,CON,DS,DE,X,S,DOC,VR,OT,IDX,KK,DT,SL,FC,ZI
+ S KK=$TR($P(KEY,";",2,4),";","|"),SEL=$TR($P(KEY,";",5,7),";","|")
+ S SS=0,LP=+$$^I("ilpu"),DT=$P(KK,"|",3),FC=0
+ S:DT="" KK=$P(KK,"|",1,2)
+ ; подсчет выделенного
+ S A="" F  S A=$O(^BUF(SEL,"sc",KK,A)) Q:A=""  D
+ .S X=^(A),SS=$P(X,"|",7)*$P(X,"|",8)+SS,FC=FC+1
+ 
+ I 'FC D MSG^RWU("Нет услуг к оплате.") Q 
+ 
+ S CON=$P(SEL,"|",1),DS=$P(SEL,"|",2),DE=$P(SEL,"|",3)
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S:DT'="" DS=DT,DE=DT
+ S A=$S(DS=DE:$$DT2^DTUTL(DE),1:$$DT2^DTUTL(DS)_"-"_$$DT2^DTUTL(DE))
+ S DOC=$$MKDOCNM^YDOCS($$FIOSH^YIPACN($P(KK,"|",1))_" за "_A_", "_$$NAME^ICONTR(CON),"Список внешних услуг","Контрагенты")
+ D SETDEF^YDOCS(DOC)
+ D SET^YDOCS(DOC,"dog",CON)
+ D SET^YDOCS(DOC,"contr",CON)
+ D SET^YDOCS(DOC,"df",DS)
+ D SET^YDOCS(DOC,"dt",DE)
+ D SET^YDOCS(DOC,"pac",$P(KK,"|",1))
+ D SET^YDOCS(DOC,"vr",$P(KK,"|",2))
+ D SET^YDOCS(DOC,"ext","tab")
+ D SET^YDOCS(DOC,"rproc","ODOC^NECST")
+ D SET^YDOCS(DOC,"lpu",LP)
+ S (CS,SS)=0,(ZI,SL)=""
+ S A="" F  S A=$O(^BUF(SEL,"sc",KK,A)) Q:A=""  D
+ .S X=^(A)
+ .S DT=$P(X,"|",1),S=$P(X,"|",7)*$P(X,"|",8),CS=CS+$P(X,"|",7),SS=SS+S
+ .D WSTR^YDOCS(DOC,X)
+ .S VR=$P(X,"|",2),OT=$P(X,"|",3),IDX=$P(X,"|",4)
+ .S X=$$SETPL^IUSL(VR,DT,OT,IDX,"c",S_"|"_3_"|"_CON)
+ .S X=$$GETPL^IUSL(VR,DT,OT,IDX,"sln")
+ .S:X'="" SL=$S(SL="":"",1:SL_"|")_X
+ .S X=$$GETPL^IUSL(VR,DT,OT,IDX,"zi")
+ .S:X'="" ZI=$$STFLG^TXTU(ZI,X)
+ D GL^IEXCH("^CDOC",$P(DOC,",",1),$P(DOC,",",2),"data") ; update data
+ D:SL'="" SET^YDOCS(DOC,"stom-sln",SL)
+ D:ZI'="" SET^YDOCS(DOC,"stzn",ZI)
+ D SET^YDOCS(DOC,"scsumm",SS)
+ D SET^YDOCS(DOC,"sccnt",CS)
+ D SET^YDOCS(DOC,"scnds",0) ; todo
+ K ^BUF(SEL,"sc",KK),^BUF(SEL,"er",KK),^BUF(SEL,"err",KK)
+ D MSG^RWU("="_DOC)
+ Q
+READY(CON,DS,DE) ; Список документов на обновление
+ N DTP,DOC,X,VR,NI,A
+ S DS=$$DI^DTUTL($G(DS)),DE=$$DI^DTUTL($G(DE))
+ S DTP=$$FNDTP^YDOCTP("Список внешних услуг")
+ Q:DTP="" 
+ S (A,DOC)="" F  S DOC=$O(^CDOCI("u-ready",DTP,1,DOC)) Q:DOC=""  D
+ .S X=$P(DOC,",",1) 
+ .I DS'="",X<DS Q
+ .I DE'="",X>DE Q 
+ .Q:'$$GET^YDOCS(DOC,"ready") 
+ .I CON'="",$$GET^YDOCS(DOC,"dog")'=CON Q 
+ .S A=$S(A="":"",1:A_CR)_DOC
+ D MSG^RWU(A)
+ Q
+EXP(DOC,OK) ; Экспорт в XML
+ ; OK - сбрасывать флаг готовности 
+ I $G(OK) D SET^YDOCS(DOC,"ready",0) Q 
+ N NI,VR,DT,DG,LP,X,U,C,PRC,A,RR,ZUB
+ S NI=$$GET^YDOCS(DOC,"pac"),VR=$$GET^YDOCS(DOC,"vr")
+ S DT=$$GET^YDOCS(DOC,"dt"),DG=$$GET^YDOCS(DOC,"dog")
+ S LP=$$GET^YDOCS(DOC,"lpu")
+ S ^BUF($J,"vr")=VR,^BUF($J,"vrfio")=$$FIO^IKADRY(VR),^BUF($J,"vspec")=$$SPEC^YIKADRY(VR),^BUF($J,"votd")=$$OTD^YIKADRY(VR)
+ S ^BUF($J,"pac")=NI,^BUF($J,"pacfio")=$$FIO^IPAC(NI),^BUF($J,"pborn")=$$GETE^IPAC(NI,"datar")
+ S ^BUF($J,"ptel")=$$GETE^IPAC(NI,"tel1")
+ S ^BUF($J,"stc")=DG
+ S ^BUF($J,"lpu")=LP
+ S ^BUF($J,"doc")=DOC
+ S ^BUF($J,"dt")=$$DT^DTUTL(DT)
+ S ^BUF($J,"from")=$$GET^ICONTR(+$$^I("ilpu"),"ecode")
+ S:$$GET^YDOCS(DOC,"pay")'="" ^BUF($J,"pay")=1
+ D ORSTR^YDOCS
+ S RR=""
+ F  S X=$$RSTR^YDOCS(DOC) Q:FYDOCS=""  D
+ .S DT=$P(X,"|",1),NI=$P(X,"|",5),U=$P(X,"|",6)
+ .S C=$P(X,"|",7),PRC=$P(X,"|",10),S=$P(X,"|",7)*$P(X,"|",8)
+ .S ZUB=$$GETPL^IUSL($P(X,"|",2),DT,$P(X,"|",3),$P(X,"|",4),"nz")
+ .S RR=$S(RR="":"",1:RR_CR)_$$DT^DTUTL(DT)_"|"_U_"|"_S_"|"_C_"|"_ZUB
+ S ^BUF($J,"usls")=RR
+ D OWF^RWU(".xml")
+ D W^RWU($G(^PP(0,1))_"<nb_console><exchange>"_CR)
+ D L^XMLU("^BUF",$J)
+ D W^RWU(CR_"</exchange></nb_console>")
+ K ^BUF($J)
+ D C^RWU
+ Q
+DOCLST(DOC) ; Вывод документа
+ D OWF^RWU(".txt")
+ D WC^RWU("|Дата|Код|Наименование|Кол-во|Цена|Пациент|Врач")
+ D C^RWU
+ Q
+REGLCL 
+ K ^LCLI("ecst")
+ S ^LCLI("ecst")="Услуги внешних поставщиков"
+ S ^LCLI("ecst","paynobal")="Оплата и с отрицательным балансом пациента"
+ S ^LCLI("ecst","byday")="Формирование по каждому дню отдельно"
+ S ^LCLI("ecst","cknpays")="Проверять сумму наличных выплат на соответствие кассе на сегодня"
+ Q

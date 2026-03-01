@@ -1,0 +1,31 @@
+ICCST ; Списки услуг [ 11/16/2020  1:16 PM ]
+chksum(IDX) ; Проверить соответствие сумм в приложении
+ N X,FYDOCS,DT,NI,U,ND,D1,D2,K,CNA,UN,DGN,UA
+ S IDX=$P(IDX,"~",1)
+ Q:'$$CHECK^YDOCS(IDX) 
+ D ORSTR^YDOCS
+ S ND=IDX
+ N KEY,CNT,VR,OT,ID,LP,S1,S2
+ F  S X=$$RSTR^YDOCS(ND) Q:FYDOCS=""  D
+ .S DT=$P(X,"|",1),NI=$P(X,"|",5),U=$P(X,"|",6)
+ .I DT="p" Q 
+ .S KEY=$TR($P(X,"|",1,4),"|","@")
+ .S VR=$P(X,"|",2),OT=$P(X,"|",3),ID=$P(X,"|",4),CNT=$P(X,"|",7)
+ .S S2=CNT*$P(X,"|",8)
+ .S S1=$P($$GETPL^IUSL(VR,DT,OT,ID,"s"),"|",1)
+ .Q:S1=S2 
+ .W !,VR_","_DT_","_OT_","_ID_" NI="_NI_", S1="_S1_", S2="_S2
+ Q
+REGLCL 
+ K ^LCLI("ccst")
+ S ^LCLI("ccst")="Реестр оказанных услуг"
+ S ^LCLI("ccst","aexec")="Процедура, выполняемая при выгрузке"
+ ; TODO - 
+ S ^LCLI("ccst","check")="Проверка услуг"
+ S ^LCLI("ccst","make")="Создание списка после проверки"
+ S ^LCLI("ccst","del")="Удаление документа"
+ S ^LCLI("ccst","delu")="Рекламация на услуги"
+ Q
+INITDB 
+ S ^MN("root","patccst")="Шаблоны приложений к счету"
+ Q

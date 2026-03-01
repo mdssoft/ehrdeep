@@ -1,0 +1,63 @@
+FIL ; Утилиты работы с файлами [ 04/07/2021  7:14 PM ]
+CHECK(FN) ; Check file exists
+ Q:$ZUTIL(140,4,FN)=0 1
+ Q 0
+DEL(FN) ; Delete file
+ N A S A=$ZUTIL(140,5,FN)
+ Q
+MOVE(FNF,FNT)   ; Move file from FNF to FNT
+ N A S A=$ZUTIL(140,6,FNF,FNT)
+ Q
+COPY(FNF,FNT)   ; Copy file from FNF to FNT
+ N A S A=$ZUTIL(140,11,FNF,FNT)
+ Q
+LEN(FN) ; Length of file
+ N L S L=$ZUTIL(140,1,FN) S:L<0 L=0
+ Q L
+OR(FN) ; Open file, if error - return ""
+ D $ZUTIL(68,40,1) ; $ZEOF
+ O FN:("RSU"::""):1 I $T=0 C FN Q ""
+ Q FN
+ORT(FN) ; Open text file, if error - return ""
+ D $ZUTIL(68,40,1) ; $ZEOF
+ O FN:("R"):1 I $T=0 C FN Q ""
+ Q FN
+OW(FN) ; Open file, if error - return ""
+ D $ZUTIL(68,40,1) ; $ZEOF
+ O FN:("WFEN"::""):1 I $T=0 C FN Q ""
+ Q FN
+ST() ; Get R or W result status
+ Q:$ZEOF=-1 0 Q:$ZB="" 0
+ Q 1
+W(R,DEV) ; Write
+ U DEV W R
+ Q
+WTAG(%1,%2,DEV)	; WTAG(tag,data)
+ U DEV W "<"_%1_">"_$$TAG^TXTU(%2)_"</"_%1_">" Q
+WTAGD(%1,%2,DEV)
+ S:$F(%2,"""")!$F(%2,"%") %2=$$TKAV^TXTU(%2)
+ U DEV W "<"_%1_" data="""_%2_"""/>" Q
+RL(SZ,DEV) ; Read SZ - size, if = "" - read all
+ U DEV N A R A#SZ
+ Q A
+C(DEV) ; Close
+ C DEV
+ Q
+EOF(DEV)        ; user for GT.M
+ Q 0
+DIR(DIR,VAR)    ; List directory VAR(FN)=0/1=File/Dir
+ N FA,B,FN
+ K @VAR
+ S FA=$ZSEARCH($S($TR($E(DIR,$L(DIR)),"\","/")="/":DIR_"*.*",1:DIR))
+ Q:FA="" 
+ F  D  S FA=$ZSEARCH("") Q:FA="" 
+ .S B=$ZUTIL(140,1,FA),FN=$TR(FA,"\","/"),FN=$P(FN,"/",$L(FN,"/"))
+ .I FN'=".",FN'=".." S:FA'="" @VAR@(FN)=$S(B=-5:1,1:0)
+ Q
+DTM(FN) ; File datetime
+ N A
+ S A=$ZUTIL(140,2,FN,0) Q:A=-2 ""
+ Q A
+TDIR()  ; temporary dir
+ Q:$$UL^TXTU($ZV)["unix" "/tmp"
+ Q "C:\TEMP"

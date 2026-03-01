@@ -1,0 +1,28 @@
+NPACCON ; Условия обслуживания пациента [ 02/26/2020  12:48 PM ]
+PVPRICE(NIB,DGN,TYP,DT,KSS) ; Получить прейскурант по пациенту
+ S DT=$$DIH^DTUTL($G(DT))
+ D MSG^RWU($$PVPRICE^IEDUTL(NIB,$G(DGN),$G(TYP),DT,$G(KSS)))
+ Q
+LDGN(NIB,DGN,DT) ; Список программ по договору
+ N R,T,X,I,Z,C
+ S DT=$$DIH^DTUTL(DT),I=$$PIDX^IPAC(NIB,DGN,DT)
+ D OWF^RWU(".txt")
+ S R=$$GET^IPAC(NIB,"prog"_I,DT)
+ F I=1:1 S X=$P(R,"|",I) Q:X=""  D
+ .S Z=$$NAME^IMPRP(X)
+ .D WC^RWU(CR_X_"|"_Z)
+ D C^RWU
+ Q
+LDGNU(NIB,DGN,DT) ; Список программ по договору, неуникальные вместе
+ N R,T,X,I,Z,C,TI,TA,A
+ S DT=$$DIH^DTUTL(DT),I=$$PIDX^IPAC(NIB,DGN,DT)
+ D OWF^RWU(".txt")
+ S R=$$GET^IPAC(NIB,"prog"_I,DT),(TI,TA,A)=""
+ F I=1:1 S X=$P(R,"|",I) Q:X=""  D
+ .S Z=$$NAME^IMPRP(X)
+ .I $$GET^IMPRP(X,"uniq",DT) S A=$S(A="":"",1:A_CR)_X_"|"_Z Q
+ .S TI=$S(TI="":"",1:TI_"~")_X,TA=$S(TA="":"",1:TA_", ")_Z
+ S X="" I TI'="" D WC^RWU(TI_"|"_TA) S X=CR
+ D:A'="" WC^RWU(X_A)
+ D C^RWU
+ Q

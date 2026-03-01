@@ -1,0 +1,397 @@
+NMDD ; Mobile Diagnostics Demo [ 02/04/2015  3:05 AM ]
+IO ; Input
+ ; text: id|type|datetime|parameter|value
+ N X,HH,R,A,I,ID,TP,NI,DTM,DT,TM,FL,VAL,DEV
+ S HH=$H,ID="",R=""
+ D ORH^RWU
+ K ^KKXX
+ F I=1:1 S A=$$R^RWU Q:%IFN["Z"  D
+ .S X=$P(A,"|",1) S:X'="" ID=X
+ .S ^KKXX(I)=A
+ .Q:ID="" 
+ .S TP=$P(A,"|",2),DTM=$P(A,"|",3),FL=$P(A,"|",4),VAL=$P(A,"|",5)
+ .Q:FL=""  Q:VAL="" 
+ .I TP="obereg" D  Q
+ ..I FL'="fall",FL'="temp" Q 
+ ..S NI=$G(^TMP("nib")),DT=+$H,TM=$P($H,",",2)
+ ..I FL="fall",VAL S ^MDD(NI,DT,TM)=TP_"||",^MDDI("mean",NI,TP,DT,TM)="",R=NI_"|"_TP_"|"_DT_"|"_TM,^MDD(NI,DT,TM,FL)=1,^MDD(NI,DT,TM,FL,"log")=$H,^TMP("warning")=$$FIO^IPAC(NI)_" - зафиксировано падение" Q 
+ ..I FL="temp" S FL="stemp",^MDD(NI,0,0,FL)=+VAL,^(FL,"log")=$H
+ .S DTM=$TR(DTM,"|"," ") ; old style
+ .S DTM=$S(DTM["T":$$IISO^DTUTL(DTM),1:$$DTI^DTUTL(DTM))
+ .S DT=$P(DTM,",",1),TM=$P($P(DTM,",",2),".",1)
+ .Q:DT=""  Q:TM="" 
+ .S NI=$S($D(^MDDE(ID)):^(ID),1:ID),DEV=""
+ .I ID="911911911" S NI=$G(^TMP("nib"))
+ .I ID="357541051402537" S NI=$G(^TMP("nib"))
+ .I ID="358421040402469" S NI=$G(^TMP("nib"))
+ .I $L(ID)=15 S NI=$G(^TMP("nib"))
+ .I ID="124" S NI=$G(^TMP("nib"))
+ .I '$$EXIST^IPAC(NI) S NI=$G(^TMP("nib")) Q:NI="" 
+ .S:ID'=NI DEV=ID
+ .S:'$D(^MDD(NI,DT,TM)) ^MDD(NI,DT,TM)=TP_"|"_DEV_"|"_$P(A,"|",3),^MDDI("mean",NI,TP,DT,TM)="",R=NI_"|"_TP_"|"_DT_"|"_TM
+ .S ^MDD(NI,DT,TM,FL)=VAL
+ .S ^MDD(NI,DT,TM,FL,"log")=$H
+ .S X=$$isAlarm(NI,DT,TM,TP)
+ .I X S ^TMP("alert")=$$FIO^IPAC(NI)_" - "_$G(^MDDM("mean",TP))_" вне нормы"
+ D CR^RWU
+ Q:R="" 
+ L ^TMP("log")
+ S X=$O(^TMP("log",""),-1)+1
+ S ^TMP("log",X)=R
+ S ^TMP("ver")=$G(^TMP("ver"))+1
+ L -^TMP("log")
+ Q
+thread ; Постобработка
+ ;Q:$D(^TMP("mdd","running"))
+ S ^TMP("mdd","running")=1,QQ=0,CR=$C(13,10),%LOG="sys",%JOB=77777
+ I $T(USRCONN^WWWSRV)'="" X "D USRCONN^WWWSRV" ; for Cache
+ F  Q:QQ  D  Q:QQ  H 1 
+ .I $D(^SYNCJ("thread^NMDD"))'=0 S QQ=1 Q
+ .Q:'$D(^TMP("log"))
+ .S X="" F  S X=$O(^TMP("log",X)) Q:X=""  D
+ ..L ^TMP("log")
+ ..S R=^TMP("log",X)
+ ..L -^TMP("log")
+ ..W !,R
+ ..Q:'$$MKMSG^IMDD($P(R,"|",1),$P(R,"|",2),$P(R,"|",3),$P(R,"|",4))
+ ..L ^TMP("log")
+ ..K ^TMP("log",X)
+ ..L -^TMP("log")
+ K ^TMP("mdd","running")
+ Q
+ISNEW(VAL) ; Check new data
+ N X
+ S X=($G(^TMP("ver"))>$G(^TMP("versend")))
+ S ^TMP("versend")=$G(^TMP("ver"))
+ D B^IJSON()
+ D W^IJSON("newdata",X)
+ D W^IJSON("alert",$G(^TMP("alert")))
+ D W^IJSON("warning",$G(^TMP("warning")))
+ D MSG^RWU($$E^IJSON())
+ K ^TMP("alert")
+ K ^TMP("warning") 
+ Q
+LIST(NI,TP,DT,DTW) ; Измерения по пациенту
+ ; NI - пациент
+ ; TP - тип
+ ; DT - дата
+ ; DTW - длина в днях
+ N DE,TM,R,REZ,iR,AL,FL
+ S REZ="[",iR=0,DT=$$DIH^DTUTL(DT)-1,DE=DT+$G(DTW,7)
+ F  S DT=$O(^MDD(NI,DT)) Q:DT=""!(DT>DE)  D
+ .S TM="" F  S TM=$O(^MDD(NI,DT,TM)) Q:TM=""  D
+ ..S R=^(TM),AL=0
+ ..I TP'="",$P(R,"|",1)'=TP Q 
+ ..D B^IJSON()
+ ..D W^IJSON("key",NI_"@"_DT_"@"_TM)
+ ..D WD^IJSON("datetime",DT_","_TM)
+ ..S FL="" F  S FL=$O(^MDD(NI,DT,TM,FL)) Q:FL=""  S R=^(FL) D W^IJSON(FL,R) S R=$$alert(NI,FL,R) S:R>AL AL=R
+ ..D W^IJSON("alert",AL)
+ ..S REZ=REZ_$S(iR:",",1:"")_$$E^IJSON(),iR=1
+ D MSG^RWU(REZ_"]")
+ Q
+alert(NI,FL,VAL) ; Экстренное значение
+ Q 0
+last(NI) ; Последнее измерение
+ N DT
+ S DT=$O(^MDD(NI,""),-1) Q:DT="" ""
+ Q DT_","_$O(^MDD(NI,DT,""),-1)
+MEANS(DT,DTW) ; Все измерения + пациенты
+ N NI,DS,DE,TM,DL,I,R,TP
+ K ^BUF($J)
+ S DS=$$DI^DTUTL(DT),DE=DS+$G(DTW,7)
+ S NI="" F  S NI=$O(^MDD(NI)) Q:NI=""  D
+ .S DT=DS-1 F  S DT=$O(^MDD(NI,DT)) Q:DT=""!(DT>DE)  D
+ ..S TM="" F  S TM=$O(^MDD(NI,DT,TM)) Q:TM=""  S ^BUF($J,DT,TM,NI)=""
+ D OWF^RWU(".txt")
+ D W^RWU("[")
+ S DL=""
+ S DT="" F  S DT=$O(^BUF($J,DT)) Q:DT=""  D
+ .S TM="" F  S TM=$O(^BUF($J,DT,TM)) Q:TM=""  D
+ ..S NI="" F  S NI=$O(^BUF($J,DT,TM,NI)) Q:NI=""  D
+ ...D B^IJSON()
+ ...D W^IJSON("key",NI_"@"_DT_"@"_TM)
+ ...D W^IJSON("date",$$DT^DTUTL(DT))
+ ...D W^IJSON("time",$$TM^DTUTL(TM))
+ ...D W^IJSON("fio",$$FIO^IPAC(NI))
+ ...D W^IJSON("age",$$AGET^IPAC(NI,+$H))
+ ...S R=^MDD(NI,DT,TM),TP=$P(R,"|",1)
+ ...D W^IJSON("type",^MDDM("mean",TP))
+ ...D W^IJSON("tp",TP)
+ ...D W^IJSON("pid",NI)
+ ...D W^IJSON("value",$$textVAL(NI,DT,TM,TP))
+ ...D:TP="ecg" W^IJSON("fn",$G(^MDD(NI,DT,TM,"ecg")))
+ ...D WC^RWU(DL_$$E^IJSON())
+ ...S DL=","
+ D W^RWU("]")
+ D C^RWU
+ Q
+LAST(DAYS) ; Все последние измерения + пациенты
+ N NI,DS,DE,TM,DL,I,R,TP
+ K ^BUF($J)
+ S DS=$H-DAYS,DE=DS+DAYS
+ S NI="" F  S NI=$O(^MDD(NI)) Q:NI=""  D
+ .S DT=DS-1 F  S DT=$O(^MDD(NI,DT)) Q:DT=""!(DT>DE)  D
+ ..S TM="" F  S TM=$O(^MDD(NI,DT,TM)) Q:TM=""  S ^BUF($J,DT,TM,NI)=""
+ D OWF^RWU(".txt")
+ D W^RWU("[")
+ S DL=""
+ S DT="" F  S DT=$O(^BUF($J,DT),-1) Q:DT=""  D
+ .S TM="" F  S TM=$O(^BUF($J,DT,TM),-1) Q:TM=""  D
+ ..S NI="" F  S NI=$O(^BUF($J,DT,TM,NI)) Q:NI=""  D
+ ...D B^IJSON()
+ ...D W^IJSON("key",NI_"@"_DT_"@"_TM)
+ ...D W^IJSON("date",$$TM^DTUTL(TM)_", "_$$DT2^DTUTL(DT))
+ ...D W^IJSON("fio",$$FIO^IPAC(NI))
+ ...D W^IJSON("age",$$AGET^IPAC(NI,+$H))
+ ...S R=^MDD(NI,DT,TM),TP=$P(R,"|",1)
+ ...D W^IJSON("type",$G(^MDDM("mean",TP)))
+ ...D W^IJSON("alarm",$$isAlarm(NI,DT,TM,TP))
+ ...D W^IJSON("tp",TP)
+ ...D W^IJSON("pid",NI)
+ ...D W^IJSON("value",$$textVAL(NI,DT,TM,TP))
+ ...D:TP="ecg" W^IJSON("fn",$G(^MDD(NI,DT,TM,"ecg")))
+ ...D WC^RWU(DL_$$E^IJSON())
+ ...S DL=","
+ D W^RWU("]")
+ D C^RWU
+ Q
+isAlarm(NI,DT,TM,TP) 
+ N A,F,X
+ I TP="ecg" Q 0
+ S A=0,F="" F  S F=$O(^MDD(NI,DT,TM,F)) Q:F=""  D  Q:A
+ .S X=^(F)
+ .I X,$G(^MDDE(NI,F,"ae")) S A=2 Q
+ .I X,$G(^MDDE(NI,F,"a")) S A=1 Q
+ .I $G(^MDDE(NI,F,"he")),^("he")<X S A=2 Q
+ .I $G(^MDDE(NI,F,"h")),^("h")<X S A=1 Q
+ .I $G(^MDDE(NI,F,"le")),^("le")>X S A=2 Q
+ .I $G(^MDDE(NI,F,"l")),^("l")>X S A=1 Q
+ Q A
+textVAL(NI,DT,TM,TP) ; Текстовое значение
+ I TP="ecg" Q "получена ЭКГ"
+ I TP="obereg",$G(^MDD(NI,DT,TM,"fall")) Q "Падение"
+ I TP="bp" Q $G(^MDD(NI,DT,TM,"systolic"))_"/"_$G(^MDD(NI,DT,TM,"diastolic"))_" пульс "_$G(^MDD(NI,DT,TM,"pulse"))
+ N FL,R,X
+ S (R,FL)="" F  S FL=$O(^MDD(NI,DT,TM,FL)) Q:FL=""  D
+ .S X=^MDDM("value",FL)
+ .S R=$S(R="":"",1:R_", ")_$P(X,"|",1)_" "_^MDD(NI,DT,TM,FL)_" "_$P(X,"|",3)
+ Q R
+GALERT(NI,FL) ; Получить сигнальные значения
+ D B^IJSON()
+ D W^IJSON("fl",FL)
+ D W^IJSON("title",$P($G(^MDDM("value",FL)),"|",1))
+ D W^IJSON("valhe",$G(^MDDE(NI,FL,"he")))
+ D W^IJSON("valh",$G(^MDDE(NI,FL,"h")))
+ D W^IJSON("vall",$G(^MDDE(NI,FL,"l")))
+ D W^IJSON("valle",$G(^MDDE(NI,FL,"le")))
+ D MSG^RWU($$E^IJSON())
+ Q
+SALERT ; Сохранить сигнальные значения
+ N A,NI,FL
+ D ORH^RWU
+ S A=$$R^RWU,NI=$P(A,"|",1),FL=$P(A,"|",2)
+ D CR^RWU
+ Q:NI=""  Q:FL="" 
+ S ^MDDE(NI,FL,"he")=$P(A,"|",3)
+ S ^MDDE(NI,FL,"h")=$P(A,"|",4)
+ S ^MDDE(NI,FL,"l")=$P(A,"|",5)
+ S ^MDDE(NI,FL,"le")=$P(A,"|",6)
+ Q
+PFIND(STR) ; Поиск
+ N EXEC,ii,CLS,xx,TPBP,iX,A,FIO,X,NIB
+ S ii=0,STR=$$UL^TXTU($$WD^TXTU($$TRIM^TXTU(STR)))
+ S EXEC="pfLine^NMDD()"
+ K ^KKK
+ D OWF^RWU(".txt"),W^RWU("[")
+ ;D:STR'="" FFND^YIFINDN(STR,1,0,0,EXEC)
+ I STR'="" s A="" F  S A=$$NEXT^IPAC(A) Q:A=""  D  Q:ii>10
+ .S FIO=$$FIO^IPAC(A),X=$$GETE^IPAC(A,"datar"),NIB=A
+ .I $$UL^TXTU($P(FIO," ",1))'[STR Q 
+ .D pfLine()
+ 
+ I STR="" s A="" F  S A=$$NEXT^IPAC(A) Q:A=""  D  Q:ii>10
+ .S FIO=$$FIO^IPAC(A),X=$$GETE^IPAC(A,"datar"),NIB=A
+ .D pfLine()
+ D W^RWU("]"),C^RWU
+ Q
+pfLine() ; write patient search object
+ D B^IJSON()
+ D W^IJSON("pid",A)
+ D W^IJSON("fio",FIO)
+ D W^IJSON("sex",$$GETE^IPAC(A,"pol"))
+ D W^IJSON("born",X)
+ D W^IJSON("age",$$AGET^IPAC(A))
+ D W^IJSON("tels",$$TELS^YIPACN(A))
+ D W^IJSON("last",$$DTM^DTUTL($$last(A)))
+ D WC^RWU($S(ii:",",1:"")_$$E^IJSON()) 
+ S ii=ii+1
+ Q
+PINFO(NI) ; Инфо по пац.
+ N A,FL
+ D B^IJSON()
+ F FL="fiof","fioi","fioo","datar","pol","phones","email","age","address" D W^IJSON(FL,$$GETE^IPAC(NI,FL))
+ D MSG^RWU($$E^IJSON())
+ Q
+PLOAD(NI) 
+ N A,FL
+ D B^IJSON()
+ F FL="fiof","fioi","fioo","datar","pol","pager","email","street","snils","text" D W^IJSON(FL,$$GETE^IPAC(NI,FL))
+ D W^IJSON("devid",107)
+ D W^IJSON("pid",NI)
+ D MSG^RWU($$E^IJSON())
+ Q
+PSAVE 
+ N I,A,FL,VAL,NI,LST,H,DTS
+ D ORH^RWU
+ F I=1:1 S A=$$WD^TXTU($$U8W^TXTU($$R^RWU)) Q:%IFN["Z"  D
+ .S FL=$P(A,"|",1) S:FL'="" LST(FL)=$P(A,"|",2)
+ D CR^RWU
+ S NI=$G(LST("pid")) Q:NI=""
+ S DTS=+$H
+ K LST("pid")
+ S LST("datar")=$$DI^DTUTL($G(LST("datar")))
+ S A=$G(LST("pol")),LST("pol")=$S(A="Мужской":1,A="Женский":2,1:"")
+ K:LST("pol")="" LST("pol")
+ S FL="" F  S FL=$O(LST(FL)) Q:FL=""  D SET^IPAC(NI,FL,DTS,LST(FL))
+ D:$$GET^IPAC(NI,"stc")="" SET^IPAC(NI,"stc",DTS,$G(^cfg("def-stc")))
+ D:$$GET^IPAC(NI,"ofor")="" SET^IPAC(NI,"ofor",DTS,1)
+ D:$$GET^IPAC(NI,"dofor")="" SET^IPAC(NI,"dofor",DTS,DTS)
+ D MKIDX^YIPACN(DTS)
+ Q
+PNEW(VAL) 
+ N I,N,NS
+ S I=+$G(^MN("newpac")),N=+$O(^MN(I,""))
+ S NS=$G(^MN(I,N,"nibstart")) S:'NS NS=1000
+ D MSG^RWU($$NEW^IPAC(NS,999999))
+ Q
+SELDEV(NI) 
+ S ^TMP("nib")=NI
+ Q
+SINFO(NI) ; Однострочное инфо по пациенту
+ N X
+ S X=$$AGET^IPAC(NI,+$H) S:X'="" X=", "_X
+ D MSG^RWU($$FIOSH^IPAC(NI)_", "_$$GETE^IPAC(NI,"pol")_X)
+ Q
+ALERTS(NI) ; Оповещения/нормы
+ Q
+FILL ; 
+ S ^MDDM("mean","bp")="Артериальное давление"
+ S ^MDDM("mean","ecg")="Электрокардиограмма"
+ S ^MDDM("mean","weight")="Вес"
+ S ^MDDM("mean","temp")="Температура"
+ S ^MDDM("mean","glucose")="Глюкоза крови"
+ S ^MDDM("mean","oximeter")="Оксиметрия"
+ S ^MDDM("mean","oxi")="Оксиметрия"
+ S ^MDDM("mean","pulse")="ЧСС"
+ S ^MDDM("mean","obereg")="Состояние"
+ 
+ S ^MDDM("value","systolic")="Систолическое|V|мм.рт.ст."
+ S ^MDDM("value","diastolic")="Диастолическое|V|мм.рт.ст."
+ S ^MDDM("value","pulse")="Пульс|V|уд./мин."
+ S ^MDDM("value","weight")="Вес|V|кг"
+ S ^MDDM("value","ecg")="Данные ЭКГ|F|"
+ S ^MDDM("value","temp")="Температура|V|C"
+ S ^MDDM("value","glucose")="Глюкоза крови|V||ммоль/л."
+ S ^MDDM("value","spo2")="Оксигенация|V|%"
+ S ^MDDM("value","bmi")="Индекс массы тела|V|"
+ S ^MDDM("value","vasage")="Возраст сосудов|V|лет"
+ S ^MDDM("value","vasstif")="Жесткость сосудов|V|"
+ S ^MDDM("value","fall")="Падение|V|"
+ S ^MDDM("value","stemp")="Температура кожи|V|C"
+ Q
+mnn(VAL) 
+ Q $P($G(^MDDM("value",VAL)),"|",3)
+start 
+ d:$D(^TMP("mdd","running")) stop
+ K ^SYNCJ("thread^NMDD")
+ J thread^NMDD
+ Q
+stop 
+ S ^SYNCJ("thread^NMDD")=1
+ H 1
+ F I=1:1:10 Q:'$D(^TMP("mdd","running"))  H 1
+ K ^SYNCJ("thread^NMDD"),^TMP("mdd","running")
+ Q
+ADDBAR(CODE,FIO) ; Добавить пациента по штрихкоду
+ Q:CODE="" 
+ N NI,FF,FI,FO,%SID
+ S ^TMP("bar")=CODE
+ I $O(^BTI("anib",CODE,""))'="" S NI=$O(^BTI("anib",CODE,"")),^TMP("nib")=NI Q 
+ S FIO=$$DBLSP^TXTU($G(FIO))
+ S:FIO="" FIO=$$getfio(CODE)
+ I FIO="" S ^TMP("nib")="" Q 
+ S FIO=$$DBLSP^TXTU($G(FIO))
+ S FF=$P(FIO," ",1),FI=$P(FIO," ",2),FO=$P(FIO," ",3)
+ S NI=$$ADD^IPAC(FF,FI,FO,"",$$SEX^YIFAM(FF),+$G(^cfg("def-stc")))
+ D SET^IPAC(NI,"anib",+$H,CODE) 
+ S ^TMP("nib")=NI
+ Q
+getfio(CODE) 
+ N %SID,%J,I,A
+ S %SID=$$OPEN^WWWCLI("213.171.47.8",80)
+ I %SID="" Q ""
+ D SETCONN^WWWCLI(%SID,0)
+ S OK=$$GET^WWWCLI(%SID,"/?cmd=getFio&id="_CODE)
+ S R=""
+ D:OK=200
+ .D OBUF^WWWCLI(%SID)
+ .S I=$$BUFCNT^WWWCLI(%SID)
+ .F %J=1:1:I S R=R_$$RBUF^WWWCLI(%SID) 
+ D CLOSE^WWWCLI(%SID)
+ S R=$$U8D^TXTU(R)
+ Q R
+PDF(FN) 
+ N X,I,L
+ S X=$$TDIR^FIL()_"/"_FN
+ Q:'$$CHECK^FIL(X)
+ D OWF^RWU(".bin")
+ S I=$$OR^FIL(X),L=0
+ U I F  R R#1024 Q:$$ST^FIL()=0  I R'="" D W^RWU(R)
+ C I
+ D C^RWU
+ Q
+SUMM(NI) ; Общая информация по пациенту
+ N X
+ D B^IJSON()
+ D W^IJSON("fio",$$FIO^IPAC(NI))
+ D W^IJSON("age",$$AGET^IPAC(NI,+$H))
+ D W^IJSON("tel",$$TELS^YIPACN(NI,+$H))
+ D W^IJSON("adr",$$ADR^YIPACN(NI,+$H))
+ D W^IJSON("gender",$$GETE^IPAC(NI,"pol"))
+ D W^IJSON("email",$$GET^IPAC(NI,"email"))
+ 
+ S X=$$lastMean(NI,"bp")
+ D:X'="" W^IJSON("bp",$P(X,"|",1))
+ D:X'="" W^IJSON("bpdate",$P(X,"|",2))
+ 
+ S X=$$lastMean(NI,"glucose")
+ D:X'="" W^IJSON("glucose",$P(X,"|",1))
+ D:X'="" W^IJSON("glucosedate",$P(X,"|",2))
+ 
+ S X=$$lastMean(NI,"obereg")
+ D:X'="" W^IJSON("fall",$P(X,"|",2))
+ 
+ S X=$G(^MDD(NI,0,0,"stemp"))
+ D:X W^IJSON("stemp",X_" "_$$mnn("stemp"))
+ D:X W^IJSON("stempdate",$$DTM^DTUTL($G(^MDD(NI,0,0,"stemp","log"))))
+ 
+ D MSG^RWU($$E^IJSON())
+ Q
+lastMean(NI,TP) 
+ N DT,TM,X,REZ
+ S REZ=""
+ S DT="" F  S DT=$O(^MDD(NI,DT),-1) Q:DT=""  D  Q:REZ'="" 
+ .S TM="" F  S TM=$O(^MDD(NI,DT,TM),-1) Q:TM=""  D  Q:REZ'=""
+ ..S X=$G(^(TM)) Q:$P(X,"|",1)'=TP
+ ..S REZ=$$textVAL(NI,DT,TM,TP)_"|"_$$DTM^DTUTL(DT_","_TM)
+ Q REZ
+EALT(NI) ; Выдача сообщений будильника
+ S NI=$G(^TMP("nib"))
+ Q:$G(^TMP("signal"))="" 
+ D B^IJSON()
+ D W^IJSON("info","alert")
+ D W^IJSON("alert",^TMP("signal"))
+ D MSG^RWU($$E^IJSON())
+ K ^TMP("signal")
+ Q

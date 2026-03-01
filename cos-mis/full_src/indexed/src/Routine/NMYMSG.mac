@@ -1,0 +1,67 @@
+NMYMSG ; Служба сообщений [ 09/06/2015  11:40 PM ]
+INST ; Start initialization
+ N K,I,R
+ S K=$$KDR^IUSER() Q:K="" 
+ S I="" F  S I=$O(^MMSG(K,I)) Q:I=""  Q:'$D(^(I,"v")) 
+ Q:I="" 
+ D W^RWU("<exec type=""plain"" action=""new"">RUN_REPORT{mymsg.frm}</exec>")
+ Q
+INIT ; Init user form
+ N K,I,R,X
+ S K=$$KDR^IUSER() Q:K="" 
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<mymsg>")
+ D:'$$LCL^NUSER("mymsg","new") WC^RWU("<btn_add visible=""no""/>")
+ S (R,I)="" F  S I=$O(^MMSG(K,I),-1) Q:I=""  S X=$G(^(I)),R=$S(R="":"",1:R_CR)_I_"|"_$$DT^DTUTL(+$P(X,"|",1))_", "_$$FIOSH^YIKADRY($P(X,"|",3))
+ D WTAGC^RWU("msgs",R)
+ S I=$O(^MMSG(K,""),-1) S:I="" I=0 S R=$G(^MMSG(K,I))
+ D WTAGDC^RWU("subj",$P(R,"|",4))
+ D WTAGC^RWU("txt",$G(^MMSG(K,I,"data")))
+ D WC^RWU("<btn_view visible="""_$S($D(^MMSG(K,I,"v")):"no",1:"yes")_"""/>")
+ D WC^RWU("</mymsg></nb_console>"),C^RWU
+ Q
+L(ID) ; Load message
+ Q:ID=""
+ N K,R
+ S K=$$KDR^IUSER() Q:K="" 
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<mymsg>")
+ S R=$G(^MMSG(K,ID))
+ D WTAGDC^RWU("subj",$P(R,"|",4))
+ D WTAGC^RWU("txt",$G(^MMSG(K,ID,"data")))
+ D WC^RWU("<btn_view visible="""_$S($D(^MMSG(K,ID,"v")):"no",1:"yes")_"""/>")
+ D WC^RWU("</mymsg></nb_console>"),C^RWU
+ Q
+VIEW(ID) ; Set view
+ Q:ID=""
+ N K S K=$$KDR^IUSER() Q:K=""  
+ S ^MMSG(K,ID,"v")=$H
+ Q
+DEL(ID) ; Delete message
+ Q:ID=""
+ N K S K=$$KDR^IUSER() Q:K=""  
+ K ^MMSG(K,ID)
+ Q
+MK ; Make message
+ N %J,A,K,I,R,X,C,D,VRL
+ S K=$$KDR^IUSER()
+ N @$$NEWVAR^YIXMLRR()
+ D RBUFH^YIXMLRR(1)
+ S R=$G(XML("nb_console","mkmsg","rcpt"))
+ F %J=1:1:999 S X=$P(R,CR,%J) Q:X=""  D
+ .S D=$P(X,":",1),C=$P(X,":",2)
+ .I C="",D'="" S VRL(D)="" Q  ; kadry
+ .I D="otd" D  Q 
+ ..S I="" F  S I=$O(^KDR(I)) Q:I=""  S:$$OTD^IKADRY(I)=C VRL(I)=""
+ .I D="spec" D  Q 
+ ..S I="" F  S I=$O(^KDR(I)) Q:I=""  S:$$SPEC^IKADRY(I)=C VRL(I)=""
+ S D=$G(XML("nb_console","mkmsg","subj"))
+ S C=$G(XML("nb_console","mkmsg","txt"))
+ S X="" F  S X=$O(VRL(X)) Q:X=""  D
+ .S I=$O(^MMSG(X,""),-1)+1
+ .S ^MMSG(X,I)=$H_"|D|"_K_"|"_D
+ .S ^MMSG(X,I,"data")=C
+ Q
+REGLCL ;
+ K ^LCLI("mymsg")
+ S ^LCLI("mymsg")="Служба сообщений"
+ S ^LCLI("mymsg","new")="Создание нового сообщения"
+ Q

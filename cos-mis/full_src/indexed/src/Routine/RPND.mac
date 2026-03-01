@@ -1,0 +1,44 @@
+RPND ; Отчеты ПНД [ 10/06/2013  4:05 PM ]
+TAB(DN,DK,TNV,TXT) ; ВЫВОД ТАБЛИЦЫ
+ N ID,DT,TN,NI,FIO,ST,T,TXT,STT,PL
+ D OWF^RWU(".txt")
+ D WC^RWU("Вызов №|Дата, время|Состояние|Сотрудник|№ И.Б.|Пациент|Повод|Адрес|КАД|Примечание")
+ S DN=$$DIH^DTUTL(DN),DK=$$DIH^DTUTL(DK)
+ S TXT=$$LU^TXTU($$WD^TXTU($G(TXT)))
+ S ID="" F  S ID=$O(^MCL(ID)) Q:ID=""  D
+ .S DT=$G(^MCL(ID,"dt")) Q:DT=""  Q:DT<DN!(DT>DK) 
+ .S TN=$G(^("vr"))
+ .I TNV'="",TN'=TNV Q 
+ .S TMM=$G(^("tm")),ST=$G(^("stat"))
+ .F PL="nib","nib1" S NI=$G(^MCL(ID,PL)) D:NI'=""
+ ..S FIO=$$FIO^IPAC(NI)
+ ..S:FIO="" FIO=$G(^MCL(ID,"fio"))
+ ..I TXT'="",$$LU^TXTU(FIO)'[TXT Q 
+ ..S STT=$$tp^NPND(ST)
+ ..S A=ID_"|"_$$DT2^DTUTL(DT)_$S(TMM="":"",1:", "_$$TM^DTUTL(TMM))_"|"
+ ..S T=$$FIOSH^IKADRY(TN)
+ ..S A=A_STT_"|"_T_"|"_NI_"|"_FIO_"|"
+ ..D WC^RWU(CR_A_$G(^MCL(ID,"dsc"))_"|"_$G(^("adr"))_"|"_$G(^("kad"))_"|"_$G(^("comm")))
+ D C^RWU
+ Q
+CHKD(DS,DE,VR) ; Контроль документов относительно вызовов
+ N V,ID,DT,NI,PL,VFIO,R,X
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D OWF^RWU(".txt")
+ D WC^RWU("Сотрудник|Вызов №|Пациент|Выполнен|Услуги|Документы")
+ S V="" F  S V=$O(^MCLI("vr",V)) Q:V=""  D:VR=""!(VR=V)
+ .S VFIO=$$FIO^IKADRY(V)
+ .S ID="" F  S ID=$O(^MCLI("vr",V,ID)) Q:ID=""  D
+ ..S DT=$G(^MCL(ID,"dt")) Q:DT=""  ;Q:DT<DS!(DT>DE) 
+ ..F PL="nib","nib1" S NI=$G(^MCL(ID,PL)) D:NI'=""
+ ...S R=$S(^MCL(ID,"stat")=9:"да",1:"")_"|"
+ ...S R=R_$S($$IsVR^IUSL(NI,V,DT,1):"да",1:"")_"|"
+ ...S X=$$CHKDT^IEPR(NI,V,DT),X=$S('X:0,$$ISSBS^IEPR(NI,X):2,1:1)
+ ...S R=R_$S(X=2:"да",X="":"черновик",1:"")
+ ...D WC^RWU(CR_VFIO_"|"_ID_"|"_$$FIO^IPAC(NI)_"|"_R)
+ D C^RWU
+ Q
+REGIPROC 
+ S ^IPROC("Вызовы","Список вызовов")="TAB_RPND,1,4,d,Период вызовов с,d,Период вызовов по,te@net:FLST_NVFIND(""""),Сотрудник,s,ФИО пациента"
+ S ^IPROC("Вызовы","Контроль документов")="CHKD_RPND,1,3,d,Период вызовов с,d,Период вызовов по,te@net:FLST_NVFIND(""""),Сотрудник"
+ Q

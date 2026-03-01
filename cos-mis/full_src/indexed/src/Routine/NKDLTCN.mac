@@ -1,0 +1,54 @@
+NKDLTCN ; Tecan-Magellan drv. [ 05/28/2012  10:39 PM ]
+LST ; Список методик
+ N DEV,R,C
+ D OWF^RWU(".txt")
+ S (C,DEV)="" F  S DEV=$O(^LABT("DEV",DEV)) Q:DEV=""  D
+ .Q:$G(^(DEV,"uid"))'="tecan-mgl" 
+ .;Q:'$D(^MLABW(DEV))
+ .D WC^RWU(C_DEV_"|"_^LABT("DEV",DEV)) S C=CR
+ D C^RWU
+ Q
+TAB(DEV) ; Таблица плашек
+ N R,X,Y,ID,P,PN
+ K ^BUF($J)
+ S DEV=$$WD^TXTU(DEV)
+ S ID="" F  S ID=$O(^MLABW(DEV,0,ID)) Q:ID=""  D
+ .S P="" F  S P=$O(^MLABW(DEV,0,ID,P)) Q:P=""  D
+ ..S R=^(P) Q:R'["|"
+ ..S PN=$P(R,"|",2),R=$P(R,"|",1)
+ ..S Y=(R-1)#8+1,X=R+7\8
+ ..S ^BUF($J,X,Y)=PN_"|"_ID
+ D OWF^RWU(".txt")
+ S R=^LABT("DEV",DEV) F X=1:1:12 S R=R_"|"_X
+ D WC^RWU(R) ; hdr 
+ F Y=1:1:8 D
+ .S R=$C($A("A")+Y-1)
+ .F X=1:1:12 S R=R_"|"_$P($G(^BUF($J,X,Y)),"|",2)
+ .D WC^RWU(CR_R)
+ D C^RWU
+ K ^BUF($J)
+ Q
+SETFIRST(DEV,POS) ; Установить начальную плашку
+ N K
+ S DEV=$$WD^TXTU(DEV)
+ S K=$P(POS,":",1),POS=$P(POS,":",2),K=8*(K-1)+POS
+ S $P(^MLABW(DEV,0),"|",1)=K
+ D CLRPOS^IKDLTCN(DEV)
+ S $P(^MLABW(DEV,0),"|",3)=1
+ D out^IKDLTCN(DEV,"",1)
+ Q
+MOVEPOS(DEV,ID,POS) ; Переместить тест в другую ячейку
+ N K,P,R
+ S DEV=$$WD^TXTU(DEV)
+ S K=$P(POS,":",1),POS=$P(POS,":",2),K=8*(K-1)+POS
+ S R=$C($A("A")+((K-1)#8))_((K+7)\8),R=K_"|"_R
+ S P="" F  S P=$O(^MLABW(DEV,0,ID,P)) Q:P=""  S ^(P)=R
+ S $P(^MLABW(DEV,0),"|",3)=1
+ D out^IKDLTCN(DEV,"",1)
+ Q
+CLRPOS(DEV) ; Сбросить позиции
+ S DEV=$$WD^TXTU(DEV)
+ D CLRPOS^IKDLTCN(DEV)
+ S $P(^MLABW(DEV,0),"|",3)=1
+ D out^IKDLTCN(DEV,"",1)
+ Q

@@ -1,0 +1,52 @@
+JWRHIO ; Экспорт/импорт склада в JSON
+INCOME(DTMS,DTME) 
+ N ID,STK,NX,DT,O,A,X,KX,V,DTP,obj,item,items,sup,doc,sum,nds
+ S DTMS=$$DIH^DTUTL(DTMS)_",0",DTME=$$DIH^DTUTL(DTME)_",86400"
+ s obj=[]
+ S NN="" F  S NN=$O(^WRHI("n",NN)) Q:NN=""  S DTP=$G(^(NN)) D:DTP="in"!(DTP="out")
+ .S R=$O(^(NN,"")),DT=$P(R,"|",1)
+ .Q:$$CMPDTM^DTUTL(DT,DTMS)=-1  Q:$$CMPDTM^DTUTL(DT,DTME)=1 
+ .S R=$G(^WRH($P(R,"|",3),$P(R,"|",2),DT)),O=$P(R,"|",2) Q:R="" 
+ .I O'="+",O'="-" Q 
+ .S ID=$P(R,"|",4)
+ .S NX=$S(ID="":"",1:$G(^WRHD(ID)))
+ .s doc={}
+ .s doc.docid=$S(DTP="in":1,DTP="out":2,1:3)
+ .s doc.id=ID
+ .s doc.datetime=$$DTM^IJSON(DT)
+ .s X=$P(NX,"|",8)
+ .I X=2 d doc.%Set("invoice_num",$P(NX,"|",9)),doc.%Set("invoice_date",$$DTISO^DTUTL($P(NX,"|",11)))
+ .I X=3 d doc.%Set("sf_num",$P(NX,"|",9)),doc.%Set("sf_date",$$DTISO^DTUTL($P(NX,"|",11)))
+ .S X=$P(R,"|",12) I X'="" d doc.%Set("sf_num",X)
+ .S X=$P(R,"|",13) I X'="" d doc.%Set("sf_date",$$DTISO^DTUTL(X))
+ .S X=$P(R,"|",14) I X'="" d doc.%Set("invoice_num",X)
+ .S X=$P(R,"|",15) I X'="" d doc.%Set("invoice_date",$$DTISO^DTUTL(X))
+ .S X=$P(R,"|",8) ; TODO $P(R,"|",7)="C"
+ .s sup={}
+ .s sup.name=$$NAMEH^ICONTR(X,+DT)
+ .s sup.inn=$$GET^ICONTR(X,"inn",+$H) ; TODO
+ .s sup.kpp=$$GET^ICONTR(X,"kpp",+$H) ; TODO
+ .s doc.supplier=sup
+ .s items=[]
+ .S KX="" F  S KX=$O(^WRHI("n",NN,KX)) Q:KX=""  D
+ ..S STK=$P(KX,"|",3),ID=$P(KX,"|",2),DT=$P(KX,"|",1)
+ ..S R=$G(^WRH(STK,ID,DT)) Q:R="" 
+ ..S item={}
+ ..s item.key=STK_","_ID_","_DT
+ ..s item.code=ID
+ ..s item.name=$$NAMENM^IWRHS(ID)
+ ..s item.mean=$$MEANNM^IWRHS(ID)
+ ..s item.count=+$P(R,"|",3)
+ ..s sum=+$P(R,"|",14),nds=+$P(R,"|",15)
+ ..s item.sum=sum
+ ..s item.nds=nds
+ ..d item.%Set("nds_rate",$S('sum:0,'nds:0,1:+$J(100*nds/sum,"",2)))
+ ..d items.%Push(item)
+ .s doc.items=items
+ .d obj.%Push(doc)
+ s item={}
+ s item.documents=obj
+ ;w !,item.%ToJSON()
+ ;q
+ D MSG^RWU(item.%ToJSON())
+ Q

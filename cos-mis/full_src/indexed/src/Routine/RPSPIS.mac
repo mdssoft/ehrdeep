@@ -1,0 +1,30 @@
+RPSPIS ; Отчеты-списки по пациентам [ 07/21/2021  3:48 PM ]
+PBILL(DS,DE,SW,LPU) ; Список пациентов и кассовых платежей
+ N NI,DT,TM,R,TP,S,I,L,STOTD,SCOTD
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D MKSCOTD^IEDE
+ S:'$$FR^I() LPU=$$^I("ilpu")
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|№|И.б.|Ф.И.О.|Дата рождения|Телефоны|Адрес|Оплачено")
+ S I=1,NI=""
+ F  S NI=$O(^BILL(NI)) Q:NI=""!(NI="00")  D
+ .S DT=DS-1,S=0
+ .F  S DT=$O(^BILL(NI,DT)) Q:DT>DE!(+DT'=DT)  S TM="" F  S TM=$O(^BILL(NI,DT,TM)) Q:TM=""  D
+ ..S R=^(TM) Q:R=""  
+ ..I SW<9 Q:$P(R,"|",1)'=""  S L=$P($P(R,"|",6),"/",1),TP=$P(L,":",1) Q:TP'="ZNF"&(TP'="ZND") 
+ ..I LPU'="",$P($P(R,"|",5),"@",2)'=LPU Q 
+ ..I SW,SW<9 Q:'$$SMOD^IEDE(SW,$P(L,":",3)) 
+ ..I SW=9 Q:$P(R,"|",1)'="+"  S S=S+$P(R,"|",2) Q
+ ..S S=S-$P(R,"|",2)
+ .Q:S=0 
+ .S S=$TR(S,".",",")
+ .D WC^RWU(CR_NI_"|"_I_"|"_NI_"|"_$$FIOSH^YIPACN(NI)_"|"_$$GETE^IPAC(NI,"datar",DE)_"|"_$$TELS^IPAC(NI)_"|"_$$GETE^IPAC(NI,"address",DE)_"|"_S)
+ .S I=I+1
+ D C^RWU
+ Q
+REGIPROC ; 
+ N FF
+ S FF=$$FR^I()
+ S ^IPROC("Отчеты по пациентам","Касса","Список пациентов и кассовых платежей")="PBILL_RPSPIS,100,"_$S(FF:4,1:3)_",d,Начальная дата,d,Конечная дата,t@string:0/За все услуги#1/Поликлиника#2/Стоматология#3/Стационар#9/Платежи суммарно,Выводить оплату"_$S(FF:",t@storage:lpu,Филиал",1:"")
+ ; только услуги, не направления
+ Q

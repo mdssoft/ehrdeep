@@ -1,0 +1,504 @@
+NHOSP ; Госпитализация в стационар [ 11/13/2022  10:36 PM ]
+INIT ; Инициализация формы журнала
+ N L,fAG,fFL,A
+ S fAG=$G(^cfg("hosp","age-bd")),fFL=$G(^cfg("hosp","lstfull"))
+ S fNP=$G(^cfg("hosp","nptab")),fBL=$G(^cfg("hosp","baltab"))
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<lhosp><vhosp>")
+ D LSTs^NSPRAV("vhosp")
+ D W^RWU("</vhosp>")
+ S L="п.п.:450;№ карты:600;Дата:700"
+ S A=$S(fAG:"Возраст:500",1:"Дата рождения:750")
+ S B=$S(fBL:"Баланс:500;",1:"")
+ S:'fFL L=L_";Пациент:"_$S(fAG:2250,1:2500)_";Пол:500;"_A_";Кем направлен:1600;Отделение, филиал:1600;Диагноз:1400"
+ S:fFL L=L_";Пациент:"_$S(fAG:2050,1:2300)_";Пол:400;"_A_";Кем направлен:1200;Отделение, филиал:1100;Диагноз:1000;Адрес:800;"_B_"Примечание:700"
+ D WC^RWU("<table default="""_L_"""/>")
+ D W^RWU("</lhosp></nb_console>"),C^RWU
+ Q
+INITI ; Инициализация формы госпитализации
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<lhospin><vid>")
+ ; TODO - отделения стационары
+ D LSTs^NSPRAV("vhosp")
+ D W^RWU("</vid><vtp>")
+ D LSTs^NSPRAV("trhosp")
+ D W^RWU("</vtp></lhospin></nb_console>"),C^RWU
+ Q
+INITO ; Инициализация формы выписки
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<lhospout><out>")
+ D LSTs^NSPRAV("outhosp")
+ D W^RWU("</out><rez>")
+ D LSTs^NSPRAV("orezhosp")
+ D W^RWU("</rez><rea>")
+ D LSTs^NSPRAV("outvhosp")
+ D W^RWU("</rea></lhospout></nb_console>"),C^RWU
+ Q
+TAB(DS,DE,FIO,VTP,OTD,LPU) ; Таблица журнала
+ ; FIO - контекст ФИО пациента
+ ; VTP - тип госпитализации
+ ; OTD - отделение
+ ; LPU - филиал
+ N DT,ID,R,X,A,NI,HE,HR,ER,FF,OT,NN,LP,fAG,fNP,fNP,fBL,E
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),LPU=$G(LPU)
+ S FIO=$$UL^TXTU(FIO)
+ S fAG=$G(^cfg("hosp","age-bd"))
+ S fNP=$G(^cfg("hosp","nptab"))
+ S fBL=$G(^cfg("hosp","baltab"))
+ D OWF^RWU(".txt")
+ D WC^RWU("key|п.п|№ карты|Дата|Пациент|Пол|"_$S('fAG:"Дата рождения",1:"Возраст")_$S(fNP:"|Кем направлен",1:"")_"|Отделение, Филиал|Диагноз|Адрес|"_$S(fBL:"Баланс|",1:"")_"Примечание")
+ S DT=DS-1 F  S DT=$O(^HOSP(DT)) Q:DT=""!(DT>DE)  D
+ .S ID="" F  S ID=$O(^HOSP(DT,ID)) Q:ID=""  D
+ ..S R=$G(^(ID)) Q:R="" 
+ ..I VTP'="",$P(R,"|",6)'=VTP Q 
+ ..S NI=$P(R,"|",1),FF=$$FIO^IPAC(NI)
+ ..I FIO'="",$$UL^TXTU(FF)'[FIO Q 
+ ..S HE=$O(^HOSP(DT,ID,"h",""),-1),HR=""
+ ..S:HE'="" HR=^(HE)
+ ..S OT=$P(HR,"|",2),LP=$P(R,"|",16)
+ ..I OTD'="",OT'=OTD Q 
+ ..I LPU'="",LPU'=LP Q 
+ ..S ER=$G(^HOSP(DT,ID,"e")),NN=$G(^("nn"))
+ ..S A=DT_"@"_ID_"|"_NN_"|"_$P(R,"|",2)_"|"_$$DT^DTUTL(DT)_"|"
+ ..S:$P(R,"|",3)=2 A=A_"Отмена - "
+ ..S A=A_FF_"|"_$$GETE^IPAC(NI,"pol",DT)_"|"_$$AGE^IPAC(NI,DT)_"|"
+ ..S:fNP X=$P(ER,"|",1),X=$S(X="":$P(ER,"|",2),1:$$FIOSH^IKADRY(X))
+ ..S:fNP A=A_X_"|"
+ ..S X=$$BbNIB^NKFUND(NI,DT) S:X'="" A=A_"п."_X_", "
+ ..S X=$$GOTD^YISPRAV(OT)
+ ..S A=A_X_$S(X="":"",LP:", ",1:"")_$S(LP:$$NAME^ICONTR(LP),1:"")
+ ..S:$P(R,"|",13) A=A_$S($E(A,$L(A))="|":"",1:", ")_"выписан "_$$DT2^DTUTL($P(R,"|",5))
+ ..S X=$P(R,"|",7),ER=$$NAME^YMKB10(X) S:ER="" ER=X
+ ..S A=A_"|"_ER_"|"_$$ADR^YIPACN(NI)
+ ..I fBL S E=+$P(^HOSP(DT,ID),"|",5),E=$S(E:E,1:+$H),X=$$GSUMM^IBILL(NI,DT,E,"+")-$$GSUMM^IBILL(NI,DT,E,"-")-$$SUMMUSL^IUSL(NI,DT,E,"",0,"",1,1,"","") S A=A_"|"_(+$J(X,"",2))
+ ..D WC^RWU(CR_A_"|"_$$OWF^TXTU($G(^HOSP(DT,ID,"c")),100))
+ D C^RWU
+ Q
+GETNIB(KEY) ; Получить пациента из госпитализации
+ Q:KEY=""
+ D MSG^RWU($P($G(^HOSP($P(KEY,"@",1),$P(KEY,"@",2))),"|",1))
+ Q
+GETINF(KEY) ; Получить информацию по госпитализации
+ ; Возврат: №иб|№ карт.стац|дата|отделение|филиал
+ N R,DT,ID,K
+ S DT=$P(KEY,"@",1),ID=$P(KEY,"@",2) Q:DT="" 
+ S R=$G(^HOSP(DT,ID)),K=$O(^HOSP(DT,ID,"h",""),-1)
+ S:K'="" K=^(K)
+ D MSG^RWU($P(R,"|",1)_"|"_$P(R,"|",2)_"|"_$$DT^DTUTL(DT)_"|"_$P(K,"|",2)_"|"_$P(R,"|",1))
+ Q
+LGPAC(NIB) ; Загрузить поля пациента
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<lhospin>")
+ D WTAGDC^RWU("nib",NIB)
+ D LPACs(NIB)
+ D W^RWU("</lhospin></nb_console>"),C^RWU
+ Q
+LPACs(NIB) 
+ N PL
+ F PL="bplace","ctz","fiof","fioi","fioo","lekall","pasp","pasp_dan","pol","street","tel1","typedoc" D WTAGDC^RWU(PL,$$GET^IPAC(NIB,PL,+$H))
+ D WTAG^RWU("datar",$$GETE^IPAC(NIB,"datar",+$H))
+ D LHnz(NIB)
+ Q
+LHnz(NIB) ; Список направлений на госпитализацию
+ N ID,A,R
+ D W^RWU("<pnaz>")
+ S ID="" F  S ID=$O(^NAZI("n",NIB,ID),-1) Q:ID=""  S A=^(ID) I $P(A,"|",1)="h",30[(+$P(A,"|",5)) D
+ .S R=$G(^NAZ(ID,"i")) Q:R="" 
+ .D WC^RWU(CR_ID_"|"_$$FIOSH^IKADRY($P(R,"|",3))_" от "_$$DT^DTUTL(+$P(R,"|",5)))
+ D W^RWU("</pnaz>")
+ Q
+SG ; Сохранить госпитализацию
+ N DT,ID,NUM,NI,R,X,XML,LL,ST,LP
+ D RBUFH^YIXMLRR(1)
+ D SPACs
+ S LP=+$$^I("ilpu")
+ M LL=XML("nb_console","lhospin") K XML
+ S ID=$G(LL("id")),DT=$$DIH^DTUTL($G(LL("dt")))
+ I ID="",$$LCL^IUSER("hosp","new")=0 D MSG^RWU("Недостаточно прав.") Q
+ I ID'="",$$LCL^IUSER("hosp","save")=0 D MSG^RWU("Недостаточно прав.") Q
+ S:ID'="" DT=$P(ID,"@",1),ID=$P(ID,"@",2)
+ I ID="" S ID=$$NNUM^IHOSP(DT)
+ S NUM=$G(LL("num")),NI=$G(LL("nib"))
+ I NUM="" S NUM=$$GET^IINKR("hosp","num") S:$G(^cfg("hosp","numbylpu")) NUM=NUM_"/"_LP ; TODO - from number 
+ S ST=+$S(ID="":"",1:$P($G(^HOSP(DT,ID)),"|",3))
+ S R=$G(LL("nib"))_"|"_NUM_"|"_ST_"|"_DT_","_$$TI^DTUTL($G(LL("tm")))
+ S X=$G(LL("days")) S:X'="" $P(R,"|",10)=X
+ S X=$G(LL("vid")) S:X'="" $P(R,"|",6)=X
+ S X=$G(LL("diag")) S:X'="" $P(R,"|",7)=X
+ S X=$G(LL("vtp")) S:X'="" $P(R,"|",9)=X
+ S X=$G(LL("traum")) S:X'="" $P(R,"|",11)=$S(X:1,1:0),$P(R,"|",12)=X
+ S X=$G(LL("lpui")) S:X'="" $P(R,"|",16)=X
+ S ^HOSP(DT,ID)=R
+ S R=""
+ S X=$G(LL("lpu")) S:X'="" $P(R,"|",2)=X
+ S X=$G(LL("napr")) S:X'="" $P(R,"|",3)=X
+ S X=$G(LL("nnar")) S:X'="" $P(R,"|",4)=X
+ K:R="" ^HOSP(DT,ID,"e")
+ S:R'="" ^HOSP(DT,ID,"e")=R
+ 
+ S R=""
+ S X=$G(LL("pnaz")) S:X'="" $P(R,"|",1)=X
+ S X=$G(LL("vrin")) S:X'="" $P(R,"|",2)=X
+ K:R="" ^HOSP(DT,ID,"n")
+ S:R'="" ^HOSP(DT,ID,"n")=R
+ 
+ S R=$G(LL("comm"))
+ K:R="" ^HOSP(DT,ID,"c")
+ S:R'="" ^HOSP(DT,ID,"c")=R
+ 
+ S X=$G(LL("otd"))
+ S:X'="" ^HOSP(DT,ID,"h",1)="|"_X
+ S:$G(^HOSP(DT,ID,"nn"))="" ^HOSP(DT,ID,"nn")=$$GET^IINKR("hosp","nn")
+ S ^HOSPI("n",NI,DT_"|"_ID)=""
+ S ^HOSPI("ns",NUM)=DT_"|"_ID
+ S ^HOSP(DT,ID,"log")=$$USRH^IUSER()
+ S ^HOSPI("in",DT_"|"_ID)=""
+ D CR^RWU
+ D REGL^IEXCH("^HOSP",DT,ID)
+ D GL^IEXCH("^HOSPI","n",NI,DT_"|"_ID)
+ D GL^IEXCH("^HOSPI","ns",NUM)
+ D GL^IEXCH("^HOSPI","in",DT_"|"_ID)
+ D LG(DT_"@"_ID)
+ Q
+SPACs 
+ N PL,R,XML1,XML2,NI
+ S NI=$G(XML("nb_console","lhospin","nib"))
+ F PL="fiof","fioi","fioo" S XML1("patients",PL)=$$DW^TXTU($$NRMFAM^YIFAM($G(XML("nb_console","lhospin",PL))))
+ F PL="bplace","ctz","lekall","pasp","pasp_dan","pol","street","tel1","typedoc","datar" S R=$G(XML("nb_console","lhospin",PL)) S:R'="" XML1("patients",PL)=$$DW^TXTU(R)
+ M XML2=XML
+ K XML M XML=XML1 K XML1
+ S:NI="" NI=$$NEW^IPAC(100,999999),XML("patients","newpac")=+$$NEXT^ISPRAV("newpac","")
+ S XML("patients","hist")=NI
+ D W^YIPACN
+ K XML,%L,%B M XML=XML2
+ S XML("nb_console","lhospin","nib")=NI
+ Q
+LG(KEY) ; Загрузить госпитализацию
+ Q:KEY="" 
+ N DT,ID,NI,R,RE,RH,X,RN
+ S DT=$P(KEY,"@",1),ID=$P(KEY,"@",2)
+ S R=^HOSP(DT,ID),RE=$G(^(ID,"e")),RN=$G(^("n")),NI=$P(R,"|",1)
+ S X=$O(^HOSP(DT,ID,"h",""),-1),RH=""
+ S:X'="" RH=^(X)
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<lhospin>")
+ D WTAGDC^RWU("nib",NI)
+ D WTAGDC^RWU("id",KEY)
+ D LPACs(NI)
+ D WTAGC^RWU("diag",$P(R,"|",7))
+ D WTAGC^RWU("dt",$$DT^DTUTL(DT))
+ D WTAGC^RWU("days",$P(R,"|",10))
+ D WTAGDC^RWU("lpu",$P(RE,"|",2))
+ D WTAGC^RWU("napr",$P(RE,"|",3))
+ D WTAGC^RWU("nnar",$P(RE,"|",4))
+ D WTAGC^RWU("num",$P(R,"|",2))
+ D WTAGDC^RWU("otd",$P(RH,"|",2))
+ D WTAGC^RWU("tm",$$TM^DTUTL($P($P(R,"|",4),",",2)))
+ D WTAGC^RWU("traum",$P(R,"|",12))
+ D WTAGDC^RWU("lpui",$P(R,"|",16))
+ D WTAGDC^RWU("vid",$P(R,"|",6))
+ D WTAGDC^RWU("vtp",$P(R,"|",9))
+ D WTAGDC^RWU("pnaz",$P(RN,"|",1))
+ D WTAGDC^RWU("vrin",$P(RN,"|",2))
+ D WTAGC^RWU("comm",$G(^HOSP(DT,ID,"c")))
+ D W^RWU("</lhospin></nb_console>"),C^RWU
+ Q
+SGEND(KEY,DI) ; Выписать пациента
+ I $$LCL^IUSER("hosp","out")=0 D MSG^RWU("Недостаточно прав.") Q 
+ N DT,ID
+ S DT=$P(KEY,"@",1),ID=$P(KEY,"@",2) Q:DT="" 
+ S $P(^HOSP(DT,ID),"|",5)=$H
+ S $P(^HOSP(DT,ID),"|",3)=1
+ K ^HOSPI("in",DT_"|"_ID)
+ Q
+SGCNC(KEY,TP,TXT) ; Отменить госпитализацию
+ ; TP - тип отмены
+ ; TXT - описание
+ N DT,ID,R
+ S DT=$P(KEY,"@",1),ID=$P(KEY,"@",2) Q:DT="" 
+ S $P(^HOSP(DT,ID),"|",3)=2,TXT=$$WD^TXTU($G(TXT))
+ S ^HOSP(DT,ID,"sc")=$G(TP)_"|"_TXT_"|"_$$USRH^IUSER()
+ K ^HOSPI("in",DT_"|"_ID)
+ D GL^IEXCH("^HOSP",DT,ID),KGL^IEXCH("^HOSPI","in",DT_"|"_ID)
+ Q
+LGP(KEY) ; Загрузить для печати
+ Q:KEY="" 
+ N DT,ID,NI,R,RE,RH,X,PL,A
+ S DT=$P(KEY,"@",1),ID=$P(KEY,"@",2)
+ S R=^HOSP(DT,ID),RE=$G(^(ID,"e")),NI=$P(R,"|",1)
+ S X=$O(^HOSP(DT,ID,"h",""),-1),RH=""
+ S:X'="" RH=^(X)
+ D OWF^RWU(".xml"),W^RWU(^PP(0,1)_"<streport><data>")
+ D WTAGC^RWU("nib",NI)
+ D WTAGC^RWU("id",KEY)
+ F PL="bplace","ctz","fiof","fioi","fioo","datar","lekall","bloodrh","pasp","pasp_dan","pol","tel1","typedoc","work","prof","jobtitle","place" D WTAGC^RWU(PL,$$GETE^IPAC(NI,PL,+$H))
+ D WTAGC^RWU("age",$$AGET^IPAC(NI))
+ D WTAGC^RWU("street",$$ADR^IPAC(NI))
+ D WTAGC^RWU("diag",$P(R,"|",7))
+ D WTAGC^RWU("dt",$$DT^DTUTL(DT))
+ S X=$P(R,"|",5)
+ D WTAGC^RWU("de",$$DT^DTUTL(X))
+ D WTAGC^RWU("te",$$TM^DTUTL(X))
+ D WTAGC^RWU("dtme",$$DTM^DTUTL(X))
+ D WTAGC^RWU("days",$P(R,"|",10))
+ D WTAGC^RWU("lpu",$P(RE,"|",2))
+ D WTAGC^RWU("napr",$P(RE,"|",3))
+ D WTAGC^RWU("nnar",$P(RE,"|",4))
+ D WTAGC^RWU("num",$P(R,"|",2))
+ D WTAGC^RWU("otd",$$GOTD^YISPRAV($P(RH,"|",2)))
+ D WTAGC^RWU("tm",$$TM^DTUTL($P($P(R,"|",4),",",2)))
+ D WTAGC^RWU("traum",$P(R,"|",12))
+ D WTAGC^RWU("vid",$P(R,"|",6))
+ S X=$P(R,"|",9),A="может идти|на каталке|на кресле"
+ D WTAGC^RWU("vtp",$S('X:"",X<4:$P(A,"|",X),1:""))
+ 
+ D WTAGC^RWU("diag1",$$NAME^YMKB10($P(R,"|",7)))
+ 
+ D WTAGC^RWU("hpvp","впервые") ; впервые, повторно TODO 
+ D WTAGC^RWU("hcnt",1) ; TODO
+ 
+ S X=$P(R,"|",14)
+ S A="выздоровление|улучшение|без перемен|ухудшение|здоров|умер"
+ D WTAGC^RWU("out",$S(X:$P(A,"|",X),1:""))
+ 
+ N OPI,RO,K1,K2,K3,K4,K5
+ S RO=$$IsNIB^NOPERSH(NI,DT,1)
+ G:RO="" LPGe
+ S K1=$P(RO,",",1),K2=$P(RO,",",2),K3=$P(RO,",",3),K4=$P(RO,",",4),K5=$P(RO,",",5)
+ S RO=$G(^OPSH(K1,K2,K3,K4,K5))
+ D WTAGC^RWU("ln1usl",$$NAME^ISPRAV("sopertp",$P(RO,"|",3)))
+ D WTAGC^RWU("ln1mo",$$NAME^ISPRAV("soperan",$P(RO,"|",4)))
+ D WTAGC^RWU("ln1osl","") ; TODO
+ 
+ D WTAGC^RWU("operfio",$$FIO^IKADRY($G(^OPSH(K1,K2,K3,K4,K5,"g"))))
+LPGe 
+ D W^RWU("</data></streport>"),C^RWU
+ Q
+LR(KEY) ; Выбытие
+ N R,X,RD,ID,DT,NI
+ S DT=$P(KEY,"@",1),ID=$P(KEY,"@",2)
+ S R=^HOSP(DT,ID),RE=$G(^(ID,"e")),NI=$P(R,"|",1)
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<lhospout>")
+ D WTAGD^RWU("id",KEY)
+ D WTAGDC^RWU("pac_info",$$FIO^IPAC(NI)_", "_$$AGET^DTUTL($$GET^IPAC(NI,"datar"),DT)_", "_$$GETE^IPAC(NI,"pol",DT))
+ S X=$P(R,"|",6)
+ D WTAGDC^RWU("gosp_info",$$DT^DTUTL(DT)_", "_$S(X=2:"Экстренно",1:"Планово")_$S($P(R,"|",13):", Выписан",1:""))
+ S X=$P(R,"|",5) S:X="" X=$H
+ D WTAGD^RWU("dt",$$DT^DTUTL($P(X,",",1)))
+ D WTAGD^RWU("tm",$$TM^DTUTL($P(X,",",2))) 
+ D WTAGD^RWU("out",$P(R,"|",13))
+ D WTAGD^RWU("rez",$P(R,"|",14))
+ D WTAGD^RWU("rea",$P(R,"|",15))
+ S R=$G(^HOSP(DT,ID,"gs"))
+ D WTAGD^RWU("ksg",$P(R,"|",1))
+ D WTAGD^RWU("kct",$P(R,"|",2))
+ D WTAGDC^RWU("diag",$P($G(^HOSP(DT,ID,"d")),"|",3))
+ D W^RWU("</lhospout></nb_console>"),C^RWU
+ Q
+SR ; Выбытие (сохранение) 
+ I $$LCL^IUSER("hosp","out")=0 D MSG^RWU("Недостаточно прав.") Q
+ N R,ID,DT,XML,LL,X
+ D RBUFH^YIXMLRR(1)
+ M LL=XML("nb_console","lhospout") K XML
+ S ID=$G(LL("id")),DT=$P(ID,"@",1),ID=$P(ID,"@",2)
+ I ID="" D CR^RWU D MSG^RWU("ERR") Q 
+ S R=^HOSP(DT,ID)
+ S X=$$DIH^DTUTL($G(LL("dt")))_","_$$TI^DTUTL($G(LL("tm")))
+ S $P(R,"|",5)=X
+ S $P(R,"|",13)=$G(LL("out"))
+ S $P(R,"|",14)=$G(LL("rez"))
+ S $P(R,"|",15)=$G(LL("rea"))
+ S ^HOSP(DT,ID)=R
+ S ^HOSP(DT,ID,"gs")=$G(LL("ksg"))_"|"_$$NNUM^TXTU($G(LL("kct")))
+ S $P(^HOSP(DT,ID,"d"),"|",3)=$G(LL("diag"))
+ S ^HOSP(DT,ID,"log")=$$USRH^IUSER()
+ K ^HOSPI("in",DT_"|"_ID)
+ D CR^RWU
+ Q
+DEL(KEY) ; Удаление госпитализации
+ I $$LCL^IUSER("hosp","del")=0 D MSG^RWU("Нет прав на удаление.") Q
+ N DT,ID,R,NI,NN
+ S DT=$P(KEY,"@",1),ID=$P(KEY,"@",2)
+ Q:DT=""  Q:ID="" 
+ S R=$G(^HOSP(DT,ID)),NI=$P(R,"|",1),NN=$P(R,"|",2),KEY=DT_"|"_ID
+ Q:R="" 
+ K ^HOSP(DT,ID)
+ D KGL^IEXCH("^HOSP",DT,ID)
+ I NI'="" K ^HOSPI("n",NI,KEY) D KGL^IEXCH("^HOSPI","n",NI,KEY)
+ I NN'="" K ^HOSPI("ns",NN) D KGL^IEXCH("^HOSPI","ns",NN)
+ I $D(^HOSP("in",KEY)) K ^(KEY) D KGL^IEXCH("^HOSP","in",KEY)
+ Q
+IsNIB(NI,DT)  ; У пациента есть открытые госпитализации
+ ; NI - код пациента
+ ; DT - дата госпитализации
+ N KX,F,D,ID,R
+ S KX="",F=0 F  S KX=$O(^HOSPI("n",NI,KX)) Q:KX=""  D  Q:F
+ .S D=$P(KX,"|",1),ID=$P(KX,"|",2)
+ .I D>DT Q
+ .S R=$G(^HOSP(D,ID)),R=+$P(R,"|",5)
+ .I R,R<DT Q
+ .S F=1
+ Q F
+GETID(NI,DT)  ; Получить код госпитализации на дату
+ N KX,F,D,ID,R
+ S KX="",F="" F  S KX=$O(^HOSPI("n",NI,KX)) Q:KX=""  D  Q:F'=""
+ .S D=$P(KX,"|",1),ID=$P(KX,"|",2)
+ .I D>DT Q
+ .S R=$G(^HOSP(D,ID)),R=+$P(R,"|",5)
+ .I R,R<DT Q
+ .S F=KX
+ Q F
+GETNZ(DT,ID) ; Назначене на госп. из госпитализации
+ S:$G(ID)="" ID=$P(DT,"|",2),DT=$P(DT,"|",1)
+ Q $P($G(^HOSP(DT,ID,"n")),"|",1)
+MOVDT(KEY,NDT) ; Переместить на другую дату
+ I $$LCL^IUSER("hosp","movdt")=0 D MSG^RWU("Нет прав.") Q 
+ N DT,ID,NID,NI,NN,R,X
+ S DT=$P(KEY,"@",1),ID=$P(KEY,"@",2),NDT=$$DIH^DTUTL(NDT)
+ Q:DT=""  Q:ID=""
+ S R=^HOSP(DT,ID),NI=$P(R,"|",1),NN=$P(R,"|",2)
+ F NID=ID:1:99999 Q:'$D(^HOSP(NDT,NID)) 
+ S KEY=NDT_"|"_NID
+ S X=$P(R,"|",4),$P(X,",",1)=NDT,$P(R,"|",4)=X
+ M ^HOSP(NDT,NID)=^HOSP(DT,ID)
+ S ^HOSP(NDT,NID)=R
+ K ^HOSP(DT,ID)
+ S ^HOSP(NDT,NID,"log")=$$USRH^IUSER()
+ D GL^IEXCH("^HOSP",NDT,NID)
+ D KGL^IEXCH("^HOSP",DT,ID)
+ D:NI'=""
+ .K ^HOSPI("n",NI,DT_"|"_ID) D KGL^IEXCH("^HOSPI","n",NI,DT_"|"_ID)
+ .S ^HOSPI("n",NI,KEY)="" D GL^IEXCH("^HOSPI","n",NI,KEY)
+ I NN'="" S ^HOSPI("ns",NN)=KEY D GL^IEXCH("^HOSPI","ns",NN)
+ D:$D(^HOSP("in",DT_"|"_ID))
+ .K ^(DT_"|"_ID) D KGL^IEXCH("^HOSP","in",DT_"|"_ID)
+ .S ^HOSP("in",KEY)="" D GL^IEXCH("^HOSP","in",KEY)
+ Q
+SETLPU(KEY,LPU) ; Перевести в другой филиал
+ I $$LCL^IUSER("hosp","lpu")=0 D MSG^RWU("Нет прав.") Q 
+ N DT,ID,R,I,X
+ S DT=$P(KEY,"@",1),ID=$P(KEY,"@",2) Q:DT=""  Q:ID="" 
+ S R=^HOSP(DT,ID)
+ Q:$P(R,"|",16)=LPU 
+ S $P(R,"|",16)=LPU,^HOSP(DT,ID)=R,I=$O(^HOSP(DT,ID,"h",""),-1)
+ I I'="" S X=^(I),$P(X,"|",3)=$H,$P(X,"|",4)=LPU,^(I+1)=X
+ S ^HOSP(DT,ID,"log")=$$USRH^IUSER()
+ D GL^IEXCH("^HOSP",DT,ID)
+ Q
+GETCOM(KEY) ; Получить примечание к госпитализации
+ N DT,ID
+ S DT=$P(KEY,"@",1),ID=$P(KEY,"@",2) Q:DT=""  Q:ID=""  
+ D MSG^RWU($G(^HOSP(DT,ID,"c")))
+ Q
+GETDOC(KEY,TYP) ; Получить документ ЭМК для печати
+ Q
+SETCOM(KEY,TXT) ; Изменить примечание у госпитализации
+ N DT,ID
+ S DT=$P(KEY,"@",1),ID=$P(KEY,"@",2) Q:DT=""  Q:ID=""  
+ S ^HOSP(DT,ID,"c")=$$WD^TXTU(TXT)
+ D GL^IEXCH("^HOSP",DT,ID,"c")
+ Q 
+FNDMH(STR,DS,DE,VR,OTD) ; Для ЭМК
+ ; FIO - контекст ФИО пациента
+ N DT,ID,R,X,A,NI,HE,HR,ER,FF,NN,FIO
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S FIO=$$UL^TXTU(STR)
+ D OWF^RWU(".txt")
+ D WC^RWU("№ И.Б.|Фамилия|Имя|Отчество|Договор|Дата")
+ S DT=DS-1 F  S DT=$O(^HOSP(DT)) Q:DT=""!(DT>DE)  D
+ .S ID="" F  S ID=$O(^HOSP(DT,ID)) Q:ID=""  D
+ ..S R=^(ID)
+ ..S NI=$P(R,"|",1),FF=$$FIO^IPAC(NI)
+ ..I FIO'="",$$UL^TXTU(FF)'[FIO Q 
+ ..S A=NI_"|"_$P(FF," ",1)_"|"_$P(FF," ",2)_"|"_$P(FF," ",3,9)_"|"_$$GETE^IPAC(NI,"stc",DT)
+ ..S A=A_"|"_$$DTM2^DTUTL($P(R,"|",4))
+ ..S:$P(R,"|",13) A=A_", выписан"
+ ..D WC^RWU(CR_A)
+ D C^RWU
+ Q
+FNDTAB(DS,DE,FIO,STC) ; Таблица поиск в госпитализациях
+ ; FIO - контекст ФИО пациента
+ ; STC - договор
+ N DT,ID,R,X,A,NI,HE,HR,ER,FF,NN
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S FIO=$$UL^TXTU(FIO),STC=$G(STC)
+ D OWF^RWU(".txt")
+ D WC^RWU("|№ И.Б.|Пациент|Госпитализирован|Дата рожд.|Пол|Возраст")
+ S DT=DS-1 F  S DT=$O(^HOSP(DT)) Q:DT=""!(DT>DE)  D
+ .S ID="" F  S ID=$O(^HOSP(DT,ID)) Q:ID=""  D
+ ..S R=^(ID)
+ ..S NI=$P(R,"|",1),FF=$$FIO^IPAC(NI)
+ ..I FIO'="",$$UL^TXTU(FF)'[FIO Q 
+ ..I STC,$$PIDXN^IPAC(NI,STC,DE)=-1 Q 
+ ..S A=DT_"@"_ID_"|"_NI_"|"_FF_"|"_$$DT^DTUTL(DT)
+ ..S:$P(R,"|",13) A=A_", выписан"
+ ..S A=A_"|"_$$GETE^IPAC(NI,"datar",DT)_"|"_$$GETE^IPAC(NI,"pol",DT)_"|"_$$AGE^IPAC(NI,DT)
+ ..D WC^RWU(CR_A)
+ D C^RWU
+ Q
+NZVR(ID) ; Список врачей по профилю госпитального направления
+ Q:ID="" 
+ N R,I,V,A
+ S R=$G(^MN(+$G(^MN("snaprtpvr")),ID)),A=""
+ F I=1:1:$L(R,"|") S V=$P(R,"|",I) I V'="" S A=$S(A="":"",1:A_CR)_V_"|"_$$FIO^IKADRY(V)
+ D MSG^RWU(A)
+ Q
+REGLCL 
+ K ^LCLI("hosp")
+ S ^LCLI("hosp")="Госпитализации"
+ S ^LCLI("hosp","new")="Создание госпитализации"
+ S ^LCLI("hosp","save")="Изменение госпитализации"
+ S ^LCLI("hosp","out")="Выписка"
+ S ^LCLI("hosp","del")="Удаление госпитализации"
+ S ^LCLI("hosp","movdt")="Изменение даты госпитализации"
+ S ^LCLI("hosp","lpu")="Изменение филиала"
+ Q
+INITDB 
+ N I
+ S ^MN("root","vhosp")="Вид госпитализации"
+ S ^MN("root","trhosp")="Транспортировка при госпитализации"
+ S ^MN("root","outhosp")="Вид выписки из стационара"
+ S ^MN("root","outvhosp")="Причина выписки из стационара"
+ S ^MN("root","orezhosp")="Результат выписки из стационара"
+ S ^MN("root","cvhosp")="Причина отмены госпитализации"
+ D:'$D(^MN("vhosp"))
+ .S I=$$NEWIDX^YISPRAV("vhosp")
+ .S ^MN(I,1)="планово"
+ .S ^MN(I,2)="экстренно"
+ D:'$D(^MN("trhosp"))
+ .S I=$$NEWIDX^YISPRAV("trhosp")
+ .S ^MN(I,1)="может идти"
+ .S ^MN(I,2)="на каталке"
+ .S ^MN(I,3)="на кресле"
+ D:'$D(^MN("outhosp"))
+ .S I=$$NEWIDX^YISPRAV("outhosp")
+ .S ^MN(I,1)="выписан"
+ .S ^MN(I,2)="в дневной стационар"
+ .S ^MN(I,3)="в круглосуточный стационар"
+ .S ^MN(I,4)="переведен в другой стационар"
+ .S ^MN(I,5)="переведен в другое отделение"
+ D:'$D(^MN("outvhosp"))
+ .S I=$$NEWIDX^YISPRAV("outvhosp")
+ .S ^MN(I,1)="планово"
+ .S ^MN(I,2)="отказ"
+ .S ^MN(I,3)="отказ (другой профиль)"
+ .S ^MN(I,4)="отказ (нет мест)"
+ .S ^MN(I,5)="самовольный уход"
+ .S ^MN(I,6)="по инициативе больного"
+ .S ^MN(I,7)="нарушение режима"
+ .S ^MN(I,8)="эпидпоказания"
+ D:'$D(^MN("orezhosp"))
+ .S I=$$NEWIDX^YISPRAV("orezhosp")
+ .S ^MN(I,1)="выздоровление"
+ .S ^MN(I,1.1)="выздоровление с частичным восстановлением физиологического процесса или функции"
+ .S ^MN(I,1.2)="выздоровление с полным нарушением физиологического процесса или функции"
+ .S ^MN(I,2)="ремиссия"
+ .S ^MN(I,3)="улучшение состояния"
+ .S ^MN(I,4)="без перемен"
+ .S ^MN(I,6)="ухудшение состояния"
+ .S ^MN(I,8)="стабилизация"
+ .S ^MN(I,10)="компенсация функций"
+ .S ^MN(I,12)="хронизация"
+ .S ^MN(I,14)="развитие ятрогенных осложнений"
+ .S ^MN(I,16)="развитие нового заболевания, связанного с основным"
+ .S ^MN(I,99)="умер"
+ D:'$D(^MN("cvhosp"))
+ .S I=$$NEWIDX^YISPRAV("cvhosp")
+ .S ^MN(I,1)="нет"
+ .S ^MN(I,2)="заболевание"
+ Q

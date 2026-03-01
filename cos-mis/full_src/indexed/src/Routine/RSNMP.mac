@@ -1,0 +1,134 @@
+RSNMP ; Report SNMP [ 03/09/2015  3:21 PM ]
+SHWV(DS,DE,STC,GOSP,OO) ; Показать вызовы
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ K ^BUFH($J,"v")
+ N ID,R,H,VR,D,CSTC,OGS,OOP,YNL,A S H=$H,YNL(0)="Нет",YNL(1)="Да"
+ D OWF^RWU(".txt")
+ D WC^RWU("№ К.В.|Дата,Время|Статус|Пациент "_$$TXTP^DTUTL(DS,DE)_"|Договор|Врач|У больн.|Путь|За МКАД|Отказ от госп.|Отказ от опл.")
+ S ID="" F  S ID=$O(^EMKV(ID)) Q:ID=""  D
+ .S D=$G(^EMKV(ID,"dts"))
+ .Q:(+D)<DS  Q:(+D)>DE  
+ .S CSTC=$G(^EMKV(ID,"stc"))
+ .I STC'="",CSTC'=STC Q 
+ .S OGS=$G(^EMKV(ID,"ogosp"))
+ .I GOSP'=9 Q:GOSP'=OGS 
+ .S OOP=$G(^EMKV(ID,"oopl"))
+ .I OO'=9 Q:OO'=OOP 
+ .S R=$G(^EMKV(ID,"stat"))
+ .S VR=$$KADRBR^NSNMPSP($G(^EMKV(ID,"brig")),"vr",D)
+ .S A=$G(^EMKV(ID,"nkv"))_"|"_$$DTM^DTUTL(D)_"|"
+ .S A=A_$G(^EMM("emkvst",+R))_"|"
+ .S A=A_$$FIOSH^YIPACN($G(^EMKV(ID,"nib")))_"|"
+ .S A=A_$$NAME^IINSC(CSTC)_"|"_$$FIOSH^IKADRY(VR)_"|"
+ .S A=A_$$TM^DTUTL($G(^EMKV(ID,"t_zb")))_"|"
+ .S A=A_($G(^EMKV(ID,"roadt"))-$G(^EMKV(ID,"roadf")))_"|"
+ .S A=A_(+$G(^EMKV(ID,"roadm")))_"|"
+ .S A=A_$S(OGS="":"",1:$G(YNL(OGS)))_"|"_$S(OOP="":"",1:$G(YNL(OOP)))
+ .D WC^RWU(CR_A)
+ D C^RWU
+ Q
+BYDIAG ; Кол-во по диагнозам
+ K ^BUF($J,"d")
+ N ID,R,H S H=$H
+ S ID="" F  S ID=$O(^EMKV(ID)) Q:ID=""  D
+ .Q:$G(^EMKV(ID,"stat"))'=2 
+ .S R=$G(^EMKV(ID,"diag")) Q:R="" 
+ .S ^BUF($J,"d",R)=$G(^BUF($J,"d",R))+1
+ D OWF^RWU(".txt"),WC^RWU("Диагноз|Количество")
+ S ID="" F  S ID=$O(^BUF($J,"d",ID)) Q:ID=""  D WC^RWU(CR_$$NAME^YMKB10(ID)_"|"_$G(^BUF($J,"d",ID)))
+ D C^RWU
+ K ^BUF($J,"d")
+ Q
+VRW(DS,DE) ; Выработка по врачам
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ K ^BUF($J,"v")
+ N ID,R,H,VR,D,T
+ S H=$H
+ S ID="" F  S ID=$O(^EMKV(ID)) Q:ID=""  D
+ .S D=$G(^EMKV(ID,"dts"))
+ .Q:+D<DS  Q:+D>DE  
+ .S R=$G(^EMKV(ID,"stat")),T=$G(^("t_zv")),VR=$G(^("brig"))
+ .S VR=+$$KADRBR^NSNMPSP(VR,"vr",D) Q:'VR 
+ .S ^(VR)=$G(^BUF($J,"v",VR))+1
+ .S:R=3 ^(1)=$G(^BUF($J,"v",VR,1))+1
+ .Q:R'=2
+ .S ^(2)=$G(^BUF($J,"v",VR,2))+1
+ .S:T ^(5)=$G(^(5))+T
+ D OWF^RWU(".txt"),WC^RWU("Сотрудник "_$$TXTP^DTUTL(DS,DE)_"|Вызовов всего|Отменено|Выполнено|Затрачено")
+ S ID="" F  S ID=$O(^BUF($J,"v",ID)) Q:ID=""  D WC^RWU(CR_$$FIO^YIKADRY(ID)_"|"_$G(^BUF($J,"v",ID))_"|"_$G(^(ID,1))_"|"_$G(^(2))_"|"_$$TM^DTUTL($G(^(5))))
+ K ^BUF($J,"v")
+ D C^RWU
+ Q
+BRW(DS,DE) ; Выработка по бригадам
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ K ^BUF($J,"v")
+ N ID,R,H,BR,D,T,K,M
+ S H=$H
+ S ID="" F  S ID=$O(^EMKV(ID)) Q:ID=""  D
+ .S D=$G(^EMKV(ID,"dts"))
+ .Q:+D<DS  Q:+D>DE  
+ .S R=$G(^EMKV(ID,"stat"))
+ .S T=$G(^("t_zv")),BR=$G(^("brig")),K=$G(^("road")),M=$G(^("roadm"))
+ .S BR=+$$GETGRP^ISNMPSP(BR,"num",D) Q:'BR 
+ .S ^(BR)=$G(^BUF($J,"v",BR))+1
+ .S:R=3 ^(1)=$G(^BUF($J,"v",BR,1))+1
+ .Q:R'=2
+ .S ^(2)=$G(^BUF($J,"v",BR,2))+1
+ .S:T ^(5)=$G(^(5))+T
+ .S:K ^(6)=$G(^(6))+K
+ .S:M ^(7)=$G(^(7))+M
+ D OWF^RWU(".txt"),WC^RWU("Бригада № "_$$TXTP^DTUTL(DS,DE)_"|Вызовов всего|Отменено|Выполнено|Затрачено|Пробег, км.|За КАД")
+ S ID="" F  S ID=$O(^BUF($J,"v",ID)) Q:ID=""  D WC^RWU(CR_ID_"|"_$G(^BUF($J,"v",ID))_"|"_$G(^(ID,1))_"|"_$G(^(2))_"|"_$$TM^DTUTL($G(^(5)))_"|"_$G(^(6))_"|"_$G(^(7)))
+ K ^BUF($J,"v")
+ D C^RWU
+ Q
+LST(DS,DE,DGX,MOD,VTM,AGEX) ; Перечень вызовов
+ ; MOD - стандартный/расширенный
+ ; VTM - представление времени
+ N ID,R,A,NI,DT,TM,DG,AGE,X,X1,X2,X3
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D OWF^RWU(".txt")
+ D WC^RWU("Дата|Время|Пациент "_$$TXTP^DTUTL(DS,DE)_"|Возраст|Договор|Бригада|Километраж|За МКАД|У больн.|"_$S(MOD:"На вызове|Затрачено|Прием|Передача|Прибытие|Оконч.|Возврат|",1:"")_"Повод|Диагноз")
+ S ID="" F  S ID=$O(^EMKV(ID)) Q:ID=""  D
+ .S R=$G(^EMKV(ID,"dts"))
+ .Q:(+R)<DS  Q:(+R)>DE
+ .S DT=$G(^("kvd")) S:DT="" DT=+R
+ .S NI=$G(^("nib")) Q:NI=""  ; без пац. не выводим
+ .S DG=$G(^("stc"))
+ .S TM=$G(^("t_priv"))
+ .S:TM="" TM=$P(R,",",2)
+ .S AGE=$$AGE^IPAC(NI,+DT)
+ .I AGEX Q:(AGEX=1)&(AGE<17)  Q:(AGEX=2)&(AGE>16) 
+ .S:DG="" DG=$$GET^IPAC(NI,"stc",+DT)
+ .I DGX'="",DGX'=DG Q 
+ .S A=$$DT^DTUTL(DT)_"|"_$$TM^DTUTL(TM)_"|"_$$FIO^ISNMP(ID)_"|"
+ .S A=A_AGE_"|"_$$NAME^IINSC(DG,+DT)_"|"
+ .S A=A_$$GETGRP^ISNMPSP($G(^EMKV(ID,"brig")),"num",R)_"|"
+ .S A=A_(+$G(^EMKV(ID,"road")))_"|"
+ .S A=A_(+$G(^EMKV(ID,"roadm")))_"|"
+ .S A=A_$$vtm($G(^EMKV(ID,"t_zb")))_"|"
+ .S:MOD X1=$G(^EMKV(ID,"t_pbv")),X2=$G(^("t_ov")),X3=$G(^("t_prv"))
+ .S:MOD A=A_$$vtm($G(^EMKV(ID,"t_zv")))_"|"
+ .S:MOD A=A_$$vtm($S(X2<X3:86400-X3+X2,1:X2-X3))_"|"
+ .S:MOD A=A_$$TM^DTUTL($G(^EMKV(ID,"t_priv")))_"|"
+ .S:MOD A=A_$$TM^DTUTL(X3)_"|"
+ .S:MOD A=A_$$TM^DTUTL(X1)_"|"
+ .S:MOD A=A_$$TM^DTUTL(X2)_"|"
+ .S:MOD A=A_$$TM^DTUTL($G(^EMKV(ID,"t_vv")))_"|"
+ .S A=A_$$OWF^TXTU($$NMPV^NSNMPSP($G(^EMKV(ID,"pvv"))),99)_"|"
+ .S A=A_$$NAME^YMKB10($G(^EMKV(ID,"diag")),99)
+ .D WC^RWU(CR_A)
+ D C^RWU
+ Q
+vtm(X) 
+ Q:VTM X\60
+ Q $$TM^DTUTL(X)
+REGIPROC 
+ Q:'+$G(^cfg("snmp")) 
+ N D S D="Отчеты СНМП"
+ S ^IPROC(D,"Вызовы")="SHWV_RSNMP,1,5,d,Период с,d,Период по,t@storage:dog,Договор,t@string:9/#1/Да#0/Нет,Госпитализация,t@string:9/#1/Да#0/Нет,Отказ от оплаты"
+ S ^IPROC(D,"Выработка по врачам")="VRW_RSNMP,1,2,d,Период вызовов с,d,Период по"
+ S ^IPROC(D,"Выработка по бригадам")="BRW_RSNMP,1,2,d,Период вызовов с,d,Период по"
+ S ^IPROC(D,"Вызовы по нозологиям")="BYDIAG_RSNMP,1,0"
+ S ^IPROC(D,"Перечень вызовов")="LST_RSNMP,1,6,d,Период с,d,Период по,t@storage:dog,Договор,t@string:0/Стандартный#1/Расширенный,Формат,t@string:0/часы-минуты#1/минуты,Представление времени,t@string:0/Нет#1/Взрослые#2/Дети,Ограничение возраста"
+ Q

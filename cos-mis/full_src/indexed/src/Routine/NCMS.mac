@@ -1,0 +1,364 @@
+NCMS ; Расписание контактов [ 07/21/2021  3:47 PM ]
+RUN ; From PAC FN
+ D MSG^RWU($G(^PP(0,1))_"<nb_console><run>RUN_REPORT{evlist.frm}</run></nb_console>",".xmlb")
+ Q
+INITA ; Инициализация формы evlista
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<evlista>")
+ D:$$LCL^IUSER("cms","showlpu") W^RWU("<table default=""Пациент:1600;Дата, время:1000;Тип:1600;Описание:2500;Статус:1000;Перенесено:900;Филиал:1100""/>")
+ D W^RWU("</evlista></nb_console>"),C^RWU
+ Q
+INIT ; Инициализация формы evlist
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<evlist>")
+ D:$$LCL^IUSER("cms","showlpu") W^RWU("<table default=""Дата, время:1200;Тип:1800;Описание:3300;Статус:1300;Перенесено на:1000;Филиал:1100""/>")
+ D W^RWU("</evlist></nb_console>"),C^RWU
+ Q
+TPLST ; Type list
+ N A,I,R,C,ATP
+ S ATP=$TR($$LCL^IUSER("cms","allowtp"),",|",";;"),C=CR
+ S:ATP'="" ATP=";"_ATP_";",C=""
+ S (I,A)=""
+ F  S I=$O(^CMM("start",I)) Q:I=""  S R=^(I) I $P(R,"|",2)'="sys",$P(R,"|",3)'=1,$S(ATP="":1,1:ATP[(";"_I_";")) S A=A_C_I_"|"_$P(R,"|",1),C=CR
+ D MSG^RWU(A)
+ Q
+TCLST ; Type of connection
+ N A,I S (I,A)=""
+ F  S I=$O(^CMM("tconn",I)) Q:I=""  S A=A_CR_I_"|"_$P(^(I),"|",1)
+ D MSG^RWU(A)
+ Q
+mkltp(TP) ; Создать список разрешенных типов
+ I TP'="" S LTP(TP)="" Q
+ ; не системные события
+ N I,R
+ S I="" F  S I=$O(^CMM("start",I)) Q:I=""  S R=^(I) I $P(R,"|",2)'="sys",$P(R,"|",3)'=1 S LTP(I)=""
+ Q
+TAB(NI,DT,TP,ST,OW) ; Show table
+ ; TP - тип события
+ ; ST - что показывать: 1-Предстоящие,2-Не выполненные,3-Выполненные,4-Просроченные 
+ ; OW - показывать собственно созданные
+ Q:NI="" 
+ N D,I,R,C,A,DE,T,LTP,sL
+ S DT=$$DI^DTUTL(DT),OW=$G(OW)
+ S D=$S(ST=1:"",DT="":"",ST=3:"",1:DT-1)
+ S DE=$S(ST=1:99999,DT="":999999,1:DT)
+ S DT=$S(DT'="":DT,ST=1:+$H,ST=4:+$H,1:"")
+ S:$$LCL^IUSER("cms","swown") OW=1
+ S sL=$$LCL^IUSER("cms","showlpu")
+ S OW=$S(OW:$$KDR^IUSER(),1:"")
+ D mkltp(TP)
+ D OWF^RWU(".txt")
+ F  S D=$O(^CMS("P",NI,D)) Q:D=""!(D>DE)  S I="" F  S I=$O(^CMS("P",NI,D,I)) Q:I=""  D
+ .S R=^(I),A=$P(R,"|",1)
+ .Q:ST=2&(A>1)  Q:ST=3&(A'=2) 
+ .Q:'$D(LTP(+$P(R,"|",6)))  
+ .S T=$P(R,"|",8)
+ .I ST=1 Q:A=2  I DT'="" Q:DT<$P(R,"|",7)   I T'="" Q:DT>T 
+ .I ST=4 Q:A>1  Q:DT<$P(R,"|",7)  Q:T=""  Q:T>DT  
+ .I ST=3 Q:DT>T 
+ .S C=$G(^(I,"c")),T=+$P(R,"|",2)
+ .I OW'="",'$D(^CMSI("owner",OW,"P",NI,D,I)) Q 
+ .S A=NI_"~"_D_"~"_I_"|"_$$DT2^DTUTL(D)_$S(T=0:"",1:","_$$TM^DTUTL(T))
+ .S A=A_"|"_$$NAME^ICCME("start",+$P(R,"|",6))_"|"_C_"|"
+ .S C=$O(^CMS("P",NI,D,I,"r",""),-1) S:C'="" C=^(C)
+ .S A=A_$$gSTAT(+$P(R,"|",1))_"|"_$$DT2^DTUTL(C)
+ .S:sL A=A_"|"_$$NAME^ICONTR($P($G(^CMS("P",NI,D,I,"i")),"|",3))
+ .D WC^RWU(CR_A)
+ D C^RWU
+ Q
+LstLT(NI,DT,TP,MODE) ; Show adv.list
+ ; TP - тип события
+ Q:NI="" 0
+ N D,I,R,C,A,DE,T,CC,X,H,LTP
+ S DT=$$DIH^DTUTL(DT),CC=$S(MODE=2:CR,1:""),X=0,H=+$H,TP=$G(TP)
+ D mkltp(TP)
+ S D="" F  S D=$O(^CMS("P",NI,D)) Q:D=""  S I="" F  S I=$O(^CMS("P",NI,D,I)) Q:I=""  D
+ .S R=^(I),A=$P(R,"|",1) 
+ .Q:A=2  I DT'="" Q:DT<$P(R,"|",7)   I $P(R,"|",8)'="" Q:DT>$P(R,"|",8) 
+ .S C=$G(^(I,"c")),T=+$P(R,"|",2)
+ .Q:'$D(LTP(+$P(R,"|",6))) 
+ .S A=$S(H=D:"Задача на сегодня",H>D:"Прошедшая задача",1:"Предстоящая задача")
+ .S A=$S(MODE:"RUN_MREPORT{evlistlt.frm}",1:NI_"~"_D_"~"_I)_"|"_A_$C(9)
+ .S A=A_$$DT2^DTUTL(D)_$S(T=0:"",1:","_$$TM^DTUTL(T))
+ .S A=A_$C(9)_$$NAME^ICCME("start",+$P(R,"|",6)_$S(C="":"",1:", "_C))
+ .D WC^RWU(CC_A) S CC=CR,X=X+1
+ Q X
+gSTAT(X) 
+ Q:X="" ""
+ Q $G(^CMM("cmsstat",X))
+INITT ; Initialize task form
+ N I,L
+ D OWF^RWU(".xmlb")
+ D W^RWU($G(^PP(0,1))_"<nb_console><ievlist><tp>")
+ S (I,L)=""
+ F  S I=$O(^CMM("start",I)) Q:I=""  S L=L_CR_I_"|"_$P(^(I),"|",1)
+ D WC^RWU(L_"</tp><stp>")
+ S (I,L)=""
+ F  S I=$O(^CMM("tconn",I)) Q:I=""  S L=L_CR_I_"|"_$P(^(I),"|",1)
+ D WC^RWU(L_"</stp></ievlist></nb_console>")
+ D C^RWU
+ Q
+L(KEY) ; load task
+ N NI,D,I,R,C
+ S NI=$P(KEY,"~",1),D=$P(KEY,"~",2),I=$P(KEY,"~",3)
+ I NI=""!(D="")!(I="") Q 
+ D OWF^RWU(".xmlb")
+ D W^RWU($G(^PP(0,1))_"<nb_console><ievlist>")
+ S R=$G(^CMS("P",NI,D,I)),C=$G(^(I,"c"))
+ D WTAGDC^RWU("id",KEY)
+ D WTAGDC^RWU("dt",$$DT^DTUTL(D))
+ D WTAGDC^RWU("tm",$$TM^DTUTL($P(R,"|",2)))
+ D WTAGDC^RWU("tp",$P(R,"|",6))
+ D WTAGDC^RWU("dsc",C)
+ D WTAGDC^RWU("stp",$P(R,"|",3))
+ D WTAGDC^RWU("tpc",$P(R,"|",9))
+ S C=$P(R,"|",7) S:C'="" C=D-$P(R,"|",7)
+ D WTAGDC^RWU("bday",C)
+ D WTAGDC^RWU("to",$$DT^DTUTL($P(R,"|",8)))
+ D W^RWU("</ievlist></nb_console>")
+ D C^RWU
+ Q
+S ; Save from network  
+ N @$$NEWVAR^YIXMLRR()
+ D RBUFH^YIXMLRR(1)
+ D W
+ Q
+W ; write
+ N X,R,D,NI,KEY,I,V,TP
+ S KEY=$G(XML("nb_console","ievlist","id")),X=0
+ S NI=$P(KEY,"~",1),D=$P(KEY,"~",2),I=$P(KEY,"~",3)
+ I I'="" S X=$G(^CMS("P",NI,D,I)) D RMIDX^ICMS("P",NI,D,I)
+ S:D="" D=$$DIH^DTUTL($G(XML("nb_console","ievlist","dt")))
+ S $P(X,"|",2)=$$TI^DTUTL($G(XML("nb_console","ievlist","tm")))
+ S TP=$G(XML("nb_console","ievlist","tp"))
+ S $P(X,"|",6)=TP
+ S $P(X,"|",3)=$G(XML("nb_console","ievlist","stp"))
+ S $P(X,"|",7)=D-$G(XML("nb_console","ievlist","bday"))
+ S $P(X,"|",8)=$$DI^DTUTL($G(XML("nb_console","ievlist","to")))
+ S $P(X,"|",9)=$G(XML("nb_console","ievlist","tpc"))
+ S V=$$KDR^IUSER()
+ I I'="" S ^CMS("P",NI,D,I)=X
+ I I="" L +^CMS("P",NI,D) S I=$O(^CMS("P",NI,D,""),-1)+1,^(I)=X L -^CMS("P",NI,D)
+ S ^CMS("P",NI,D,I,"c")=$G(XML("nb_console","ievlist","dsc"))
+ S ^CMS("P",NI,D,I,"i")=V_"|"_$G(%LOG)_"|"_$$^I("ilpu")_"|"_$H
+ D MKIDX^ICMS("P",NI,D,I)
+ D GL^IEXCH("^CMS","P",NI,D,I)
+ Q
+DEL(KEY) ; delete task	
+ I $$LCL^IUSER("cms","del")=0 D MSG^RWU("Нет прав") Q 
+ N NI,D,I
+ S NI=$P(KEY,"~",1),D=$P(KEY,"~",2),I=$P(KEY,"~",3)
+ D DO^ITRIG("cms","del")
+ D RMIDX^ICMS("P",NI,D,I)
+ I '$D(^CMS("P",NI,D,I)) Q 
+ K ^(I)
+ D KGL^IEXCH("^CMS","P",NI,D,I)
+ Q
+BEGIN(KEY) ; принять к исполнению
+ I $$LCL^IUSER("cms","begin")=0 D MSG^RWU("Нет прав") Q 
+ N NI,D,I
+ S NI=$P(KEY,"~",1),D=$P(KEY,"~",2),I=$P(KEY,"~",3)
+ I '$D(^CMS("P",NI,D,I)) Q 
+ S $P(^(I),"|",1)=1
+ D GL^IEXCH("^CMS","P",NI,D,I)
+ D DO^ITRIG("cms","begin")
+ Q
+MOVE(KEY,DT) ; переместить на другую дату
+ I $$LCL^IUSER("cms","move")=0 D MSG^RWU("Нет прав") Q 
+ N NI,D,I
+ S NI=$P(KEY,"~",1),D=$P(KEY,"~",2),I=$P(KEY,"~",3)
+ I '$D(^CMS("P",NI,D,I)) Q 
+ S DT=$$DIH^DTUTL(DT)
+ S $P(^(I),"|",1)=1,$P(^(I),"|",7)=DT,^(I,"r",$H)=DT
+ D GL^IEXCH("^CMS","P",NI,D,I)
+ D RMIDX^ICMS("P",NI,D,I)
+ D MKIDX^ICMS("P",NI,D,I)
+ D DO^ITRIG("cms","move")
+ Q
+END(KEY) ; завершить задачу
+ I $$LCL^IUSER("cms","end")=0 D MSG^RWU("Нет прав") Q 
+ N NI,D,I
+ S NI=$P(KEY,"~",1),D=$P(KEY,"~",2),I=$P(KEY,"~",3)
+ I '$D(^CMS("P",NI,D,I)) Q 
+ D SETST^ICMS("P",NI_"|"_D_"|"_I,2,1)
+ D DO^ITRIG("cms","end")
+ Q
+EPR ; Может быть вызвана при подписании документа
+ Q:$G(NI)=""!($G(ID)="") 
+ Q:$G(^EPRD(NI,ID,"notifydt"))=""  
+ N MOD
+ S MOD=+$G(^cfg("epr","notify-mode"))
+ I 'MOD,$G(^EPRD(NI,ID,"notify"))'=1  Q
+ I MOD=1,$G(^EPRD(NI,ID,"notnotify"))=1  Q 
+ N CB,TP,DT,I,A,V,AF,TEST
+ S CB=$S($D(^cfg("epr","notify-before")):^("notify-before"),1:7)
+ S AF=$G(^cfg("epr","notify-after")) S:'AF AF=1
+ S DT=$$DIH^DTUTL($G(^EPRD(NI,ID,"notifydt")))
+ S TP=$$FNDATP^ICCME("Повторная явка к врачу")
+ S A="",$P(A,"|",6)=TP,$P(A,"|",7)=DT-CB,$P(A,"|",8)=DT+AF
+ S V=$$KDR^IUSER()
+ S TEST=0
+ D DO^ITRIG("cms","epr-start")
+ Q:TEST 
+ L +^CMS("P",NI,DT)
+ S I=$O(^CMS("P",NI,DT,""),-1)+1,^(I)=A
+ L -^CMS("P",NI,DT)
+ S ^CMS("P",NI,DT,I,"i")=V_"|"_$G(%LOG)_"|"_$$^I("ilpu")_"|"_$H
+ S A=$G(^EPRD(NI,ID,"notifydsc"))
+ S A="Врач: "_$$FIOSH^IKADRY(V)_$S(A="":"",1:", "_A)
+ S:A'="" ^CMS("P",NI,DT,I,"c")=A
+ S ^EPR(NI,ID,"cms")=DT_","_I
+ D DO^ITRIG("cms","epr-end")
+ D MKIDX^ICMS("P",NI,DT,I)
+ D GL^IEXCH("^CMS","P",NI,DT,I)
+ Q
+eprINST ; Установить триггер на подписи документов если есть notifydt
+ N N
+ S N="" F  S N=$O(^DTYPE(N)) Q:N=""  I $D(^DTYPE(N,"fields","notofydt")),'$D(^DTYPE(N,"sbproc","EPR^NCMS")) S ^DTYPE(N,"sbproc","EPR^NCMS")="" D GL^IEXCH("^DTYPE",N,"sbproc","EPR^NCMS") 
+ Q
+ISEV(NI,DT) ; Есть невыполненные задачи на дату
+ S:$G(DT)="" DT=+$H
+ N D,I,R,F
+ S F=0,D=""
+ F  S D=$O(^CMS("P",NI,D)) Q:D=""!F  S I="" F  S I=$O(^CMS("P",NI,D,I)) Q:I=""!F  D
+ .S R=^(I),A=$P(R,"|",1) 
+ .Q:A=2  Q:DT<$P(R,"|",7)   I $P(R,"|",8)'="" Q:DT>$P(R,"|",8) 
+ .S F=1
+ Q F
+tapcnn(DE,TPX) ; Список для контакт центра
+ N DT,NI,I,D,T
+ S DE=$$DIH^DTUTL(DE)
+ S DT="" F  S DT=$O(^CMSI("dt",DT)) Q:DT=""!(DT>DE)  D   
+ .S NI="" F  S NI=$O(^CMSI("dt",DT,"P",NI)) Q:NI=""  D   
+ ..I TPX'="",'$D(^CMSI("type",TPX,"P",NI)) Q
+ ..S D="" F  S D=$O(^CMSI("dt",DT,"P",NI,D)) Q:D=""  S I="" F  S I=$O(^CMSI("dt",DT,"P",NI,D,I)) Q:I=""  D
+ ...S T=^(I)
+ ...I T'="" Q:DE>T  I DE>T Q 
+ ...Q:'$D(^CMS("P",NI,D,I)) 
+ ...S T=$G(^(I))
+ ...Q:$P(T,"|",1)=2  ; done
+ ...Q:$P(T,"|",6)'=TPX 
+ ...D WC^RWU(CR_NI_"@|"_$$FIO^IPAC(NI)_"|"_$$OWF^TXTU($$TELS^IPAC(NI),50)_"||")
+ Q
+TODONI(NI) ; Список невыполненных задач пациента
+ D TAB(NI,$$DT^DTUTL(+$H),"",1)
+ Q
+TODO(DS,DE,ST) ; Выполнение задач по пациентам
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D OWF^RWU(".txt")
+ D WC^RWU("И.б.|Пациент|Дата задачи|Тип задачи|Описание|Статус|Завершил")
+ N NI,D,I,R,C,A,T,SR,DT
+ S DS=$S(ST=1:"",1:DS),DE=$S(ST=1:999999,1:DE)
+ 
+ I ST'=2,ST'=3 S NI="" F  S NI=$O(^CMS("P",NI)) Q:NI=""  D
+ .S D=DS-1 F  S D=$O(^CMS("P",NI,D)) Q:D=""!(D>DE)  D
+ ..S I="" F  S I=$O(^CMS("P",NI,D,I)) Q:I=""  D TODOp
+ 
+ I ST=2!(ST=3) S DT=DS-1 F  S DT=$O(^CMSI("de",DT)) Q:DT=""!(DT>DE)  D
+ .S NI="" F  S NI=$O(^CMSI("de",DT,"P",NI)) Q:NI=""  D
+ ..S D="" F  S D=$O(^CMSI("de",DT,"P",NI,D)) Q:D=""  D
+ ...S I="" F  S I=$O(^CMSI("de",DT,"P",NI,D,I)) Q:I=""  D:$D(^CMS("P",NI,D,I)) TODOp
+ 
+ D C^RWU
+ Q
+TODOp 
+ S R=^(I),SR=$P(R,"|",1) Q:ST=2&(SR>1)  Q:ST=3&(SR'=2) 
+ S T=$P(R,"|",8),A=$P(R,"|",7)
+ I ST=1 Q:SR=2  Q:DE<A&(DS>A)  I T'="" Q:DE>T 
+ I ST=4 Q:SR>1  Q:DS<A  Q:T=""  Q:T'<DS 
+ S C=$G(^(I,"c"))
+ S A=NI_"|"_$$FIO^IPAC(NI)_"|"_$$DT2^DTUTL(D)
+ S A=A_"|"_$$NAME^ICCME("start",+$P(R,"|",6))_"|"_C_"|"
+ S R=$G(^CMS("P",NI,D,I,"p"))
+ D WC^RWU(CR_A_$$gSTAT(+SR)_"|"_$$FIO^ICMS($P(R,"|",4,5),1)_$S($P(R,"|",6):", "_$$DT2^DTUTL($P(R,"|",6))))
+ 
+ Q
+TODOLT(DS,TPX,DE,OW,TXT,OK) ; Невыполненные задачи по пациентам
+ ; DE - по дату
+ ; OW - по владельцу (0/1/2/3/4=свои/к исполнению/без исполн/с датой в периоде)
+ ; TPX - тип задачи
+ ; TXT - фильтр по описанию
+ ; OK - выполненные
+ D OWF^RWU(".txt")
+ D WC^RWU("Пациент")
+ N NI,DT,D,I,R,C,A,T,TP,DEE,KDR,MXD,sL
+ S DS=$$DIH^DTUTL(DS),TPX=$G(TPX),DE=$$DIH^DTUTL($G(DE)),OW=$G(OW)
+ S TXT=$$UL^TXTU($$WD^TXTU($G(TXT))),OK=+$G(OK)
+ S:$$LCL^IUSER("cms","swown") OW=$S(OW=2:2,1:1)
+ S sL=$$LCL^IUSER("cms","showlpu")
+ S MXD=$G(^cfg("cms","maxactive")) S:'MXD MXD=180
+ S KDR=$$KDR^IUSER()
+ S DEE=$S(DE="":DS+1,1:DE)
+ S DT=DS-MXD F  S DT=$O(^CMSI("dt",DT)) Q:DT=""!(DT>DEE)  D   
+ .S NI="" F  S NI=$O(^CMSI("dt",DT,"P",NI)) Q:NI=""  D   
+ ..I TPX'="",'$D(^CMSI("type",TPX,"P",NI)) Q
+ ..S D=$S(OW=4:DS-1,1:"") F  S D=$O(^CMSI("dt",DT,"P",NI,D)) Q:$S(D="":1,OW=4:D>DE,1:0)  S I="" F  S I=$O(^CMSI("dt",DT,"P",NI,D,I)) Q:I=""  D
+ ...S T=^(I)
+ ...I T'="",T<DS Q 
+ ...;I T'="" Q:DS>T  I DE'="",DE>T Q 
+ ...I OW=1,'$D(^CMSI("owner",KDR,"P",NI,D,I)) Q 
+ ...Q:'$D(^CMS("P",NI,D,I)) 
+ ...I OW=2 S R=$G(^(I,"p")) Q:R=""  Q:$P(R,"|",1)'="D"  Q:$P(R,"|",2)'=KDR 
+ ...I OW=3 S R=$G(^(I,"p")) Q:$P(R,"|",2)'="" 
+ ...S R=^CMS("P",NI,D,I),A=$P(R,"|",1),TP=+$P(R,"|",6)
+ ...I 'OK,A=2 Q 
+ ...I OK,A'=2 Q
+ ...I TPX'="",TPX'=TP Q 
+ ...S C=$G(^(I,"c")),T=+$P(R,"|",2)
+ ...I TXT'="",$$UL^TXTU(C)'[TXT q 
+ ...S A=NI_"~"_D_"~"_I_"|"_NI_" "_$$FIOSH^YIPACN(NI)_"|"
+ ...S A=A_$$DT2^DTUTL(D)_$S(T=0:"",1:","_$$TM^DTUTL(T))
+ ...S A=A_"|"_$$NAME^ICCME("start",TP)_"|"_C_"|"
+ ...S C=$O(^CMS("P",NI,D,I,"r",""),-1) S:C'="" C=^(C)
+ ...S A=A_$$gSTAT(+$P(R,"|",1))_"|"_$$DT2^DTUTL(C)
+ ...S:sL A=A_"|"_$$NAME^ICONTR($P($G(^CMS("P",NI,D,I,"i")),"|",3))
+ ...D WC^RWU(CR_A)
+ D C^RWU
+ Q
+HINFO(KEY) ; Информация по задаче в HTML
+ N TP,NI,DT,ID,R,X,Y,A
+ S NI=$P(KEY,"~",1),DT=$P(KEY,"~",2),ID=$P(KEY,"~",3),TP=$P(KEY,"~",4)
+ S:TP="" TP="P"
+ D MINHDR^IHTML("")
+ D CSS^IHTML
+ D W^RWU(CR_".hdr { background-color: #66CCFF; }")
+ D W^RWU(CR_".right { text-align: right; }")
+ D CSSE^IHTML
+ D W^RWU(CR_"</head><body>")
+ S R=$G(^CMS(TP,NI,DT,ID))
+ D WC^RWU(CR_"<b>Пациент:</b> "_$$FIO^IPAC(NI))
+ 
+ S A=$G(^CMS(TP,NI,DT,ID,"p")),X=$P(A,"|",1)
+ D:R'=""
+ .S X=$S(X="D":"Сотрудник",X="P":"Пациент",X="E":"Внешний исполнитель",1:"")
+ .S A=$P(A,"|",2)
+ .S A=$S(X="D":$$FIO^IKADRY(A),X="P":$$FIO^IPAC(A),X="E":"",1:"")
+ .D WC^RWU(CR_"<b>Исполнитель:</b> "_X_" "_A)
+ 
+ S X=$P(R,"|",1)
+ D:X=2 WC^RWU(CR_"<br><b><font color=""#FF0000"">Задача завершена.</font></b>")
+ D:X=9 WC^RWU(CR_"<br><b><font color=""#FF0000"">Задача отменена.</font></b>")
+ 
+ S X=$P(R,"|",6)
+ D:X'="" WC^RWU(CR_"<br><b>Тип задачи:</b> "_$$TAG^TXTU($$NAME^ICCME("start",X)))
+ S X=$P(R,"|",7)
+ D:X'="" WC^RWU(CR_"<br><b>Дата задачи:</b> "_$$DT^DTUTL(X))
+ S X=$P(R,"|",2)
+ D:X'="" WC^RWU(", <b>Время:</b> "_$$TM^DTUTL(X))
+ S X=$P(R,"|",8)
+ D:X'="" WC^RWU(CR_"<br><b>Дата окончания:</b> "_$$DT^DTUTL(X))
+ S X=$G(^CMS(TP,NI,DT,ID,"c"))
+ D:X'="" WC^RWU(CR_"<br><b>Описание:</b><br>"_$$TAG^TXTU(X))
+ S X=$P(R,"|",9)
+ D:X WC^RWU(CR_"<br><b>Персональная задача.</b>")
+ S X=$G(^CMS(TP,NI,DT,ID,"i"))
+ D:X'=""
+ .D WC^RWU(CR_"<hr><b>Создана:</b><br>"_$$DTM^DTUTL($P(X,"|",4))_", "_$$TAG^TXTU($$FIO^IKADRY($P(X,"|",1))))
+ .S Y=$P(X,"|",3)
+ .D:Y'="" WC^RWU(CR_"<br>Филиал: "_$$NAME^ICONTR(Y))
+ D END^IHTML
+ Q
+REGIPROC 
+ S ^IPROC("Задачи и Задания","Задачи по пациентам")="TODO_NCMS,1,3,d,Дата начала периода,d,Дата окончания периода,t@string:1/Предстоящие#2/Не выполненные#3/Выполненные#4/Просроченные,Показывать"
+ Q
+INITDB 
+ S ^CMM("cmsstat",0)="Не выполнено",^(1)="В работе",^(2)="Завершено",^(9)="Отменено"
+ Q

@@ -1,0 +1,149 @@
+IMLABU ; Внутренние утилиты КДЛ [ 11/25/2020  1:39 PM ]
+FPRNID(CLS) ; ID первого документа печати 
+ N ID,R
+ S ID="" F  S ID=$O(^LABT("PRN",ID)) Q:ID=""  I $P(^(ID),"|",2)=CLS,$G(^(ID,"zid"))="",$G(^("dgn"))="" Q 
+ Q ID
+FPRNIDP(CLS,ZI,DG) ; Поиск по ID заказчику или договору
+ N ID,R,REZ
+ S:ZI'="" ZI=","_ZI_","
+ S:DG'="" DG=","_DG_","
+ S (ID,REZ)=""
+ F  S ID=$O(^LABT("PRN",ID)) Q:ID=""  D:$P(^(ID),"|",2)=CLS  Q:REZ'=""
+ .S R=$G(^(ID,"zid"))
+ .I R'="",ZI'="",ZI[(","_R_",") S REZ=ID Q
+ .S R=$G(^("dgn"))
+ .I R'="",DG'="",DG[(","_R_",") S REZ=ID
+ Q REZ
+PRNFL(ID,FL) ; Получить поле шаблона печати
+ Q $G(^LABT("PRN",ID,"fl",FL))
+ZFIO(CON,ID) ; ФИО сотрудника заказчика
+ I CON=$$^I("ilpu") Q $$FIO^IKADRY(ID)
+ Q $$FIO^NPEOPL(ID)
+CORRPT(ID,PRC,SUMM) ; Коррекция шаблона по сумме
+ N U,S,SS,DX,MX
+ S U="",SS=0
+ F  S U=$O(^LABT("PU",ID,U)) Q:U=""  S SS=SS+$$PRICE^IPRICE(U,PRC)
+ Q:'SS 
+ S DX=SUMM/SS,MX="",SS=0
+ S U="" F  S U=$O(^LABT("PU",ID,U)) Q:U=""  D  
+ .S S=$$PRICE^IPRICE(U,PRC)
+ .S:S>$P(MX,"|",1) $P(MX,"|",1)=S,$P(MX,"|",2)=U
+ .S S=$J(S*DX,"",0),SS=SS+S
+ .S ^LABT("PU",ID,U)=S
+ S S=SUMM-SS
+ S:S'=0 U=$P(MX,"|",2),^(U)=^LABT("PU",ID,U)+S
+ Q
+ZAK2DGN(ZAK,DGN) ; Преобразовать услуги заказчика в договор
+ N NI,II,J,R,Z,VR,OT,KX,DT,ID,ULL
+ S NI="" F  S NI=$O(^MLAB(NI)) Q:NI=""  D
+ .S II="" F  S II=$O(^MLAB(NI,II)) Q:II=""  D
+ ..S Z=$G(^MLAB(NI,II,"zi")) Q:Z=""
+ ..Q:$P(Z,"|",1)'=ZAK
+ ..S ULL=$G(^("up")) Q:ULL=""
+ ..W "."
+ ..F J=1:1 S Z=$P(ULL,"|",J) Q:Z=""  S KX=$P(Z,"/",1),Z=$P(Z,"/",2),VR=$P(KX,":",1),OT=$P(KX,":",2),DT=$P(KX,":",3) D
+ ...F K=1:1 S ID=$P(Z,":",K) Q:ID=""  D SETDGN^IUSL(VR,DT,OT,ID,DGN)
+ Q
+RENPRM(FR,TO) ; Rename ID lab parameter
+ N NI,ID,DEV,R
+ ; move parameter settings
+ M ^LABT("T",TO)=^LABT("T",FR)
+ K ^LABT("T",FR)
+ ; convert in devices
+ S DEV="" F  S DEV=$O(^LABT("T",TO,"dev",DEV)) Q:DEV=""  D
+ .S R=$P(^(DEV),"|",1) Q:R=""
+ .S $P(^LABT("DEV",DEV,"t",R),"|",1)=TO
+ ; convert data
+ S NI="" F  S NI=$O(^MLAB(NI)) Q:NI=""  D
+ .S ID="" F  S ID=$O(^MLAB(NI,ID)) Q:ID=""  D:$D(^(ID,"d",FR))
+ ..M ^MLAB(NI,ID,"d",TO)=^MLAB(NI,ID,"d",FR)
+ ..K ^MLAB(NI,ID,"d",FR)
+ ..W "."
+ Q
+RENORM(TXT) ; Переформатирование 1 нормы в 2-е
+ ; возврат min|max|text
+ Q:TXT="" "|"
+ N X1,X2,N1,N2,F
+ S X1=$F(TXT,"-"),X2=$F(TXT,"-",X1)
+ I X1,X2,X1'=X2 Q "||"_TXT ; text nrm
+ S F=1
+ I TXT[" - " S X1=$P(TXT," - ",1),X2=$P(TXT," - ",2),N1=$$nn(X1),N2=$$nn(X2) S:N1'=""&(N2'="") F=0
+ I F,TXT["-" S X1=$P(TXT,"-",1),X2=$P(TXT,"-",2),N1=$$nn(X1),N2=$$nn(X2) S:N1'=""&(N2'="") F=0
+ I F,TXT["<" S X1=$P(TXT,"<",1),X2=$P(TXT,"<",2),N2=$$nn(X2) S:X1=""&(X2'="")&(N2'="") F=0,N1=""
+ I F,TXT[">" S X1=$P(TXT,">",1),X2=$P(TXT,">",2),N1=$$nn(X1) S:X2=""&(X1'="")&(N1'="") F=0,N2=""
+ Q:F "||"_TXT
+ Q N1_"|"_N2
+nn(X) 
+ I X[" " S X=$$TRIM^TXTU(X) Q:X[" " X
+ Q $$NNUM^TXTU(X)
+REBIO(FR,TO) ; Изменить биоматериал в заявках с .. на ..
+ N NI,ID
+ S NI="" F  S NI=$O(^MLAB(NI)) Q:NI=""  D
+ .S ID="" F  S ID=$O(^MLAB(NI,ID)) Q:ID=""  D
+ ..D:$D(^MLAB(NI,ID,"mi",FR))
+ ...M ^MLAB(NI,ID,"mi",TO)=^MLAB(NI,ID,"mi",FR)
+ ...K ^MLAB(NI,ID,"mi",FR)
+ ..D:$D(^MLAB(NI,ID,"s31","mi",FR))
+ ...M ^MLAB(NI,ID,"s31","mi",TO)=^MLAB(NI,ID,"s31","mi",FR)
+ ...K ^MLAB(NI,ID,"s31","mi",FR)
+ ..W "."
+ Q
+MKBIOC ; Создать биоматериалы (из списков лабораторий)
+ N L,LST,ID,R,M,IDX,NM
+ S ID="" F  S ID=$O(^LABT("M",ID)) Q:ID=""   S R=^(ID) S:R'="" LST($$LU^TXTU(R))=ID
+ S IDX=$O(^LABT("M",""),-1)+1
+ S L="" F  S L=$O(^LABC(L)) Q:L=""  D
+ .S M="" F  S M=$O(^LABC(L,"M",M)) Q:M=""  D
+ ..S R=^(M),NM=$$LU^TXTU($P(R,"|",2))
+ ..I $D(LST(NM)) s $P(^LABC(L,"M",M),"|",1)=LST(NM) Q  ; нашли
+ ..S ^LABT("M",IDX)=$P(R,"|",2) ; новый
+ ..S $P(^LABC(L,"M",M),"|",1)=IDX
+ ..S LST(NM)=IDX,IDX=IDX+1
+ Q
+RECNA(LAB) ; Присвоить внешние коды из ^CNA лаборатории
+ N LCN,R,K
+ S LCN="" F  S LCN=$O(^LABC(LAB,"CN",LCN)) Q:LCN=""  D
+ .S R=$G(^(LCN)) Q:R=""
+ .Q:$P(R,"|",1)'="" 
+ .S K=$G(^CNA($P(R,"|",2))) Q:K="" 
+ .S $P(^LABC(LAB,"CN",LCN),"|",1)=K
+ Q
+CORRDBL(DS,DE,DEL) ; Удаление дублирующихся записей
+ ; DEL=0/1 - удаление/поиск
+ N DT,ID,NI,P,LN,LNX,R,V
+ K ^BUF($J)
+ S DT="" F  S DT=$O(^MLABI("d",DT)) Q:DT=""!(DT>DE)  D
+ .S ID="" F  S ID=$O(^MLABI("d",DT,ID)) Q:ID=""  D
+ ..S NI=^MLABI("c",ID)
+ ..S (LN,P)="" F  S P=$O(^MLAB(NI,ID,"d",P)) Q:P=""  D
+ ...S LN=LN_"|"_P_":"_$P(^(P),"|",1)
+ ..Q:LN="" 
+ ..S LAB=$P($P($G(^MLAB(NI,ID,"lab")),"|",2),".",1)
+ ..S LNX=$$RSH^IHASH(LN)
+ ..S P="" F  S P=$O(^BUF($J,NI,LNX,P)) Q:P=""  D
+ ...Q:^(P)'=LN 
+ ...S V=^(P,"dt")
+ ...Q:^("l")'=LAB 
+ ...I V>(DT-2),V<(DT+2) w "." S F=1 D:DEL DEL^IMLAB(NI,ID)
+ ..Q:F="" 
+ ..S P=$O(^BUF($J,NI,LNX,P),-1)+1 
+ ..S ^BUF($J,NI,LNX,P)=LN,^(P,"dt")=DT,^("l")=LAB
+ K ^BUF($J)
+ Q
+ADDELB(USL,LAB,EBIO) ; Добавить биоматериал для внешней КДЛ
+ ; USL - Услуга из прейскуранта
+ ; EBIO - код внешнего биоматриала
+ Q:EBIO="" 
+ N CE
+ S CE=$G(^LABTI("LAB",LAB,"CN",USL)) Q:CE="" 
+ S ^LABC(LAB,"CN",CE,"b",EBIO)=""
+ D GL^IEXCH("^LABC",LAB,"CN",CE,"b",EBIO)
+ Q
+CLRELB(USL,LAB,EBIO) ; Очистить биоматериал для внешней КДЛ
+ ; USL - Услуга из прейскуранта
+ ; EBIO - код внешнего биоматриала (опционально)
+ N CE
+ S CE=$G(^LABTI("LAB",LAB,"CN",USL)) Q:CE="" 
+ I $G(EBIO)="" K ^LABC(LAB,"CN",CE,"b") D GL^IEXCH("^LABC",LAB,"CN",CE,"b")
+ I $G(EBIO)'="" K ^LABC(LAB,"CN",CE,"b",EBIO) D GL^IEXCH("^LABC",LAB,"CN",CE,"b",EBIO)
+ Q

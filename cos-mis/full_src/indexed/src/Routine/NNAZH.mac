@@ -1,0 +1,10 @@
+NNAZH ; Назначения по госпитализации [ 10/27/2017  2:32 PM ]
+ADDCL(ID) ; Добавить в список обзвона
+ N CL,CLI,NI
+ Q:ID=""  Q:'$D(^NAZ(ID))  
+ S CL=$$fndsUID^NCCNTR()
+ I CL="" D MSG^RWU("Список обзвона не найден.") Q 
+ S NI=$$NIB^INAZN(ID)
+ S CLI=$$ADDLI^NCCNTR(CL,NI,1)
+ S ^NAZ(ID,"cl")=CL_"@"_CLI,^CCNL(CL,CLI,"naz")=ID
+ Q

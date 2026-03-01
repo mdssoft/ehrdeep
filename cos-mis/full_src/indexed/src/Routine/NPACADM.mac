@@ -1,0 +1,1373 @@
+NPACADM ; Администрирование пациента [ 09/20/2024  2:42 PM ]
+INIT 
+ N R
+ D OWF^RWU(".xmlb")
+ D W^RWU(^PP(0,2)_"<admpac><cfg>")
+ D W^RWU("chkpas="_(+$$LCL^NUSER("pacadm","dchkpas")))
+ D W^RWU("</cfg>")
+ S R=$$LCL^IUSER("pacadm","pages")
+ D:R'=""
+ .I R'["u" D VIS^IO("page1",0),VIS^IO("btn_usl",0)
+ .I R'["b" D VIS^IO("page2",0),VIS^IO("btn_bill",0)
+ .I R'["e" D VIS^IO("page3",0),VIS^IO("btn_mhist",0)
+ .I R'["n" D VIS^IO("page4",0),VIS^IO("btn_nazn",0)
+ .I R'["o" D VIS^IO("page5",0),VIS^IO("btn_other",0)
+ D W^RWU("</admpac></nb_console>"),C^RWU
+ Q
+USL(NIB) ; Таблица услуг
+ N @$$NEWVAR^IUSL,ITS,ITE,KX,ID,UX,CEN,SUMM,SB,ITER,ITSB,OT,VR,VI,DT,FR
+ N KV,DTM,VF,SS,SUS,SU,SUi,IK,ITER,ITSA,ITSN,ITSF
+ S ITS="<item",ITER=" class=""1"">",ITE="</item>",ITSB=" class=""4"">"
+ S ITER=" class=""1"">",IK=" class=""5"">",ITSA=" class=""6"">",ITSN=" class=""9"">",ITSF=" class=""8"">"
+ D OWF^RWU(".xmlb")
+ D WC^RWU($G(^PP(0,2))_"<admpac><table><titles><key></key><item>Дата</item></titles>")
+ S DT="" F  S DT=$O(^PNF(NIB,DT)) Q:DT=""  S KX="",CSTC=$$GET^IPAC(NIB,"stc",DT) F  S KX=$O(^PNF(NIB,DT,KX)) Q:KX=""  D
+ .S DTM=$P(^(KX),"|",1)
+ .S OT=$P(KX,"|",2),VR=$P(KX,"|",1),ID=$P(KX,"|",3)
+ .D GET^IUSL(VR,DT,OT,ID,1)
+ .S STAT=$G(STAT)
+ .Q:STAT="d"!(STAT="")
+ .S ISTC=$G(ISTC)
+ .S:'$L(ISTC) ISTC=$$GET^IPAC(NIB,"stc",DT)
+ .S A="<row>"_"<key>"_VR_"@"_DT_"@"_OT_"@"_ID_"</key>"
+ .S B=ITS_">"_VR_" "_$$FIOSH^IKADRY(VR)_ITE_ITS_">"_$$NAME^IINSC($S(ISTC="":CSTC,1:ISTC))_ITE_ITS_">"_$$GET^ISPRAV("tprice",$G(PRC))_ITE_ITS_">"_$G(COMM)_ITE_ITS_">"_$$DTM^DTUTL(DTM)_ITE
+ .S SB=ITS_$S(45[STAT:ITSA,STAT?1N:ITSB,1:">")_$$DT2^DTUTL(DT)_ITE_ITS
+ .S VI=$$GET^IINSC(ISTC,"dvid",DT)
+ .S FLG=$G(FLG)
+ .S SUS=$$GETPL^IUSL(VR,DT,OT,ID,"s"),SUi=2
+ .S FR=$$GETPL^IUSL(VR,DT,OT,ID,"fr")
+ .S KV=(STAT=2)!("|"_FLG_"|"["|kss|")
+ .S UX=$O(UL("")) F  D USLprc S UX=$O(UL(UX)) Q:UX=""
+ D W^RWU("</table></admpac></nb_console>")
+ D C^RWU
+ Q
+USLprc 
+ S CNT=$S(UX="":"",1:UL(UX))
+ S CEN=$S(SUS'["|"&$L(SUS):SUS,SUS'="":$P(SUS,"|",SUi),1:$$USUM^IUSL(DT,UX,CNT))
+ S SUi=SUi+1
+ S C=A_SB_$S($D(ERR):ITER,1:">")_UX_ITE_ITS_$S(UX="":">",$D(ERR("USL",UX)):ITER,$$GETPL^IUSL(VR,DT,OT,ID,"f")'="":ITSN,1:">")
+ S C=C_$$TAG^TXTU($$NAMEH^IPRICE(UX,PRC,DT))_ITE_ITS_$S($D(ERR("FLG")):ITER,KV:IK,1:">")_$$FLGNMS^YIMHS(FLG)_ITE
+ S C=C_ITS_$S($D(ERR("DIA")):ITER,1:">")_$G(DIA)_ITE_ITS_">"_CNT_ITE
+ S C=C_ITS_$S(FR="":">",1:ITSF)
+ D WC^RWU(C_$S(UX="":UX,1:CEN)_ITE_B_"</row>"_CR)
+ Q
+UINFO(NIB,KEY) ; Информация по услуге
+ D VHTML^YNEDU($P(KEY,"@",1),$P(KEY,"@",2),$P(KEY,"@",3),$P(KEY,"@",4),1,1)
+ Q
+UINFOZ(NIB,KEY) ; Информация по отлазде з.п. по услуге
+ D TRACE^NZARPU($P(KEY,"@",1)_","_$P(KEY,"@",3)_","_$P(KEY,"@",2)_","_$P(KEY,"@",4))
+ Q
+UDEL(NIB,KEY,OK,TAB) ; Удалить
+ I $$chkr("usl","UDEL") Q  
+ N DT,VR,OT,ID,LP,ST,RCL,fL
+ D ukdec
+ I $$GETPL^IUSL(VR,DT,OT,ID,"kp")'="",%LOG'="admin" D MSG^RWU("Вы не можете удалять эту услугу, она в чеке") q 
+ S OK=+$G(OK),LP=+$$GETPL^IUSL(VR,DT,OT,ID,"l")
+ S RCL=$$GETPL^IUSL(VR,DT,OT,ID,"rcl")
+ S ST=$$GETSTAT^IUSL(VR,DT,OT,ID)
+ I 'OK,"wd"'[ST,$L($T(INIT^NZARP)),$$SBS^NZARP(LP,OT,VR,DT) D MSG^RWU("?У врача подписана ведомость по заработной плате, продолжить ?") Q  
+ I 'OK,RCL'="" D MSG^RWU("?Услуга является рекламацией, продолжить ?") Q
+ I 'OK,$$UisLAB^IMLAB(VR,DT,OT,ID) D MSG^RWU("?Услуга включена в заявку КДЛ, продолжить ?") Q 
+ D:$$UisLAB^IMLAB(VR,DT,OT,ID) RMULAB^IMLAB(VR,DT,OT,ID) ; del lab link
+ D:RCL="" RETUSL^YNED(VR,OT,$$SPEC^IKADRY(VR),DT,ID)
+ D:RCL'="" DHSYS^YNED(VR,OT,$$SPEC^IKADRY(VR),DT,ID)
+ Q:$$IsMSG^RWU()
+ D:'+$G(TAB) USL(NIB)
+ Q
+UANN(NIB,KEY,UCNT,TAB) ; Аннулировать
+ I $$chkr("usl","UANN") Q  
+ N DT,VR,OT,ID
+ D ukdec
+ D RCLUSL^YNED(VR,OT,"",DT,ID,1,$G(UCNT))
+ D ulog
+ Q:$$IsMSG^RWU()
+ D:'+$G(TAB) USL(NIB)
+ Q
+UANNR(NIB,KEY,TAB) ; Разаннулировать услугу 
+ I $$chkr("usl","UANNR") Q 
+ N DT,VR,OT,ID,X,BIL
+ D ukdec
+ S X=$$GETSTAT^IUSL(VR,DT,OT,ID)
+ I X=5 D MSG^RWU("Услуга является аннулирующей - продолжение невозможно.") Q 
+ I '$$RCLCNT^IUSL(VR,DT,OT,ID) D MSG^RWU("Указанная услуга не была аннулирована.") Q 
+ D RERECL^IUSL(VR,DT,OT,ID,"BIL")
+ D:$G(BIL)'="" DEL^IBILL(NIB,BIL)
+ D ulog
+ Q:$$IsMSG^RWU()
+ D:'+$G(TAB) USL(NIB)
+ Q
+USSUM(NIB,KEY,SUM,TAB) ; Изменить сумму
+ I $$chkr("usl","USSUM") Q 
+ N DT,VR,OT,ID,S,P
+ D ukdec
+ G:'$D(^ZNF(VR,OT,DT,ID)) USL+1
+ Q:$$chkann() 
+ S SUM=$TR(SUM,",",".")
+ S S=$$SETPL^IUSL(VR,DT,OT,ID,"s",SUM)
+ S P=$$GETPL^IUSL(VR,DT,OT,ID,"p")
+ D ulog
+ I P="" D USL(NIB) Q 
+ D REMBILL^IBILL(NIB,P,S-SUM,"") ; коррекция платежа
+ Q:$$IsMSG^RWU()
+ D:'+$G(TAB) USL(NIB)
+ Q
+USBS(NIB,KEY,TAB) ; Убрать подпись услуг
+ I $$chkr("usl","USBS") Q 
+ N DT,VR,OT,SP,ID,RCL,IDX
+ D ukdec
+ Q:$$chkann() 
+ S IDX=ID,NRM=0,RCL=2,SP=$$SPEC^IKADRY(VR)
+ D RETsys^YNED
+ Q:$$IsMSG^RWU()
+ D:'+$G(TAB) USL(NIB)
+ Q
+UDOSBS(NIB,KEY,TAB) ; Подписать услуги
+ I $$chkr("usl","UDOSBS") Q 
+ N DT,VR,OT,ID,UDT
+ D ukdec
+ D SBSYS^YNED(NIB,VR,OT,$$DT^DTUTL(DT),+$G(^cfg("credit")),"UDT",ID)
+ Q:$$IsMSG^RWU()
+ D:'+$G(TAB) USL(NIB)
+ Q
+UDOSBSA(NIB,TAB) ; Подписать все услуги
+ I $$chkr("usl","UDOSBSA") Q 
+ N DT,VR,OT,KX,LST
+ S DT="" F  S DT=$O(^PNF(NIB,DT)) Q:DT=""  D  Q:$$IsMSG^RWU() 
+ .K LST
+ .S KX="" F  S KX=$O(^PNF(NIB,DT,KX)) Q:KX=""  D  Q:$$IsMSG^RWU() 
+ ..S VR=$P(KX,"|",1),OT=$P(KX,"|",2)
+ ..Q:$D(LST(VR_"|"_OT)) 
+ ..D SBSYS^YNED(NIB,VR,OT,$$DT^DTUTL(DT),+$G(^cfg("credit")))
+ ..S LST(VR_"|"_OT)=""
+ Q:$$IsMSG^RWU()
+ D:'+$G(TAB) USL(NIB)
+ Q
+UPRC(NIB,KEY,PRC,RESS,TAB) ; Изменить прейскурант в услуге
+ ; RESS - сброс фикс. суммы
+ I $$chkr("usl","UPRC") Q 
+ N DT,VR,OT,SP,ID,RCL,IDX,NRM,P
+ D ukdec
+ Q:$$chkann() 
+ S IDX=ID,NRM=0,RCL=2,SP=$$SPEC^IKADRY(VR),RESS=+$G(RESS)
+ D:RESS'=2 RETsys^YNED
+ D SETPRC^IUSL(VR,DT,OT,ID,PRC)
+ I RESS=1,$$ISPL^IUSL(VR,DT,OT,ID,"s") S P=$$KILPL^IUSL(VR,DT,OT,ID,"s")
+ D ulog
+ Q:$$IsMSG^RWU()
+ D:'+$G(TAB) USL(NIB)
+ Q
+USKD(NIB,KEY,SKD,RESS,TAB) ; Изменить скидку в услуге
+ ; RESS - сброс фикс. суммы
+ I $$chkr("usl","USKD") Q 
+ N DT,VR,OT,SP,ID,RCL,IDX,NRM
+ D ukdec
+ Q:$$chkann() 
+ S IDX=ID,NRM=0,RCL=2,SP=$$SPEC^IKADRY(VR),RESS=+$G(RESS)
+ D RETsys^YNED
+ D SETSKD^IUSL(VR,DT,OT,ID,SKD)
+ I RESS,$$ISPL^IUSL(VR,DT,OT,ID,"s") S IDX=$$KILPL^IUSL(VR,DT,OT,ID,"s")
+ D ulog
+ Q:$$IsMSG^RWU()
+ D:'+$G(TAB) USL(NIB)
+ Q
+UCNT(NIB,KEY,CNT) ; Изменить количество услуг
+ I $$chkr("usl","UCNT") Q 
+ N DT,VR,OT,SP,ID,RCL,IDX,NRM,U
+ D ukdec
+ Q:$$chkann() 
+ S IDX=ID,NRM=0,RCL=2,SP=$$SPEC^IKADRY(VR),RESS=+$G(RESS)
+ D RETsys^YNED
+ D SETCNT^IUSL(VR,DT,OT,ID,$$NNUM^TXTU(CNT))
+ D ulog
+ Q:$$IsMSG^RWU()
+ S ID=$$KILPL^IUSL(VR,DT,OT,ID,"s")
+ D USL(NIB)
+ Q
+UDGN(NIB,KEY,DGN,TAB) ; Изменить договор в услуге
+ I $$chkr("usl","UDGN") Q 
+ N DT,VR,OT,SP,ID,RC
+ D ukdec
+ D SETDGN^IUSL(VR,DT,OT,ID,DGN)
+ S RC=$$GETPL^IUSL(VR,DT,OT,ID,"rcl")
+ I RC'="" S VR=$P(RC,"~",1),DT=$P(RC,"~",3),OT=$P(RC,"~",2),ID=$P(RC,"~",4) D SETDGN^IUSL(VR,DT,OT,ID,DGN)
+ D ulog
+ Q:$$IsMSG^RWU()
+ D:'+$G(TAB) USL(NIB)
+ Q
+UGETPRC(NIB,KEY) ; Получить прейскурант по услуге
+ N DT,VR,OT,SP,ID,@$$NEWVAR^IUSL()
+ D ukdec
+ D GET^IUSL(VR,DT,OT,ID,1) ; w. NOER
+ D MSG^RWU($$CORCP^IPRICET($G(PRC)))
+ Q
+UGETCNT(NIB,KEY) ; Получить кол-во по услуге
+ N DT,VR,OT,SP,ID,@$$NEWVAR^IUSL(),U
+ D ukdec
+ D GET^IUSL(VR,DT,OT,ID,1) ; w. NOER
+ S U=$O(UL(""))
+ D MSG^RWU($S(U'="":UL(U),1:""))
+ Q
+UCOD(NIB,KEY,USL,TAB) ; Изменить код услуги
+ I $$chkr("usl","UCOD") Q 
+ N DT,VR,OT,SP,ID,RCL,IDX,NRM
+ D ukdec
+ Q:$$chkann() 
+ S IDX=ID,NRM=0,RCL=2,SP=$$SPEC^IKADRY(VR),RESS=+$G(RESS)
+ D RETsys^YNED
+ D SETUSL^IUSL(VR,DT,OT,ID,USL)
+ D ulog
+ Q:$$IsMSG^RWU()
+ S ID=$$KILPL^IUSL(VR,DT,OT,ID,"s")
+ D:'$G(TAB) USL(NIB)
+ Q
+USDT(NIB,KEY,NDT,TAB) ; Изменить дату
+ I $$chkr("usl","USDT") Q 
+ N DT,VR,OT,ID,NID,P,D,T,R,Z,X,I,RR,F
+ S NDT=$$DIH^DTUTL(NDT)
+ D ukdec
+ Q:$$uchk()  
+ ; find free ID
+ S NID=ID F  Q:'$D(^ZNF(VR,OT,NDT,NID))  S NID=NID+1
+ ; Move
+ S RR=$G(^ZNF(VR,OT,DT,ID,"rcl"))
+ M ^PNF(NIB,NDT,VR_"|"_OT_"|"_NID)=^PNF(NIB,DT,VR_"|"_OT_"|"_ID)
+ M ^ZNF(VR,OT,NDT,NID)=^ZNF(VR,OT,DT,ID)
+ K ^PNF(NIB,DT,VR_"|"_OT_"|"_ID),^ZNF(VR,OT,DT,ID)
+ S ^ZNFL(VR,OT,NDT,NID,$H)=$$USR^IUSER()_"|"_$$KDR^IUSER()
+ I RR'="" S $P(^ZNF($P(RR,"~",1),$P(RR,"~",2),$P(RR,"~",3),$P(RR,"~",4),"rcl"),"~",3)=NDT
+ S F=0
+ I $D(^ZNFE(VR,OT,DT,ID)) M ^ZNFE(VR,OT,NDT,NID)=^ZNFE(VR,OT,DT,ID) k ^ZNFE(VR,OT,DT,ID) S F=1
+ ; index
+ I '$D(^PNF(NIB,DT)),$D(^ZNFI("dn",DT,NIB)) K ^(NIB) D KGL^IEXCH("^ZNFI","dn",DT,NIB)
+ I '$D(^ZNFI("dn",NDT,NIB)) S ^(NIB)="" D GL^IEXCH("^ZNFI","dn",NDT,NIB)
+ ; update
+ D KGL^IEXCH("^ZNF",VR,OT,DT,ID)
+ D KGL^IEXCH("^PNF",NIB,DT,VR_"|"_OT_"|"_ID)
+ D:RR'="" GL^IEXCH("^ZNF",$P(RR,"~",1),$P(RR,"~",2),$P(RR,"~",3),$P(RR,"~",4),"rcl")
+ D:F KGL^IEXCH("^ZNFE",VR,OT,DT,ID),GL^IEXCH("^ZNFE",VR,OT,NDT,NID)
+ ; платежи
+ S P=$G(^ZNF(VR,OT,NDT,NID,"p"))
+ D:$L(P)
+ .S D=$P(P,",",1),T=$P(P,",",2),P=$G(^BILL(NIB,D,T))
+ .I P="" K ^ZNF(VR,OT,NDT,NID,"p") Q  ; ! уже нет платежей
+ .S R=$P(P,"|",6),Z=$P(R,"/",1),$P(Z,":",4)=NDT,$P(R,"/",1)=Z
+ .F I=2:1:99 S Z=$P(R,"/",I) Q:Z=""  I $P(Z,":",3)=ID S $P(Z,":",3)=NID,$P(R,"/",I)=Z
+ .S $P(P,"|",6)=R,^(T)=P
+ .D UPD^IEXCH("IBILL",NIB_","_D)
+ ; назначения
+ S P=$G(^ZNF(VR,OT,NDT,NID,"f"))
+ D:$L(P) CNGU^INAZN(P,OT_"@"_VR_"@"_DT_"@"_ID,OT_"@"_VR_"@"_NDT_"@"_NID)
+ ; лаборатория
+ S P=$G(^ZNF(VR,OT,NDT,NID,"li"))
+ D:P'="" CNGUDT^IMLAB(NIB,P,VR,DT,OT,ID,NDT) ; TODO - ID-NID
+ 
+ D UPD^IUSL(VR,OT,NDT,NID,NIB)
+ D:'$G(TAB) USL(NIB)
+ Q:$G(TAB)=2 VR_"@"_NDT_"@"_OT_"@"_NID
+ Q
+USVR(NIB,KEY,NVR,TAB) ; Изменить врача
+ Q:'$$CHECK^YIKADRY(NVR) 
+ I $$chkr("usl","USVR") Q 
+ N DT,VR,OT,ID,X,RC
+ D ukdec
+ Q:VR=NVR 
+ Q:$$uchk() 
+ S X=$$MOV^IUSL(VR,DT,OT,ID,NVR,"")
+ D:'$G(TAB) USL(NIB)
+ Q
+USOT(NIB,KEY,NOTD,TAB) ; Изменить отделение
+ Q:'$$CHECK^ISPRAV("otd",NOTD) 
+ I $$chkr("usl","USOT") Q 
+ N DT,VR,OT,ID,X
+ D ukdec
+ Q:OT=NOTD 
+ Q:$$uchk()  
+ S X=$$MOV^IUSL(VR,DT,OT,ID,"",NOTD)
+ D:'$G(TAB) USL(NIB)
+ Q
+UGRNL(NIB,KEY,GRN,GRNID,TAB) ; По гарантийному письму
+ I $$chkr("usl","UGRNL") Q 
+ N DT,VR,OT,ID,IDX,NRM,RCL,SP,ST,X
+ D ukdec
+ Q:$$chkann() 
+ S IDX=ID,NRM=0,RCL=3,SP=$$SPEC^IKADRY(VR),GRN=$$WD^TXTU($G(GRN))
+ S ST=$$GETSTAT^IUSL(VR,DT,OT,ID)
+ I ST=2 S RCL=5 D RETsys^YNED S RCL=3 ; было по кассе, убираем
+ D RETsys^YNED
+ I GRNID'="" S X=$$SETPL^IUSL(VR,DT,OT,ID,"g",GRNID),GRN=""
+ D:GRN'="" SETCM^IUSL(VR,DT,OT,ID,$$GETCM^IUSL(VR,DT,OT,ID)_GRN)
+ S X=""
+ D:ST=2 SBSYS^YNED(NIB,VR,OT,$$DT^DTUTL(DT),+$G(^cfg("credit")),"X",ID)
+ Q:$$IsMSG^RWU()
+ D:'$G(TAB) USL(NIB)
+ Q
+UNGRNL(NIB,KEY) ; Без гарантийного письма
+ I $$chkr("usl","UNGRNL") Q 
+ N DT,VR,OT,ID,IDX,NRM,RCL,SP,ST,X
+ D ukdec
+ Q:$$chkann() 
+ S IDX=ID,NRM=0,RCL=6
+ D RETsys^YNED
+ D ulog
+ Q:$$IsMSG^RWU()
+ D USL(NIB)
+ Q
+UNKSSC(NIB,KEY) ; Не по кассе, проверка
+ N DT,VR,OT,ID,X,Y
+ D ukdec
+ Q:$$chkann()  
+ S X=$$GETDGN^IUSL(VR,DT,OT,ID)
+ S Y=$$GET^IINSC(X,"dvid",DT)
+ I Y=3 D MSG("Вы пытаетесь изменить кассовую услугу у индивидуального пациента") Q
+ Q
+UNKSS(NIB,KEY,TAB) ; Не по кассе
+ I $$chkr("usl","UNKSS") Q 
+ N DT,VR,OT,ID,IDX,NRM,RCL,SP
+ D ukdec
+ Q:$$chkann()  
+ S IDX=ID,NRM=0,RCL=5,SP=$$SPEC^IKADRY(VR)
+ D RETsys^YNED
+ D ulog
+ Q:$$IsMSG^RWU()
+ D:'$G(TAB) USL(NIB)
+ Q
+UKSS(NIB,KEY,TAB) ; По кассе
+ I $$chkr("usl","UKSS") Q 
+ N DT,VR,OT,ID
+ D ukdec
+ Q:$$chkann() 
+ S IDX=ID,NRM=0,RCL=4,SP=$$SPEC^IKADRY(VR)
+ D RETsys^YNED
+ Q:$$IsMSG^RWU() 
+ D SBSYS^YNED(NIB,VR,OT,DT,$G(^cfg("credit")),,ID)
+ D ulog
+ Q:$$IsMSG^RWU() 
+ D:'$G(TAB) USL(NIB)
+ Q
+UDIA(NIB,KEY,DIA,TAB) ; Изменить диагноз
+ I $$chkr("usl","UDIA") Q 
+ N DT,VR,OT,ID
+ D ukdec
+ S DIA=$$RECODE^YMKB10($$WD^TXTU(DIA))
+ D SETDI^IUSL(VR,DT,OT,ID,DIA)
+ D ulog
+ D:'+$G(TAB) USL(NIB)
+ Q
+ULPU(NIB,KEY,LPU,TAB) ; Изменить филиал
+ I $$chkr("usl","ULPU") Q 
+ N DT,VR,OT,ID
+ D ukdec
+ D SETLPU^IUSL(VR,DT,OT,ID,+LPU)
+ D:'+$G(TAB) USL(NIB)
+ Q
+UNAZ(NIB,KEY,NAZ,TAB) ; Изменить назначение
+ I $$chkr("usl","UNAZ") Q 
+ N DT,VR,OT,ID,X,NI,U,I,UL,KSS,RC
+ D ukdec
+ S:$E(NAZ)="+" NAZ=$$MKFTO^INAZN(NIB,$E(NAZ,2,99),VR,1)
+ S NI=NIB
+ S U=$$GETUSLS^IUSL(VR,DT,OT,ID),X=$P($P(U,"/",1),"*",2)
+ S:X="" X=1
+ S UL($P($P(U,"/",1),"*",1))=X
+ S I=$$FUSLID^INAZN(NAZ,U,OT_"@"_VR_"@"_DT_"@"_ID)
+ S KSS=$S($$IsKSS^INAZN(NAZ):"kss",1:"")
+ ; Если не нашли эту услугу в назначениях
+ I I'="" S X=$$STFLG^TXTU($$FLG^INAZN(NAZ,I),KSS) D:X'="" ADDFLG^IUSL(VR,DT,OT,ID,X) D EXS^INAZN(NAZ,I,$$GETDTM^IUSL(VR,DT,OT,ID))
+ S X=$$SETPL^IUSL(VR,DT,OT,ID,"f",NAZ)
+ S RC=$$GETPL^IUSL(VR,DT,OT,ID,"rcl")
+ I RC'="" S VR=$P(RC,"~",1),DT=$P(RC,"~",3),OT=$P(RC,"~",2),ID=$P(RC,"~",4),X=$$SETPL^IUSL(VR,DT,OT,ID,"f",NAZ)
+ D ulog
+ D:'$G(TAB) USL(NIB)
+ Q
+UMOV(NIB,KEY,TNIB,TAB) ; Переместить на другого пациента
+ I $$chkr("usl","UMOV") Q 
+ Q:'$$EXIST^IPAC(TNIB)  Q:NIB=TNIB 
+ N DT,VR,OT,ID
+ D ukdec
+ Q:$$chkann() 
+ D ulog
+ D MOVUSL^NDBLPAC(VR,DT,OT,ID,TNIB)
+ D:'$G(TAB) USL(NIB)
+ Q
+UCPY(NIB,KEY,TNIB,TAB) ; Скопировать на другого пациента
+ I $$chkr("usl","UCPY") Q 
+ Q:'$$EXIST^IPAC(TNIB)  Q:NIB=TNIB 
+ N DT,VR,OT,ID
+ D ukdec
+ Q:$$chkann() 
+ S ID=$$CPYNI^IUSL(VR,DT,OT,ID,TNIB)
+ D:'$G(TAB) USL(NIB)
+ Q
+USPEC(NIB,KEY,SP,TAB) ; Изменить специальность
+ I $$chkr("usl","USPEC") Q 
+ N DT,VR,OT,ID
+ D ukdec
+ D SETSP^IUSL(VR,DT,OT,ID,SP)
+ D ulog
+ D:'$G(TAB) USL(NIB)
+ Q
+UTOZLST(NIB,KEY) ; Виды отправки в расчет ЗП
+ I $$chkr("usl","UTOZLST") Q 
+ N DT,VR,OT,ID,A
+ D ukdec
+ S A=""
+ S:$$GETPL^IUSL(VR,DT,OT,ID,"f")'="" A=A_CR_"1|Назначивший сотрудник"
+ S:$$GETPL^IUSL(VR,DT,OT,ID,"cw")'="" A=A_CR_"2|Соисполнитель"
+ S:A'="" %L="0|Исполнитель услуги"_A
+ D MSG^RWU(A)
+ Q
+UTOZRP(NIB,KEY,MOD,OK) ; В расчет ЗП
+ I $$chkr("usl","UTOZRP") Q 
+ N DT,VR,OT,ID
+ S MOD=+$G(MOD),OK=+$G(OK)
+ D ukdec
+ I 'OK,$$GETPL^IUSL(VR,DT,OT,ID,"zrp") D MSG^RWU("?По услуге произведен расчет зарплаты, продолжить ?") Q  
+ D TOZRP^IZARP(VR,DT,OT,ID,MOD)
+ Q
+UFRZRP(NIB,KEY,MOD) ; Из расчета ЗП
+ ; MOD - 0/1/2 = основной/по направлению/соисполнитель
+ I $$chkr("usl","UFRZRP") Q 
+ N DT,VR,OT,ID,O,V,LP
+ S MOD=+$G(MOD)
+ D ukdec
+ D FRZRP^IZARP(VR,DT,OT,ID,MOD)
+ Q
+UCLRZRPL(NIB,KEY,MOD) ; Сбросить период расчета ЗП
+ ; MOD - 0/1/2 = основной/по направлению/соисполнитель
+ I $$chkr("usl","UFRZRP") Q 
+ N DT,VR,OT,ID,O,V,LP,KX
+ S MOD=+$G(MOD)
+ D ukdec
+ S O=$S($G(^cfg("zarp","nootd")):0,OT=999:$$OTD^IKADRY(VR),1:OT)
+ S LP=$$GETPL^IUSL(VR,DT,OT,ID,"l")
+ S:LP="" LP=+$$^I("ilpu")
+ S KX=VR_"|"_OT_"|"_DT_"|"_ID
+ S V="" F  S V=$O(^ZARPI("uexclog",LP,O,V)) Q:V=""  D
+ .K ^ZARPI("uexclog",LP,O,V,KX)
+ .D KGL^IEXCH("^ZARPI","uexclog",LP,O,V,KX)
+ S V="" F  S V=$O(^ZARPI("uexcr",V)) Q:V=""  D:$D(^(V,KX))
+ .K ^ZARPI("uexcr",V,KX)
+ .D KGL^IEXCH("^ZARPI","uexcr",V,KX)
+ S KX=$$KILPL^IUSL(VR,DT,OT,ID,"zrp")
+ S KX=$$KILPLE^IUSL(VR,DT,OT,ID,"zrp")
+ Q
+UDBGZRP(NIB,KEY) ; Изменить статус отладки ЗП
+ I $$chkr("usl","UDBGZRP") Q 
+ N DT,VR,OT,ID,K,X
+ S MOD=+$G(MOD)
+ D ukdec
+ S K=VR_","_OT_","_DT_","_ID,X=$G(^ZARPI("trace",K))
+ S:'X ^ZARPI("trace",K)=1
+ K:X ^ZARPI("trace",K)
+ Q
+UNZUBG(NIB,KEY) ; Получить № зуба
+ N DT,VR,OT,ID
+ D ukdec
+ D MSG^RWU($TR($$GETPL^IUSL(VR,DT,OT,ID,"nz"),"/|",",,"))
+ Q
+UNZUB(NIB,KEY,ZUB,TAB) ; Изменить № зуба
+ I $$chkr("usl","UNZUB") Q 
+ N DT,VR,OT,ID
+ S ZUB=$$TRIM^TXTU(ZUB)
+ D ukdec
+ S ZUB=$$RECODE^ISTOM(ZUB)
+ S ID=$$SETPL^IUSL(VR,DT,OT,ID,"nz",ZUB)
+ D:'$G(TAB) USL(NIB)
+ Q
+UCOWRK(NIB,KEY,CW,TAB) ; Установить соисполнителя
+ I $$chkr("usl","UCOWRK") Q  
+ N DT,VR,OT,ID
+ D ukdec
+ S ID=$$SETPL^IUSL(VR,DT,OT,ID,"cw",CW)
+ D:'$G(TAB) USL(NIB)
+ Q
+UAGC(NIB,KEY,AGC,TAB) ; Установить агента
+ I $$chkr("usl","UAGC") Q 
+ N DT,VR,OT,ID
+ D ukdec
+ S ID=$$SETPL^IUSL(VR,DT,OT,ID,"ag",AGC)
+ D:'$G(TAB) USL(NIB)
+ Q
+UNPG(NIB,KEY) ; Без программы
+ I $$chkr("usl","UNPG") Q 
+ N DT,VR,OT,ID,IDX,NRM,RCL,SP,ST,X
+ D ukdec
+ Q:$$chkann()  
+ S IDX=ID,NRM=0,RCL=3,SP=$$SPEC^IKADRY(VR)
+ S ST=$$GETSTAT^IUSL(VR,DT,OT,ID)
+ I ST=2 S RCL=5 D RETsys^YNED S RCL=3 ; было по кассе, убираем
+ D RETsys^YNED ; добавляем ГП (RCL=3)
+ D ADDFLG^IUSL(VR,DT,OT,ID,"npg")
+ S X=""
+ D:ST=2 SBSYS^YNED(NIB,VR,OT,$$DT^DTUTL(DT),+$G(^cfg("credit")),"X",ID)
+ D ulog
+ Q:$$IsMSG^RWU() 
+ D USL(NIB)
+ Q
+UNOP(NIB,KEY) ; Бесплатно
+ I $$chkr("usl","UNOP") Q 
+ N DT,VR,OT,ID,IDX,NRM,RCL,SP,ST,X
+ D ukdec
+ Q:$$chkann()  
+ S IDX=ID,NRM=0,SP=$$SPEC^IKADRY(VR)
+ S ST=$$GETSTAT^IUSL(VR,DT,OT,ID)
+ I ST=2 S RCL=5 D RETsys^YNED D ADDFLG^IUSL(VR,DT,OT,ID,"kss") ; было по кассе, возврат, флаг оставить
+ D ADDFLG^IUSL(VR,DT,OT,ID,"nop")
+ S X=""
+ D:ST=2 SBSYS^YNED(NIB,VR,OT,$$DT^DTUTL(DT),+$G(^cfg("credit")),"X",ID)
+ D ulog
+ Q:$$IsMSG^RWU() 
+ D USL(NIB)
+ Q
+UNNOP(NIB,KEY) ; Отмена бесплатной услуги
+ I $$chkr("usl","UNNOP") Q 
+ N DT,VR,OT,ID,IDX,NRM,RCL,SP,ST,X
+ D ukdec
+ Q:$$chkann()  
+ S IDX=ID,NRM=0,SP=$$SPEC^IKADRY(VR)
+ S ST=$$GETSTAT^IUSL(VR,DT,OT,ID)
+ I ST=2 S RCL=2 D RETsys^YNED ; если по кассе, убираем подпись
+ D EXFLG^IUSL(VR,DT,OT,ID,"nop")
+ S X=""
+ D:ST=2 SBSYS^YNED(NIB,VR,OT,$$DT^DTUTL(DT),+$G(^cfg("credit")),"X",ID)
+ D ulog
+ Q:$$IsMSG^RWU() 
+ D USL(NIB)
+ Q
+URKL(NIB,KEY,TAB,SET) ; По рекламации
+ ; SET - установить/снять принудииельно (0/1)
+ I $$chkr("usl","URKL") Q 
+ N DT,VR,OT,ID,IDX,NRM,RCL,SP,ST,X
+ D ukdec
+ Q:$$chkann()  
+ I $G(SET)="" S SET='+$$IsFLG^IUSL(VR,DT,OT,ID,"rkl")
+ D:SET ADDFLG^IUSL(VR,DT,OT,ID,"rkl")
+ D:'SET EXFLG^IUSL(VR,DT,OT,ID,"rkl")
+ D ulog
+ Q:$$IsMSG^RWU() 
+ D:'$G(TAB) USL(NIB)
+ Q
+UGFLG(NIB,KEY) ; Получить флаги услуг
+ N DT,VR,OT,ID
+ D ukdec
+ D MSG^RWU($$GETFLG^IUSL(VR,DT,OT,ID))
+ Q
+USFLG(NIB,KEY,ST,TAB) ; Установить статусы услуг
+ I $$chkr("usl","USFLG") Q 
+ N DT,VR,OT,ID,STR,I,F,REZ,SRC
+ S ST=$$WD^TXTU(ST)
+ D ukdec
+ S STR=$$GETFLG^IUSL(VR,DT,OT,ID)
+ S SRC=$$FLGLN^YIMHS("","","",1)
+ 
+ F I=1:1:$L(ST,"|") D
+ .S F=$P(ST,"|",I) Q:F="" 
+ .S:'$$FLinFL^TXTU(STR,F) STR=$$STFLG^TXTU(STR,F)
+ S REZ=STR
+ F I=1:1:$L(STR,"|") D
+ .S F=$P(STR,"|",I)
+ .Q:$S(F="kss":1,F="grn":1,F="rkl":1,1:0)
+ .I SRC'="",'$$FLinFL^TXTU(SRC,F) Q 
+ .S:'$$FLinFL^TXTU(ST,F) REZ=$$EXFLG^TXTU(REZ,F)
+ 
+ D SETFLG^IUSL(VR,DT,OT,ID,REZ)
+ D ulog
+ D:'$G(TAB) USL(NIB)
+ Q
+UKVG(NIB,KEY) ; Получить № квитанции
+ N DT,VR,OT,ID
+ D ukdec
+ D MSG^RWU($$GETPL^IUSL(VR,DT,OT,ID,"kv"))
+ Q
+UKV(NIB,KEY,KV,TAB) ; Изменить № квитанции
+ I $$chkr("usl","UKV") Q 
+ N DT,VR,OT,ID
+ S KV=$$TRIM^TXTU(KV)
+ D ukdec
+ S KV=$$SETPL^IUSL(VR,DT,OT,ID,"kv",KV)
+ D ulog
+ D:'$G(TAB) USL(NIB)
+ Q
+UNDS(NIB,KEY,SUM,TAB) ; Изменить сумму НДС
+ I $$chkr("usl","UNDS") Q 
+ N DT,VR,OT,ID
+ D ukdec
+ S SUM=$$SETPL^IUSL(VR,DT,OT,ID,"nds",$$NNUM^TXTU(SUM))
+ D ulog
+ D:'$G(TAB) USL(NIB)
+ Q
+UECSUMG(NIB,KEY) ; Получить примечание сумму контрагенту
+ N DT,VR,OT,ID
+ D ukdec
+ D MSG^RWU($P($$GETPL^IUSL(VR,DT,OT,ID,"c"),"|",1))
+ Q
+UECSUM(NIB,KEY,SUM,TAB) ; Изменить сумму контрагенту
+ I $$chkr("usl","UECSUM") Q 
+ N DT,VR,OT,ID,X
+ D ukdec
+ S X=$$GETPL^IUSL(VR,DT,OT,ID,"c")
+ S $P(X,"|",1)=$$NNUM^TXTU(SUM)
+ S SUM=$$SETPL^IUSL(VR,DT,OT,ID,"c",X)
+ D ulog
+ D:'$G(TAB) USL(NIB)
+ Q
+UCOMG(NIB,KEY) ; Получить примечание по услуге
+ N DT,VR,OT,ID
+ D ukdec
+ D MSG^RWU($$GETCM^IUSL(VR,DT,OT,ID))
+ Q
+UCOM(NIB,KEY,COM,TAB) ; Изменить примечание
+ I $$chkr("usl","UCOM") Q 
+ N DT,VR,OT,ID
+ S COM=$$WD^TXTU(COM)
+ D ukdec
+ D SETCM^IUSL(VR,DT,OT,ID,COM)
+ D:'$G(TAB) USL(NIB)
+ Q
+UMATG(NIB,KEY) ; Получить данные по материалам
+ N DT,VR,OT,ID
+ D ukdec
+ D GMATT^YNED("","","","",NIB,ID_"@"_VR_"@"_DT_"@"_OT,1)
+ Q
+UVIRT(NIB,KEY,AGC,TAB) ; Виртуальная услуга
+ I $$chkr("usl","UVIRT") Q 
+ N DT,VR,OT,ID
+ D ukdec
+ S ID=$$SETPL^IUSL(VR,DT,OT,ID,"v",%LOG)
+ D:'$G(TAB) USL(NIB)
+ Q
+UNVIRT(NIB,KEY,AGC,TAB) ; Убрать виртуальность
+ I $$chkr("usl","UNVIRT") Q 
+ N DT,VR,OT,ID
+ D ukdec
+ S ID=$$KILPL^IUSL(VR,DT,OT,ID,"v")
+ D:'$G(TAB) USL(NIB)
+ Q
+ULCK(NIB,KEY,VAR,TAB) ; Убрать блокировку
+ I $$chkr("usl","ULCK") Q 
+ N DT,VR,OT,ID
+ D ukdec
+ S ID=$$KILPLE^IUSL(VR,DT,OT,ID,"lc")
+ D:'$G(TAB) USL(NIB)
+ Q
+UGFRA(NIB,KEY,MOD) ; Получить данные франшизы
+ ; MOD - 1/0 = процент/сумма
+ N DT,VR,OT,ID
+ D ukdec
+ D MSG^RWU($P($$GETPL^IUSL(VR,DT,OT,ID,"fr"),"|",$S($G(MOD):2,1:1)))
+ Q
+UFRA(NIB,KEY,MOD,VAL,TAB) ; Изменить данные франшизы
+ ; MOD - 1/0 = процент/сумма
+ I $$chkr("usl","UFRA") Q  
+ N DT,VR,OT,ID,R,ST,RCL,NRM,IDX,X
+ D ukdec
+ S VAL=$$NNUM^TXTU(VAL),MOD=$S($G(MOD):2,1:1),ST=1
+ I MOD=1,VAL>100 S VAL=""
+ S R=$$GETPL^IUSL(VR,DT,OT,ID,"fr"),$P(R,"|",MOD)=VAL
+ I '$P(R,"|",1),'$P(R,"|",2) S ST=0
+ I 'ST,'$$ISPL^IUSL(VR,DT,OT,ID,"fr") Q 
+ I $$GETSTAT^IUSL(VR,DT,OT,ID)'="w" S RCL=2,IDX=ID,NRM=0 D RETsys^YNED Q:$$IsMSG^RWU() 
+ I 'ST S R=$$SETPL^IUSL(VR,DT,OT,ID,"fr","|") D SBSYS^YNED(NIB,VR,OT,$$DT^DTUTL(DT),+$G(^cfg("credit")),"X",ID)
+ I ST S R=$$SETPL^IUSL(VR,DT,OT,ID,"fr",R)
+ D ulog
+ D:'$G(TAB) USL(NIB)
+ Q
+USKP(NIB,KEY,LPU,TAB) ; Изменить статус оплаты услуги
+ I $$chkr("usl","USKP") Q 
+ N DT,VR,OT,ID,X
+ D ukdec
+ S X=$$GETPL^IUSL(VR,DT,OT,ID,"kp")
+ S X=$S(X:$$KILPL^IUSL(VR,DT,OT,ID,"kp"),1:$$SETPL^IUSL(VR,DT,OT,ID,"kp",1))
+ D:'+$G(TAB) USL(NIB)
+ Q
+UPRG(NIB,KEY,PRG,TAB) ; Изменить программу (уникальную)
+ I $$chkr("usl","UPRG") Q 
+ N DT,VR,OT,ID,X
+ D ukdec
+ D SETPRG^IUSL(VR,DT,OT,ID,PRG)
+ D:'+$G(TAB) USL(NIB)
+ Q
+uchk() ; Критические изменения услуг
+ I $$GETSTAT^IUSL(VR,DT,OT,ID)=3 D MSG("Услуга включена в счет!") Q 1
+ Q 0
+chkann() ; проверка и сообщение услуга аннул.
+ Q:'$$GETPL^IUSL(VR,DT,OT,ID,"rcl") 0
+ D MSG("Услуга аннулирована. Продолжение невозможно.") 
+ Q 1
+ukdec ; Развернуть ключ услуги
+ S VR=$P(KEY,"@",1),DT=$P(KEY,"@",2),OT=$P(KEY,"@",3),ID=$P(KEY,"@",4)
+ Q
+ulog ; Логирование изменений услуги
+ S ^ZNFL(VR,OT,DT,ID,"log",$H)=$$USR^IUSER()_"|"_$$KDR^IUSER()
+ Q
+BILL(NIB) ; Таблица платежей
+ N DT,TI,A,TXT,L,OPE,TP,SUM,FR,K,T
+ S DT=999999,FR=+$$FR^I()
+ D OWF^RWU(".xmlb")
+ D WC^RWU($G(^PP(0,2))_"<admpac><btable>Дата")
+ F  S DT=$O(^BILL(NIB,DT),-1) Q:DT=""  S TI="" F  S TI=$O(^BILL(NIB,DT,TI),-1) Q:TI=""  D
+ .S L=^(TI),OPE=$P(L,"|",1),TP=$P(L,"|",3)
+ .I OPE'="+",OPE'="-",OPE'="" Q 
+ .S SUM=$P(L,"|",2),TXT=$$GPTYPE^IBILL(L)
+ .S A=DT_"@"_TI_"|"_$$DT2^DTUTL(DT)_"|"_$$TM^DTUTL(TI)_"|"_SUM_"|"
+ .S A=A_TXT_"|"_$S(TP="":"",TP=2:"б.карта",TP=5:"б/н оплата",1:$P($G(^(+$G(^MN("paytype")),TP)),"|",1))
+ .S TP=$P(L,"|",5),OPE=$$FIOSH^NUSER(TP)
+ .S A=A_"|"_$P(L,"|",7)
+ .S A=A_"|"_$S(OPE="":$P(TP,"@",1),1:OPE)
+ .S K=$P(L,"|",4) S:K'="" T=$$NAME^ISPRAV("kkm",K),K=$S(T="":K,1:T)
+ .I FR,TP["@" S A=A_", "_$$NAME^ICONTR($P(TP,"@",2)) ; ЛПУ
+ .D WC^RWU(CR_$$TAG^TXTU(A_"|"_K))
+ S DT="" F  S DT=$O(^BILL(NIB,"R",DT)) Q:DT=""  S TI="" F  S TI=$O(^BILL(NIB,"R",DT,TI)) Q:TI=""  D
+ .S L=^(TI),OPE=$P(L,"|",1) Q:OPE 
+ .S SUM=$P(L,"|",2)
+ .S A="R"_DT_"@"_TI_"|"_$$DT2^DTUTL(DT)_"|"_$$TM^DTUTL(TI)_"|"_SUM
+ .S TP=$P(L,"|",3),OPE=$$FIOSH^NUSER(TP)
+ .S A=A_"|резерв|||"_$S(OPE="":$P(TP,"@",1),1:OPE)
+ .I FR,TP["@" S A=A_", "_$$NAME^ICONTR($P(TP,"@",2)) ; ЛПУ
+ .D WC^RWU(CR_$$TAG^TXTU(A))
+ D W^RWU("</btable></admpac></nb_console>")
+ D C^RWU
+ Q
+BSUM(NIB,KEY,SUM,TAB) ; Изменить сумму
+ I $$chkr("bill","BSUM") Q 
+ N DT,TM,L,SB,TP
+ S DT=$P(KEY,"@",1),TM=$P(KEY,"@",2),SB=""
+ S:$E(DT)="R" DT=$E(DT,2,9),SB="R"
+ I SB="",'$D(^BILL(NIB,DT,TM)) D:'$G(TAB) BILL(NIB) Q 
+ I SB'="",'$D(^BILL(NIB,SB,DT,TM)) D:'$G(TAB) BILL(NIB) Q
+ S ^BILLLOG(NIB,DT,TM,$H)=$$USR^IUSER()_"|"_$G(^BILL(NIB,DT,TM))
+ S L=^BILL(NIB,DT,TM),$P(L,"|",2)=+$TR(SUM,",","."),^BILL(NIB,DT,TM)=L
+ S TP=$P(L,"|",6)
+ D REFBALI^IBILL(NIB,DT)
+ D:SB="R" UPDRES^IBILL(NIB)
+ S L=$$NOW^IBILL(NIB)
+ I L>0,+$G(^BILL(NIB,"R"))>0 D DORES^IBILL(NIB,L)
+ I $P(TP,":",1)="NAZ" D CNGPAY^INAZN($P(TP,":",2),DT,TM,-SUM)
+ I $P(TP,":",1)="BTPL" D CNGPAY^IPOLIS(NIB,$P(TP,":",2),DT_","_TM,-SUM)
+ D UPD^IEXCH("IBILL",NIB_","_DT)
+ Q:$$IsMSG^RWU() 
+ D:'$G(TAB) BILL(NIB)
+ Q
+BDATE(NIB,KEY,NDT,TAB) ; Изменить дату
+ I $$chkr("bill","BDATE") Q 
+ N DT,TM,L,R,P,I,Z
+ S DT=$P(KEY,"@",1),TM=$P(KEY,"@",2),NDT=$$DIH^DTUTL(NDT)
+ I $E(DT)="R" D MSG^RWU("Недоступно для резерва.") Q 
+ I '$D(^BILL(NIB,DT,TM))!(DT=NDT) D:'$G(TAB) BILL(NIB) Q 
+ D CNGDTM^IBILL(NIB,DT,TM,NDT,TM)
+ Q:$$IsMSG^RWU() 
+ D:'$G(TAB) BILL(NIB)
+ Q
+BTIME(NIB,KEY,NTM,TAB) ; Изменить время платежа
+ I $$chkr("bill","BTIME") Q 
+ N DT,TM,L,R,P,I,Z,OT,VR,D
+ S DT=$P(KEY,"@",1),TM=$P(KEY,"@",2),NTM=$$TI^DTUTL(NTM)
+ I $E(DT)="R" D MSG^RWU("Недоступно для резерва.") Q 
+ I '$D(^BILL(NIB,DT,TM))!(TM=NTM) D:'$G(TAB) BILL(NIB) Q 
+ D CNGDTM^IBILL(NIB,DT,TM,DT,NTM)
+ Q:$$IsMSG^RWU() 
+ D:'$G(TAB) BILL(NIB)
+ Q
+BTYPE(NIB,KEY,TP,TAB) ; Изменить тип оплаты
+ I $$chkr("bill","BTYPE") Q 
+ N DT,TM,L
+ S DT=$P(KEY,"@",1),TM=$P(KEY,"@",2)
+ I $E(DT)="R" D MSG^RWU("Недоступно для резерва.") Q
+ I '$D(^BILL(NIB,DT,TM)) D:'$G(TAB) BILL(NIB) Q 
+ S L=^(TM)
+ I $P(L,"|",1)="" D MSG^RWU("У данного платежа отсутствует тип") Q  ; не + и не -
+ D SETTP^IBILL(NIB,DT_","_TM,TP,1)
+ D:'+$G(TAB) BILL(NIB)
+ S:+$G(TAB) %L=""
+ Q
+BACC(NIB,KEY,SC,TAB) ; Изменить счет оплаты
+ I $$chkr("bill","BACC") Q 
+ N DT,TM,L
+ S DT=$P(KEY,"@",1),TM=$P(KEY,"@",2)
+ I $E(DT)="R" D MSG^RWU("Недоступно для резерва.") Q
+ I '$D(^BILL(NIB,DT,TM)) D:'$G(TAB) BILL(NIB) Q 
+ S L=^(TM)
+ S ^BILLLOG(NIB,DT,TM,$H)=$$USR^IUSER()_"|"_L
+ S $P(L,"|",12)=SC,^BILL(NIB,DT,TM)=L
+ D REFBAL^IBILL(NIB)
+ D UPD^IEXCH("IBILL",NIB_","_DT)
+ D:'+$G(TAB) BILL(NIB)
+ S:+$G(TAB) %L=""
+ Q
+BWHO(NIB,KEY,VR) ; Изменить оператора
+ I $$chkr("bill","BWHO") Q 
+ N DT,TM,L,R
+ S DT=$P(KEY,"@",1),TM=$P(KEY,"@",2)
+ I $E(DT)="R" D MSG^RWU("Недоступно для резерва.") Q
+ S VR=$$USRFKDR^IUSER(VR)
+ I '$D(^BILL(NIB,DT,TM)) D BILL(NIB) Q 
+ I VR="" D MSG^RWU("У данного сотрудника нет учетной записи для входа в систему") Q
+ S L=^(TM),R=$P(L,"|",5)
+ S ^BILLLOG(NIB,DT,TM,$H)=$$USR^IUSER()_"|"_L
+ S $P(R,"@",1)=VR,$P(L,"|",5)=R,^BILL(NIB,DT,TM)=L
+ S $P(^BILLI(DT,TM,NIB),"|",4)=R
+ D UPD^IEXCH("IBILL",NIB_","_DT)
+ D BILL(NIB)
+ Q
+BLPU(NIB,KEY,LPU) ; Изменить место оплаты (ЛПУ)
+ I $$chkr("bill","BLPU") Q 
+ N DT,TM,L,R
+ S DT=$P(KEY,"@",1),TM=$P(KEY,"@",2)
+ I $E(DT)="R" D MSG^RWU("Недоступно для резерва.") Q
+ I '$D(^BILL(NIB,DT,TM)) D BILL(NIB) Q 
+ D SETLPU^IBILL(NIB,DT_","_TM,LPU)
+ D BILL(NIB)
+ Q
+BMOV(NIB,KEY,NNIB,ANY,TAB) ; Перенести на другого пациента
+ I $$chkr("bill","BMOV") Q 
+ N DT,TM,L
+ S DT=$P(KEY,"@",1),TM=$P(KEY,"@",2)
+ I $E(DT)="R" D MSG^RWU("Недоступно для резерва.") Q 
+ I NNIB=""!'$D(^BILL(NIB,DT,TM)) D:'$G(TAB) BILL(NIB) Q 
+ I NIB=NNIB D MSG^RWU("Одинаковые номера историй.") Q 
+ I '$$EXIST^IPAC(NNIB) D MSG^RWU("Нет такого пациента") Q 
+ S L=$P($G(^BILL(NIB,DT,TM)),"|",1)
+ I L="",'$G(ANY) D MSG^RWU("?Внимание ! Вы подтверждаете, что хотите переместить СПИСАНИЕ со счета ?"_CR_"Это рекомендуется делать другими средствами."_CR_"Продолжить ?") Q
+ M ^BILL(NNIB,DT,TM)=^BILL(NIB,DT,TM)
+ K ^BILL(NIB,DT,TM),^BILLI(DT,TM,NIB)
+ D REFBALI^IBILL(NIB,DT)
+ D REFBALI^IBILL(NNIB,DT)
+ D KGL^IEXCH("^BILL",NIB,DT,TM)
+ D KGL^IEXCH("^BILLI",DT,TM,NIB)
+ D UPD^IEXCH("IBILL",NIB_","_DT)
+ D UPD^IEXCH("IBILL",NNIB_","_DT)
+ S L=$$NOW^IBILL(NIB)
+ I L>0,+$G(^BILL(NIB,"R"))>0 D DORES^IBILL(NIB,L)
+ S L=$$NOW^IBILL(NNIB)
+ I L>0,+$G(^BILL(NNIB,"R"))>0 D DORES^IBILL(NNIB,L)
+ D:'+$G(TAB) BILL(NIB)
+ S:+$G(TAB) %L=""
+ Q
+BDEL(NIB,KEY,OK,TAB) ; Удалить платеж
+ I $$chkr("bill","BDEL") Q 
+ N DT,TM,L,K,SB
+ S DT=$P(KEY,"@",1),TM=$P(KEY,"@",2),OK=+$G(OK),SB=""
+ S:$E(DT)="R" DT=$E(DT,2,9),SB="R"
+ I SB="",'$D(^BILL(NIB,DT,TM)) D:'+$G(TAB) BILL(NIB) Q 
+ I SB'="",'$D(^BILL(NIB,SB,DT,TM)) D:'+$G(TAB) BILL(NIB) Q
+ S ^BILLLOG(NIB,DT,TM,$H)=$$USR^IUSER()_"|"_$G(^BILL(NIB,DT,TM))
+ I SB'="" D  G BDEL1 ; резерв
+ .K ^BILL(NIB,SB,DT,TM),^BILLI(DT,TM,NIB,SB)
+ .D KGL^IEXCH("^BILL",NIB,SB,DT,TM),KGL^IEXCH("^BILLI",DT,TM,NIB,SB)
+ .Q:$P($G(^BILL(NIB,SB,DT,TM-1)),"|",1)'="P"
+ .K ^BILL(NIB,SB,DT,TM-1)
+ .D KGL^IEXCH("^BILL",NIB,SB,DT,TM-1)
+ .D UPDREF^IBILL(NIB)
+ .D UPD^IEXCH("IBILL",NIB_","_DT)
+ S L=$P($G(^BILL(NIB,DT,TM)),"|",1)
+ I 'OK,L="" D MSG^RWU("?Внимание ! Вы подтверждаете, что хотите удалить СПИСАНИЕ со счета ?"_CR_"Это рекомендуется делать другими средствами."_CR_"Продолжить ?") Q 
+ D DEL^IBILL(NIB,DT_","_TM)
+BDEL1 
+ D:'+$G(TAB) BILL(NIB)
+ S:+$G(TAB) %L=""
+ Q
+BGCOM(NIB,KEY) ; Получить примечание
+ N DT,TM
+ S DT=$P(KEY,"@",1),TM=$P(KEY,"@",2)
+ I $E(DT)="R" D MSG^RWU("") Q 
+ D MSG^RWU($P($G(^BILL(NIB,DT,TM)),"|",7))
+ Q
+BCOM(NIB,KEY,COM,TAB) ; Изменить примечание
+ I $$chkr("bill","BCOM") Q 
+ N DT,TM,L
+ S DT=$P(KEY,"@",1),TM=$P(KEY,"@",2),COM=$$WD^TXTU(COM)
+ I $E(DT)="R" D MSG^RWU("Недоступно для резерва.") Q 
+ I '$D(^BILL(NIB,DT,TM)) D:'$G(TAB) BILL(NIB) Q 
+ S ^BILLLOG(NIB,DT,TM,$H)=$$USR^IUSER()_"|"_$G(^BILL(NIB,DT,TM))
+ S $P(^BILL(NIB,DT,TM),"|",7)=COM
+ D UPD^IEXCH("IBILL",NIB_","_DT)
+ D:'+$G(TAB) BILL(NIB)
+ S:+$G(TAB) %L=""
+ Q
+BKKM(NIB,KEY,KKM,TAB) ; Изменить KKM ID
+ I $$chkr("bill","BKKM") Q 
+ N DT,TM,L
+ S DT=$P(KEY,"@",1),TM=$P(KEY,"@",2)
+ I $E(DT)="R" D MSG^RWU("Недоступно для резерва.") Q 
+ I '$D(^BILL(NIB,DT,TM)) D:'$G(TAB) BILL(NIB) Q 
+ S ^BILLLOG(NIB,DT,TM,$H)=$$USR^IUSER()_"|"_$G(^BILL(NIB,DT,TM))
+ S $P(^BILL(NIB,DT,TM),"|",4)=KKM
+ D UPD^IEXCH("IBILL",NIB_","_DT)
+ D:'+$G(TAB) BILL(NIB)
+ S:+$G(TAB) %L=""
+ Q
+BGETKN(NIB,KEY) ; Получить код банк. карты
+ N DT,TM,R
+ S DT=$P(KEY,"@",1),TM=$P(KEY,"@",2)
+ I $E(DT)="R" D MSG^RWU("") Q
+ S R=$P(^BILL(NIB,DT,TM),"|",6)
+ D MSG^RWU($S($E(R,1,2)="N:":$E(R,3,99),1:""))
+ Q
+BBKN(NIB,KEY,KNUM,TAB) ; Изменить код банк. карты
+ I $$chkr("bill","BBKN") Q 
+ N DT,TM,R
+ S DT=$P(KEY,"@",1),TM=$P(KEY,"@",2),KNUM=$$WD^TXTU(KNUM)
+ I $E(DT)="R" D MSG^RWU("Недоступно для резерва.") Q 
+ I '$D(^BILL(NIB,DT,TM)) D:'$G(TAB) BILL(NIB) Q 
+ S ^BILLLOG(NIB,DT,TM,$H)=$$USR^IUSER()_"|"_$G(^BILL(NIB,DT,TM))
+ S R=$P(^BILL(NIB,DT,TM),"|",6)
+ S:$E(R,1,2)="N:" $P(^(TM),"|",6)="N:"_KNUM
+ D UPD^IEXCH("IBILL",NIB_","_DT)
+ D:'+$G(TAB) BILL(NIB)
+ S:+$G(TAB) %L=""
+ Q
+BGETKV(NIB,KEY) ; Получить № квитанции
+ N DT,TM
+ S DT=$P(KEY,"@",1),TM=$P(KEY,"@",2)
+ I $E(DT)="R" D MSG^RWU("") Q
+ D MSG^RWU($P(^BILL(NIB,DT,TM),"|",8))
+ Q
+BKVN(NIB,KEY,KV,TAB) ; Изменить № квитанции
+ I $$chkr("bill","BKVN") Q 
+ N DT,TM,L
+ S DT=$P(KEY,"@",1),TM=$P(KEY,"@",2)
+ I $E(DT)="R" D MSG^RWU("Недоступно для резерва.") Q 
+ I '$D(^BILL(NIB,DT,TM)) D:'$G(TAB) BILL(NIB) Q 
+ S ^BILLLOG(NIB,DT,TM,$H)=$$USR^IUSER()_"|"_$G(^BILL(NIB,DT,TM))
+ S $P(^BILL(NIB,DT,TM),"|",8)=KV
+ D UPD^IEXCH("IBILL",NIB_","_DT)
+ D:'$G(TAB) BILL(NIB)
+ Q
+BLCK(NIB,VAL) ; Заблокировать/разблокировать счет
+ I $$chkr("bill","BLCK") Q 
+ D RO^IBILL(NIB,VAL)
+ Q
+EPR(NIB) 
+ N ID,TP,NM,S,R,D,OW,SH,DT
+ D OWF^RWU(".xmlb")
+ D WC^RWU($G(^PP(0,2))_"<admpac><etable>Дата")
+ S DT="" F  S DT=$O(^EPRI("nd",NIB,DT)) Q:DT=""  S ID="" F  S ID=$O(^EPRI("nd",NIB,DT,ID)) Q:ID=""  D:$D(^EPR(NIB,ID))
+ .S S=+$P($G(^EPR(NIB,ID,"s")),"|",1)
+ .S D=$P($G(^("dt")),"|",1),TP=$G(^("t")),NM=$G(^("n")),SH=$G(^("h"))
+ .S OW=$P($G(^("o")),"|",2),OW=$$FIO^IKADRY(OW)
+ .D WC^RWU(CR_ID_"|"_$$TAG^TXTU($$DT2^DTUTL(D)_"|"_NM_"|"_$G(^DTYPE(TP,"tname"))_"|"_$S(S:"да",1:"нет")_$S(SH:" скрыт",1:"")_"|"_OW))
+ D W^RWU("</etable></admpac></nb_console>")
+ D C^RWU
+ Q
+EDATE(NIB,ID,NDT,TAB) ; Изменить дату
+ I $$chkr("epr","EDATE") Q 
+ Q:NIB="" 
+ I '$D(^EPR(NIB,ID)),'+$G(TAB) D EPR(NIB) Q 
+ D SETDT^IEPR(NIB,ID,$$DI^DTUTL(NDT))
+ D:'+$G(TAB) EPR(NIB)
+ Q
+ETIME(NIB,ID,TM,TAB) ; Изменить время
+ I $$chkr("epr","ETIME") Q 
+ Q:NIB="" 
+ I '$D(^EPR(NIB,ID)),'+$G(TAB) D EPR(NIB) Q 
+ S TM=$$TI^DTUTL(TM) Q:TM=""
+ N X
+ S X=$P(^EPR(NIB,ID,"dt"),"|",1),$P(X,",",2)=TM
+ S $P(^EPR(NIB,ID,"dt"),"|",1)=X
+ D GL^IEXCH("^EPR",NIB,ID,"dt")
+ I $D(^EPRD(NIB,ID,"time")) S ^("time")=$$TM^DTUTL(TM) D GL^IEXCH("^EPRD",NIB,ID,"time")
+ D:'+$G(TAB) EPR(NIB)
+ Q
+ENAME(NIB,ID,NM,TAB) ; Изменить имя
+ I $$chkr("epr","ENAME") Q 
+ Q:NIB="" 
+ I '$D(^EPR(NIB,ID)),'+$G(TAB) D EPR(NIB) Q 
+ S ^EPR(NIB,ID,"n")=$$WD^TXTU(NM)
+ D GL^IEXCH("^EPR",NIB,ID,"n")
+ D:'+$G(TAB) EPR(NIB)
+ Q
+EUNSB(NIB,ID,TAB) ; Убрать подпись
+ I $$chkr("epr","EUNSB") Q 
+ Q:NIB="" 
+ I '$D(^EPR(NIB,ID)),'+$G(TAB) D EPR(NIB) Q 
+ N NI,HALF,FL,TXT S NI=NIB
+ D UNSBsys^YIMH
+ D:'+$G(TAB) EPR(NIB)
+ Q
+ESBS(NIB,ID,TAB) ; Подписать
+ I $$chkr("epr","ESBS") Q 
+ Q:NIB="" 
+ I '$D(^EPR(NIB,ID)),'+$G(TAB) D EPR(NIB) Q 
+ D SBSC^YIMH(NIB,ID)
+ D:'+$G(TAB) EPR(NIB)
+ Q
+EMOV(NIB,ID,NNIB,TAB) ; Переместить на другого пациента
+ I $$chkr("epr","EMOV") Q 
+ Q:'$$EXIST^IPAC(NIB)  Q:'$$EXIST^IPAC(NNIB) 
+ I NIB=NNIB D MSG^RWU("Одинаковые номера историй.") Q 
+ Q:ID="" 
+ N X
+ S X=$$MOVID^IEPR(NIB,ID,NNIB)
+ Q:$$IsMSG^RWU() 
+ D:'+$G(TAB) EPR(NIB)
+ Q
+ECPY(NIB,ID,NNIB,TAB) ; Копировать на другого пациента
+ I $$chkr("epr","EMOV") Q 
+ Q:'$$EXIST^IPAC(NIB)  Q:'$$EXIST^IPAC(NNIB) 
+ I NIB=NNIB D MSG^RWU("Одинаковые номера историй.") Q 
+ Q:ID="" 
+ N X
+ S X=$$CPYID^IEPR(NIB,ID,NNIB)
+ Q:$$IsMSG^RWU() 
+ D:'+$G(TAB) EPR(NIB)
+ Q
+EINFO(NIB,ID) ; Информация по документу
+ D VIEWDOC^YIMHH(NIB,ID,1,1)
+ Q
+EVINFO(NIB,ID) ; Информация по документу с версиями
+ D VIEWDOCV^YIMHH(NIB,ID,1,1)
+ Q
+EDEL(NIB,ID,TAB) ; Удалить документ
+ I $$chkr("epr","EDEL") Q 
+ Q:NIB="" 
+ I '$D(^EPR(NIB,ID)) D EPR(NIB) Q
+ N FL,R,X,K,T,D,N
+ S N=NIB
+ D DELsys^YIMH
+ Q:$$IsMSG^RWU()  
+ D:'+$G(TAB) EPR(NIB)
+ Q
+ECOW(NIB,ID,OW,TAB) ; Изменить владельца документа
+ I $$chkr("epr","ECOW") Q 
+ Q:NIB="" 
+ I '$D(^EPR(NIB,ID))!(OW="") D EPR(NIB) Q
+ N R
+ D RMIDX^IEPR(NIB,ID)
+ S R=$G(^EPR(NIB,ID,"o"))
+ S $P(R,"|",2)=OW,$P(R,"|",4)=$$SPEC^IKADRY(OW),^EPR(NIB,ID,"o")=R
+ D GL^IEXCH("^EPR",NIB,ID,"o")
+ I $D(^EPRD(NIB,ID,"dfio")) S ^EPRD(NIB,ID,"dfio")=$$FIO^IKADRY(OW) D GL^IEXCH("^EPRD",NIB,ID,"dfio")
+ D MKIDX^IEPR(NIB,ID)
+ D:'+$G(TAB) EPR(NIB)
+ Q
+EHIDE(NIB,ID,TAB) ; Изменить статуст видимости документа
+ I $$chkr("epr","EHIDE") Q 
+ Q:NIB=""
+ I '$D(^EPR(NIB,ID)) D EPR(NIB) Q 
+ N R
+ S R=$G(^EPR(NIB,ID,"h"))
+ I R K ^EPR(NIB,ID,"h") D KGL^IEXCH("^EPR",NIB,ID,"h")
+ I 'R S ^EPR(NIB,ID,"h")=1 D GL^IEXCH("^EPR",NIB,ID,"h")
+ D:'+$G(TAB) EPR(NIB)
+ Q
+EGALVL(NIB,ID,VAL,TAB) ; Получить уровень доступа документа
+ Q:NIB=""
+ I '$D(^EPR(NIB,ID)) Q 
+ D MSG^RWU($G(^EPR(NIB,ID,"al")))
+ Q
+ESALVL(NIB,ID,VAL,TAB) ; Изменить уровень доступа документа
+ I $$chkr("epr","ESALVL") Q 
+ Q:NIB=""
+ I '$D(^EPR(NIB,ID)) D EPR(NIB) Q 
+ S VAL=+VAL
+ I VAL=0 K ^EPR(NIB,ID,"al") D KGL^IEXCH("^EPR",NIB,ID,"al")
+ I VAL S ^EPR(NIB,ID,"al")=VAL D GL^IEXCH("^EPR",NIB,ID,"al")
+ D:'+$G(TAB) EPR(NIB)
+ Q
+EJRN(NIB,ID,TAB) ; Добавить в журнал посещений
+ I $$chkr("epr","EJRN") Q 
+ N D,V,L
+ S D=+$P($G(^EPR(NIB,ID,"dt")),"|",1)
+ S V=$G(^("o")),L=$P(V,"|",3),V=$P(V,"|",2)
+ I D,L'="",V'="" D VRSTART^IEVLOG(L,$$OTD^IKADRY(V),V,NIB,D)
+ D:'+$G(TAB) EPR(NIB)
+ Q
+NAZ(NIB) ; Таблица назначений
+ D OWF^RWU(".xmlb")
+ D WC^RWU($G(^PP(0,2))_"<admpac><ntable><titles><key></key></titles>")
+ N ID,R,K,Z,SP,I,X,ITS,ITP,ITER,ITE,ITSB,ITNUL
+ N U,PRC,NI,VR,VDT,DT,I,A,NA,ST,F,FT,P,S,SK,SP,E,fVR,DE
+ S ITS="<item",ITER=" class=""1"">",ITE="</item>",ITSB=" class=""4"">"
+ S ITP=" class=""5"">",ITNUL=ITS_">"_ITE
+ S ID="" F  S ID=$O(^NAZI("n",NIB,ID)) Q:ID=""  S R=^(ID),Z=+$P(R,"|",5) I "acdlpzh"[$P(R,"|",1) D
+ .S K=$G(^NAZ(ID,"a")),Z=$P(K,"|",4),K=$P(K,"|",1),TP=$P(R,"|",1)
+ .D:K=""
+ ..S (SP,I)=""
+ ..F  S I=$O(^NAZ(ID,"a",I)) Q:I=""  S X=$P(^(I),"|",2) I $L(X) S:SP="" SP=X I SP'=X S SP="" Q
+ ..S:$L(SP) K=$$GSPEC^YISPRAV(SP)
+ .I K="",$L(Z) S K=$P($G(^NAZM("pt",Z)),"|",1)
+ .S K=$S(K="":$$TPLST^NNAZN(TP),1:K),DT=$P(R,"|",3)
+ .S fVR=$P($G(^NAZ(ID,"i")),"|",3)
+ .S K=ITS_">"_$$DT2^DTUTL(DT)_$S($P($G(^NAZ(ID,"e")),"|",1)=1:" вып.",1:"")_ITE_ITS_">"_K_ITE
+ .I TP="r" S A="<key>"_ID_"</key>"_K_ITNUL_ITNUL_ITNUL_ITNUL_ITS_">"_fVR_" "_$$TAG^TXTU($$FIOSH^IKADRY(fVR))_ITE D WC^RWU(CR_"<row>"_A_"</row>") Q  
+ .I $O(^NAZ(ID,"a",""))="" S A="<key>"_ID_"</key>"_K_ITS_">Без услуг"_ITE_ITNUL_ITNUL_ITNUL_ITS_">"_fVR_" "_$$TAG^TXTU($$FIOSH^IKADRY(fVR))_ITE D WC^RWU(CR_"<row>"_A_"</row>") Q  
+ .S PRC=$$PRC^IINSC($$GET^IPAC(NIB,"stc",DT),NIB,DT)
+ .S PRC=$$CORCP^IPRICET(PRC)
+ .S I="" F  S I=$O(^NAZ(ID,"a",I)) Q:I=""  D
+ ..S R=^(I),U=$P(R,"|",5),P=$P(R,"|",6),SK=+$P(R,"|",7),SP=$P(R,"|",2)
+ ..S A=$P(R,"|",11),VR=$P(A,"@",2),VDT=$P(A,"@",3),E=$P(R,"|",15)
+ ..S DE=$P(R,"|",4)
+ ..S FLG=$P(R,"|",9) S:FLG'="" FLG="~"_FLG_"~"
+ ..S:P="" P=PRC
+ ..S ST=($P(R,"|",3)=2)
+ ..I $L($P(R,"|",14)) S:+$G(^NAZ(ID,"g",$P(R,"|",14)))=0 ST=1 ; по груп
+ ..S A="<key>"_ID_"@"_I_"</key>"_K
+ ..S A=A_ITS_$S($P(R,"|",1)=1:ITSB,1:">")_U_" "
+ ..S:U="" A=A_$$TAG^TXTU($S(SP="":"",1:$$GSPEC^YISPRAV(SP)_" ("_$$SPTYPE^INAZN(SP)_")"))
+ ..S:$L(U) A=A_$$TAG^TXTU($$CNAMEH^IPRICE(U,P,DT))
+ ..S A=A_ITE_ITS_$S($P(R,"|",10):ITP_"+",FLG["~kss~":ITP,FLG["~grn~":">Г.П.",1:">")_ITE
+ ..S A=A_ITS_">"_$S($L(E):$$DT2^DTUTL($P(R,"|",12))_", "_E,VDT="":"",1:$$DT2^DTUTL(VDT)_", "_$$TAG^TXTU($$FIOSH^IKADRY(VR)))_ITE
+ ..S A=A_ITS_">"_$S(ST:"+",1:"")_ITE
+ ..S A=A_ITS_">"_fVR_" "_$$TAG^TXTU($$FIOSH^IKADRY(fVR))_$S(DE:", по "_$$DT2^DTUTL(DE),1:"")_ITE
+ ..D WC^RWU(CR_"<row>"_A_"</row>")
+ ..S K=ITS_">"_ITE_ITS_">"_ITE
+ D W^RWU("</ntable></admpac></nb_console>")
+ D C^RWU
+ Q
+NMOV(NIB,ID,NNIB)       ; Переместить на другого пациента
+ I $$chkr("naz","NMOV") Q 
+ Q:'$$EXIST^IPAC(NIB)  Q:'$$EXIST^IPAC(NNIB) 
+ I NIB=NNIB D MSG^RWU("Одинаковые номера историй.") Q  
+ D MOV^INAZN($P(ID,"@",1),NNIB)
+ D NAZ(NIB)
+ Q
+NSUMM(NIB,ID,SUM,TAB)       ; Изменить сумму
+ I $$chkr("naz","NSUMM") Q 
+ N IA,A
+ S IA=$P(ID,"@",2),ID=$P(ID,"@",1)
+ S A=^NAZ(ID,"a",IA)
+ S $P(A,"|",8)=SUM,$P(A,"|",7)=""
+ S ^NAZ(ID,"a",IA)=A
+ D renaz
+ D REGL^IEXCH("^NAZ",ID)
+ D:'+$G(TAB) NAZ(NIB)
+ Q
+NSKD(NIB,ID,SKD,TAB)       ; Изменить скидку
+ I $$chkr("naz","NSKD") Q 
+ N S,IA,A
+ S IA=$P(ID,"@",2),ID=$P(ID,"@",1)
+ I IA="" d nska G nskd1
+ S A=^NAZ(ID,"a",IA)
+ S $P(A,"|",7)=SKD,$P(A,"|",8)=""
+ S ^NAZ(ID,"a",IA)=A
+nskd1 D renaz
+ D REGL^IEXCH("^NAZ",ID)
+ D:'+$G(TAB) NAZ(NIB)
+ Q
+nska 
+ S IA="" F  S IA=$O(^NAZ(ID,"a",IA)) Q:IA=""  D
+ .S A=^NAZ(ID,"a",IA)
+ .S $P(A,"|",7)=SKD,$P(A,"|",8)=""
+ .S ^NAZ(ID,"a",IA)=A
+ Q
+renaz ; обновить сумму кассовых назначений
+ N PT,S,F
+ Q:'$D(^NAZ(ID,"k"))
+ S PT=+$P($G(^NAZ(+ID,"a")),"|",4)
+ S S=0,F=$G(^NAZM("pt",PT,"f"))
+ D LNSBSc^NNAZN(ID,$P(F,"|",5)!$P(F,"|",6))
+ S:S $P(^NAZ(ID,"k"),"|",1)=S
+ Q
+NDATE(NIB,ID,DT)       ; Изменить дату назначения
+ I $$chkr("naz","NDATE") Q 
+ S ID=$P(ID,"@",1),DT=$$DI^DTUTL(DT)
+ D CNGDT^INAZU(ID,DT)
+ D NAZ(NIB)
+ Q
+NKSS(NIB,ID,MOD) ; Назн. по кассе
+ I $$chkr("naz","NKSS") Q 
+ N S,IA,A,I,R,NI
+ S IA=$P(ID,"@",2),ID=$P(ID,"@",1),MOD=$G(MOD)
+ S A=$G(^NAZ(ID,"i")),NI=$P(A,"|",2),OD=+$P(A,"|",5)
+ S I="" F  S I=$O(^NAZ(ID,"a",I)) Q:I=""  D
+ .S R=^(I) Q:$P(R,"|",5)="" 
+ .S $P(R,"|",9)=$TR($$STFLG^TXTU($TR($P(R,"|",9),"~","|"),"kss"),"|","~")
+ .S ^(I)=R
+ D GL^IEXCH("^NAZ",ID)
+ D NAZ(NIB)
+ Q
+NGFLG(NIB,ID) ; Получить флаги строки назначения
+ N IA,R
+ S IA=$P(ID,"@",2),ID=$P(ID,"@",1)
+ Q:IA="" 
+ S R=$TR($P(^NAZ(ID,"a",IA),"|",9),"~","|")
+ D MSG^RWU(R)
+ Q
+NSFLG(NIB,ID,ST) ; Изменить флаги в строке назначения
+ I $$chkr("naz","NSFLG") Q 
+ N IA,R,STR,SRC,F,I,REZ
+ S IA=$P(ID,"@",2),ID=$P(ID,"@",1)
+ I IA="" d MSG^RWU("Неприменимо к данному типу назначения") Q 
+ I $P(^NAZ(ID,"a",IA),"|",5)="" d MSG^RWU("Допустимо изменять только назначения на услуги.") Q 
+ S ST=$$WD^TXTU(ST)
+ S STR=$TR($P(^NAZ(ID,"a",IA),"|",9),"~","|")
+ S SRC=$$FLGLN^YIMHS("","","",1)
+ 
+ F I=1:1:$L(ST,"|") D
+ .S F=$P(ST,"|",I)
+ .S:'$$FLinFL^TXTU(STR,F) STR=$$STFLG^TXTU(STR,F)
+ S REZ=STR
+ F I=1:1:$L(STR,"|") D
+ .S F=$P(STR,"|",I)
+ .I SRC'="",'$$FLinFL^TXTU(SRC,F) Q 
+ .S:'$$FLinFL^TXTU(ST,F) REZ=$$EXFLG^TXTU(REZ,F)
+ 
+ S $P(^NAZ(ID,"a",IA),"|",9)=$TR(REZ,"|","~")
+ D GL^IEXCH("^NAZ",ID,"a",IA)
+ D NAZ(NIB)
+ Q
+NPAY(NIB,ID) ; Установить предоплату на назначение
+ I $$chkr("naz","NPAY") Q 
+ D SETPPAY^INAZN($P(ID,"@",1))
+ D NAZ(NIB)
+ Q
+NULNK(NIB,ID) ; Убрать статус выполнения
+ I $$chkr("naz","NULNK") Q 
+ N IA,R,VR,OT,DT,IU
+ S IA=$P(ID,"@",2),ID=$P(ID,"@",1)
+ D REEX^INAZN(ID,IA)
+ D NAZ(NIB)
+ Q
+NEEXT(NIB,ID,TXT) ; Выполнено в стороннем учреждении
+ I $$chkr("naz","NEEXT") Q 
+ N IA
+ S TXT=$$WD^TXTU(TXT),IA=$P(ID,"@",2),ID=$P(ID,"@",1)
+ I IA="" D NAZ(NIB) Q 
+ D:TXT'="" SETEXT^INAZN(ID,IA,TXT)
+ D:TXT="" CLREXT^INAZN(ID,IA)
+ D NAZ(NIB)
+ Q
+NSPEC(NIB,ID,SP) ; Изменить специальность назначения
+ I $$chkr("naz","NSPEC") Q 
+ D SETSP^INAZN($P(ID,"@",1),$P(ID,"@",2),SP)
+ D NAZ(NIB)
+ Q
+NDEL(NIB,ID) ; Удалить назначение
+ I $$chkr("naz","NDEL") Q 
+ N IA
+ S IA=$P(ID,"@",2),ID=$P(ID,"@",1)
+ D DEL^INAZN(ID,0,0)
+ D NAZ(NIB)
+ Q
+NANLRET(NIB,ID) ; Удалить назначение с возвратом услуг
+ I $$chkr("naz","NANLRET") Q 
+ N IA
+ S IA=$P(ID,"@",2),ID=$P(ID,"@",1)
+ D RETNAZ^INAZN(ID) ; w. return usl 
+ D NAZ(NIB)
+ Q
+NDPAY(NIB,ID) ; Убрать оплату назначения
+ I $$chkr("naz","NDPAY") Q 
+ N IA
+ S IA=$P(ID,"@",2),ID=$P(ID,"@",1)
+ D DEL^INAZN(ID,0,1)
+ D NAZ(NIB)
+ Q
+NDTO(NIB,ID,DT) ; Дата действия усл. в назн.
+ I $$chkr("naz","NDTO") Q 
+ N IA
+ S IA=$P(ID,"@",2),ID=$P(ID,"@",1),DT=$$DI^DTUTL(DT)
+ S $P(^NAZ(ID,"a",IA),"|",4)=DT
+ D GL^IEXCH("^NAZ",ID,"a",IA)
+ D NAZ(NIB)
+ Q
+NMKU(NIB,ID,VR) ; Создать услугу на врача из назначения
+ I $$chkr("naz","NMKU") Q 
+ N S,IA,A,U,DT,OT,Z
+ S IA=$P(ID,"@",2),ID=$P(ID,"@",1)
+ S A=^NAZ(ID,"a",IA),U=$P(A,"|",5)
+ S DT=+$P(^NAZ(ID,"i"),"|",5)
+ S OT=$$OTD^IKADRY(VR)
+ s A=$$ADD^IUSL(VR,DT,OT,NIB,U,"","nop","","","","")
+ S Z=$$SETSTAT^IUSL(VR,DT,OT,A,"w")
+ S Z=$$SETPL^IUSL(VR,DT,OT,A,"fex",ID_"@"_IA)
+ S Z=$$SETPL^IUSL(VR,DT,OT,A,"f",ID)
+ D NAZ(NIB)
+ Q
+NKVG(NIB,ID) ; Получить номера квитанций
+ S IA=$P(ID,"@",2),ID=$P(ID,"@",1)
+ D MSG^RWU($TR($$GETKV^INAZN(ID),"|",";"))
+ Q
+NKV(NIB,ID,KV) ; Установить номера квитанций
+ I $$chkr("naz","NKV") Q 
+ N I,X
+ S IA=$P(ID,"@",2),ID=$P(ID,"@",1)
+ S KV=$TR(KV,";/,","|||")
+ I $$GETKV^INAZN(ID)=KV D NAZ(NIB) Q 
+ D DELKV^INAZN(ID)
+ F I=1:1:$L(KV,"|") S X=$P(KV,"|",I) D:X'="" SETKV^INAZN(ID,X)
+ D NAZ(NIB)
+ Q
+OTHER(NIB) ; Прочие данные
+ D OWF^RWU(".xmlb")
+ D WC^RWU($G(^PP(0,2))_"<admpac>")
+ D WTAGDC^RWU("osstatus",$$GET^IPAC(NIB,"state",+$H))
+ D WTAGDC^RWU("psumm",$$GET^IPAC(NIB,"psumm",+$H))
+ D WTAGDC^RWU("plpu",$$GET^IPAC(NIB,"lpu",+$H))
+ D WTAGDC^RWU("pplock",$$GET^IPAC(NIB,"pplock",+$H))
+ 
+ D WTAGDC^RWU("pdsc",$$GETACC^IDSCN(NIB,$H))
+ D W^RWU("</admpac></nb_console>")
+ D C^RWU
+ Q
+OSS(NIB,STAT) ; Установить системные статусы
+ Q:'$$EXIST^IPAC(NIB) 
+ D SET^IPAC(NIB,"state",+$H,STAT,1)
+ Q
+OPSUM(NIB,SUM) ; Установить стоимость прикрепления
+ Q:'$$EXIST^IPAC(NIB) 
+ S SUM=+$TR(SUM,",",".")
+ D SET^IPAC(NIB,"psumm",+$H,SUM,1)
+ Q
+OPCLRDS(NIB) ; Очистить накопительную скидку
+ D CLRACC^IDSCN(NIB)
+ Q
+OPLPU(NIB,LPU) ; Установить основного ЛПУ пациента
+ Q:'$$EXIST^IPAC(NIB) 
+ D SET^IPAC(NIB,"lpu",+$H,LPU,1)
+ Q
+MOVPAC(FNIB,TNIB) ; Переместить пациента
+ Q:'$$EXIST^IPAC(FNIB)  Q:'$$EXIST^IPAC(TNIB)
+ D MOVPAC^NDBLPAC(FNIB,TNIB,,1)
+ Q
+CNGNIB(FNIB,TNIB) ; Изменить № И.Б. пациента
+ Q:'$$EXIST^IPAC(FNIB)  
+ I '$$LCL^IUSER("pacadm","cngnib") D MSG("Недостаточно прав") Q
+ I $$EXIST^IPAC(TNIB) D MSG("Такой пациент существует.") Q  
+ D MOVPAC^NDBLPAC(FNIB,TNIB,,1)
+ Q
+EMKPIN(NIB,PIN) ; Установить pin доступа к ЭМК
+ Q:'$$EXIST^IPAC(NIB) 
+ I '$$LCL^IUSER("pacadm","emkpin") D MSG("Недостаточно прав") Q 
+ D SET^IPAC(NIB,"apin",+$H,PIN,1)
+ Q
+GEPRAL(NIB) ; Получить уровень доступа к ЭМК
+ Q:'$$EXIST^IPAC(NIB)
+ I '$$LCL^IUSER("pacadm","emkpin") Q 
+ D MSG^RWU($$GET^IPAC(NIB,"al",+$H))
+ Q
+SEPRAL(NIB,AL) ; Установить уровень доступа ЭМК
+ Q:'$$EXIST^IPAC(NIB)
+ I '$$LCL^IUSER("pacadm","emkpin") D MSG("Недостаточно прав") Q
+ D SET^IPAC(NIB,"al",+$H,$$NNUM^TXTU(AL),1)
+ Q
+SETPPLC(NIB,X) ; Установить блокировку личного кабинета
+ Q:'$$EXIST^IPAC(NIB)
+ S:X=0 X="" S:X'="" X=1
+ D SET^IPAC(NIB,"pplock",+$H,X,1)
+ Q
+PPCDEL(NIB) 
+ Q:'$$EXIST^IPAC(NIB) 
+ I '$$LCL^IUSER("pacadm","ppcabd") D MSG("Недостаточно прав") Q 
+ D DEL^NPPCAB(NIB)
+ Q
+MSG(TXT) 
+ D MSG^RWU(TXT)
+ Q
+chkr(TP,PROC) ; Проверить права
+ S TP=$$LCL^IUSER("pacadm","dis"_TP)
+ Q:TP="" 0
+ I (","_TP_",")[(","_PROC_",") D MSG^RWU("Нет прав") Q 1
+ Q 0
+REGLCL 
+ S ^LCLI("pacadm")="Администрирование пациента"
+ S ^LCLI("pacadm","dchkpas")="Проверять пароли при удалении"
+ S ^LCLI("pacadm","ppcabd")="Удаление регистрации личного кабинета пациента"
+ S ^LCLI("pacadm","emkpin")="Установка PIN-кода и уровня доступа на ЭМК пациента"
+ S ^LCLI("pacadm","cngnib")="Изменение № И.Б. пациента"
+ S ^LCLI("pacadm","pages")="Выводить определенные страницы: u - услуги, b - платежи, n - назначения, e - ЭМК, o - доп."
+ S ^LCLI("pacadm","disusl")="Изменение услуг. Перечень запрещенных вызовов через запятую"
+ S ^LCLI("pacadm","disbill")="Изменение платежей. Перечень запрещенных вызовов через запятую"
+ S ^LCLI("pacadm","disepr")="Изменение ЭМК. Перечень запрещенных вызовов через запятую"
+ S ^LCLI("pacadm","disnaz")="Изменение назначений. Перечень запрещенных вызовов через запятую"
+ Q

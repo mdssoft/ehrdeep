@@ -1,0 +1,31 @@
+NDMAIL ; Сообщения-документы [ 02/14/2012  7:45 PM ]
+PACJ ; Жалобы пациентов
+ N A,AS,FN,FLG,NIB,IDX,DN,J
+ S FLDN=$$MKFLD^YDOCTP("Жалобы и предложения"),TPN=$$MKTP^YDOCTP("Сообщение руководству","txt",FLDN)
+ D ORH^RWU
+ S FLG=0,AS="",NIB="",IDX=1
+ F J=1:1:999 S A=$$R^RWU Q:%IFN["Z"  D
+ .I J=1 D  Q  ;FLG=0 S AS=AS_A S:$L(AS)>2000 AS="" I AS[CR D  Q
+ ..S AS=A
+ ..S DN=$$MKDOC^YDOCS("Письмо пациента от "_$$DT2^DTUTL(+$H),TPN,FLDN)
+ ..D SET^YDOCS(DN,"fromt","P")
+ ..D SET^YDOCS(DN,"from",+$P(AS,CR,1))
+ ..S A=$$^I("ilpu")
+ ..D SET^YDOCS(DN,"ownert","D")
+ ..D SET^YDOCS(DN,"owner",$$USR^IUSER())
+ ..D SET^YDOCS(DN,"date",$H)
+ ..S AS="" ;.Q:J=1  ;)!($D(DN)=0)  ;Q:(FLG=0)!($D(DN)=0) 
+ .I J>1,A'="" D SETD^YDOCS(DN,IDX,A) S IDX=IDX+1
+ D CR^RWU
+ D MSG^RWU("")
+ Q
+PSUPPORT 
+ N XML,XMLR,FLDN,TPN,DN,I,RR
+ D ORH^RWU
+ F %J=1:1 S A=$$R13^RWU Q:%IFN["Z"  D XML^YIXMLRR
+ D CR^RWU
+ S FLDN=$$MKFLD^YDOCTP("Технические проблемы"),TPN=$$MKTP^YDOCTP("Сообщение о технической проблеме","xml",FLDN)
+ S DN=$$MKDOC^YDOCS("Сообщение о проблеме "_$$DTM^DTUTL(+$H),TPN,FLDN)
+ S I="" F  S I=$O(XML("message",I)) Q:I=""  D SETD^YDOCS(DN,XML("message",I))
+ D SETDEF^YDOCS(DN)
+ Q

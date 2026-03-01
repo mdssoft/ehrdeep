@@ -1,0 +1,140 @@
+REXTCON ; Отчеты внешних контрагентов [ 01/10/2016  9:57 PM ]
+USLLST(DS,DE,CON,MOD,xLPU,wSUM) ; Список услуг
+ ; SEL - DGN_DS_DE_LPU_NIB_WRK
+ N LPU,NIB,XN,ID,X,cCONT,DT,VR,U,A,S,I,P,C,NI,FF,SSUMM
+ S FF=+$$FR^I()
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),MOD=+$G(MOD),wSUM=+$G(wSUM)
+ S xLPU=$G(xLPU),SSUMM=0
+ S:'FF xLPU=$$^I("ilpu")
+ D OWF^RWU(".txt")
+ D WC^RWU("Дата|Код|Наименование|Кол-во|Цена|Пациент|Баланс|Врач")
+ D MKALLPRC^IUSLSC(DS,DE,1,"ULLPRC^REXTCON","",$S(FF:0,1:1)) ; this LPU
+ I wSUM,SSUMM D W^RWU(CR_"||||"_$TR(SSUMM,",",".")_"|||")
+ D C^RWU
+ Q
+ULLPRC ; proc internal
+ I xLPU'="",xLPU'=LPU Q 
+ Q:'$D(^CNE(U,PRC,"con"))
+ N D,X,C,IS
+ S D=$O(^("con",DT+1),-1) Q:D="" 
+ S X=$G(^(D,CON)) Q:X="" 
+ S IS=$$GETPL^IUSL(VR,DT,OTD,ID,"c")
+ I MOD'=9 S C=$P(IS,"|",2) Q:$S('MOD:C=3,1:C="") ; уже выставлена
+ S D=$P(X,"|",2) S:D="" D=U
+ 
+ S S=$S($P(IS,"|",1)'="":$P(IS,"|",1),1:$G(UL(U))*$P(X,"|",1))
+ S:wSUM SSUMM=SSUMM+S
+ S A=D_"|"_$S($D(^CNCE(CON,U)):^(U),1:$$NAMEH^IPRICE(U,PRC,DT))
+ S A=$$DT^DTUTL(DT)_"|"_A_"|"_$G(UL(U))_"|"_$TR(S,".",",")
+ S A=A_"|"_NI_" "_$$FIOSH^IPAC(NI,DT)_"|"_$TR($$NOW^IBILL(NI),".",",")
+ D WC^RWU(CR_A_"|"_$$FIOSH^YIKADRY(VR))
+ Q
+ACON(DS,DE,xLPU) ; Сводка по контрагентам
+ N LPU,NIB,XN,ID,X,DT,VR,U,A,S,I,P,C,NI,FF,SSUMM,CC,SS,CON
+ S FF=+$$FR^I()
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S xLPU=$G(xLPU)
+ S:'FF xLPU=$$^I("ilpu")
+ D OWF^RWU(".txt")
+ K ^BUF($J)
+ D MKALLPRC^IUSLSC(DS,DE,1,"APprc^REXTCON","",$S(FF:0,1:1)) ; this LPU
+ 
+ D WC^RWU("Контрагенты "_$$TXTP^DTUTL(DS,DE)_"|Пациентов|Услуг|Сумма|Контрагенту|Разница")
+ S CON="" F  S CON=$O(^BUF($J,"c",CON)) Q:CON=""  D
+ .S A="" F X=0,1,2,3 S A=A_"|"_$TR($G(^BUF($J,"c",CON,X)),".",",")
+ .S A=A_"|"_$TR($G(^(2))-$G(^(3)),".",",")
+ .D WC^RWU(CR_$$NAME^ICONTR(CON)_A)
+ S A="" F X=0,1,2,3 S A=A_"|"_$TR($G(SSUMM(X)),".",",")
+ S:$D(SSUMM) A=A_"|"_$TR($G(SSUMM(2))-$G(SSUMM(3)),".",",")
+ D:$D(SSUMM) WC^RWU(CR_"Итого"_A)
+ D C^RWU
+ K ^BUF($J)
+ Q
+APprc 
+ I xLPU'="",xLPU'=LPU Q 
+ Q:'$D(^CNE(U,PRC,"con"))
+ N D,X,C,IS
+ S D=$O(^("con",DT+1),-1) Q:D="" 
+ S IS=$$GETPL^IUSL(VR,DT,OTD,ID,"c")
+ S CON=$P(IS,"|",3)
+ S:CON="" CON=$O(^CNE(U,PRC,"con",D,""))
+ Q:CON="" 
+ S X=$G(^CNE(U,PRC,"con",D,CON))
+ S D=$P(X,"|",2) S:D="" D=U
+ S CC=$G(UL(U))
+ S S=$S($P(IS,"|",1)'="":$P(IS,"|",1),1:CC*$P(X,"|",1))
+ S SS=$S($D(UL(U,1)):UL(U,1),1:$$PRICEH^IPRICE(U,PRC,DT)*KSKD*CC)
+ S SSUMM(1)=$G(SSUMM(1))+CC
+ S SSUMM(3)=$G(SSUMM(3))+S
+ S SSUMM(2)=$G(SSUMM(2))+SS
+ S X=0
+ I '$D(^BUF($J,"p",CON,NI)) S ^(NI)="",X=1
+ 
+ S ^(1)=$G(^BUF($J,"c",CON,1))+CC
+ S ^(2)=$G(^(2))+SS
+ S ^(3)=$G(^(3))+S
+ S:X SSUMM(0)=$G(SSUMM(0))+1,^(0)=$G(^(0))+1
+ Q
+ADCON(DS,DE,XCON,XTP,xLPU) ; Детальная сводка по контрагенту
+ N LPU,NIB,XN,ID,X,DT,VR,U,A,S,I,P,C,NI,FF,SSUMM,CC,SS,CON,ZZ
+ S FF=+$$FR^I()
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S xLPU=$G(xLPU)
+ S:'FF xLPU=$$^I("ilpu")
+ D OWF^RWU(".txt")
+ K ^BUF($J)
+ D MKALLPRC^IUSLSC(DS,DE,1,"ADPprc^REXTCON","",$S(FF:0,1:1)) ; this LPU
+ 
+ S A=$S(XTP=1:"Пациент|Услуга",1:"Услуга")_" "_$$TXTP^DTUTL(DS,DE)
+ D WC^RWU("Контрагент|"_A_"|Кол-во|Сумма|Контрагенту|Разница")
+ S CON="" F  S CON=$O(^BUF($J,"c",CON)) Q:CON=""  D
+ .S ZZ="" F  S ZZ=$O(^BUF($J,"c",CON,ZZ)) Q:ZZ=""  D
+ ..S A="" F X=1,2,3 S A=A_"|"_$TR($G(^BUF($J,"c",CON,ZZ,X)),".",",")
+ ..S A=A_"|"_$TR($G(^(2))-$G(^(3)),".",",")
+ ..S U=$S(XTP=1:$P(ZZ,"|",2),1:ZZ)
+ ..S P=$$STARTTP^IPRICE(U,DE,0)
+ ..S X="|"_U_" "_$$NAME^IPRICE(U,P)
+ ..S:XTP=1 NI=$P(ZZ,"|",1),X="|"_$$FIO^IPAC(NI)_" ("_NI_")"_X
+ ..D WC^RWU(CR_$$NAME^ICONTR(CON)_X_A)
+ S A="" F X=0,1,2,3 S A=A_"|"_$TR($G(SSUMM(X)),".",",")
+ S:$D(SSUMM) A=A_"|"_$TR($G(SSUMM(2))-$G(SSUMM(3)),".",",")
+ D:$D(SSUMM) WC^RWU(CR_"Итого"_$S(XTP=1:"|",1:"")_A)
+ D C^RWU
+ K ^BUF($J)
+ Q
+ADPprc 
+ I xLPU'="",xLPU'=LPU Q 
+ Q:'$D(^CNE(U,PRC,"con"))
+ N D,X,C,IS
+ S D=$O(^("con",DT+1),-1) Q:D="" 
+ I XCON'="",'$D(^(D,XCON)) Q 
+ S IS=$$GETPL^IUSL(VR,DT,OTD,ID,"c")
+ S CON=$P(IS,"|",3)
+ I CON'="",XCON'="",CON'=XCON Q
+ I XCON'="",CON="" S CON=XCON ; уже проверено выше
+ S:CON="" CON=$O(^CNE(U,PRC,"con",D,""))
+ Q:CON="" 
+ S X=$G(^CNE(U,PRC,"con",D,CON))
+ S D=$P(X,"|",2) S:D="" D=U
+ S CC=$G(UL(U))
+ S S=$S($P(IS,"|",1)'="":$P(IS,"|",1),1:CC*$P(X,"|",1))
+ S SS=$S($D(UL(U,1)):UL(U,1),1:$$PRICEH^IPRICE(U,PRC,DT)*KSKD*CC)
+ S ZZ=$S(XTP=1:NI_"|"_U,1:U)
+ 
+ S SSUMM(1)=$G(SSUMM(1))+CC
+ S SSUMM(3)=$G(SSUMM(3))+S
+ S SSUMM(2)=$G(SSUMM(2))+SS
+ 
+ S ^(1)=$G(^BUF($J,"c",CON,ZZ,1))+CC
+ S ^(2)=$G(^(2))+SS
+ S ^(3)=$G(^(3))+S
+ Q
+REGIPROC ;
+ N FF,F,A,B
+ S A="Отчеты по услугам",B="Внешние услуги"
+ S FF=+$$FR^I()
+ S F=$S(FF:",t@storage:lpu,Филиал",1:"")
+ S ^IPROC(A,B,"Услуги внешних контрагентов")="USLLST_REXTCON,1,"_$S(FF:5,1:4)_",d,Дата регистрации с,d,Дата регистрации по,t@net:LSTFLG_YCONTR(""prt""),Контрагент,t@string:0/Не выставленные в счете#1/Выставленные в счете#9/Все услуги,Отображать"_F
+ S ^IPROC(A,B,"Сводка по контрагентам")="ACON_REXTCON,1,"_$S(FF:3,1:2)_",d,Дата услуг с,d,Дата услуг по"_F
+ S ^IPROC(A,B,"Детальная сводка по контрагентам")="ADCON_REXTCON,1,"_$S(FF:5,1:4)_",d,Дата услуг с,d,Дата услуг по,t@net:LSTFLG_YCONTR(""prt"")@1,Контрагент,t@string:1/Пациент-Услуга#2/Услуга,Группировать по"_F
+ Q

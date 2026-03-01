@@ -1,0 +1,137 @@
+NROLES ; Роли пользователей [ 04/13/2019  4:01 PM ]
+LST(TAG) ; Список ролей
+ D OWF^RWU(".txt")
+ D LSTs($$WD^TXTU($G(TAG)))
+ D C^RWU
+ Q
+LSTs(TAG,CCR) ; Список ролей (системно)
+ N R,C,A
+ S (A,R)="",TAG=$G(TAG),C=$S($G(CCR):CR,1:"")
+ F  S R=$O(^WWW("roles",R)) Q:R=""  S K=$G(^(R)) I TAG=""!(TAG=$G(^(R,"flg"))) S A=A_C_R_"|"_K,C=CR
+ D WC^RWU(A)
+ Q
+TAB ; Таблица ролей
+ D OWF^RWU(".txt")
+ D WC^RWU("Наименование")
+ D LSTs("",1)
+ D C^RWU
+ Q
+L(ID) ; Загрузить
+ N KID,R,A,T,LL,X,LC
+ M:ID'="" LL=^WWW("roles",ID,"log")
+ D OWF^RWU(".xmlb")
+ D W^RWU($G(^PP(0,2))_"<roles>")
+ D WTAGDC^RWU("rname",$G(^WWW("roles",ID)))
+ D WTAGDC^RWU("flg",$G(^WWW("roles",ID,"flg")))
+ D WTAGDC^RWU("dir",$$DBLSLH($G(LL)))
+ D WTAGDC^RWU("dir1",$$DBLSLH($G(LL(1))))
+ D WTAGDC^RWU("ip",$G(LL("IP")))
+ S KID=$G(LL("kadry"))
+ D WTAGDC^RWU("kadry",KID)
+ D WTAGDC^RWU("kadry_name",$$FIO^IKADRY(KID))
+ D WTAGDC^RWU("otd",$G(LL("otd")))
+ D WTAGDC^RWU("sync",$G(LL("SYNC"))="user")
+ D WTAGDC^RWU("kkm",+$G(LL("kkm")))
+ 
+ S R="" F  S R=$O(^LCLI(R)) Q:R=""  S LC(R)=""
+ 
+ S (A,R)="" F  S R=$O(LC(R)) Q:R=""  D
+ .S T=$G(LL("lcl",R))
+ .S X=$G(^LCL(R)),X=$S(X="":$G(^LCLI(R)),1:X)
+ .S A=A_CR_R_"@"_T_"|"_X_"|"_$S(T="":T,1:$G(^LCL(R,T)))
+ D WC^RWU("<lcl>"_A_"</lcl>")
+ 
+ S (A,R)=""
+ K LC F  S R=$O(^WWW("host",R)) Q:R=""  S LC(R)=""
+ M LC=^WWW("roles",ID,"log","host") 
+ S R="" F  S R=$O(LC(R)) Q:R=""  S A=A_CR_R_"|"_$G(LC(R))
+ D WC^RWU("<srv>"_A_"</srv>")
+ 
+ D W^RWU("</roles></nb_console>"),C^RWU
+ Q
+LNULL ; Загрузить параметры справочников
+ N R,A,LL,X
+ D OWF^RWU(".xmlb")
+ D W^RWU($G(^PP(0,2))_"<roles>")
+ 
+ S (A,R)="" F  S R=$O(^LCLI(R)) Q:R=""  D
+ .S X=$G(^LCL(R)),X=$S(X="":$G(^LCLI(R)),1:X)
+ .S A=A_CR_R_"@|"_X_"|"
+ D WC^RWU("<lcl>"_A_"</lcl>")
+ 
+ S (A,R)=""
+ F  S R=$O(^WWW("host",R)) Q:R=""  S A=A_CR_R_"|"
+ D WC^RWU("<srv>"_A_"</srv>")
+ D W^RWU("</roles></nb_console>"),C^RWU
+ Q
+S ; Сохранить
+ N ID
+ D RBUFH^YIXMLRR(1)
+ S ID=$$W()
+ D CLOSE^YIXMLRR
+ D MSG^RWU(^PP(0,2)_"<roles><id>"_ID_"</id></roles></nb_console>",".xmlb") 
+ Q
+W() 
+ N NB,FM,ID,R,NM,I,X,K1,K2
+ S NB="nb_console",FM="roles"
+ S NM=$G(XML(NB,FM,"rname")) Q:NM="" ""
+ S ID=$G(XML(NB,FM,"id"))
+ S:ID="" ID=$O(^WWW("roles",""),-1)+1
+ S ^WWW("roles",ID)=NM
+ S ^WWW("roles",ID,"log")=$G(XML(NB,FM,"dir"))
+ S ^("log",1)=$G(XML(NB,FM,"dir1"))
+ S R=$G(XML(NB,FM,"otd"))
+ S:R=999 R=""
+ S:R'="" ^("otd")=R K:R="" ^("otd")
+ S R=$TR($G(XML(NB,FM,"ip"))," ","")
+ S:R'="" ^("IP")=R K:R="" ^("IP")
+ S R=+$G(XML(NB,FM,"kkm"))
+ S:R ^("kkm")=R K:R=0 ^("kkm")
+ S R=+$G(XML(NB,FM,"sync"))
+ S:R=1 ^("SYNC")="user" K:R=0 ^("SYNC")
+ S R=$G(XML(NB,FM,"kadry"))
+ S:R'="" ^("kadry")=R
+ K:R="" ^("kadry")
+ ; права
+ K ^WWW("roles",ID,"log","lcl")
+ S X=$G(XML(NB,FM,"lcl"))
+ F I=1:1:99 S R=$P(X,CR,I) Q:R=""  S K1=$P(R,"@",2) S:K1'="" ^WWW("roles",ID,"log","lcl",$P(R,"@",1))=K1
+ ; сервера
+ K ^WWW("roles",ID,"log","host")
+ S X=$G(XML(NB,FM,"srv"))
+ F I=2:1:99 S R=$P(X,CR,I) Q:R=""  S K1=$P(R,"|",1),K2=$P(R,"|",2) S:K2'="" ^WWW("roles",ID,"log","host",K1)=K2
+ S ^WWW("roles",ID,"l")=$$USRH^IUSER()
+ D REGL^IEXCH("^WWW","roles",ID)
+ ; обновить профиль по умолчанию
+ D:$G(^WWW("user","role"))=ID SETDEF(ID)
+ Q ID
+DEL(ID) ; Удалить
+ N L
+ S L="" F  S L=$O(^LOG(L)) Q:L=""  I $G(^(L,"role"))=ID K ^("role") D KGL^IEXCH("^LOG",L,"role")
+ K ^WWW("roles",ID)
+ D KGL^IEXCH("^WWW","roles",ID)
+ D K^ISSG("^WWW(""roles"""_ID_")")
+ Q
+CHKLCL(ID) ; Проверить роль на возможность оперирования пользователем
+ Q:ID="" 1
+ N R
+ S R=$$LCL^IUSER("users","roles") Q:R="" 1
+ Q $$FLinFL^TXTU(R,ID)
+DBLSLH(R) 
+ N P,J
+ S P=1 F  S J=$F(R,"\",P) Q:J=0  S P=J+1,$E(R,J-1)="\\"
+ Q R
+REROLE(VAL,MOD) ; Обновить роль у пользователей
+ ; MOD - затирать информацию
+ N L
+ S L="" F  S L=$O(^LOG(L)) Q:L=""  I $G(^(L,"role"))=VAL D SETROLE^IUSER(L,VAL,$G(MOD))
+ Q
+SETDEF(VAL) ; Установить как роль по умолчанию
+ K ^WWW("user")
+ M ^WWW("user")=^WWW("roles",VAL,"log")
+ S ^WWW("user","role")=VAL
+ D REGL^IEXCH("^WWW","user")
+ Q
+INITDB 
+ S ^MN("root","rolesflg")="Статусы ролей пользователей"
+ Q

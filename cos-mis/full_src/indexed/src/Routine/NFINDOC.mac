@@ -1,0 +1,310 @@
+NFINDOC ; Финансовые документы [ 03/13/2023  4:00 PM ]
+LST(ID,CC) ;
+ N K,I,TXT
+ D OWF^RWU(".txt")
+ D:$G(CC) W^RWU(CR)
+ F I=1:1:9 S K=$P(ID,",",I) Q:K=""  D
+ .D:I>1 W^RWU(CR)
+ .D:K="lpu" LSTfi
+ .D:K="contr" LSTnf
+ .D:K="dgn" LSTdgn
+ .D:K="doc" LSTint("doc")
+ D C^RWU
+ Q
+LSTint(NM) 
+ Q:NM=""  
+ N N,C
+ S (N,C)=""
+ F  S N=$O(^FDM(NM,N)) Q:N=""  D WC^RWU(C_N_"|"_$P(^(N),"|",1)) S C=CR
+ Q
+LSTnf 
+ N N,NM,F,C
+ S (N,C)="" F  S N=$O(^CGA(N)) Q:N=""!(N>999999)  D
+ .S NM=$$GET^ICONTR(N,"shortname",+$H)
+ .S F="|"_$$GET^ICONTR(N,"flg",+$H)_"|"
+ .I F'="||" Q:F["|fi|"
+ .D WC^RWU(C_"C"_N_"|"_NM) S C=CR
+ Q
+LSTfi 
+ N N,NM,F,C
+ S (N,C)="" F  S N=$O(^CGA(N)) Q:N=""!(N>999999)  D
+ .S NM=$$GET^ICONTR(N,"shortname",+$H)
+ .S F="|"_$$GET^ICONTR(N,"flg",+$H)_"|"
+ .Q:F'["|fi|"
+ .D WC^RWU(C_"C"_N_"|"_NM) S C=CR
+ Q
+LSTdgn 
+ N N,C
+ S (N,C)="" F  S N=$O(^DGN(N)) Q:N=""  D
+ .D WC^RWU(C_"D"_N_"|"_$$GET^YNDOG(N,"shortname",+$H)) S C=CR
+ Q
+LSTSC(IDX) ; Списки услуг
+ Q:$E(IDX)'="D" 
+ ; TODO - сбор договоров от юрлица 
+ N DTP,DOC,C,K
+ S DTP=$$FNDTP^YDOCTP("Приложение к счету"),IDX=$E(IDX,2,99)
+ D OWF^RWU(".txt"),WC^RWU("|Наименование документа")
+ I $L(DTP) S DOC="" F  S DOC=$O(^CDOCI("type",DTP,DOC)) Q:DOC=""  D
+ .I $L(IDX),$$GET^YDOCS(DOC,"dog")'=IDX Q 
+ .S K=DOC_"@"_$$GET^YDOCS(DOC,"scsumm")_"@"_$$GET^YDOCS(DOC,"sccnt")
+ .D WC^RWU(CR_K_"|"_$$GET^YDOCS(DOC,"nm"))
+ .S C=CR
+ D C^RWU
+ Q
+LSTESC(IDX) ; Списки внешних услуг
+ N DTP,DOC,C,K
+ S DTP=$$FNDTP^YDOCTP("Список внешних услуг")
+ D OWF^RWU(".txt"),WC^RWU("|Наименование документа")
+ I $L(DTP) S DOC="" F  S DOC=$O(^CDOCI("type",DTP,DOC)) Q:DOC=""  D
+ .S K=DOC_"@"_$$GET^YDOCS(DOC,"scsumm")_"@"_$$GET^YDOCS(DOC,"sccnt")
+ .D WC^RWU(CR_K_"|"_$$GET^YDOCS(DOC,"nm"))
+ .S C=CR
+ D C^RWU
+ Q
+LSC1(IDX) ; Списки счетов услуг 1
+ N DT,C,ID,R,S
+ D OWF^RWU(".txt"),WC^RWU("|Документ|Договор|На сумму|Описание")
+ S DT="",C="" F  S DT=$O(^FDC(DT)) Q:DT=""  S ID="" F  S ID=$O(^FDC(DT,1,ID)) Q:ID=""  D
+ .S R=^(ID) Q:+$P(R,"|",1)<1 
+ .S S=$P(R,"|",2)
+ .D WC^RWU(CR_DT_",1,"_ID_"@"_S_"|"_$P(R,"|",11)_" от "_$$DT^DTUTL(DT)_"|"_$$CONAME($P(R,"|",6))_"|"_S_"|"_$P(R,"|",13))
+ .S C=CR
+ D C^RWU
+ Q
+LSC2(IDX) ; Списки счетов в.у. 4
+ N DT,C,ID,R
+ D OWF^RWU(".txt"),WC^RWU("|Документ|Компания|На сумму|Описание")
+ S DT="",C="" F  S DT=$O(^FDC(DT)) Q:DT=""  S ID="" F  S ID=$O(^FDC(DT,1,ID)) Q:ID=""  D
+ .S R=^(ID) Q:+$P(R,"|",1)<1 
+ .D WC^RWU(CR_DT_",1,"_ID_"|"_$P(R,"|",11)_" от "_$$DT^DTUTL(DT)_"|"_$$CONAME($P(R,"|",5))_"|"_$P(R,"|",2)_"|"_$P(R,"|",13))
+ .S C=CR
+ D C^RWU
+ Q
+LSC3(IDX) ; Списки прочих счетов 7
+ N DT,C,ID,R
+ D OWF^RWU(".txt"),WC^RWU("|Дата|Компания|На сумму|Описание")
+ S DT="",C="" F  S DT=$O(^FDC(DT)) Q:DT=""  S ID="" F  S ID=$O(^FDC(DT,1,ID)) Q:ID=""  D
+ .S R=^(ID) Q:+$P(R,"|",1)<1 
+ .D WC^RWU(CR_DT_",1,"_ID_"|"_$$DT^DTUTL(DT)_"|"_$$CONAME($P(R,"|",5))_"|"_$P(R,"|",2)_"|"_$P(R,"|",13))
+ .S C=CR
+ D C^RWU
+ Q
+CONAME(ID) ; Имя контрагента
+ Q $S($E(ID,1)="C":$$NAME^ICONTR($E(ID,2,99)),1:$$NAME^IINSC($E(ID,2,99)))
+GDF(TP,ID) ; Get data from
+ Q
+TAB(TXT,ORG,DS,DE,TP) 
+ N DT,R,ID,T,A
+ D OWF^RWU(".txt")
+ D WC^RWU("|Дата|Тип документа|Сумма|От кого|Кому")
+ S DS=$$DI^DTUTL(DS),DE=$$DIH^DTUTL(DE),DT=DS-1
+ F  S DT=$O(^FDC(DT)) Q:DT=""!(DT>DE)  D
+ .S T=TP-1 F  S T=$O(^FDC(DT,T)) Q:T=""!((TP'="")&(T>TP))  D
+ ..S ID="" F  S ID=$O(^FDC(DT,T,ID)) Q:ID=""  D
+ ...S R=^(ID)
+ ...I ORG'="",$P(R,"|",5)'=ORG Q:$P(R,"|",6)'=ORG
+ ...S A=DT_","_T_","_ID_"|"_$$DT2^DTUTL(DT)_"|"_$P($G(^FDM("doc",T)),"|",1)
+ ...S A=A_"|"_$P(R,"|",2)_"|"_$$CONAME($P(R,"|",5))_"|"_$$CONAME($P(R,"|",6))
+ ...D WC^RWU(CR_A)
+ D C^RWU
+ Q
+L(ID) 
+ N DT,T,R,z,X
+ S DT=$P(ID,",",1),T=$P(ID,",",2),ID=$P(ID,",",3)
+ S R=$G(^FDM("doc",+T)),z=$P($G(^FDM("doc",T)),"|",2)
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<findoc>")
+ D W^RWU("<page"_$P(R,"|",2)_" visible=""yes""/>")
+ D W^RWU("<l_bydoc"_$P(R,"|",2)_" userdata="""_$P(R,"|",5)_"""/>")
+ D:$P(R,"|",3)'="" W^RWU("<l_from"_$P(R,"|",2)_" userdata="""_$P(R,"|",3)_"""/>")
+ D:$P(R,"|",4)'="" W^RWU("<l_to"_$P(R,"|",2)_" userdata="""_$P(R,"|",4)_"""/>")
+ D WTAGD^RWU("subsc"_$P(R,"|",2),$P(R,"|",6))
+ D WTAGDC^RWU("doctitle",$P(R,"|",1))
+ D WTAGD^RWU("tp",T)
+ D WTAGD^RWU("id",DT_","_T_","_ID)
+ S X=$G(^FDC(DT,T,ID))
+ D WTAGDC^RWU("num"_z,$P(X,"|",11))
+ D WTAGDC^RWU("dt"_z,$$DT^DTUTL($P(X,"|",12)))
+ D WTAGDC^RWU("scname"_z,$P(X,"|",13))
+ D WTAGDC^RWU("summ"_z,$P(X,"|",2))
+ D WTAGDC^RWU("nds"_z,0) ; - todo !!
+ D WTAGDC^RWU("count"_z,$P(X,"|",3))
+ D WTAGDC^RWU("subsc"_z,$P(X,"|",7))
+ S R=$P(X,"|",5)
+ D WC^RWU("<from"_z_" title="""_$$TKAV^TXTU($$CONAME(R))_""" userdata="""_R_"""/>")
+ S R=$P(X,"|",6)
+ D WC^RWU("<to"_z_" title="""_$$TKAV^TXTU($$CONAME(R))_""" userdata="""_R_"""/>")
+ S R=$P(X,"|",14)
+ D WC^RWU("<bydoc"_z_" title="""_$$TKAV^TXTU($$GET^YDOCS(R,"nm"))_""" userdata="""_R_"""/>")
+ ; todo основание докум.
+ D WTAGDC^RWU("comm"_z,$G(^FDC(DT,T,ID,"c")))
+ D W^RWU("</findoc></nb_console>"),C^RWU
+ Q
+DEL(ID) ; Удалить документ
+ N DT,T,R,z,X,SC
+ S DT=$P(ID,",",1),T=$P(ID,",",2),ID=$P(ID,",",3)
+ Q:DT=""!(T="")!(ID="") 
+ S SC=$P($G(^FDC(DT,T,ID)),"|",14) 
+ D:SC'="" SET^YDOCS(SC,"scnum","")
+ K ^FDC(DT,T,ID)
+ Q
+GET(ID,PL) ; Получить по текстовому имени поля
+ I PL="from"
+ I PL="to"
+ Q
+GETSUB(ID,PL) ; Получить поле субсправочника по текстовому имени поля
+ I PL="from"
+ I PL="to"
+ Q
+GETE(ID,PL) ; Получить текстовое значение поля
+ Q
+S 
+ N %J,A,ID,TP,DT
+ D ORH^RWU
+ F %J=1:1 S A=$$WD^TXTU($$R13^RWU) Q:%IFN["Z"  D XML^YIXMLRR
+ D CR^RWU
+ D W,CLOSE^YIXMLRR
+ D MSG^RWU(^PP(0,2)_"<findoc><id data="""_DT_","_TP_","_ID_"""/></findoc></nb_console>",".xmlb")
+ Q
+W 
+ N LST,PL,P,R,z,X,T,K,FR,TO,PR
+ M LST=XML("nb_console","findoc") K XML
+ S ID=$G(LST("id")),TP=+$G(LST("tp")),DT=$P(ID,",",1),ID=$P(ID,",",3)
+ S z=$P($G(^FDM("doc",TP)),"|",2)
+ S:DT="" DT=+$H
+ S PR=$S(ID="":"",1:$G(^FDC(DT,TP,ID)))
+ S:ID="" ID=$O(^FDC(DT,TP,""),-1)+1
+ S R=1_"|"_$G(LST("summ"_z))_"|"_$G(LST("count"_z))
+ S FR=$G(LST("from"_z)),TO=$G(LST("to"_z))
+ ; Чистка индексов
+ S X=TP_","_ID
+ S K=$P(PR,"|",5)
+ I FR'="",K'="",K'=FR K ^FDCI("con",K,DT,X) D KGL^IEXCH("^FDCI","con",K,DT,X)
+ S K=$P(PR,"|",6)
+ I TO'="",K'="",K'=TO K ^FDCI("con",K,DT,X) D KGL^IEXCH("^FDCI","con",K,DT,X)
+ 
+ S $P(R,"|",5)=FR
+ S $P(R,"|",6)=TO
+ S $P(R,"|",7)=$G(LST("subsc"_z))
+ S $P(R,"|",9)=$H
+ S $P(R,"|",10)=$$USR^IUSER()
+ S $P(R,"|",11)=$G(LST("num"_z))
+ S $P(R,"|",12)=$$DI^DTUTL($G(LST("dt"_z)))
+ S $P(R,"|",13)=$G(LST("scname"_z))
+ S X=$G(LST("bydoc"_z))
+ I X'="" S $P(R,"|",14)=X,T=$$GET^YDOCS(X,"scnum") D:T="" SET^YDOCS(X,"scnum",DT_","_TP_","_ID)
+ S ^FDC(DT,TP,ID)=R
+ S ^FDC(DT,TP,ID,"c")=$G(LST("comm"_z))
+ D REGL^IEXCH("^FDC",DT,TP,ID)
+ S X=TP_","_ID
+ I FR'="" S ^FDCI("con",FR,DT,X)="" D GL^IEXCH("^FDCI","con",FR,DT,X)
+ I TO'="" S ^FDCI("con",TO,DT,X)="" D GL^IEXCH("^FDCI","con",TO,DT,X)
+ Q
+NEW(DOC) ; New document
+ N R,z
+ S R=$G(^FDM("doc",+DOC)),z=$P(R,"|",2)
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<findoc>")
+ D W^RWU("<page"_z_" visible=""yes""/>")
+ s ^KKK=$P(R,"|",5)
+ D WTAGU^RWU("l_bydoc"_z,$P(R,"|",5))
+ D WTAGU^RWU("l_from"_z,$P(R,"|",3))
+ D WTAGU^RWU("l_to"_z,$P(R,"|",4))
+ D W^RWU("<bydoc"_z_" title="""" data=""""/>")
+ D W^RWU("<from"_z_" title=""""/>")
+ D W^RWU("<to"_z_" title=""""/>")
+ D WTAGD^RWU("subsc"_z,$P(R,"|",6))
+ D WTAGDC^RWU("doctitle",$P(R,"|",1))
+ D WTAGDC^RWU("scname"_z,$P(R,"|",1))
+ D WTAGD^RWU("num"_z,$$NNUM(z))
+ D WTAGD^RWU("tp",DOC)
+ D W^RWU("</findoc></nb_console>"),C^RWU
+ Q
+NNUM(ID) 
+ N X S X=$G(^INKR("^FDC",ID))+1,^(ID)=X 
+ Q X_"/"_$E($$YEAR^DTUTL($H),3,4)
+LSTPRN(ID) ; Вывод шаблонов печати
+ N TP,I,R,A
+ S TP=$P(ID,",",2),(A,I)=""
+ F  S I=$O(^FDM("doc",TP,"p",I)) Q:I=""  S R=^(I),A=$S(A="":"",1:A_CR)_$P(R,"|",2,3)
+ D MSG^RWU(A)
+ Q
+LSC(ID) ; Вывод печатных документов
+ N DT,T,R,z,X,JL,DTT,ND,NF,DOC,K
+ S DT=$P(ID,",",1),T=$P(ID,",",2),ID=$P(ID,",",3)
+ S R=$G(^FDM("doc",+T)),z=$P($G(^FDM("doc",T)),"|",2)
+ D OWF^RWU(".xml")
+ D W^RWU(^PP(0,1)_"<streport><data>")
+ S X=$G(^FDC(DT,T,ID))
+ S DTT=$P(X,"|",12),NF=$E($P(X,"|",5),2,9),ND=$E($P(X,"|",6),2,9)
+ S DOC=$P(X,"|",14)
+ ; ДАННЫЕ ПО ПОСТАВЩИКУ
+ D WTAGC^RWU("iname",$$GET^ICONTR(NF,"oname",DTT))
+ D WTAGC^RWU("iaddr",$$GET^ICONTR(NF,"addr",DTT))
+ D WTAGC^RWU("iinnkpp","ИНН: "_$$GET^ICONTR(NF,"inn",DTT)_"; КПП: "_$$GET^ICONTR(NF,"kpp",DTT))
+ D WTAGC^RWU("ibank",$$GET^ICONTR(NF,"bank",DTT)_" в "_$$GET^ICONTR(NF,"gbank",DTT))
+ D WTAGC^RWU("irs",$$GET^ICONTR(NF,"rsch",DTT))
+ D WTAGC^RWU("ikodes",$$GET^ICONTR(NF,"kodes",DTT))
+ ; ДАННЫЕ ПО ГРУЗОПОЛУЧАТЕЛЮ
+ D WTAGC^RWU("oname",$$GET^YNDOG(ND,"oname",DTT))
+ D WTAGC^RWU("onum",$$GET^YNDOG(ND,"dognum",DTT))
+ D WTAGC^RWU("odate",$$DT^DTUTL($$GET^YNDOG(ND,"init_date",DTT)))
+ D WTAGC^RWU("oaddr",$$GET^YNDOG(ND,"addr",DTT))
+ D WTAGC^RWU("ophone",$$GET^YNDOG(ND,"phone",DTT))
+ D WTAGC^RWU("oinnkpp","ИНН: "_$$GET^YNDOG(ND,"inn",DTT)_"; КПП: "_$$GET^YNDOG(ND,"kpp",DTT))
+ D WTAGC^RWU("obank",$$GET^YNDOG(ND,"bank",DTT)_" в "_$$GET^YNDOG(ND,"gbank",DTT))
+ D WTAGC^RWU("ors",$$GET^YNDOG(ND,"rsch",DTT))
+ S R=$$GET^YNDOG(ND,"fior",DTT)
+ D WTAGC^RWU("oruk",R)
+ S K="" S:R["." K=" "_$P(R," ",2,9),R=$P(R," ",1)
+ D WTAGC^RWU("orukrp",$$GET^PADEJ(R)_K)
+ S R=$$GET^YNDOG(ND,"doljr",DTT) S:R="" R="Генеральный директор"
+ D WTAGC^RWU("orukd",R)
+ ; ДАННЫЕ ПО ПРЕДМЕТУ СЧЕТА
+ D WTAGC^RWU("scd",$$DT^DTUTL($P(X,"|",12)))
+ D WTAGC^RWU("scnum",$P(X,"|",11))
+ D WTAGC^RWU("scname",$P(X,"|",13))
+ D WTAGC^RWU("sccenn",$P(X,"|",2))
+ D WTAGC^RWU("sccnt",$P(X,"|",3))
+ D WTAGC^RWU("scsumm",$P(X,"|",2))
+ D WTAGC^RWU("scnds","0,0%")
+ D WTAGC^RWU("ndscen","-")
+ D WTAGC^RWU("ndssumm","-")
+ S R=$$DT^DTUTL($$GET^YDOCS(DOC,"df"))
+ S K=$$DT^DTUTL($$GET^YDOCS(DOC,"dt"))
+ D WTAGC^RWU("scdates",$S($L(R):R_"-"_K,1:""))
+ ; РУКОВОДИТЕЛЬ И ГЛАВБУХ
+ S R=$$GET^ICONTR(NF,"fior",DTT)
+ S:R="" R=$$^I("iglvr")
+ D WTAGC^RWU("iglvr",R)
+ S K="" S:R["." K=" "_$P(R," ",2,9),R=$P(R," ",1)
+ S R=$$GET^PADEJ(R)
+ D WTAGC^RWU("iglvrrp",R_K)
+ S R=$$GET^ICONTR(NF,"doljr",DTT)
+ S:R="" R=$$^I("iglvrd")
+ S:R="" R="Главный врач"
+ D WTAGC^RWU("iglvrd",R)
+ S R=$$GET^ICONTR(NF,"fiobuh",DTT)
+ S:R="" R=$$^I("iglbh")
+ D WTAGC^RWU("iglbh",R)
+ S R=$$^I("iglbhd")
+ S:R="" R="Главный бухгалтер"
+ D WTAGC^RWU("iglbhd",R)
+ D WC^RWU("</data></streport>")
+ D C^RWU
+ Q
+TABSC(ORG,DS,DE) ; Сводный список счетов по организации
+ N DT,R,ID,T,A,TP,KX
+ D OWF^RWU(".txt")
+ D WC^RWU("|Дата|№ докум.|Сумма|Оплата|Наименование|Примечание|Контрагент")
+ ; TODO - Оплата
+ S DS=$$DI^DTUTL($G(DS)),DE=$$DIH^DTUTL($G(DE))
+ S DT=DS-1 F  S DT=$O(^FDCI("con",ORG,DT)) Q:DT=""!(DT>DE)  D
+ .S KX="" F  S KX=$O(^FDCI("con",ORG,DT,KX)) Q:KX=""  D
+ ..S T=$P(KX,",",1),ID=$P(KX,",",2)
+ ..S R=$G(^FDC(DT,T,ID)) Q:R=""
+ ..I ORG'="",$P(R,"|",5)'=ORG Q:$P(R,"|",6)'=ORG
+ ..S A=DT_","_T_","_ID_"|"_$$DT2^DTUTL(DT)_"|"_$P(R,"|",11)
+ ..S A=A_"|"_$P(R,"|",2)_"||"_$P(R,"|",13) ; summ+name
+ ..S A=A_"|"_$G(^FDC(DT,T,ID,"c"))_"|"_$$CONAME($P(R,"|",5))
+ ..D WC^RWU(CR_A)
+ D C^RWU
+ Q

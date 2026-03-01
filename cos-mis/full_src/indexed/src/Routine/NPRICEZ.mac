@@ -1,0 +1,273 @@
+NPRICEZ ; Прейскурант (новый) [ 08/27/2020  1:19 PM ]
+LP(N,DT,PRC,TIP,ZGR) ; Загрузка полей
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<zprice>")
+ S DT=$$DIH^DTUTL(DT)+1,ZGR=+$G(ZGR),PRC=+PRC
+ N PL,A,R,I,Ix,X
+ S R=$$GET(N,"use",DT)
+ D WTAGD^RWU("use",$S(R="":1,1:R))
+ S R=$$GET^IPRICE(N,"grp",TIP,DT)
+ D WTAGD^RWU("grp",R),WTAGDC^RWU("pgrp",$$NAME^NPRICEG(R))
+ S PL="cowrk",R=$$LCWRK^YNPRICE($$GET^IPRICE(N,PL,TIP,DT))
+ D WTAGC^RWU(PL,R)
+ D WTAGC^RWU("pname",$$NAMEH^IPRICE(N,TIP,DT))
+ D WTAGDC^RWU("cowrko",$$GET^IPRICE(N,"cowrko",TIP,DT))
+ S DT=DT+1
+ S Ix=+$G(^MN("zpprice")),DT=$O(^CNZ(N,PRC,ZGR,DT),-1)
+ S (A,PL)=""
+ F  S PL=$O(^MN(Ix,PL)) Q:PL=""  S A=A_CR_PL_"|"_$G(^MN(Ix,PL))_"|"_$G(^CNZ(N,PRC,ZGR,DT,PL))
+ D WC^RWU("<prms>"_A_"</prms>")
+ S (A,I)="" F  S I=$O(^CNZ(N,PRC,I)) Q:I=""  I $E(I)="V" S X=$E(I,2,99),A=$S(A="":"",1:A_CR)_X_"|"_$$FIODT^IKADRY(X,DT)
+ S A=A_CR_"+|Добавить сотрудника"
+ D WC^RWU("<vrl>"_A_"</vrl>")
+ D W^RWU("</zprice></nb_console>"),C^RWU
+ Q
+LPG(N,DT,PRC,ZGRP,VR) ; Загрузка полей группы
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<zprice>")
+ S DT=$$DIH^DTUTL(DT)+1
+ N PL,A,R,I,Ix
+ S Ix=+$G(^MN("zpprice")),PRC=+PRC,ZGRP=+ZGRP,VR=$G(VR)
+ S:VR'="" ZGRP="V"_VR
+ S DT=$O(^CNZG(N,PRC,ZGRP,DT),-1)
+ S (A,PL)=""
+ F  S PL=$O(^MN(Ix,PL)) Q:PL=""  S R=$G(^CNZG(N,PRC,ZGRP,DT,PL)),A=A_CR_PL_"|"_$G(^MN(Ix,PL))_"|"_R
+ D WC^RWU("<prms>"_A_"</prms>")
+ D W^RWU("</zprice></nb_console>"),C^RWU
+ Q
+LPRM(COD,DT,PRC,ZGRP,VR) ; Параметры по услуге
+ N I,P,R,A
+ S DT=$$DIH^DTUTL(DT),PRC=+PRC,ZGRP=+ZGRP
+ S:VR'="" ZGRP="V"_VR
+ S DT=$O(^CNZ(COD,PRC,ZGRP,DT+1),-1)
+ S A="",I=+$G(^MN("zpprice")),P=""
+ F  S P=$O(^MN(I,P)) Q:P=""  S R=$G(^CNZ(COD,PRC,ZGRP,DT,P)),A=A_CR_P_"|"_$G(^MN(I,P))_"|"_R
+ D MSG^RWU(A)
+ Q
+S ; СОХРАНЕНИЕ 
+ D ORH^RWU
+ N %J,A
+ F %J=1:1 S A=$$R13^RWU Q:%IFN["Z"  D XMLAN^YIXMLRR
+ S ^CN=$H
+ D CR^RWU,W
+ D CLOSE^YIXMLRR
+ Q
+W ;
+ N N,DT,TIP,PL,DTPV,PR,DTS,R,A,LF,PR,U,TP,G,ZGR,VR
+ S NBC="nb_console",OPR="zprice"
+ S DT=$G(XML(NBC,OPR,"date")),DTS=$$DIH^DTUTL(DT)
+ S TIP=+$G(XML(NBC,OPR,"tprice"))
+ S TP=+$G(XML(NBC,OPR,"tp"))
+ S ZGR=+$G(XML(NBC,OPR,"zrpgrp"))
+ S VR=$G(XML(NBC,OPR,"vrl"))
+ S G=$S(TP=2:"^CNZG",1:"^CNZ")
+ S:VR ZGR="V"_VR
+ S U=$G(XML(NBC,OPR,"use"))
+ S N=$G(XML(NBC,OPR,$S(TP=2:"grp",1:"kod")))
+ I N="" L +@G S N=$O(@G@(""),-1)+1,@G@(N,"use",DTS)=0 L -@G D REGL^IEXCH(G,N,"use")
+ S PL="cowrk",R=$$WD^TXTU($G(XML(NBC,OPR,PL))) D WCWRK^YNPRICE
+ D SET^IPRICE(N,"cowrko",TIP,DTS,$G(XML(NBC,OPR,"cowrko")))
+ S TIP=+$G(XML(NBC,OPR,"price"))
+ F PL="kod","date","price","use","cowrk","tprice" K XML(NBC,OPR,PL)
+ S A=$G(XML(NBC,OPR,"prms"))
+ D:TP'=2 SET(N,"use",DTS,U)
+ K @G@(N,TIP,ZGR,DTS)
+ F I=2:1:99 S R=$P(A,CR,I) Q:R=""  S PL=$P(R,"|",1) S:PL'="" @G@(N,TIP,ZGR,DTS,PL)=$P(R,"|",3)
+ D:TP=1  ; услуга
+ .S PL=0,I="" F  S I=$O(^CNZ(N,TIP,ZGR,DTS,I)) Q:I=""  I $G(^(I))'="" S PL=1 Q 
+ .I 'PL s ^CNZ(N,TIP,ZGR,DTS)=0 D GL^IEXCH("^CNZ",N,TIP,ZGR,DTS)
+ D REGL^IEXCH(G,N,TIP,ZGR)
+ Q
+PRM(N,PRC,PRM,ZGRP,VR,DT) ; Параметр
+ ; PRC - Прейскурант, PRM - Параметр
+ ; ZGRP - Зарпл. группа , VR - сотрудник
+ N G,D,Z,P
+ S ZGRP=+ZGRP,P=PRC,Z=ZGRP
+ ; проверка по прейскуранту
+ I '$D(^CNZ(N,P)),$D(^CNZ(N,0)) S P=0 ; default
+ I $D(^(P,"V"_VR)) S Z="V"_VR ; grp by vr
+ I '$D(^(Z)),$D(^(0)) S Z=0
+ S G=$O(^CNZ(N,P,Z,DT+1),-1)
+ I $L(G),$G(^(G))'=0,$D(^(G)) Q $G(^(G,PRM))
+ S G=$$GET^IPRICE(N,"grp",PRC,DT)
+ Q:G="" ""
+ ; проверка по группе
+ I '$D(^CNZG(G,PRC)),$D(^CNZG(G,0)) S PRC=0
+ I $D(^(PRC,"V"_VR)) S ZGRP="V"_VR
+ I '$D(^(ZGRP)),$D(^(0)) S ZGRP=0
+ S D=$O(^CNZG(G,PRC,ZGRP,DT+1),-1) ; ! naked синтаксис в Cache не раб. !
+ Q:D="" "" Q $G(^(D,PRM))
+GET(N,PL,DT) ; Значение поля
+ S DT=$O(^CNZ(N,PL,DT+1),-1) Q:DT="" "" Q ^(DT)
+GETD(N,POLE,TIP,DT) 
+ S DT=$$DIH^DTUTL($G(DT))+1
+ S DT=$O(^CNZ(N,PL,DT),-1) Q:DT="" "" Q ^(DT)
+CHECK(N) ; Проверить код
+ Q:$D(^CNZ(N)) 0 Q 1
+SET(N,PL,DT,R) 
+ S:DT="" DT=$H N DTPV,PR
+ S DTPV=$O(^CNZ(N,PL,DT),-1),PR=""
+ S:DTPV'="" PR=$G(^(DTPV))
+ I $D(^(DT)) K:^(DT)'=R ^(DT)
+ S:PR'=R ^(DT)=R
+ S DTPV=$O(^(DT)) I DTPV'="" K:R=^(DTPV) ^(DTPV)
+ D GL^IEXCH("^CNZ",N,PL)
+ S ^CNZ=$H
+ Q
+PRDT(COD,DT,TP,PRC,ZG) ; prev date
+ N P,PD,D,G
+ S DT=$$DIH^DTUTL($G(DT)),P=9999,PD=0,G=$S(TP=2:"^CNZG",1:"^CNZ")
+ S:TP=2 COD=+$$GET^IPRICE(COD,"grp",$$CORCP^IPRICET(PRC),DT)
+ S ZG=+$G(ZG)
+ F  S P=$O(@G@(COD,P)) Q:P=""  S D=$O(^(P,DT),-1) I $L(D),D>PD S PD=D
+ S D=$O(@G@(COD,PRC,ZG,DT),-1) I $L(D),D>PD S PD=D
+ S:PD=0 PD=DT
+ D MSG^RWU($$DT^DTUTL(PD))
+ Q
+NXDT(COD,DT,TP,PRC,ZG) ; next date
+ N P,PD,CD,G
+ S DT=$$DIH^DTUTL($G(DT)),P=9999,PD=99999,G=$S(TP=2:"^CNZG",1:"^CNZ")
+ S:TP=2 COD=+$$GET^IPRICE(COD,"grp",$$CORCP^IPRICET(PRC),DT)
+ S ZG=+$G(ZG)
+ F  S P=$O(@G@(COD,P)) Q:P=""  S CD=$O(^(P,DT)) I $L(CD),CD<PD S PD=CD
+ S CD=$O(@G@(COD,PRC,ZG,DT)) I $L(CD),CD<PD S PD=CD
+ S:PD=99999 PD=DT
+ D MSG^RWU($$DT^DTUTL(PD))
+ Q
+INIT ; Initialize form
+ N R,V
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<zprice>")
+ D:+$G(^cfg("oprice-vcne")) WC^RWU("<nprice default=""Код:1400;Наименование:5300;Изменено:1500;Цена:1300""/>")
+ D W^RWU("<zrpgrp>|"_CR)
+ D LSTs^NSPRAV("zrpgrp") 
+ D W^RWU("</zrpgrp>")
+ D W^RWU("</zprice></nb_console>"),C^RWU
+ Q
+CONV ; Convert -> w.ZGRP (0)
+ K ^BUF($J)
+ S N="" F  S N=$O(^CNZ(N)) Q:N=""  S P="" F  S P=$O(^CNZ(N,P)) Q:P=""  M:P?1.N ^BUF($J,N,P,0)=^CNZ(N,P) M:P'?1.N ^BUF($J,N,P)=^CNZ(N,P)
+ K ^CNZ M ^CNZ=^BUF($J) K ^BUF($J)
+ S N="" F  S N=$O(^CNZG(N)) Q:N=""  S P="" F  S P=$O(^CNZG(N,P)) Q:P=""  M ^BUF($J,N,P,0)=^CNZG(N,P)
+ K ^CNZG M ^CNZG=^BUF($J) K ^BUF($J)
+ Q
+LZPRC ; Загрузка зарплаты по сотруднику и соисполнителям
+ ; Код|Наименование|Дата|ЗП исполнителя|Соисп.1|Соисп 2|Соисп 3|Соисп 4
+ ; Индекс параметра прайса ЗП =1 
+ N %J,A,DT,PRC,VAL,U,CW,C,CWN,R,I
+ D ORH^RWU
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D
+ .I %J=1 F I=5:1:$L(A,"|") S R=$P(A,"|",I) I R'="" S CWN(I-4)=R
+ .S U=$$LU^TXTU($TR($P(A,"|",1)," ",""))
+ .Q:U=""  Q:'$D(^CN(U)) 
+ .S DT=$$DIH^DTUTL($P(A,"|",3)),VAL=$TR($P(A,"|",4),", ",".")
+ .S ^CNZ(U,0,0,DT,1)=VAL
+ .S:'$D(^CNZ(U,"use")) ^CNZ(U,"use",DT)=1
+ .S CW="" 
+ .F I=5:1:$L(A,"|") S R=$TR($P(A,"|",I),", ",".") D:R'=""
+ ..S CW=$S(CW="":"",1:CW_"|")_$S(I=5:"79::",1:"::")_R_":"_CWN(I-4)
+ .Q:CW=""
+ .S ^CNE(U,1,"cowrk",DT)=CW
+ D CR^RWU
+ Q
+LZPRCP ; Загрузка параметра зарплатного прайса
+ ; Код|Наименование|Дата|Параметр(ID)|Значение|По группе|Зп.группа|Прейскурант|<парам2|знач2><парам3|знач3>..
+ ; Прейскурант - можно несколько через ;
+ N %J,A,U,DT,PRC,VAL,PP,GG,ZG,V,P,I,P1,J
+ D ORH^RWU
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D:%J>1
+ .S U=$$LU^TXTU($TR($P(A,"|",1)," ","")) Q:U=""  Q:'$D(^CN(U)) 
+ .S DT=$$DIH^DTUTL($P(A,"|",3))
+ .S PP=$P(A,"|",4),VAL=$$NNUM^TXTU($P(A,"|",5))
+ .Q:PP="" 
+ .S V(PP)=VAL
+ .F I=9,11,13,15,17 S PP=$P(A,"|",I),VAL=$$NNUM^TXTU($P(A,"|",I+1)) S:PP'="" V(PP)=VAL
+ .S VAL=0,J="" F  S J=$O(V(J)) Q:J=""  S:$G(V(J))'="" VAL=1
+ .S:'VAL V=0 ; no data
+ .S GG=$P(A,"|",6),ZG=+$P(A,"|",7),PRC=$TR($P(A,"|",8)," ","")
+ .I PRC'="" F J=1:1:$L(PRC,";") S P1=$P(PRC,";",J) I P1'="" M ^CNZ(U,P1,ZG,DT)=V D GL^IEXCH("^CNZ",U,P1,ZG,DT)
+ .Q:PRC'=""  
+ .F  S PRC=$O(^CN(U,PRC)) Q:PRC=""  M ^CNZ(U,PRC,ZG,DT)=V D GL^IEXCH("^CNZ",U,PRC,ZG,DT)
+ D CR^RWU
+ Q
+LZPRCPL ; Линейная загрузка параметров (без групп услуг)
+ ; Код|Наименование|Параметры
+ ; Вторая строка: прайс/0-все:з.п. группа|Дата|Коды параметров
+ N %J,A,U,LP,DT,PRC,ZG,X,V,I
+ D ORH^RWU
+ S V=+$G(^MN("zpprice"))
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D:%J>1
+ .I %J=2 D  Q 
+ ..S PRC=$P(A,"|",1),DT=$$DIH^DTUTL($P(A,"|",2))
+ ..S ZG=+$P(PRC,":",2),PRC=$P(PRC,":",1)
+ ..F I=3:1:$L(A,"|") S X=$P(A,"|",I) I X'="",$D(^MN(V,X)) S LP(I)=X
+ .Q:PRC="" 
+ .S U=$P(A,"|",1) Q:U=""  Q:'$D(^CN(U)) 
+ .F I=3:1:$L(A,"|") D
+ ..S X=$G(LP(I)) Q:X="" 
+ ..S ^CNZ(U,PRC,ZG,DT,X)=$P(A,"|",I)
+ ..D GL^IEXCH("^CNZ",U,PRC,ZG,DT,X)
+ .S X=0,I="" F  S I=$O(^CNZ(U,PRC,ZG,DT,I)) Q:I=""  S:$G(^(I))'="" X=1
+ .I 'X S ^CNZ(U,PRC,ZG,DT)=0 D GL^IEXCH("^CNZ",U,PRC,ZG,DT)
+ D CR^RWU
+ Q
+EXP(DTT) ; Экспорт зарплатного прейскуранта
+ ; DTT - дата экспорта
+ ; Выгружаются только действующие на дату
+ N U,PRC,ZG,PP,DT,R,A,P,PRCL
+ S DTT=$$DIH^DTUTL(DTT)
+ D OWF^RWU(".txt")
+ D WC^RWU("Код|Прейскурант|Наименование услуги на "_$$DT^DTUTL(DTT)_"|Группа|Параметр|Значение")
+ d USEDL^IPRICET("PRCL")
+ S U="" F  S U=$O(^CNZ(U)) Q:U=""  D
+ .S PRC="" F  S PRC=$O(^CNZ(U,PRC)) Q:PRC=""  D:'PRC!$D(PRCL(PRC))
+ ..I PRC,'$$CHECKH^IPRICE(U,PRC,DTT) Q 
+ ..S P=$S(PRC:PRC,1:$$CORCP^IPRICET(1))
+ ..S ZG="" F  S ZG=$O(^CNZ(U,PRC,ZG)) Q:ZG=""  D
+ ...S DT=$O(^(ZG,DTT+1),-1) Q:DT="" 
+ ...S A=U_"|"_$S('PRC:"Любой",1:$$NAME^ISPRAV("tprice",PRC))
+ ...S A=A_"|"_$$NAMEH^IPRICE(U,P,DT)
+ ...S A=A_"|"_$S('ZG:"Все группы",1:$$NAME^ISPRAV("zrpgrp",ZG))_"|"
+ ...S PP="" F  S PP=$O(^CNZ(U,PRC,ZG,DT,PP)) Q:PP=""  D
+ ....S R=^(PP) Q:R=""
+ ....D WC^RWU(CR_A_$$NAME^ISPRAV("zpprice",PP)_"|"_R)
+ D C^RWU
+ Q
+MOVVR(FVR,TVR) ; Перемещение параметров с одного сотрудника на другого
+ Q
+MOVGU(GRP,U,GPRC,UPRC,DT) ; Копировать с группы/услуги на услугу
+ ; GPRC - с кого копировать 
+ ; UPRC - на кого копировать
+ Q:U=""  Q:GPRC=""  Q:UPRC="" 
+ N ZG,D
+ G:$D(^CNZ(U,GPRC)) MOVGUu
+ I GRP'="" S ZG="" F  S ZG=$O(^CNZG(GRP,GPRC,ZG)) Q:ZG=""  D
+ .S D=$O(^(ZG,DT+1),-1) Q:D=""
+ .M ^CNZ(U,UPRC,ZG,DT)=^CNZG(GRP,GPRC,ZG,D)
+ .D REGL^IEXCH("^CNZ",U,UPRC,ZG,DT)
+ Q
+MOVGUu 
+ S ZG="" F  S ZG=$O(^CNZ(U,GPRC,ZG)) Q:ZG=""  D
+ .S D=$O(^(ZG,DT+1),-1) Q:D=""
+ .M ^CNZ(U,UPRC,ZG,DT)=^CNZ(U,GPRC,ZG,D)
+ .D REGL^IEXCH("^CNZ",U,UPRC,ZG,DT)
+ Q
+appendu(FP,TP,DT) ; Дополнить зарплатный прайс услугами другого (на осн. ^CN)
+ ; FP - исходный
+ ; TP - что дополнить
+ ; DT - дата копирования
+ N U
+ Q:TP=""  Q:FP="" 
+ S U=""
+ F  S U=$O(^CN(U)) Q:U=""  I $D(^CN(U,FP)),$D(^CN(U,FP)) D
+ .Q:$D(^CNZ(U,TP))  ; есть в результирующем
+ .Q:'$D(^CNZ(U,FP))  ; нет в исходном
+ .D MOVGU("",U,FP,TP,DT)
+ Q
+REGIPROC 
+ S ^IPROC("Система","Прейскурант","Экспорт зарплатного прейскуранта")="EXP_NPRICEZ,1,1,d,Дата прейскуранта"
+ 
+ S ^IMPROC("Параметры зарплатного прейскуранта")="LZPRCP_NPRICEZ()"
+ S ^IMPROC("Параметры зарплатного прейскуранта (линейно)")="LZPRCPL_NPRICEZ()"
+ Q
+INITDB 
+ S ^MN("root","zrpgrp")="Зарплатная группа"
+ S ^MN("root","zpprice")="Параметры зарплатного прейскуранта"
+ Q

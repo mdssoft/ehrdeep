@@ -1,0 +1,116 @@
+ICMS ; Расписание контактов [ 10/28/2019  2:33 PM ]
+MKIDXE(TP,IDX,DT,ID) ; Только дата завершения
+ N R,X G MKIDXe
+MKIDX(TP,IDX,DT,ID) ; Создать индексы
+ N R,X
+ S R=$G(^CMS(TP,IDX,DT,ID)) Q:R="" 
+ S X=$P(R,"|",6)
+ I X'="" S ^CMSI("type",X,TP,IDX,DT,ID)="" D GL^IEXCH("^CMSI","type",X,TP,IDX,DT,ID)
+ S X=$P(R,"|",7)
+ I X'="" S ^CMSI("dt",X,TP,IDX,DT,ID)=$P(R,"|",8) D GL^IEXCH("^CMSI","dt",X,TP,IDX,DT,ID)
+ S X=$P($G(^CMS(TP,IDX,DT,ID,"i")),"|",1)
+ I X'="" S ^CMSI("owner",X,TP,IDX,DT,ID)="" D GL^IEXCH("^CMSI","owner",X,TP,IDX,DT,ID)
+MKIDXe 
+ S X=+$P($G(^CMS(TP,IDX,DT,ID,"p")),"|",6) ; заверш/отмена
+ I X S ^CMSI("de",X,TP,IDX,DT,ID)="" D GL^IEXCH("^CMSI","de",X,TP,IDX,DT,ID)
+ Q
+RMIDX(TP,IDX,DT,ID) ; Удалить индексы
+ N R,X
+ S R=$G(^CMS(TP,IDX,DT,ID)) Q:R="" 
+ S X=$P(R,"|",6)
+ I X'="" K ^CMSI("type",X,TP,IDX,DT,ID) D KGL^IEXCH("^CMSI","type",X,TP,IDX,DT,ID)
+ S X=$P(R,"|",7)
+ I X'="" K ^CMSI("dt",X,TP,IDX,DT,ID) D KGL^IEXCH("^CMSI","dt",X,TP,IDX,DT,ID)
+ S X=$P($G(^CMS(TP,IDX,DT,ID,"i")),"|",1)
+ I X'="" K ^CMSI("owner",X,TP,IDX,DT,ID) D KGL^IEXCH("^CMSI","owner",X,TP,IDX,DT,ID)
+ S X=+$P($G(^CMS(TP,IDX,DT,ID,"p")),"|",6) ; заверш/отмена
+ I X K ^CMSI("de",X,TP,IDX,DT,ID) D KGL^IEXCH("^CMSI","de",X,TP,IDX,DT,ID)
+ Q
+REIDX ; Переиндексировать
+ N TP,IDX,DT,ID
+ K ^CMSI
+ S TP="" F  S TP=$O(^CMS(TP)) Q:TP=""  D
+ .S IDX="" F  S IDX=$O(^CMS(TP,IDX)) Q:IDX=""  D 
+ ..S DT="" F  S DT=$O(^CMS(TP,IDX,DT)) Q:DT=""  D
+ ...S ID="" F  S ID=$O(^CMS(TP,IDX,DT,ID)) Q:ID=""  D MKIDX(TP,IDX,DT,ID)
+ Q
+IsNIB(NI,DT,TP,ST,UID1,RT) ; У пациента есть события на эту дату
+ ; TP - тип
+ ; ST - 0-все,1-новые,2-Не выполненные,3-Выполненные,4-Просроченные
+ ; UID1 - первый компонент UID
+ ; RT - вернуть и ID
+ N D,I,R,A,DE,T,T1,F,TPL,ID
+ S TP=$G(TP),ST=+$G(ST),RT=$G(RT)
+ I $G(UID1)'="" S I="" F  S I=$O(^CMM("start",I)) Q:I=""  S T=$P($P(^(I),"|",4),".",1) S:T=UID1 TPL(I)=""
+ S D=$S(ST<2:"",DT="":"",1:DT-1)
+ S DE=$S(ST<2:99999,DT="":999999,1:DT)
+ S DT=$S(DT'="":DT,ST=1:+$H,ST=4:+$H,1:"")
+ S F=0
+ F  S D=$O(^CMS("P",NI,D)) Q:D=""!(D>DE)  S I="" F  S I=$O(^CMS("P",NI,D,I)) Q:I=""  D  Q:F
+ .S R=^(I),A=$P(R,"|",1)
+ .Q:ST=2&(A>1)  Q:ST=3&(A'=2)
+ .S T1=+$P(R,"|",6)
+ .I TP'="",T1'=TP Q
+ .I $D(TPL),'$D(TPL(T1)) Q 
+ .S T=$P(R,"|",8)
+ .I ST=1 Q:A=2  I DT'="" Q:DT<$P(R,"|",7)   I T'="" Q:DT>T
+ .I ST=0,DT'="" Q:DT<$P(R,"|",7)   I T'="" Q:DT>T
+ .I ST=4 Q:A>1  Q:DT<$P(R,"|",7)  Q:T=""  Q:T>DT
+ .S F=1
+ .S:RT ID=NI_"|"_D_"|"_I_"|"_T1 
+ Q F_$S(RT:"|"_$G(ID),1:"")
+MOVPAC(FNIB,TNIB) ; Перемещение пациентов
+ D movID(FNIB,TNIB,"P")
+ Q
+MOVVR(FVR,TVR) ; Перемещение врачей
+ D movID(FVR,TVR,"D")
+ Q
+movID(FROM,TO,TP) ; Перемещение между идентификаторами по типу задачи
+ N DT,ID,I
+ S DT="" F  S DT=$O(^CMS(TP,FROM,DT)) Q:DT=""  D
+ .S ID="" F  S ID=$O(^CMS(TP,FROM,DT,ID)) Q:ID=""  D
+ ..D RMIDX(TP,FROM,DT,ID)
+ ..F I=ID:1:99999 Q:'$D(^CMS(TP,TO,DT,I)) 
+ ..M ^CMS(TP,TO,DT,I)=^CMS(TP,FROM,DT,ID)
+ ..K ^CMS(TP,FROM,DT,ID)
+ ..D REGL^IEXCH("^CMS",TP,TO,DT,I)
+ ..D KGL^IEXCH("^CMS",TP,FROM,DT,ID)
+ ..D MKIDX(TP,TO,DT,I)
+ Q
+SETST(TP,KEY,ST,WU) ; Установить статус
+ ; TP - тип
+ ; KEY - ключ записи через |
+ ; ST - статус
+ ; WU - устанавливать пользователя
+ N KX,D,I
+ S KX=$P(KEY,"|",1),D=$P(KEY,"|",2),I=$P(KEY,"|",3)
+ Q:KX=""!(D="")!(I="")  
+ S $P(^CMS(TP,KX,D,I),"|",1)=ST
+ S:$G(WU) $P(^CMS(TP,KX,D,I,"p"),"|",4,6)="D|"_$$KDR^IUSER()_"|"_$H
+ D GL^IEXCH("^CMS",TP,KX,D,I)
+ D:ST=2!(ST=9) MKIDXE(TP,KX,D,I)
+ Q
+FIO(RX,SH) ; ФИО создателя/исполнителя
+ ; RX - строка тип|код
+ ; SH - короткое имя 
+ S SH=$G(SH)
+ I $P(RX,"|",1)="P" S RX=$P(RX,"|",2) Q:SH $$FIOSH^IPAC(RX) Q $$FIO^IPAC(RX)
+ I $P(RX,"|",1)="D" S RX=$P(RX,"|",2) Q:SH $$FIOSH^IKADRY(RX) Q $$FIO^IKADRY(RX) 
+ Q ""
+INITDB 
+ S ^CMM("cmsstat",0)="Не выполнено"
+ S ^CMM("cmsstat",1)="В работе"
+ S ^CMM("cmsstat",2)="Завершено"
+ S ^CMM("cmsstat",9)="Отменено"
+ Q
+REGLCL ; 
+ K ^LCLI("cms")
+ S ^LCLI("cms")="Контакты с пациентами"
+ S ^LCLI("cms","del")="Удаление (0-запрет)"
+ S ^LCLI("cms","end")="Окончание задачи (0-запрет)"
+ S ^LCLI("cms","begin")="Взятие задачи на выполнение (0-запрет)"
+ S ^LCLI("cms","move")="Перемещение задачи (0-запрет)"
+ S ^LCLI("cms","swown")="Показывать только лично созданные записи"
+ S ^LCLI("cms","allowtp")="Список разрешенных типов задач через ;"
+ S ^LCLI("cms","showlpu")="Показывать филиал в списке задач"
+ Q

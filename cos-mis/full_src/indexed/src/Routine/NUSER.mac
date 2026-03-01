@@ -1,0 +1,359 @@
+NUSER ; Управление пользователями [ 06/23/2020  11:54 AM ]
+LK(KID) ; Load from kadry
+ N LOG,R,A,T,LL,ID,X,LC
+ Q:$$LCL^IUSER("users","view")=0 
+ S LOG=$$GET^IKADRY(KID,"user",+$H)
+ I KID'="",LOG="" S R="" F  S R=$O(^LOG(R)) Q:R=""  I $G(^(R,"kadry"))=KID S LOG=R Q 
+ I LOG="",$$LCL("kadry","autouser") M LL=^WWW("user")
+ M:$L(LOG) LL=^LOG(LOG)
+ Q:'$$CHKLCL^NROLES($G(LL("role"))) 
+ D OWF^RWU(".xmlb")
+ D W^RWU($G(^PP(0,2))_"<kdrusr>")
+ D WTAGDC^RWU("uname",LOG)
+ D WTAGDC^RWU("dir",$$DBLSLH($G(LL)))
+ D WTAGDC^RWU("dir1",$$DBLSLH($G(LL(1))))
+ D WTAGDC^RWU("ip",$G(LL("IP")))
+ D WTAGDC^RWU("otd",$G(LL("otd")))
+ D WTAGDC^RWU("sync",$G(LL("SYNC"))="user")
+ D WTAGDC^RWU("kkm",+$G(LL("kkm")))
+ D WTAGC^RWU("lcl",$$LSTsys^NLCL(""))
+ D WTAGDC^RWU("role_name",$G(^WWW("roles",+$G(LL("role")))))
+ D WTAGDC^RWU("log",$$FUSRH^IUSER($G(LL("log"))))
+ D W^RWU("</kdrusr></nb_console>"),C^RWU
+ Q
+LKLT(KID,FRM) ; Load from kadry
+ N LOG,R,A,T,LL,ID,X
+ Q:$$LCL^IUSER("users","view")=0 
+ S LOG=$$GET^IKADRY(KID,"user",+$H),FRM=$G(FRM)
+ I KID'="",LOG="" S R="" F  S R=$O(^LOG(R)) Q:R=""  I $G(^(R,"kadry"))=KID S LOG=R Q 
+ M:$L(LOG) LL=^LOG(LOG)
+ Q:'$$CHKLCL^NROLES($G(LL("role"))) 
+ D OWF^RWU(".xmlb")
+ D W^RWU($G(^PP(0,2))_"<"_FRM_">")
+ D WTAGDC^RWU("uname",LOG)
+ D:'$$LCL^IUSER("users","hidepwd") WTAGDC^RWU("pass",$G(^PAS(LOG)))
+ D WTAGDC^RWU("role_name",$G(^WWW("roles",+$G(LL("role")))))
+ D W^RWU("</"_FRM_"></nb_console>"),C^RWU
+ Q
+SK ; Save from kadry
+ Q:$$LCL^IUSER("users","save")=0
+ N LOG,OLOG
+ N @$$NEWVAR^YIXMLRR()
+ D RBUFH^YIXMLRR(1)
+ D WK
+ Q
+WK ; write
+ N NB,FM,R,KID,I,X
+ S NB="nb_console",FM="kdrusr"
+ S LOG=$G(XML(NB,FM,"uname")) Q:LOG=""
+ S OLOG=$G(XML(NB,FM,"unamei"))
+ S KID=$G(XML(NB,FM,"kid"))
+ I LOG["@"!(LOG["|")!(LOG[" ") D MSG^RWU("Недопустимое имя пользователя") Q 
+ I '$$CHKLCL^NROLES($G(XML(NB,FM,"role"))) D MSG^RWU("Изменение данных пользователя запрещено.") Q
+ I $$CHKNEX^IUSER(KID,LOG) D MSG^RWU("Указанное имя пользователя уже занято.") Q
+ I $$LCL^IUSER("users","rename"),KID'="" S R=$$GET^IKADRY(KID,"user") I R'="",LOG'=R D MSG^RWU("Изменение имени запрещено.") Q 
+ 
+ S ^LOG(LOG)=$G(XML(NB,FM,"dir"))
+ S ^(LOG,1)=$G(XML(NB,FM,"dir1"))
+ S R=$G(XML(NB,FM,"otd"))
+ S:R=999 R=""
+ S:R'="" ^("otd")=R K:R="" ^("otd")
+ S R=$TR($G(XML(NB,FM,"ip"))," ","")
+ S:R'="" ^("IP")=R K:R="" ^("IP")
+ S R=+$G(XML(NB,FM,"kkm"))
+ S:R ^("kkm")=R K:R=0 ^("kkm")
+ S R=+$G(XML(NB,FM,"sync"))
+ S:R=1 ^("SYNC")="user" K:R=0 ^("SYNC")
+ S ^("kadry")=KID
+ K ^("lcl")
+ D SET^IKADRY(KID,"user",+$H,LOG,1)
+ S X=$G(XML(NB,FM,"lcl"))
+ F I=1:1:99 S R=$P(X,CR,I) Q:R=""  S FM=$P(R,"@",2) S:FM'="" ^LOG(LOG,"lcl",$P(R,"@",1))=FM
+ I '$D(^LOG(LOG,"lcl","i")),$D(^LOG(%LOG,"lcl","i")) S ^LOG(LOG,"lcl","i")=^LOG(%LOG,"lcl","i")
+Wsys 
+ D UPD^IUSER(LOG)
+ Q
+UPASS(U) ; Сгенерировать пароль
+ I U'="",$G(^PAS(U))'="" Q 
+ D MSG^RWU(10000+$R(90000))
+ Q
+LU(LOG) ; Загрузка пользователя
+ Q:$$LCL^IUSER("users","view")=0 
+ N KID,R,A,T,LL,ID,X,LC,U
+ M:$L(LOG) LL=^LOG(LOG)
+ Q:'$$CHKLCL^NROLES($G(LL("role")))
+ D OWF^RWU(".xmlb")
+ D W^RWU($G(^PP(0,2))_"<users>")
+ D WTAGDC^RWU("uname",LOG)
+ D WTAGDC^RWU("dir",$$DBLSLH($G(LL)))
+ D WTAGDC^RWU("dir1",$$DBLSLH($G(LL(1))))
+ D WTAGDC^RWU("ip",$G(LL("IP")))
+ D WTAGDC^RWU("clientid",$G(LL("clientid")))
+ S KID=$G(LL("kadry"))
+ D WTAGDC^RWU("kadry",KID)
+ D WTAGDC^RWU("kadry_name",$$FIO^IKADRY(KID))
+ D WTAGDC^RWU("otd",$G(LL("otd")))
+ D WTAGDC^RWU("sync",$G(LL("SYNC"))="user")
+ D WTAGDC^RWU("kkm",+$G(LL("kkm")))
+ D WTAGDC^RWU("deny",+$G(LL("deny")))
+ D WTAGDC^RWU("exe",$G(LL("X")))
+ 
+ S U=$G(LL("log"))
+ D:U'="" WTAGDC^RWU("log",$$FUSRH^IUSER(U))
+ 
+ S R="" F  S R=$O(^LCL(R)) Q:R=""  S LC(R)=""
+ 
+ S (A,R)="" F  S R=$O(LC(R)) Q:R=""  D
+ .S T=$G(LL("lcl",R))
+ .S X=$G(^LCL(R)),X=$S(X="":$G(^LCLI(R)),1:X)
+ .S A=A_CR_R_"@"_T_"|"_X_"|"_$S(T="":T,1:$G(^LCL(R,T)))
+ D WC^RWU("<lcl>"_A_"</lcl>")
+ D WTAGDC^RWU("role_name",$G(^WWW("roles",+$G(LL("role")))))
+ 
+ S (A,R)=""
+ K LC F  S R=$O(^WWW("host",R)) Q:R=""  S LC(R)=""
+ M LC=^LOG(LOG,"host")
+ S R="" F  S R=$O(LC(R)) Q:R=""  S A=A_CR_R_"|"_$G(LC(R))
+ D WC^RWU("<srv>"_A_"</srv>")
+ 
+ S (A,R)="" F  S R=$O(LC("plcl",R)) Q:R=""  D
+ .S T="" F  S T=$O(LC("plcl",R,T)) Q:T=""  D
+ ..S X=$G(^LCLI(R))_"-"_$G(^LCLI(R,T))
+ ..S A=A_CR_R_"@"_T_"|"_X_"|"_$G(LC("plcl",R,T))
+ D WC^RWU("<prms>"_A_"</prms>")
+ 
+ D W^RWU("</users></nb_console>"),C^RWU
+ Q
+SU ; Сохранение пользователя
+ Q:$$LCL^IUSER("users","save")=0 
+ D RBUFH^YIXMLRR(1)
+ D WU
+ D CLOSE^YIXMLRR
+ Q
+WU 
+ N NB,FM,R,KID,I,X,K1,K2,K3
+ S NB="nb_console",FM="users"
+ S LOG=$G(XML(NB,FM,"uname")) Q:LOG=""
+ S R=$G(XML(NB,FM,"role"))
+ S:R=""&(LOG'="") R=$G(^LOG(LOG,"role"))
+ I LOG["@"!(LOG["|")!(LOG[" ") D MSG^RWU("Недопустимое имя пользователя") Q
+ I '$$CHKLCL^NROLES(R) D MSG^RWU("Изменение данных пользователя запрещено.") Q
+ S KID=$G(XML(NB,FM,"kadry"))
+ I $$LCL^IUSER("users","rename"),KID'="" S R=$$GET^IKADRY(KID,"user") I R'="",LOG'=R D MSG^RWU("Изменение имени запрещено.") Q 
+ S ^LOG(LOG)=$G(XML(NB,FM,"dir"))
+ S ^(LOG,1)=$G(XML(NB,FM,"dir1"))
+ S R=$G(XML(NB,FM,"otd"))
+ S:R'="" ^LOG(LOG,"otd")=R K:R="" ^LOG(LOG,"otd")
+ S R=$G(XML(NB,FM,"clientid"))
+ S:R'="" ^LOG(LOG,"clientid")=R K:R="" ^LOG(LOG,"clientid")
+ S R=$TR($G(XML(NB,FM,"ip"))," ","")
+ S:R'="" ^LOG(LOG,"IP")=R K:R="" ^LOG(LOG,"IP")
+ S R=$TR($G(XML(NB,FM,"exe"))," ","")
+ S:R'="" ^LOG(LOG,"X")=R K:R="" ^LOG(LOG,"X")
+ d setplb("kkm")
+ d setplb("deny")
+ S R=+$G(XML(NB,FM,"sync"))
+ S:R=1 ^("SYNC")="user" K:R=0 ^("SYNC")
+ S ^("kadry")=KID
+ D:KID'="" SET^IKADRY(KID,"user",+$H,LOG,1)
+ ; права
+ K ^LOG(LOG,"lcl")
+ S X=$G(XML(NB,FM,"lcl"))
+ F I=1:1:99 S R=$P(X,CR,I) Q:R=""  S K1=$P(R,"@",2) S:K1'="" ^LOG(LOG,"lcl",$P(R,"@",1))=K1
+ ; сервера
+ K ^LOG(LOG,"host")
+ S X=$G(XML(NB,FM,"srv"))
+ F I=2:1:99 S R=$P(X,CR,I) Q:R=""  S K1=$P(R,"|",1),K2=$P(R,"|",2) S:K2'="" ^LOG(LOG,"host",K1)=K2
+ ; персональные параметры
+ K ^LOG(LOG,"plcl")
+ S X=$G(XML(NB,FM,"prms"))
+ F I=2:1:99 S R=$P(X,CR,I) Q:R=""  S K3=$P(R,"|",1),K1=$P(K3,"@",1),K2=$P(K3,"@",2),K3=$P(R,"|",3) I K1'="",K2'="" S ^LOG(LOG,"plcl",K1,K2)=K3
+ 
+ ; default LPU profile
+ I '$D(^LOG(LOG,"lcl","i")),$D(^LOG(%LOG,"lcl","i")) S ^LOG(LOG,"lcl","i")=^LOG(%LOG,"lcl","i")
+ 
+ D UPD^IUSER(LOG)
+ Q
+setplb(nm) 
+ S R=+$G(XML(NB,FM,nm))
+ S:R ^(nm)=R K:R=0 ^(nm)
+ Q
+SUROLE(LOG,ROLE) ; Изменить роль
+ Q:'$$CHKLCL^NROLES(ROLE) 
+ I $$LCL^IUSER("users","save")=0 D MSG^RWU("Нет прав") Q 
+ D SETROLE^IUSER($$WD^TXTU(LOG),ROLE)
+ D LU(LOG)
+ Q
+DU(USR) ; Удаление пользователя
+ Q:USR="" 
+ Q:$$LCL^IUSER("users","del")=0 
+ S USR=$$WD^TXTU(USR)
+ Q:'$$CHKLCL^NROLES($G(^LOG(USR,"role"))) 
+ D DEL^IUSER(USR)
+ Q
+RU(USRF,USRT) ; Переименовать пользователя
+ Q:USRF=""  Q:USRT="" 
+ S USRF=$$WD^TXTU(USRF),USRT=$$WD^TXTU(USRT)
+ I $$LCL^IUSER("users","rename")=0 D MSG^RWU("Нет прав") Q
+ I USRT["@"!(USRT["|")!(USRT[" ") D MSG^RWU("Недопустимое имя пользователя") Q
+ D REN^IUSER(USRF,USRT)
+ Q
+LSTUSR(TXT,ROLE) ; Поиск пользователей
+ n L,K
+ s TXT=$$LU^TXTU($$WD^TXTU(TXT)),ROLE=$G(ROLE)
+ D OWF^RWU(".txt")
+ S L="" F  S L=$O(^LOG(L)) Q:L=""  D
+ .s K=$G(^(L,"kadry"))
+ .I ROLE'="",$G(^("role"))'=ROLE Q 
+ .I TXT'="",$$LU^TXTU(L)'[TXT Q 
+ .d WC^RWU(CR_L_"|"_$$FIOSH^IKADRY(K))
+ D C^RWU
+ Q
+CHKPAS(PAS) ; Check password for current user
+ D MSG^RWU($S(PAS="":"",$G(^PAS(%LOG))=PAS:1,1:0))
+ Q
+CHKPAS2(LOG,PAS) ; Check password (temp version)
+ S LOG=$$WD^TXTU(LOG)
+ D MSG^RWU($S(PAS="":"",$G(^PAS(LOG))=PAS:1,1:0))
+ Q
+PASS(UID,P) ; Set password
+ Q:UID=""  Q:'$D(^LOG(UID)) 
+ Q:'$$CHKLCL^NROLES($G(^LOG(UID,"role"))) 
+ I $$LCL^IUSER("users","passwd")=0 D MSG^RWU("Нет прав") Q
+ I UID["@"!(UID["|")!(UID[" ") D MSG^RWU("Недопустимое имя пользователя") Q 
+ ; $$WD^TXTU(P) - ! пароль в нативной кодировке
+ D PASS^IUSER(UID,P)
+ Q
+GETALOG(KID) ; Get Autolog
+ Q:KID=""  
+ N LOG,R
+ S %L=$$GET^IKADRY(KID,"user",+$H) Q:%L'=""
+ S R="" F  S R=$O(^LOG(R)) Q:R=""  I $G(^(R,"kadry"))=KID S %L=R Q 
+ Q
+LOGLT(KID,LOG,PAS) ; Упрощенная версия создания пользователя
+ N OLOG
+ I LOG["@"!(LOG["|")!(LOG[" ") D MSG^RWU("Недопустимое имя пользователя") Q
+ I $$CHKNEX^IUSER(KID,LOG) D MSG^RWU("Указанное имя пользователя уже занято.") Q 
+ I '$$CHKLCL^NROLES($G(^LOG(LOG,"role"))) D MSG^RWU("Изменение этого пользователя запрещено.") Q 
+ S OLOG=$S(KID="":"",1:$$GET^IKADRY(KID,"user",+$H))
+ I OLOG'="",OLOG'=LOG,$$LCL^IUSER("users","rename")=0 D MSG^RWU("Изменение имени запрещено.") Q 
+ I '$D(^LOG(LOG)) M ^LOG(LOG)=^WWW("user") D Wsys
+ I KID'="",$G(^LOG(LOG,"kadry"))="" S ^("kadry")=KID D SET^IKADRY(KID,"user",+$H,LOG,1),Wsys
+ 
+ S ^PAS(LOG)=PAS
+ D:+$G(^cfg("login","allsrv")) GL^IEXCH("^PAS",LOG)
+ Q
+GETPAS(LOG) ; Get password (для упрощенной версии) 
+ Q:LOG="" 
+ Q:$$LCL("kadry","user")'=2 
+ Q:'$$CHKLCL^NROLES($G(^LOG(LOG,"role")))
+ D MSG^RWU($G(^PAS(LOG)))
+ Q
+LCLLST(NM) ; Список ограничений по разделу
+ N R,A
+ S A="|По умолчанию",R=""
+ Q:NM="" 
+ F  S R=$O(^LCL(NM,R)) Q:R=""  S A=A_CR_R_"|"_$G(^(R))
+ D MSG^RWU(A)
+ Q
+LSTROLE(TAG,NUL) ; Список ролей
+ N R,C,A
+ S A=""
+ S:$G(NUL) A="|Убрать роль"
+ S A=$S(A="":"",1:CR)_$S($D(^WWW("user")):"|Значения по умолчанию",1:"")
+ S R="",C=$S(A="":"",1:CR),TAG=$G(TAG)
+ F  S R=$O(^WWW("roles",R)) Q:R=""  S K=$G(^(R)) I TAG=""!(TAG=$G(^(R,"flg"))) S A=A_C_R_"|"_K,C=CR
+ D MSG^RWU(A)
+ Q
+SETROLE(KID,LOG,X,FRM,CLR) ; Установить роль пользователя
+ ; X - ID роли
+ ; CLR - очищать существующую роль
+ I LOG="" Q 
+ I '$D(^LOG(LOG)) D MSG^RWU("Данные пользователя не сохранены.") Q 
+ I $$CHKNEX^IUSER(KID,LOG) D MSG^RWU("Указанное имя пользователя уже занято.") Q
+ I '$$CHKLCL^NROLES(X) D MSG^RWU("Изменение роли запрещено.") Q 
+ I $$LCL^IUSER("users","save")=0 D MSG^RWU("Нет прав") Q 
+ N R
+ S FRM=$G(FRM),CLR=$G(CLR)
+ S:CLR="" CLR=$$LCL^IUSER("users","roleclr")
+ M:X="" ^LOG(LOG)=^WWW("user")
+ I X="-" S ^LOG(LOG,"role")="",X="" ; reset
+ I X'="" K:CLR ^LOG(LOG,"lcl") M ^LOG(LOG)=^WWW("roles",X,"log") S ^LOG(LOG,"role")=X
+ I KID'="",$G(^LOG(LOG,"kadry"))="" S ^("kadry")=KID D SET^IKADRY(KID,"user",+$H,LOG,1)
+ D Wsys
+ I FRM'="" D LKLT(KID,FRM) Q 
+ D LK(KID)
+ Q
+DBLSLH(R) 
+ N P,J
+ S P=1 F  S J=$F(R,"\",P) Q:J=0  S P=J+1,$E(R,J-1)="\\"
+ Q R
+FIOSH(ID,MOD) ; ФИО+ЛПУ по логину
+ Q:ID="" ""  N K
+ I ID["@" S:$P(ID,"@",2)=$$^I("ilpu") K=$G(^LOG($P(ID,"@",1),"kadry")) S:$P(ID,"@",2)'=$$^I("ilpu") K=$G(^LOGA(ID,"kadry"))
+ S:ID'["@" K=$G(^LOG($P(ID,"@",1),"kadry"))
+ Q:K="" ID
+ S MOD=$G(MOD)
+ Q:'$$CHECK^IKADRY(K) $P(ID,"@",1)_$S(MOD&(ID["@"):"@"_$P(ID,"@",2),1:"")
+ I MOD=2 Q $$FIOSH^IKADRY(K)_" ("_ID_")"
+ Q $$FIOSH^IKADRY(K)_$S(MOD&(ID["@"):"@"_$P(ID,"@",2),1:"")
+FIO(ID,RETVR) ; Полное ФИО или таб. номер (RETVR=1) по логину
+ Q:ID="" ""  N K
+ I ID["@" S:$P(ID,"@",2)=$$^I("ilpu") K=$G(^LOG($P(ID,"@",1),"kadry")) S:$P(ID,"@",2)'=$$^I("ilpu") K=$G(^LOGA(ID,"kadry"))
+ S:ID'["@" K=$G(^LOG($P(ID,"@",1),"kadry"))
+ Q:K="" ID Q:$G(RETVR)=1 K Q $$FIO^IKADRY(K)_$S($G(RETVR)=2:" ("_ID_")",1:"")
+NMLPU(ID) ; Получить ЛПУ по пользователю
+ S ID=$P(ID,"@",2) Q:ID="" ""
+ Q $$NAME^ICONTR(ID)
+KDR() ; Таб. номер по текущему %LOG
+ G KDR+1^IUSER
+USR() ; Пользователь+ЛПУ
+ Q:$G(%LOG)="" ""
+ N L S L=+$$^I("ilpu")
+ Q %LOG_$S(L=0:"",1:"@"_L)
+LCL(L,NM) ; Get LCL field for current user
+ Q:$D(^LOG(%LOG,"lcl",L))[0 "" ; именно так
+ Q $G(^LCL(L,+^(L),NM))
+LCLUSR(USR,L,NM) ; Get LCL field for selected user
+ Q:$D(^LOG(USR,"lcl",L))[0 "" ; именно так
+ Q $G(^LCL(L,+^(L),NM))
+CFG(X,Y) ; Get from ^cfg
+ D MSG^RWU($S($D(Y):$G(^cfg(X,Y)),1:$G(^cfg(X))))
+ Q
+GETUCFG(CFG) ; Get user config
+ D MSG^RWU($S(CFG="":"",1:$G(^LOG(%LOG,"usercfg",CFG))))
+ Q
+SETUCFG(CFG,X) ; Set user config
+ S ^LOG(%LOG,"usercfg",CFG)=$$WD^TXTU(X)
+ Q
+TEMP(VAR,X) ; Получение/запись временных значений
+ I '$D(X) Q $G(^JOB(%JOB,"tempvars",VAR))
+ S ^JOB(%JOB,"tempvars",VAR)=X
+ Q
+GETLCL(L,NM) ; Get LCL field for current user (network version)
+ Q:$D(^LOG(%LOG,"lcl",L))[0  ; именно так
+ D MSG^RWU($G(^LCL(L,+^(L),NM)))
+ Q
+ROLE() ; ID роли
+ Q $G(^LOG(%LOG,"role"))
+INITF(FRM) ; Init 'abstract' form
+ Q:FRM=""
+ I '$D(^LOG(%LOG,"lcl",FRM)),'$D(^FSTATE(FRM)) S %L="" 
+ D OWF^RWU(".xmlb")
+ D W^RWU(^PP(0,2)_"<"_FRM_">")
+ N R,I,X
+ S R=+$G(^LOG(%LOG,"lcl",FRM)),I=""
+ F  S I=$O(^LCL(FRM,R,I)) Q:I=""  D
+ .S I=$G(^(I)) Q:I="" 
+ .D WC^RWU("<"_I_" visible="""_$S(I:"yes",1:"no")_"""/>")
+ ; fixed state
+ S R="" F  S R=$O(^FSTATE(FRM,R)) Q:R=""  D
+ .S (X,I)=""
+ .F  S I=$O(^FSTATE(FRM,R,I)) Q:I=""  S X=X_" "_I_"="""_^(I)_""""
+ .Q:X="" 
+ .D WC^RWU("<"_R_X_"/>")
+ D W^RWU("</"_FRM_"></nb_console>"),C^RWU
+ Q
+REGLCLI 
+ D REGLCLI^NUSERS
+ Q

@@ -1,0 +1,768 @@
+NZUBLAB ; Зуботехн. лаборатория [ 03/05/2021  1:35 AM ]
+INIT 
+ N SPL
+ M SPL=^cfg("stom-lab-spec")
+ Q
+VRLST 
+ D OWF^RWU(".txt")
+ D VRLST^IZUBLAB
+ D C^RWU
+ Q
+OPEN 
+ N N,SPL,LP,ISP,LST
+ M SPL=^cfg("stom-lab-spec")
+ S LP=+$$^I("ilpu")
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<znnlst>")
+ D W^RWU("<isp>")
+ ; todo  - зубопротезн. отделение 
+ ; С сортировкой
+ S N="" F  S N=$O(^KDR(N)) Q:N=""  I $D(SPL(+$$SPEC^IKADRY(N))),$$USEInLPU^IKADRY(N,LP) S LST($$FIOSH^IKADRY(N)_"|"_N)="",ISP(N)=""
+ F  S N=$O(LST(N)) Q:N=""  D WC^RWU(CR_$P(N,"|",2)_"|"_$P(N,"|",1))
+ D W^RWU("</isp><zak>")
+ K LST
+ S N="" F  S N=$O(^KDR(N)) Q:N=""  I '$D(ISP(N)),$$CHECK^IKADRY(N) S LST($$FIOSH^IKADRY(N)_"|"_N)=""
+ F  S N=$O(LST(N)) Q:N=""  D WC^RWU(CR_$P(N,"|",2)_"|"_$P(N,"|",1))
+ D W^RWU("</zak><jzak>")
+ D LSTFLsys^YCONTR("","fi|cli|prt",,1)
+ D W^RWU("</jzak></znnlst></nb_console>"),C^RWU
+ Q
+OPENZV ; Инициализация формы заказ-наряда врача
+ N FRM S FRM="ztvorder" G OPENi
+OPENZ ; Инициализация формы заказ-наряда
+ N FRM S FRM="ztzakaz"
+OPENi N X,T
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<"_FRM_">")
+ D W^RWU("<jzak>")
+ D LSTFLsys^YCONTR("","fi|cli|prt")
+ D W^RWU("</jzak>")
+ D W^RWU("<add_usl visible="""_$S($$LCL^IUSER("zublab","addu")=0:"no",1:"yes")_"""/>")
+ S X=$G(^cfg("zlab","wrkdtex"))
+ S T=$S(X:"Наименование этапа:5000;Дата:1600;Вып.:700;Выполнено:2500",1:"Наименование этапа:5000;Дата:1600;Вып.:700;Исполнитель:2500")
+ D WC^RWU("<wrk default="""_T_""" userdata="""_X_"""/>")
+ D:$G(^cfg("zlab","sel-elpu")) WC^RWU("<elpu userdata=""1""/>")
+ D:$G(^cfg("zlab","ssum")) WC^RWU("<cfgf data=""ssum""/>")
+ D W^RWU("</"_FRM_"></nb_console>"),C^RWU
+ Q
+TAB(DS,DE,ZZ,IS,STT,JZZ,FIO,PAY) ; Таблица
+ ; ZZ - заказчик
+ ; IS - исполнитель
+ ; STT - статус
+ ; JZZ - юрлицо
+ ; FIO - ФИО пациента
+ ; PAY - оплата 0-все/1-да/2-нет
+ N ID,R,A,S,X,NI,ST,SD,DT,JZ,HH,mST,ANN,D,FF,LPU,IsNI
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S FIO=$$LU^TXTU($$WD^TXTU(FIO)),PAY=+$G(PAY)
+ S IsNI=$S(FIO="":0,1:$$EXIST^IPAC(FIO))
+ S mST=$G(^cfg("zlab","dstcl")),LPU=$$^I("ilpu"),FF=+$$FR^I()
+ S HH=+$H
+ D OWF^RWU(".txt")
+ D WC^RWU("|Заказ|Пациент|Дата|Заказчик|Клиника|Принят|Выполнен|Исполнитель|Этап")
+ S ID="" F  S ID=$O(^STZN(ID)) Q:ID=""  D
+ .S A=$G(^(ID)) Q:A="" 
+ .I ZZ'="",$P(A,"|",3)'=ZZ Q
+ .I IS'="",$P(A,"|",6)'=IS Q
+ .S JZ=$P(A,"|",4)
+ .I JZZ'="",JZ'=JZZ Q
+ .I 'FF,LPU'=JZ Q  
+ .I PAY S X=$P(A,"|",10) Q:PAY=1&('X)  Q:PAY=2&(X) 
+ .S NI=$P(A,"|",1)
+ .I NI'="",IsNI,FIO'=NI Q 
+ .S S=$P(A,"|",2),AN=""
+ .I STT=8 S AN=+$$IsMIN^IZUBLAB(ID) Q:'AN 
+ .I STT'="" Q:STT=4&(S'=5)  Q:STT=6&(S'=6)  Q:STT=7&(S'=7)  Q:STT=2&(S'=9)  Q:STT=1&(S'="")  Q:STT=3&((S<1)!(S=9))  Q:STT=5&((S<1)!(S=9))  
+ .S R=$$GSTAGE(ID,DS,DE,$S(STT=5:1,STT=10:4,STT="":3,1:0)) ; GSTAGE(ID,DS,DE,STT=5) 
+ .I R="",STT'=10 Q:STT=5  S SD=+$P(A,"|",5) Q:SD<DS  Q:SD>DE 
+ .S ST=$P(R,"|",1),SD=$P(R,"|",2) ; этап и дата
+ .I STT=10,ST="" Q  ; нет этапа на дату
+ .I FIO'="",'IsNI,$$LU^TXTU($$FIO^IPAC(NI))'[FIO Q  
+ .S R=$$CLSTAGE(ST,SD,HH)
+ .S R=ID_$S(S=9:"@24",R="":$S(mST:"",ST'="":"@8",1:""),1:"@"_R)
+ .S:'$P(A,"|",10) $P(R,"@",3)=23 ; неоплата
+ .S:AN="" AN=$$IsMIN^IZUBLAB(ID)
+ .S:AN $P(R,"@",4)=23 ; с минусом
+ .S R=R_"|"_ID_"|"_$$FIOSH^IPAC(NI)_"|"_$$DT^DTUTL(+$P(A,"|",5))
+ .S R=R_"|"_$$FIOSH^IKADRY($P(A,"|",3))_"|"_$$NAME^ICONTR(JZ)
+ .S X=$S(S=5:"согл.",S=6:"приост.",S=7:"отмена.",1:$$DT^DTUTL($P(A,"|",8)))
+ .S D=$P($P(A,"|",7),"@",3),R=R_"|"_$$DT2^DTUTL(D)
+ .S R=R_"|"_X_"|"_$$FIOSH^IKADRY($P(A,"|",6))
+ .S R=R_"|"_$S(S=9:"Выполнен",1:$$NMSTAGE(ST,SD,DS,DE,STT=""))
+ .D WC^RWU(CR_R)
+ D C^RWU
+ Q
+LSTZN(NIB) ; Список нарядов по пациенту
+ N ID,R,A
+ S A=""
+ S ID="" F  S ID=$O(^STZN(ID)) Q:ID=""  D
+ .S R=$G(^(ID)) Q:$P(R,"|",1)'=NIB
+ .S A=$S(A="":"",1:A_CR)_ID_"|"_$$DT^DTUTL($P(R,"|",5))_", "_$$FIOSH^IKADRY($P(R,"|",3))
+ D MSG^RWU(A)
+ Q
+GSTAGE(ID,DS,DE,OK) ; Get stage
+ ; OK =0/1/2/3/4 - все текущие/выполненные/любой первый/младший невыполн./любой в периоде
+ N R,I,S,D,DD,DM,SM
+ S DS=$G(DS),DE=$G(DE),OK=+$G(OK)
+ S (S,I,SM)="",DD=$S(OK=1:999999,1:0),DM=99999
+ F  S I=$O(^STZN(ID,"w",I)) Q:I=""  D  I OK=4,SM'="" Q 
+ .S R=^(I),D=$P(R,"|",1) Q:D=""  
+ .I OK=4 Q:D<DS  Q:D>DE  S DM=D,SM=I Q 
+ .I OK=1,$P(R,"|",2) Q  ; без дат и сделанные
+ .I OK=3,$P(R,"|",2) Q
+ .I DS'="",D<DS Q
+ .I OK=2,DM>D S DM=D,SM=I
+ .I OK=3,DM>D S DM=D,SM=I
+ .Q:OK=3 
+ .I DE'="",D>DE Q
+ .I OK=1 S:D<DD S=I,DD=D
+ .I OK=0!(OK=2),$P(R,"|",2) S:D>DD S=I,DD=D
+ I S="",OK=2,DM'=99999 Q SM_"|"_DM
+ I OK=3!(OK=4),SM'="" Q SM_"|"_DM
+ Q:S="" ""
+ Q S_"|"_DD
+GFSTAGE(ID,DT,OK) ; Этап на дату
+ N R,I,S,D,DD
+ S (S,I)="",DT=$G(DT),OK=+$G(OK),DD=$S(OK:999999,1:0)
+ F  S I=$O(^STZN(ID,"w",I)) Q:I=""  D
+ .S R=^(I),D=$P(R,"|",1) Q:D=""  I OK q:$P(R,"|",2)
+ .I DT'="",D'<DT Q
+ .I OK S:D<DD S=I,DD=D
+ .I 'OK,$P(R,"|",2) S:D>DD S=I,DD=D
+ Q:S="" ""
+ Q S_"|"_DD
+NMSTAGE(ST,DT,DS,DE,wDT) ; Name of stage
+ ; wDT - выводить дату
+ Q:ST="" ""
+ Q:ST=-1 ""
+ S wDT=$G(wDT)
+ Q $$NAME^ISPRAV("stomstage",ST)_$S('wDT&DS=DE:"",1:", "_$$DT2^DTUTL(DT))
+CLSTAGE(ST,DT,DH) ; Стиль строки
+ I mST,(DH>(DT+1))!(DH<DT) Q ""
+ Q $$GETN^ISPRAV("stomstage",ST,2)
+DELZN(ID) ; Delete
+ Q:ID=""  Q:$$LCL^IUSER("zublab","del")=0 
+ N A,NI S A=$G(^STZN(ID)),NI=$P(A,"|",1)
+ I $P(A,"|",2)=9 D MSG^RWU("Заказ-наряд уже выполнен.") Q 
+ K ^STZN(ID) D KGL^IEXCH("^STZN",ID)
+ I NI'="" K ^STZNI("n",NI,ID) D KGL^IEXCH("^STZNI","n",NI,ID)
+ Q
+SV 
+ N FRM,XLPU S FRM="ztvorder",XLPU=+$$^I("ilpu") G Si
+S ; Save
+ N FRM,XLPU S FRM="ztzakaz",XLPU=0
+Si 
+ N %J,A
+ D ORH^RWU
+ F %J=1:1 S A=$$WD^TXTU($$R13^RWU) Q:%IFN["Z"  D XMLAN^YIXMLRR
+ D CR^RWU
+ D W(FRM),CLOSE^YIXMLRR
+ Q
+W(FM) ; Write
+ N ID,NB,I,A,NI,D,R,NN,VRX,X,Y,FIOF,F,Z,ST,SS,WI,LST,RR,PR,DX,cST,CF,DT,UKEY,E1,E2,aCNGU,OT,VR,DT,IDU,ZUB,CCL,HH
+ S NB="nb_console"
+ S ID=XML(NB,FM,"id"),NN=0,HH=$H
+ S aCNGU=$$LCL^IUSER("zublab","cngsbs")
+ S CCL=$$LCL^IUSER("zublab","ccolor") ; TODO
+ S GID=$RE($$^I("ilpu"))
+ D wchk
+ Q:$$IsMSG^RWU() 
+ I ID="" S ID=$$NEW^IZUBLAB(""),NN=1  
+ S NI=XML(NB,FM,"nib"),A=$G(^STZN(ID)),SS=0
+ D:NI=""  ; поиск/добавление пациента
+ .N FF,FI,FO,BD
+ .S FF=$G(XML(NB,FM,"fio")),BD=$$DI^DTUTL($G(XML(NB,FM,"born")))
+ .Q:FF="" 
+ .S FI=$P(FF," ",2),FO=$P(FF," ",3),FF=$P(FF," ",1)
+ .S NI=$$GETNIB^IPACFND(FF,FI,FO,BD,"",1)
+ .I NI'="",NI'=-1 Q
+ .S NI=$$ADD^IPAC(FF,FI,FO,BD,"",+$G(^cfg("def-stc")),"")
+ .D SET^IPAC(NI,"tel1",+HH,XML(NB,FM,"tel"),1)
+ S cST=+$G(^cfg("zlab","st-end")) ; закрытие по конкретн. этапу
+ S VRX=XML(NB,FM,"zak")
+ S DT=$$DIH^DTUTL($G(XML(NB,FM,"dt_label")))
+ ; nib|status|vr|vr.lpu|created|executor|confirm|complete|%LOG|pay|dt|ex.lpu
+ ; "s")=summ, "ci")= "cz")= "u")= "m")= "w")=
+ ; status: ""-created,1-accepted,5-coordination,9-complete
+ S A=$G(^STZN(ID))
+ S $P(A,"|",1)=NI,$P(A,"|",9)=$$USR^IUSER()
+ S $P(A,"|",3)=VRX
+ S I=$P(A,"|",8) ; дата завершения
+ S:I&(DT>I) DT=I ; не более даты завершения
+ S $P(A,"|",5)=$S($P(A,"|",5)="":DT,$G(^cfg("zlab","ncngdt")):$P(A,"|",5),1:DT)
+ S I=$G(XML(NB,FM,"jzak")) S:XLPU I=XLPU
+ S $P(A,"|",4)=I
+ S $P(A,"|",10)=$G(XML(NB,FM,"pay"))
+ S I=$$DI^DTUTL($G(XML(NB,FM,"dtctl")))
+ S:I'="" $P(A,"|",11)=I
+ S I=$G(XML(NB,FM,"vr"))
+ S $P(A,"|",6)=I
+ S:($P(A,"|",7)="")&(I'="") $P(A,"|",7)=$H ; accept
+ S:($P(A,"|",2)="")&(I'="") $P(A,"|",2)=1 ; work status
+ S I=$G(XML(NB,FM,"elpu"))
+ S $P(A,"|",12)=I
+ S ^STZN(ID)=A
+ S X=$G(XML(NB,FM,"icomm"))
+ S:X'=$G(^STZN(ID,"ci")) ^STZNL(ID,"ci",HH)=X,^STZN(ID,"ci")=X,^STZN(ID,"cih")=HH
+ S ^STZN(ID,"ci")=X
+ S X=$G(XML(NB,FM,"zcomm"))
+ S:X'=$G(^STZN(ID,"cz")) ^STZNL(ID,"cz",HH)=X,^STZN(ID,"cz")=X,^STZN(ID,"czh")=HH
+ S ^STZN(ID,"cz")=X
+ S $P(^STZN(ID,"im"),"|",1)=+$G(XML(NB,FM,"sfoto"))
+ S A=$G(XML(NB,FM,"matt"))
+ F I=2:1:99 S R=$P(A,CR,I) Q:R=""  D
+ .S X=$P(R,"|",1) S:X'="" ^STZN(ID,"m",X)=$P(R,"|",3)
+ K XML(NB,FM,"matt")
+ S A=XML(NB,FM,"wrk")
+ S (F,Z,CF)=0
+ K LST M LST=^STZN(ID,"w")
+ K ^STZN(ID,"w")
+ F I=2:1:99 S R=$P(A,CR,I) Q:R=""  D
+ .S X=$P(R,"|",1) Q:X="" 
+ .S ST=$S($P(R,"|",4)="":0,1:1)
+ .S F=F+1 S:ST Z=Z+1
+ .S WI=$P(X,"@",1),DX=$P(X,"@",3)
+ .I ST,cST,$$GETN^ISPRAV("stomstage",WI,3) S CF=1
+ .S D=$$DI^DTUTL($P(R,"|",3))
+ .I D="",ST S D=+$H
+ .I DX="",ST S DX=$H
+ .I DX'="",'ST S DX=""
+ .S PR=$G(LST(WI)),RR=PR,X=$P(X,"@",2)
+ .S $P(RR,"|",1,2)=D_"|"_ST
+ .S:X'="" $P(RR,"|",3)=X
+ .S:DX'="" $P(RR,"|",4)=DX
+ .S:RR'=PR ^STZNL(ID,"w",HH,WI)=RR
+ .S ^STZN(ID,"w",WI)=RR
+ I 'cST,F
+ .S A=^STZN(ID) 
+ .I F=Z,$P(A,"|",2)'=9 S $P(A,"|",2)=9,$P(A,"|",8)=$H,^STZN(ID)=A,Z="sbs" ; выполнено
+ .I F'=Z,$P(A,"|",2)=9 s $P(A,"|",2)=1,$P(A,"|",8)="",^STZN(ID)=A ; отмена выполнения
+ D:cST
+ .S A=^STZN(ID)
+ .I CF,$P(A,"|",2)'=9 S $P(A,"|",2)=9,$P(A,"|",8)=$H,^STZN(ID)=A,Z="sbs" ; выполнено
+ .I 'CF,$P(A,"|",2)=9 s $P(A,"|",2)=1,$P(A,"|",8)="",^STZN(ID)=A ; отмена выполн.
+ K XML(NB,FM,"wrk")
+ S A=XML(NB,FM,"table")
+ K LST M LST=^STZN(ID,"u")
+ K ^STZN(ID,"u")
+ F I=2:1:99 S R=$P(A,CR,I) Q:R=""  D
+ .Q:$P(R,"|",2)=""  ; no usl
+ .S ZUB=$P(R,"|",6)
+ .S X=(I-1)_"|"_$P(R,"|",2)_"|"_ZUB,NN=$P(R,"|",1)
+ .S PR=$G(LST(X)),RR=PR,UKEY=$P(PR,"|",7)
+ .S:UKEY="" UKEY=$TR($P(NN,"@",7),"~","@"),$P(RR,"|",7)=UKEY
+ .S SS=SS+($P(R,"|",4)*$P(R,"|",5))
+ .S E1=$P(NN,"@",4),E2=$P(NN,"@",5)
+ .S $P(RR,"|",1,4)=$P(NN,"@",2)_"|"_$P(R,"|",4,5)_"|"_$$NNUM^TXTU($P(NN,"@",3))
+ .S $P(RR,"|",6)=$P(R,"|",9) ; comm
+ .S VR=$P(UKEY,"@",2),DT=$P(UKEY,"@",3),OT=$P(UKEY,"@",1),IDU=$P(UKEY,"@",4)
+ .I aCNGU,UKEY'="",E1'="" S:VR'=E1 Y=$$MOV^IUSL(VR,DT,OT,IDU,E1,""),VR=E1,IDU=Y,$P(UKEY,"@",2)=E1,$P(UKEY,"@",4)=Y,$P(RR,"|",7)=UKEY S $P(RR,"|",5)=E1 ; TODO E2 change
+ .I UKEY="" S $P(RR,"|",5)=E1,$P(RR,"|",8)=E2
+ .S ^STZN(ID,"u",X)=RR
+ .S:$$GETPL^IUSL(VR,DT,OT,IDU,"nz")=ZUB E1=$$SETPL^IUSL(VR,DT,OT,IDU,"nz",ZUB) ; TODO - по настройке
+ .S:$$GETPL^IUSL(VR,DT,OT,IDU,"zi")="" E1=$$SETPL^IUSL(VR,DT,OT,IDU,"zi",ID)
+ ; id|usl|zub=state|summ|cnt|color|<executor>|comm|<usl ptr>|<литейщик>
+ K XML(NB,FM,"table")
+ S ^STZNI("n",NI,ID)=VRX
+ D GL^IEXCH("^STZNI","n",NI,ID)
+ D WLOG^IZUBLAB(ID)
+ D GL^IEXCH("^STZN",ID)
+ D:Z="sbs" SBS^IZUBLAB(ID)
+ D L(ID,FRM)
+ Q
+wchk ; Проверка вводимых данных наряда
+ N NCL,NNZ
+ S A=XML(NB,FM,"table")
+ S (NCL,NNZ)=0
+ F I=2:1:99 S R=$P(A,CR,I) Q:R=""  D
+ .Q:$P(R,"|",2)=""  ; no usl
+ .S:$P(R,"|",6)="" NNZ=1
+ .S NN=$P(R,"|",1)
+ .S:$P(NN,"@",3)="" NCL=1
+ I CCL,NNZ D MSG^RWU("Не указаны номера зубов") Q  ; TODO - from price
+ I CCL,NCL D MSG^RWU("Не указаны цвета") Q 
+ Q
+LPAC(NIB,FRM) ; Вывод пациента
+ S:$G(FRM)="" FRM="ztzakaz"
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<"_FRM_">")
+ D WTAGDC^RWU("fio",$$FIO^IPAC(NIB))
+ D WTAGDC^RWU("born",$$GETE^IPAC(NIB,"datar"))
+ D WTAGDC^RWU("tel",$$GET^IPAC(NIB,"tel1"))
+ D W^RWU("</"_FRM_"></nb_console>"),C^RWU
+ Q
+LPZN(NIB,VRX,OTX,DT) ; Загрузка услуг по наряду
+ N FRM
+ S FRM="ztvorder"
+ N KX,VR,OT,ID,CSTC,CPRC,R,U,EX,CNT,A,K,@$$NEWVAR^IUSL,KEY,FE,II,A
+ S DT=$$DIH^DTUTL(DT)
+ S ID=$O(^STZNI("n",NIB,""),-1)
+ I ID'="",$P($G(^STZN(ID)),"|",5)'=DT S ID=""
+ I ID'="",^STZNI("n",NIB,ID)=VRX D L(ID,"ztvorder") Q  ; существующий
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<"_FRM_">")
+ D WTAGDC^RWU("fio",$$FIO^IPAC(NIB))
+ D WTAGDC^RWU("born",$$GETE^IPAC(NIB,"datar"))
+ D WTAGDC^RWU("tel",$$GET^IPAC(NIB,"tel1"))
+ S CSTC=$$GET^IPAC(NIB,"stc",DT)
+ S CPRC=+$$GET^YNDOG(CSTC,"price",DT)
+ S II=1,(A,ZI)="",FE=0
+ S KX="" F  S KX=$O(^PNF(NIB,DT,KX)) Q:KX=""  D
+ .S VR=$P(KX,"|",1),OT=$P(KX,"|",2),ID=$P(KX,"|",3)
+ .Q:VRX'=VR
+ .S K=OT_"@"_VR_"@"_DT_"@"_ID
+ .K ERR
+ .D GETLT^IUSL(VR,DT,OT,ID)
+ .Q:STAT="d" 
+ .I $P($$GETPL^IUSL(VR,DT,OT,ID,"c"),"|",3)'="" S FE=1 Q  ; услуга уже в счете
+ .S:'$G(PRC) PRC=CPRC
+ .S U=$O(UL("")) q:U=""  ; TODO - many
+ .S CNT=+UL(U) S:'CNT CNT=1
+ .Q:$$GET^IPRICE(U,"cls",PRC,DT)'["zzn"
+ .S KEY=II_"@0@@@@4@"_$TR(K,"@","~")
+ .S S=$$SUMM^IUSL(VR,DT,OT,ID)/CNT
+ .S A=A_CR_KEY_"|"_U_"|"_$$NAMEH^IPRICE(U,PRC,DT)_"|"_S_"|"_CNT_"|"_$$GETPL^IUSL(VR,DT,OT,ID,"nz")
+ .S ZI=$$GETPL^IUSL(VR,DT,OT,ID,"zi")
+ .S II=II+1
+ D WTAGC^RWU("table",A)
+ D:ZI'="" WTAGD^RWU("id",ZI)
+ D WTAGD^RWU("sfoto",0)
+ I FE S II=0 D WTAGDC^RWU("info","Услуги уже отправлены в лабораторию.")
+ I II=1,'$$LCL^IUSER("zublab","mkclr") D WTAGDC^RWU("info","Нет услуг для выставления в наряде.")
+ D W^RWU("</"_FRM_"></nb_console>"),C^RWU
+ Q
+L(ID,FRM) ; Load one
+ Q:ID="" 
+ S:$G(FRM)="" FRM="ztzakaz"
+ N A,R,N,S,P,NIB,X,D,VR,IS,LI,DT,wED,SBS,SBDT,IsZ,KEY,PP,UOT,UVR,UDT,UID,SUM,CNT,OKU
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<"_FRM_">")
+ S wED=$G(^cfg("zlab","wrkdtex"))
+ S A=$G(^STZN(ID)),S=0,VR=$P(A,"|",3),IS=$P(A,"|",6),EL=$P(A,"|",12),DT=+$P(A,"|",5)
+ S:'DT DT=+$H
+ D WTAGD^RWU("id",ID)
+ D WTAGD^RWU("zak",VR)
+ D WTAGDC^RWU("zak_name",$$FIOSH^IKADRY(VR))
+ D WTAGD^RWU("vr",IS)
+ D WTAGD^RWU("elpu",EL)
+ S R=$$FIOSH^IKADRY(IS)_$S(EL="":"",1:", "_$$NAME^ICONTR(EL))
+ D WTAGDC^RWU("vr_name",$$FIOSH^IKADRY(IS))
+ D WTAGD^RWU("jzak",$P(A,"|",4))
+ D WTAGD^RWU("dt_label",$$DT2^DTUTL(DT))
+ D WTAGD^RWU("de_label",$$DT2^DTUTL($P(A,"|",8)))
+ D WTAGD^RWU("dtctl",$$DT^DTUTL($P(A,"|",11)))
+ D WTAGD^RWU("pay",+$P(A,"|",10))
+ S R=$P(A,"|",2)
+ S R=$S(R="":"",R=5:3,R=9:9,1:1)
+ D WTAGDCU^RWU("id",ID,R)
+ S NIB=$P(A,"|",1)
+ D WTAGD^RWU("nib",NIB)
+ D WTAGDC^RWU("fio",$$FIO^IPAC(NIB))
+ D WTAGDC^RWU("born",$$GETE^IPAC(NIB,"datar"))
+ D WTAGDC^RWU("tel",$$GET^IPAC(NIB,"tel1"))
+ D WTAGDC^RWU("icomm",$G(^STZN(ID,"ci")))
+ D WTAGDC^RWU("zcomm",$G(^STZN(ID,"cz")))
+ D WTAGD^RWU("sfoto",+$P($G(^STZN(ID,"im")),"|",1))
+ S P=$$GET^YNDOG($$GET^IPAC(NIB,"stc",DT),"price",DT)
+ S P=$$CORCP^IPRICET(P)
+ S (A,N)="",IsZ=0
+ F  S N=$O(^STZN(ID,"u",N)) Q:N=""  D
+ .S R=^(N)
+ .S IS=$P(R,"|",5),LI=$P(R,"|",8),SBS=$P(R,"|",7),SBDT=$P(SBS,"@",3)
+ .S OKU=$P($P(R,"|",9),"@",1)
+ .S KEY=$P(N,"|",1)_"@"_$P(R,"|",1)_"@"_$P(R,"|",4)_"@"_IS_"@"_LI_"@"_$S(OKU'="":7,SBS="":"",$$IsSBS^IZUBLAB("","",SBS):4,1:"")
+ .S:SBS'="" $P(KEY,"@",7)=$TR(SBS,"@","~")
+ .S UOT=$P(SBS,"@",1),UVR=$P(SBS,"@",2),UDT=$P(SBS,"@",3),UID=$P(SBS,"@",4)
+ .S PP=$$UPRC^IZUBLAB(R,P)
+ .S A=A_CR_KEY_"|"
+ .S SUM=$P(R,"|",2),CNT=$P(R,"|",3)
+ .S A=A_$P(N,"|",2)_"|"_$$NAME^IPRICE($P(N,"|",2),PP)_"|"_SUM_"|"_CNT
+ .S X=$P(R,"|",4)
+ .S A=A_"|"_$P(N,"|",3)_"|"_$$NAME^ISPRAV("stomzcolor",X)
+ .S A=A_"|"_$$FIOSH^IKADRY(IS)_"|"_$P(R,"|",6)
+ .S A=A_"|"_$$FIOSH^IKADRY(LI)
+ .S A=A_"|"_$$DT2^DTUTL(SBDT)
+ .S S=S+(SUM*CNT)
+ .I 'IsZ,SBS'="",$$ZRP^IUSL(UVR,SBDT,UOT,UID) s IsZ=1
+ D WTAGC^RWU("table",A)
+ S (N,A)=""
+ F  S N=$O(^STZN(ID,"m",N)) Q:N=""  D
+ .S R=^(N)
+ .S A=A_CR_N_"|"_$$NAMENM^IWRHS(N)_"|"_R_"|"_$$MEANNM^IWRHS(N)
+ D WTAGC^RWU("matt",A)
+ S (N,A)=""
+ F  S N=$O(^STZN(ID,"w",N)) Q:N=""  D
+ .S R=^(N),VR=$P(R,"|",3),D=$P(R,"|",4)
+ .S A=A_CR_N_"@"_VR_"@"_D_"|"
+ .S A=A_$$NAME^ISPRAV("stomstage",N)_"|"_$$DT^DTUTL($P(R,"|",1))
+ .S A=A_"|"_$S($P(R,"|",2)=1:"(+)",1:"")
+ .S A=A_"|"_$S(wED:$$DTM^DTUTL(D),1:$$FIOSH^IKADRY(VR))
+ D WTAGC^RWU("wrk",A)
+ D WTAGD^RWU("summ",S)
+ D WTAGD^RWU("inf",$S(IsZ:"З.П.",1:""))
+ D W^RWU("</"_FRM_"></nb_console>"),C^RWU
+ Q
+SBSU(ID,KEY,DT) ; Подписать одну услугу
+ S KEY=$P(KEY,"@",1) Q:KEY="" 
+ ; TODO $$LCL^IUSER("zublab","sbsdt")
+ S DT=$$DI^DTUTL($G(DT))
+ I DT'="",DT<$$DS^IZUBLAB(ID) D MSG^RWU("Подпись не может быть установлена ранее даты создания наряда.") Q
+ D SBS^IZUBLAB(ID,KEY,DT)
+ Q:$$IsMSG^RWU() 
+ D L(ID)
+ Q
+MOVUDT(ID,KEY,DT) ; Перенести подпись услуги на дату
+ S KEY=$P(KEY,"@",1) Q:KEY=""
+ I '$$LCL^IUSER("zublab","cngsdt") D MSG^RWU("Нет прав на изменение даты.") Q 
+ S DT=$$DI^DTUTL($G(DT))
+ I DT'="",DT<$$DS^IZUBLAB(ID) D MSG^RWU("Дата не может быть указана ранее даты создания наряда.") Q
+ D CNGUDT^IZUBLAB(ID,KEY,DT)
+ Q:$$IsMSG^RWU() 
+ D L(ID)
+ Q
+CHKDELU(ID,KEY) ; Проверка удаления услуги
+ I $$IsSBS^IZUBLAB(ID,KEY) D  Q
+ .I $$LCL^IUSER("zublab","unsbs") D MSG^RWU("SBS") Q
+ .D MSG^RWU("ER") 
+ D MSG^RWU("OK")
+ Q
+SETUOK(ID,KEY,CLR) ; Установить что услуга одобрена
+ Q:ID=""  Q:KEY="" 
+ D SETUOK^IZUBLAB(ID,$P(KEY,"@",1),$S($G(CLR):"",1:$$KDR^IUSER()))
+ D L(ID)
+ Q
+CHKNZUB(ID,NI,USL,NZ) ; Проверить присвоение зубов по кол-ву
+ N L,LI,P,DT
+ S L=$S(NZ="":0,1:$L(NZ,",")),DT=+$H
+ S P=$$PRC^IZUBLAB(NI,ID),LI=$$GET^IPRICE(USL,"znu",P,DT)
+ Q:LI="" 
+ I L>LI D MSG^RWU("Вы указали недопустимое для данной работы число зубов ("_L_")") Q
+ Q
+RETU(ID,KEY) ; Возврат по услуге
+ I '$$LCL^IUSER("zublab","unsbs") D MSG^RWU("Отмена выполнения услуги запрещена.") Q 
+ D MSG^RWU($$UNSBS^IZUBLAB(ID,KEY))
+ Q
+RETUE(ID,KEY) ; Возврат по услуге
+ I '$$LCL^IUSER("zublab","unsbs") D MSG^RWU("Отмена выполнения услуги запрещена.") Q 
+ D MSG^RWU($$UNSBS^IZUBLAB(ID,KEY))
+ D SETST^IZUBLAB(ID,KEY)
+ Q
+SETZC ; Сохранить и отправить комментарий заказчика
+ N %J,A,ID,XML,C,R
+ D ORH^RWU
+ F %J=1:1 S A=$$WD^TXTU($$R13^RWU) Q:%IFN["Z"  D XMLAN^YIXMLRR
+ D CR^RWU
+ S NB="nb_console",FM="ztvorder"
+ S ID=$G(XML(NB,FM,"id"))
+ D:ID'=""
+ .S C=$G(XML(NB,FM,"zcomm")),R=$G(^STZN(ID,"cz"))
+ .Q:C=R  
+ .S ^STZN(ID,"cz")=C,^STZN(ID,"czh")=$H
+ .D WLOG^IZUBLAB(ID)
+ .D GL^IEXCH("^STZN",ID)
+ .S ^STZNI("ex",ID)="c"
+ .D GL^IEXCH("^STZNI","ex",ID) 
+ D CLOSE^YIXMLRR
+ Q
+SETZI ; Сохранить и отправить комментарий исполнителя
+ N %J,A,XML,ID,NB,FM,C,R
+ D ORH^RWU
+ F %J=1:1 S A=$$WD^TXTU($$R13^RWU) Q:%IFN["Z"  D XMLAN^YIXMLRR
+ D CR^RWU
+ S NB="nb_console",FM="ztzakaz"
+ S ID=$G(XML(NB,FM,"id"))
+ D:ID'=""
+ .S C=$G(XML(NB,FM,"icomm")),R=$G(^STZN(ID,"ci"))
+ .Q:C=R 
+ .S ^STZN(ID,"ci")=C,^STZN(ID,"cih")=$H
+ .D WLOG^IZUBLAB(ID)
+ .D GL^IEXCH("^STZN",ID)
+ .S ^STZNI("ex",ID)="c"
+ .D GL^IEXCH("^STZNI","ex",ID)
+ D CLOSE^YIXMLRR
+ Q
+CEL(NIB,TXT,INT,SC) ; Прейскурант
+ ; TXT - строка поиска
+ ; SC - колонка выбора кол-ва
+ N U,P,NM
+ S P=$$PRC^IZUBLAB(NIB,"")
+ S TXT=$$UL^TXTU($$TRIM^TXTU($$WD^TXTU($G(TXT)))),SC=+$G(SC)
+ D OWF^RWU(".txt")
+ D WC^RWU($S(SC:"Кол-во|",1:"")_"Код|Наименование|Цена")
+ S U="" F  S U=$O(^CN(U)) Q:U=""  D:$D(^(U,P))
+ .Q:'$$CHECK^IPRICE(U,P) 
+ .Q:$$GET^IPRICE(U,"cls",P,+$H)'["zzn" 
+ .S NM=$$NAME^IPRICE(U,P)
+ .I TXT'="",$$UL^TXTU(NM)'[TXT Q 
+ .D WC^RWU(CR_$S(SC:"|",1:"")_U_"|"_NM_"|"_$$PRICE^IPRICE(U,P))
+ D C^RWU
+ Q
+STAGE ; Этапы работ
+ D OWF^RWU(".txt")
+ D LSTs^NSPRAV("stomstage")
+ D C^RWU
+ Q
+WORKER ; Исполнители TODO
+ N N,LST,F,SPL,LP
+ M SPL=^cfg("stom-lab-spec")
+ S LP=+$$^I("ilpu")
+ D OWF^RWU(".txt")
+ S N=""
+ F  S N=$O(^KDR(N)) Q:N=""  I $D(SPL(+$$SPEC^IKADRY(N))),$$USEInLPU^IKADRY(N,LP) S F=$$FIOSH^IKADRY(N),LST($E(F,1,24)_N)=N_"|"_F
+ S N="" F  S N=$O(LST(N)) Q:N=""  D WC^RWU(CR_LST(N))
+ D C^RWU
+ Q
+COLORS ; Цвета работ
+ D OWF^RWU(".txt")
+ D LSTs^NSPRAV("stomzcolor")
+ D C^RWU
+ Q
+DOIT 
+ D OWF^RWU(".txt")
+ D WC^RWU("COORD^NZUBLAB|Отправить на согласование"_CR_"WAIT^NZUBLAB|Приостановить выполнение"_CR_"REWAIT^NZUBLAB|Восстановить выполнение"_CR_"CANCEL^NZUBLAB|Отменить выполнение"_CR_"DELZN^NZUBLAB|Удалить"_CR_"COMPLETE^NZUBLAB|Завершить") ; "|Субподряд"_CR_"|Рекламация"
+ D C^RWU
+ Q
+ACCPT(ID,VR,SBS) ; Принять заказ
+ Q:ID=""!(VR="") 
+ N A S A=$G(^STZN(ID))
+ S $P(A,"|",6)=VR,$P(A,"|",7)=$H
+ S:$P(A,"|",2)="" $P(A,"|",2)=1 ; status
+ S ^STZN(ID)=A
+ D GL^IEXCH("^STZN",ID)
+ D:$G(SBS) SBS^IZUBLAB(ID)
+ Q
+COORD(ID) ; На согласование
+ Q:ID="" 
+ N A S A=$G(^STZN(ID))
+ S $P(A,"|",2)=5
+ S ^STZN(ID)=A
+ D GLZ^IEXCH("^STZN",ID)
+ Q
+WAIT(ID) ; Приостановлено
+ Q:ID="" 
+ N A S A=$G(^STZN(ID))
+ S $P(A,"|",2)=6
+ S ^STZN(ID)=A
+ D GLZ^IEXCH("^STZN",ID)
+ Q
+REWAIT(ID) ; Отменить Приостановлено
+ Q:ID="" 
+ N A S A=$G(^STZN(ID))
+ Q:$P(A,"|",2)'=6 
+ S $P(A,"|",2)=1
+ S ^STZN(ID)=A
+ D GLZ^IEXCH("^STZN",ID)
+ Q
+CANCEL(ID) ; Отменена
+ Q:ID="" 
+ N A S A=$G(^STZN(ID))
+ S $P(A,"|",2)=7
+ S ^STZN(ID)=A
+ D GLZ^IEXCH("^STZN",ID)
+ Q
+COMPLETE(ID) ; Завершить
+ Q:ID="" 
+ N A S A=$G(^STZN(ID))
+ Q:$P(A,"|",2)=9 
+ S $P(A,"|",2)=9,$P(A,"|",8)=$H
+ S ^STZN(ID)=A
+ D GLZ^IEXCH("^STZN",ID)
+ D SBS^IZUBLAB(ID)
+ Q
+CONF(ID) ; Вернуть в работу
+ Q:ID="" 
+ N A S A=$G(^STZN(ID))
+ S $P(A,"|",2)=1
+ S ^STZN(ID)=A
+ D GLZ^IEXCH("^STZN",ID)
+ Q
+ANNUL(ID) ; Аннулировать
+ Q:ID="" 
+ N A S A=$G(^STZN(ID))
+ S $P(A,"|",2)="",$P(A,"|",8)=""
+ S ^STZN(ID)=A
+ D GLZ^IEXCH("^STZN",ID)
+ Q
+WRKL(ID,KEY) ; Список изменений этапа
+ Q:ID="" 
+ S KEY=$P(KEY,"@",1)
+ N H,R,L,A,C
+ S (H,C,A)=""
+ F  S H=$O(^STZNL(ID,"w",H)) Q:H=""  D:$D(^(H,KEY))
+ .S R=^(KEY),L=$P($G(^STZNL(ID,"log",H)),"|",1)
+ .S A=A_C_KEY_"@"_$P(R,"|",3)_"|"_$$NAME^ISPRAV("stomstage",KEY)
+ .S A=A_", "_$$DT^DTUTL($P(R,"|",1))_$S($P(R,"|",2)=1:", выполнен",1:"")
+ .S A=A_", "_$$FIOSH^IKADRY($P(R,"|",3))
+ .S A=A_" ("_$$DTM^DTUTL(H)_", "_$$FIO^NUSER(L,2)_")",C=CR
+ D MSG^RWU(A)
+ Q
+PRN(ID) ; Шаблон печати
+ Q:ID="" 
+ N A,X,NI,K,ZNL,UUL,P,PR,U,Z,S,C,CL,Z1,Z2,Z3,R1,R2,R3,I,Pcr,Pcs
+ S A=$G(^STZN(ID)) Q:A="" 
+ S Pcr=$G(^cfg("zlab","prn-ceram"))
+ S Pcs=$G(^cfg("zlab","prn-cnt-sum"))
+ S NI=$P(A,"|",1),DT=+$P(A,"|",5),CL=""
+ S P=$$PRC^IZUBLAB(NI,ID,DT)
+ S K="" F  S K=$O(^STZN(ID,"u",K)) Q:K=""  D
+ .S X=^(K)
+ .S U=$P(K,"|",2),Z=$P(K,"|",3),C=$P(X,"|",4)
+ .S:U'="" UUL(K)=$P(X,"|",3)_"|"_C_"|"_$$UPRC^IZUBLAB(X,P)
+ .I Z'="" F I=1:1:$L(Z,",") S Z1=$P(Z,",",I) S:Z1'="" ZNL(Z1)=""
+ .S:C'="" CL=C ; color
+ D OWF^RWU(".xml")
+ D OPEN^ISTREP("Заказ-наряд")
+ D FIELD^ISTREP("i","znzf",,387,152,"href")
+ D FIELD^ISTREP("i","zntp",,392,128,"href")
+ D ENDFLD^ISTREP()
+ D W^RWU("<data>")
+ D WTAG^RWU("znzf","znzf.bmp")
+ D WTAG^RWU("zntp","zntp.bmp")
+ D W^RWU("</data>")
+ D FONT^ISTREP(1,"Times New Roman",10)
+ D FONT^ISTREP(2,"Times New Roman",12)
+ D FONT^ISTREP(3,"Times New Roman",12,"b")
+ D FONT^ISTREP(4,"Times New Roman",14)
+ D FONT^ISTREP(5,"Times New Roman",24)
+ D CSTART^ISTREP("p")
+ D LD^ISTREP($$^I("iname"),2,"l")
+ D LD^ISTREP($$^I("iaddr")_" "_$$^I("itel"),1,"l")
+ D LD^ISTREP("Заказ-наряд №"_ID,3,"c")
+ S X=$P(A,"|",4)
+ D WC^RWU(CR_"<l><d f=""5"">"_$$TAG^TXTU($$NAME^ICONTR(X))_"</d></l>")
+ D H^ISTREP(2)
+ D W^RWU("<l><d w=""95"" b=""tblr""><l>")
+ S X=$P(A,"|",3)
+ D whln("Врач: ",$$FIO^IKADRY(X))
+ D WC^RWU(CR_"<l b=""b"" w=""95""><d f=""3"" w=""25"">Пациент: </d><d f=""2"">"_$$TAG^TXTU($$FIO^IPAC(NI))_"</d></l>")
+ D WC^RWU(CR_"<l b=""b"" w=""95""><d f=""3"" w=""25"">Тип лица: </d><d f=""2"">"_$$TAG^TXTU("")_"</d></l>") ; TODO
+ S X=$$NAME^ISPRAV("stomzcolor",CL)
+ D WC^RWU(CR_"<l b=""b"" w=""95""><d f=""3"" w=""25"">Цвет: </d><d f=""2"" w=""25"">"_$$TAG^TXTU(X)_"</d><d f=""3"" w=""20"">Материал: </d><d f=""2"" w=""20"">"_$$TAG^TXTU("")_"</d></l>")
+ D whln("Техник: ",$$FIO^IKADRY($P(A,"|",6)))
+ D W^RWU("</l></d><d w=""94"">")
+ ; Зубная формула
+ S Z1="18|17|16|15|14|13|12|11|21|22|23|24|25|26|27|28"
+ S Z2="8|7|6|5|4|3|2|1|1|2|3|4|5|6|7|8"
+ S Z3="48|47|46|45|44|43|42|31|31|32|33|34|35|36|37|38"
+ S (R1,R2,R3)=""
+ D WC^RWU(CR_"<l><d w=""9""/><d>Формула зубов:</d></l>")
+ F K=1:1:16 D
+ .S X=$P(Z1,"|",K)
+ .S R1=R1_"<d w=""5"" h=""5"" b=""tblr"" a=""c"">"_$S($D(ZNL(X)):"X",1:"")_"</d>"
+ .S R2=R2_"<d w=""5"" h=""5"" b=""tblr"" a=""c"">"_$P(Z2,"|",K)_"</d>"
+ .S X=$P(Z3,"|",K)
+ .S R3=R3_"<d w=""5"" h=""5"" b=""tblr"" a=""c"">"_$S($D(ZNL(X)):"X",1:"")_"</d>"
+ D W^RWU(CR_"<l><d w=""7""/>"_R1_"</l>")
+ D W^RWU(CR_"<l><d w=""7""/>"_R2_"</l>")
+ D W^RWU(CR_"<l><d w=""7""/>"_R3_"</l>")
+ 
+ D W^RWU("</d></l>")
+ D H^ISTREP(2)
+ D:'Pcs LD^ISTREP("Виды работ",3,"l")
+ D:Pcs TAB^ISTREP("Виды работ|Кол-во|Сумма","156|14|20","f","3","#EEEEEE")
+ S S=0,K="" F  S K=$O(UUL(K)) Q:K=""  D
+ .S U=$P(K,"|",2),X=UUL(K),Z=$P(K,"|",3),C=$P(X,"|",2),P=$P(X,"|",3),X=$P(X,"|",1)
+ .D:'Pcs WC^RWU(CR_"<l b=""tblr"" w=""200"" f=""2""><d>"_$$TAG^TXTU($$NAME^IPRICE(U,P)_$S(X'="":" "_X_" шт.",1:"")_$S(Z="":"",1:", Зуб №"_Z)_$S(C="":"",1:", Цвет "_$$NAME^ISPRAV("stomzcolor",C)))_"</d></l>")
+ .I Pcs S Z1=$$PRICEH^IPRICE(U,P,DT)*X,S=S+Z1 D TLN^ISTREP($$TAG^TXTU($$NAME^IPRICE(U,P)_$S(Z="":"",1:", Зуб №"_Z)_$S(C="":"",1:", Цвет "_$$NAME^ISPRAV("stomzcolor",C)))_"|"_X_"|"_Z1,"156|14|20",2,"","tblr","")
+ D:S WC^RWU("<l><d w=""156""/><d w=""14"">Итого</d><d>"_S_"</d></l>")
+ D H^ISTREP(2)
+ 
+ D W^RWU("<l><d w=""95"" b=""tblr""><l>")
+ D whln2("Этап","Дата")
+ D whln2("Дата приема пациента",$$DT^DTUTL(DT))
+ S X=$P(A,"|",11)
+ D:X'="" whln2("Примерка конструкции",$$DT^DTUTL(X))
+ S K="" F  S K=$O(^STZN(ID,"w",K)) Q:K=""  D
+ .S X=$P(^(K),"|",1)
+ .D whln2($$NAME^ISPRAV("stomstage",K),$$DT^DTUTL(X))
+ D W^RWU("</l></d><d w=""95"">")
+ 
+ S X="<d w=""7""/><d h=""5"" w=""5"" b=""tblr""/>"
+ D:Pcr
+ .D WC^RWU(CR_"<l h=""5""><d w=""7""/><d>Перекрытие керамикой:</d></l>")
+ .D WC^RWU(CR_"<l h=""7"">"_X_"<d> а) круговая гирлянда</d></l>")
+ .D WC^RWU(CR_"<l h=""7"">"_X_"<d> б) оральная гирлянда</d></l>")
+ .D WC^RWU(CR_"<l h=""7"">"_X_"<d> в) жевательная поверхность полный контур</d></l>")
+ D H^ISTREP(2)
+ 
+ D:Pcr WC^RWU("<l><d w=""7""/><f w=""80"">zntp</f></l>")
+ D W^RWU("</d></l>")
+ 
+ D H^ISTREP(5)
+ 
+ D LD^ISTREP("Дополнительные инструкции",3,"l")
+ D WC^RWU(CR_"<l b=""tlr"" w=""190"" h=""25"" f=""2""><d>"_$$TAG^TXTU($G(^STZN(ID,"cz")))_"</d></l>")
+ D WC^RWU(CR_"<l b=""blr"" w=""190"" h=""25"" f=""2""><d>"_$$TAG^TXTU($G(^STZN(ID,"ci")))_"</d></l>")
+ D H^ISTREP(5)
+ D LD^ISTREP("Заведующий производством _____________________________________",1,"l")
+ 
+ D CEND^ISTREP,CLOSE^ISTREP
+ D C^RWU
+ Q
+whln(NM,V) 
+ D WC^RWU(CR_"<l b=""b"" w=""95""><d f=""3"" w=""25"">"_NM_"</d><d f=""2"">"_$$TAG^TXTU(V)_"</d></l>")
+ Q
+whln2(NM,V) 
+ D WC^RWU(CR_"<l b=""b"" w=""95""><d f=""3"" w=""60"" b=""r"">"_NM_"</d><d f=""2"" w=""35"">"_$$TAG^TXTU(V)_"</d></l>")
+ Q
+PRNPAT(ID) ; Данные для шаблона печати
+ Q
+TLIST(VR,DT,PCLR) ; Список работ по технику
+ ; PCLR - вывод заголовка только для сущ. списка
+ N ID,A,ST,R,W,VA,X,DX
+ S DT=$$DIH^DTUTL(DT),PCLR=+$G(PCLR)
+ D OWF^RWU(".txt")
+ D:'PCLR WC^RWU("Наряд №|Пациент|Этап|Заказчик")
+ S ID="" F  S ID=$O(^STZN(ID)) Q:ID=""  D
+ .S A=^(ID),ST="",VA=$P(A,"|",6),DX=99999
+ .Q:569[$P(A,"|",2) 
+ .S W="" F  S W=$O(^STZN(ID,"w",W)) Q:W=""  D  
+ ..S R=^(W) Q:$P(R,"|",2)  
+ ..S X=$P(R,"|",4)
+ ..I VA'=VR,VR'=X Q 
+ ..I VA=VR,X'="",X'=VR Q 
+ ..S X=$P(R,"|",1) Q:X=""  Q:X>DT 
+ ..S:X'=""&(X<DX) DX=X,ST=W
+ .Q:ST=""
+ .S W=$$FIOSH^IKADRY($P(A,"|",3))
+ .S R=$$NAME^ICONTR($P(A,"|",4))
+ .S:W'=""&(R'="") W=W_", "_R S:W="" W=R
+ .I PCLR=1 D WC^RWU("Наряд №|Пациент|Этап|Заказчик") S PCLR=0
+ .D WC^RWU(CR_ID_"|"_$$FIO^IPAC($P(A,"|",1))_"|"_$$NAME^ISPRAV("stomstage",ST)_", "_$$DT2^DTUTL(DX)_"|"_W)
+ D C^RWU
+ Q
+EXP(DOC,OK,EID) ; Экспорт в другую лабораторию
+ D EXP^IZUBLAB(DOC,$G(OK),$G(EID))
+ Q
+REGLCL 
+ S ^LCLI("zublab")="Зуботехническая лаборатория"
+ S ^LCLI("zublab","del")="Удаление нарядов"
+ S ^LCLI("zublab","unsbs")="=1 - разрешить снятие подписи у работы"
+ S ^LCLI("zublab","cngsbs")="=1 - разрешить изменение сотрудников в подписанном наряде"
+ S ^LCLI("zublab","addu")="Добавление произвольных услуг в наряд 0/1"
+ S ^LCLI("zublab","ccolor")="Контроль обязательного вввода цвета"
+ S ^LCLI("zublab","mkclr")="Возможность создания произвольного наряда врачом 0/1"
+ Q
+INITDB 
+ N I
+ S ^MN("root","stomstage")="Этапы в зуботехнической лаборатории"
+ S ^MN("root","stomzcolor")="Цвет зуба в зуботехнич.наряде"
+ D:'$$CHKSPR^ISPRAV("stomstage") 
+ .S I=$$NEWIDX^YISPRAV("stomstage")
+ .K ^MN(I)
+ .S ^MN(I,1)="Индивидуальная ложка"
+ .S ^MN(I,2)="Прикус"
+ .S ^MN(I,3)="Постановка зубов"
+ .S ^MN(I,4)="Перепостановка"
+ .S ^MN(I,5)="Примерка каркаса Бюгеля"
+ .S ^MN(I,6)="Готовность протеза"
+ .S ^MN(I,7)="Починка протезов"
+ .S ^MN(I,8)="Примерка коронок"
+ .S ^MN(I,9)="Перештамповка"
+ .S ^MN(I,10)="Спайка коронок"
+ .S ^MN(I,11)="Взвешивание золота"
+ .S ^MN(I,12)="Готовность протеза"
+ .S ^MN(I,13)="Переснятие слепков"
+ .S ^MN(I,14)="Перемоделирование зубов"
+ .S ^MN(I,15)="Ортодонтические аппараты"
+ D:'$$CHKSPR^ISPRAV("stomzcolor")
+ .S I=$$NEWIDX^YISPRAV("stomzcolor")
+ .K ^MN(I)
+ .S ^MN(I,1)="Белый"
+ .S ^MN(I,2)="Розовый"
+ Q

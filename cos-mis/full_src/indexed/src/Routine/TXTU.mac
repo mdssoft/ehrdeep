@@ -1,0 +1,404 @@
+TXTU ; Текст. утилиты [ 07/25/2024  2:51 PM ]
+DW(A) ; to Win
+ D:'$D(%DW)!('$D(%WD)) MKDW
+ Q:'$L(%DW) A Q $TR(A,%DW,%WD)
+WD(A) ; to DOS
+ D:'$D(%DW)!('$D(%WD)) MKDW
+ Q:'$L(%DW) A
+ Q $TR(A,%WD_$C(147,148,171,187,150),%DW_$C(34,34,34,34,45))
+WDA(A) ; to DOS (w.o. config)
+ D:'$D(%DWA)!('$D(%WDA)) MKDWA
+ Q:'$L(%DWA) A
+ Q $TR(A,%WDA_$C(147,148,171,187,150),%DWA_$C(34,34,34,34,45))
+LU(A) ; to Upper
+ D:'$D(%cLU)!($L($G(%cLL))'=59) MKLU
+ Q $TR(A,%cLL,%cLU)
+UL(A) ; to Lower
+ D:'$D(%cLU)!($L($G(%cLL))'=59) MKLU
+ Q $TR(A,%cLU,%cLL)
+MKDW 
+ S (%DW,%WD)=""  
+ I $G(^cfg("encoding"))=0 S %WDX=1 Q  ; no encoding flag
+ N I
+ F I=128:1:159,240,160:1:175,224:1:239,241,252 S %DW=%DW_$C(I)
+ F I=192:1:223,168,224:1:239,240:1:255,184,185 S %WD=%WD_$C(I)
+ Q
+MKDWA 
+ S (%DWA,%WDA)=""
+ N I
+ F I=128:1:159,240,160:1:175,224:1:239,241,252 S %DWA=%DWA_$C(I)
+ F I=192:1:223,168,224:1:239,240:1:255,184,185 S %WDA=%WDA_$C(I)
+ Q
+MKLU 
+ S %cLL="qwertyuiopasdfghjklzxcvbnmёйцукенгшщзхъфывапролджэячсмитьбю"
+ S %cLU="QWERTYUIOPASDFGHJKLZXCVBNMЁЙЦУКЕНГШЩЗХЪФЫВАПРОЛДЖЭЯЧСМИТЬБЮ"
+ Q
+TRIM(R) ; Trim left-right
+ N C
+ S:$D(%WDX) R=$TR(R,$C(152,160),"  ")
+ F  S C=$E(R,1) Q:C'=" "&(C'=$C(9))  S R=$E(R,2,$L(R))
+ F  S C=$E(R,$L(R)) Q:C'=" "&(C'=$C(9))  S R=$E(R,1,$L(R)-1)
+ Q R
+TRIMCR(R) ; Включая перевод строки
+ Q:R="" "" N C,S
+ S S=$C(32,9,10,13)
+ S:$D(%WDX) S=S_$C(152,160)
+ F  S C=$E(R,1) Q:C=""!(S'[C)  S R=$E(R,2,$L(R))
+ F  S C=$E(R,$L(R)) Q:C=""!(S'[C)  S R=$E(R,1,$L(R)-1)
+ Q R
+TRIMR(R) ; Trim right
+ N C
+ S:$D(%WDX) R=$TR(R,$C(152,160),"  ")
+ F  S C=$E(R,$L(R)) Q:C'=" "&(C'=$C(9))  S R=$E(R,1,$L(R)-1)
+ Q R
+TRIML(R) ; Trim left
+ N C
+ S:$D(%WDX) R=$TR(R,$C(152,160),"  ")
+ F  S C=$E(R,1) Q:C'=" "&(C'=$C(9))  S R=$E(R,2,$L(R))
+ Q R
+TKAV(R) ; Convert '"' and '%' to UTF
+ N J
+ S J=-1 F  S J=$F(R,"%",J+1) Q:J=0  S $E(R,J-1)="%25"
+ S J=-1 F  S J=$F(R,"""",J+1) Q:J=0  S $E(R,J-1)="%22"
+ ;S J=-1 F  S J=$F(R,"\",J+2) Q:J=0  S $E(R,J-1)="\\"
+ Q R
+DKAV(R) ; Double "
+ N J,P S P=0 F  S J=$F(R,"""",P+1) Q:J=0  S P=J,$E(R,J-1)=""""""
+ Q R
+TURL(R) ; String to URL format
+ N J,X,L S L=$L(R)
+ F J=1:1 Q:J>L  S X=$A($E(R,J)) I X=43!(X=58)!(X=59)!(X=63)!(X=64)!(X<40)!(X>122) S $E(R,J)=$S(X<16:"%0",1:"%")_$$HEX^CONU(X),L=L+2
+ Q R
+FURL(R) ; String from URL format
+ N J,P S P=1
+ F  S J=$F(R,"%",P) Q:J=0  S P=J,$E(R,J-1,J+1)=$C($$FHEX^CONU($E(R,J,J+1)))
+ Q R
+HTML(R) ; Conv "->qout and ect.
+ N J,P S P=1
+ F  S J=$F(R,"&",P) Q:J=0  S P=J,$E(R,J-1)="&amp;"
+ S P=1 F  S J=$F(R,"""",P) Q:J=0  S P=J,$E(R,J-1)="&quot;"
+ S P=1 F  S J=$F(R,">",P) Q:J=0  S P=J,$E(R,J-1)="&gt;"
+ S P=1 F  S J=$F(R,"<",P) Q:J=0  S P=J,$E(R,J-1)="&lt;"
+ Q R
+TURLLT(R) ; light version
+ N J,P
+ S P=1 F  S J=$F(R,"%",P) Q:J=0  S P=J,$E(R,J-1)="%25"
+ S P=1 F  S J=$F(R,"""",P) Q:J=0  S P=J,$E(R,J-1)="%22"
+ S P=1 F  S J=$F(R,"\",P) Q:J=0  S P=J,$E(R,J-1)="%5C"
+ Q R
+TAG(R) ; Conv &->&amp; and ect.
+ N J,P
+ S P=1 F  S J=$F(R,"&",P) Q:J=0  S P=J+1,$E(R,J-1)="&amp;"
+ S P=1 F  S J=$F(R,">",P) Q:J=0  S P=J+1,$E(R,J-1)="&gt;"
+ S P=1 F  S J=$F(R,"<",P) Q:J=0  S P=J+1,$E(R,J-1)="&lt;"
+ Q R
+TGA(R) ; Conv &amp->& and ect.
+ N J,P,X
+ S P=1 F  S J=$F(R,"&amp;",P) Q:J=0  S P=J-5,$E(R,P,J-1)="&"
+ S P=1 F  S J=$F(R,"&gt;",P) Q:J=0  S P=J-4,$E(R,P,J-1)=">"
+ S P=1 F  S J=$F(R,"&lt;",P) Q:J=0  S P=J-4,$E(R,P,J-1)="<"
+ S P=1 F  S J=$F(R,"&quot;",P) Q:J=0  S P=J-6,$E(R,P,J-1)=""""
+ S P=1 F  S J=$F(R,"&#x",P) Q:J=0  S X=$F(R,";",J),P=J-3,$E(R,P,X-1)=$C($ZHEX($E(R,J,X-2)_"H"))
+ S P=1 F  S J=$F(R,"&#",P) Q:J=0  S X=$F(R,";",J),P=J-2,$E(R,P,X-1)=$C($E(R,J,X-2))
+ Q R
+GT(R) ; Conv from &amp and ect.
+ N J,P
+ S P=1 F  S J=$F(R,"&amp;",P) Q:J=0  S P=J-5,$E(R,J-5,J-1)="&"
+ S P=1 F  S J=$F(R,"&gt;",P) Q:J=0  S P=J-4,$E(R,J-4,J-1)=">"
+ S P=1 F  S J=$F(R,"&lt;",P) Q:J=0  S P=J-4,$E(R,J-4,J-1)="<"
+ S P=1 F  S J=$F(R,"&nbsp;",P) Q:J=0  S P=J-6,$E(R,J-6,J-1)=" "
+ S P=1 F  S J=$F(R,"&quot;",P) Q:J=0  S P=J-6,$E(R,J-6,J-1)=""""
+ Q R
+DBLSLH(R) ; Double slash for data=""
+ N P,J
+ S P=1 F  S J=$F(R,"\",P) Q:J=0  S P=J+1,$E(R,J-1)="\\"
+ Q R
+UNSS(R) ; UnScanSpecSym
+ N J,P
+ S P=1 F  S J=$F(R,"\r",P) Q:J=0  S P=J-5,$E(R,J-2,J-1)=$C(13)
+ S P=1 F  S J=$F(R,"\n",P) Q:J=0  S P=J-5,$E(R,J-2,J-1)=$C(10)
+ S P=1 F  S J=$F(R,"\t",P) Q:J=0  S P=J-5,$E(R,J-2,J-1)=$C(9)
+ S P=1 F  S J=$F(R,"\\",P) Q:J=0  S P=J-5,$E(R,J-2,J-1)="\"
+ Q R
+U8W(R) ; UTF8(DEC8x2) -> CP1251
+ N J,P,X,I S P=1
+ F  S J=$F(R,$C(194),P) Q:J=0  S P=J,X=$A($E(R,J,J)),X=$S(X=171:".",X=187:".",1:0) S:X'=0 $E(R,J-1,J)=X
+ S P=1
+ F  S J=$F(R,$C(208),P),I=$F(R,$C(209),P),J=$S(I<J&(I>0):I,J>0:J,1:I) Q:J=0  S X=$A($E(R,J,J)),P=J,$E(R,J-1,J)=$S(X=145&(I=J):"ё",X=129&(I'=J):"Ё",X<192&(X>143):$C(X+48),X=1:$C(168),X>127:$C(X+112),1:" ")
+ Q $TR(R,$C(177,178),"ab")
+U8D(R) ; UTF8(DEC8x2) -> CP866
+ N J,P,X,I S P=1
+ F  S J=$F(R,$C(194),P) Q:J=0  S P=J,X=$A($E(R,J,J)),X=$S(X=171:".",X=187:".",1:0) S:X'=0 $E(R,J-1,J)=X
+ S P=1
+ F  S J=$F(R,$C(208),P),I=$F(R,$C(209),P),J=$S(I<J&(I>0):I,J>0:J,1:I) Q:J=0  S X=$A($E(R,J,J)),P=J,$E(R,J-1,J)=$S(X=145&(I=J):$C(184),X<192&(X>143):$C(X+48),X=1:$C(168),X>127:$C(X+112),1:" ")
+ D:($D(%DW)=0)!($D(%WD)=0) MKDW
+ Q $TR(R,%WD_$C(177,178),%DW_"ab")
+WUTF(R) ; Win1251 -> UTF
+ N I,X,C,f,t
+ S X="",f=$C(168,184,218,220,250,252),t=$C(149,181,172,170,140,138)
+ F I=1:1:$L(R) S C=$A(R,I) S:f[$E(R,I) X=X_$C(208)_$TR($E(R,I),f,t),C=0 S:C>191&(C<240) X=X_$C(208,C-48),C=0 S:C>239 X=X_$C(209,C-112),C=0 S:C>0 X=X_$C(0,C)
+ Q X
+WU8(R) ; Win1251 -> UTF-8
+ N I,X,C,P,f,t,p
+ S X=""
+ S f=$C(168,184)  ; Ё, ё в Windows-1251
+ S t=$C(129,145)  ; Правильные вторичные байты UTF-8: для Ё (208+129), для ё (209+145)
+ S p=$C(208,209)  ; Правильные первичные байты UTF-8
+ F I=1:1:$L(R) S C=$E(R,I) D
+ .S P=$F(f,C)-1
+ .I P>0 S X=X_$E(p,P)_$E(t,P),C=0 Q  ; Специальная обработка для Ё/ё
+ .S C=$A(C)
+ .I C>191,C<240 S X=X_$C(208)_$C(C-48),C=0 Q  ; Буквы п-я
+ .I C>239 S X=X_$C(209)_$C(C-112),C=0 Q       ; Буквы р-ё (кроме самой ё)
+ .I C<128 S X=X_$C(C) Q                       ; ASCII
+ .S X=X_$C(209)_$C(145)                       ; Fallback для ё (на случай необработанных символов)
+ Q X
+WU8T(R) ; todo
+ N I,X,C,f,t
+ S X="",f=$C(168,184,218,220,250,252),t=$C(149,181,172,170,140,138)
+ ;F I=1:1:$L(R) S C=$E(R,I) S:$A(C)<192 X=X_X S:$A(C)>191 C=$TR(C,^PP(0,4),^PP(0,5)),X=X_"&#x04"_($ZH($A(C)))_";"
+ ;Q X
+ F I=1:1:$L(R) S C=$A(R,I) S:f[$E(R,I) X=X_$C(208)_$TR($E(R,I),f,t),C=0 S:C>191&(C<240) X=X_"&#"_$$HEX^CONU(C-48),C=0 S:C>239 X=X_$C(209,C-112),C=0 S:C<128&C X=X_$C(C)
+ Q X
+HH(X) 
+ F I=1:1:$L(X) W !,$$HEX^CONU($A(X,I))
+ Q
+WUCS2(R) ; Win1251 -> UCS2
+ N X,I,C S X=""
+ F I=1:1:$L(R) S C=$A(R,I) S:C<128 X=X_$C(0)_$E(R,I) I C>192 S C=C+848,X=X_$C(208,C#256)
+ Q X
+WUCS22(R) ; Win1251 -> UCS2
+ N X,I,C S X=""
+ F I=1:1:$L(R) S C=$A(R,I) S:C<192 X=X_$C(0)_$E(R,I) I C>191 S C=C+848,X=X_$C($P(C/256,".",1))_$C(C#256)
+ Q X
+DBLSP(R) ; Delete double spaces
+ N J S J=0 F  S J=$F(R,"  ",J) Q:J=0  S J=J-2,$E(R,J)=""
+ Q R
+DBLSYM(R,SYM) ; Delete double symbol
+ N J,L ; TODO
+ S L=$L(SYM),SYM=SYM_SYM,J=0
+ F  S J=$F(R,SYM,J) Q:J=0  S J=J-L,$E(R,J,J-L+1)=""
+ Q R
+TRANSLIT(X) ; By GOST table
+ N A,B,I,F,T,P,Y
+ S A="АБВГДЕЁЗИЙКЛМНОПРСТУФХЦЪЫЬЭабвгдеёзийклмнопрстуфхцъыьэ"
+ S B="ABVGDEEZIJKLMNOPRSTUFHC'Y'Eabvgdeezijklmnoprstufhc'y'e"
+ S X=$TR(X,A,B)
+ S A="ЖЧШЩЮЯжчшщюя"
+ S B="Zh|Ch|Sh|Sch|Yu|Ya|zh|ch|sh|sch|yu|ya"
+ F I=1:1:12 S F=$E(A,I),T=$P(B,"|",I) S P=1 F  S Y=$F(X,F,P) Q:Y=0  S P=Y,$E(X,Y-1)=T 
+ Q X
+FIO(F,I,O) ; ФИО из отдельных переменных
+ Q:O="" F_$S(I="":"",1:" "_I)
+ Q F_" "_I_" "_O
+FIOSH(F,I,O) ; Сокращенное ФИО
+ S:I'="" F=F_" "_$E(I,1)_"."
+ I $G(O)'="" S:I="" F=F_" ." S F=F_$E(O,1)_"."
+ Q F
+FIOSHF(FIO) ; Сокращенное ФИО из строки
+ N I,O S O=$P(FIO," ",3),I=$P(FIO," ",2),FIO=$P(FIO," ",1)
+ S:I'="" FIO=FIO_" "_$E(I,1)_"."
+ I O'="" S:I="" FIO=FIO_" ." S FIO=FIO_$E(O,1)_"."
+ Q FIO
+NORMFIO(F,I,O) ; Нормализация ФИО
+ I F["-" N F2 S F2=$P(F,"-",2),F=$P(F,"-",1),F=$$LU($E(F,1))_$$UL($E(F,2,99))_"-"_$$LU($E(F2,1))_$$UL($E(F2,2,99))
+ E  S F=$$LU($E(F,1))_$$UL($E(F,2,99))
+ S I=$$LU($E(I,1))_$$UL($E(I,2,99))
+ S O=$$LU($E(O,1))_$$UL($E(O,2,99))
+ Q F_"|"_I_"|"_O
+NORMFIOF(FIO) ; Нормализация ФИО из строки
+ N F,I,O
+ S F=$P(FIO," ",1),I=$P(FIO," ",2),O=$P(FIO," ",3,9)
+ I F["-" N F2 S F2=$P(F,"-",2),F=$P(F,"-",1),F=$$LU($E(F,1))_$$UL($E(F,2,99))_"-"_$$LU($E(F2,1))_$$UL($E(F2,2,99))
+ E  S F=$$LU($E(F,1))_$$UL($E(F,2,99))
+ S I=$$LU($E(I,1))_$$UL($E(I,2,99))
+ S O=$$LU($E(O,1))_$$UL($E(O,2,99))
+ Q F_" "_I_" "_O
+EXFLG(STR,FLG,DLM) ; Исключить строку из последоват. X1|X2|X3...
+ Q:FLG="" STR Q:STR="" ""
+ S:$G(DLM)="" DLM="|"
+ N F,X
+ S X=DLM_STR_DLM,FLG=DLM_FLG_DLM
+ S F=$F(X,FLG) Q:'F STR
+ S $E(X,F-$L(FLG),F-2)=""
+ S:$E(X,1)=DLM $E(X,1)="" S:$E(X,$L(X))=DLM $E(X,$L(X))=""
+ Q X
+EXFLGS(STR,FLG,DLM) ; Исключить флаги в флаги
+ Q:FLG="" STR Q:STR="" ""
+ S:$G(DLM)="" DLM="|"
+ N I,FL
+ F I=1:1:$L(FLG,DLM) S FL=$P(FLG,DLM,I) I FL'="",DLM_STR_DLM[(DLM_FL_DLM) S STR=$$EXFLG(STR,FL,DLM)
+ Q STR
+STFLG(STR,FLG,DLM) ; Установить строку в последоват. X1|X2|X3...
+ Q:STR="" FLG Q:FLG="" STR
+ S:$G(DLM)="" DLM="|"
+ Q:DLM_STR_DLM[(DLM_FLG_DLM) STR
+ S $P(STR,DLM,$L(STR,DLM)+1)=FLG
+ Q STR
+STFLGS(STR,FLG) ; Установить флаги в флаги
+ Q:STR="" FLG Q:FLG="" STR
+ N I,FL
+ F I=1:1:$L(FLG,"|") S FL=$P(FLG,"|",I) I FL'="","|"_STR_"|"'[("|"_FL_"|") S $P(STR,"|",$L(STR,"|")+1)=FL
+ Q STR
+FLinFL(FLG1,FLG2) ; Флаги попадаются во флагах
+ Q:FLG1="" 0 Q:FLG2="" 0
+ I FLG2'["|" Q ("|"_FLG1_"|")[("|"_FLG2_"|")
+ N I,X,F
+ S FLG2="|"_FLG2_"|",F=0
+ F I=1:1:$L(FLG1,"|") S X=$P(FLG1,"|",I) I FLG2[("|"_X_"|") S F=1 Q 
+ Q F
+MIXRE(STR) ; Mix in string rus and eng letters
+ Q:STR="" 0
+ N X,F
+ S X=$L($TR(STR,$TR(STR,"ёйцукенгшщзхъфывапролджэячсмитьбюЁЙЦУКЕНГШЩЗХЪФЫВАПРОЛДЖЭЯЧСМИТЬБЮ",""),""))
+ I X,$L($TR(STR,$TR(STR,"qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM",""),"")) Q 1
+ Q 0
+REER(STR) ; eng->rus по написанию
+ S STR=$TR(STR,"EeTOoPpAaHKkXxCcBM","ЕеТОоРрАаНКкХхСсВМ")
+ Q STR
+RERE(STR) ; rus->eng по написанию
+ S STR=$TR(STR,"ЕеТОоРрАаНКкХхСсВМ","EeTOoPpAaHKkXxCcBM")
+ Q STR
+FB(STR,V) ; Find backward
+ N I,F
+ S F="" F I=$L(STR):-1:1 I $E(STR,I)=V S F=I Q 
+ Q F
+TRT(STR,S1,S2) ; Translate from string1 to string2
+ Q:STR="" "" Q:S1="" STR
+ N J,P,L
+ S P=1,L=$L(S1)
+ F  S J=$F(STR,S1,P) Q:J=0  S P=J,$E(STR,J-L,J-1)=S2
+ Q STR
+EP(TXT,VAL,D1,D2) ; Extract piece with value: val1<d1>data1<d2>val2<d1>..
+ N I,X,R
+ S R=""
+ F I=1:1:$L(TXT,D2) S X=$P(TXT,D2,I) I $P(X,D1,1)=VAL S R=$P(X,D1,2,99) Q 
+ Q R
+OWF(STR,NUM) ; Text overflow
+ Q:NUM="" STR
+ Q:$L(STR)<NUM STR
+ Q $E(STR,1,NUM-2)_".."
+MPHN(VAL,PRE) ; Recode mobile phone
+ S VAL=$P(VAL,",",1) ; first
+ S VAL=$TR(VAL,$TR(VAL,"1234567890",""),"")
+ I $L(VAL)<8 Q VAL
+ S:$G(PRE)="" PRE="+7"
+ S:$L(VAL)=10&($E(VAL)=9) VAL=PRE_VAL ; 916/903
+ S:$L(VAL)=10&($E(VAL)=4) VAL=PRE_VAL ; 495/499
+ S:$E(VAL)=8 VAL=PRE_$E(VAL,2,99)
+ S:$E(VAL)=7 VAL=PRE_$E(VAL,2,99) ; from +7
+ S:$L(VAL)=11&($E(VAL)=7) VAL="+"_VAL
+ Q VAL
+NNUM(X) ; Numeric or null
+ Q:X="" ""
+ N M S M=$E(X,1) S:M'="-" M=""
+ S X=$TR(X,", ","."),X=$TR(X,$TR(X,"1234567890.",""),"")
+ Q:X="" ""
+ Q +(M_X)
+URL(P1,P2,P3,P4,P5,P6,P7,P8,P9,P10,P11,P12) 
+ N A
+ S A=""
+ S:$D(P1) A="P1="""_$$TURL^TXTU(P1)_""""
+ S:$D(P2) A=A_$S(A="":"",1:"&")_"P2="""_$$TURL^TXTU(P2)_""""
+ S:$D(P3) A=A_$S(A="":"",1:"&")_"P3="""_$$TURL^TXTU(P3)_""""
+ S:$D(P4) A=A_$S(A="":"",1:"&")_"P4="""_$$TURL^TXTU(P4)_""""
+ S:$D(P5) A=A_$S(A="":"",1:"&")_"P5="""_$$TURL^TXTU(P5)_""""
+ S:$D(P6) A=A_$S(A="":"",1:"&")_"P6="""_$$TURL^TXTU(P6)_""""
+ S:$D(P7) A=A_$S(A="":"",1:"&")_"P7="""_$$TURL^TXTU(P7)_""""
+ S:$D(P8) A=A_$S(A="":"",1:"&")_"P8="""_$$TURL^TXTU(P8)_""""
+ S:$D(P9) A=A_$S(A="":"",1:"&")_"P9="""_$$TURL^TXTU(P9)_""""
+ S:$D(P10) A=A_$S(A="":"",1:"&")_"P10="""_$$TURL^TXTU(P10)_""""
+ S:$D(P11) A=A_$S(A="":"",1:"&")_"P11="""_$$TURL^TXTU(P11)_""""
+ S:$D(P12) A=A_$S(A="":"",1:"&")_"P12="""_$$TURL^TXTU(P12)_""""
+ Q A
+NUMET(V,E1,E2,E3) ; Окончание числительного
+ ; E1,E2,E3 - окончания
+ N X1,X2
+ S X1=V#10,X2=V#100
+ I X1=1,X2'=11 Q $S($G(E1)="":"",1:E1)
+ I X1'<2,X1'>4,(X2<10)!(X2'<20) Q $S($G(E2)="":"а",1:E2)
+ Q $S($G(E3)="":"ей",1:E3)
+CBOOL(VAL) ; Boolean convert
+ Q:VAL="yes"!(VAL="true")!(VAL="Y")!(VAL="TRUE") 1
+ Q 0
+NRMMAIL(VAL) ; Нормализовать email
+ S VAL=$$UL(VAL)
+ Q $TR(VAL,$TR(VAL,"qwertyuiopasdfghjklzxcvbnm@1234567890.-_+'",""),"")
+DECMAIL(X,TP) ; Decode mail
+ ; TP - 0/1/2/3 = full email/name of sender/user(before @)/domain
+ Q:X'["@" ""
+ N NM,ML
+ S TP=+$G(TP)
+ I X["<" S NM=$$TRIM($P(X,"<",1)),ML=$$TRIM($P($P(X,"<",2),">",1))
+ I X'["<" S NM="",ML=X
+ S ML=$TR($$UL(ML)," ","")
+ Q $S(TP=1:NM,TP=2:$P(ML,"@",1),TP=3:$P(ML,"@",2),1:ML)
+REMAIL(X,RETV) ; перекодировать email
+ ; RETV - переменная возврата
+ N R,I
+ k @RETV
+ S X=$$UL($$DBLSP($TR(X,";"," "))) Q:X=""
+ F I=1:1:$L(X," ") S R=$P(X," ",I) I R'="",R["@",R["." S @RETV@(R)=""
+ Q
+REWWW(X,RETV) ; Перекодировать список доменов
+ ; RETV - переменная возврата
+ N R,I
+ k @RETV
+ S X=$$UL($$DBLSP($TR(X,";"," "))) Q:X=""
+ F I=1:1:$L(X," ") S R=$P(X," ",I) I R'="",R["." S:$E(R,1,7)="http:\\" $E(R,1,7)="" S:$E(R,1,4)="www." $E(R,1,4)="" S @RETV@(R)=""
+ Q
+REPHN(X,RETV) ; Перекодировать список телефонов
+ ; RETV - переменная возврата
+ N R,I,F
+ k @RETV
+ I $L(X)>20,X'[",",X'[";",X'["/" S X=$TR($$DBLSP(X)," ",";")
+ E  S X=$$DBLSYM($TR(X,";,/",";;;"),";")
+ Q:X="" 
+ F I=1:1:$L(X,";") S R=$P(X,";",I) I R'="" S R=$$MPHN(R) S:$L(R)>3 @RETV@(R)=""
+ Q
+GENDER(X) ; Пол в 1/2
+ Q $S(X="":"","МмMm"[$E(X,1):1,"ЖжFf"[$E(X,1):2,1:"")
+MKLN(C,N) ; Создать строку из N символов C
+ N I,A
+ S A="" F I=1:1:N S A=A_C
+ Q A
+numtext(num,razr) ; Число в текст
+ N hundreds,tens,ones,razryad,t,o,R
+ S hundreds="| сто| двести| триста| четыреста| пятьсот| шестьсот| семьсот| восемьсот| девятьсот"
+ S tens="|| двадцать| тридцать| сорок| пятьдесят| шестьдесят| семьдесят| восемьдесят| девяносто"
+ S ones="||| три| четыре| пять| шесть| семь| восемь| девять| десять| одиннадцать| двенадцать| тринадцать| четырнадцать| пятнадцать| шестнадцать| семнадцать| восемнадцать| девятнадцать"
+ S razryad="| тысяч| миллион| миллиард| триллион| квадриллион| квинтиллион"
+ S R=$P(hundreds,"|",1+(num\100))
+ Q:num=0 R
+ S t=(num#100)\10,o=num#10
+ I t=1 S R=R_$P(ones,"|",1+(num#100))_$P(razryad,"|",razr+1) S:razr>1 R=R_"ов" Q R
+ S R=R_$P(tens,"|",1+t)
+ I o=1 S:razr=1 R=R_" одна" S:razr'=1 R=R_" один"
+ I o=2 S:razr=1 R=R_" две" S:razr'=1 R=R_" два"
+ I o>2 S R=R_$P(ones,"|",o+1)
+ S R=R_$P(razryad,"|",razr+1)
+ I o=1,razr=1 S R=R_"а"
+ I o>1,o<5 S:razr=1 R=R_"и" S:razr>1 R=R_"а"
+ I o>4,razr>1 S R=R_"ов"
+ Q R
+NTEXT(V) ; Число в текст
+ N L,Z,I,R,T
+ I V=0 Q "ноль"
+ S V="000"_V,L=($L(V)+2)/3
+ I L>7 Q V
+ S V="00"_V,R="",Z=$L(V)
+ F I=1:1:L S T=Z-(3*I),R=$$numtext(+$E(V,T+1,T+3),I-1)_R
+ S:$E(R)=" " $E(R)=""
+ Q R
+TXTSUM(V) ; Текстовая сумма
+ N V1,V2
+ S V1=$P(V,".",1),V2=+$P(V,".",2)
+ S:$L(V2)=1 V2=V2_"0"
+ S V=$$NTEXT(V1),$E(V,1)=$$LU($E(V))
+ Q V_" руб. "_V2_" коп."
+DN(X) ; Форматирование с предваряющим 0
+ S:X<1 X=0_(+X)
+ Q X
+INS(STR,INS,POS) ; вставить строку в позицию
+ Q:STR="" ""
+ Q $E(STR,1,POS-1)_INS_$E(STR,POS,$L(STR))

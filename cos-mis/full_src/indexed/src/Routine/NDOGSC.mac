@@ -1,0 +1,164 @@
+NDOGSC ; Отчеты по договорам ;[ 04/28/2023  1:06 AM ]
+LITE(DGN,DS,DE,NRKL,WRK,PRG,SMOD,xLPU) ; Сводка по договору
+ ; NRKL - без рекламаций
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),WRK=$G(WRK)
+ N PDT,ACNT,ASUMM,AERR,NI,ID,SUM,CNT,SCNT,SUMM,PC,EP,DTSTART,DTEND,FF,LP,F,REZ,DT,CIDX,SCOTD,STOTD,FPRC
+ S DTSTART=DS,DTEND=DE,xLPU=$G(xLPU,$$^I("ilpu")),PRG=$G(PRG)
+ S FF='+$$FR^I(),FPRC=$S(SMOD:"LITEprc^NDOGSC",1:"")
+ D MKSCOTD^IEDE
+ D MKDGN^IUSLSC(DGN,DS,DE,"","",$S(NRKL:"",1:2),FPRC)
+ D OWF^RWU(".txt"),WC^RWU("№ "_DGN_"|"_$$NAMEH^YNDOG(DGN,DTSTART)_" (с "_$$DT^DTUTL(DTSTART)_" по "_$$DT^DTUTL(DTEND)_");"_CR_"№ И.Б.|Ф.И.О. пациента|Полис|Услуг|Сумма|Ошибок")
+ S (ACNT,ASUM,AERR,PC)=0
+ S:PRG'="" PRG="|"_PRG_"|"
+ S NI="" F  S NI=$O(^BUF($J,"sc",NI)) Q:NI=""  D
+ .I WRK'="" Q:WRK'=$$GET^IPAC(NI,"work",DE)
+ .S (SCNT,SUMM,F)=0,(ID,PDT)=""
+ .F  S ID=$O(^BUF($J,"sc",NI,ID)) Q:ID=""  D
+ ..S A=^(ID),CNT=$P(A,"|",4),SUM=$P(A,"|",3)
+ ..I FF!$L(xLPU),xLPU'=$P(A,"|",10) Q 
+ ..S DT=$P(A,"|",1)
+ ..I PRG'="" S CIDX=$$PIDX^IPAC(NI,DGN,DT) Q:("|"_$$GET^IPAC(NI,"prog"_CIDX,DT)_"|")'[PRG  
+ ..S SCNT=SCNT+CNT,SUMM=SUM*CNT+SUMM,F=1
+ ..S:PDT="" PDT=DT
+ .Q:'F 
+ .K REZ
+ .S EP='$$CHKTXT^YIPACN(NI,PDT)
+ .I EP,$$CHECK^IGRNL(NI,PDT) S EP=0
+ .S A=+$G(^BUF($J,"er",NI))
+ .D WC^RWU(CR_NI_"|"_$S(EP:"Ошибка """_REZ_"""",1:$$FIO^IPAC(NI,PDT))_"|"_$$GET^IPAC(NI,"polis",PDT)_"|"_SCNT_"|"_SUMM_"|"_A)
+ .S ACNT=ACNT+SCNT,ASUM=ASUM+SUMM,AERR=AERR+A,PC=PC+1
+ D WC^RWU(CR_"Итого||"_PC_"|"_ACNT_"|"_ASUM_"|"_AERR)
+ K ^BUF($J,"sc"),^BUF($J,"er")
+ D C^RWU
+ Q
+LITEprc ; otd filter
+ I SMOD,'$$SMOD^IEDE(SMOD,OTD) S TEST=0 Q 
+ S TEST=1
+ Q
+FULL(DGN,DS,DE,UMOD,SWNUL,WRK,LIN,PACST,svBD,iINS,xLPU) ; Услуги по договорам
+ ; UMOD - 1/0/2/3, без рекл,все,рекл,исключенные
+ ; SWNUL - не показывать нулевые услуги
+ ; LIN - 0/1/2/3 стандартный/линейно/линейно+врач+программа/линейно с подитогами
+ ; PACST - классы пациентов
+ 
+ ; xLPU - фильтр по ЛПУ
+ N ACNT,SCNT,CCNT,SUMM,ASUM,AERR,NI,USL,SUM,DT,PRTP,A,EP,DTSTART,DTEND,FF,LP,REZ,R,VR,PIDX
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),iINS=$G(iINS)
+ S DTSTART=DS,DTEND=DE,FF='+$$FR^I()
+ S WRK=$G(WRK),LIN=+$G(LIN),PACST=$G(PACST),xLPU=$G(xLPU,$$^I("ilpu"))
+ S:WRK=999!(WRK=0) WRK=""
+ S:PACST'="" PACST="|"_PACST_"|"
+ D:UMOD=1 MKDGN^IUSLSC(DGN,DS,DE)
+ D:UMOD'=1 MKDGN^IUSLSC(DGN,DS,DE,"","",$S(UMOD=3:3,UMOD=2:4,1:2))
+ D OWF^RWU(".txt")
+ D WC^RWU($S(LIN:"№ И.Б.|Пациент|",1:"")_$S(LIN=3:"Дата рожд.|Полис|",1:"")_"|№ "_DGN_"|"_$$NAMEH^YNDOG(DGN,DE)_" (с "_$$DT^DTUTL(DTSTART)_" по "_$$DT^DTUTL(DTEND)_");"_CR_$S(LIN=3:"||||",LIN:"||",1:"")_"Дата|Код|Наименование|Цена|Кол-во|Сумма"_$S(LIN=2:"|Врач|Программа",1:""))
+ S (ACNT,ASUM,AERR,CCNT)=0
+ S NI="" F  S NI=$O(^BUF($J,"sc",NI)) Q:NI=""  D
+ .I WRK,WRK'=$$GET^IPAC(NI,"work",DE) Q 
+ .I PACST'="","|"_$$GET^IPAC(NI,"status",DE)_"|"'[PACST Q 
+ .S (SCNT,SUMM)=0,ID=""
+ .F  S ID=$O(^BUF($J,"sc",NI,ID)) Q:ID=""  D
+ ..S SUM=^(ID),CNT=$P(SUM,"|",4),USL=$P(SUM,"|",2),DT=$P(SUM,"|",1)
+ ..I FF!$L(xLPU),xLPU'=$P(SUM,"|",10) Q 
+ ..I $G(SWNUL) Q:'+$P(SUM,"|",3) 
+ ..S PRTP=+$P(SUM,"|",6),VR=$P(SUM,"|",7)
+ ..K REZ
+ ..S EP=$S(iINS:0,1:'$$CHKTXT^YIPACN(NI,DT))
+ ..I EP,$$CHECK^IGRNL(NI,DT) S EP=0
+ ..I LIN S PIDX=$$PIDX^IPAC(NI,DGN,DT)
+ ..S:'SCNT A=NI_"|"_$S(EP:"Ошибка """_REZ_"""",1:$$FIO^IPAC(NI,DT))_$S(LIN=3:"|"_$$GETE^IPAC(NI,"datar",DT)_"|"_$$GET^IPAC(NI,"polis"_PIDX,DT),1:"")
+ ..I 'LIN,'SCNT D WC^RWU(CR_"|"_A)
+ ..S SUM=$P(SUM,"|",3),SCNT=SCNT+CNT,SUMM=SUM*CNT+SUMM
+ ..S R=$$DT^DTUTL(DT)_"|"_USL_"|"_$$NAMEH^IPRICE(USL,PRTP,DT)_"|"_SUM_"|"_CNT_"|"_(SUM*CNT)
+ ..I LIN S PIDX=$$PIDX^IPAC(NI,DGN,DT)
+ ..S:LIN=2 R=R_"|"_$$FIO^IKADRY(VR)_"|"_$$GETE^IPAC(NI,"prog"_PIDX,DT)
+ ..D WC^RWU(CR_$S(LIN:A_"|",1:"")_R)
+ .I SCNT,LIN=3 D WC^RWU(CR_"Подытог||||||||"_SCNT_"|"_SUMM)
+ .S ACNT=ACNT+$S(SCNT:1,1:0),CCNT=CCNT+SCNT,ASUM=ASUM+SUMM,AERR=AERR+$G(^BUF($J,"er",NI))
+ D:LIN&(ACNT!ASUM) WC^RWU(CR_"Итого|"_ACNT_" пациентов|||||"_$S(LIN=3:"||",1:"")_CCNT_"|"_ASUM)
+ D:'LIN WC^RWU(CR_"||Итого пациентов "_ACNT_"||"_CCNT_"|"_ASUM)
+ K ^BUF($J,"sc"),^BUF($J,"er")
+ D C^RWU
+ Q
+PRCCMP(DGN,DS,DE,DPRC) ; Сравнение с прейскурантом
+ N SS,ID,A,SCNT,SUMM,DTT,PDT,SUM,BSUMM,CNT,USL,PC,DTSTART,DTEND,EP
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D OWF^RWU(".txt"),WC^RWU("|N "_DGN_"|"_$$NAMEH^YNDOG(DGN,DE)_" (с "_$$DT^DTUTL(DS)_" по "_$$DT^DTUTL(DE)_");"_CR_"П.п|№ И.Б.|Ф.И.О. пациента|Услуг|Сумма|По прейскуранту|Разница")
+ D MKDGN^IUSLSC(DGN,DS,DE)
+ S (SS(1),SS(2),SS(3))=0,DPRC=+DPRC,PC=1
+ S NI="" F  S NI=$O(^BUF($J,"sc",NI)) Q:NI=""  D
+ .S (SCNT,SUMM,BSUMM)=0,(ID,PDT)=""
+ .F  S ID=$O(^BUF($J,"sc",NI,ID)) Q:ID=""  D
+ ..S A=^(ID),CNT=$P(A,"|",4),SUM=$P(A,"|",3),USL=$P(A,"|",2)
+ ..S SCNT=SCNT+CNT,SUMM=SUM*CNT+SUMM,DTT=$P(A,"|",1) S:PDT="" PDT=DTT
+ ..S BSUMM=CNT*$$PRICEH^IPRICE(USL,DPRC,DTT)+BSUMM
+ .S EP='$$CHKTXT^YIPACN(NI,PDT)
+ .I EP,$$CHECK^IGRNL(NI,PDT) S EP=0
+ .D WC^RWU(CR_PC_"|"_NI_"|"_$S(EP:"Ошибка """_REZ_"""",1:$$FIO^IPAC(NI,PDT))_"|"_SCNT_"|"_SUMM_"|"_BSUMM_"|"_(SUMM-BSUMM))
+ .S SS(1)=SS(1)+SCNT,SS(2)=SS(2)+SUMM,SS(3)=SS(3)+BSUMM,PC=PC+1
+ D WC^RWU(CR_"||Итого:|"_SS(1)_"|"_SS(2)_"|"_SS(3)_"|"_(SS(2)-SS(3)))
+ K ^BUF($J,"sc"),^BUF($J,"er")
+ D C^RWU
+ Q
+VLITE(DVID,DS,DE,WRK,PRG,SMOD,MNSUM,MXSUM,xLPU) ; Сводка по виду договора
+ ; MXSUM,MNSUM - максимальные и минимальные суммы
+ ; SMOD - вид деятельности (стом/стац/п-ка)
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S xLPU=$G(xLPU),PRG=$G(PRG),WRK=$G(WRK)
+ 
+ N FF,ACNT,ASUM,KSUM,PC,DV,DVD,CC,XX,RR,NI,DG,P,STOTD,SCOTD
+ S FF='+$$FR^I()
+ S:FF xLPU=$$^I("ilpu")
+ D MKSCOTD^IEDE
+ S (ACNT,ASUM,KSUM,PC)=0
+ K ^BUF($J,"rez")
+ D MKAPPRC^IUSLSC(DS,DE,1,"VLTPRE^NDOGSC","VLTPROC^NDOGSC","","",FF)
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|№ И.Б.|Ф.И.О. пациента|Договор|Полис|Услуг|Сумма по договору|Сумма по кассе")
+ S RR="" F  S RR=$O(^BUF($J,"rez",RR)) Q:RR=""  D
+ .S NI=$P(RR,"|",1),DG=$P(RR,"|",2)
+ .S CC=^(RR)
+ .I MNSUM,MNSUM>$P(CC,"|",2) Q
+ .I MXSUM,MXSUM<$P(CC,"|",2) Q
+ .S P=$$PIDX^IPAC(NI,DG,DE)
+ .S XX=$$FIO^IPAC(NI,DE)_"|"_$$NAME^IINSC(DG)_"|"_$$GET^IPAC(NI,"polis"_P,DE)
+ .D WC^RWU(CR_NI_"|"_NI_"|"_XX_"|"_$TR($P(CC,"|",1),".",",")_"|"_$TR(+$P(CC,"|",2),".",",")_"|"_$TR(+$P(CC,"|",3),".",","))
+ .S PC=PC+1
+ .S ACNT=ACNT+$P(CC,"|",1),ASUM=ASUM+$P(CC,"|",2),KSUM=KSUM+$P(CC,"|",3)
+ D:ACNT WC^RWU(CR_"|Итого|"_PC_"|||"_$TR(ACNT,".",",")_"|"_$TR(ASUM,".",",")_"|"_$TR(KSUM,".",","))
+ K ^BUF($J,"rez")
+ D C^RWU
+ Q
+VLTPRE 
+ I xLPU,xLPU'=LPU S TEST=0 Q 
+ I SMOD,'$$SMOD^IEDE(SMOD,OTD) S TEST=0 Q 
+ I WRK'="",WRK'=$$GET^IPAC(NIB,"work",DE) S TEST=0 Q 
+ S TEST=1
+ Q
+VLTPROC 
+ I '$D(DVD(CSTC,DT)) S DV=$$GET^YNDOG(CSTC,"dvid",DT),DVD(CSTC,DT)=DV
+ E  S DV=DVD(CSTC,DT)
+ Q:DVID'=DV 
+ I PRG'="","|"_$$GET^IPAC(NI,"prog"_$$PIDX^IPAC(NI,CSTC,DT),DT)_"|"'[PRG Q 
+ S CC=$G(UL(U))
+ S XX=$S($D(UL(U,1)):UL(U,1),1:$$PRICEH^IPRICE(U,PRC,DT)*KSKD*CC)
+ S RR=$G(^BUF($J,"rez",NI_"|"_CSTC))
+ S $P(RR,"|",1)=$P(RR,"|",1)+CC
+ S:STAT'=2 $P(RR,"|",2)=$P(RR,"|",2)+XX
+ S:STAT=2 $P(RR,"|",3)=$P(RR,"|",3)+XX
+ S ^BUF($J,"rez",NI_"|"_CSTC)=RR
+ Q
+REGIPROC 
+ N D,FF,F,PS,DD,DG,MR
+ S D="Отчеты по страховым компаниям",FF=+$$FR^I()
+ S DD="d,Дата с,d,Дата по"
+ S PS="t@string:0/Всем подразделениям#1/Поликлинике#2/Стоматологии#3/Стационару,Расчет по"
+ S DG=",te@net:LST_YNDOG(),Договор,"
+ S MR="te@storage:mectorab@1,Место работы"
+ S F=$S(FF:",t@storage:lpu,Филиал",1:"")
+ S ^IPROC(D,"Сводка по договору")="LITE_NDOGSC,1,"_$S(FF:8,1:7)_DG_DD_",t@string:1/Да#0/Нет,Включая рекламации,"_MR_",te@net:LST_YMPRP(""""),Программа,"_PS_F
+ S ^IPROC(D,"Оказанные услуги")="FULL_NDOGSC,1,"_$S(FF:10,1:9)_DG_DD_",t@string:1/Все#0/Без рекламаций#2/Рекламации#3/Исключенные из счета,Показывать услуги,t@string:0/Да#1/Нет,Показывать нулевые услуги,"_MR_",t@string:0/Стандартный#1/Линейный#2/Линейный с врачом и программой#3/Линейный с реквизитами и итогом,Формат отчета,t@net:NMLCR_NSPRAV(1),Статус пациента,t@string:0/Нет#1/Да,Игнорировать прикрепление"_F
+ S ^IPROC(D,"Оказанные услуги")="FULL_NDOGSC,1,"_$S(FF:9,1:8)_DG_DD_",t@string:1/Да#0/Нет,Включая рекламации,t@string:0/Да#1/Нет,Показывать нулевые услуги,"_MR_",t@string:0/Стандартный#1/Линейный#2/Линейный с врачом и программой#3/Линейный с реквизитами и итогом,Формат отчета,t@net:NMLCR_NSPRAV(1),Статус пациента"_F
+ S ^IPROC(D,"Договор по прейскуранту")="PRCCMP_NDOGSC,1,4"_DG_DD_",te@storage:tprice,Прейскурант"
+ S ^IPROC(D,"Сводка по видам договоров")="VLITE_NDOGSC,100,"_$S(FF:9,1:8)_",t@net:NMLST_NSPRAV(""dvid""),Вид договора,"_DD_","_MR_",te@net:LST_YMPRP(""""),Программа,"_PS_",s,Минимальная сумма услуг договора,s,Максимальная сумма услуг договора"_F
+ Q

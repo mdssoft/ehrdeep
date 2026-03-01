@@ -1,0 +1,88 @@
+IMEDTER ; Взаимодействие с medterra [ 10/28/2013  12:56 PM ]
+MKDATA(IID,NI,TP,DT,TM) ; Создание XML файла
+ N IO,I,X,R,K,FN,CR,NM,PNM,PPM,SNILS,ETP,ANIB,A,FL,FFN
+ 
+ S CR=$C(13,10)
+ S NM=^MDDM("mean",TP)
+ S ETP=$G(^cfg("medterra","full-patient"))
+ S ANIB=$$GET^IPAC(NI,"anib")
+ S SNILS=$$GET^IPAC(NI,"snils")
+ I ANIB="" Q 0
+ 
+ D B^IJSON()
+ D W^IJSON("id",NI_DT_TM)
+ D W^IJSON("name",$$DW^TXTU($$TAG^TXTU(NM)))
+ D WD^IJSON("datetime",DT_","_TM)
+ D W^IJSON("patient_id",$S(ETP:SNILS,1:ANIB))
+ 
+ D:ETP
+ .D W^IJSON("patient_name",$$GET^IPAC(NI,"fiof"))
+ .D W^IJSON("patient_surname",$$GET^IPAC(NI,"fioi"))
+ .D W^IJSON("patient_suffix",$$GET^IPAC(NI,"fioo"))
+ .D W^IJSON("patient_gender",$$GET^IPAC(NI,"pol"))
+ .D W^IJSON("patient_birth",$$DTISO^DTUTL($$GET^IPAC(NI,"datar")))
+ 
+ D:TP="ecg"
+ .S FFN=$$MKPDF^IMDD(NI,DT,TM)
+ .S FN=$TR(FFN,"\","/")
+ .S FN=$P(FN,"/",$L(FN,"/"))
+ .;u 0 W !,"FN="_FN_" , FFN="_FFN
+ .D SENDFN(IID,"/tools/medterra/data/"_FN,FFN)
+ 
+ S A=$$E^IJSON()
+ u 0 w !,"JSON="_A
+ D SEND(IID,"/tools/medterra/digest",A)
+ Q 1
+PRM(TP,FL) 
+ I TP="bp" Q:FL="systolic" "Давление систолическое|мм рт.ст" Q:FL="diastolic" "Давление диастолическое|мм рт.ст" Q:FL="pulse" "Пульс|уд. в мин." Q ""
+ I UID="med_mon/diabet" Q $P("Хлебные ед.|Глюкоза в крови|Инсулин","|",POS)_"|"_$P("ХЕ|ммоль/л.|ед","|",POS)
+ I UID="med_mon/bread" Q $P("||Хлебные ед.|Калории|Белки|Углеводы|Жиры","|",POS)_"|"_$P("||ХЕ|ед","|",POS)
+ I TP="weight" Q:FL="weight" "Вес|кг"
+ Q ""
+DOSEND(IID) 
+ Q:'$D(^MSGOUT("medterra")) 
+ N DIR,I,NI,ID,KEY,FILL,FN,DT,TP,TM,IDX,R
+ S IDX="" F  S IDX=$O(^MSGOUT("medterra",IID,IDX)) Q:IDX=""  D
+ .S R=^(IDX),TO=$P(R,"|",2) 
+ .Q:$G(^(IDX,"chkfn"))'="" 
+ .S KEY=$G(^("sub"))
+ .S NI=$P(KEY,"|",1),TP=$P(KEY,"|",2),DT=$P(KEY,"|",3),TM=$P(KEY,"|",4)
+ .;u 0 W !,NI_","_TP_","_DT_","_TM
+ .Q:'$$MKDATA(IID,NI,TP,DT,TM)
+ .;W !,"OK"
+ .K ^MSGOUT("medterra",IID,IDX)
+ Q
+DORECV(ID) 
+ Q
+INITDB 
+ S ^MSGHUB("medterra")="IMEDTER"
+ S ^MSGHUB("medterra",1)="IMEDTER"
+ Q
+SEND(IID,URL,TXT) 
+ N NET,IP,PRT
+ S IP=$G(^MSGHUB("medterra",IID,"server")) S:IP="" IP="127.0.0.1"
+ S PRT=$G(^MSGHUB("medterra",IID,"port")) S:PRT="" PRT=3000
+ S NET=$$OPEN^WWWCLI(IP,PRT)
+ Q:NET=""
+ D OWBUF^WWWCLI(NET)
+ D WBUF^WWWCLI(NET,$$WU8^TXTU($$DW^TXTU(TXT)))
+ D CBUF^WWWCLI(NET)
+ D SETHDR^WWWCLI(NET,"Content-type","application/json;charset=UTF-8")
+ S X=$$POST^WWWCLI(NET,URL)
+ D CLOSE^WWWCLI(NET)
+ Q
+SENDFN(IID,URL,FN) 
+ N NET,IP,PRT,I,R
+ S IP=$G(^MSGHUB("medterra",IID,"server")) S:IP="" IP="127.0.0.1"
+ S PRT=$G(^MSGHUB("medterra",IID,"port")) S:PRT="" PRT=3000
+ S NET=$$OPEN^WWWCLI(IP,PRT)
+ Q:NET=""
+ D OWBUF^WWWCLI(NET)
+ S I=$$OR^FIL(FN),L=0
+ U I F  R R#1024 Q:$$ST^FIL()=0  I R'="" D WBUF^WWWCLI(NET,R) s L=L+$L(R)
+ C I
+ D CBUF^WWWCLI(NET)
+ D SETHDR^WWWCLI(NET,"Content-type","application/octet-stream")
+ S X=$$POST^WWWCLI(NET,URL)
+ D CLOSE^WWWCLI(NET)
+ Q

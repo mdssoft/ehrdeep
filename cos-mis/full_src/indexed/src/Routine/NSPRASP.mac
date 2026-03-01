@@ -1,0 +1,1114 @@
+NSPRASP ; Расписание по специалистам [ 09/13/2023  1:21 AM ]
+OTLSTT ; Список отделений
+ D MSG^RWU($$OTLSTs(+$$^I("ilpu")))
+ Q
+OTLSTs(LPU,FLG) ; Список отделений в соответствии с флагами
+ N OT,A,C,FV,AL,ST,LST,NM
+ S (C,OT,A)="",FLG=$G(FLG)
+ S FV=+$G(^cfg("rasp-vr-old")) S:'FV FV=180 ; Последняя дата появления
+ S AL=$$LCL^IUSER("sprasp","allowotd") S:AL'="" AL="|"_AL_"|"
+ S ST=$G(^cfg("sprasp","sortotd"))
+ F  S OT=$O(^DSH(LPU,OT)) Q:OT=""  D:$G(^(OT))>($H-FV)
+ .I AL'="",AL'[("|"_OT_"|") Q 
+ .I FLG'="" Q:'$$FLinFL^TXTU($$GETPL^ISPRAV("otd",OT,"flg"),FLG)
+ .S NM=$$GOTD^YISPRAV(OT)
+ .S LST($S(ST:$E(NM,1,64)_"|"_OT,1:OT))=OT_"|"_NM
+ S OT="" F  S OT=$O(LST(OT)) Q:OT=""  D
+ .S A=A_C_LST(OT),C=CR
+ Q A
+VOTDN(OTL,NN,DT) ; View VR by OT
+ ; NN - null param
+ ; DT - base date
+ N LPU,OT,VR,A,BUF,I,FF,SP,K,KS,J,FV,HH,AL
+ S LPU=+$$^I("ilpu"),FF=+$G(^cfg("rasp-sp-otd")),A=""
+ S HH=$$DIH^DTUTL($G(DT))
+ S FV=+$G(^cfg("rasp-vr-old")) S:'FV FV=180 ; Последняя дата появления
+ S AL=$$LCL^IUSER("sprasp","allowotd") S:AL'="" AL="|"_AL_"|"
+ I OTL="" S OT="" F  S OT=$O(^DSH(LPU,OT)) Q:OT=""  D:$S(AL="":1,1:AL[("|"_OT_"|")) lOTDN(OT)
+ I OTL'="" F I=1:1:99 S OT=$P(OTL,"|",I) Q:OT=""  D:$S(AL="":1,1:AL[("|"_OT_"|")) lOTDN(OT)
+ D OWF^RWU(".txt")
+ S (A,I)="" F  S A=$O(BUF(A)) Q:A=""  D WC^RWU(I_BUF(A)) S I=CR
+ D C^RWU
+ Q
+lOTDN(OT) ; Список сотрудников по отделению
+ S VR=""
+ G:FF lOTDN1
+ F  S VR=$O(^DSH(LPU,OT,VR)) Q:VR=""  I $$VCHK^IRASP2(VR),$$VRDTtst(VR) S A=$$VFIOSH^IRASP2(VR),K=$$GOTD^YISPRAV(OT),BUF(A_OT_VR)=VR_","_OT_"|"_A_$S(K="":"",1:" - "_K)
+ Q
+lOTDN1 
+ N RX,DX
+ F  S VR=$O(^DSH(LPU,OT,VR)) Q:VR=""  I $$VCHK^IRASP2(VR) S A=$$VFIOSH^IRASP2(VR) S SP="" F  S SP=$O(^DSH(LPU,OT,VR,SP)) Q:SP=""  D:$O(^(SP,HH-FV))'="" 
+ .F J=1:1:9 S K=$P(SP,"|",J) Q:K=""  S KS=$$SPEC^ISPRAV(K),BUF(A_OT_VR_$E(KS,1,64)_K)=VR_","_OT_","_K_"|"_A_$S(KS="":"",1:" - "_KS)
+ .S DX=$O(^DSH(LPU,OT,VR,SP,HH-1)) Q:DX="" 
+ .S RX=$P($G(^DSH(LPU,OT,VR,SP,DX)),"|",9) Q:RX=""   ; add spec
+ .F J=1:1:9 S K=$P(RX,"@",J) Q:K=""  S KS=$$SPEC^ISPRAV(K),BUF(A_OT_VR_$E(KS,1,64)_K)=VR_","_OT_","_SP_"|"_A_$S(KS="":"",1:" - "_KS) 
+ Q
+VRDTtst(VR) ; Проверка на последнюю дату присутствия
+ S SP="" F  S SP=$O(^DSH(LPU,OT,VR,SP)) Q:SP=""  Q:$O(^(SP,HH-FV))'=""
+ Q $S(SP="":0,1:1)
+LSPN(SP) ; todo
+ S VR=""
+ F  S VR=$O(^DSH(LPU,OT,VR)) Q:VR=""  S:$$VCHK^IRASP2(VR) A=$$VFIOSH^IRASP2(VR),BUF(A_OT_VR)=VR_","_OT_"|"_A_" - "_$$GOTD^YISPRAV(OT)
+ Q
+LSP(DT,VRL) ; View table
+ N LPU,VR,OT,SP,DTT,TM,I,J,X,T,R,IDL,IDC,LST,DE,DS,SRT,sTP,Z,SS,Sph,Sbl
+ N FL,F,K,DTX,Sfc,MX,MI,UVR,Sft,OWf,OW,UKB,Zk,CAB,ZTI,CCN,CCNX,fTAB,fLDT
+ N vSO,VKK
+ S LPU=+$$^I("ilpu"),DTX=DT
+ S sTP=+$G(^cfg("sprasp-sort"))
+ S Sbl=+$G(^cfg("rasp-show-bill"))
+ S Sph=$G(^cfg("rasp-show-phone")),Sph=$S(Sph=0:0,1:1)
+ S Sfc=+$G(^cfg("rasp-first-cab"))
+ S Zk=$G(^cfg("rasp","zpocab"))
+ S fLDT=$G(^cfg("rasp","sbyload"))
+ S vSO=$G(^cfg("rasp-sp-otd"))
+ S OWf=+$$LCL^IUSER("sprasp","first-owner")
+ S Sft=+$G(^cfg("rasp-filter-time"))*60 S:'Sft Sft=3600
+ S ZTI=+$G(^MN("raspzt"))
+ S:$$LCL^IUSER("sprasp","nopacphone") Sph=0
+ S OW=$$KDR^IUSER()
+ S FL="|"_$P(DT,"|",2,9)_"|",DT=$P(DT,"|",1)
+ S fTAB=(FL["|tab|")
+ S DE=$P(DT,":",2),DT=$P(DT,":",1),UKB=""
+ S DS=$$DIH^DTUTL(DT),DE=$S(DE="":DS,1:$$DIH^DTUTL(DE))
+ D UREGU^IRASP2
+ ; select and sort
+ F X=1:1:$L(VRL,"|") S R=$P(VRL,"|",X) Q:R=""  D
+ .S OT=$P(R,",",2),VR=$P(R,",",1),SS=$P(R,",",3)
+ .S SP=$S(SS="":"",1:$O(^DSH(LPU,OT,VR,SS),-1)),Z=1
+ .F  S SP=$O(^DSH(LPU,OT,VR,SP)) Q:SP=""!(SS'=SP&$L(SS))  F DTT=DS:1:DE D:$D(^DSH(LPU,OT,VR,SP,DTT))
+ ..S R=$S(sTP=1:DTT_"~"_SP_"~~"_VR_"~"_OT_"~"_LPU,sTP=2:$P($G(^(DTT)),"|",2)_"~"_DTT_"~"_SP_"~~"_VR_"~"_OT_"~"_LPU,1:LPU_"~"_OT_"~~"_VR_"~"_SP_"~"_DTT)
+ ..I fLDT D  ; сортировка по занятости
+ ...S TM="",K=0,F=0
+ ...F  S TM=$O(^DSH(LPU,OT,VR,SP,DTT,TM)) Q:TM=""  S T=$P($G(^(TM)),"|",1) S:R="" K=K+1 S:R'="" F=F+1
+ ...S $P(R,"~",3)=999+K-F ; свободный индекс
+ ..S:Sfc!OWf R=$S(OWf&(VR=OW):2,$E(VR)="X":4,1:5)_"~"_R
+ ..S SRT(R)="",Z=0
+ .S VKK=VR_","_OT_$S(vSO:","_SS,1:"")
+ .S:Z UVR(VKK)=""
+ .I 'Z,$P(VR,".",1)="X" S UKB(VKK)=""
+ ; after sort
+ S J=0,Z="" F  S Z=$O(SRT(Z)) Q:Z=""  D  Q:J>50
+ .S I=$S(Sfc!OWf:1,1:0)
+ .S:sTP=2 I=I+1,DTT=$P(Z,"~",I+1),SP=$P(Z,"~",I+2),OT=$P(Z,"~",I+5),LPU=$P(Z,"~",I+6)
+ .S:sTP=1 DTT=$P(Z,"~",I+1),SP=$P(Z,"~",I+2),OT=$P(Z,"~",I+5),LPU=$P(Z,"~",I+6)
+ .S:sTP=0 LPU=$P(Z,"~",I+1),OT=$P(Z,"~",I+2),SP=$P(Z,"~",I+5),DTT=$P(Z,"~",I+6)
+ .S VR=$P(Z,"~",I+4)
+ .I $D(^DSH(LPU,OT,VR,SP,DTT))'=11 Q ; без времени не кажем
+ .I FL["|now|",+$H=DTT S TM=$P($H,",",2),F=$O(^(DTT,TM-Sft)) Q:F=""  Q:F>(TM+Sft)  S F=$O(^(TM+Sft),-1) Q:F=""  Q:F<(TM-Sft)  ; не попадают в сейчас +- час
+ .S J=J+1
+ .S R=$S($D(^DSHM("tt",OT,SP)):1,$D(^DSHM("tt","-",SP)):1,1:"")
+ .S MX=$G(^DSH(LPU,OT,VR,SP,DTT))
+ .S IDL(J)=LPU_"~"_OT_"~"_VR_"~"_SP_"~"_DTT_"~"_R_"~"_$P(MX,"|",9)
+ .S IDC(J)=MX,CAB=$P(MX,"|",2),F=0,MX=$P(MX,"|",6)
+ .S CCN=$P($$CABFL^IPLPU(LPU,CAB,"p"),"|",2) ; кресел
+ .S MI=0 S:MX MX=MX-1
+ .S CCNX=CCN ; без обнуления, для разных каб.
+ .I CCN!MX,$$FLinFL^TXTU($$CABFL^IPLPU(LPU,CAB,"cls"),"nmdsh") S (CCN,MX)="" 
+ .S I=$S(fTAB&(CCN!MX):100000,1:1)
+ .S TM="" F  S TM=$O(^DSH(LPU,OT,VR,SP,DTT,TM)) Q:TM=""  D
+ ..S X=$G(^(TM))
+ ..I MX,MI=99,(TM#60=0)!(X'="") S I=I+1,MI=0 ; начало или занято->go+1
+ ..I fTAB S I=$S(CCN!MX:I,1:TM/60)
+ ..S R=$G(^(TM,"t")),LST(I,J)=TM_"|"_X
+ ..D LSPproc
+ ..I MX!CCN,TM<90000,X'="",X'="*" S MI=TM#60 I MI<MX,$S(CAB="":1,'CCN:1,1:$$TMCCAB^IRASP2(CAB,LPU,OT,VR,SP,DTT,TM)<CCN),$G(^DSH(LPU,OT,VR,SP,DTT,TM+1))="" S LST(I,J)=TM+1,MI=99 ; неск. записей на 1-но время, лимит есть, след. время пусто
+ .D REGU^IRASP2(LPU,OT,SP,VR,DTT,"LSP^NSPRASP("""_DTX_""","""_VRL_""")")
+ ; кабинеты с множественными записями - вверх
+ I fTAB S I="",X=99999 F  S I=$O(LST(I)) Q:I=""!(I>99999)  S X=X+1 I $D(LST(X)) M LST(I)=LST(X) K LST(X)
+ 
+ D OWF^RWU(".xmlb")
+ D W^RWU(^PP(0,2))
+ I $$C^I("sprasp","no-big-msg")'=1,J>50 D WC^RWU("<script_variable><message>Внимание, выбранное Вами расписание слишком большое."_CR_"Количество отображаемых записей будет ограничено 50.</message></script_variable><run>show_message(0,0);"_CR_"</run>")
+ D W^RWU("<sprasp>")
+ D WTAGDC^RWU("tabkey",VRL)
+ ; расцветить недействующие
+ S (Z,I)="" F  S I=$O(UVR(I)) Q:I=""  S Z=$S(Z="":"",1:Z_"|")_I
+ D:Z'="" WC^RWU("<vrlist colorstate=""$CCCCCC="_Z_"""/>")
+ ; расцветить кабинеты
+ S (Z,I)="" F  S I=$O(UKB(I)) Q:I=""  S Z=$S(Z="":"",1:Z_"|")_I
+ D:Z'="" WC^RWU("<vrlist colorstate=""$99FFFF="_Z_"""/>")
+ D VTAB^NRASP(DE'=DS,1)
+ S Z=$G(^DSHM("minfo",0))
+ I Z'="",+Z=+$H,$P(Z,",",2)+3600>$P($H,",",2) D WTAGDC^RWU("maininfo",^DSHM("minfo",1))
+ D W^RWU("</sprasp></nb_console>")
+ D C^RWU
+ Q
+LSPproc ; Заполнение служебной инф. таблицы (+ in NCRASP)
+ S CCNX=$G(CCNX)
+ I R'="" S LST(I,J,"t")=$P(R,"|",1,2),T=$P(R,"|",1),R=$P(R,"|",5) S:R<1 R="" S:R>0 TM=TM+R-1 S I=I+1 Q  ; прим. к времени, если с длит - перескакиваем к нужн. времени
+ S R=$G(^("c"))
+ S:R'="" LST(I,J,"c")=$S($P(R,"|",3)="":"",$P(R,"|",4):4,1:2)
+ S R=""
+ S:$G(^("b"))'="" LST(I,J,"b")=$P(^("b"),"|",4)
+ S:$G(^("i"))'="" R=^("i"),LST(I,J,"i")=$P(R,"|",9,11)
+ S:$G(^("e"))'="" LST(I,J,"e")=""
+ I Sph,$L(R) S LST(I,J,"p")=$P(R,"|",1) ; телефон
+ I Zk,CAB'="",X="",CCNX<2 S R=OT_"@"_VR_"@"_SP,T="" F  S T=$O(^DSHI("cab",LPU,CAB,DTT,T)) Q:T=""  I T'=R S K=$G(^DSH(LPU,$P(T,"@",1),$P(T,"@",2),$P(T,"@",3),DTT,TM)) I K'="",K'="*" S LST(I,J)=TM_"|занято" Q
+ I Zk,CAB'="",X="",CCNX>1,$$TMCCAB^IRASP2(CAB,LPU,OT,VR,SP,DTT,TM)'<CCNX S LST(I,J)=TM_"|занято"
+ S I=I+1
+ Q
+SELVR(DT,VRL,KEY) 
+ N LST,X,R S LST="",KEY=$P(KEY,"~",3)
+ F X=1:1:$L(VRL,"|") S R=$P(VRL,"|",X) Q:R=""  S:$P(R,",",1)=KEY LST=LST_$S(LST="":"",1:"|")_R
+ D LSP(DT,LST)
+ Q
+SELSP(DT,VRL,KEY) ; Все по врачу на дату
+ N LST,L,O,V
+ S LST="",L=$P(KEY,"~",1),KEY=$P(KEY,"~",4)
+ S O="" F  S O=$O(^DSH(L,O)) Q:O=""  S V="" F  S V=$O(^DSH(L,O,V)) Q:V=""  S:$D(^(V,KEY)) LST=LST_$S(LST="":"",1:"|")_V_","_O_","_KEY
+ D LSP(DT,LST)
+ Q
+SPKEY(SPCL,FIO,DT) ; Сотрудники по специальностям
+ ; SPCL - перечень специальностей
+ ; FIO - выводить ФИО
+ ; DT - базовая дата 
+ I $P(SPCL,":",1)="VR" D VRKEY($P(SPCL,":",2,99),$G(FIO)) Q 
+ N X,I,LPU,OT,VR,SP,A,HH,FV
+ S HH=$$DIH^DTUTL($G(DT))
+ S FV=+$G(^cfg("rasp-vr-old")) S:'FV FV=180 ; Последняя дата появления
+ 
+ S (OT,A)="",LPU=+$$^I("ilpu"),FIO=+$G(FIO)
+ F  S OT=$O(^DSH(LPU,OT)) Q:OT=""  D
+ .S VR="" F  S VR=$O(^DSH(LPU,OT,VR)) Q:VR=""  D
+ ..F I=1:1:99 S SP=$P(SPCL,"|",I) Q:SP=""  D:$D(^DSH(LPU,OT,VR,SP))
+ ...Q:'$$VRDTtst(VR)
+ ...S A=A_$S(A="":"",1:CR)_VR_","_OT_","_SP_"|"_$S(FIO:$$VFIOSH^IRASP2(VR),1:"-")
+ D MSG^RWU(A)
+ Q
+VRKEY(VCL,FIO) ; Сотрудники со специальностью по табельному
+ ; VCL - список врачей
+ N X,I,L,O,V,A,S
+ S (O,A)="",L=+$$^I("ilpu"),FIO=+$G(FIO)
+ F  S O=$O(^DSH(L,O)) Q:O=""  F I=1:1:99 S V=$P(VCL,"|",I) Q:X=""  I $D(^DSH(L,O,V)) S S="" F  S S=$O(^DSH(L,O,V,S)) Q:S=""  S A=A_$S(A="":"",1:CR)_V_","_O_","_X_"|"_$S(FIO:$$VFIOSH^IRASP2(V),1:"-")
+ D MSG^RWU(A)
+ Q
+ENDVRD(DS,KEY) ; Последняя дата приема по сотруднику
+ N OT,VR,SP,LP,DT,D
+ S LP=+$$^I("ilpu"),DS=$$DIH^DTUTL(DS),VR=$P(KEY,",",1),OT=$P(KEY,",",2)
+ S (DT,SP)=""
+ F  S SP=$O(^DSH(LP,OT,VR,SP)) Q:SP=""  S D=$O(^(SP,""),-1) S:D>DT DT=D
+ D MSG($$DT^DTUTL(DT))
+ Q
+ZPTMLST(KEY,TM) ; Список доступных для записи времен
+ ; шаг 5 мин или из ^cfg(rasp,zptml)
+ N TMS,TE,LPU,OT,VR,SP,DT,A
+ S TM=$$TI^IRASP2(TM),TMS=+$$C^I("rasp","zptml")*60,A=""
+ S:'TMS TMS=300
+ S LPU=$P(KEY,"~",1),OT=$P(KEY,"~",2),VR=$P(KEY,"~",3)
+ S SP=$P(KEY,"~",4),DT=$P(KEY,"~",5)
+ S TE=$O(^DSH(LPU,OT,VR,SP,DT,TM))
+ S:TE="" TE=TM+1800 ; 30 min.
+ F TM=TM:TMS:TE S DT=$$TM^DTUTL(TM),A=$S($L(A):A_CR,1:"")_DT_"|с "_DT
+ D MSG(A)
+ Q
+ZTMLEN(KEY,TM) ; Длительность ячейки записи
+ N LPU,OT,VR,SP,DT,TE
+ S LPU=$P(KEY,"~",1),OT=$P(KEY,"~",2),VR=$P(KEY,"~",3)
+ S SP=$P(KEY,"~",4),DT=$P(KEY,"~",5),TM=$$TI^IRASP2(TM)
+ S TE=$O(^DSH(LPU,OT,VR,SP,DT,TM+59)) Q:TE=""
+ S TE=$P($$TM^DTUTL(TE-TM),":",1,2)
+ S:$P(TE,":",1)="00" TE=$P(TE,":",2)
+ D MSG^RWU(TE)
+ Q
+REZPS(OK) ; Retreive write state for ZPSL
+ N KEY,DTT,TM,ZP,VRL,EID
+ S OK=$G(OK) S:'OK OK=1
+ S KEY=$G(^JOB(%JOB,"sprasp","KEY")),DTT=$G(^("DTT")),TM=$G(^("TM")),ZP=$G(^("ZP")),VRL=$G(^("VRL")),EID=$G(^("EID"))
+ G ZPS1
+ZPS(KEY,DTT,TM,ZP,VRL,EID,SYS,UPDN) ; Write record
+ ; VRL - перечень враче йдля отображения
+ ; EID - 
+ ; SYS - системный вызов
+ ; UPDN - обновление по сети
+ N OK S OK=0
+ K ^JOB(%JOB,"sprasp")
+ S EID=$G(EID)
+ S ^("sprasp","KEY")=KEY,^("DTT")=DTT,^("TM")=TM,^("ZP")=ZP,^("VRL")=VRL
+ S ^("EID")=EID
+ZPS1 N DT,LPU,OT,VR,SP,REZ,NI,A,Q,I,K,RS,WLI
+ S A=TM,TM=$$TI^IRASP2(TM),EID=$G(EID)
+ S LPU=$P(KEY,"~",1),OT=$P(KEY,"~",2),VR=$P(KEY,"~",3)
+ S SP=$P(KEY,"~",4),DT=$P(KEY,"~",5)
+ Q:LPU=""!(OT="")!(VR="")!(SP="")!(DT="") 
+ S:$P(ZP,"|",2)=-1 $P(ZP,"|",2)="" ; comm
+ S NI=$P(ZP,"|",1),RS=$P(ZP,"|",7),WLI=$P(ZP,"|",8)
+ 
+ Q:$$ZPSchk() ; проверка прав
+ 
+ N REZZ
+ D DO^ITRIG("sprasp","zps")
+ I $D(REZZ)!$$IsMSG^RWU() D MSG^RWU(REZZ) Q  
+ ; TODO - вывод всех сообщений сразу
+ 
+ G:'$$EXIST^IPAC(NI) ZPS2
+ 
+ ; По специальностям
+ I 'OK,$$C^I("rasp","chkprgsp") D  Q:$$IsMSG^RWU() 
+ .S K=$$CNTSTC^IPAC(NI,DT),Q=1
+ .F I="",1:1:K-1 S K=$$GET^IPAC(NI,"prog"_I,DT) I $L(K) S Q=0 I $$CHKSA^YMPRP(K,DT,SP)'<0 S Q=1 Q 
+ .Q:Q 
+ .D MSG("?Прием у данного специалиста в рамках программы обслуживания невозможен."_CR_"Хотите продолжить ?")
+ ; По отделениям
+ I 'OK,$$C^I("rasp","chkprgotd") D  Q:$$IsMSG^RWU() 
+ .S K=$$CNTSTC^IPAC(NI,DT),Q=1
+ .F I="",1:1:K-1 S K=$$GET^IPAC(NI,"prog"_I,DT) I $L(K) S Q=0 I $$CHKOA^YMPRP(K,DT,OT)'<0 S Q=1 Q 
+ .Q:Q 
+ .D MSG("?Прием в данном отделении в рамках программы обслуживания невозможен."_CR_"Хотите продолжить ?")
+ ; По филиалу
+ I 'OK,$$C^I("rasp","chkprglpu") D  Q:$$IsMSG^RWU()
+ .S K=$$CNTSTC^IPAC(NI,DT),Q=1
+ .F I="",1:1:K-1 S K=$$GET^IPAC(NI,"prog"_I,DT) I K'="" S Q=0 I $$CHKLPUA^IMPRP(K,DT,LPU)'<0 S Q=1 Q
+ .Q:Q
+ .D MSG("?Прием в данном филиале в рамках программы обслуживания невозможен."_CR_"Хотите продолжить ?")
+ S K=$$LCL^IUSER("sprasp","norerec")
+ I $S('OK:1,K:1,1:0),$$EXIST^IRASP2(OT,VR,SP,DT,TM,LPU) D MSG($S(K:"",1:"?")_"Это время занято другой записью."_$S('K:CR_"Хотите продолжить ?",1:"")) Q 
+ZPS2 
+ D SET^IRASP2(OT,VR,SP,DT,TM,ZP,OK,LPU,EID)
+ 
+ I $G(UPDN),LPU'=$$^I("ilpu"),$$ADRLPU^IEXCH(LPU)'="" D
+ .S K=$$URL^TXTU(OT,VR,SP,DT,TM,ZP,OK,LPU,EID,1)
+ .S OK=$$LPUGET^IEXCH(LPU,"SET_IRASP2?"_K,%LOG)
+ 
+ I $D(REZ) D MSG(REZ) S:$$C^I("rasp","msglog") ^ISLOG("ZPRASP",$H)=REZ Q 
+ D:WLI'="" do^NWLRASP(WLI)
+ D:RS'=""
+ .N Nii S Nii=$$EXIST^IPAC(NI)
+ .D ADDIN^ICCME($S(Nii:NI,1:""),2,"",$P(ZP,"|",2),$S(Nii:"",1:$P(NI," ",1)),$S(Nii:"",1:$P(NI," ",2)),$S(Nii:"",1:$P(NI," ",3)),"",$P(ZP,"|",4),RS,SP_"|"_DT_"|"_TM_"|"_LPU_"|"_OT_"|"_VR)
+ K ^JOB(%JOB,"sprasp")
+ D UPDDSH^YIMHP(VR)
+ D DO^ITRIG("sprasp","zpsend")
+ D:'$G(SYS) LSP(DTT,VRL)
+ Q
+REZPSL(OK) ; Retreive write state for ZPSL
+ N KEY,DTT,TM,ZP,VRL,LTM
+ S OK=$G(OK) S:'OK OK=1
+ S KEY=$G(^JOB(%JOB,"sprasp","KEY")),DTT=$G(^("DTT")),TM=$G(^("TM")),ZP=$G(^("ZP")),VRL=$G(^("VRL")),LTM=$G(^("LTM"))
+ G ZPSL1
+ZPSL(KEY,DTT,TM,ZP,VRL,LTM) ; Write record (w. time lenght)
+ N OK S OK=0
+ K ^JOB(%JOB,"sprasp")
+ S ^("sprasp","KEY")=KEY,^("DTT")=DTT,^("TM")=TM,^("ZP")=ZP,^("VRL")=VRL,^("LTM")=$G(LTM)
+ZPSL1 N DT,LPU,OT,VR,SP,REZ,NI,A,I,RS,WLI
+ S A=TM,TM=$$TI^IRASP2(TM)
+ I LTM["@",LTM'["++",$E(LTM,2,9)'="" S LTM=$$TI^IRASP2($E(LTM,2,9))-TM/60
+ S LTM=+LTM,LPU=$P(KEY,"~",1),OT=$P(KEY,"~",2),VR=$P(KEY,"~",3)
+ S SP=$P(KEY,"~",4),DT=$P(KEY,"~",5)
+ Q:LPU=""!(OT="")!(VR="")!(SP="")!(DT="") 
+ S:$P(ZP,"|",2)=-1 $P(ZP,"|",2)=""
+ S NI=$P(ZP,"|",1),RS=$P(ZP,"|",7),WLI=$P(ZP,"|",8)
+ 
+ Q:$$ZPSchk() ; проверка прав
+ 
+ D DO^ITRIG("sprasp","zpsl")
+ 
+ D SETL^IRASP2(OT,VR,SP,DT,TM,LTM,ZP,0,LPU)
+ K ^JOB(%JOB,"sprasp")
+ I $D(REZ) D MSG(REZ) Q
+ D:WLI'="" do^NWLRASP(WLI)
+ D:RS'=""
+ .N Nii S Nii=$$EXIST^IPAC(NI)
+ .D ADDIN^ICCME($S(Nii:NI,1:""),2,"",$P(ZP,"|",2),$S(Nii:"",1:$P(NI," ",1)),$S(Nii:"",1:$P(NI," ",2)),$S(Nii:"",1:$P(NI," ",3)),"",$P(ZP,"|",4),RS,SP_"|"_DT_"|"_TM_"|"_LPU_"|"_OT_"|"_VR)
+ 
+ D UPDDSH^YIMHP(VR)
+ D LSP(DTT,VRL)
+ Q
+ZPSchk() ; Проверка типовых прав
+ N EX,REZ,X
+ I $$LCL^IUSER("sprasp","write")=0 D MSG("Запись запрещена") Q 1
+ I $$FLinFL^TXTU($$LCL^IUSER("sprasp","nootd"),OT) D MSG("Запись в отделение запрещена") Q 1
+ I $$FLinFL^TXTU($$LCL^IUSER("sprasp","nospec"),SP) D MSG("Запись к специалисту запрещена") Q 1
+ 
+ I A["++:",$$LCL^IUSER("sprasp","fowt"),'$$IsFULL^IRASP2(LPU,OT,VR,SP,DT) D MSG("Расписание ещё не заполнено, Вы не можете записать на дополнительное время") Q 1
+ 
+ S X=$$LCL^IUSER("sprasp","novrflg")
+ I X'="",$$FlinFL^TXTU($$GET^IKADRY(VR,"flg",DT),X) D MSG("Запись к сотруднику запрещена") Q 1
+ S X=$$LCL^IUSER("sprasp","vrflg")
+ I X'="",'$$FlinFL^TXTU($$GET^IKADRY(VR,"flg",DT),X) D MSG("Запись к сотруднику запрещена") Q 1
+ 
+ S EX=$$EXIST^IPAC(NI)
+ Q:'EX 0
+ 
+ I $$C^I("sprasp","stcofor"),'$$CHKINSD^IPAC(NI,"",DT) D MSG("Запись пациентов по данному договору невозможна.") Q 1
+ I OK<2,$$C^I("sprasp","dbill") S A=-$G(^("dbill")),X=$$NOW^IBILL(NI) I A>X D MSG("#2У пациента существует долг в "_(-X)_" руб."_CR_"Хотите продолжить ?") Q 1
+ I OK<3,$$LCL^IUSER("sprasp","chkofor")!$$C^I("sprasp","chkofor"),'$$CHKTXT^YIPACN(NI,DT) D MSG("#3Пациент не имеет права обслуживания:"_CR_REZ_CR_"Хотите продолжить ?") Q 1
+ I $P(ZP,"|",4)="",$$LCL^IUSER("sprasp","chkpacphn"),$$GET^IPAC(NI,"tel1")="",$$GET^IPAC(NI,"tel2")="",$$GET^IPAC(NI,"pager")="" D MSG("Не указаны контакты.") Q 1
+ D DO^ITRIG("sprasp","zpschk")
+ I $D(REZ) D MSG(REZ) Q 1
+ Q 0
+DLS(KEY,DTT,TM,VRL) ; Delete record
+ I $$LCL^IUSER("sprasp","delete")=0 D MSG("Удаление запрещено") Q 
+ N DT,LPU,OT,VR,SP,REZ,X
+ S TM=$$TI^IRASP2(TM)
+ S LPU=$P(KEY,"~",1),OT=$P(KEY,"~",2),VR=$P(KEY,"~",3)
+ S SP=$P(KEY,"~",4),DT=$P(KEY,"~",5)
+ S:TM="" TM=$P(KEY,"~",6)
+ Q:LPU=""!(OT="")!(VR="")!(SP="")!(DT="") 
+ I $$FLinFL^TXTU($$LCL^IUSER("sprasp","nootd"),OT) D MSG("Удаление в отделении запрещена") Q 
+ I $$FLinFL^TXTU($$LCL^IUSER("sprasp","nospec"),SP) D MSG("Удаление у специалиста запрещена") Q
+ I $$LCL^IUSER("sprasp","nodelcome"),$L($G(^DSH(LPU,OT,VR,SP,DT,TM,"c"))) D MSG("Удаление ""пришедшего"" пациента запрещено.") Q
+ I $$LCL^IUSER("sprasp","mydel"),VR'=$$KDR^IUSER() D MSG("Вы можете удалять только свои записи.") Q
+ I $$LCL^IUSER("sprasp","owdel"),$$KDR^IUSER()=$$GETLOG^IRASP2(LPU,OT,VR,SP,DT,TM) D MSG("Вы можете удалять только свои записи.") Q
+ I $$LCL^IUSER("sprasp","myotddel"),$S($D(^JOB(%JOB,"sel-otd")):^("sel-otd"),1:$$OTD^IKADRY($$KDR^IUSER())'=OT) D MSG("Вы можете удалять только записи своего отделения.") Q
+ D DO^ITRIG("sprasp","del")
+ D DEL^IRASP2(OT,VR,SP,DT,TM,LPU)
+ I $D(REZ) D MSG(REZ) Q
+ D:DTT'="" LSP(DTT,VRL),UPDDSH^YIMHP(VR)
+ Q
+ZLEN(KEY,DTT,TM,VRL,TML) ; Set time length of record
+ I $$LCL^IUSER("sprasp","timelen")=0 D MSG("Нет прав на изменение времени записи.") q 
+ N DT,LPU,OT,VR,SP,REZ
+ S TM=$$TI^IRASP2(TM)
+ S LPU=$P(KEY,"~",1),OT=$P(KEY,"~",2),VR=$P(KEY,"~",3)
+ S SP=$P(KEY,"~",4),DT=$P(KEY,"~",5)
+ Q:LPU=""!(OT="")!(VR="")!(SP="")!(DT="") 
+ I $$FLinFL^TXTU($$LCL^IUSER("sprasp","nootd"),OT) D MSG("Изменение в отделении запрещено") Q 
+ I $$FLinFL^TXTU($$LCL^IUSER("sprasp","nospec"),SP) D MSG("Изменение у специалиста запрещено") Q
+ I TM>89999 D MSG("Изменение дополнительного времени запрещено") Q 
+ S:$P(TML,"|",2)'="" TML=$P(TML,"|",1)_"|"_$$TI^DTUTL($P(TML,"|",2))
+ D SETLEN^IRASP2(OT,VR,SP,DT,TM,TML,LPU)
+ D DO^ITRIG("sprasp","slen")
+ I $D(REZ) D MSG(REZ) Q
+ D LSP(DTT,VRL)
+ Q
+ZTLOAD(KEY,TM) ; Load item time type
+ N DT,LPU,OT,VR,SP,R
+ S LPU=$P(KEY,"~",1),OT=$P(KEY,"~",2),VR=$P(KEY,"~",3)
+ S SP=$P(KEY,"~",4),DT=$P(KEY,"~",5),TM=$$TI^IRASP2(TM)
+ S R=$G(^DSH(LPU,OT,VR,SP,DT,TM,"t"))
+ D OWF^RWU(".xmlb")
+ D W^RWU(^PP(0,2)_"<ztrasp>")
+ D WTAGDC^RWU("txt",$P(R,"|",2))
+ S DT=$P(R,"|",4)
+ S R=$S(DT="":"",1:$$DTM^DTUTL(DT)_", "_$$FIOSH^NUSER($P(R,"|",3),2))
+ D WTAGDC^RWU("user",R)
+ D W^RWU("</ztrasp></nb_console>")
+ D C^RWU
+ Q
+ZTC(KEY,DTT,TM,VRL,TP,ALL,TXT,TML,NTAB) ; Change time type
+ ; NTAB - 
+ N DT,LPU,OT,VR,SP,REZ
+ S NTAB=+$G(NTAB)
+ S:DTT="" NTAB=1
+ I $$LCL^IUSER("sprasp","settype")=0 D:'NTAB LSP(DTT,VRL) Q 
+ S TM=$$TI^IRASP2(TM)
+ S TXT=$$WD^TXTU($G(TXT))
+ S LPU=$P(KEY,"~",1),OT=$P(KEY,"~",2),VR=$P(KEY,"~",3)
+ S SP=$P(KEY,"~",4),DT=$P(KEY,"~",5)
+ Q:LPU=""!(OT="")!(VR="")!(SP="")!(DT="") 
+ D SETZTP^IRASP2(OT,VR,SP,DT,TM,TP,LPU,+$G(ALL),TXT,$G(TML)*60)
+ I $D(REZ) D MSG(REZ) Q
+ D:'NTAB LSP(DTT,VRL)
+ Q
+COME(KEY,DTT,TM,VRL,X,OK) ; Приход пациента
+ N DT,LPU,OT,VR,SP,REZ,NI,F,K
+ S TM=$$TI^IRASP2(TM),X=+$G(X),OK=+$G(OK)
+ S LPU=$P(KEY,"~",1),OT=$P(KEY,"~",2),VR=$P(KEY,"~",3)
+ S SP=$P(KEY,"~",4),DT=$P(KEY,"~",5)
+ I TM="" D MSG("Системная ошибка") S ^ERLOG("NSPRASP",+$H,$P($H,",",2))="KEY:"_KEY_" TM=NULL" Q  
+ I +$H'=DT D MSG("Отметку можно установить только сегодняшним пациентам.") Q  ; не сегодня !
+ S:TM="" TM=$P(KEY,"~",6)
+ Q:LPU=""!(OT="")!(VR="")!(SP="")!(DT="") 
+ S NI=$$GETNIB^IRASP2(LPU,OT,VR,SP,DT,TM)
+ I 'OK,$$EXIST^IPAC(NI),$$C^I("sprasp","dbill") S F=-$G(^("dbill")),K=$$NOW^IBILL(NI) I F>K D MSG("?У пациента существует долг в "_(-K)_" руб."_CR_"Хотите продолжить ?") Q
+ S F=$G(^cfg("rasp-chk-pac"))
+ D:F  Q:$$IsMSG^RWU() 
+ .Q:NI="" 
+ .S F="" S:$$GET^IPAC(NI,"pol",DT)="" F="Пол"
+ .S:$$GET^IPAC(NI,"datar",DT)="" F=F_$S(F="":"",1:CR)_"Дата рождения"
+ .Q:F="" 
+ .D MSG^RWU("У пациента не заполнены поля:"_CR_F)
+ I 'X,$$LCL^IUSER("sprasp","comeall") D COMEALL^IRASP2(LPU,OT,VR,SP,DT,TM) G COMEe1
+ I 'X S ^DSH(LPU,OT,VR,SP,DT,TM,"c")=$H_"|"_$$USR^IUSER()_"||0" D GL^IEXCH("^DSH",LPU,OT,VR,SP,DT,TM,"c")
+ I X,$P($G(^DSH(LPU,OT,VR,SP,DT,TM,"c")),"|",4)=0 K ^("c") D KGL^IEXCH("^DSH",LPU,OT,VR,SP,DT,TM,"c")
+COMEe1 
+ D DO^ITRIG("sprasp","come")
+ I $G(^cfg("sprasp-vrmsg-come")) S:NI="" NI=$P($G(^DSH(LPU,OT,VR,SP,DT,TM)),"|",1) D MSGVR^NISUTL(VR,"К Вам приш"_$S($$GET^IPAC(NI,"pol")=2:"ла",1:"ел")_" "_$$FIO^IPAC(NI))
+ D UPDDSH^YIMHP(VR)
+COMEe D:$L(DTT) LSP(DTT,VRL)
+ Q
+COPY(KEY,TM) ; Get record info to form
+ N DT,LPU,OT,VR,SP,NI,R,PHN,F,TT,IF
+ S TM=$$TI^IRASP2(TM)
+ S LPU=$P(KEY,"~",1),OT=$P(KEY,"~",2),VR=$P(KEY,"~",3)
+ S SP=$P(KEY,"~",4),DT=$P(KEY,"~",5)
+ Q:LPU=""!(OT="")!(VR="")!(SP="")!(DT="") 
+ S F=$G(^DSH(LPU,OT,VR,SP,DT,TM)),NI=+$P(F,"|",1),IF=$G(^(TM,"i"))
+ D OWF^RWU(".xmlb")
+ D W^RWU(^PP(0,2)_"<sprasp>")
+ D WTAGDC^RWU("pac",$S(NI=0:$P(F,"|",1),1:NI))
+ D WTAGDC^RWU("pac_name",$S(NI=0:$P(F,"|",1),1:$$FIO^IPAC(NI)))
+ D WTAGDC^RWU("comment",$P(F,"|",2))
+ D WTAGDC^RWU("pac_contact",$P(IF,"|",1))
+ D WTAGD^RWU("pac_id",$P(F,"|",7))
+ D W^RWU("</sprasp></nb_console>")
+ D C^RWU
+ Q
+GCALLB(KEY,TM) ; Get data patient callback from
+ N DT,LPU,OT,VR,SP,NI,R,PHN,F,TT,TTC,IF,X,Y,RB,R,CKEY,CK,fCM,fNPP
+ S TM=$$TI^IRASP2(TM)
+ S LPU=$P(KEY,"~",1),OT=$P(KEY,"~",2),VR=$P(KEY,"~",3)
+ S SP=$P(KEY,"~",4),DT=$P(KEY,"~",5)
+ S:TM="" TM=$P(KEY,"~",6)
+ Q:LPU=""!(OT="")!(VR="")!(SP="")!(DT="") 
+ S fNPP=$$LCL^IUSER("sprasp","nopacphone")
+ S F=$G(^DSH(LPU,OT,VR,SP,DT,TM)),NI=$P(F,"|",1)
+ S IF=$G(^(TM,"i")),RB=$G(^("b"))
+ S:'$$EXIST^IPAC(NI) NI=""
+ S X=$P(IF,"|",1),Y=$S(NI'="":$$TELS^IPAC(NI,+$H),1:"")
+ S TT=$S(fNPP:"",NI'="":$S(Y="":X,1:Y),X'="":X,1:"")
+ D OWF^RWU(".xmlb")
+ D W^RWU(^PP(0,2)_"<rspcall>")
+ D WTAGDC^RWU("pfio",$S(NI="":$P(F,"|",1),1:$$FIO^IPAC(NI)))
+ D WTAGDC^RWU("rinf",$$TIME^IRASP2(TM)_", "_$$SPEC^ISPRAV(SP)_", "_$$VFIOSH^IRASP2(VR))
+ S:fNPP TT="скрыт"
+ S TTC="" F F=1:1:$L(TT,",") S X=$$MPHN^TXTU($P(TT,",",F)) S:X'="" TTC=$S(TTC="":"",1:TTC_CR)_X
+ I NI'="",$$GET^IPAC(NI,"ofor")=10 S TT="Запрет обзвона",TTC="" ; Почил - не отзваниваем
+ D WTAGDCU^RWU("pphone",$S(TT="":"Телефон не указан",1:"Тел. "_TT),TTC)
+ S F=$G(^CMM("link","dsh-call"))
+ I RB=""!(F="") S RB="Контактов не было" G GCALLBe
+ S CKEY=SP_"|"_DT_"|"_TM_"|"_LPU_"|"_OT_"|"_VR
+ S fCM=$$C^I("rasp","lastcmm") S:'fCM fCM=2
+ S CK=$TR($P(RB,"|",6),"@","|")
+ S RB=$$NMREZ^ICCME(F,$P($P(RB,"|",4),"@",1))_", "_$$DTM2^DTUTL($P(RB,"|",1))_" ("_$P(RB,"|",2)_")"
+ F  Q:fCM=1  S CK=$O(^CMEI("ts",F,CKEY,CK),-1) Q:CK=""  D
+ .S X=$G(^CME($P(CK,"|",1),$P(CK,"|",2),$P(CK,"|",3)))
+ .S RB=RB_CR_$$NMREZ^ICCME(F,$P(X,"|",8))_", "_$$DTM2^DTUTL($P(X,"|",10))_" ("_$P(X,"|",9)_")"
+GCALLBe D WTAGDC^RWU("info",RB)
+ D W^RWU("<bt_call visible="""_$S(TTC="":"no",('$$C^I("callc","ccintergate"))!('$$LCL^IUSER("crasp","ccireg")):"no",1:"yes")_"""/>")
+ D W^RWU("</rspcall></nb_console>")
+ D C^RWU
+ Q
+RCALLB(KEY,DTT,TM,VRL,RES,TXT,TP) ; Set data from callback patient from
+ ; TP - обработать (0-текущ. запись,1-все за день,2-все с дня)
+ I $$LCL^IUSER("sprasp","callback")=0 D MSG("Нет прав для действия") Q
+ N DT,LPU,OT,VR,SP,NI,TT,TTM,A,PID,H
+ S TM=$$TI^IRASP2(TM),TXT=$$WD^TXTU(TXT),TP=+$G(TP)
+ S LPU=$P(KEY,"~",1),OT=$P(KEY,"~",2),VR=$P(KEY,"~",3)
+ S SP=$P(KEY,"~",4),DT=$P(KEY,"~",5)
+ S:TM="" TM=$P(KEY,"~",6)
+ Q:LPU=""!(OT="")!(VR="")!(SP="")!(DT="") 
+ S H=+$H
+ S NI=$G(^DSH(LPU,OT,VR,SP,DT,TM)),TT=$G(^(TM,"i"))
+ S PID=$P(NI,"|",7),NI=$P(NI,"|",1) S:PID="" PID=NI
+ S A=$$EXIST^IPAC(NI)
+ S:'A TP=0 ; для неопознанных пациентов только текущая запись
+ S TTM=$S($L(TT):$P(TT,"|",1),A:$$GET^IPAC(NI,"pager",H),1:"")
+ S TT=$S(A:$$TELS^IPAC(NI,H),$L(TT):$P(TT,"|",1),1:"")
+ I NI'="",$$GET^IPAC(NI,"ofor")=10 S TT="Запрет обзвона" ; Почил - не отзваниваем
+ ; one record
+ I TP=0 D RCALLBp
+ ; all day
+ I TP=1 S TM="" F  S TM=$O(^DSHP(PID,DT,TM)) Q:TM=""  S VR="" F  S VR=$O(^DSHP(PID,DT,TM,VR)) Q:VR=""  S A=^(VR),LPU=$P(A,"|",1),OT=$P(A,"|",2),SP=$TR($P(A,"|",3),"@","|") D RCALLBp
+ ; all days from current
+ I TP=2 S DT=DT-1 F  S DT=$O(^DSHP(PID,DT)) Q:DT=""  D  Q:$$IsMSG^RWU() 
+ .S TM="" F  S TM=$O(^DSHP(PID,DT,TM)) Q:TM=""  S VR="" F  S VR=$O(^DSHP(PID,DT,TM,VR)) Q:VR=""  S A=^(VR),LPU=$P(A,"|",1),OT=$P(A,"|",2),SP=$TR($P(A,"|",3),"@","|") D RCALLBp Q:$$IsMSG^RWU() 
+ Q:$$IsMSG^RWU() 
+ D:$L(DTT) LSP(DTT,VRL)
+ Q
+RCALLBp 
+ N TPE,R,X,TPX,REZ
+ S TPE=","_$P(RES,"@",2)_","
+ I (TPE[",del,")!(TPE[",wl,"),$$LCL^IUSER("sprasp","nodelcb") D MSG^RWU("Нет прав для удаления записей подобным образом.") Q 
+ S TPX=$$FNDTP^ICCME("Обзвон пациентов","dsh-call")
+ D:TPE[",sms," 
+ .S R=$G(^CMM("start",TPX,"data")) Q:R="" 
+ .Q:TTM="" 
+ .D send^NRASPIO(TTM,R,LPU,OT,VR,SP,DT,TM,NI)
+ 
+ I TPE[",del,"!(TPE[",wl,") D  Q:$$IsMSG^RWU()  
+ .S X=+$G(^cfg("exch"))
+ .D:X=2 DELnet^NCRASP(LPU,OT,VR,SP,DT,TM)
+ .I $D(REZ) D MSG^RWU(REZ) K REZ Q 
+ .S R=$$DEL^IRASP2(OT,VR,SP,DT,TM,LPU,,1)
+ .I $D(REZ) D MSG^RWU(REZ) K REZ Q 
+ .D LSP(DTT,VRL) 
+ S A=$$ADDOUTf^ICCME(NI,TPX,$P(RES,"@",1),TXT,TT,SP_"|"_DT_"|"_TM_"|"_LPU_"|"_OT_"|"_VR,$H,1)
+ I TPE[",del," Q
+ I TPE[",wl," Q ; to wait list - TODO
+ S ^DSH(LPU,OT,VR,SP,DT,TM,"b")=$H_"|"_$$USR^IUSER()_"||"_$P(RES,"@",1)_"||"_A
+ D GL^IEXCH("^DSH",LPU,OT,VR,SP,DT,TM,"b")
+ D DONOW^IEXCH ; immediatly send to another server
+ Q
+REGPCHK(KEY,DTT,TM) ; Проверить перед регистрацией
+ N DT,LPU,OT,VR,SP,NI,X,F,I,DSI
+ S TM=$$TI^IRASP2(TM)
+ S LPU=$P(KEY,"~",1),OT=$P(KEY,"~",2),VR=$P(KEY,"~",3)
+ S SP=$P(KEY,"~",4),DT=$P(KEY,"~",5)
+ Q:LPU=""!(OT="")!(VR="")!(SP="")!(DT="") 
+ S DSI=$G(^DSH(LPU,OT,VR,SP,DT,TM)),NI=$P(DSI,"|",1)
+ S X=$G(^(TM,"i")) S:X="" $P(X,"|",5)=NI
+ I $$EXIST^IPAC(NI) D MSG("Пациент уже зарегистрирован.") Q
+ I $$LCL^IUSER("sprasp","noregp") D MSG("Регистрация пациентов запрещена.") Q
+ S I=$$NWP^IRASP2("")
+ I I="" D MSG("Не определен шаблон нового пациента.") Q 
+ S F=$$C^I("rasp","regp-now")
+ I F=1,+$H'=DT D MSG("Регистрация пациента допустима только для записей на сегодня.")
+ I I="",$$NEXT^ISPRAV("newpac","")'="" D MSG^RWU("selnew")
+ Q
+REGPNWL ; Список шаблонов нового пациента
+ D OWF^RWU(".txt")
+ D LST^IRPAC
+ D C^RWU
+ Q
+REGPE(KEY,DTT,TM,VRL,In)    ; Регистрация пац. без сообщ. "зарегистрирован" 
+ N PMSG S PMSG=""
+ G REGP1
+REGP(KEY,DTT,TM,VRL,In) ; Регистрация пациента
+ ; In - шаблон нового пациента
+ N PMSG S PMSG="Пациент уже зарегистрирован."
+REGP1 N DT,LPU,OT,VR,SP,XML,NI,X,DSI,F,I,O,PID
+ S TM=$$TI^IRASP2(TM)
+ S LPU=$P(KEY,"~",1),OT=$P(KEY,"~",2),VR=$P(KEY,"~",3)
+ S SP=$P(KEY,"~",4),DT=$P(KEY,"~",5)
+ Q:LPU=""!(OT="")!(VR="")!(SP="")!(DT="") 
+ S DSI=$G(^DSH(LPU,OT,VR,SP,DT,TM)),NI=$P(DSI,"|",1),PID=$P(DSI,"|",7)
+ S X=$G(^(TM,"i")) S:X="" $P(X,"|",5)=NI
+ I $$EXIST^IPAC(NI) D MSG(PMSG) Q
+ S In=$$NWP^IRASP2($G(In))
+ I In="" D MSG("Не определен шаблон нового пациента.") Q
+ S F=$$C^I("rasp","regp-now")
+ I F=1,+$H'=DT D MSG("Регистрация пациента допустима только для записей на сегодня.") Q
+ D NNIB^IRPAC(In)
+ S XML("patients","newpac")=In
+ S F=$TR($$DBLSP^TXTU($P(X,"|",5)),"."," "),I=$P(X,"|",6),O=$P(X,"|",7)
+ S:I="" I=$P(F," ",2) S:O="" O=$P(F," ",3) S F=$P(F," ",1)
+ I F=""!(I="") D MSG("Не указано ФИО.") Q 
+ S F=$$LU^TXTU($E(F,1))_$$UL^TXTU($E(F,2,99))
+ S XML("patients","fiof")=$$DW^TXTU(F)
+ S I=$$LU^TXTU($E(I,1))_$$UL^TXTU($E(I,2,99))
+ S XML("patients","fioi")=$$DW^TXTU(I)
+ S O=$$LU^TXTU($E(O,1))_$$UL^TXTU($E(O,2,99))
+ S XML("patients","fioo")=$$DW^TXTU(O)
+ S XML("patients","datar")=$$DT^DTUTL($P(X,"|",8))
+ S XML("patients","pol")=$P(X,"|",9)
+ S F=$G(^cfg("rasp-regpac-tel"))
+ S O=$P(X,"|",1),I=$E(O,1)
+ I I="д" S F="tel1",O=$E(O,2,99)
+ I I="р" S F="tel2",O=$E(O,2,99)
+ I I="м" S F="pager",O=$E(O,2,99)
+ S XML("patients",$S(F="":"tel1",1:F))=$$DW^TXTU($$TRIM^TXTU(O))
+ S F=$P(X,"|",2)
+ S:F XML("patients","rsource")=F
+ S NI=XML("patients","hist")
+ I +$G(^cfg("rasp-regpac-xpac")) D REGPxpc Q 
+ N SAVED D W^YIPACN
+ I NI="" D MSG("Ошибка сохранения информации о пациенте.") Q
+ D REGPexe(OT,VR,SP,DT,TM,LPU,NI)
+ D LSP(DTT,VRL)
+ Q
+REGPxpc ; fill xpatient.frm
+ N P,I,X
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,1)_"<patients>")
+ ; D NNIBsys^YIPACN(+$G(^MN("newpac")),In) - NNIB^IRPAC
+ S P="",I=+$G(^MN("newpac"))
+ I '+$$LCL^IUSER("patients"," noestate") S X="" F  S X=$O(^MN(I,In,"estate",X)) Q:X=""  D W^RWU("<"_X_" enabled="""_$S($G(^MN(I,In,"estate",X))=0:"no",1:"yes")_"""/>")
+ F  S P=$O(XML("patients",P)) Q:P=""  D WTAGD^RWU(P,XML("patients",P))
+ D WTAGDC^RWU("saveexec","REGPexe^NSPRASP("_OT_","""_VR_""","""_SP_""","_DT_","_TM_","_LPU_",NI)")
+ D W^RWU("</patients>"),C^RWU
+ Q
+REGPexe(OT,VR,SP,DT,TM,LPU,NI) 
+ N DSI,pDSI,X
+ S DSI=$G(^DSH(LPU,OT,VR,SP,DT,TM))
+ S pDSI=DSI,$P(DSI,"|",1)=NI,DSI=$P(DSI,"|",1,6)
+ S ^(TM)=DSI
+ S X=$G(^(TM,"i")) G:X="" REGPexe1
+ ; заполнение телефона, если нет у пациента 
+ D SETPHN^IRASP2(NI,$P(X,"|",1))
+REGPexe1 
+ D REREG^IRASP2(OT,VR,SP,DT,TM,LPU,pDSI)
+ D UPDDSH^YIMHP(VR)
+ Q
+KSSI(KEY,DTT,TM,VRL) ; Для совместимости
+ G KSS+1
+KSS(KEY,TM) ; Вызов кассы из расписания
+ N DT,LPU,OT,VR,NI,SP,U,R
+ S TM=$$TI^IRASP2(TM),DT=$P(KEY,"~",5)
+ S LPU=$P(KEY,"~",1),OT=$P(KEY,"~",2),VR=$P(KEY,"~",3),SP=$P(KEY,"~",4)
+ Q:LPU=""!(OT="")!(VR="")!(DT="") 
+ S NI=$P($G(^DSH(LPU,OT,VR,SP,DT,TM)),"|",1) Q:NI="" 
+ S R=$O(^DSH(LPU,OT,VR,SP,DT,TM,"u","")),U=""
+ I R'="" S U=$P(^(R),"|",1) S:U="" U=1 S U=R_"|"_U
+ S SP=$$C^I("rasp","kssfrm")
+ S:SP="" SP="inkss"
+ D:SP="inkss" RASP^YNEDK(OT,VR,DT,NI,U)
+ D:SP="ksslist" RASP^NKSSL(VR,DT,NI) ; TODO
+ Q
+GCOM(KEY,TM) ; get comment
+ N DT,LPU,OT,VR,SP
+ S TM=$$TI^IRASP2(TM),DT=$P(KEY,"~",5)
+ S LPU=$P(KEY,"~",1),OT=$P(KEY,"~",2),VR=$P(KEY,"~",3),SP=$P(KEY,"~",4)
+ Q:LPU=""!(OT="")!(VR="")!(DT="")
+ D MSG^RWU($$GETCOM^IRASP2(LPU,OT,VR,SP,DT,TM))
+ Q
+SUSL(KEY,TM,TXT,CLR) ; set usl
+ I $$LCL^IUSER("sprasp","nosusl") D MSG("Изменение услуг запрещено") Q 
+ S TXT=$$WD^TXTU(TXT) Q:TXT=""  
+ N DT,LPU,OT,VR,SP,K,CNT,I,U
+ S TM=$$TI^IRASP2(TM),DT=$P(KEY,"~",5)
+ S LPU=$P(KEY,"~",1),OT=$P(KEY,"~",2),VR=$P(KEY,"~",3),SP=$P(KEY,"~",4)
+ Q:LPU=""!(OT="")!(VR="")!(DT="")
+ I TXT["@" S CLR=1 ; always
+ I $G(CLR) S K="" F  S K=$O(^DSH(LPU,OT,VR,SP,DT,TM,"u",K)) Q:K=""  K ^(K)
+ F I=1:1:$L(TXT,"@") S U=$P(TXT,"@",I) D:U'=""
+ .S CNT=$P(U,"|",2),TXT=$E($P(U,"|",1),1,64) S:CNT="" CNT=1
+ .S ^DSH(LPU,OT,VR,SP,DT,TM,"u",TXT)=CNT
+ D DO^ITRIG("sprasp","setusl")
+ Q
+SCOM(KEY,TM,TXT,DTT,VRL) ; set comment
+ I $$LCL^IUSER("sprasp","noscomm") D MSG("Изменение примечания запрещено") Q 
+ S TXT=$$WD^TXTU(TXT)
+ N DT,LPU,OT,VR,SP
+ S TM=$$TI^IRASP2(TM),DT=$P(KEY,"~",5)
+ S LPU=$P(KEY,"~",1),OT=$P(KEY,"~",2),VR=$P(KEY,"~",3),SP=$P(KEY,"~",4)
+ Q:LPU=""!(OT="")!(VR="")!(DT="")
+ S TXT=$$SETCOM^IRASP2(LPU,OT,VR,SP,DT,TM,TXT)
+ I TXT'="" D MSG^RWU(TXT) Q 
+ D DO^ITRIG("sprasp","setcomm")
+ D:$G(DTT)'=""!($G(VRL)'="") LSP(DTT,VRL)
+ Q
+GCON(KEY,TM) ; get contacts
+ N DT,LPU,OT,VR,SP
+ S TM=$$TI^IRASP2(TM),DT=$P(KEY,"~",5)
+ S LPU=$P(KEY,"~",1),OT=$P(KEY,"~",2),VR=$P(KEY,"~",3),SP=$P(KEY,"~",4)
+ Q:LPU=""!(OT="")!(VR="")!(DT="")
+ D MSG^RWU($$GETCON^IRASP2(LPU,OT,VR,SP,DT,TM))
+ Q
+SCON(KEY,TM,TXT,DTT,VRL) ; set contacts
+ S TXT=$$WD^TXTU(TXT)
+ N DT,LPU,OT,VR,SP
+ S TM=$$TI^IRASP2(TM),DT=$P(KEY,"~",5)
+ S LPU=$P(KEY,"~",1),OT=$P(KEY,"~",2),VR=$P(KEY,"~",3),SP=$P(KEY,"~",4)
+ Q:LPU=""!(OT="")!(VR="")!(DT="")
+ D SETCON^IRASP2(LPU,OT,VR,SP,DT,TM,TXT)
+ D DO^ITRIG("sprasp","setcont")
+ D LSP(DTT,VRL)
+ Q
+SDCOM(KEY,TXT) ; set dayly comment
+ N DT,LPU,OT,VR,SP,R,Wo,PHN
+ S LPU=$P(KEY,"~",1),OT=$P(KEY,"~",2),VR=$P(KEY,"~",3)
+ S SP=$P(KEY,"~",4),DT=$P(KEY,"~",5)
+ Q:LPU=""!(OT="")!(VR="")!(DT="")
+ S TXT=$$WD^TXTU(TXT)
+ S Wo=+$G(^cfg("rasp-aotimer"))
+ S R=$$LCL^IUSER("rasp","aotimer") S:R'="" Wo=R
+ I Wo&(+$H>DT) D MSG("Изменение комментария недопустимо !") Q 
+ S R=$G(^DSH(LPU,OT,VR,SP,DT))
+ S $P(R,"|",7)=TXT,^(DT)=R
+ ; TODO - log
+ D GL^IEXCH("^DSH",LPU,OT,VR,SP,DT)
+ D MSG^RWU("")
+ Q
+SRSC(KEY,TM,RSC,DTT,VRL) ; set rsource
+ I $$LCL^IUSER("sprasp","nosrsource") D MSG("Изменение источника рекламы запрещено") Q 
+ S RSC=$$WD^TXTU(RSC)
+ N DT,LPU,OT,VR,SP
+ S TM=$$TI^IRASP2(TM),DT=$P(KEY,"~",5)
+ S LPU=$P(KEY,"~",1),OT=$P(KEY,"~",2),VR=$P(KEY,"~",3),SP=$P(KEY,"~",4)
+ Q:LPU=""!(OT="")!(VR="")!(DT="")
+ D SETRSC^IRASP2(LPU,OT,VR,SP,DT,TM,RSC)
+ D:$G(DTT)'=""!($G(VRL)'="") LSP(DTT,VRL)
+ Q
+SCAB(KEY,CAB,DTT,VRL) ; set dayly cabinet
+ N DT,LPU,OT,VR,SP,R,Wo,PHN
+ S LPU=$P(KEY,"~",1),OT=$P(KEY,"~",2),VR=$P(KEY,"~",3)
+ S SP=$P(KEY,"~",4),DT=$P(KEY,"~",5)
+ Q:LPU=""!(OT="")!(VR="")!(DT="")
+ S Wo=+$G(^cfg("rasp-mk-aotimer"))
+ S R=$$LCL^IUSER("mkrasp","aotimer") S:$L(R) Wo=R
+ G:Wo&(+$H>DT) SCABe
+ S CAB=$$WD^TXTU(CAB)
+ S PHN=$P(CAB,"@",2),CAB=$P(CAB,"@",1)
+ S R=$G(^DSH(LPU,OT,VR,SP,DT))
+ S:$L(PHN) $P(R,"|",3)=PHN
+ S $P(R,"|",2)=CAB
+ S ^(DT)=R
+ D GL^IEXCH("^DSH",LPU,OT,VR,SP,DT)
+ D MKI^IMRASP(LPU,DT,DT,DT)
+SCABe D LSP(DTT,VRL)
+ Q
+SNIB(KEY,TM,NIB,DTT,VRL) ; set new nib
+ S NIB=$$WD^TXTU(NIB)
+ N DT,LPU,OT,VR,SP
+ S TM=$$TI^IRASP2(TM),DT=$P(KEY,"~",5)
+ S LPU=$P(KEY,"~",1),OT=$P(KEY,"~",2),VR=$P(KEY,"~",3),SP=$P(KEY,"~",4)
+ Q:LPU=""!(OT="")!(VR="")!(DT="")
+ D SETNIB^IRASP2(LPU,OT,VR,SP,DT,TM,NIB)
+ D LSP(DTT,VRL)
+ Q
+MOVE(KEYT1,KEYT2,DTT,VRL,WOC) ; Переместить запись
+ ; WOC - без примечания
+ N DT,LPU,OT,VR,SP,TM,DT1,LPU1,OT1,VR1,SP1,TM1
+ S TM=$$TI^IRASP2($P(KEYT1,"@",1)),KEYT1=$P(KEYT1,"@",2)
+ S TM1=$$TI^IRASP2($P(KEYT2,"@",1)),KEYT2=$P(KEYT2,"@",2)
+ Q:TM=""  Q:TM1=""  Q:KEYT1=""  Q:KEYT2=""  
+ S LPU=$P(KEYT1,"~",1),OT=$P(KEYT1,"~",2),VR=$P(KEYT1,"~",3)
+ S SP=$P(KEYT1,"~",4),DT=$P(KEYT1,"~",5)
+ S LPU1=$P(KEYT2,"~",1),OT1=$P(KEYT2,"~",2),VR1=$P(KEYT2,"~",3)
+ S SP1=$P(KEYT2,"~",4),DT1=$P(KEYT2,"~",5)
+ I $$LCL^IUSER("sprasp","write")=0 D MSG("Запись запрещена") Q
+ I $$FLinFL^TXTU($$LCL^IUSER("sprasp","nootd"),OT) D MSG("Изменение в отделении запрещено") Q 
+ I $$FLinFL^TXTU($$LCL^IUSER("sprasp","nospec"),SP) D MSG("Изменение у специалиста запрещено") Q
+ I $$FLinFL^TXTU($$LCL^IUSER("sprasp","nootd"),OT1) D MSG("Запись в отделение запрещена") Q 
+ I $$FLinFL^TXTU($$LCL^IUSER("sprasp","nospec"),SP1) D MSG("Запись к специалисту запрещена") Q
+ D MOV^IRASP2(OT,VR,SP,DT,TM,LPU,OT1,VR1,SP1,DT1,TM1,LPU1,$G(WOC))
+ I $D(REZ) D MSG(REZ) Q 
+ D LSP(DTT,VRL)
+ Q
+POUT(KEY,TM,X,DTT,VRL) ; Пациент ушел
+ N DT,LPU,OT,VR,SP
+ S TM=$$TI^IRASP2(TM),DT=$P(KEY,"~",5)
+ I $$LCL^IUSER("sprasp","pout")=0 D MSG("Вы не можете ставить отметку об уходе.") Q  
+ I +$H'=DT D MSG("Отметку можно установить только сегодняшним пациентам.") Q 
+ S LPU=$P(KEY,"~",1),OT=$P(KEY,"~",2),VR=$P(KEY,"~",3),SP=$P(KEY,"~",4)
+ Q:LPU=""!(OT="")!(VR="")!(DT="")!(TM="") 
+ I X S ^DSH(LPU,OT,VR,SP,DT,TM,"e")=$H_"|"_$$USR^IUSER() D GL^IEXCH("^DSH",LPU,OT,VR,SP,DT,TM,"e")
+ I 'X K ^DSH(LPU,OT,VR,SP,DT,TM,"e") D KGL^IEXCH("^DSH",LPU,OT,VR,SP,DT,TM,"e")
+ D LSP(DTT,VRL)
+ Q
+GETNI(KEY,TM) ; Получение номера истории из расписания
+ ; KEY - ключ расписания
+ ; TM - время
+ N DT,LP,OT,VR,SP,A
+ S LP=$P(KEY,"~",1),OT=$P(KEY,"~",2),VR=$P(KEY,"~",3),DT=$P(KEY,"~",5)
+ S SP=$P(KEY,"~",4),TM=$$TI^IRASP2(TM),A=""
+ Q:LP=""!(OT="")!(VR="")!(DT="") 
+ S A=$P($G(^DSH(LP,OT,VR,SP,DT,TM)),"|",1)
+ D MSG^RWU($S(A="":"",$$EXIST^IPAC(A):A,1:""))
+ Q
+DOACT(KEY,TM,ACT) ; Выполнить действие с записью
+ ; KEY - ключ расписания
+ ; TM - время
+ ; ACT - действие (1 - выбор специальности врача в сессии из расп)
+ N DT,LP,OT,VR,SP,NI
+ S LP=$P(KEY,"~",1),OT=$P(KEY,"~",2),VR=$P(KEY,"~",3),DT=$P(KEY,"~",5)
+ S SP=$P(KEY,"~",4),TM=$$TI^IRASP2(TM)
+ I ACT=1,$$LCL^IUSER("sprasp","selmhv") D
+ .I $$KDR^IUSER()'=VR Q  ; проверка сопоставления с кадрами 
+ .I '$$IsOTD^IKADRY(VR,OT,DT) Q 
+ .I '$$IsSPEC^IKADRY(VR,SP,DT) Q 
+ .I $$OTDbySP^IKADRY(VR,SP,DT)'=OT,$$SPbyOTD^IKADRY(VR,OT,DT)'=SP Q 
+ .D SETSKDR^IUSER(VR,OT,SP)
+ .D MSG^RWU(LP_"|"_VR_"|"_OT_"|"_SP)
+ Q
+LWTL(KEY,TM) ; Load to wait list
+ N DT,LPU,OT,VR,SP
+ S TM=$$TI^IRASP2(TM),DT=$P(KEY,"~",5)
+ S LPU=$P(KEY,"~",1),OT=$P(KEY,"~",2),VR=$P(KEY,"~",3),SP=$P(KEY,"~",4)
+ Q:LPU=""!(OT="")!(VR="")!(DT="")
+ D LDSH^NWLRASP(LPU,OT,VR,SP,DT,TM)
+ Q
+KEYRUN(KEY,TM,PRC) ; Запустить процедуру с номером истории
+ N DT,LPU,OT,VR,NI,SP
+ S TM=$$TI^IRASP2(TM)
+ S LPU=$P(KEY,"~",1),OT=$P(KEY,"~",2),VR=$P(KEY,"~",3),DT=$P(KEY,"~",5)
+ S SP=$P(KEY,"~",4)
+ Q:LPU=""!(OT="")!(VR="")!(DT="") 
+ S NI=$P($G(^DSH(LPU,OT,VR,SP,DT,TM)),"|",1)
+ S:NI'="" NI=$S($D(^BTN(NI)):NI,1:"")
+ I NI'="" D @(PRC_"(NI)")
+ Q
+GPAT ; Get pattern
+ D GPATLT^NPTRASP
+ Q
+VPTRN(X) ; Load pattern
+ N I,R,OTL,SPL,VRL,N,K,LPU,OT,VR,SP,CAB,BUF,FF,FV,HH
+ S I=+$G(^MN("rpat")),R=$G(^MN(I,+X))
+ I R="" Q 
+ S FV=+$G(^cfg("rasp-vr-old")),HH=+$H S:'FV FV=180 ; Последняя дата появления
+ S LPU=+$$^I("ilpu"),I="|",FF=+$G(^cfg("rasp-sp-otd"))
+ S VRL=I_$P(R,"~",2)_I,OTL=I_$P(R,"~",3)_I,SPL=I_$P(R,"~",4)_I,OT=""
+ F  S OT=$O(^DSH(LPU,OT)) Q:OT=""  D
+ .I OTL'="",SPL="",VRL="",OTL'[("|"_OT_"|") Q
+ .S VR="" F  S VR=$O(^DSH(LPU,OT,VR)) Q:VR=""  S K="" F  S K=$O(^DSH(LPU,OT,VR,K)) Q:K=""  F I=1:1:9 S SP=$P(K,"|",I) Q:SP=""  D
+ ..Q:'(VRL[("|"_VR_"|")!(OTL[("|"_OT_"|"))!(SPL[("|"_SP_"|"))) 
+ ..Q:$O(^DSH(LPU,OT,VR,SP,HH-FV))="" 
+ ..Q:'$$VRDTtst(VR) 
+ ..Q:'$$VCHK^IRASP2(VR) 
+ ..S R=$$VFIOSH^IRASP2(VR)
+ ..S BUF(R_OT_VR)=VR_","_OT_"|"_R_" - "_$S(FF:$$SPEC^ISPRAV(SP),1:$$GOTD^YISPRAV(OT))
+ D OWF^RWU(".txt")
+ S (R,I)="" F  S R=$O(BUF(R)) Q:R=""  D WC^RWU(I_BUF(R)) S I=CR
+ D C^RWU
+ Q
+EUDP ; End update
+ Q
+LOCK(KEY,DTT,VRL,MOD) ; Блокировка расписания
+ ; MOD =0 - блокировать, =1 - разблокировать
+ S MOD=$G(MOD)
+ N DT,LPU,OT,VR,SP
+ S DT=$P(KEY,"~",5)
+ S LPU=$P(KEY,"~",1),OT=$P(KEY,"~",2),VR=$P(KEY,"~",3),SP=$P(KEY,"~",4)
+ Q:LPU=""!(OT="")!(VR="")!(DT="")
+ I '$$LCL^IUSER("sprasp","setlock") D MSG^RWU("Блокировка запрещена.") Q 
+ I VR'=$$KDR^IUSER(),$$LCL^IUSER("sprasp","owlock") D MSG^RWU("Блокировка чужого расписания запрещена") Q
+ D DOlock^IMRASP(LPU,OT,VR,SP,DT,DT,'MOD)
+ D LSP(DTT,VRL)
+ Q
+FIO(NI) ; FIO w. bill
+ I NI[" " Q ; ФИО в параметре
+ N A,X
+ S A=$$FIO^IPAC(NI)
+ I A="" S A="нет пациента" G FIOe
+ S:$$NOW^IBILL(NI)>0 A=A_", на счету "_$$NOW^IBILL(NI)
+ S X=$$GETE^IPAC(NI,"dog_to") S:X'="" A=A_", срок "_X
+FIOe D MSG^RWU(A)
+ Q
+PACSX(NI,DT,FDT,EV) ; Маршрут пациента (с ключами)
+ D OWF^RWU(".txt")
+ D PACSys^NKRASP(NI,DT,0,FDT,1)
+ D:$G(EV) W^RWU(CR),NIBSTsys^RCCME(NI,1)
+ D C^RWU
+ Q
+PACS(NI,DT,FDT)     ; Маршрут пациента
+ D OWF^RWU(".txt")
+ D PACSys^NKRASP(NI,DT,0,+$G(FDT))
+ D C^RWU
+ Q
+PACWLST(DT,VRL,TS,TE) ; Записанные пациенты на период времени
+ N LPU,VR,OT,SP,TM,I,X,R,DE,DS,Z,SS,FF
+ S LPU=+$$^I("ilpu"),DE=$P(DT,":",2),DT=$P(DT,":",1)
+ S DS=$$DIH^DTUTL(DT),DE=$S(DE="":DS,1:$$DIH^DTUTL(DE))
+ S TS=$$TI^DTUTL(TS),TE=$$TI^DTUTL(TE)
+ S:TS="" TS=0 S:TE="" TE=99999
+ S FF=1
+ D OWF^RWU(".txt")
+ F X=1:1:$L(VRL,"|") S R=$P(VRL,"|",X) Q:R=""  D
+ .S OT=$P(R,",",2),VR=$P(R,",",1),SS=$P(R,",",3)
+ .S SP=$S(SS="":"",1:$O(^DSH(LPU,OT,VR,SS),-1))
+ .F  S SP=$O(^DSH(LPU,OT,VR,SP)) Q:SP=""!((SS'="")&(SS'=SP))  F DT=DS:1:DE D:$D(^DSH(LPU,OT,VR,SP,DT))
+ ..D PACWLp
+ D C^RWU
+ Q
+PACWLp ; proc for PACWLST NSPRASP/NCRASP
+ S Z=$P($G(^(DT)),"|",2) Q:Z="" 
+ S Z=$$VFIOSH^IRASP2(VR)_"|"_$$SPEC^ISPRAV(SP)_"|"_Z
+ S TM=TS-1 F  S TM=$O(^DSH(LPU,OT,VR,SP,DT,TM)) Q:TM=""!(TM>TE)  D
+ .S K=$G(^(TM)) Q:K=""  Q:K="*"
+ .S NI=$P(K,"|",1),R=CR_$$DT^DTUTL(DT)_"|"_$$TM^DTUTL(TM)_"|"
+ .S NI=$S($$EXIST^IPAC(NI):$$FIOSH^YIPACN(NI)_" ("_NI_")",1:NI)
+ .I FF D WC^RWU("Дата|Время|Пациент|Врач|Специальность|Каб.|Примечание") S FF=0
+ .D WC^RWU(R_NI_"|"_Z_"|"_$P(K,"|",2))
+ Q
+uPAC(NIB) ; SynC Update
+ D MSG^RWU(^PP(0,2)_"<run>sprasp_get_legend(0,0);"_CR_"</run></nb_console>",".xmlb")
+ Q
+SETMINF(TXT) ; Set main info text (объявление по клинике)
+ Q:$$LCL^IUSER("sprasp","sminfo")=0 
+ S TXT=$$WD^TXTU(TXT)
+ S:TXT'="" ^DSHM("minfo",1)=TXT,^(0)=$H
+ K:TXT="" ^DSHM("minfo",0),^(1)
+ Q
+LEGEND(KEY,TM) ; Short Record info
+ N LPU,OT,VR,SP,DT,F,IF,NI,T,X,Y,Z,O,DGN,E,TSY,OUT,A
+ S LPU=$P(KEY,"~",1),OT=$P(KEY,"~",2),VR=$P(KEY,"~",3)
+ S SP=$P(KEY,"~",4),DT=$P(KEY,"~",5)
+ S TM=$$TI^IRASP2(TM) S:TM="" TM=$P(KEY,"~",6)
+ Q:LPU=""!(OT="")!(VR="")!(SP="")!(DT="")
+ S F=$G(^DSH(LPU,OT,VR,SP,DT,TM)),NI=$P(F,"|",1),IF=$G(^(TM,"i"))
+ S OUT=$D(^("e"))
+ S O=$P(F,"|",4),E=$$EXIST^IPAC(NI)
+ S T=$S(E:NI_$S($$C^I("rasp","show-anib"):" ("_$$GET^IPAC(NI,"anib")_")",1:"")_" "_$$FIO^IPAC(NI),$L(IF):$TR($P(IF,"|",5,7),"|","	"),1:$P(F,"|",1)),X=""
+ D:E
+ .S X=$$CNTCCME(NI,DT)
+ .S DGN=$$GET^IPAC(NI,DT)
+ .S X=$S(X:"Отказов - "_X,1:"")
+ .S Y=$$GET^IPAC(NI,"dog_from",DT)
+ .S:$L(Y)&(Y>DT) X=$S($L(X):X_", ",1:"")_"Срок "_$$DT2^DTUTL(Y)
+ .S Y=$$GET^IPAC(NI,"dog_to",DT)
+ .S:$L(Y)&(Y<DT) X=$S($L(X):X_", ",1:"")_"Срок "_$$DT2^DTUTL(Y)
+ .S:$$C^I("sprasp","legend-sex") Y=$$GET^IPAC(NI,"pol"),X=$S($L(X):X,1:"")_$S(Y=1:"Муж.",Y=2:"Жен.",1:"")
+ .S O=$$GETE^IPAC(NI,"datar")
+ .S:$L(O) X=$S($L(X):X_", ",1:"")_O_" г.р."
+ .I $$C^I("sprasp","legend-stc") S Z=$$OWF^TXTU($$GETE^IPAC(NI,"stc"),40) S:Z'="" X=$S(X="":"",1:X_", ")_Z
+ .I $$C^I("sprasp","legend-status") S Z=$$GETE^IPAC(NI,"status") S:Z'="" X=$S(X="":"",1:X_", ")_Z
+ .I $$C^I("sprasp","legend-ush") S Z=$$GETE^IPAC(NI,"ush") S:Z'="" X=$S(X="":"",1:X_", ")_Z
+ .S Y=$$GET^IDSCN(NI,+$H)
+ .S:Y X=$S(X="":"",1:X_", ")_"Ск."_Y_"%"
+ .S Z=$$LCL^IUSER("sprasp","legend-user")
+ .S:Z="" Z=$$C^I("sprasp","legend-user")
+ .I Z'="" X "S Y="_Z S:Y'="" X=$S(X="":"",1:X_", ")_Y
+ D:'E
+ .S O=$P(IF,"|",8)
+ .S:$L(O) X=$S($L(X):X_", ",1:"")_$S(O[".":O,1:$$DT^DTUTL(O))_" г.р."
+ 
+ I $$C^I("sprasp","legend-ttype") S Y=$G(^DSH(LPU,OT,VR,SP,DT,TM,"u")) S:Y'="" X=$S(X="":"",1:X_", ")_$P(^DSHM("tt",$P(Y,",",1),$P(Y,",",2),$P(Y,",",3)),"|",2)
+ D:$$C^I("sprasp","legend-usl") 
+ .S Y="" F  S Y=$O(^DSH(LPU,OT,VR,SP,DT,TM,"u",Y)) Q:Y=""  S X=$S(X="":"",1:X_", ")_$$OWF^TXTU(Y_" "_$$NAME^IPRICE(Y,$$STARTTP^IPRICE(Y,+$H,$P(^(Y),"|",2))),64)
+ S A=T_CR_X,TSY="" ; (1,2)
+ S X=$P(IF,"|",1),Y=$S(E:$$TELS^IPAC(NI,+$H),1:"")
+ S T=$S($$LCL^IUSER("sprasp","nopacphone"):"",'E:X,Y="":X,X="":Y,1:X_", "_Y)
+ S T=$TR(T,$C(13,10)," ")
+ S:$L(T) T="т."_T
+ S:$L($P(F,"|",2)) T=$S(T="":"",1:T_" ")_$P(F,"|",2)
+ S A=A_CR_T,$P(TSY,"|",3)=T ; comm. + phones (3)
+ S T=$$OWF^TXTU($S(E:$TR($$GET^IPAC(NI,"text"),$C(13,10)," "),1:""),100)
+ S A=A_CR_T,$P(TSY,"|",1)=T ; patient comm. (4)
+ S T=""
+ I E,'$$C^I("sprasp","legend-ndb") S X=$$NOW^IBILL(NI),Y=$$SRES^IBILL(NI),T=$S(X<0:"долг "_(-X),X>0:"аванс "_X,1:"")_$S(Y:" к оплате "_Y,1:""),$P(TSY,"|",2)=T
+ S A=A_CR_T ; (5) Bill
+ S T=$S(OUT:"leave|",1:"") ; ушел
+ S T=T_$S('E:"nreg|",1:"") ; незарегистрирован
+ S A=A_CR_$S(T="":"",1:"|")_T ; (6) flags
+ S A=A_CR_TSY ; (7) for tabsys
+ D MSG^RWU(A)
+ D:E REG^YISYNC("uPAC^NSPRASP","("_NI_")")
+ Q
+CNTCCME(NI,DT) ; Подсчет числа событий
+ N X,Y
+ S Y=$$TEMP^NUSER("rsp-ccme-tp")
+ I Y="" S Y=$$FNDTP^ICCME("Обзвон пациентов","dsh-call") D TEMP^NUSER("rsp-ccme-tp",Y) ; TODO - по UID
+ S X=$$TEMP^NUSER("rsp-ccme-cnt")
+ I X="" S X=$$FLGREZ^ICCME(Y,"cnt") D TEMP^NUSER("rsp-ccme-cnt",X)
+ Q $$CNT^ICCME(DT-90,DT,NI,Y,X)
+FFND(STR) ; Поиск в "по звонку"
+ N CC,HH,ZZ,le,AA
+ S AA="|Ф.И.О.|Дата рожд.|Договор",HH=+$H,le=$L(AA)
+ S CC=$$C^I("sprasp","fnd-ccme") ; отказы
+ D FFND^YIFINDN(STR,3,$S($G(^cfg("sprasp-fstrict")):^("sprasp-fstrict"),1:1),1,"FFNDp^NSPRASP")
+ D DO^ITRIG("sprasp","fastfind")
+ S:$L(AA)=le AA="" ; ничего не найдено
+ D MSG^RWU(AA)
+ Q
+FFNDp 
+ Q:$L(AA)>8192  ; здесь больший список не нужен
+ S AA=AA_CR_A_$S(OFV:"@"_$$FFNDOfv^YIFINDN(A),1:"")_"|"_FIO_"|"_X_"|"
+ I CC S ZZ=$$CNTCCME(A,HH) S:ZZ AA=AA_"("_ZZ_") "
+ S AA=AA_R
+ Q
+SSMS(KEY,TM,IDT,TXT) ; Отправить SMS пациенту
+ ; IDT - ID шаблона
+ ; TXT - опциональный текст 
+ N LPU,OT,VR,SP,DT,F,IF,NI,E,PH
+ S LPU=$P(KEY,"~",1),OT=$P(KEY,"~",2),VR=$P(KEY,"~",3)
+ S SP=$P(KEY,"~",4),DT=$P(KEY,"~",5)
+ S TM=$$TI^IRASP2(TM) S:TM="" TM=$P(KEY,"~",6)
+ Q:LPU=""!(OT="")!(VR="")!(SP="")!(DT="")
+ S TXT=$$WD^TXTU($G(TXT))
+ S:$G(IDT)="" IDT=$$ftxt^NCONTP("Расписание")
+ S:TXT="" TXT=$P($$GET^ISPRAV("smstxt",IDT),"|",2)
+ I TXT="" D MSG^RWU("Не определен шаблон сообщений.") Q  
+ S F=$G(^DSH(LPU,OT,VR,SP,DT,TM)),NI=$P(F,"|",1),IF=$G(^(TM,"i"))
+ S E=$$EXIST^IPAC(NI)
+ S PH=$$phn^NCONTP($S(E:NI,1:""),$P(IF,"|",1))
+ I PH="" D MSG^RWU("У пациента не указаны телефоны.") Q 
+ ;S F=$S(E:$$FIO^IPAC(NI),$L(IF):$TR($P(IF,"|",5,7),"|"," "),1:$P(F,"|",1))
+ D send^NRASPIO(PH,TXT,LPU,OT,VR,SP,DT,TM,$S(E:NI,1:""))
+ Q
+MSG(TXT) ; Message wrapper
+ D MSG^RWU(TXT)
+ Q
+INIT ; Set init config
+ N R,M,V,X,F
+ S R=+$G(^LOG(%LOG,"lcl","sprasp"))
+ S M="<menuctrl name=""tabmenu"">",V=" visible=""no""/>"
+ S X=$G(^LCL("sprasp",R,"selall"))
+ I X=2 N I,T,Y,K S K=$$KDR^IUSER(),T=$$GETOTL^IRASP2($$^I("ilpu"),K),Y="" F I=1:1:$L(T,"|") S Y=$S(Y="":"",1:Y_"|")_K_","_$P(T,"|",I)
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<sprasp><otd"_$S(X=1:" userdata=""all"">",X=2:" userdata="""_T_"@"_Y_""">",1:">"))
+ D OTLSTT
+ D W^RWU(%L_"</otd>")
+ K %B,%L
+ D:$G(^LCL("sprasp",R,"mknew"))=0 W^RWU("<new_pac_btn"_V)
+ D:$G(^LCL("sprasp",R,"fxpac"))=1 W^RWU("<fnd_pac_btn visible=""yes""/>")
+ D:$G(^LCL("sprasp",R,"delete"))=0 W^RWU("<del_zap_btn"_V_M_"<item id=""del"""_V_"</menuctrl>")
+ D:$G(^LCL("sprasp",R,"timelen"))=0 W^RWU(M_"<item id=""tlen1"""_V_"<item id=""tlen2"""_V_"</menuctrl>")
+ D:$G(^LCL("sprasp",R,"pin"))=0 W^RWU("<pin"_V)
+ D:$G(^LCL("sprasp",R,"fndonly"))=1 W^RWU("<pac readonly=""yes""/>")
+ D:$G(^LCL("sprasp",R,"mempac"))'=1 W^RWU("<mem data=""0""/>")
+ D:$G(^LCL("sprasp",R,"fndrec"))=0 W^RWU("<del_zap_btn"_V)
+ D:$G(^LCL("sprasp",R,"nocallw"))=0 W^RWU("<new_call_btn"_V)
+ S X=$G(^LCL("sprasp",R,"settype"))
+ D:X=0 W^RWU(M_"<item id=""ttime"""_V_"</menuctrl>")
+ 
+ D W^RWU("<cfg>")
+ D WTAGD^RWU("settype",$S(X="":1,1:+X))
+ D WTAGD^RWU("callback",$S($G(^LCL("sprasp",R,"callback"))=0:0,1:1))
+ D WTAGD^RWU("mhist",+$G(^LCL("sprasp",R,"mhist")))
+ D WTAGD^RWU("mhistv",+$G(^LCL("sprasp",R,"mhistv")))
+ F F="allpatt","norerec","setcab","timestart","defzpsc","cngnib","newnaz","timelenzр" D:$G(^LCL("sprasp",R,F)) WTAGD^RWU(F,1)
+ S X=$$C^I("rasp","mrsource") S:'X X=$G(^LCL("sprasp",R,"mrsource"))
+ D:X WTAGD^RWU("mrsource",1)
+ S X=$G(^LCL("sprasp",R,"def-action"))
+ S:X="" X=$G(^cfg("sprasp-def-action"))
+ D:$L(X) WTAGDC^RWU("tabact",X) ; default rewrite action
+ S X=$G(^cfg("rasp-regpac-xpac"))
+ D:$L(X) WTAGD^RWU("regxp",X) ; temp. use - allow register from xpac...
+ S X=$$C^I("rasp","kssfrm") S:X="" X="inkss"
+ S:$G(^LCL("sprasp",R,"nokssfrm")) X=""
+ D WTAGD^RWU("kassa",X)
+ S X=+$G(^LCL("sprasp",R,"vrselcnt"))
+ D:X WTAGD^RWU("vrselcnt",X)
+ S X=$G(^LCL("sprasp",R,"callwfnc"))
+ D:X'="" WTAGDC^RWU("callwfnc",X)
+ D:$$LCL^IUSER("sprasp","noccont") WTAGD^RWU("noccont",1)
+ D:$$LCL^IUSER("rasp","del")=2 WTAGD^RWU("delall",1)
+ S X=$G(^LCL("sprasp",R,"maxdtrange"))
+ D:X WTAGD^RWU("maxdtrange",X)
+ S X=$G(^LCL("sprasp",R,"selserv"))
+ D:X WTAGD^RWU("selserv",+X)
+ D W^RWU("</cfg>")
+ D:$D(^DSHM("minfo",1)) WTAGDC^RWU("maininfo",^DSHM("minfo",1))
+ D W^RWU("</sprasp></nb_console>"),C^RWU
+ Q
+REGLCL 
+ K ^LCLI("sprasp")
+ S ^LCLI("sprasp")="Запись к специалистам"
+ S ^LCLI("sprasp","callback")="Отзвон"
+ S ^LCLI("sprasp","settype")="Установка типа времени"
+ S ^LCLI("sprasp","mknew")="Создание нового пациента"
+ S ^LCLI("sprasp","fxpac")="Свободный поиск пациента"
+ S ^LCLI("sprasp","delete")="Удаление из расписания"
+ S ^LCLI("sprasp","write")="Запись в расписание"
+ S ^LCLI("sprasp","move")="Перемещение пациентов в расписании"
+ S ^LCLI("sprasp","nocallw")="Запись по звонку (0 - запрет)"
+ S ^LCLI("sprasp","timelen")="Изменение длительности записи"
+ S ^LCLI("sprasp","timelenzh")="Скрыть длительность записи в записи по звонку"
+ S ^LCLI("sprasp","noscomm")="Запрет изменения примечания к записи"
+ S ^LCLI("sprasp","pin")="Ввод PIN кода"
+ S ^LCLI("sprasp","selall")="Выбор всех отделений по умолчанию (=1) или расписание пользователя (=2)"
+ S ^LCLI("sprasp","mempac")="Запоминать пациента"
+ S ^LCLI("sprasp","allpatt")="Выбор шаблонов во всех режимах"
+ S ^LCLI("sprasp","vrselcnt")="Показывать расписание, если выбрано не более сотрудников"
+ S ^LCLI("sprasp","fndonly")="Запрет ввода в поле 'пациент'"
+ S ^LCLI("sprasp","def-action")="Действие по двойному клику на пациенте"
+ S ^LCLI("sprasp","fowt")="Запись на доп. время только при отсутствии свободного"
+ S ^LCLI("sprasp","nopacphone")="Скрывать контактные телефоны пациента"
+ S ^LCLI("sprasp","norerec")="Запрет записи поверх"
+ S ^LCLI("sprasp","nootd")="Запрет записи в отделения"
+ S ^LCLI("sprasp","nospec")="Запрет записи в специальности"
+ S ^LCLI("sprasp","nodelcome")="Запрет удаления пришедших пациентов"
+ S ^LCLI("sprasp","mydel")="Удаление только записей к себе"
+ S ^LCLI("sprasp","owdel")="Удаление только созданных лично записей"
+ S ^LCLI("sprasp","myotddel")="Удаление только из своего отделения"
+ S ^LCLI("sprasp","nodelcb")="Запрет удаления по отзвону"
+ S ^LCLI("sprasp","timestart")="Возможность выбора времени начала записи"
+ S ^LCLI("sprasp","setcab")="Возможность изменения кабинета из расписания"
+ S ^LCLI("sprasp","setlock")="Возможность блокировки расписания"
+ S ^LCLI("sprasp","owlock")="Блокировка только своего расписания"
+ S ^LCLI("sprasp","first-owner")="Отображать первым в сетке расписание пользователя"
+ S ^LCLI("sprasp","nokssfrm")="Касса из расписания недоступна"
+ S ^LCLI("sprasp","noccont")="Необязательные контакты при записи по звонку"
+ S ^LCLI("sprasp","sminfo")="Изменение общей информации по клинике"
+ S ^LCLI("sprasp","mhist")="Меню просмотра и изменения ЭИБ"
+ S ^LCLI("sprasp","mhistv")="Меню просмотра ЭИБ"
+ S ^LCLI("sprasp","nwp")="Шаблон регистрации нового пациента (из newpac)"
+ S ^LCLI("sprasp","defzpsc")="Запись по умолчанию для двойного клика =0 - поиск пациента, =1 - по звонку"
+ S ^LCLI("sprasp","mrsource")="Обязателен ввод источника рекламы в записи по звонку"
+ S ^LCLI("sprasp","maxdtrange")="Максимально выбираемый период по календарю (по умолч. 60)"
+ S ^LCLI("sprasp","callwfnc")="Функция информационной кнопки в записи по звонку заголовок|форма"
+ S ^LCLI("sprasp","legend-user")="Пользовательская ф-ция для вывода инф. о записи"
+ S ^LCLI("sprasp","maxud")="Максимальное число дней от сегодня в которые можно (>0) или нельзя (<0) записывать"
+ S ^LCLI("sprasp","chkofor")="Проверять оформление пациента на день записи"
+ S ^LCLI("sprasp","cngnib")="Разрешено изменение записанного пациента"
+ S ^LCLI("sprasp","chkpacphn")="Проверка телефона у существующего пациента"
+ S ^LCLI("sprasp","pacwphn")="Записывать телефон существующему пациенту при его отсутствии"
+ S ^LCLI("sprasp","newnaz")="Возможность создания назначений из шаблона на пациента"
+ S ^LCLI("sprasp","nosrsource")="Запрет отдельного изменения источника рекламы"
+ S ^LCLI("sprasp","pout")="Выставление отметки уход/не уход. 0=нет, 1=да"
+ S ^LCLI("sprasp","allowotd")="Список доступных пользователю отделений через '|'"
+ S ^LCLI("sprasp","novrflg")="Статусы врача, при которых запрещена запись"
+ S ^LCLI("sprasp","vrflg")="Статусы врача, только при которых разрешена запись"
+ S ^LCLI("sprasp","serserv")="Выбор услуги на которую запись после записи"
+ S ^LCLI("sprasp","selmhv")="Выбор специальности врача при старте ЭМК из расписания"
+ S ^LCLI("sprasp","noregp")="Запрет регистрации пациентов из расписания"
+ Q

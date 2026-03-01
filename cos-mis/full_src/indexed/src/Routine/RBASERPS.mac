@@ -1,0 +1,101 @@
+RBASERPS ; Упр. отчетность - по СК [ 09/04/2018  4:39 PM ]
+STC(DS,DE,BUSL) ; По страховым компаниям
+ ; BUSL - договора с услугами в периоде
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N LPU,R,X1,X2,X3,X4,DGL,U1,U2,DG,TX,stcLST
+ K ^BUF($J)
+ D MK^IRPUSL(DS,DE,"^BUF($J,0","USER1,CSTC","ppl,pos,sum,cnt",0,"PROCU^RBASERPS")
+ D MK^IRPKON(DS,DE,"^BUF($J,0","USER1,CSTC","kon",1,"PROCK^RBASERPS",1)
+ D OWF^RWU(".txt")
+ D WC^RWU("Компания|Прикреплено|Доля в числе|Число|Доля в числе|Процент|Кол-во|Доля в к-ве|Сумма|Доля в|Число посещ.|Услуг на|Стоимость|Стоимость;")
+ D WC^RWU(CR_$$TXTP^DTUTL(DS,DE)_"|всего на "_$$DT2^DTUTL(DE)_"|прикрепленных|обратившихся|обратившихся|обращаемости|посещений|посещений|услуг|сумме услуг|на обратившегося|посещение|посещения|на обратившегося")
+ S U1="" F  S U1=$O(^BUF($J,0,U1)) Q:U1=""  D:$E(U1,1)'=" "
+ .S R=U1 D LN(1)
+ .K TX S TX(1)=$G(^(" kon")),TX(2)=$G(^(" ppl")),TX(3)=$G(^(" pos")),TX(4)=$G(^(" sum"))
+ .D WC^RWU(CR_$S(U1=0:"Прочие",1:$$NAME^ICONTR(U1))_"|"_R)
+ .S DG="" F  S DG=$O(^BUF($J,0,U1,DG)) Q:DG=""  D:$E(DG,1)'=" "
+ ..S R=DG D LN(2)
+ ..D WC^RWU(CR_" - "_$S('DG:"Не указан",1:$$NAME^IINSC(DG))_"|"_R)
+ K ^BUF($J)
+ D C^RWU
+ Q
+LN(LVL) ; Line calculation
+ S X4=+$G(^(R," kon"))
+ S R=X4_"|"
+ I LVL=2 S:+$G(TX(1))'=0 R=R_$$FN(100*X4/TX(1))
+ S X1=+$G(^(" pos")),X2=+$G(^(" ppl")),X3=+$G(^(" sum"))
+ S R=R_"|"_X2_"|"
+ I LVL=2 S:+$G(TX(2))'=0 R=R_$$FN(100*X2/TX(2))
+ S R=R_"|"_$S('X4:0,1:$$FN(100*X2/X4))_"|"
+ S R=R_X1_"|"
+ I LVL=2 S:+$G(TX(3))'=0 R=R_$$FN(100*X1/TX(3))
+ S R=R_"|"_$$FN(X3)_"|"
+ I LVL=2 S:+$G(TX(4))'=0 R=R_$$FN(100*X3/TX(4))
+ S R=R_"|"_$S('X2:0,1:$$FN(X1/X2))_"|" ; pos/pipl
+ S X4=+$G(^(" cnt"))
+ S R=R_$S('X1:0,1:$$FN(X4/X1))_"|"
+ S R=R_$S('X1:0,1:$$FN(X3/X1))_"|"
+ S R=R_$S('X2:0,1:$$FN(X3/X2))
+ Q
+PRP(DS,DE,IsWRK,LPUx) ; Подразделений и видов услуг
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),IsWRK=$G(IsWRK),LPUx=$G(LPUx)
+ N R,X1,X2,X3,X4,X5,X6,DGL,U1,U2,UL1,DG
+ N TX
+ K ^BUF($J)
+ D MK^IRPKON(DS,DE,"^BUF($J,0","CSTC"_$S(IsWRK:",WRK",1:""),"kon,dgsum,dtssum,dtsum",1,"PROCK2^RBASERPS")
+ D MK^IRPUSL(DS,DE,"^BUF($J,0","CSTC"_$S(IsWRK:",USER1",1:""),"ppl,sum,scost,zrp",0,"PROCU2^RBASERPS")
+ D OWF^RWU(".txt")
+ D WC^RWU("Компания|Продано|Годовая|Начислено|Начислено|Сумма услуг|Себестоимость|Начислено|Обратилось из|% обращаемости|Разница за период|Выручка;")
+ D WC^RWU(CR_$$TXTP^DTUTL(DS,DE)_"|абонементов|стоимость|с начала|за период|за период|услуг|зарплаты|проданных||начислено-оказано|за период")
+ S DG="" F  S DG=$O(^BUF($J,0,DG)) Q:DG=""  D:$E(DG,1)'=" "
+ .S R=DG D LN2(1) ; K TX S TX(1)=$G(^(" pos")),TX(2)=$G(^(" sum"))
+ .D WC^RWU(CR_$S(+DG=0:"Не указано",1:$$NAME^IINSC(DG))_"|"_R)
+ .S U1="" F  S U1=$O(^BUF($J,0,DG,U1)) Q:U1=""  D:$E(U1,1)'=" "
+ ..S R=U1 D LN2(2)
+ ..D WC^RWU(CR_" - "_$S('U1:"Организация не указана",1:$G(^M(5,U1)))_"|"_R)
+ K ^BUF($J)
+ D C^RWU
+ Q
+LN2(LVL) 
+ S X1=+$G(^(R," kon")),X2=+$G(^(" dgsum")),X3=+$G(^(" dtssum"))
+ S R=X1_"|"_X2_"|"_$$FN(X3)_"|"
+ ; todo
+ S X2=+$G(^(" dtsum")),X4=+$G(^(" sum")),X5=+$G(^(" ppl"))
+ S X3=+$G(^(" scost")),X6=+$G(^(" zrp"))
+ S R=R_$$FN(X2)_"|"_$$FN(X4)_"|"_$$FN(X3)_"|"_$$FN(X6)_"|"_X5
+ S R=R_"|"_$S('X1:0,1:$$FN(100*X5/X1)) ; ppl/kon
+ S R=R_"|"_$$FN(X2-X4)_"|" ; dtsum-sum
+ S R=R_$$FN(X2-X3-X6) ; начислено-себестоимость-зарплата
+ Q
+FN(X) 
+ Q $TR($FN(X,"",2),".",",")
+PROCK ; Filter proc DSH
+ S CSTC=+CSTC
+ I BUSL,'$D(stcLST(CSTC)) S TEST=1 Q 
+ I $$GET^IINSC(CSTC,"dvid",DE)>1 S TEST=1 Q 
+ S USER1=+$$GET^IINSC(CSTC,"ow",DE)
+ Q
+PROCK2 ; Filter proc DSH
+ I +CSTC=0 S TEST=1 Q
+ I $$GET^IINSC(CSTC,"dvid",DE)'=1 S TEST=1 Q 
+ Q
+PROCU ; Filter proc USL
+ I KASS!(FLG["|prf|") S TEST=1 Q
+ S DGT=$$GETDGT^IRPUSL(CSTC,DT)
+ I DGT>1 S TEST=1 Q  
+ S USER1=+$$GET^IINSC(CSTC,"ow",DT)
+ S:BUSL stcLST(CSTC)=""
+ Q
+PROCU2 
+ I KASS!(FLG["|prf|") S TEST=1 Q 
+ S DGT=$$GETDGT^IRPUSL(CSTC,DT)
+ I DGT'=1 S TEST=1 Q 
+ Q:'IsWRK 
+ S USER1=+$$GET^IPAC(NI,"work",DT)
+ Q
+REGIPROC 
+ N D,FF
+ S D="Управленческая отчетность",FF=+$$FR^I()
+ S ^IPROC(D,"Финансы","Отчет по страховым компаниям")="STC_RBASERPS,1,3,d,Дата начала периода,d,Дата окончания периода,t@string:0/Нет#1/Да,Договора только с услугами"
+ S ^IPROC(D,"Финансы","Отчет по предоплатным программам")="PRP_RBASERPS,1,"_$S(FF:4,1:3)_",d,Дата начала периода,d,Дата окончания периода,t@string:0/Нет#1/Да,Детализация по местам работы"_$S(FF:",t@storage:lpu,Филиал",1:"")
+ Q

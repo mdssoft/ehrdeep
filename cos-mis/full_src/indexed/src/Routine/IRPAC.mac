@@ -1,0 +1,177 @@
+IRPAC ; Права на работу с контингентом [ 12/29/2017  11:06 PM ]
+TUPD() ; Update date
+ N X S X=$G(^MN("newpac")) Q:X="" ""
+ Q $G(^MN(X))
+CHIFR ; for YCHIFR
+ Q:$$LCL^NUSER("patients"," new")=0 
+ N I,IDX,A,NP
+ S NP=$$LCL^NUSER("patients"," newpac")
+ S IDX=$$NEWIDX^YISPRAV("newpac"),(I,A)=""
+ F  S I=$O(^MN(IDX,I)) Q:I=""  I NP=""!(NP[I) S:A'="" A=A_"|" S A=A_$G(^(I,"name"))_"@"_$G(^("prm"))
+ D WC^RWU(A)
+ Q
+LST ; Simple list
+ N IDX,I,A,NP
+ S IDX=+$G(^MN("newpac")),(I,A)="",NP=$$LCL^NUSER("patients"," newpac")
+ F  S I=$O(^MN(IDX,I)) Q:I=""  I NP=""!(NP[I) S A=A_$S(A="":"",1:CR)_I_"|"_$G(^(I,"name"))
+ D WC^RWU(A)
+ Q
+NNIB(N,NNEW) ; Make XML from class
+ N NS,NE,I,X,NI,K,T,PTI S I=+$G(^MN("newpac")),PTI="patients"
+ S NS=$G(^MN(I,N,"nibstart")),NE=$G(^MN(I,N,"nibend")),NI=""
+ S:NS="" NS=100 S:NE="" NE=100000
+ I '+$G(NNEW) S NI=$$NEW^IPAC(NS,NE),XML(PTI,"hist")=NI
+ S X="" F  S X=$O(^MN(I,N,"dstate",X)) Q:X=""  S K=^(X),T=$E(K,1),K=$E(K,2,$L(K)) D
+ .I T="=",(X="prog")!(X="status") D NNPRG(X,K) Q
+ .I T="=" S XML(PTI,X)=K Q
+ .I T="@" X:K'="" "S K="_K S XML(PTI,X)=K
+ Q
+NNPRG(POLE,R) ; for NNIB
+ S XML(PTI,POLE)=R Q  ; в результате преобраз. все равно к ..|..|
+ N JR,LR,M,A
+ S M=$S(POLE="prog":0,POLE="status":1,1:""),A=""
+ F JR=1:1 S LR=$P(R,"|",JR) Q:LR=""  S:A'="" A=A_CR S A=A_LR_"|"_$S(LR="":"",M=1:$G(^M(M,LR)),1:$$NAMEH^IMPRP(LR,+$H))
+ S XML(PTI,POLE)=A
+ Q
+INIT(ID) ; for xpatient.frm
+ Q:'$D(^LCL("patients",ID)) 
+ N L,P
+ S P="" F  S P=$O(^LCL("patients",ID," v",P)) Q:P=""  S L(P,1)=+^(P)
+ S P="" F  S P=$O(^LCL("patients",ID," d",P)) Q:P=""  S L(P,2)=""
+ S P="" F  S P=$O(^LCL("patients",ID," t",P)) Q:P=""  S L(P,3)=^(P)
+ S P="" F  S P=$O(L(P)) Q:P=""  D W^RWU("<"_P_$S($D(L(P,1)):" visible="""_$S(L(P,1):"yes",1:"no")_"""",1:"")_$S($D(L(P,2)):" enabled=""no""",1:"")_$S($D(L(P,3)):" title="""_L(P,3)_"""",1:"")_"/>") 
+ Q
+LCLI(ID,NI,DT) ; Lock control - input
+ Q:ID="" 0
+ Q:'$D(^LCL("patients",ID)) 0
+ N PL,R,T,E,X,F,RX,M,TP
+ S (M,F)=""
+ 
+ D:$L($D(^LCL("patients",ID," w")))=2  ; w subnodes
+ .S PL=""
+ .F  S PL=$O(XML("patients",PL)) Q:PL=""  I '$G(^STRUCT("patients",PL,"s")),'$G(^LCL("patients",ID," w",PL)) K XML("patients",PL) S F="-" ; any fields
+ S M="",PL=" "
+ F  S PL=$O(^LCL("patients",ID,PL)) Q:PL=""  D:$D(XML("patients",PL))
+ .S R="",X=$G(XML("patients",PL)),RX=$$GET^IPAC(NI,PL,DT)
+ .S TP=$P($G(^STRUCT("patients",PL)),"|",1)
+ .I TP="D" S X=$$DI^DTUTL(X)
+ .F  S R=$O(^LCL("patients",ID,PL,R)) Q:R=""  D:$S(X'=RX:1,1:R=0)
+ ..S T=$E(R,1),E=$E(R,2,$L(R)) I T="@" S:E="" E=0 X "S E="_E
+ ..Q:'$S(T="!":$L(X),T=0:'$L(X),T="-":1,T="=":E=X,T="@":E,1:0)
+ ..S T=$G(^LCL("patients",ID,PL,R))
+ ..S:$L(T) M=M_$S(M="":"",1:CR)_T ; сообщение
+ ..S E="" F  S E=$O(^LCL("patients",ID,PL,R,E)) Q:E=""  I $D(XML("patients",E)) S T=XML("patients",E) K XML("patients",E) S:$S(NI="":1,T=""&('$$ISFL^YIPACN(NI,E)):0,1:1) F=F_$S(F="":"",1:"|")_E ; ресет полей
+ ; если есть данные и есть поле
+ Q F_$S($L(M):CR_M,1:"")
+LCLO(ID) ; Lock control - output
+ Q:'$D(^LCL("patients",ID)) 0
+ ; todo
+ Q
+SETCLS(NIB,CLS,COM,DAY,WHO) ; Установить класс, использующийся при создании пац.
+ N XML,PTI,PL,R,H
+ S PTI="patients",PL=""
+ S R=$$LCL^NUSER("patients"," daycls") ; периодичность изменения
+ I R'="" S R=$H-R,H="" F  S H=$O(^BTEV(NIB,H),-1) Q:H=""  I $D(^(H,"PCLS")),+H>R S PL=1 Q
+ Q:PL 0
+ D NNIB(CLS,1)
+ K XML(PTI,"hist")
+ I $$GETPL^ISPRAV("newpac",CLS,"lclchk") S R=$$LCLI($$LCLI^IUSER("patients"),NIB,+$H) I R'=0,R'="" Q 0
+ S H=$S($G(DAY)="":"",1:$H+DAY),WHO=$G(WHO)
+ F  S PL=$O(XML(PTI,PL)) Q:PL=""  D
+ .S:H R=$$GET^IPAC(NIB,PL,+$H) ; на несколько дней
+ .D SET^IPAC(NIB,PL,+$H,XML(PTI,PL))
+ .D:H SET^IPAC(NIB,PL,H,R) ; на несколько дней
+ S H=$H
+ S ^BTEV(NIB,H,"PCLS")="1|"_$G(COM)_"|D|"_$$KDR^IUSER()
+ S ^BTEV(NIB,H,"PCLS","id")=CLS
+ S:WHO'="" ^BTEV(NIB,H,"PCLS","who")=WHO
+ D GL^IEXCH("^BTEV",NIB,H,"PCLS")
+ D SET^IPAC(NIB,"opfio",+H,$$USR^IUSER()_"|"_H,1)
+ Q 1
+CHKCLS(NIB,CLS) ; Проверить требования к классу у пациента
+ N F,N,%J,P,XML,TP,PL
+ S N=+$G(^MN("newpac"))
+ Q:'$D(^MN(N,CLS,"nstate")) 1
+ S A="" F  S A=$O(^BTN(NIB,A)) Q:A=""  D
+ .S PL=^BTN($C(9)_"r",A)
+ .S TP=$P($G(^STRUCT("patients",PL)),"|",1)
+ .S F=$$GET^IPAC(NIB,PL) Q:F="" 
+ .I TP="D" S F=$$DT^DTUTL(F)
+ .S XML("patients",PL)=F
+ 
+ S (F,%J)=""
+ F  Q:F'=""  S %J=$O(^MN(N,CLS,"nstate",%J)) Q:%J=""!(F'="")  D
+ .S P=$G(^MN(N,CLS,"nstate",%J,"f")),A=$G(XML("patients",%J))
+ .I A="",P="" S F=^MN(N,CLS,"nstate",%J) Q 
+ .Q:P=""  X "S:'("_P_") F=^MN(N,CLS,""nstate"",%J)"
+ Q F
+SSTATE(NIB,ST) ; Установить состояние пациент (сист. флаг)
+ Q:ST=""  
+ N X,H S H=$H,X=$$GET^IPAC(NIB,"state")
+ I X="" D WLOG^IPAC(NIB,+H,H),SET^IPAC(NIB,"state",+H,ST,1) Q
+ Q:"|"_X_"|"[("|"_ST_"|") 
+ S $P(X,"|",$L(X,"|")+1)=ST
+ D SET^IPAC(NIB,"state",+H,X,1)
+ D WLOG^IPAC(NIB,+H,H)
+ Q
+DSTATE(NIB,ST) ; Удалить статус
+ N X,F
+ S X="|"_$$GET^IPAC(NIB,"state")_"|",ST="|"_ST_"|"
+ S F=$F(X,ST) Q:'F 
+ S $E(X,F-$L(ST),F-2)=""
+ S:$E(X,1)="|" $E(X,1)="" S:$E(X,$L(X))="|" $E(X,$L(X))=""
+ D SET^IPAC(NIB,"state",+$H,X,1)
+ Q
+CSTATE(NIB,ST) ; Проверить статус
+ Q:NIB=""!(ST="") 0
+ S NIB=$$GET^IPAC(NIB,"state") Q:NIB="" 0
+ Q "|"_NIB_"|"[("|"_ST_"|")
+IsSTRAH(NIB,DT) ; Не индивидуальный пациент
+ S:$G(DT)="" DT=+$H
+ N X
+ S X=$$GET^IPAC(NIB,"stc",DT)
+ I X'="",$$GET^IINSC(X,"dvid",DT)'=3 Q 1
+ S X=$$GET^IPAC(NIB,"stc1",DT)
+ I X'="",$$GET^IINSC(X,"dvid",DT)'=3 Q 1
+ S X=$$GET^IPAC(NIB,"stc2",DT)
+ I X'="",$$GET^IINSC(X,"dvid",DT)'=3 Q 1
+ Q 0
+CHKSTCP(DGN) ; Проверить договор на наличие в нем пациентов
+ N N,F
+ S F=0,N=""
+ F  S N=$O(^BTI(" s",DGN,N)) Q:N=""  S F=$S($$ANYDTV^IPAC(N,"stc",DGN):1,$$ANYDTV^IPAC(N,"stc1",DGN):1,$$ANYDTV^IPAC(N,"stc2",DGN):1,1:0) Q:F 
+ Q F
+CNVRR1 ; Перенос полей в ' f' TOD
+ Q
+INITDB ; Make first
+ S ^MN("root","newpac")="Классы при создании пациента"
+ Q:$$CHKSPR^ISPRAV("newpac") 
+ N I
+ S I=$$NEWIDX^YISPRAV("newpac")
+ S ^MN(I,1,"name")="1. Разовый пациент",^MN(I,1,"prm")="1,0,2"
+ S ^MN(I,2,"name")="2. Индивидуальный договор",^MN(I,2,"prm")="2,0,1"
+ S ^MN(I,3,"name")="3. Абонемент",^MN(I,3,"prm")="3,0,3"
+ 
+ S ^MN(I,1,"nibstart")=1000,^MN(I,1,"nibend")=49500
+ S ^MN(I,1,"dstate","ofor")="=1",^("dofor")="@$$DT^DTUTL(+$H)"
+ S ^MN(I,1,"dstate","polis")="@$$NPOLIS^YIPACN(""S"")"
+ S ^MN(I,1,"estate","stc")=0,^MN(I,1,"estate","dog_to")=0
+ S ^MN(I,1,"estate","ofor")=0,^MN(I,1,"estate","stc1")=0
+ 
+ S ^MN(I,2,"nibstart")=1000,^MN(I,2,"nibend")=49500
+ S ^MN(I,2,"dstate","ofor")="=1",^MN(I,2,"dstate","dofor")="@$$DT^DTUTL(+$H)"
+ S ^MN(I,2,"dstate","polis")="@$$NPOLIS^YIPACN(""D"")"
+ 
+ S ^MN(I,2,"estate","stc")=0,^MN(I,2,"estate","dog_to")=0
+ S ^MN(I,2,"estate","ofor")=0,^MN(I,2,"estate","stc1")=0
+ 
+ S ^MN(I,3,"nibstart")=50000,^MN(I,3,"nibend")=90000
+ S ^MN(I,3,"dstate","stc")="=3"
+ S ^MN(I,3,"dstate","dog_from")="@$$DT^DTUTL($H+10)"
+ S ^MN(I,3,"dstate","dog_to")="@$$AFTERYD^DTUTL($H+10)"
+ S ^MN(I,3,"dstate","polis")="@$$NEW^IPOLIS()"
+ S ^MN(I,3,"dstate","ofor")="=1",^MN(I,3,"dstate","dofor")="@$$DT^DTUTL(+$H)"
+ S ^MN(I,3,"estate","stc")=0
+ S ^MN(I,3,"estate","ofor")=0,^MN(I,3,"estate","stc1")=0
+ S ^MN(I)=$H
+ Q

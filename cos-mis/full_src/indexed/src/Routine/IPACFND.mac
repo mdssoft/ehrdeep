@@ -1,0 +1,71 @@
+IPACFND ; Поиск пациентов [ 03/25/2021  2:41 PM ]
+CHKLCL(NI,DT) ; Проверить права одиночного пациента
+ N R
+ S R=$$LCL^IUSER("patients"," stc")
+ I R'="",$$PIDXN^IPAC(NI,R,DT)=-1 Q 0
+ S R=$$LCL^IUSER("patients"," work")
+ I R'="",$$GET^IPAC(NI,"work",DT)'=R Q 0
+ S R=$$LCL^IUSER("patients"," age")
+ I R,R>0,R>$$AGE^IPAC(NI,DT) Q 0
+ I R,R<0,-R<$$AGE^IPAC(NI,DT) Q 0
+ Q:'$$LCL^NUSER("patients"," clpu") 1 
+ S R=$$GET^IPAC(NI,"lpu",DT)
+ I R'="","|"_R_"|"'[("|"_$$^I("ilpu")_"|") Q 0
+ Q 1
+GETNIB(FF,FI,FO,DTB,SEX,MODE) ; Найти пациента по Ф.И.О., дате р., полу
+ ; MODE - возврат -1 если найдено несколько, =2 - первого, =3 - списком
+ Q:FF="" ""
+ N IDX,IFIO,FIOI,FIOO,FOL,NI,A,NIB,D,FX,FY,DL,FL,L,Y,I,PY,cLPU,H,DV,NFF,cSTC,cWRK
+ S MODE=+$G(MODE)
+ S IFIO=$$F^YIFAM(FF),FF=$$LU^TXTU(FF) Q:IFIO="" ""
+ S FI=$$LU^TXTU(FI),FO=$$LU^TXTU(FO),NI="",H=+$H,I=0
+ S FY=$$YEAR^DTUTL(DTB),DL=$L(DTB),FL=$L(FI),FOL=$L(FO)
+ S SEX=$$GENDER^TXTU(SEX)
+ S PY=+$G(^cfg("pfind","yearcmp")) ; сравнивать только по году рожд.
+ S cLPU=$S($$LCL^NUSER("patients"," clpu"):$$^I("ilpu"),1:"")
+ S cSTC=$$LCL^IUSER("patients"," stc")
+ S cWRK=$$LCL^IUSER("patients"," work")
+ S NI="" F  S NI=$O(^BTI(" i",IFIO,NI)) Q:NI=""  D  Q:MODE&(I>1)
+ .S D=0
+ .S NFF=$$GET^IPAC(NI,"fiof",H),DV=H
+ .I NFF="" S DV=$$FIRSTDT^IPAC(NI),DV=$S(DV>H:DV,1:H),NFF=$$GET^IPAC(NI,"fiof",DV)
+ .Q:$$LU^TXTU(NFF)'=FF
+ .I SEX'="",$$GET^IPAC(NI,"pol",H)'=SEX Q 
+ .I FL S A=$$LU^TXTU($$GET^IPAC(NI,"fioi",DV)) Q:$L(A)=1&(A'=$E(FI,1))  Q:$L(A)'=1&(A'=FI) 
+ .S FX=0
+ .I FOL S A=$$LU^TXTU($$GET^IPAC(NI,"fioo",DV)),L=$L(A) Q:$S(L<3:$E(FO)'=$E(A),1:0)  I $S(L=1!(FOL=1):$E(FO)'=$E(A),1:(A'[FO)&(FO'[A)) S:L=1&(A'=$E(FO)) FX=1 I 'FX,$L(A)'=1,$E(A,1,5)'=$E(FO,1,5) S FX=1  ; строг. сравн по 1-м буквам, или 5 букв
+ .S A=$$GET^IPAC(NI,"datar",DV),Y=""
+ .S:$L(A) Y=$$YEAR^DTUTL(A)
+ .I FX Q:Y'=FY  Q:Y=""&(FY="")  ; не отчество и не год и при несовп. отчестве не пустые
+ .I DL,PY,$L(A) Q:Y'=FY  S D=1  ; только год
+ .I DL,'PY,$L(A) Q:A'=DTB  S D=1 ; полная дата
+ .I cLPU S A=$$GET^IPAC(NI,"lpu",DV) I A'="","|"_A_"|"'[("|"_cLPU_"|") Q 
+ .I $G(cSTC),$$PIDXN^IPAC(NI,cSTC,DV)=-1 Q
+ .I $G(cWRK),$$GET^IPAC(NI,"work",DV)'=cWRK Q 
+ .S NIB(NI)=D,I=I+1
+ Q:'$D(NIB) ""
+ I MODE=3 S (A,NI)="" F  S NI=$O(NIB(NI)) Q:NI=""  S A=$S(A="":"",1:A_"|")_NI
+ Q:MODE=3 A
+ S NI=$O(NIB("")),A=$O(NIB(""),-1) Q:NI=A NI
+ Q:NIB(NI)&NIB(A) A ; если разные номера, но совпали даты - последний
+ Q:MODE=1 -1 ; есть, несколько
+ S A=""
+ I DL,'MODE S NI="" F  S NI=$O(NIB(NI)) Q:NI=""  K:'NIB(NI) NIB(NI)
+ I MODE=2,DL S A="" F  S A=$O(NIB(A)) Q:A=""  Q:NIB(A)  ; с датой
+ S:A="" A=$O(NIB(""))
+ Q A
+FNDPHN(FAM,PHN) ; Поиск по фамилии+номеру телефона
+ ; Возврат если найден только 1
+ N NI,IFIO,X,PE,LST
+ S IFIO=$$F^YIFAM(FAM),PE=$TR(PHN,$TR(PHN,1234567890,""),"")
+ S NI="" F  S NI=$O(^BTI(" i",IFIO,NI)) Q:NI=""  D
+ .S X=$$GET^IPAC(NI,"pager")
+ .I X'="",$TR(X,$TR(X,1234567890,""),"")=PE S LST(NI)="" Q
+ .S X=$$GET^IPAC(NI,"tel1")
+ .I X'="",$TR(X,$TR(X,1234567890,""),"")=PE S LST(NI)="" Q
+ .S X=$$GET^IPAC(NI,"tel2")
+ .I X'="",$TR(X,$TR(X,1234567890,""),"")=PE S LST(NI)="" Q
+ Q:'$D(LST) ""
+ S NI=$O(LST(""))
+ I NI'=$O(LST(""),-1) Q "" ; есть несколько
+ Q NI

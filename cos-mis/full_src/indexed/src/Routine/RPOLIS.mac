@@ -1,0 +1,780 @@
+RPOLIS ; Отчеты по абонементам [ 03/27/2023  2:56 PM ]
+SALEL(DS,DE,SRT,LPU) ; Проданные полисы
+ N NI,AB,DF,WP,C9,AG,PR,SM,FR,SLP,X,K,DO,RSS
+ G SALE1
+SALE(DS,DE,SRT,RSS) ; Проданные полисы
+ N NI,AB,DF,WP,C9,AG,PR,SM,FR,SLP,LPU,X,K,DO,A,T
+SALE1 S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S C9=$C(9),FR=$$FR^I(),LPU=$$^I("ilpu"),RSS=$G(RSS)
+ K ^BUF($J) S K=1
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient||||Период "_$$DT2^DTUTL(DS)_"-"_$$DT2^DTUTL(DE)_"|;"_CR) ;
+ D WC^RWU("|№ Абонемента|Создан|Зарегистирован|Пациент|Стоимость|На счету|Погашено|% Оплаты|"_$S(RSS:"Базовая цена|",1:"")_"Агент|Вн. агент"_$S(FR>0:"|Филиал",1:""))
+ S WP=$G(^BTPL(C9_"t","wdt")) G:WP="" SALEEND
+ S NI="" F  S NI=$O(^BTPL(NI)) Q:NI=""!(NI[C9)  S AB="" F  S AB=$O(^BTPL(NI,AB)) Q:AB=""  D
+ .S A=$O(^(AB,WP,""))
+ .Q:+A<DS  Q:+A>DE 
+ .S SLP=$P($G(^(A)),"@",2)
+ .I 'FR,SLP'="" Q:LPU'=SLP 
+ .S DF=$$GET^IPOLIS(NI,AB,"df")
+ .S AG=$$GET^IPOLIS(NI,AB,"agent")
+ .S DO=$$GET^IPOLIS(NI,AB,"dofor")
+ .S:$$CHECK^IKADRY(+AG) AG=$$FIOSH^IKADRY(AG)
+ .S PR=+$$GET^IPOLIS(NI,AB,"price"),SM=$$GET^IPOLIS(NI,AB,"summ")
+ .S X=$S(SRT=2:A,SRT=1:DO,SRT=3:AB,1:"")_","_K,K=K+1
+ .S A=NI_"|"_AB_"|"_$$DT^DTUTL(DO)_"|"_$$DTM^DTUTL(A)_"|"_NI_" "_$$FIO^IPAC(NI,DF)_"|"_PR_"|"_$$NOW^IBILL(NI)_"|"_SM_"|"_$S(PR>0:$$FN(100*SM/PR),1:0)_"|"_$S(RSS:$$FN($$RSUMM^IPOLIS(NI,AB,1))_"|",1:"")_AG
+ .S AG=$$GET^IPOLIS(NI,AB,"agent0"),T=$$GET^IPOLIS(NI,AB,"agent2")
+ .S A=A_"|"_AG_$S(T="":"",AG'="":", ",1:"")_$S(T="":"",1:T_"(2й)")
+ .S ^BUF($J,X)=A_$S(FR>0:"|"_$$NAME^ICONTR(SLP),1:"")
+ S X="" F  S X=$O(^BUF($J,X)) Q:X=""  D WC^RWU(CR_^(X))
+SALEEND D C^RWU K ^BUF($J)
+ Q
+RLST(DS,DE,FLD) ; Реестр абонементов
+ N NI,AB,DF,WP,C9,AG,PR,SM,FR,SLP,LPU,X,K,DO,WTP,TP,PO
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S C9=$C(9),FR=$$FR^I(),LPU=$$^I("ilpu")
+ S WTP=+$G(^BTPL(C9_"t","tp"))
+ K ^BUF($J) S K=1
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|||Период "_$$DT2^DTUTL(DS)_"-"_$$DT2^DTUTL(DE)_"||;"_CR) ;
+ D WC^RWU("|№ Абонемента|Зарегистирован|Пациент|№ И.Б.|Стоимость|Вид")
+ S WP=$G(^BTPL(C9_"t","wdt")) G:WP="" SALEEND
+ S NI="" F  S NI=$O(^BTPL(NI)) Q:NI=""!(NI[C9)  S AB="" F  S AB=$O(^BTPL(NI,AB)) Q:AB=""  D
+ .S A=$O(^(AB,WP,""))
+ .Q:+A<DS  Q:+A>DE 
+ .S SLP=$P($G(^(A)),"@",2)
+ .I 'FR,SLP'="" Q:LPU'=SLP
+ .S TP=$G(^BTPL(NI,AB,WTP))
+ .I FLD'="",TP'="" Q:$G(^BTPLS("t",TP,"grp"))'=FLD 
+ .S DF=$$GET^IPOLIS(NI,AB,"df")
+ .S AG=$$GET^IPOLIS(NI,AB,"agent")
+ .S DO=$$GET^IPOLIS(NI,AB,"dofor")
+ .S:$$CHECK^IKADRY(+AG) AG=$$FIOSH^IKADRY(AG)
+ .S PR=+$$GET^IPOLIS(NI,AB,"price"),SM=$$GET^IPOLIS(NI,AB,"summ")
+ .S PO=$$GET^IPAC(NI,"polis",+A)
+ .S X=PO_","_K,K=K+1
+ .; TODO - AB - polis
+ .S ^BUF($J,X)=NI_"|"_PO_"|"_$$DT^DTUTL(A)_"|"_$$FIO^IPAC(NI,DF)_"|"_NI_"|"_PR_"|"_$G(^BTPLS("t",TP,"name"))
+ S X="" F  S X=$O(^BUF($J,X)) Q:X=""  D WC^RWU(CR_^(X))
+ D C^RWU
+ K ^BUF($J)
+ Q
+USLTG(DS,DE,ATP,FLD,SKSS) ; Услуги по разделу абонементов
+ ; ATP - тип абонемента
+ ; FLD - раздел абонементов
+ ; SKSS - по договору/по кассе
+ N NI,AB,WTP,C9,FR,LPU,TP,SLP,NMTP,DF,LNRUN,FIO
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S C9=$C(9),FR=$$FR^I(),LPU=$$^I("ilpu")
+ S WTP=+$G(^BTPL(C9_"t","tp"))
+ D OWF^RWU(".txt")
+ D WC^RWU("№ И.Б.|Пациент|Дата|Услуга|Кол-во|Сумма|Абонемент")
+ S NI="" F  S NI=$O(^BTPL(NI)) Q:NI=""!(NI[C9)  S AB="" F  S AB=$O(^BTPL(NI,AB)) Q:AB=""  D
+ .S TP=$G(^BTPL(NI,AB,WTP))
+ .I ATP'="",TP'=ATP Q 
+ .I FLD'="",TP'="" Q:$G(^BTPLS("t",TP,"grp"))'=FLD 
+ .Q:$O(^PNF(NI,DS-1))="" 
+ .S NMTP=$G(^BTPLS("t",TP,"name"))
+ .S DF=$$GET^IPOLIS(NI,AB,"df") S:DF="" DF=DE
+ .S FIO="",LNRUN="USLTGp^RPOLIS"
+ .D DOSC^NPACSC(NI,DS,DE,,$$GET^IPAC(NI,"stc",DE))
+ D C^RWU
+ Q
+USLTGp 
+ N CNT,CEN,SUM
+ S FLG="|"_$G(FLG)_"|",KSS=0
+ I KASS S KSS=1
+ I SKSS Q:'KSS&(SKSS=1)  Q:KSS&(SKSS=2)
+ S:FIO="" FIO=NI_"|"_$$FIOSH^IPAC(NI)
+ S U="" F  S U=$O(UL(U)) Q:U=""  D
+ .S CNT=$G(UL(U))
+ .S CEN=$S($D(UL(U,1)):UL(U,1)/CNT,SuM["|":$P(SuM,"|",Idx)/CNT,SuM'="":SuM/CNT,1:$$PRICEH^IPRICE(U,$G(PRC),DT)*KSKD),SUM=CNT*CEN
+ .D WC^RWU(CR_FIO_"|"_$$DT^DTUTL(DT)_"|"_U_" "_$$NAMEH^IPRICE(U,$G(PRC),DT)_"|"_CNT_"|"_SUM_"|"_NMTP)
+ Q
+TOPAY(DE,SRT,LPU) ; Полисы к оплате
+ N NI,AB,DF,WP,C9,AG,PR,SM,FR,SLP,X,K,DO,PP,DM,SMP
+ S DE=$$DIH^DTUTL(DE)
+ S C9=$C(9),FR=$$FR^I(),LPU=$$^I("ilpu")
+ K ^BUF($J) S K=1
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient||||На дату "_$$DT2^DTUTL(DE)_"|;"_CR) ;
+ D WC^RWU("|№ Абонемента|Создан|Зарегистирован|Пациент|Стоимость|Дата к оплате|Сумма к оплате|Погашено|% Оплаты|Агент"_$S(FR>0:"|Филиал",1:""))
+ S WP=$G(^BTPL(C9_"t","wdt")) G:WP="" SALEEND
+ S NI="" F  S NI=$O(^BTPL(NI)) Q:NI=""!(NI[C9)  S AB="" F  S AB=$O(^BTPL(NI,AB)) Q:AB=""  D
+ .S A=$O(^(AB,WP,""))
+ .Q:+A>DE 
+ .S SLP=$P($G(^(A)),"@",2)
+ .I 'FR,SLP'="" Q:LPU'=SLP 
+ .S PR=+$$GET^IPOLIS(NI,AB,"price"),SM=$$GET^IPOLIS(NI,AB,"summ")
+ .Q:PR'>SM 
+ .S PP=$$DEBTPP^IPOLIS(NI,AB),SMP=0,DM=""
+ .I PP'="" S DM=$P(PP,"|",2) Q:DM>DE  S SMP=$P(PP,"|",1) Q:'SMP 
+ .S:'SMP SMP=PR-SM
+ .S DF=$$GET^IPOLIS(NI,AB,"df")
+ .S AG=$$GET^IPOLIS(NI,AB,"agent")
+ .S DO=$$GET^IPOLIS(NI,AB,"dofor")
+ .S:$$CHECK^IKADRY(+AG) AG=$$FIOSH^IKADRY(AG)
+ .S X=$S(SRT=2:A,SRT=1:DO,SRT=3:AB,1:"")_","_K,K=K+1
+ .S ^BUF($J,X)=NI_"|"_AB_"|"_$$DT^DTUTL(DO)_"|"_$$DTM^DTUTL(A)_"|"_NI_" "_$$FIO^IPAC(NI,DF)_"|"_PR_"|"_$$DT^DTUTL(DM)_"|"_$$FN(SMP)_"|"_SM_"|"_$S(PR>0:$$FN(100*SM/PR),1:0)_"|"_AG_$S(FR>0:"|"_$$NAME^ICONTR(SLP),1:"")
+ S X="" F  S X=$O(^BUF($J,X)) Q:X=""  D WC^RWU(CR_^(X))
+ D C^RWU
+ K ^BUF($J)
+ Q
+FIN(DS,DE) ; Финансовый отчет по абонементам
+ N NI,AB,DF,WP,C9,SW,PR,SM,FR,SLP,LPU,X,K,DO
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S C9=$C(9),FR=$$FR^I(),LPU=$$^I("ilpu")
+ K ^BUF($J) S K=1
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient||Период "_$$DT^DTUTL(DS)_"-"_$$DT^DTUTL(DE)_"|;"_CR)
+ D WC^RWU("|И.Б.|Пациент|№ Абонемента|Стоимость|Погашено|Поступление|Оплата"_$S(FR>0:"|Филиал",1:""))
+ S WP=$G(^BTPL(C9_"t","wdt")) G:WP="" FINend
+ S SW=$G(^BTPL(C9_"t","sum"))
+ S NI="" F  S NI=$O(^BTPL(NI)) Q:NI=""!(NI[C9)  S AB="" F  S AB=$O(^BTPL(NI,AB)) Q:AB=""  D
+ .S A=$O(^(AB,WP,""))
+ .Q:+A<DS  Q:+A>DE 
+ .S SLP=$P($G(^(A)),"@",2)
+ .I 'FR,SLP'="" Q:LPU'=SLP 
+ .S DF=$$GET^IPOLIS(NI,AB,"df")
+ .S AG=$$GET^IPOLIS(NI,AB,"agent")
+ .S DO=$O(^BILL(NI,999999),-1) ; last pay
+ .S X=$O(^BTPL(NI,AB,SW,""),-1) ; last come
+ .S PR=$$GET^IPOLIS(NI,AB,"price"),SM=$$GET^IPOLIS(NI,AB,"summ")
+ .S A=NI_"|"_$$FIO^IPAC(NI,DF)_"|"_AB_"|"_$TR(PR,".",",")_"|"
+ .S A=A_$TR(SM,".",",")_"|"_$$DT^DTUTL(DO)_"|"_$$DT^DTUTL(X)
+ .S ^BUF($J,K)=NI_"|"_A_$S(FR>0:"|"_$$NAME^ICONTR(SLP),1:"")
+ .S K=K+1
+ S X="" F  S X=$O(^BUF($J,X)) Q:X=""  D WC^RWU(CR_^(X))
+FINend D C^RWU K ^BUF($J)
+ Q
+DSUMM(DS,DE,FLD,PAY,LPU) ; По договорам и суммам
+ N A,NI,AB,SM,STAT,C9,TP,FR,WP,WTP,SS
+ S C9=$C(9)
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S WP=$G(^BTPL(C9_"t","wdt")),WTP=+$G(^("tp"))
+ S FR=$$FR^I()
+ S LPU=$S(FR:$G(LPU),1:$$^I("ilpu"))
+ S NI="" F  S NI=$O(^BTPL(NI)) Q:NI=""!(NI[C9)  S AB="" F  S AB=$O(^BTPL(NI,AB)) Q:AB=""  D
+ .S A=$O(^(AB,WP,""))
+ .Q:+A<DS  Q:+A>DE 
+ .S SLP=$P($G(^(A)),"@",2)
+ .I LPU'="",LPU'=SLP Q 
+ .S TP=+$G(^BTPL(NI,AB,WTP))
+ .I FLD'="" Q:'TP  Q:$G(^BTPLS("t",TP,"grp"))'=FLD  
+ .S SM=+$$GET^IPOLIS(NI,AB,"price")
+ .S SS=$$GET^IPOLIS(NI,AB,"summ")
+ .I PAY,'SS Q 
+ .S STAT(TP,SM,1)=$G(STAT(TP,SM,1))+1
+ .S STAT(TP,SM,2)=$G(STAT(TP,SM,2))+SM
+ .S STAT(TP,SM,3)=$G(STAT(TP,SM,3))+SS
+ .S STAT(TP,-1,1)=$G(STAT(TP,-1,1))+1
+ .S STAT(TP,-1,2)=$G(STAT(TP,-1,2))+SM
+ .S STAT(TP,-1,3)=$G(STAT(TP,-1,3))+SS
+ D OWF^RWU(".txt")
+ D WC^RWU("Тип и сумма договора "_$$TXTP^DTUTL(DS,DE)_"|Кол-во|Сумма (руб.)|Погашено (руб.)")
+ S TP="" F  S TP=$O(STAT(TP)) Q:TP=""  D
+ .S A=$S('TP:"Тип не указан",1:$G(^BTPLS("t",TP,"name")))
+ .D WC^RWU(CR_A_"|"_$G(STAT(TP,-1,1))_"|"_$G(STAT(TP,-1,2))_"|"_$G(STAT(TP,-1,3)))
+ .S SM=-1 F  S SM=$O(STAT(TP,SM)) Q:SM=""  D WC^RWU(CR_" - Цена "_SM_" руб.|"_$G(STAT(TP,SM,1))_"|"_$G(STAT(TP,SM,2))_"|"_$G(STAT(TP,SM,3)))
+ D C^RWU
+ Q
+SDSUMM(DS,DE,FLD,PAY,SSLP,LPU) ; Сводка по договорам и суммам
+ ; FLD - раздел абонементов
+ ; PAY - только оплаченные
+ ; SSLP - детально по филиалам
+ N A,NI,AB,SM,STAT,C9,TP,FR,WP,WTP,SS,X1,X2,TTX
+ S C9=$C(9)
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),SSLP=$G(SSLP)
+ S WP=$G(^BTPL(C9_"t","wdt")),WTP=+$G(^("tp"))
+ S FR=$$FR^I()
+ S LPU=$S(FR:$G(LPU),1:$$^I("ilpu"))
+ S NI="" F  S NI=$O(^BTPL(NI)) Q:NI=""!(NI[C9)  S AB="" F  S AB=$O(^BTPL(NI,AB)) Q:AB=""  D
+ .S A=$O(^(AB,WP,""))
+ .Q:+A<DS  Q:+A>DE 
+ .S SLP=$P($G(^(A)),"@",2)
+ .I LPU'="",LPU'=SLP Q 
+ .S TP=+$G(^BTPL(NI,AB,WTP))
+ .I FLD'="" Q:'TP  Q:$G(^BTPLS("t",TP,"grp"))'=FLD  
+ .S SM=$$GET^IPOLIS(NI,AB,"price")
+ .S SS=$$GET^IPOLIS(NI,AB,"summ")
+ .I PAY,'SS Q
+ .S TTX=$S(SSLP:TP_","_SLP,1:TP)
+ .S STAT(TTX,1)=$G(STAT(TTX,1))+1
+ .S STAT(TTX,2)=$G(STAT(TTX,2))+SM
+ .S STAT(TTX,3)=$G(STAT(TTX,3))+SS
+ D OWF^RWU(".txt")
+ D WC^RWU("Тип и сумма договора "_$$TXTP^DTUTL(DS,DE)_"|Кол-во|Средняя цена (руб.)|Сумма (руб.)|Погашено (руб.)"_$S(SSLP:"|Филиал",1:""))
+ S TTX="" F  S TTX=$O(STAT(TTX)) Q:TTX=""  D
+ .S TP=$P(TTX,",",1)
+ .S A=$S('TP:"Тип не указан",1:$G(^BTPLS("t",TP,"name")))
+ .S X1=$G(STAT(TTX,1)),X2=$G(STAT(TTX,2))
+ .D WC^RWU(CR_A_"|"_$$FN(X1)_"|"_$$FN($S(X1:X2/X1,1:0))_"|"_$$FN(X2)_"|"_$$FN($G(STAT(TTX,3)))_$S(SSLP:"|"_$$NAME^ICONTR($P(TTX,",",2)),1:""))
+ D C^RWU
+ Q
+NACT ; Неактивные
+ N NI,AB,DF,C9,A,AG S C9=$C(9)
+ D OWF^RWU(".txt")
+ D WC^RWU("№ Абонемента|Создан|Пациент|Стоимость|Погашено|На счету|Баз.сумма|Агент")
+ S NI="" F  S NI=$O(^BTPL(NI)) Q:NI=""!(NI[C9)  S AB="" F  S AB=$O(^BTPL(NI,AB)) Q:AB=""  Q:$D(^BTPLI("a",1,NI,AB))  D
+ .S DF=$$GET^IPOLIS(NI,AB,"df")
+ .S A=CR_AB_"|"_$$DT^DTUTL($$GET^IPOLIS(NI,AB,"dofor"))
+ .S A=A_"|"_NI_" "_$$FIO^IPAC(NI,DF)_"|"_$$GET^IPOLIS(NI,AB,"price")
+ .S A=A_"|"_$$GET^IPOLIS(NI,AB,"summ")_"|"_$$NOW^IBILL(NI)_"|"
+ .S AG=$$GET^IPOLIS(NI,AB,"agent")
+ .S A=A_$$GET^IPOLIS(NI,AB,"bprice")_"|"
+ .D WC^RWU(A_$S($$CHECK^IKADRY(AG):AG_" "_$$FIOSH^IKADRY(AG),1:AG))
+ .Q  S A=+$$GET^IPOLIS(NI,AB,"summ")
+ .;I A>0 I $$GET^IPOLIS(NI,AB,"price")=A D ACTIVAT^IPOLIS(NI,AB,"",1)
+ D C^RWU
+ Q
+AGSUM(DS,DE) ; Отчет по агентам
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N NI,AB,WP,C9,AG,STAT,ASM,SM,PR,SS,X1,X2,AG0,AG2,AGL,TP
+ d mkPRC
+ S C9=$C(9),WP=$G(^BTPL(C9_"t","wdt")) G:WP="" AGSEND
+ S NI="" F  S NI=$O(^BTPL(NI)) Q:NI=""!(NI[C9)  S AB="" F  S AB=$O(^BTPL(NI,AB)) Q:AB=""  D
+ .S A=$O(^(AB,WP,""))
+ .Q:A<DS  Q:A>DE 
+ .S AG=$$TRIM^TXTU($$GET^IPOLIS(NI,AB,"agent"))
+ .S AG0=$$TRIM^TXTU($$GET^IPOLIS(NI,AB,"agent0"))
+ .S AG2=$$TRIM^TXTU($$GET^IPOLIS(NI,AB,"agent2"))
+ .S:AG="" AG="Не указан" S STAT(AG,1)=$G(STAT(AG,1))+1
+ .S PR=+$$GET^IPOLIS(NI,AB,"price"),ASM=+$$GET^IPOLIS(NI,AB,"bprice")
+ .S:ASM=0 ASM=PR S CH=+$$GET^IPOLIS(NI,AB,"summ")
+ .S STAT(AG,2)=$G(STAT(AG,2))+PR
+ .S STAT(AG,3)=$G(STAT(AG,3))+CH
+ .Q:PR=0!(PR<0)
+ .S X1=$$GETPRC($$GET^IPOLIS(NI,AB,"tp")),X2=(PR-ASM)*CH ; X2/PR
+ .S STAT(AG,4)=$G(STAT(AG,4))+((X2*$P(X1,"|",2))/(PR*100))
+ .S:$L(AG0) STAT(AG0,4)=$G(STAT(AG0,4))+((X2*$P(X1,"|",1))/(PR*100))
+ .S:$L(AG2) STAT(AG2,4)=$G(STAT(AG2,4))+((X2*$P(X1,"|",3))/(PR*100))
+ D OWF^RWU(".txt")
+ D WC^RWU("Период "_$$DT2^DTUTL(DS)_"-"_$$DT2^DTUTL(DE)_"|;"_CR) ;
+ D WC^RWU("Агент|Полисов|Стоимость|Погашено|% Оплаты|Агентские")
+ S AG="" F  S AG=$O(STAT(AG)) Q:AG=""  D
+ .S SM=$S($$CHECK^IKADRY(AG):$$FIOSH^IKADRY(AG),1:AG)
+ .S PR=$G(STAT(AG,2)),CH=$G(STAT(AG,3))
+ .S X1=$S($G(STAT(AG,1))="":"",PR>0:$FN(100*CH/PR,"",2),1:0)
+ .S X2=$FN($G(STAT(AG,4)),"",2)
+ .S SS(1)=$G(SS(1))+$G(STAT(AG,1)),SS(2)=$G(SS(2))+PR,SS(3)=$G(SS(3))+CH
+ .S SS(4)=$G(SS(4))+X1,SS(5)=$G(SS(5))+X2
+ .D WC^RWU(CR_SM_"|"_$G(STAT(AG,1))_"|"_PR_"|"_CH_"|"_X1_"|"_X2)
+ D:$D(SS) WC^RWU(CR_" Итого|"_$G(SS(1))_"|"_$G(SS(2))_"|"_$G(SS(3))_"|"_$G(SS(4))_"|"_$G(SS(5)))
+AGSEND D C^RWU
+ Q
+AGCSUM(DS,DE) ; Отчет по агентам (с текущими суммами)
+ S DS=$$DIH^DTUTL($G(DS)),DE=$$DIH^DTUTL($G(DE))
+ N NI,AB,SP,C9,AG,STAT,ASM,SM,PR,X1,X2,AG0,AG2,AGL,SS
+ d mkPRC
+ S C9=$C(9),SP=$G(^BTPL(C9_"t","sum")) G:SP="" AGSEND
+ S NI="" F  S NI=$O(^BTPL(NI)) Q:NI=""!(NI[C9)  S AB="" F  S AB=$O(^BTPL(NI,AB)) Q:AB=""  D
+ .S A=$O(^(AB,SP,"")),B=$O(^(""),-1)
+ .Q:A>DE  Q:B<DS 
+ .S A=DS_",0",B=+$O(^BTPL(NI,AB,SP,DE_",99999"),-1),CH=0
+ .F  S A=$O(^BTPL(NI,AB,SP,A)) Q:A=""  S CH=CH+$P(^(A),"|",1) Q:A=B 
+ .Q:CH=0 
+ .S AG=$$TRIM^TXTU($$GET^IPOLIS(NI,AB,"agent")) S:AG="" AG="Не указан"
+ .S AG0=$$TRIM^TXTU($$GET^IPOLIS(NI,AB,"agent0"))
+ .S AG2=$$TRIM^TXTU($$GET^IPOLIS(NI,AB,"agent2"))
+ .S STAT(AG,1)=$G(STAT(AG,1))+1
+ .S PR=+$$GET^IPOLIS(NI,AB,"price"),ASM=+$$GET^IPOLIS(NI,AB,"bprice")
+ .S:ASM=0 ASM=PR
+ .S STAT(AG,2)=$G(STAT(AG,2))+PR
+ .S STAT(AG,3)=$G(STAT(AG,3))+CH
+ .Q:PR=0!(PR<0)
+ .S X1=$$GETPRC($$GET^IPOLIS(NI,AB,"tp")),X2=(PR-ASM)*CH ; X2/PR
+ .S STAT(AG,4)=$G(STAT(AG,4))+((X2*$P(X1,"|",2))/(PR*100))
+ .S:$L(AG0) STAT(AG0,4)=$G(STAT(AG0,4))+((X2*$P(X1,"|",1))/(PR*100))
+ .S:$L(AG2) STAT(AG2,4)=$G(STAT(AG2,4))+((X2*$P(X1,"|",3))/(PR*100))
+ D OWF^RWU(".txt")
+ D WC^RWU("Период "_$$DT2^DTUTL(DS)_"-"_$$DT2^DTUTL(DE)_"|;"_CR) ;
+ D WC^RWU("Агент|Полисов|Стоимость|Погашено|% Оплаты|Агентские")
+ S AG="" F  S AG=$O(STAT(AG)) Q:AG=""  D
+ .S SM=$S($$CHECK^IKADRY(AG):$$FIOSH^IKADRY(AG),1:AG)
+ .S PR=$G(STAT(AG,2)),CH=$G(STAT(AG,3))
+ .S X1=$S($G(STAT(AG,1))="":"",PR>0:$FN(100*CH/PR,"",2),1:0)
+ .S X2=$FN($G(STAT(AG,4)),"",2)
+ .S SS(1)=$G(SS(1))+$G(STAT(AG,1)),SS(2)=$G(SS(2))+PR,SS(3)=$G(SS(3))+CH
+ .S SS(4)=$G(SS(4))+(X1*$G(STAT(AG,1))),SS(5)=$G(SS(5))+X2
+ .D WC^RWU(CR_SM_"|"_$G(STAT(AG,1))_"|"_PR_"|"_CH_"|"_X1_"|"_X2)
+ S X1=$G(SS(1))
+ D:$D(SS) WC^RWU(CR_" Итого|"_$G(SS(1))_"|"_$G(SS(2))_"|"_$G(SS(3))_"|"_$G(SS(4))_"|"_$G(SS(5)))
+AGCSEND D C^RWU
+ Q
+AGCR(DS,DE,AGN) ; Отчет по агентам (с текущими суммами)
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S AGN=$$WD^TXTU(AGN)
+ N NI,AB,SP,C9,AG,STAT,ASM,SM,PR,WP,CHA,SA,SSA,GDR,AG0,AG2,AGL,X,K
+ d mkPRC
+ S C9=$C(9),K=1,SA=0,GDR=$$^I("igldr")
+ S SP=$G(^BTPL(C9_"t","sum")) G:SP="" AGCREND
+ S WP=$G(^("wdt")) G:WP="" AGCREND
+ D OWF^RWU(".htm")
+ D WC^RWU("<html><head><title>Отчет агента</title>")
+ D W^RWU("<meta http-equiv=""Content-Type"" content=""text/html; charset=windows-1251"">")
+ D W^RWU("<style type=""text/css"">"_CR)
+ D W^RWU("<!--"_CR)
+ D W^RWU(".a10 {  font-family: Arial, Helvetica, sans-serif; font-size: 10px}"_CR)
+ D W^RWU(".a10b {  font-family: Arial, Helvetica, sans-serif; font-size: 10px; font-weight: bold}"_CR)
+ D W^RWU("-->")
+ D W^RWU("</style></head><body bgcolor=""#FFFFFF"" text=""#000000""><div align=""right""><table width=""30%"" border=""0"" cellspacing=""-"">")
+ D WC^RWU("<tr><td class=""a10b""><div align=""right"">УТВЕРЖДАЮ</div></td></tr><tr><td class=""a10""><div align=""right"">"_$S(GDR="":"Главный врач",1:"Генеральный директор")_"</div></td>")
+ S:GDR="" GDR=$$^I("glvr")
+ D WC^RWU("</tr><tr><td class=""a10""><div align=""right"">"_$$HTML^TXTU($$^I("ifname"))_"</div></td></tr><tr><td class=""a10""><div align=""right"">__________________ "_$$FIOSH^TXTU($P(GDR," ",1),$P(GDR," ",2),$P(GDR," ",3))_"</div></td></tr>")
+ D WC^RWU("<tr><td class=""a10""><div align=""right"">&quot;____&quot; ________________ 200__ г </div></td></tr></table>")
+ D WC^RWU("<div align=""center""><p><span class=""a10"">Отчет агента <br>"_$S($$CHECK^IKADRY(AGN):AGN_" "_$$FIOSH^IKADRY(AGN),1:AGN)_"<br>")
+ D WC^RWU("<br>по договору N___________ от ___________________ <br>за период "_$$DT^DTUTL(DS)_"-"_$$DT^DTUTL(DE)_CR)
+ D WC^RWU("</span></p><table width=""100%"" border=""1"" cellspacing=""0"" class=""a10""><tr><td colspan=""2"" align=""center"">Договор абонемента")
+ D WC^RWU("</td><td rowspan=""2"">Пациент (ФИО)</td><td colspan=""2""><div align=""center"">Стоимость <br></div></td><td rowspan=""2"">Зачислено в оплату абонемента")
+ D WC^RWU("</td><td rowspan=""2"">Процент оплаты<br>(текущий)</td><td rowspan=""2"">Сумма вознаграждения</td></tr><tr><td>N договора<br>")
+ D WC^RWU("</td><td>Дата<br></td><td>по договору<br></td><td>закупочная<br></td></tr>")
+ K ^BUF($J)
+ S NI="" F  S NI=$O(^BTPL(NI)) Q:NI=""!(NI[C9)  S AB="" F  S AB=$O(^BTPL(NI,AB)) Q:AB=""  D
+ .S A=+$O(^(AB,SP,"")),B=+$O(^(""),-1)
+ .Q:A>DE  Q:B<DS 
+ .S A=DS_",0",B=+$O(^BTPL(NI,AB,SP,DE_",99999"),-1),CH=0
+ .F  S A=$O(^BTPL(NI,AB,SP,A)) Q:A=""  S CH=CH+$P($G(^(A)),"|",1) Q:A=B 
+ .Q:CH=0 
+ .S AG=$$TRIM^TXTU($$GET^IPOLIS(NI,AB,"agent"))
+ .S AG0=$$TRIM^TXTU($$GET^IPOLIS(NI,AB,"agent0"))
+ .S AG2=$$TRIM^TXTU($$GET^IPOLIS(NI,AB,"agent2"))
+ .I AG="",AG0="",AG2="" Q:$L(AGN) 
+ .I $L(AG),AGN'=AG,AGN'=AG0,AGN'=AG2 Q 
+ .S A=$O(^BTPL(NI,AB,WP,"")),B=A
+ .S A="<tr><td>"_AB_"</td><td>"_$$DT^DTUTL(A)_"</td><td>"
+ .S A=A_NI_" "_$$FIO^IPAC(NI,B)_"</td><td>"
+ .S PR=+$$GET^IPOLIS(NI,AB,"price"),ASM=+$$GET^IPOLIS(NI,AB,"bprice")
+ .S:ASM=0 ASM=PR
+ .S A=A_PR_"</td><td>"_ASM_"</td><td>"_CH_"</td><td>"
+ .S CHA=+$$GET^IPOLIS(NI,AB,"summ"),X=$$GETPRC($$GET^IPOLIS(NI,AB,"tp"))
+ .S K=$S(AGN="":2,AGN=AG2:3,AGN=AG0:1,1:2)
+ .S:PR'>0 A=A_"0</td><td>0"
+ .S:PR>0 SSA=$FN((((PR-ASM)*CH*$P(X,"|",K))/(PR*100)),"",2),A=A_$S(PR>0:$FN(100*CHA/PR,"",2),1:0)_"</td><td>"_SSA,SA=SA+SSA
+ .S A=A_"</td></tr>",^BUF($J,AB_K)=A,K=K+1
+ S B="" F  S B=$O(^BUF($J,B)) Q:B=""  D WC^RWU(^(B)_CR) ; sort by polis
+AGCREND D WC^RWU("</table><p align=""right"" class=""a10"">Итого сумма вознаграждения "_SA_" руб.<br></p>")
+ D WC^RWU("<p align=""right""><span class=""a10"">Агент _________________________ /__________________/</span><br></p>")
+ S B=$$^I("icmdr")
+ S K=$S(B="":"Генеральный директор",1:"Коммерческий директор")
+ D WC^RWU("<p align=""right""><span class=""a10"">Согласовано: "_K_" _________________ / "_$S(B="":$$^I("igldr"),1:B)_" /</span><br></p>")
+ D W^RWU("</div></div></body></html>")
+ D C^RWU
+ K ^BUF($J)
+ Q
+AGPSUM(DS,DE,AGN,LPU,LOGGL) ; Агентские по сотруднику
+ Q:AGN="" 0
+ ; LOGGL - глобаль для логировния
+ N NI,AB,SP,C9,AG,ASM,PR,SA,SSA,AG0,AG2,AGL,X,K,ti
+ d mkPRC
+ S C9=$C(9),SA=0,LOGGL=$G(LOGGL),LPU=$G(LPU),ti="RPOLIS:agp"
+ D CHKIAG
+ S SP=$G(^BTPL(C9_"t","sum")) Q:SP="" 0
+ S WP=$G(^BTPL(C9_"t","wdt")) Q:WP="" 0
+ S NI="" F  S NI=$O(^TIDX(ti,AGN,NI)) Q:NI=""  S AB="" F  S AB=$O(^TIDX(ti,AGN,NI,AB)) Q:AB=""  D
+ .S A=$O(^BTPL(NI,AB,SP,DS_",")),B=+$O(^(DE_",99999"),-1)
+ .Q:+A>DE  Q:B<DS 
+ .I LPU'="" S A=$O(^BTPL(NI,AB,WP,"")),A=$P(^(A),"@",2) I A'="",A'=LPU Q 
+ .S PR=+$$GET^IPOLIS(NI,AB,"price")
+ .Q:PR=0 
+ .S A=DS_",0",B=$O(^BTPL(NI,AB,SP,DE_",99999"),-1),CH=0
+ .F  S A=$O(^BTPL(NI,AB,SP,A)) Q:A=""  S CH=CH+$P($G(^(A)),"|",1) Q:A=B 
+ .Q:CH=0 
+ .S AG=$$GET^IPOLIS(NI,AB,"agent")
+ .S AG0=$$GET^IPOLIS(NI,AB,"agent0")
+ .S AG2=$$GET^IPOLIS(NI,AB,"agent2")
+ .I AG="",AG0="",AG2="" Q 
+ .I $L(AG),AGN'=AG,AGN'=AG0,AGN'=AG2 Q 
+ .I CH<PR,("|"_$$TPFLG^IPOLIS(NI,AB,DE)_"|")["|endag|" Q 
+ .S ASM=+$$GET^IPOLIS(NI,AB,"bprice")
+ .S:ASM=0 ASM=PR
+ .S X=$$GETPRC($$GET^IPOLIS(NI,AB,"tp"))
+ .S K=$S(AGN="":2,AGN=AG2:3,AGN=AG0:1,1:2)
+ .S SSA=$FN((((PR-ASM)*CH*$P(X,"|",K))/(PR*100)),"",2),SA=SA+SSA
+ .Q:LOGGL="" 
+ .S K="Агентские по абонементу "_AB_" ("_NI_" "_$$FIOSH^YIPACN(NI)_")"
+ .S X=$O(@LOGGL@(""),-1)+1,^(X)=K_"|"_SSA
+ Q SA
+AGPVCNT(DS,DE,AGN,LPU,LOGGL) ; Агентские по сотруднику (кол-во)
+ Q:AGN="" 0
+ ; LOGGL - глобаль для логировния
+ N NI,AB,SP,C9,AG,ASM,PR,CA,AG0,AG2,AGL,X,K,ti
+ d mkPRC
+ S C9=$C(9),CA=0,LOGGL=$G(LOGGL),LPU=$G(LPU),ti="RPOLIS:agp"
+ D CHKIAG
+ S SP=$G(^BTPL(C9_"t","sum")) Q:SP="" 0
+ S WP=$G(^BTPL(C9_"t","wdt")) Q:WP="" 0
+ S NI="" F  S NI=$O(^TIDX(ti,AGN,NI)) Q:NI=""  S AB="" F  S AB=$O(^TIDX(ti,AGN,NI,AB)) Q:AB=""  D
+ .S A=$O(^BTPL(NI,AB,SP,DS_",")),B=+$O(^(DE_",99999"),-1)
+ .Q:+A>DE  Q:B<DS 
+ .I LPU'="" S A=$O(^BTPL(NI,AB,WP,"")),A=$P(^(A),"@",2) I A'="",A'=LPU Q 
+ .S PR=+$$GET^IPOLIS(NI,AB,"price")
+ .Q:PR=0 
+ .S A=DS_",0",B=+$O(^BTPL(NI,AB,SP,DE_",99999"),-1),CH=0
+ .F  S A=$O(^BTPL(NI,AB,SP,A)) Q:A=""  S CH=CH+$P($G(^(A)),"|",1) Q:A=B 
+ .Q:CH=0 
+ .S AG=$$GET^IPOLIS(NI,AB,"agent")
+ .S AG0=$$GET^IPOLIS(NI,AB,"agent0")
+ .S AG2=$$GET^IPOLIS(NI,AB,"agent2")
+ .I AG="",AG0="",AG2="" Q 
+ .I $L(AG),AGN'=AG,AGN'=AG0,AGN'=AG2 Q 
+ .I CH<PR,("|"_$$TPFLG^IPOLIS(NI,AB,DE)_"|")["|endag|" Q
+ .S CA=CA+1
+ .Q:LOGGL="" 
+ .S K="Абонемент "_AB_" ("_NI_" "_$$FIOSH^YIPACN(NI)_")"
+ .S X=$O(@LOGGL@(""),-1)+1,^(X)=""
+ Q CA
+AGPCNT(DS,DE,LOGGL) ; Абонементы по сотрудникам (число)
+ ; LOGGL - глобаль для логировния
+ N NI,AB,SP,C9,AG,ASM,PR,SSA,AG0,AG2,AGL,X,K,WP,LPU,CNT
+ d mkPRC
+ S C9=$C(9),K=1,SA=0,LOGGL=$G(LOGGL)
+ S SP=$G(^BTPL(C9_"t","sum")) Q:SP="" 
+ S WP=$G(^BTPL(C9_"t","wdt")) Q:WP="" 
+ S CNT=0
+ S NI="" F  S NI=$O(^BTPL(NI)) Q:NI=""!(NI[C9)  S AB="" F  S AB=$O(^BTPL(NI,AB)) Q:AB=""  D
+ .S A=$O(^(AB,WP,""))
+ .Q:+A<DS  Q:+A>DE 
+ .S LP=$P($G(^(A)),"@",2)
+ .S PR=+$$GET^IPOLIS(NI,AB,"price")
+ .Q:PR=0 
+ .S A=DS_",0",B=+$O(^BTPL(NI,AB,SP,DE_",99999"),-1),CH=0
+ .F  S A=$O(^BTPL(NI,AB,SP,A)) Q:A=""  S CH=CH+$P($G(^(A)),"|",1) Q:A=B 
+ .Q:CH=0 
+ .S AG=$$TRIM^TXTU($$GET^IPOLIS(NI,AB,"agent"))
+ .S AG0=$$TRIM^TXTU($$GET^IPOLIS(NI,AB,"agent0"))
+ .S AG2=$$TRIM^TXTU($$GET^IPOLIS(NI,AB,"agent2"))
+ .I AG="",AG0="",AG2="" Q   
+ .I $L(AG),$$CHECK^IKADRY(AG) S @LOGGL@(LP,AG)=$G(@LOGGL@(LP,AG))+1
+ .I $L(AG0),$$CHECK^IKADRY(AG0) S @LOGGL@(LP,AG0)=$G(@LOGGL@(LP,AG0))+1
+ .I $L(AG2),$$CHECK^IKADRY(AG2) S @LOGGL@(LP,AG2)=$G(@LOGGL@(LP,AG2))+1
+ Q CNT
+AGPSUMM(DS,DE,LOGGL,TP) ; Абонементы по сотруднику (общая/оплаченная сумма)
+ ; TP - 0/1 - оплаченная/общая сумма
+ ; LOGGL - глобаль для логировния
+ N NI,AB,SP,C9,AG,ASM,PR,SSA,AG0,AG2,AGL,X,K,WP,LPU
+ d mkPRC
+ S C9=$C(9),K=1,SA=0,LOGGL=$G(LOGGL),TP=+$G(TP)
+ S SP=$G(^BTPL(C9_"t","sum")) Q:SP="" 
+ S WP=$G(^BTPL(C9_"t","wdt")) Q:WP="" 
+ S NI="" F  S NI=$O(^BTPL(NI)) Q:NI=""!(NI[C9)  S AB="" F  S AB=$O(^BTPL(NI,AB)) Q:AB=""  D
+ .S A=$O(^(AB,WP,""))
+ .Q:+A<DS  Q:+A>DE 
+ .S LP=$P($G(^(A)),"@",2)
+ .S PR=+$$GET^IPOLIS(NI,AB,"price")
+ .Q:PR=0 
+ .S A=DS_",0",B=+$O(^BTPL(NI,AB,SP,DE_",99999"),-1),CH=0
+ .I 'TP F  S A=$O(^BTPL(NI,AB,SP,A)) Q:A=""  S CH=CH+$P($G(^(A)),"|",1) Q:A=B 
+ .I 'TP Q:CH=0 
+ .S AG=$$TRIM^TXTU($$GET^IPOLIS(NI,AB,"agent"))
+ .S AG0=$$TRIM^TXTU($$GET^IPOLIS(NI,AB,"agent0"))
+ .S AG2=$$TRIM^TXTU($$GET^IPOLIS(NI,AB,"agent2"))
+ .I AG="",AG0="",AG2="" Q   
+ .S K=$S(TP:PR,1:CH)
+ .I $L(AG),$$CHECK^IKADRY(AG) S @LOGGL@(LP,AG)=$G(@LOGGL@(LP,AG))+K
+ .I $L(AG0),$$CHECK^IKADRY(AG0) S @LOGGL@(LP,AG0)=$G(@LOGGL@(LP,AG0))+K
+ .I $L(AG2),$$CHECK^IKADRY(AG2) S @LOGGL@(LP,AG2)=$G(@LOGGL@(LP,AG2))+K
+ Q
+CHKIAG ; рединдекс по агентам
+ I +$G(^TIDX("RPOLIS:agp"))=+$H,$P(^TIDX("RPOLIS:agp"),",",2)+30>$P($H,",",2) Q 
+ ; если прошло недостаточно времени (30 сек) - не переиндексируем
+ N NI,AB,AG,AG0,AG2,ti,C9
+ S ti="RPOLIS:agp",NI="",C9=$C(9)
+ K ^TIDX(ti)
+ F  S NI=$O(^BTPL(NI)) Q:NI=""!(NI[C9)  S AB="" F  S AB=$O(^BTPL(NI,AB)) Q:AB=""  D
+ .S AG=$$GET^IPOLIS(NI,AB,"agent")
+ .S AG0=$$GET^IPOLIS(NI,AB,"agent0")
+ .S AG2=$$GET^IPOLIS(NI,AB,"agent2")
+ .S:AG'="" ^TIDX(ti,AG,NI,AB)=""
+ .S:AG0'="" ^TIDX(ti,AG0,NI,AB)=""
+ .S:AG2'="" ^TIDX(ti,AG2,NI,AB)=""
+ S ^TIDX(ti)=$H
+ Q
+mkPRC ; категории начислений
+ ; AGL(вид,агенты)=проценты
+ N I,J,R,K,X,X1,X2,LL
+ k AGL
+ M AGL(0)=^BTPLS("a")
+ S I=+$G(^MN("agspgrp")) Q:'I 
+ 
+ S J="" F  S J=$O(^MN(I,J)) Q:J=""  D
+ .S R=$P(^(J),"|",2) Q:R="" 
+ .S R=$TR(R,"/\ ",";;")
+ .F K=1:1:$L(R,";") S X=$P(R,";",K),X1=$P(X,"=",1),X2=$P(X,"=",2) I X1'="",X2'="" S LL(J,$TR(X1,",","|"))=$TR(X2,",","|")
+ 
+ S K="" F  S K=$O(^BTPLS("t",K)) Q:K=""  D
+ .S X=$G(^BTPLS("t",K,"pgrp")) Q:X="" 
+ .M AGL(K)=LL(X)
+ Q
+GETPRC(CAT) ; распределение процентов
+ N R
+ S R=$S(AG0="":"",1:0),CAT=+CAT
+ S R=$S(AG="":R,1:R_$S(R="":R,1:"|")_1)
+ S R=$S(AG2="":R,1:R_$S(R="":R,1:"|")_2)
+ S R=$S(R="":"0|100|0",$D(ALG(CAT,R)):ALG(CAT,R),$D(ALG(0,R)):ALG(0,R),R=0:"100|0|0",R=2:"0|0|100",1:"0|100|0")
+ Q R
+BILL(DS,DE) ; Проплаты за годовой абонемент
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N C9,WST,WSS,NI,NM,H,A,I,WDF,WAG
+ S C9=$C(9)
+ S WST=$G(^BTPL(C9_"t","stc"))
+ S WSS=$G(^BTPL(C9_"t","sum"))
+ S WDF=$G(^BTPL(C9_"t","dofor"))
+ S WAG=$G(^BTPL(C9_"t","agent"))
+ D OWF^RWU(".txt")
+ D WC^RWU("Договор с "_$$DT2^DTUTL(DS)_" по "_$$DT2^DTUTL(DE)_"|Дата оформления|Пациент|Дата платежа|Сумма платежа|Агент")
+ S NI="" F  S NI=$O(^BTPL(NI)) Q:NI=""!(NI[C9)  S NM="" F  S NM=$O(^BTPL(NI,NM)) Q:NM=""  D
+ .S A=$G(^(NM,WAG))
+ .S H=NM_"|"_$$DT^DTUTL($G(^(WDF)))_"|"_NI_" "_$$FIO^IPAC(NI)_"|"
+ .S I=$O(^BTPL(NI,NM,WSS,"")) Q:I=""  Q:+I>DE 
+ .S A=$S($$CHECK^IKADRY(A):A_" "_$$FIOSH^IKADRY(A),1:A),I=DS_",0"
+ .F  S I=$O(^BTPL(NI,NM,WSS,I)) Q:I=""  D:(I-1)<DE WC^RWU(CR_H_$$DTM^DTUTL(I)_"|"_+$P(^(I),"|",1)_"|"_A)
+ D C^RWU
+ Q
+OPSUM(DS,DE,WRK) ; Оприходованная сумма ->SUMM(DGN) ,(,1)=всего на конец
+ N NI,PL,C9,WSM,WPR,WSS,WST,WDF,WDC,S,P,SS,DT,DF,DCT,SS1,SS2,SS3,DG
+ S C9=$C(9),WRK=+$G(WRK)
+ K SUMM
+ S WST=$G(^BTPL(C9_"t","stc")) G:WST="" OPSEND
+ S WPR=$G(^("price")) G:WPR="" OPSEND
+ S WSM=$G(^("summ")) G:WSM="" OPSEND
+ S WSS=$G(^("sum")) G:WSS="" OPSEND
+ S WDF=$G(^("df")) G:WDF="" OPSEND
+ S WDC=$G(^("dcnt")) G:WDC="" OPSEND
+ S NI="" F  S NI=$O(^BTPL(NI)) Q:NI=""  S PL="" F  S PL=$O(^BTPL(NI,PL)) Q:PL=""  D
+ .S S=$G(^(PL,WSM)),P=$G(^(WPR)) Q:P=""&(S="") 
+ .S DG=+$G(^(WST)),DCT=+$G(^(WDC)),DF=$G(^(WDF))
+ .S:DCT=0 DCT=1 S SS1=0,SS2=0,DT=0
+ .F  S DT=$O(^BTPL(NI,PL,WSS,DT)) Q:DT=""!(DT>DE)  S P=$P(^(DT),"|",1) S:DT<DS SS1=SS1+P S:DT>(DS-1) SS2=SS2+P
+ .S S=SS1+SS2
+ .S DT=DS-DF+1,SS=0,SS3=0 S:DT>DCT DT=DCT S:DT>0 SS=SS1*DT/DCT,SS3=(SS1*(DT-1))/DCT
+ .S DT=DE-DF+1,SS2=0 S:DT>DCT DT=DCT S:DT>0 SS2=(S*DT)/DCT
+ .S:DS<60996 SS3=SS ; подгонка, чтобы ранние результаты не изменялись :(
+ .S SUMM(DG)=$G(SUMM(DG))+SS2-SS3
+ .S SUMM(DG,1)=$G(SUMM(DG,1))+SS2
+ .S SUMM(DG,2)=$G(SUMM(DG,2))+S ; total
+ .S SUMM(DG,3)=$G(SUMM(DG,3))+1 ; count
+ .Q:'WRK 
+ .S DT=+$$GET^IPAC(NI,"work",DE) Q:'DT 
+ .S SUMM(DG,9,DT)=$G(SUMM(DG,9,DT))+SS2-SS3
+ .S SUMM(DG,9,DT,1)=$G(SUMM(DG,9,DT,1))+SS2
+ .S SUMM(DG,9,DT,2)=$G(SUMM(DG,9,DT,2))+S ; total
+ .S SUMM(DG,9,DT,3)=$G(SUMM(DG,9,DT,3))+1 ; count
+OPSEND 
+ Q
+PDH(DS,DE,WRK) ; Зачисленный доход абонементов
+ N SUMM,DG,N,W
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S:DS>DE DS=DE
+ S N=$$DT2^DTUTL(DE),WRK=+$G(WRK)
+ D OPSUM(DS,DE,WRK)
+ S DG=0 F  S DG=$O(SUMM(DG)) Q:DG=""  S SUMM(0)=$G(SUMM(0))+$G(SUMM(DG)),SUMM(0,1)=$G(SUMM(0,1))+$G(SUMM(DG,1)),SUMM(0,2)=$G(SUMM(0,2))+$G(SUMM(DG,2)),SUMM(0,3)=$G(SUMM(0,3))+$G(SUMM(DG,3))
+ D OWF^RWU(".txt")
+ D WC^RWU("Зачисленный доход за период "_$$DT2^DTUTL(DS)_"-"_N_";")
+ D WC^RWU(CR_"Тип абонемента|Кол-во|Зачислено|Итого на "_N_"|Остаток на "_N)
+ S DG=0 F  S DG=$O(SUMM(DG)) Q:DG=""  D
+ .S N=$$NAMEH^YNDOG(DG,DE),N=$S(N="":"Не указан",1:N)
+ .D WC^RWU(CR_N_"|"_$$FN($G(SUMM(DG,3)))_"|"_$$FFN($G(SUMM(DG)))_"|"_$$FFN($G(SUMM(DG,1)))_"|"_$$FFN($G(SUMM(DG,2))-$G(SUMM(DG,1))))
+ .Q:'WRK 
+ .S W="" F  S W=$O(SUMM(DG,9,W)) Q:W=""  D WC^RWU(CR_" - "_$G(^M(5,W))_"|"_$$FN($G(SUMM(DG,9,W,3)))_"|"_$$FFN($G(SUMM(DG,9,W)))_"|"_$$FFN($G(SUMM(DG,9,W,1)))_"|"_$$FFN($G(SUMM(DG,9,W,2))-$G(SUMM(DG,9,W,1))))
+ D:$D(SUMM) WC^RWU(CR_"Сумма|"_+$G(SUMM(0,3))_"|"_$$FFN($G(SUMM(0)))_"|"_$$FFN($G(SUMM(0,1)))_"|"_$$FFN($G(SUMM(0,2))-$G(SUMM(0,1))))
+ D C^RWU
+ Q
+LST ; Список абонементов
+ N ID,C,LST,G,i S (C,ID)="",i=1
+ D OWF^RWU(".txt"),WC^RWU("№|Наименование|Цена")
+ F  S ID=$O(^BTPLS("t",ID)) Q:ID=""  S G=+$G(^(ID,"grp")),LST(G,ID)=""
+ S G="" F  S G=$O(LST(G)) Q:G=""  D
+ .D WC^RWU(CR_"|"_$$NAME^ISPRAV("salegrp",G))
+ .S ID="" F  S ID=$O(LST(G,ID)) Q:ID=""  D WC^RWU(CR_i_"|"_$G(^BTPLS("t",ID,"name"))_"|"_(+$G(^("price",1)))_" руб.") S i=i+1
+ D C^RWU
+ Q
+ASP(NI,PLS,PDS,PDE) ; Анализ стоимости прикрепления
+ N TP,R,A,T,DT,DS,DC,CI,PSUM,PCNT,PKSUM,DIL,LNRUN,UER,S,S1
+ S NI=$P(NI," ",1),PLS=$$WD^TXTU(PLS)
+ S PDS=$$DI^DTUTL(PDS),PDE=$$DI^DTUTL(PDE)
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|№ И.Б.|Абонемент|Вид|Срок|Ф.И.О. пациента|Цена|Оплачено|Лимит|Сумма услуг|Разница|%|Касса|Диагноз максимальной стоимости")
+ S TP=$S(NI=""&(PLS=""):3,NI="":2,1:1)
+ I TP=1 S PLS="" F  S PLS=$O(^BTPL(NI,PLS)) Q:PLS=""  D ASPprc(NI,PLS)
+ I TP=2 S R=$$RECONV^IPOLIS(PLS) S NI="" F  S NI=$O(^BTPLI("p",R,NI)) Q:NI=""  D:^(NI)=PLS ASPprc(NI,PLS)
+ S:TP=3 CI=$$GTZ^XMLU("wdt","^BTPL("""_$C(9)_"t""","^BTPL("""_$C(9)_"r""") 
+ I TP=3 S NI="" F  S NI=$O(^BTPL(NI)) Q:NI=""  D
+ .S PLS="" F  S PLS=$O(^BTPL(NI,PLS)) Q:PLS=""  D
+ ..S DT=$O(^(PLS,CI,"")) Q:DT=""
+ ..I PDS'="",DT<PDS Q 
+ ..I PDE'="",DT>PDE Q 
+ ..D ASPprc(NI,PLS)
+ D C^RWU
+ Q
+ASPprc(NI,PLS) 
+ S DS=$$GET^IPOLIS(NI,PLS,"df"),DC=$$GET^IPOLIS(NI,PLS,"dcnt")-1
+ S T=+$$GET^IPOLIS(NI,PLS,"tp")
+ S S=$$GET^IPOLIS(NI,PLS,"price")
+ S A=NI_"|"_PLS_"|"_$G(^BTPLS("t",T,"name"))_"|"_$S(DS="":"",1:$$DT^DTUTL(DS)_"-"_$$DT^DTUTL(DS+DC))_"|"_$$FIO^IPAC(NI)
+ S A=A_"|"_$$FN(S)_"|"_$$FN($$CSUMM^IPOLIS(NI,PLS))
+ S (PSUM,PKSUM)=0
+ K DIL
+ S A=A_"|"_$$FN($$GET^IPAC(NI,"sumlimit",DS))
+ I DS'="" S LNRUN="ASPusl^RPOLIS",UER=1 D DOSC^NPACSC(NI,DS,DS+DC)
+ S S1=PSUM-PKSUM
+ S A=A_"|"_$$FN(S1)_"|"_$$FN(S-S1)_"|"_$S(S:$$FN(100*S1/S),1:"")_"|"_$$FN(PKSUM)
+ S (R,T)="",S=0 F  S T=$O(DIL(T)) Q:T=""  I DIL(T)>S S S=DIL(T),R=T
+ D WC^RWU(CR_NI_"|"_A_"|"_$S(S:$E($$NAME^YMKB10(R),1,64)_" ("_$$FN(S)_")",1:""))
+ Q
+ASPusl 
+ S U="" F  S U=$O(UL(U)) Q:U=""  D
+ .S CNT=$G(UL(U))
+ .S CEN=$S($D(UL(U,1)):UL(U,1)/CNT,1:$$PRICEH^IPRICE(U,$G(PRC),DT)*KSKD),SUM=CNT*CEN
+ .S PSUM=PSUM+SUM
+ .S:KASS PKSUM=PKSUM+SUM
+ .I DIA'="" S DIL(DIA)=$G(DIL(DIA))+SUM
+ Q
+ASVD(DS,DE,ACT,WRK) ; Детальный анализ видов договоров
+ ; ACT - активированные
+ N NI,PLS,TP,R,A,T,DT,DC,CI,STAT,SUMM,LNRUN,UER,S,S1,WK,I
+ N WPR,WSM,WSG,WSS,WDF,WDT,WDC,WTP,SS,SS1,SS2,SS3,DCT,PSUM,KSUM,HH,PRS
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|№ И.Б.|Пациент "_$$TXTP^DTUTL(DS,DE)_"|Полис|Период с|Период по|Дней|Абонемент|Цена|Оплачено|Сумма услуг|Зачислено|Услуг по кассе")
+ S WPR=$G(^BTPL($C(9)_"t","price")) G:WPR="" ASVDe
+ S WSM=$G(^("summ")) G:WSM="" ASVDe
+ S WSS=$G(^("sum")) G:WSS="" ASVDe
+ S WDF=$G(^("df")) G:WDF="" ASVDe
+ S WTP=$G(^("tp")) G:WTP="" ASVDe
+ S WDC=$G(^("dcnt")) G:WDC="" ASVDe
+ S HH=+$H
+ 
+ S NI="" F  S NI=$O(^BTPL(NI)) Q:NI=""  D
+ .S PLS="" F  S PLS=$O(^BTPL(NI,PLS)) Q:PLS=""  D
+ ..S DT=$G(^BTPL(NI,PLS,WDF))
+ ..I DS'="",DT'="",DT<DS Q 
+ ..I DE'="",DT'="",DT>DE Q 
+ ..I $S(ACT=1:'$D(^BTPLI("a",1,NI,PLS)),ACT=2:$D(^BTPLI("a",1,NI,PLS)),1:0) Q 
+ ..D ASVprc(NI,PLS,1)
+ASVDe 
+ D C^RWU
+ Q
+ASV(DS,DE,ACT,WRK) ; Анализ видов договоров
+ ; ACT - активированные
+ N NI,PLS,TP,R,A,T,DT,DC,CI,STAT,SUMM,LNRUN,UER,S,S1,WK,I,HH
+ N WPR,WSM,WSG,WSS,WDF,WDT,WDC,WTP,SS,SS1,SS2,SS3,DCT,PSUM,KSUM
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D OWF^RWU(".txt")
+ S WPR=$G(^BTPL($C(9)_"t","price")) G:WPR="" ASVe
+ S WSM=$G(^("summ")) G:WSM="" ASVe
+ S WSS=$G(^("sum")) G:WSS="" ASVe
+ S WDF=$G(^("df")) G:WDF="" ASVe
+ S WTP=$G(^("tp")) G:WTP="" ASVe
+ S WDC=$G(^("dcnt")) G:WDC="" ASVe
+ S HH=+$H
+ S NI="" F  S NI=$O(^BTPL(NI)) Q:NI=""  D
+ .S PLS="" F  S PLS=$O(^BTPL(NI,PLS)) Q:PLS=""  D
+ ..S DT=$G(^BTPL(NI,PLS,WDF))
+ ..I DS'="",DT'="",DT<DS Q 
+ ..I DE'="",DT'="",DT>DE Q 
+ ..I $S(ACT=1:'$D(^BTPLI("a",1,NI,PLS)),ACT=2:$D(^BTPLI("a",1,NI,PLS)),1:0) Q 
+ ..D ASVprc(NI,PLS,0)
+ASVe 
+ D WC^RWU("Вид договора"_$S($L(DS)!$L(DE):" за период "_$S(DS="":"...",1:$$DT^DTUTL(DS))_"-"_$S(DE="":"...",1:$$DT^DTUTL(DE)),1:"")_"|Кол-во|Цена|Оплачено|Сумма услуг|Зачислено|Услуг по кассе")
+ 
+ S T="" F  S T=$O(STAT(T)) Q:T=""  D
+ .K SUMM
+ .S WK="" F  S WK=$O(STAT(T,WK)) Q:WK=""  S A="" F  S A=$O(STAT(T,WK,A)) Q:A=""  S SUMM(A)=$G(SUMM(A))+STAT(T,WK,A)
+ .S A=$$FN($G(SUMM(1))) F I=2:1:6 S A=A_"|"_$$FFN($G(SUMM(I)))
+ .S I=$S('$D(^BTPLS("t",T)):"Не определено",1:$G(^(T,"name")))
+ .D WC^RWU(CR_I_"|"_A)
+ .Q:'WRK 
+ .S WK="" F  S WK=$O(STAT(T,WK)) Q:WK=""  D
+ ..S A=$G(^M(5,WK))_"|"_$$FN($G(SUMM(1)))
+ ..F I=2:1:6 S A=A_"|"_$$FFN($G(SUMM(I)))
+ ..D WC^RWU(CR_A)
+ D C^RWU
+ Q
+ASVprc(NI,PLS,WW) 
+ S S=$G(^BTPL(NI,PLS,WSM)),PRS=$G(^(WPR)) I PRS="",S="" Q  
+ S DCT=+$G(^(WDC)),DF=$G(^(WDF)),T=+$G(^(WTP))
+ S WK=$S(WRK:+$$GET^IPAC(NI,"work"),1:0)
+ S STAT(T,WK,1)=$G(STAT(T,WK,1))+1
+ 
+ S:DCT=0 DCT=1 S (SS1,SS2,DT)=0
+ F  S DT=$O(^BTPL(NI,PLS,WSS,DT)) Q:DT=""!(DT>DE)  S P=$P(^(DT),"|",1) S:DT<DS SS1=SS1+P S:DT>(DS-1) SS2=SS2+P
+ S S=SS1+SS2
+ S DT=DS-DF+1,SS=0,SS3=0 S:DT>DCT DT=DCT S:DT>0 SS=SS1*DT/DCT,SS3=(SS1*(DT-1))/DCT
+ S DT=DF+DCT-1 ; до окончания но не более текущей даты
+ S DT=$S(DT>HH:HH,1:DT)-DF+1,SS2=0 S:DT>DCT DT=DCT S:DT>0 SS2=(S*DT)/DCT
+ 
+ S STAT(T,WK,2)=$G(STAT(T,WK,2))+PRS
+ S STAT(T,WK,3)=$G(STAT(T,WK,3))+S
+ S STAT(T,WK,5)=$G(STAT(T,WK,5))+SS2
+ 
+ S (PSUM,KSUM)=0
+ I DF'="" S LNRUN="ASVusl^RPOLIS",UER=1 D DOSC^NPACSC(NI,DF,DF+DCT-1)
+ S STAT(T,WK,4)=$G(STAT(T,WK,4))+PSUM
+ S STAT(T,WK,6)=$G(STAT(T,WK,6))+KSUM
+ 
+ Q:'WW  
+ D WC^RWU(CR_NI_"|"_NI_"|"_$$FIO^IPAC(NI)_"|"_PLS_"|"_$$DT^DTUTL(DF)_"|"_$$DT^DTUTL(DF+DCT-1)_"|"_DCT_"|"_$$NAME^NTPOLIS(T)_"|"_PRS_"|"_S_"|"_PSUM_"|"_SS2_"|"_KSUM)
+ Q
+ASVusl 
+ S U="" F  S U=$O(UL(U)) Q:U=""  D
+ .S CNT=$G(UL(U))
+ .S CEN=$S($D(UL(U,1)):UL(U,1)/CNT,1:$$PRICEH^IPRICE(U,$G(PRC),DT)*KSKD)
+ .S SUM=CNT*CEN
+ .I KASS S KSUM=KSUM+SUM Q 
+ .S PSUM=PSUM+SUM
+ Q
+ASVDP(DS,DE,ACT) ; TODO Договора с агентскими выплатами
+ ; DS - дата начала
+ ; DE - дата окончания действия
+ ; ACT - активированные
+ N NI,PLS,TP,R,A,T,DT,DC,CI,STAT,SUMM,LNRUN,UER,S,S1,WK,I,WRK,AG,AGS
+ N WPR,WSM,WSG,WSS,WDF,WDT,WDC,WTP,SS,SS1,SS2,SS3,DCT,PSUM,KSUM,HH,PRS
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|№ И.Б.|Пациенты "_$$TXTP^DTUTL(DS,DE)_"|Полис|Период с|Период по|Дней|Продан|Абонемент|Цена|Оплачено|Агентские|Агент")
+ S WPR=$G(^BTPL($C(9)_"t","price")) G:WPR="" ASVDe
+ S WSM=$G(^("summ")) G:WSM="" ASVDe
+ S WSS=$G(^("sum")) G:WSS="" ASVDe
+ S WDF=$G(^("df")) G:WDF="" ASVDe
+ S WTP=$G(^("tp")) G:WTP="" ASVDe
+ S WDC=$G(^("dcnt")) G:WDC="" ASVDe
+ S HH=+$H
+ 
+ S NI="" F  S NI=$O(^BTPL(NI)) Q:NI=""  D
+ .S PLS="" F  S PLS=$O(^BTPL(NI,PLS)) Q:PLS=""  D
+ ..S DT=$G(^BTPL(NI,PLS,WDF))
+ ..I DS'="",DT'="",DT<DS Q 
+ ..I DE'="",DT'="",DT>DE Q 
+ ..I $S(ACT=1:'$D(^BTPLI("a",1,NI,PLS)),ACT=2:$D(^BTPLI("a",1,NI,PLS)),1:0) Q 
+ ..D ASVprc(NI,PLS,1)
+ ..D WC^RWU(CR_NI_"|"_NI_"|"_$$FIO^IPAC(NI)_"|"_PLS_"|"_$$DT^DTUTL(DF)_"|"_$$DT^DTUTL(DF+DCT-1)_"|"_DCT_"|"_$$NAME^NTPOLIS(T)_"|"_PRS_"|"_S_"|"_PSUM_"|"_SS2_"|"_KSUM)
+ASVDPe 
+ D C^RWU
+ Q
+ 
+FFN(X) Q:'X 0 Q $TR($TR($FN(X,",",2),","," "),".",",")
+FN(X) Q:'X 0 Q $TR(+$J(X,"",2),".",",")
+REGIPROC 
+ N D,S,FR,F
+ S D="Абонементы",FR=$$FR^I()
+ S S=",t@string:1/Дате создания#2/Дате регистрации#3/Полису#0/Не сортировать,Сортировать по"
+ S F=$S(FR:",t@storage:lpu,Филиал",1:"")
+ S ^IPROC(D,"Проданные абонементы")="SALE_RPOLIS,100,4,d,Дата регистрации с,d,Дата регистрации по"_S_",t@string:0/Нет#1/Да,Вывод базовой стоимости"
+ S ^IPROC(D,"Контроль оплат абонементов")="TOPAY_RPOLIS,100,2,d,Дата контроля"_S
+ S ^IPROC(D,"Абонементы по договорам")="DSUMM_RPOLIS,1,"_$S(FR:5,1:4)_",d,Дата регистрации с,d,Дата регистрации по,t@net:NMLCR_NSPRAV(""salegrp""),Раздел,t@string:0/Нет#1/Да,Только оплаченные"_F
+ S ^IPROC(D,"Сводка по суммам абонементов")="SDSUMM_RPOLIS,1,"_$S(FR:6,1:4)_",d,Дата регистрации с,d,Дата регистрации по,t@net:NMLCR_NSPRAV(""salegrp""),Раздел,t@string:0/Нет#1/Да,Только оплаченные"_$S(FR:",t@string:0/Нет#1/Да,Детально по филиалам",1:"")_F
+ S ^IPROC(D,"Неактивированные абонементы")="NACT_RPOLIS,1,0"
+ S ^IPROC(D,"Отчет по агентам")="AGSUM_RPOLIS,1,2,d,Дата регистрации полиса с,d,Дата регистрации полиса по"
+ S ^IPROC(D,"Отчет по оплатам агентов")="AGCSUM_RPOLIS,1,2,d,Дата оплаты полиса с,d,Дата оплаты полиса по"
+ S ^IPROC(D,"Платежи за абонементы")="BILL_RPOLIS,1,2,d,Дата оплаты полиса с,d,Дата оплаты полиса по"
+ S ^IPROC(D,"Отчет агента за период")="AGCR_RPOLIS,3,3,d,Дата оплаты полиса с,d,Дата оплаты полиса по,s,Агент (ФИО или номер)"
+ S:FR ^IPROC(D,"Проданные абонементы по ЛПУ")="SALEL_RPOLIS,100,4,d,Дата регистрации с,d,Дата регистрации по"_S_",t@storage:lpu,Филиал"
+ S ^IPROC(D,"Доход за период")="PDH_RPOLIS,1,3,d,Дата начала периода,d,Дата окончания периода,t@string:0/Нет#1/Да,Выводить по местам работы"
+ S ^IPROC(D,"Финансовый отчет по абонементам")="FIN_RPOLIS,100,2,d,Дата регистрации полиса с,d,Дата регистрации полиса по"
+ S ^IPROC(D,"Список абонементов")="LST_RPOLIS,1"
+ S ^IPROC(D,"Анализ стоимости прикрепления")="ASP_RPOLIS,100,4,e@pac,Номер И.Б. пациента,s,Номер абонемента,d,Дата регистрации с,d,Дата регистрации по"
+ S ^IPROC(D,"Анализ видов договоров")="ASV_RPOLIS,1,4,d,Дата регистрации с,d,Дата регистрации по,t@string:1/Да#2/Нет#3/Все,Активированные,t@string:0/Нет#1/Да,Выводить по местам работы"
+ S ^IPROC(D,"Анализ видов договоров (подробно)")="ASVD_RPOLIS,100,4,d,Дата регистрации с,d,Дата регистрации по,t@string:1/Да#2/Нет#3/Все,Активированные,t@string:0/Нет#1/Да,Выводить по местам работы"
+ S ^IPROC(D,"Реестр абонементов")="RLST_RPOLIS,100,3,d,Дата регистрации с,d,Дата регистрации по,t@net:NMLCR_NSPRAV(""salegrp""),Раздел"
+ S ^IPROC(D,"Услуги по абонементам")="USLTG_RPOLIS,1,5,d,Дата услуг с,d,Дата услуг по,t@net:LSTLT_NTPOLIS()@1,Тип абонемента,t@net:NMLCR_NSPRAV(""salegrp""),Раздел,t@string:0/#1/Только по кассе#2/Только по договору,Вид услуг"
+ Q

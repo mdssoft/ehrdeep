@@ -1,0 +1,20 @@
+A ; ПОИСК ВРАЧЕЙ [ 03/20/2011  9:56 PM ]
+ Q
+YY(R,STR,OTX,SPX,OFX,LPUX) ; ПОИСК ВРАЧА  
+ D FND^NVFIND(STR,$G(OTX),$G(SPX),$G(OFX),$G(LPUX))
+ Q
+FLST(STR,CCR,MED,RSP,LPAll,nOWF) ; Find for lists
+ D FLST^NVFIND(STR,$G(CCR),$G(MED),$G(RSP),$G(LPAll),$G(nOWF))
+ Q
+FLSTLT(STR,MED,LPAll) ; Find lite, for lists
+ D FLSTLT^NVFIND(STR,$G(MED),$G(LPAll))
+ Q
+NVR(VR) ; ФИО врача по номеру
+ D NVR^NVFIND(VR)
+ Q
+SPECFN(SP,wID) ; Сотрудники по специальности
+ Q $$SPECFN^NVFIND($G(SP),$G(wID))
+DOLJFN(DL,wID) ; Сотрудники по должности
+ Q $$DOLJFN^NVFIND($G(DL),$G(wID))
+MYOTDFN(SP,wID) ; сотрудники по текущему отделению
+ Q $$MYOTDFN^NVFIND($G(SP),$G(wID))

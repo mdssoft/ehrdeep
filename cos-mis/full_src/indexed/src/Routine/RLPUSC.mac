@@ -1,0 +1,36 @@
+RLPUSC ; Общие отчеты по услугам ЛПУ [ 09/05/2013  0:28 AM ]
+VACC(DS,DE,xLPU) ; Число по флагу вакцинации (vcc)
+ N NI,R,OT,VR,ID,FR,U,DT,CLS,@$$NEWVAR^IUSL
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),xLPU=$G(xLPU)
+ S FR=+$$FR^I()
+ S:'FR xLPU=$$^I("ilpu")
+ K ^BUF($J)
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ..S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ...S R=$G(^(ID,"e")) Q:R=""  Q:"wd"[$P(R,"~",1) 
+ ...I $L(xLPU),xLPU'=$G(^("l")) Q 
+ ...D GETLT^IUSL(VR,DT,OT,ID)
+ ...I 'PRC S PRC=+$$GET^IINSC($$GETTZ^YIPACN(NI,$G(TZRBTN("stc")),DT),"price",DT) S:'PRC PRC=$$CORCP^IPRICET(0)
+ ...S U="" F  S U=$O(UL(U)) Q:U=""  D
+ ....S CLS=$$GET^IPRICE(U,"cls",PRC,DT) Q:CLS=""
+ ....Q:"|"_CLS_"|"'["|vcc|" 
+ ....S ^(U_"|"_PRC)=$G(^BUF($J,1,U_"|"_PRC))+UL(U)
+ ; Группировка по названию
+ S ID="" F  S ID=$O(^BUF($J,1,ID)) Q:ID=""  D
+ .S U=$P(ID,"|",1),PRC=$P(ID,"|",2),DT=^(ID)
+ .S R=$$OWF^TXTU($$NAMEH^IPRICE(U,PRC,DE),300)
+ .S ^(R)=$G(^BUF($J,2,R))+DT
+ ; Вывод
+ D OWF^RWU(".txt")
+ D WC^RWU("Наименование услуги|Кол-во")
+ S ID="" F  S ID=$O(^BUF($J,2,ID)) Q:ID=""  D
+ .S DT=^(ID)
+ .D WC^RWU(CR_ID_"|"_DT)
+ D C^RWU
+ Q
+REGIPROC ;
+ N FF
+ s FF=+$$FR^I()
+ S ^IPROC("Вакцинопрофилактика","Число вакцинаций по услугам")="VACC_RLPUSC,1,"_$S(FF:3,1:2)_",d,Период услуг с,d,Период услуг по"_$s(FF:",t@storage:lpu,Филиал",1:"")
+ Q

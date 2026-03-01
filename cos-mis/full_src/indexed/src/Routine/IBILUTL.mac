@@ -1,0 +1,247 @@
+IBILUTL ; Утилиты счетов [ 08/29/2023  4:01 PM ]
+A  
+ W !,"-= Управление наличными платежами =-",!
+ W "1. Личные счета пациентов",!
+ W "2. Кассовые операции",!
+ W "0. Выход",!
+ W ">" R CMD
+ D:CMD=2 KSOL
+ Q:CMD=0 
+ G A
+KSOL ; Список операций
+ N DT,LPU,I,LI,T,L,TP,C,CD,Y,X,R
+ W !,"Введите № филиала:" R LPU
+ W !,"Введите дату:" R DT
+ S DT=$$DIH^DTUTL(DT)
+ I '$D(^CGA(+LPU)) W !,"Неверный номер филиала !",! Q
+ W !,$$NAME^ICONTR(LPU)_" на "_$$DT^DTUTL(DT)
+KSOL1 S T="",I=1 F  S T=$O(^BILL("00",LPU,DT,T)) Q:T=""  D
+ .I $D(^(T,"ok")) D
+ ..S L=$P(^("ok"),"|",1)
+ ..S TP=$S(+$P(L,"@",3)>1:"Вн.перемещение",1:"Инкассация")
+ ..W !,I_". "_$$DTM^DTUTL(DT_","_T)_", "_$P(L,"@",2)_", "_TP_": "_$P(L,"@",4)
+ ..S LI(I)=DT_"|"_T_"|ok",I=I+1
+ .I $D(^BILL("00",LPU,DT,T,"ik")) D
+ ..S L=$P(^("ik"),"|",1)
+ ..W !,I_". "_$$DTM^DTUTL(DT_","_T)_", "_$P(L,"@",2)_", приход наличных"
+ ..S LI(I)=DT_"|"_T_"|ik",I=I+1
+ W !,"0. Назад",!,">" R C Q:C=0  G:C="" KSOL1
+KSOL2 W !,"Доступные действия:",!
+ W "1. Изменить",!,"2. Удалить",!,"0. Назад",!,">" R CD
+ G:CD=0 KSOL1
+ I CD=2 W !,"Удалить Y/N:" R Y S Y=$$LU^TXTU(Y) G:Y'="Y" KSOL2 D  G KSOL1
+ .S X=LI(C),T=$P(X,"|",2),X=$P(X,"|",3)
+ .K ^BILL("00",LPU,DT,T,X)
+ .D KGL^IEXCH("^BILL","00",LPU,DT,T,X) 
+ .W "..OK",!
+ I CD=1 D  G KSOL1
+ .S X=LI(C),T=$P(X,"|",2),X=$P(X,"|",3)
+ .S L=$P(^BILL("00",LPU,DT,T,X),"|",1)
+ .W !,"Сумма:"_$P(L,"@",2) W !,">" R R S:R'="" $P(L,"@",2)=R
+ .W !,"Примечание:"_$P(L,"@",4) W !,">" R R S:R'="" $P(L,"@",4)=R
+ .S $P(^BILL("00",LPU,DT,T,X),"|",1)=L
+ .D GL^IEXCH("^BILL","00",LPU,DT,T,X)
+ .W "..OK",!
+ G KSOL2
+ Q
+ROUND ; Round pay to 2-sign
+ N S,N,D,T,R,Q
+ S N="" F  S N=$O(^BILL(N)) Q:N=""!(N="00")  D
+ .S Q=0
+ .S D="" F  S D=$O(^BILL(N,D)) Q:D=""!(+D'=D)  D
+ ..S T="" F  S T=$O(^BILL(N,D,T)) Q:T=""  D
+ ...S R=^(T),S=$P(R,"|",2)
+ ...Q:S'["." 
+ ...Q:$L($P(S,".",2))<3  
+ ...W "."
+ ...S S=+($P(S,".",1)_"."_$E($P(S,".",2),1,2))
+ ...S $P(^(T),"|",2)=S,Q=1
+ ...D GL^IEXCH("^BILL",N,D,T)
+ .Q:'Q 
+ .D REFBAL^IBILL(N)
+ .D GLZ^IEXCH("^BILL",N)
+ Q
+UPDNET(DS,DE,LPU) ; Заново обновить по сети
+ N DT,TM,NI,R
+ S LPU=$G(LPU)
+ S DT=DS-1 F  S DT=$O(^BILLI(DT)) Q:DT=""!(DT>DE)  D
+ .S TM="" F  S TM=$O(^BILLI(DT,TM)) Q:TM=""  D
+ ..S NI="" F  S NI=$O(^BILLI(DT,TM,NI)) Q:NI=""  D
+ ...S R=^(NI)
+ ...I LPU'="",$P($P(R,"|",4),"@",2)'=LPU Q 
+ ...D UPD^IEXCH("IBILL",NI_","_DT) w "."
+ Q
+UPDNETL(DS,DE,LPU) ; Заново обновить по сети на LPU
+ N DT,TM,NI,R,LP
+ S LPU=$G(LPU),LP=$$^I("ilpu")
+ S DT=DS-1 F  S DT=$O(^BILLI(DT)) Q:DT=""!(DT>DE)  D
+ .S TM="" F  S TM=$O(^BILLI(DT,TM)) Q:TM=""  D
+ ..S NI="" F  S NI=$O(^BILLI(DT,TM,NI)) Q:NI=""  D
+ ...S R=^(NI)
+ ...D UPDA^IEXCH("IBILL",NI_","_DT,LP,LPU) w "."
+ Q
+MKCBUF ; Создать буфер для сравнения
+ N DT,TM,NI
+ K ^TMPBIL
+ S DT="" F  S DT=$O(^BILLI(DT)) Q:DT=""  D
+ .S TM="" F  S TM=$O(^BILLI(DT,TM)) Q:TM=""  D
+ ..S NI="" F  S NI=$O(^BILLI(DT,TM,NI)) Q:NI=""  D
+ ...S ^TMPBIL(NI,DT,TM)=""
+ Q
+UCBUF ; Сравнить буфер и отправить отсутствующие
+ S DT="" F  S DT=$O(^BILLI(DT)) Q:DT=""  D
+ .S TM="" F  S TM=$O(^BILLI(DT,TM)) Q:TM=""  D
+ ..S NI="" F  S NI=$O(^BILLI(DT,TM,NI)) Q:NI=""  D
+ ...Q:$D(^TMPBIL(NI,DT,TM)) 
+ ...D UPD^IEXCH("IBILL",NI_","_DT)
+ ...S ^TMPBIL(NI,DT,TM)=1
+ 
+ S L=$$^I("ilpu")
+ S NI="" F  S NI=$O(^TMPBIL(NI)) Q:NI=""  D
+ .S DT="" F  S DT=$O(^TMPBIL(NI,DT)) Q:DT=""  D
+ ..S TM="" F  S TM=$O(^TMPBIL(NI,DT,TM)) Q:TM=""  D
+ ...Q:$D(^BILL(NI,DT,TM)) 
+ ...Q:$D(^TMPBIL1(NI,DT,TM))
+ ...S ^TMPBIL1(NI,DT,TM,L)=1
+ ...D GL^IEXCH("^TMPBIL1",NI,DT,TM,L)
+ Q
+MOVUSL(U1,U2) ; Заменить код услуги U1 на U2
+ N N,D,T,R
+ S N="" F  S N=$O(^BILL(N)) Q:N=""!(N="00")  D
+ .S D="" F  S D=$O(^BILL(N,D)) Q:D=""!(+D'=D)  D
+ ..S T="" F  S T=$O(^BILL(N,D,T)) Q:T=""  D
+ ...S R=^(T) Q:R'["ZNF"  Q:R'[U1  ; simple filter
+ ...D SETZNFU^IBILL(N,D,T,U1,U2)
+ ...; TODO - update
+ Q
+COPY(FNI,TNI) ; Копия платежей на другого пациента
+ M ^BILL(TNI)=^BILL(FNI)
+ ; TODO - if exists older
+ D REFBALI^IBILL(TNI,0)
+ Q
+ZBK(NI,VER) ; Резервная копия платежей в ^ZNFBK
+ N DT,TM
+ S VER=+$G(VER)
+ K ^ZNFBK(NI,VER,"B"),^ZNFBK(NI,VER,"BI")
+ S DT="" F  S DT=$O(^BILL(NI,DT)) Q:DT=""  D
+ .S TM="" F  S TM=$O(^BILL(NI,DT,TM)) Q:TM=""  D
+ ..M ^ZNFBK(NI,VER,"B",DT,TM)=^BILL(NI,DT,TM)
+ ..M ^ZNFBK(NI,VER,"BI",DT,TM)=^BILLI(DT,TM)
+ Q
+CPSPACE(NI,DS,DE,FROM,UPD) ; Копия из другой области в текущую
+ N TM,DT
+ S DT=DS-1 F  S DT=$O(^|FROM|BILL(NI,DT)) Q:DT=""!(+DT'=DT)!(DT>DE)  D
+ .S TM="" F  S TM=$O(^|FROM|BILL(NI,DT,TM)) Q:TM=""  D
+ ..K ^BILL(NI,DT,TM)
+ ..M ^BILL(NI,DT,TM)=^|FROM|BILL(NI,DT,TM)
+ ..K ^BILLI(DT,TM,NI)
+ ..M ^BILLI(DT,TM,NI)=^|FROM|BILLI(DT,TM,NI)
+ ..D:UPD REGL^IEXCH("^BILL",NI,DT,TM),REGL^IEXCH("^BILLI",DT,TM,NI)
+ D REFBALI^IBILL(NI,0)
+ D:UPD GLZ^IEXCH("^BILL",NI)
+ Q
+MOVPAC(FNIB,TNIB) ; Переместить платежи пациента с на
+ N X,Y,Z
+ Q:'$D(^BILL(TNIB))  
+ D CLRBILLI(FNIB)
+ S BILL=$G(^BILL(TNIB))+$G(^BILL(FNIB)),^BILL(TNIB)=BILL
+ M ^BILL(TNIB,"D")=^BILL(FNIB,"D") K ^BILL(FNIB,"D")
+ M ^BILL(TNIB,"R")=^BILL(FNIB,"R") K ^BILL(FNIB,"R")
+ S X="" F  S X=$O(^BILL(FNIB,X)) Q:X=""  S Y="" F  S Y=$O(^BILL(FNIB,X,Y)) Q:Y=""  D
+ .D KD^ISSG("^BILL("_FNIB_","""_X_""","_Y_")")
+ .S Z=Y F  Q:'$D(^BILL(TNIB,X,Z))  S Z=Z+1
+ .M ^BILL(TNIB,X,Z)=^BILL(FNIB,X,Y) S L(TNIB_","_X)=""
+ .K ^BILL(FNIB,X,Y) D KGL^IEXCH("^BILL",FNIB,X,Y)
+ I $D(^BILL(FNIB))=1 K ^BILL(FNIB) D KGL^IEXCH("^BILL",FNIB) ; if no subnodes
+ D MKBLI(TNIB)
+ S X="" F  S X=$O(L(X)) Q:X=""  D UPD^IEXCH("IBILL",X)
+ D UPD^IEXCH("IBILL",FNIB) ; проверка/чистка
+ Q
+CLRBILLI(NIB) ; Очистить индексы
+ N DT,TM S DT=""
+ F  S DT=$O(^BILL(NIB,DT)) Q:DT=""  S TM="" F  S TM=$O(^BILL(NIB,DT,TM)) Q:TM=""  D
+ .Q:'$D(^BILLI(DT,TM,NIB))
+ .K ^(NIB)
+ .D KGL^IEXCH("^BILLI",DT,TM,NIB)
+ Q
+MKBLI(NI) 
+ N DT,TM,SM,R,S,K
+ S SM=0,DT=""
+ F  S DT=$O(^BILL(NI,DT)) Q:DT=""!(+DT'=DT)  S TM="" F  S TM=$O(^BILL(NI,DT,TM)) Q:TM=""  D
+ .S R=$G(^(TM)),K=$P(R,"|",1) I $L(K),K'="+",K'="-" Q 
+ .S S=+$P(R,"|",2),SM=SM+S,K=$S(K="":"S",K="-":"M",1:"A")
+ .S R=SM_"|"_S_"|"_K_"|"_$P(R,"|",5)
+ .Q:$G(^BILLI(DT,TM,NI))=R  ; not changed
+ .S ^(NI)=R
+ .D GL^IEXCH("^BILLI",DT,TM,NI)
+ Q
+REFI ; Refresh ^BILLI
+ N NI
+ S NI="" F  S NI=$O(^BILL(NI)) Q:NI=""!(NI="00")  D REFBALI^IBILL(NI,0)
+ S NI="J" F  S NI=$O(^BILL(NI)) Q:NI=""  D REFBALI^IBILL(NI,0)
+ Q
+REKKM(DS,DE,USR,KKM) ; Изменить KKM ID для оператора
+ N NI,DT,TM,R
+ S NI="" F  S NI=$O(^BILL(NI)) Q:NI=""  D
+ .S DT=DS-1 F  S DT=$O(^BILL(NI,DT)) Q:DT=""!(+DT'=DT)!(DT>DE)  D
+ ..S TM="" F  S TM=$O(^BILL(NI,DT,TM)) Q:TM=""  D
+ ...S R=^(TM) 
+ ...Q:$P(R,"|",4)=KKM   Q:$P($P(R,"|",5),"@",1)'=USR  
+ ...S $P(^(TM),"|",4)=KKM
+ ...D GL^IEXCH("^BILL",NI,DT,TM)
+ Q
+CNGKKM(DS,DE,FKKM,TKKM) ; Изменить KKM ID с одного на другой
+ N NI,DT,TM,R
+ S NI="" F  S NI=$O(^BILL(NI)) Q:NI=""  D
+ .S DT=DS-1 F  S DT=$O(^BILL(NI,DT)) Q:DT=""!(+DT'=DT)!(DT>DE)  D
+ ..S TM="" F  S TM=$O(^BILL(NI,DT,TM)) Q:TM=""  D
+ ...S R=^(TM) 
+ ...Q:$P(R,"|",4)'=FKKM     
+ ...S $P(^(TM),"|",4)=TKKM
+ ...D GL^IEXCH("^BILL",NI,DT,TM)
+ Q
+CNGLPU(DS,DE,LPU,USR,TLPU) ; Изменить филиал на платежах по пользователю
+ N DT,TM,NI,R
+ S LPU=$G(LPU)
+ S DT=DS-1 F  S DT=$O(^BILLI(DT)) Q:DT=""!(DT>DE)  D
+ .S TM="" F  S TM=$O(^BILLI(DT,TM)) Q:TM=""  D
+ ..S NI="" F  S NI=$O(^BILLI(DT,TM,NI)) Q:NI=""  D
+ ...S R=^(NI)
+ ...I LPU'="",$P($P(R,"|",4),"@",2)'=LPU Q 
+ ...I USR'="",$P($P(R,"|",4),"@",1)'=USR Q 
+ ...D SETLPU^IBILL(NI,DT_","_TM,TLPU) w "."
+ Q
+UPDSCT ; Пересчитать типы счетов
+ N NI,R,OT,SC,OSC
+ S NI="" F  S NI=$O(^BILL(NI)) Q:NI=""!(NI="00")  D usct(NI)
+ Q
+usct(NI) 
+ S OSC=""
+ S DT="" F  S DT=$O(^BILL(NI,DT)) Q:DT=""!(+DT'=DT)  D
+ .S TM="" F  S TM=$O(^BILL(NI,DT,TM)) Q:TM=""  D
+ ..S R=^(TM),SC=$P(R,"|",12),X=SC,T=$P(R,"|",1)
+ ..I T'="",T'="-",T'="+" Q 
+ ..I SC="" S OT=$$znfotd(R) S:OT'="" SC=$$GETSC^IBILL(OT,"") S:SC'="" $P(^BILL(NI,DT,TM),"|",12)=SC
+ ..S:SC'="" OSC=SC
+ ..I X="",OSC'="" S $P(^BILL(NI,DT,TM),"|",12)=OSC
+ d REFBAL^IBILL(NI)
+ Q
+FIX(DT,MODE,ENIB,TP) ; Коррекция счетов пациентов
+ ; DT - дата
+ ; MODE - 0-все в 0, 1 - только долг, 2 - только аванс
+ ; ENIB - исключенные номера историй через |
+ ; TP - тип платежа для коррекции
+ N NI,X,EF,H
+ S EF=$L(ENIB),ENIB="|"_ENIB_"|",H=DT_",86399"
+ S:'$G(TP) TP=7
+ S NI="" F  S NI=$O(^BILL(NI)) Q:NI=""!(NI="00")  D
+ .S X=$$NOW^IBILL(NI,DT) Q:'X 
+ .I MODE=1,X>0 Q 
+ .I MODE=2,X<0 Q 
+ .I EF,ENIB[("|"_NI_"|") Q 
+ .D ADD^IBILL(NI,H,-X,TP,1,"","Коррекция")
+ Q
+znfotd(R) 
+ S R=$P(R,"|",6)
+ Q:$P(R,":",1)'="ZNF" ""
+ Q $P(R,":",3)

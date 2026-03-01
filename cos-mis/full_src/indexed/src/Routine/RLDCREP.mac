@@ -1,0 +1,106 @@
+RLDCREP ; Отчеты для П-ки Минэкономразвития [ 12/16/2011  7:13 PM ]
+STP2N(NAZ) ; Приложение 2 только из назначений
+ N NIB
+ S NIB=$$NIB^INAZN(NAZ)
+ G STP2+1
+STP2(NIB,NAZ) ; Приложение 2
+ N I,W,OTD,VR,KX,DT,SUS,SUi,UX,R,F,CEN,CNT,SUM,DS,DE,DV,VRS
+ N @$$NEWVAR^IUSL
+ S NAZ=$G(NAZ)
+ D OWF^RWU(".xml")
+ F I=1:1:10 D WC^RWU(CR_$E($T(STP2R1+I),3,999))
+ D WTAGC^RWU("nib",NIB)
+ D WTAGC^RWU("fiof",$$GET^IPAC(NIB,"fiof"))
+ D WTAGC^RWU("fioi",$$GET^IPAC(NIB,"fioi"))
+ D WTAGC^RWU("fioo",$$GET^IPAC(NIB,"fioo"))
+ F I=1:1:20 D WC^RWU(CR_$E($T(STP2R2+I),3,999))
+ S DS=+$H-3
+ I $G(NAZ)'="" S DS=$$fromDT^INAZN(NAZ) S:DS="" DS=+$H-3
+ S DE=DS+3
+ S VR=$$KDR^IUSER(),OTD=$$OTD^IKADRY(VR)
+ S DV=$$GET^YNDOG($$GET^IPAC(NIB,"stc",DE),"dvid")
+ S W="134|20|40",F="|c|",SUM=0
+ D TAB^ISTREP("Наименование услуги|Стоимость|Исполнитель",W,"f")
+ F DT=DS-1:1:DE S KX="" F  S KX=$O(^PNF(NIB,DT,KX)) Q:KX=""  D
+ .S OT=$P(KX,"|",2)
+ .I OT'=OTD,'$$IsOTD^IKADRY($P(^(KX),"|",6),OTD,DE) q  ; кто ввел из OTD
+ .S VR=$P(KX,"|",1),ID=$P(KX,"|",3)
+ .D GET^IUSL(VR,DT,OT,ID)
+ .Q:STAT="d"!(STAT="w")!(STAT="")!(STAT>3)
+ .S FLG="|"_$G(FLG)_"|"
+ .I DV'=3,'(STAT=2!(FLG["|kss|")!(FLG["|nop|")) Q  ; для страх. только касса
+ .S SUS=$$GETPL^IUSL(VR,DT,OT,ID,"s"),SUi=2
+ .S UX="" F  S UX=$O(UL(UX)) Q:UX=""  D
+ ..S CNT=$S(UX="":"",1:UL(UX))
+ ..S CEN=$S(SUS'=""&(SUS'["|"):SUS,SUS'="":$P(SUS,"|",SUi),1:$$USUM^IUSL(DT,UX,CNT))
+ ..S SUi=SUi+1,SUM=SUM+CEN
+ ..S R=$$NAMEH^IPRICE(UX,PRC,DT)_"|"_CEN_"|"_$$FIOSH^IKADRY(VR)
+ ..D TLN^ISTREP(R,W,"","","tlrb",F)
+ F I=1:1:2 D WC^RWU(CR_$E($T(STP2R3+I),3,999))
+ D WC^RWU(CR_"<f>$moneytowords:"_SUM_":руб.:коп.</f></p>")
+ F I=1:1:7 D WC^RWU(CR_$E($T(STP2R4+I),3,999))
+ D C^RWU
+ Q
+STP2R1 ; 28
+ ;<?xml version="1.0" encoding="Windows-1251"?>
+ ; <streport nm="Приложение к договору на стационарную помощь №2">
+ ;<fields>
+ ;	<field tp="n" nm="lpu" src="storage:orgname"/>
+ ;	<field tp="n" nm="nib"/>
+ ;	<field tp="n" nm="fiof"/> <field tp="n" nm="fioi"/> <field tp="n" nm="fioo"/>
+ ;	
+ ;	<field tp="n" nm="summ" src="control:unprice.summ.data"/>
+ ;</fields>
+ ;<data>
+STP2R2 
+ ;</data>
+ ;<print>
+ ;<fonts>
+ ;	<font id="1" name="Times New Roman" size="11"/>
+ ;	<font id="2" name="Times New Roman" size="11" style="b"/>
+ ;	<font id="3" name="Times New Roman" size="6"/>
+ ;	<font id="4" name="Times New Roman" size="10"/>
+ ;</fonts>
+ ;<content orn="p" brt="10" brl="10" brr="10" brb="10">
+ ;<l a="c" f="2"><d>Приложение №2</d></l>
+ ;	<l a="c" f="2"><d>К Договору № _________ от .___. _________ 200__г.</d></l>
+ ;	<l h="2"/>
+ ;	<l><d w="92">г. Москва</d><f w="92" a="r">$textdate</f></l>
+ ;	<l h="2"/>
+ ;	<p><f>$tab</f><f>lpu</f><d>, именуемое в дальнейшем .Исполнитель., в лице главного врача Алдушиной О.Н., действующей на основании Устава, с одной стороны, и </d>
+ ;	<f>$fio:fiof:fioi:fioo</f>
+ ;	<d> с другой стороны, именуемый в дальнейшем "Пациент", а совместно именуемые "Стороны", заключили настоящее Приложение №2 о следующем:</d></p>
+ ;	<l h="2"/>
+ ;<p><d>1.</d><f>$tab</f><d>Фактический объем оказанных платных медицинских услуг Исполнителем Пациенту составил:</d></p>
+ ;	<l h="2"/>
+STP2R3 ; 2
+ ;<l h="2"/>
+ ;	<p><d>Фактическая стоимость оказанных медицинских услуг: </d>
+ ;	<f>$moneytowords:число:руб.:коп.</f></p>
+STP2R4 ; 7
+ ;	<l h="5"/>
+ ;	<l><d>Лечащий врач _________________________________________</d></l>
+ ;	<l h="5"/>
+ ;	<l><d>Заведующий отделением _______________________________</d></l>
+ ;</content>
+ ;</print>
+ ;</streport>	
+STP1N(ID) ; Приложение 1 (печать из назначений)
+ N A,P,U,X,NIB,LST,S,SS,DT
+ S DT=$$fromDT^INAZN(ID)
+ D NLSTsum^NNAZU(ID)
+ D OWF^RWU(".xml")
+ D W^RWU(^PP(0,1))
+ D WC^RWU("<streport nm=""Приложение №1 к договору стационара""><data>")
+ D WTAG^RWU("num",ID)
+ D WTAG^RWU("nib",NIB)
+ D WTAGC^RWU("fio",$$FIO^IPAC(NIB))
+ D WTAGC^RWU("comm",$G(^NAZ(ID,"c")))
+ S SS=0,(A,X)="" F  S X=$O(LST(X)) Q:X=""  D
+ .S U=$P(X,"|",1),P=$P(X,"|",2),S=LST(X,1),SS=SS+S
+ .S A=$S(A="":"",1:A_CR)_$$NAMEH^IPRICE(U,P,DT)_"|"_S
+ D WTAGC^RWU("tab",A)
+ D WTAGC^RWU("summ",SS)
+ D W^RWU("</data></streport>")
+ D C^RWU
+ Q

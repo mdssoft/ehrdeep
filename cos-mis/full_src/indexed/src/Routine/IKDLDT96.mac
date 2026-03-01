@@ -1,0 +1,66 @@
+IKDLDT96 ; Работа с ДТ-96 [ 09/28/2012  2:57 AM ]
+DO(DEV,CMD) ; Обработчик драйвера
+ ; CMD = I/E/C - Import/Export/Clear
+ N DIR,FN,R
+ S R=^LABT("DEV",DEV,"i"),CMD=$G(CMD)
+ Q:$P(R,"|",3)'="IPDIR" 
+ I CMD="I" D inNET(DEV) Q  ; пришли данные
+ ; экспорт раб. списка
+ I CMD="E"!(CMD="") D outNET(DEV,1) Q
+ I CMD="C"  Q 
+ Q
+outNET(DEV,CLR) ; Create network output file
+ Q:DEV=""
+ Q:'$P($G(^MLABW(DEV,0)),"|",3)
+ Q:$O(^MLABW(DEV,0,""))=""
+ N IO,LN,I,X,Y,ID,P,IP,R
+ S IO=$$PREPOST^IKDLOUT(DEV,"worklist.xml",CLR)
+ Q:IO=""
+ Q:$G(^MLABWE(DEV,0,"tp"))'=9 
+ S LN=$G(^MLABWE(DEV,0,"ln")) Q:LN="" 
+ S IP=$$GET^IINKR("kdl-dt96")
+ D OWF^RWU(".txt")
+ D W^RWU("<?xml version=""1.0"" encoding=""windows-1251""?>")
+ D W^RWU("<package><create_plate plate="""_IP_""" size_x=""12"" size_y=""8"">")
+ F I=1:1:96 S R=$P(LN,"|",I) Q:R=""  D
+ .S X=$P(R,":",1),Y=$P(R,":",2),ID=$P(R,":",3),P=$P(R,":",4)
+ .S P=$G(^LABT("T",P,"dev",DEV)) Q:P="" 
+ .D WC^RWU("<cell x="""_(X+1)_""" y="""_(Y+1)_""" name="""_ID_"""><test id="""_P_""" n=""1""/></cell>")
+ D W^RWU("</create_plate></package>")
+ D C^RWU
+ S $P(^MLABW(DEV,0),"|",3)=""
+ D ENDPOST^IKDLOUT(DEV,IO,"worklist.xml")
+ Q
+inNET(DEV) 
+ N J,R,ID,IT,P,TG,FNX,X,Y,A,IJ
+ S FNX=$G(^LABT("DEV",DEV,"fn"))
+ D ORH^RWU
+ D OEV^XMLR("inTGS^IKDLDT96","","")
+ S ID=""
+ F J=1:1 S A=$$R^RWU Q:%IFN["Z"  D:A'="" REV^XMLR(A)
+ D CR^RWU
+ Q
+inTGS 
+ S TG=%XM(2) 
+ I TG="cell" S ID=$S($G(%XM(2,"p","state"))="complete":$G(%XM(2,"p","name")),1:"") Q  ; только готовые
+ I TG="test" D:ID'=""  
+ .S IT=$G(%XM(2,"p","id")),R=$G(%XM(2,"p","value"))
+ .Q:IT=""  Q:R=""  Q:R="нд" 
+ .Q:ID="" 
+ .Q:'$D(^MLABI("c",ID)) 
+ .;U 0 w !,"ID="_ID_", PRM="_IT_", R="_R
+ .S P=$G(^LABT("DEV",DEV,"t",IT)) Q:P="" 
+ .I FNX'="" X "S R="_FNX
+ .Q:ID=""  Q:'$D(^MLABI("c",ID)) 
+ .D SET^IMLAB(ID,P,R,DEV)
+ .S IJ="" F  S IJ=$O(^MLABWE(DEV,0,"i",ID,IJ)) Q:IJ=""  K ^MLABW(DEV,0,IJ,P) ; TODO - WL
+ Q
+TEST 
+ S %JOB=777
+ S IO=$$OR^FIL("c:\lab\123-full.xml") Q:IO=""
+ D OWF^RWU("hpar")
+ U IO F  R R Q:$$ST^FIL()=0  D:R'="" W^RWU(R)
+ C IO
+ D C^RWU
+ d inNET("DT96")
+ Q

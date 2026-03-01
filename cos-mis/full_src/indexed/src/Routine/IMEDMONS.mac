@@ -1,0 +1,69 @@
+IMEDMONS ; Служебные процедуры мед. мониторинга [ 05/25/2013  11:38 PM ]
+MKMSG(NI,ID,DT,TM) ; Отсылка сообщений
+ N TP,UID,R,I,X,VR,PH,ML,PML,FIO,K,MSG,UIDS
+ S UID=$$UID^IMHS(NI,ID),TP=$G(^EPR(NI,ID,"t"))
+ Q:$P(UID,"/",1)'="med_mon" 
+ S UIDS=$P(UID,"/",2)
+ S VR=$$GET^IPAC(NI,"ush") Q:VR=""
+ S VR=$$GET^ISPRAV("uchastok",VR)
+ S PH=$$GET^IKADRY(VR,"mphone")
+ S ML=$$GET^IKADRY(VR,"email")
+ S PML=$$GET^IPAC(NI,"email")
+ I ML'=""!(PH'=""),$$IsMSGFIL^IMEDMON(NI,ID,DT,TM) D:ML'="" SENDFIL(NI,ID,ML) S:PH'="" X=$$ADDSEND^IMSGHUB("sms","medmon","",PH,"Получена ЭКГ: "_$$FIOSH^IPAC(NI),"") Q 
+ S MSG=$$MSGTEXT(NI,ID,DT,TM)
+ Q:MSG="" 
+ S:PH'="" X=$$ADDSEND^IMSGHUB("sms","medmon","",PH,MSG,"")
+ S MSG=MSG_CR_"Дата, время события: "_$$DT^DTUTL(DT)_", "_$$TM^DTUTL(TM)
+ S:ML'="" X=$$ADDSEND^IMSGHUB("mail","medmon","",ML,MSG,"Данные телемониторинга")
+ I ML'="",$G(^MHMON(NI,"f","set","medarhiv")) D
+ .N DB
+ .S DB=$S(UIDS="cardio":ID,UIDS="oxi":ID,UIDS="diary":ID,1:$$GETDBID^IMEDMON(NI,UID,DT_",1"))
+ .S DB=NI_"|"_DB_"|"_DT_","_TM
+ .S X=$$ADDSEND^IMSGHUB("medarhiv","","mHealth",ML,"","",DB)
+ Q
+MSGTEXT(NI,ID,DT,TM) ; Формирование тектового сообщения
+ N TP,UID,R,I,X,FIO,K,MSG
+ S UID=$$UID^IMHS(NI,ID),TP=$G(^EPR(NI,ID,"t"))
+ Q:$P(UID,"/",1)'="med_mon" 
+ S FIO=$$FIO^IPAC(NI),MSG=""
+ S X=$G(^EPRD(NI,ID,DT,TM))
+ F I=1:1:$L(X,"|") S R=$P(X,"|",I) D:R'=""
+ .S K=$$PRM^IMEDARH(TP,I) Q:$P(K,"|",1)="" 
+ .I UID="med_mon/weight" S R=R/10
+ .S MSG=$S(MSG="":"",1:MSG_CR)_$P(K,"|",1)_": "_R_" "_$P(K,"|",2)
+ S:MSG'="" MSG=FIO_CR_MSG
+ Q MSG
+SENDFIL(NI,ID,MAIL) 
+ N IO,X,TM,P
+ S X=$G(^EPRD(NI,ID)) Q:X=""
+ S X=$P(X,".",1,$L(X,".")-1)_".pdf"
+ S X=$$TDIR^FIL()_"/"_X
+ S TM=$P($G(^EPR(NI,ID,"dt")),"|",1)
+ S P="$$FILPDF^IMEDMONS("""_NI_""","_ID_","""_X_""")"
+ S X=$$ADDSEND^IMSGHUB("mail","medmon","",MAIL,"Файл от "_$$DTM^DTUTL(TM)_" приложен.","Данные телемониторинга (ЭКГ)",X,P)
+ Q
+MKPDF(NI,ID,TXT) ; Создать PDF на устройстве
+ ; IO - external VAR (device)
+ ; TXT - additional texts
+ N F,DTM
+ S F="/DBDIR/"_^EPRD(NI,ID)
+ S F=$$SENDECG^INETECG(F) Q:F=""
+ S DTM=$$DTM^DTUTL($P(^EPR(NI,ID,"dt"),"|",1))
+ S DTM=$$GET^IPAC(NI,"email")_$S(DTM="":"",1:", "_DTM)
+ D PDFW^INETECG(F,IO,$$GET^IPAC(NI,"email"))
+ Q
+FILPDF(NI,ID,FN) ; Создать PDF файл (для вызова из IMSGHUB)
+ N F,DTM
+ S F="/DBDIR/"_^EPRD(NI,ID)
+ Q:'$$LEN^NFILES(F) 0
+ N IO,X,TM
+ Q:$G(^EPRD(NI,ID))="" 0
+ S X=FN
+ S TM=$P($G(^EPR(NI,ID,"dt")),"|",1)
+ S IO=$$OW^FIL(X) Q:IO="" 0
+ S F=$$SENDECG^INETECG(F) Q:F="" 0
+ S DTM=$$DTM^DTUTL($P(^EPR(NI,ID,"dt"),"|",1))
+ S DTM=$$GET^IPAC(NI,"email")_$S(DTM="":"",1:", "_DTM)
+ D PDFW^INETECG(F,IO,DTM)
+ C IO
+ Q 1

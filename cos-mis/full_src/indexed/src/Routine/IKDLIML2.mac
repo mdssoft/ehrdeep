@@ -1,0 +1,70 @@
+IKDLIML2 ; Immulite 2000 driver [ 09/17/2012  12:51 PM ]
+UNI(DEV,TXT) ; Unidirectional
+ N RR,R,I,M,LN,SSN,PWD,PID,LPID,P,ID,P1,PP,VAL,X,DTM,NL,NH,LDEV
+ ; PID - patient ID, LPID - lab patient ID
+ ; ID - заявка, P - тест(код)
+ ; NL - норма низкая, NH - норма высокая
+ S RR=""
+ ;F  U DEV R R#1 Q:R=""  D
+ N J
+ F J=1:1:$L(TXT) S R=$E(TXT,J) D
+ .;I $A(R)=5 H 2 W $C(6) Q  ; ENQ -> ACK
+ .S RR=RR_R Q:RR'[$C(10)
+ .; W $C(6) ; ACK
+ .S RR=$TR(RR,$C(2,3,10),"") ; STX,ETX,LF
+ .S LN=$P(RR,$C(13),1),X=$P(RR,$C(13),2) ; TODO check X-checksumm
+ .S I=$E(LN,1),M=$E(LN,2),RR="" ; I=0..7
+ .I M="H" S SSN=$P(LN,"|",5),PWD=$P(LN,"|",4),LDEV=$$DFUID^IMLABS(SSN) Q
+ .I M="P" S PID=$P(LN,"|",5),LPID=$P(LN,"|",4) Q
+ .I M="O" S ID=$P(LN,"|",3),P=$P($P(LN,"|",5),"^",4) Q
+ .I M="R" D 
+ ..S P1=$P($P(LN,"|",3),"^",4),VAL=$P(LN,"|",4)
+ ..S X=$P(LN,"|",6)
+ ..S NL=$P($P(X,"^",1),"\",1),NH=$P($P(X,"^",2),"\",1)
+ ..S DTM=$$redt($P(LN,"|",13))
+ ..Q:$P(LN,"|",9)'="F"  ; not final
+ ..;U 0 W !,"PID="_PID_" , ID="_ID
+ ..;W !,P1_"="_VAL_" ("_NL_" - "_NH_"), at "_$$DTM^DTUTL(DTM)
+ ..Q:LDEV=""  q 
+ ..Q:ID="" 
+ ..Q:'$D(^MLABI("c",$E(ID,1,128))) 
+ ..S PP=$G(^LABT("DEV",LDEV,"t",P1)) Q:PP=""
+ ..D SET^IMLAB(ID,PP,VAL,LDEV)
+ ..D OKPRM^IMLABW(LDEV,ID,PP)
+ Q
+BI(DEV) ; Bidirectional
+ N RR,R
+ S RR=""
+ F  U DEV R R#1 Q:R=""  D
+ .I $A(R)=5 H 2 W $C(6) Q  ; ENQ -> ACK
+ .S RR=RR_R Q:RR'[$C(10)
+ .W $C(6) ; ACK
+ .S RR=$TR(RR,$C(2,3,10),"") ; STX,ETX,LF
+ .S LN=$P(RR,$C(13),1),X=$P(RR,$C(13),2) ; TODO check X-checksumm
+ .S I=$E(LN,1),M=$E(LN,2),RR="" ; I=0..7
+ 
+ Q
+send(LN) 
+ W LN
+ Q
+redt(X) ; Преобразование ASTM даты
+ S X=$$DI^DTUTL($E(X,7,8)_"."_$E(X,5,6)_"."_$E(X,1,4))_","_$$TI^DTUTL($E(X,9,10)_":"_$E(X,11,12)_":"_$E(X,13,14))
+ Q:X'="," X
+ Q ""
+tUNI ; Test unidirect.
+ S DEV=$$OR^FIL("c:\fil\comlog.log")
+ ;S DEV=11 O DEV ; COM1
+ U DEV R TXT 
+ D UNI(DEV,TXT)
+ C DEV 
+ Q
+NET 
+ N J,R,A
+ D ORH^RWU
+ ;O 2:($J) U 2
+ S A="" F J=1:1 S R=$$R^RWU Q:%IFN["Z"  S A=A_R ; W R
+ ;C 2 U 0
+ S ^ASTM=A ; DEBUG
+ D CR^RWU
+ D UNI(2,A)
+ Q

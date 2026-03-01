@@ -1,0 +1,244 @@
+RSCPRP ; Предоплатные договора [ 04/08/2016  0:23 AM ]
+PDH(DS,DE)      ; Зачисленный доход абонементов
+ N SUMM,DG,N
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S N=$$DT2^DTUTL(DE)
+ D OPSUM(DS,DE)
+ D OWF^RWU(".txt")
+ D WC^RWU("Зачисленный доход за период "_$$DT^DTUTL(DS)_"-"_$$DT^DTUTL(DE)_";")
+ D WC^RWU(CR_"Договор|Лиц|Итого за период|Остаток на "_N)
+ S DG="" F  S DG=$O(SUMM(DG)) Q:DG=""  S N=$$NAMEH^YNDOG(DG,DE) D WC^RWU(CR_$S(N="":"Не указан",1:N)_"|"_(+$G(SUMM(DG)))_"|"_$$FFN($G(SUMM(DG,1)))_"|"_$$FFN($G(SUMM(DG,2))-$G(SUMM(DG,1))))
+ D C^RWU
+ Q
+OPSUM(DS,DE)    ; Оприходованная сумма -> SUMM(DGN) , (,1)=всего на конец
+ N DGN,X,PX,NIB,DF,DT,K,K0,KA,D,S,STC,M,SS,DDS,DDE,DFT,MM,MD,MS,PIDX,LEAP
+ S DGN="",DD=DE-DS+1
+ S LEAP=$$YLEAP^DTUTL($$YEAR^DTUTL(DS))!$$YLEAP^DTUTL($$YEAR^DTUTL(DE))
+ F  S DGN=$O(^DGN(DGN)) Q:DGN=""  D:$$GET^IINSC(DGN,"dvid",DE)=1
+ .S SS=$$GET^IINSC(DGN,"psumm",DE),SUMM(DGN)=0
+ .S NIB="" F  S NIB=$O(^BTI(" s",DGN,NIB)) Q:NIB=""  D
+ ..K MM,MD,MS
+ ..D cstc("") S PIDX=""
+ ..I '$D(MM) D cstc(1) S PIDX=1
+ ..I '$D(MM) D cstc(2) S PIDX=2
+ ..Q:'$D(MM)
+ ..S SUMM(DGN)=SUMM(DGN)+1
+ ..Q:'$$cligen("",DS,DE)
+ ..S SUMM(DGN,1)=$G(SUMM(DGN,1))+KA
+ ..; S:(DDS-DDE)>0 SUMM(DGN,2)=K*(DT-DDE)/DD+$G(SUMM(DGN,2)) ; TODO
+ Q
+CLILST(DGN,DS,DE,PRGX,WRK,DET,SCDGN,SCPRG) ; Список лиц, действующих в период по договору
+ N DG,X,PX,NIB,DF,DT,K,KA,D,S,STC,M,MM,MD,MS,SS,DDS,DDE,DDC,DFT,DTXT,K0,PIDX,plSd,plSp,proc,DXS,DXE,LEAP
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),SCPRG=$G(SCPRG),SCDGN=$G(SCDGN)
+ S:PRGX'="" PRGX="|"_PRGX_"|"
+ S SCPRG=$$UL^TXTU(SCPRG),SCDGN=$$UL^TXTU(SCDGN)
+ S plSd=$$PLIDX^IPAC("stcdog"),plSp=$$PLIDX^IPAC("stcprg")
+ S DG="",DD=DE-DS+1
+ S LEAP=$$YLEAP^DTUTL($$YEAR^DTUTL(DS))!$$YLEAP^DTUTL($$YEAR^DTUTL(DE))
+ S SS=$$GET^IINSC(DGN,"psumm",DE)
+ S proc=$S(+DET:"cliww",1:"")
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|№ И.Б.|Ф.И.О. за период "_$$DT2^DTUTL(DS)_"-"_$$DT2^DTUTL(DE)_"|Срок с|Срок по|Дней|Сумма|Стоимость полиса|Полис|Зарегистрирован")
+ S NIB="" F  S NIB=$O(^BTI(" s",DGN,NIB)) Q:NIB=""  D
+ .I WRK'="",'$$ANYDTV^IPAC(NIB,"work",WRK,DS,DE) Q 
+ .K MM,MD,MS
+ .D cstc("") S PIDX=""
+ .I '$D(MM) D cstc(1) S PIDX=1
+ .I '$D(MM) D cstc(2) S PIDX=2
+ .Q:'$D(MM)
+ .S DXS=DS,DXE=DE
+ .I PRGX'="" S X=$$DTBTWF^IPAC(NIB,"prog"_PIDX,DS,DE,PRGX) Q:X=""  S DXS=$P(X,"|",1),DXE=$P(X,"|",2)
+ .I SCPRG'="",$$UL^TXTU($$GETTZ^IPAC(NI,plSp,DE))'=SCPRG Q 
+ .I SCDGN'="",$$UL^TXTU($$GETTZ^IPAC(NI,plSd,DE))'=SCDGN Q 
+ .Q:'$$cligen(proc,DXS,DXE) 
+ .Q:DET 
+ .S DTXT=$$DT^DTUTL(DDS)_"|"_$$DT^DTUTL(DDE)
+ .D WC^RWU(CR_NIB_"|"_NIB_"|"_$$FIO^IPAC(NIB)_"|"_DTXT_"|"_DDC_"|"_$TR(KA,".",",")_"|"_$TR(K0,",",",")_"|"_$$GET^IPAC(NIB,"polis"_PIDX,DDE)_"|"_$$DT^DTUTL($$WRITED^IPAC(NIB)))
+ D C^RWU
+ Q
+cliww 
+ S DTXT=$$DT^DTUTL(X)_"|"_$$DT^DTUTL(D)
+ D WC^RWU(CR_NIB_"|"_NIB_"|"_$$FIO^IPAC(NIB)_"|"_DTXT_"|"_S_"|"_$TR(K,".",",")_"|"_$TR(K0,",",",")_"|"_$$GET^IPAC(NIB,"polis"_PIDX,DDE)_"|"_$$DT^DTUTL($$WRITED^IPAC(NIB)))
+ Q
+cligen(proc,DS,DE) ; Формирование периодов и сумм
+ S X="" F  S PX=X,X=$O(MM(X)) S:PX'="" K=MM(PX),MM(PX)=$S(K'="":K,X="":DE,1:X) Q:X=""  ; DG period
+ S DDS=$O(MM("")),DDE=$O(MM(""),-1),DDE=MM(DDE) S:DDE="" DDE=DE
+ ; строим периоды
+ D GETM^IPAC(NIB,"dog_from"_PIDX,"M")
+ M MS=M
+ S X=$O(M(DDS+1),-1),K="",K0=1
+ F  D:X'=""  S X=$O(M(X)) Q:X=""!(X>DDE)  S:K'=""&(X<PX) MD(K)=X-1 ; пересеч. периода
+ .S K=M(X) Q:K=""  
+ .S S=$S(K<DS:DS,1:K) ; дата срока
+ .S K=$S(K<DDS:DDS,1:K) ; дата изменения
+ .S PX=$$gmm(K),D=$$GET^IPAC(NIB,"dog_to"_PIDX,K)
+ .I D<DDS S K0=0 Q
+ .S PX=$S(D>DDE:DDE,PX<D&(PX>S):PX,1:D),MD(S)=PX
+ I K0,'$D(MD) S MD(DDS)=DDE ; if no "from" и не было искл.
+ D GETM^IPAC(NIB,"dog_to"_PIDX,"M")
+ S X=$O(M(DDS+1),-1),K0=0 ; ограничение "по" (по последн. значению)
+ F  D  S X=$O(M(X)) Q:X=""!(X>DDE) 
+ .S D=$O(MS(X+1),-1) Q:D=""  
+ .S K=M(X),S=$O(MM($S(X<DDS:DDS,1:X)+1),-1)
+ .S S=MM(S) Q:X>S
+ .S D=MS(D),D=$S(X<DDS:DDS,1:X)+1,D=$O(MD(D+1),-1) Q:D="" 
+ .S K=$S(K>DDE:DDE,K="":X-1,1:K),K0=1
+ .S PX=$O(MD(D)) I PX'="",K'<PX S K=PX-1 ; перехлест периода
+ .S PX=$$gmm(D) I PX'="",K>PX S K=PX ; перехлест периода дальнего (stc)
+ .S MD(D)=K
+ S K=$S(K0:"",'$D(M):"",1:M($O(M(""),-1)))
+ I K'="",K<DDS K MD Q 0 ; сроки законч.
+ I K'="",K<DDE S X=$O(MD(DDS-1)),X=$S(X'<DDS&(X'>DDE):X,1:DDS),MD(X)=K ; срок по меньше конца периода. Если не существует в периоде даты
+ Q:'$D(MD) 0
+ D GETM^IPAC(NIB,"ofor","M")
+ S X=$O(M(DDS+1),-1)-1 ; лимиты по оформлению
+ F  S X=$O(M(X)) Q:X=""!(X>DDE)  I M(X)'=1 S D=$O(MD(X+1),-1) I D'="",MD(D)<X S MD(D)=X
+ ; common
+ S X=$O(MD("")),K=$O(MD(""),-1),DDC=0
+ S:X'="" DDS=X S:K'="" DDE=MD(K)
+ 
+ S (K,X)="",KA=0 F  S X=$O(MD(X)) Q:X=""  D
+ .S D=MD(X),S=D-X+1,DDC=S+DDC Q:'S 
+ .S K=$$GET^IPAC(NIB,"psumm",D) ; для кажд. периода
+ .S:K="" K=$$GET^IPAC(NIB,"psumm",X)
+ .S:K="" K=SS Q:'K 
+ .S DD=$S(LEAP:$$leapsz(X,D),1:365)
+ .S K0=K,K=(K*S)/DD,KA=KA+K
+ .I proc'="" S K=+$J(K,"",5) D @proc
+ Q:DDC'>0 0
+ S KA=+$J(KA,"",5)
+ Q 1
+leapsz(DS,DE) ; Дней года с учетом периода (период до 2х лет)
+ N Y1,Y2,F1,F2,M
+ S Y1=$$YEAR^DTUTL(DS),Y2=$$YEAR^DTUTL(DE)
+ S F1=$$YLEAP^DTUTL(Y1),F2=$S(Y1=Y2:F1,1:$$YLEAP^DTUTL(Y2))
+ I 'F1,'F2 Q 365
+ I F1 S M=$$MONTH^DTUTL(DS) Q:M>2 365 Q:(M=2)&($$DAY^DTUTL(DS)=29) 365 Q:Y1'=Y2 366
+ I F2 S M=$$MONTH^DTUTL(DE) Q:M>2 366 Q:(M=2)&($$DAY^DTUTL(DE)=29) 366 Q 365
+ Q 365
+cstc(PIDX) ; Проверить договор 
+ D GETM^IPAC(NIB,"stc"_PIDX,"M")
+ S X=$O(M(DS+1),-1),PX=X,K=""
+ F  D  S X=$O(M(X)) Q:X=""!(X>DE)
+ .S K=$S(X="":"",1:M(X)),PX=$S(K=DGN:X,1:PX)
+ .I K=DGN S PX=$S(X<DS:DS,1:X),MM(PX)="" Q 
+ .Q:'PX  Q:'$D(MM)
+ .I X<PX S MM(PX)=X-1,PX="" Q 
+ .S:'$G(MM(PX)) MM(PX)=X-1
+ Q
+gmm(DT) ; get from MM
+ S DT=$O(MM(DT+1),-1) Q:DT="" ""
+ Q MM(DT)
+CLILST0(DGN,DS,DE) ; Список лиц, действующих в период по договору
+ N DG,X,NIB,DF,DT,K,STC,M,SS,DDS,DDE,DDC,DFT,DTXT,K0
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S DG="",DD=DE-DS+1
+ S SS=$$GET^IINSC(DGN,"psumm",DE)
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|№ И.Б.|Ф.И.О. за период "_$$DT2^DTUTL(DS)_"-"_$$DT2^DTUTL(DE)_"|Срок с|Срок по|Дней|Сумма|Стоимость полиса|Полис|Зарегистрирован")
+ S NIB="" F  S NIB=$O(^BTI(" s",DGN,NIB)) Q:NIB=""  D
+ .D GETM^IPAC(NIB,"stc","M")
+ .S X=DS-1 F  S X=$O(M(X)) Q:X=""  Q:M(X)=DGN 
+ .S:X="" X=$O(M(DS+1),-1)  Q:X=""  Q:+X>DE  Q:M(X)'=DGN  
+ .S DF=$$GETPREV^YIPACN(NIB,"dog_from",$S(DS>X:DS,1:X)-1) ; посл. сост. в периоде
+ .S:DF="" DF=$$GETNEXT^YIPACN(NIB,"dog_from",0)
+ .S DT=$$GETPREV^YIPACN(NIB,"dog_to",$S(DS>X:DS,1:X)+1)
+ .S:DT="" DT=$$GETNEXT^YIPACN(NIB,"dog_to",0)
+ .S DTXT=$$DT^DTUTL(DF)_"|"_$$DT^DTUTL(DT)
+ .D GETM^IPAC(NIB,"ofor","M")
+ .S DFT=$O(M(DS-1)) I DFT'="",M(DFT)'=1,DT>DFT S DT=DFT
+ .Q:DT<DF 
+ .S K=$$GET^IPAC(NIB,"psumm",DF)
+ .S:K="" K=$$GET^IPAC(NIB,"psumm",X)
+ .S:K="" K=SS
+ .S DDE=$S(DE>DT:DT,1:DE),DDS=$S(DS<DF:DF,1:DS) Q:DDS>DDE 
+ .S DD=365 ; период для суммы
+ .S K0=K,K=(K*(DDE-DDS+1))/DD
+ .D WC^RWU(CR_NIB_"|"_NIB_"|"_$$FIO^IPAC(NIB)_"|"_DTXT_"|"_(DDE-DDS+1)_"|"_$TR(K,".",",")_"|"_$TR(K0,",",",")_"|"_$$GET^IPAC(NIB,"polis")_"|"_$$DT^DTUTL($$WRITED^IPAC(NIB)))
+ D C^RWU
+ Q
+USUMsys(DS,DE) 
+ N DG,KX,S,SE,SS
+ D OPSUM(DS,DE)
+ K ^BUF($J)
+ D MKALLPRC^IUSLSC(DS,DE,0,"USLPROC^RSCPRP","")
+ S DG="" F  S DG=$O(^BUF($J,"u",DG)) Q:DG=""  S KX="" F  S KX=$O(^BUF($J,"u",DG,KX)) Q:KX=""  D
+ .S S=^(KX),^BUF($J,"s",DG,S,KX)=""
+ K ^BUF($J,"u")
+ S DG="" F  S DG=$O(SUMM(DG)) Q:DG=""  D
+ .S SE=$G(SUMM(DG,1)),SS=0,S=""
+ .F  S S=$O(^BUF($J,"s",DG,S),-1) Q:S=""  D
+ ..S KX="" F  S KX=$O(^BUF($J,"s",DG,S,KX)) Q:KX=""  D
+ ...Q:(SS+S)>SE  S SS=SS+S
+ .S SUMM(DG,3)=SS
+ K ^BUF($J)
+ Q
+USUM(DS,DE) ; Сумма по списку услуг по доходу
+ N SUMM,DG
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ D USUMsys(DS,DE)
+ D OWF^RWU(".txt")
+ D WC^RWU("Доход по предоплате за период "_$$DT^DTUTL(DS)_"-"_$$DT^DTUTL(DE)_"||Зачтено|Сумма услуг|Сумма оказанных|услуг, всего;")
+ D WC^RWU(CR_"Договор|Лиц|за период|за период")
+ S DG="" F  S DG=$O(SUMM(DG)) Q:DG=""  S N=$$NAMEH^YNDOG(DG,DE) D WC^RWU(CR_$S(N="":"Не указан",1:N)_"|"_(+$G(SUMM(DG)))_"|"_$$FFN($G(SUMM(DG,1)))_"|"_$$FFN($G(SUMM(DG,3)))_"|"_$$FFN($G(SUMM(DG,9))))
+ D C^RWU
+ Q
+USLST(DS,DE,DG,TSUM) ; Список услуг по доходу
+ ; TSUM="" - автоматический расчет или фиксированная сумма
+ I DG="" D MSG^RWU(CR_"Укажите договор") Q 
+ N SUMM,KX,S,SE,SS,NIB,ACNT,R,USL,DT
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ I TSUM="" D OPSUM(DS,DE) S TSUM=+$G(SUMM(DG))
+ K ^BUF($J,"s"),^BUF($J,"u"),^BUF($J,"r")
+ D MKALLPRC^IUSLSC(DS,DE,0,"USLLPRC^RSCPRP","")
+ S KX="" F  S KX=$O(^BUF($J,"u",KX)) Q:KX=""  D
+ .S S=^(KX),^BUF($J,"s",S,KX)=""
+ S SS=0,S="",ACNT=0
+ F  S S=$O(^BUF($J,"s",S),-1) Q:S=""  D
+ .S KX="" F  S KX=$O(^BUF($J,"s",S,KX)) Q:KX=""  D
+ ..Q:((SS+S)>TSUM) 
+ ..S SS=SS+S,R=$G(^BUF($J,"u",KX,1)),NIB=$P(R,"|",1) 
+ ..S:NIB'="" ^BUF($J,"r",NIB,KX)=R
+ D OWF^RWU(".txt")
+ D WC^RWU("|N "_DG_"|"_$$NAMEH^YNDOG(DG,DE)_";"_CR_"Дата|Код|Наименование|Цена|Кол-во|Сумма")
+ S NIB="" F  S NIB=$O(^BUF($J,"r",NIB)) Q:NIB=""  D
+ .D WC^RWU(CR_"|"_NIB_"|"_$$FIO^IPAC(NIB)) S S=0,SE=0
+ .S KX="" F  S KX=$O(^BUF($J,"r",NIB,KX)) Q:KX=""  D
+ ..S R=^(KX)
+ ..S ACNT=ACNT+$P(R,"|",4),USL=$P(R,"|",2),DT=$P(KX,"|",1)
+ ..S USL=USL_"|"_$$NAMEH^IPRICE(USL,$P(R,"|",3),DT)
+ ..D WC^RWU(CR_$$DT^DTUTL(DT)_"|"_USL_"|"_$P(R,"|",6)_"|"_$P(R,"|",4,5))
+ ..S S=S+$P(R,"|",5),SE=SE+$P(R,"|",4)
+ .D WC^RWU(CR_"||Всего||"_SE_"|"_S)
+ D WC^RWU(CR_"||Итого||"_ACNT_"|"_SS)
+ D C^RWU
+ K ^BUF($J,"s"),^BUF($J,"u"),^BUF($J,"r")
+ Q
+USLPROC ; for callback IUSLSC
+ Q:'$D(SUMM(CSTC))  Q:KASS 
+ N X S X=$S($D(UL(U,1)):UL(U,1),1:$$PRICEH^IPRICE(U,PRC,DT)*KSKD*$G(UL(U)))
+ Q:X=0 
+ S FLG=DT_"|"_VR_"|"_OTD_"|"_ID
+ S ^(FLG)=$G(^BUF($J,"u",CSTC,FLG))+X
+ S SUMM(CSTC,9)=$G(SUMM(CSTC,9))+X
+ Q
+USLLPRC ; for callback IUSLSC
+ Q:CSTC'=DG  Q:KASS 
+ N X,Z,C
+ S C=$G(UL(U))
+ S Z=$S($D(UL(U,1)):UL(U,1)/C,1:$$PRICEH^IPRICE(U,PRC,DT)*KSKD),X=Z*C
+ Q:X=0 
+ S FLG=DT_"|"_VR_"|"_OTD_"|"_ID
+ S ^(FLG)=$G(^BUF($J,"u",FLG))+X
+ S ^(FLG,1)=NI_"|"_U_"|"_PRC_"|"_C_"|"_X_"|"_Z
+ Q
+FFN(X) 
+ Q $TR($TR($FN(X,",",2),","," "),".",",")
+REGIPROC 
+ S ^IPROC("Отчеты по страховым компаниям","Доход по предоплате за период")="PDH_RSCPRP,1,2,d,Дата начала периода,d,Дата окончания периода"
+ S ^IPROC("Отчеты по страховым компаниям","Сумма по предоплате за период")="USUM_RSCPRP,1,2,d,Дата начала периода,d,Дата окончания периода"
+ S ^IPROC("Отчеты по страховым компаниям","Услуги по предоплате за период")="USLST_RSCPRP,1,4,d,Дата начала периода,d,Дата окончания периода,t@storage:dog,Договор,s,Ограничить суммой (пусто - расчитать)"
+ S ^IPROC("Отчеты по страховым компаниям","Список клиентов по предоплате за период")="CLILST_RSCPRP,100,8,te@storage:dog,Договор,d,Дата начала периода,d,Дата окончания периода,te@net:LST_YMPRP(""""),Программа,te@storage:mectorab@1,Место работы,t@string:0/Нет#1/Да,Детализировать,s,Страховая программа,s,Страховой договор"
+ S ^IPROC("Отчеты по страховым компаниям","Список клиентов по предоплате за период (o)")="CLILST0_RSCPRP,100,3,te@storage:dog,Договор,d,Дата начала периода,d,Дата окончания периода"
+ 
+ Q

@@ -1,0 +1,297 @@
+RBASERP ; Отчеты руководства [ 09/04/2018  4:37 PM ]
+CASH(DS,DE,vMODE,dMODE,pMODE) ; Отчет по выручке
+ ; vMODE - вид отчета
+ ; dMODE - розница/ск или все договора
+ ; pMODE - вид учета посещений
+ ; 1 - розничные продажи, 2 - поликлиника, 3 - стоматология, 4 - абонементы, 5 - авансы, 6-профосмотры, 7 - ЛМК, 8 - вредники, 9 - мигранты, 10 - страховые компании, 11 - фактовые, 13 - поликлиника, 14 - стоматология, 12 - предоплата, 15 - поликлиника, 16 - стоматология, 17 - факт в рознице 
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),vMODE=+$G(vMODE)
+ N SST,LP,STOTD,DT,TM,NI,DGL,DTP,BTPLS,L,K,R,OT,SUMM,H,FR,LPU,stTP
+ S FR=+$$FR^I(),LPU=$$^I("ilpu"),pMODE=+$G(pMODE)
+ I pMODE N nPOS F K=10,11,13,30,40,75,78,79,82,84,91 S nPOS(K)=""
+ D OWF^RWU(".txt")
+ D WC^RWU("Период "_$$DT2^DTUTL(DS)_"-"_$$DT2^DTUTL(DE)_"|за период|за период|за период|за период|за период|посещений|сумма|сумма на;")
+ D WC^RWU(CR_"|лиц|посещений|число услуг|сумма услуг|по кассе|на лицо|на лицо|посещение")
+ S:$G(^cfg("stom-otd")) STOTD(^cfg("stom-otd"))=""
+ M STOTD=^cfg("stom-otd")
+ K ^BUF($J,"p"),^BUF($J,"l")
+ M BTPLS=^BTPLS("stc")
+ D MKALLPRC^IUSLSC(DS,DE,1,"CASHPRC^RBASERP","",'FR)
+ S L="" F  S L=$O(^BUF($J,"p",L)) Q:L=""  D
+ .I 'FR Q:L'=LPU 
+ .S R="" F  S R=$O(^BUF($J,"p",L,R)) Q:R=""  D:R<13!(R=99) 
+ ..S K="" F  S K=$O(^BUF($J,"p",L,R,K)) Q:K=""  D:K'="-"
+ ...S SST(L,R,2)=$G(SST(L,R,2))+1
+ ...S SST(L,-1,2)=$G(SST(L,-1,2))+1
+ ...S SST(-1,R,2)=$G(SST(-1,R,2))+1
+ ...S SST(-1,-1,2)=$G(SST(-1,-1,2))+1
+ K ^BUF($J,"p"),^BUF($J,"l")
+ S DT=DS-1
+ F  S DT=$O(^BILLI(DT)) Q:DT=""!(DT>DE)  S TM="" F  S TM=$O(^BILLI(DT,TM)) Q:TM=""  S NI="" F  S NI=$O(^BILLI(DT,TM,NI)) Q:NI=""  D
+ .S L=$G(^BILL(NI,DT,TM)) Q:L=""  S LP=$P($P(L,"|",5),"@",2) 
+ .I 'FR Q:LP'=LPU 
+ .S R=$P(L,"|",1),LP=+LP
+ .I +$P(L,"|",1)<6 I R="+"!(R="-") S SUMM(LP)=$G(SUMM(LP))+$P(L,"|",2)
+ .Q:R'=""  ; OPE
+ .S K=$P($P(L,"|",6),"/",1),R=$P(K,":",1),SUM=+$P(L,"|",2) Q:SUM=0 
+ .; S SUMM(LP,1)=$G(SUMM(LP,1))-SUM
+ .Q:R'="ZNF"&(R'="ZND")&(R'="BTPL") 
+ .S SUMM(LP,1)=$G(SUMM(LP,1))-SUM
+ .S L=+$P($P(L,"|",5),"@",2),OT=+$P(K,":",3)
+ .S DTP=$S(R="BTPL":4,'vMODE:2,$D(STOTD(OT)):3,1:2)
+ .S SST(LP,DTP,5)=$G(SST(LP,DTP,5))-SUM
+ .S SST(-1,DTP,5)=$G(SST(-1,DTP,5))-SUM
+ .S SST(LP,-1,5)=$G(SST(LP,-1,5))-SUM
+ .S SST(-1,-1,5)=$G(SST(-1,-1,5))-SUM
+ S SST(-1,-1,5)=0 S L="" F  S L=$O(SUMM(L)) Q:L=""  S SST(L,-1,5)=0
+ S L="" F  S L=$O(SUMM(L)) Q:L=""  D
+ .S K=$G(SUMM(L))-$G(SUMM(L,1))
+ .S SST(L,5,5)=$G(SST(L,5,5))+K,SST(-1,5,5)=$G(SST(-1,5,5))+K
+ .S K=$G(SUMM(L))
+ .S SST(L,-1,5)=$G(SST(L,-1,5))+K,SST(-1,-1,5)=$G(SST(-1,-1,5))+K
+ ; D OPSUM^RPOLIS(DS,DE)
+ ; S K="",R=0 F  S K=$O(SUMM(K)) Q:K=""  S R=R+SUMM(K) ; полисы
+ ; K SUMM S SUMM=R
+ K:'FR SST(-1)
+ S L="" F  S L=$O(SST(L)) Q:L=""  D
+ .S H=$S(L<0:"Всего по клиникам",1:$$NAME^ICONTR(L)),DTP=""
+ .F K=1:1:5 S H=H_"|"_$$FFN(-1,K)
+ .D SUBFN(-1),WC^RWU(CR_H)
+ .F K=2:1:5 S SST(L,1,K)=$G(SST(L,2,K))+$G(SST(L,3,K))+$G(SST(L,4,K))
+ .S H="" F K=1:1:5 S H=H_"|"_$$FFN(1,K)
+ .D SUBFN(1),WC^RWU(CR_" розничные продажи"_H)
+ .S H="" F K=1:1:5 S H=H_"|"_$$FFN(2,K)
+ .D SUBFN(2),WC^RWU(CR_$S(vMODE:"  - Поликлиника",1:"  - Факт")_H)
+ .I vMODE S H="" F K=1:1:5 S H=H_"|"_$$FFN(3,K)
+ .I vMODE D SUBFN(3),WC^RWU(CR_"  - Стоматология"_H)
+ .S H="" F K=1:1:5 S H=H_"|"_$$FFN(4,K)
+ .D SUBFN(4),WC^RWU(CR_"  - Абонементы"_H)
+ .S H="" F K=1:1:5 S H=H_"|"_$$FFN(5,K)
+ .D WC^RWU(CR_"  - Остаток"_H)
+ .S H="" F K=1:1:5 S H=H_"|"_$$FFN(6,K)
+ .D SUBFN(6),WC^RWU(CR_"  - Профосмотры"_H)
+ .F K=2:1:4 S SST(L,10,K)=$G(SST(L,11,K))+$G(SST(L,12,K))
+ .S H="" F K=1:1:4 S H=H_"|"_$$FFN(10,K)
+ .S H=H_"|" D SUBFN(10),WC^RWU(CR_" страховые компании"_H)
+ .S H="" F K=1:1:4 S H=H_"|"_$$FFN(11,K)
+ .S H=H_"|" D SUBFN(11),WC^RWU(CR_"  - По факту"_H)
+ .I vMODE S H="" F K=1:1:4 S H=H_"|"_$$FFN(13,K)
+ .I vMODE S H=H_"|" D SUBFN(13),WC^RWU(CR_"    - Поликлиника"_H)
+ .I vMODE S H="" F K=1:1:4 S H=H_"|"_$$FFN(14,K)
+ .I vMODE S H=H_"|" D SUBFN(14),WC^RWU(CR_"    - Стоматология"_H)
+ .S H="" F K=1:1:4 S H=H_"|"_$$FFN(12,K)
+ .S H=H_"|" D SUBFN(12),WC^RWU(CR_"  - По предоплате"_H)
+ .I vMODE S H="" F K=1:1:4 S H=H_"|"_$$FFN(15,K)
+ .I vMODE S H=H_"|" D SUBFN(15),WC^RWU(CR_"    - Поликлиника"_H)
+ .I vMODE S H="" F K=1:1:4 S H=H_"|"_$$FFN(16,K)
+ .I vMODE S H=H_"|" D SUBFN(16),WC^RWU(CR_"    - Стоматология"_H)
+ .I 'dMODE D W^RWU(CR) Q 
+ .S H="" F K=1:1:4 S H=H_"|"_$$FFN(99,K)
+ .S H=H_"|" D SUBFN(99),WC^RWU(CR_" прочие договора"_H_CR)
+ D C^RWU
+ Q
+SUBFN(ID) ; расчетные колонки
+ N X
+ S X=+$G(SST(L,ID,1)),X=$S(X=0:0,1:$G(SST(L,ID,2))/X)
+ S H=H_"|"_$TR($S(X[".":$FN(X,"",2),1:X),".",",")
+ S X=+$G(SST(L,ID,1)),X=$S(X=0:0,1:$G(SST(L,ID,4))/X)
+ S H=H_"|"_$TR($S(X[".":$FN(X,"",2),1:X),".",",")
+ S X=+$G(SST(L,ID,2)),X=$S(X=0:0,1:$G(SST(L,ID,4))/X)
+ S H=H_"|"_$TR($S(X[".":$FN(X,"",2),1:X),".",",")
+ Q
+FFN(ID,X) 
+ S X=+$G(SST(L,ID,X))
+ Q $TR($S(X[".":$FN(X,"",2),1:X),".",",")
+FN(X) 
+ Q $TR($S(X[".":$FN(X,"",2),1:X),".",",")
+GETDGT(DG,DT) ; Получить тип договора
+ Q:DG="" 3 Q:$D(DGL(+DG)) DGL(+DG)
+ S DT=+$$GET^IINSC(DG,"dvid",DT),DGL(DG)=DT
+ Q DT
+CASHPRC 
+ I pMODE Q:$D(nPOS(SP)) 
+ N X,L,CC,Z
+ S L=+$G(LPU),Z=VR_","_DT_","_NI,CSTC=+CSTC
+ 
+ S DTP=$$GETDGT(CSTC,DT),FLG="|"_$G(FLG)_"|"
+ S stTP=$D(STOTD(OTD))
+ S DTP=$S(FLG["|prf|":6,(DTP=3)!KASS:$S('vMODE:2,stTP:3,1:2),$D(BTPLS(CSTC)):4,DTP=0:11,DTP=1:12,dMODE:99,1:-1)
+ Q:DTP<0 
+ 
+ S CC=$G(UL(U))
+ S X=$S($D(UL(U,1)):UL(U,1),1:$$PRICEH^IPRICE(U,PRC,DT)*KSKD*CC)
+ 
+ S:'$D(^BUF($J,"p",L,DTP,Z)) ^(Z)="" ; посещений
+ S:'$D(^("-",NI)) ^(NI)=1,SST(L,DTP,1)=$G(SST(L,DTP,1))+1 ;лиц по типу
+ 
+ S:'$D(^BUF($J,"l",NI)) ^(NI)="",SST(-1,-1,1)=$G(SST(-1,-1,1))+1 ;лиц
+ S Z="L"_L
+ S:'$D(^(NI,Z)) ^(Z)="",SST(L,-1,1)=$G(SST(L,-1,1))+1 ;по ЛПУ всего
+ S:'$D(^(DTP)) ^(DTP)="",SST(-1,DTP,1)=$G(SST(-1,DTP,1))+1 ; по типу
+ S Z=$S(DTP>10:10,1:1)
+ S:'$D(^(Z)) ^(Z)="",SST(-1,Z,1)=$G(SST(-1,Z,1))+1 ; раздел
+ S:'$D(^(Z,L)) ^(L)="",SST(L,Z,1)=$G(SST(L,Z,1))+1 ;по ЛПУ, раздел
+ 
+ S SST(L,DTP,4)=$G(SST(L,DTP,4))+X
+ S SST(-1,DTP,4)=$G(SST(-1,DTP,4))+X
+ S SST(L,-1,4)=$G(SST(L,-1,4))+X
+ S SST(-1,-1,4)=$G(SST(-1,-1,4))+X
+ 
+ S SST(L,DTP,3)=$G(SST(L,DTP,3))+CC
+ S SST(-1,DTP,3)=$G(SST(-1,DTP,3))+CC
+ S SST(L,-1,3)=$G(SST(L,-1,3))+CC
+ S SST(-1,-1,3)=$G(SST(-1,-1,3))+CC
+ 
+ Q:'vMODE  Q:DTP'=11&(DTP'=12) 
+ S DTP=$S(DTP=11&stTP:14,DTP=11:13,DTP=12&stTP:16,1:15)
+ S Z=VR_","_DT_","_NI
+ S:'$D(^BUF($J,"p",L,DTP,Z)) ^(Z)="",SST(L,DTP,2)=$G(SST(L,DTP,2))+1,SST(-1,DTP,2)=$G(SST(-1,DTP,2))+1 ; посещений
+ S:'$D(^("-",NI)) ^(NI)="",SST(L,DTP,1)=$G(SST(L,DTP,1))+1 ;лиц по типу
+ 
+ S:'$D(^BUF($J,"l",NI,DTP)) ^(DTP)="",SST(-1,DTP,1)=$G(SST(-1,DTP,1))+1 ; по типу
+ 
+ S SST(L,DTP,4)=$G(SST(L,DTP,4))+X
+ S SST(-1,DTP,4)=$G(SST(-1,DTP,4))+X
+ S SST(L,DTP,3)=$G(SST(L,DTP,3))+CC
+ S SST(-1,DTP,3)=$G(SST(-1,DTP,3))+CC
+ Q
+VSK(DS,DE) ; Отчет по выручке страховых компаний
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N SST,LP,DT,TM,NI,DGL,DTP,L,K,R,OT,SUMM,H,DG,STAT
+ S DG="" F  S DG=$O(^DGN(DG)) Q:DG=""  D
+ .S DTP=$$GET^IINSC(DG,"dvid",DE) Q:DTP'=0&(DTP'=1) 
+ .S SST(DTP+1,DG,1)=0
+ D MKALLPRC^IUSLSC(DS,DE,1,"VSKPRC^RBASERP","",'+$$FR^I(),"VSKPRCE^RBASERP")
+ S DTP="" F  S DTP=$O(^BUF($J,"p",DTP)) Q:DTP=""  S DG="" F  S DG=$O(^BUF($J,"p",DTP,DG)) Q:DG=""  D
+ .S K="" F  S K=$O(^BUF($J,"p",DTP,DG,K)) Q:K=""  D:K'="-"
+ ..S SST(DTP,DG,3)=$G(SST(DTP,DG,3))+1
+ ..S SST(DTP,-1,3)=$G(SST(DTP,-1,3))+1
+ ..S SST(-1,-1,3)=$G(SST(-1,-1,3))+1
+ K ^BUF($J)
+ S DT=DS-1
+ F  S DT=$O(^BILLI(DT)) Q:DT=""!(DT>DE)  S TM="" F  S TM=$O(^BILLI(DT,TM)) Q:TM=""  S NI="" F  S NI=$O(^BILLI(DT,TM,NI)) Q:NI=""  D
+ .S L=$G(^BILL(NI,DT,TM)) Q:L=""  S LP=$P($P(L,"|",5),"@",2) 
+ .S R=$P(L,"|",1) Q:R'=""  ; OPE
+ .S K=$P($P(L,"|",6),"/",1),R=$P(K,":",1),SUM=+$P(L,"|",2) Q:SUM=0 
+ .Q:R'="ZNF"&(R'="ZND") 
+ .S DG=$$GET^IPAC(NI,"stc",DT),DTP=$$GETDGT(DG,DT)+1
+ .Q:DTP'=1&(DTP'=2) 
+ .S SST(DTP,DG,10)=$G(SST(DTP,DG,10))-SUM
+ .S SST(DTP,-1,10)=$G(SST(DTP,-1,10))-SUM
+ .S SST(-1,-1,10)=$G(SST(-1,-1,10))-SUM
+ K STAT D CNTSTC^NPACUR(DE)
+ S DTP="" F  S DTP=$O(STAT(DTP)) Q:DTP=""  S DG="" F  S DG=$O(STAT(DTP,DG)) Q:DG=""  D
+ .S K=+$G(STAT(DTP,DG)),SST(DTP+1,DG,1)=K
+ .S SST(DTP+1,-1,1)=$G(SST(DTP+1,-1,1))+K
+ .S SST(-1,-1,1)=$G(SST(-1,-1,1))+K
+ D OWF^RWU(".txt")
+ D WC^RWU("Период "_$$DT2^DTUTL(DS)_"-"_$$DT2^DTUTL(DE)_"|Прикреплено|Лиц|Посещений|Услуг|Сумма|Выплачено З.П.|Себестоимость|Выручка|Дебет. задолженность|Касса")
+ S L="Всего по компаниям"
+ F K=1:1:10 S L=L_"|"_$$FN($S(K=9:"",1:+$G(SST(-1,-1,K))))
+ S $P(L,"|",9)=$$FN($G(SST(-1,-1,5))+$G(SST(-1,-1,10))-$G(SST(-1,-1,6))-$G(SST(-1,-1,7)))
+ D WC^RWU(CR_L)
+ S DTP=-1 F  S DTP=$O(SST(DTP)) Q:DTP=""  D
+ .S L=$S(DTP=1:"По факту",1:"По прикреплению")
+ .F K=1:1:10 S L=L_"|"_$$FN($S(K=9:"",1:+$G(SST(DTP,-1,K))))
+ .S $P(L,"|",9)=$$FN($G(SST(DTP,-1,5))+$G(SST(DTP,-1,10))-$G(SST(DTP,-1,6))-$G(SST(DTP,-1,7)))
+ .D WC^RWU(CR_L)
+ .S DG=-1 F  S DG=$O(SST(DTP,DG)) Q:DG=""  D
+ ..S L="  - "_$$NAMEH^YNDOG(DG,DE)
+ ..F K=1:1:10 S L=L_"|"_$$FN($S(K=9:"",1:+$G(SST(DTP,DG,K))))
+ ..S $P(L,"|",9)=$$FN($G(SST(DTP,DG,5))+$G(SST(DTP,DG,10))-$G(SST(DTP,DG,6))-$G(SST(DTP,DG,7)))
+ ..D WC^RWU(CR_L)
+ D C^RWU
+ Q
+VSKPRC 
+ S FLG="|"_$G(FLG)_"|"
+ N X,CC,Z,SB
+ S CSTC=+CSTC Q:CSTC=0 
+ S DTP=$$GETDGT(CSTC,DT) Q:DTP'=0&(DTP'=1)  S DTP=DTP+1
+ Q:KASS  Q:FLG["|prf|"  
+ S Z=VR_","_DT_","_NI,CSTC=+CSTC Q:CSTC=0 
+ 
+ S CC=$G(UL(U))
+ S X=$S($D(UL(U,1)):UL(U,1),1:$$PRICEH^IPRICE(U,PRC,DT)*KSKD*CC)
+ S SB=$$GET^IPRICE(U,"scost",PRC,DT)*CC
+ 
+ S:'$D(^BUF($J,"p",DTP,CSTC,Z)) ^(Z)=1 ; посещений
+ S:'$D(^("-",NI)) ^(NI)="",SST(DTP,CSTC,2)=$G(SST(DTP,CSTC,2))+1 ; лиц
+ S:'$D(^BUF($J,"l",DTP,NI)) ^(NI)="",SST(DTP,-1,2)=$G(SST(DTP,-1,2))+1 ;по DTP
+ S:'$D(^BUF($J,"a",NI)) ^(NI)="",SST(-1,-1,2)=$G(SST(-1,-1,2))+1 ;всех
+ ; кол-во
+ S SST(DTP,CSTC,4)=$G(SST(DTP,CSTC,4))+CC
+ S SST(DTP,-1,4)=$G(SST(DTP,-1,4))+CC
+ S SST(-1,-1,4)=$G(SST(-1,-1,4))+CC
+ ; сумма
+ S SST(DTP,CSTC,5)=$G(SST(DTP,CSTC,5))+X
+ S SST(DTP,-1,5)=$G(SST(DTP,-1,5))+X
+ S SST(-1,-1,5)=$G(SST(-1,-1,5))+X
+ ; себестоимость
+ S SST(DTP,CSTC,7)=$G(SST(DTP,CSTC,7))+SB
+ S SST(DTP,-1,7)=$G(SST(DTP,-1,7))+SB
+ S SST(-1,-1,7)=$G(SST(-1,-1,7))+SB
+ Q
+VSKPRCE 
+ Q:'$D(^ZNFE(VR,OTD,DT,ID,"zrp"))
+ S SUMM=0
+ S U="" F  S U=$O(^ZNFE(VR,OTD,DT,ID,"zrp",U)) Q:U=""  S SUMM=SUMM+$P(^(U),"|",1)
+ Q:'SUMM 
+ S SST(DTP,CSTC,6)=$G(SST(DTP,CSTC,6))+SUMM
+ S SST(DTP,-1,6)=$G(SST(DTP,-1,6))+SUMM
+ S SST(-1,-1,6)=$G(SST(-1,-1,6))+SUMM
+ Q
+CASHLT(DS,DE) ; Краткий отчет по ДДС
+ N DT,TM,NI,L,SUM,OPE,TP,DGL,DTP,NM,I,R
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ K ^BUF($J)
+ S DT=DS-1 F  S DT=$O(^BILLI(DT)) Q:DT=""!(DT>DE)  D
+ .S TM="" F  S TM=$O(^BILLI(DT,TM)) Q:TM=""  D
+ ..S NI="" F  S NI=$O(^BILLI(DT,TM,NI)) Q:NI=""  D
+ ...Q:$G(^(NI))=""
+ ...S L=$G(^BILL(NI,DT,TM)) Q:L=""
+ ...S SUM=$P(L,"|",2),OPE=$P(L,"|",1),TP=+$P(L,"|",3)
+ ...Q:OPE'="+"&(OPE'="-")  Q:SUM=0
+ ...S ^(1)=$G(^BUF($J,TP,1))+SUM
+ ...S:'$D(^("ni",NI)) ^(NI)=0,^(2)=$G(^BUF($J,TP,2))+1
+ ...S ^(1)=$G(^BUF($J,100,1))+SUM
+ ...S:'$D(^("ni",NI)) ^(NI)=0,^(2)=$G(^BUF($J,100,2))+1
+ 
+ D MKALLPRC^IUSLSC(DS,DE,1,"CASHLTp^RBASERP","",+$$FR^I())
+ 
+ S TP="" F  S TP=$O(^BUF($J,TP)) Q:TP=""  D
+ .S NI="" F  S NI=$O(^BUF($J,TP,"ni",NI)) Q:NI=""  D
+ ..Q:$O(^BILL(NI,DS),-1)'=""
+ ..Q:$O(^PNF(NI,DS),-1)'=""
+ ..S ^(3)=$G(^BUF($J,TP,3))+1
+ 
+ S (TP,R)="" F  S TP=$O(^BUF($J,TP)) Q:TP=""  D
+ .S R=R_"|"_$S(TP=99:"Страховые",TP=100:"Итого",1:$$NAME^ISPRAV("paytype",TP))
+ D OWF^RWU(".txt")
+ D WC^RWU($$TXTP^DTUTL(DS,DE)_R)
+ F I=1:1:3 D
+ .S (TP,R)="" F  S TP=$O(^BUF($J,TP)) Q:TP=""  D
+ ..S R=R_"|"_$$FN(+$G(^BUF($J,TP,I)))
+ .D WC^RWU(CR_$S(I=1:"Сумма",I=2:"Лиц",I=3:"Лиц впервые",1:"")_R)
+ D C^RWU
+ Q
+CASHLTp 
+ Q:KASS   
+ S DTP=$$GETDGT(CSTC,DT)
+ Q:DTP>1  ; только страховые
+ 
+ N CC,X
+ 
+ S CC=$G(UL(U))
+ S X=$S($D(UL(U,1)):UL(U,1),1:$$PRICEH^IPRICE(U,PRC,DT)*KSKD*CC)
+ 
+ S ^(1)=$G(^BUF($J,99,1))+X
+ S:'$D(^("ni",NI)) ^(NI)=0,^(2)=$G(^BUF($J,99,2))+1
+ 
+ S ^(1)=$G(^BUF($J,100,1))+X
+ S:'$D(^("ni",NI)) ^(NI)=0,^(2)=$G(^BUF($J,100,2))+1
+ Q
+REGIPROC 
+ S ^IPROC("Управленческая отчетность","Отчет по ДДС")="CASH_RBASERP,1,5,d,Дата начала периода,d,Дата окончания периода,t@string:0/Стандартный#1/Расширенный,Вид отчета,t@string:0/Нет#1/Да,По всем договорам,t@string:0/Без ограничений#1/Врачей-специалистов,Ограничить посещениями"
+ S ^IPROC("Управленческая отчетность","Краткий отчет по ДДС")="CASHLT_RBASERP,1,2,d,Дата начала периода,d,Дата окончания периода"
+ Q:'+$$FR^I() 
+ S ^IPROC("Управленческая отчетность","Отчет по выручке страховых компаний")="VSK_RBASERP,1,2,d,Дата начала периода,d,Дата окончания периода"
+ Q

@@ -1,0 +1,24 @@
+RNAZR ; Отчеты по назначениям (списки) [ 05/23/2014  12:50 PM ]
+REE(DS,DE,LPU) ; Реестр договоров по назначениям
+ N FF,D,ID,R,ST,DN,NI,VR,L,LE
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S FF=+$$FR^I()
+ S:'FF LPU=$$^I("ilpu")
+ S LE=$RE(LPU)
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|№ И.б.|Ф.И.О. Пациента|№ договора|Дата заключения|Создал|Сумма"_$S(FF:"|Филиал",1:""))
+ S D=DS-1 F  S D=$O(^NAZI("d",D)) Q:D=""!(D>DE)  D
+ .S ID="" F  S ID=$O(^NAZI("d",D,ID)) Q:ID=""  D:FF!($P(ID,".",2)=LE)
+ ..S R=$G(^NAZ(ID,"i")) Q:R=""
+ ..S DN=$P(R,"|",9) Q:DN="" 
+ ..S ST=$P($G(^("e")),"|",1)
+ ..Q:ST[289
+ ..S S=$P($G(^("k")),"|",1),NI=$P(R,"|",2),VR=$P(R,"|",3),L=$P(R,"|",4)
+ ..D WC^RWU(CR_NI_"|"_NI_"|"_$$FIO^IPAC(NI)_"|"_DN_"|"_$$DT^DTUTL(D)_"|"_$$FIOSH^YIKADRY(VR)_"|"_S_$S(FF:"|"_$$NAME^ICONTR(L),1:""))
+ D C^RWU
+ Q
+REGIPROC 
+ N FF
+ S FF=+$$FR^I()
+ S ^IPROC("Отчеты по пациентам","Реестры","Реестр договоров по назначениям")="REE_RNAZR,100,"_$S(FF:3,1:2)_",d,Начальная дата,d,Конечная дата"_$S(FF:",t@storage:lpu,Филиал",1:"")
+ Q

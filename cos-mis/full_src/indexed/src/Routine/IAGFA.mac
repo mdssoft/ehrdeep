@@ -1,0 +1,236 @@
+IAGFA ; AGFA connector
+TRGDSH()
+	Q:$G(OT)'=10 
+	D SNEW(LPU,OT,VR,SP,DT,TM)
+	Q
+TRGPAC()
+	Q:$G(NI)=""  
+	Q:'$D(^DSHI("agfa",NI)) 
+	D PCNG(NI)
+	Q
+SNEW(LPU,OT,VR,SP,DT,TM) ; Send new 
+	N obj,R,NI,X,OID,LL,U,P
+	Q:'$P($G(^DSH(LPU,OT,VR,SP,DT,TM,"c")),"|",1)  ; пришедшие
+	S R=$G(^DSH(LPU,OT,VR,SP,DT,TM)) Q:R="" 
+	S NI=$P(R,"|",1) Q:'$$EXIST^IPAC(NI)
+	s obj = {"app":"SCMISMER","facility":"AGMEDMER","sysid":"SCMISMER"}
+	s obj.msgid=$$GET^IINKR("agfa","msg")
+	s obj.pid=NI
+	s obj.fiof=$$GET^IPAC(NI,"fiof",DT)
+	s obj.fioi=$$GET^IPAC(NI,"fioi",DT)
+	s obj.fioo=$$GET^IPAC(NI,"fioo",DT)
+	s obj.bdate=$$DTISO^DTUTL($$GET^IPAC(NI,"datar",DT))
+	S X=$$GET^IPAC(NI,"pol",DT)
+	s obj.sex=$S(X=1:"M",X=2:"F",1:"U")
+	s obj.comm=$P(R,"|",2)
+	S OID=$P(R,"|",8)
+	I OID="" S OID=$$GET^IINKR("DSH","id"),$P(^DSH(LPU,OT,VR,SP,DT,TM),"|",8)=OID
+	s obj.src="DSH_"_OID
+	S ^DSHI("agfa",NI,OID)=$H
+	S LL=$$GETLOG^IRASP2(LPU,OT,VR,SP,DT,TM),LL=$$UKDR^IUSER(LL)
+	s obj.logDtm=$$DTISO^DTUTL(+$P(R,"|",4))_" "_$$TM^DTUTL($P($P(R,"|",4),",",2))
+	s obj.logSid=LL
+	s obj.logFiof=$$GET^IKADRY(LL,"f",DT)
+	s obj.logFioi=$$GET^IKADRY(LL,"i",DT)
+	s obj.logFioo=$$GET^IKADRY(LL,"o",DT)
+	S U=$O(^DSH(LPU,OT,VR,SP,DT,TM,"u",""))
+	S P=$S(U="":"",1:$$CORCP^IPRICET($P(^DSH(LPU,OT,VR,SP,DT,TM,"u",U),"|",2)))
+	s obj.serviceCode=U
+	s obj.serviceName=$S(P="":"",1:$$NAME^IPRICE(U,P))
+	s obj.datetime=$$DTISO^DTUTL(DT)_" "_$$TM^DTUTL(TM)
+	s obj.cab=$P($G(^DSH(LPU,OT,VR,SP,DT)),"|",2)
+	;s ^KKK=(obj).$ToJSON()
+	D send("/agfa/appoint_new?",obj)
+	Q
+SCNG(LPU,OT,VR,SP,DT,TM) ; Change
+	N obj,R,NI,X,OID,LL,U,P
+	;Q:'$P($G(^DSH(LPU,OT,VR,SP,DT,TM,"c")),"|",1)  ; пришедшие
+	S R=$G(^DSH(LPU,OT,VR,SP,DT,TM)) Q:R="" 
+	S NI=$P(R,"|",1) Q:'$$EXIST^IPAC(NI)
+	s obj = {"app":"SCMISMER","facility":"AGMEDMER","sysid":"SCMISMER"}
+	s obj.msgid=$$GET^IINKR("agfa","msg")
+	s obj.pid=NI
+	s obj.fiof=$$GET^IPAC(NI,"fiof",DT)
+	s obj.fioi=$$GET^IPAC(NI,"fioi",DT)
+	s obj.fioo=$$GET^IPAC(NI,"fioo",DT)
+	s obj.bdate=$$DTISO^DTUTL($$GET^IPAC(NI,"datar",DT))
+	S X=$$GET^IPAC(NI,"pol",DT)
+	s obj.sex=$S(X=1:"M",X=2:"F",1:"U")
+	S OID=$P(R,"|",8)
+	I OID="" Q 
+	s obj.comm=$P(R,"|",2)
+	s obj.src="DSH_"_OID
+	S LL=$$GETLOG^IRASP2(LPU,OT,VR,SP,DT,TM),LL=$$UKDR^IUSER(LL)
+	s obj.logDtm=$$DTISO^DTUTL(+$P(R,"|",4))_" "_$$TM^DTUTL($P($P(R,"|",4),",",2))
+	s obj.logSid=LL
+	s obj.logFiof=$$GET^IKADRY(LL,"f",DT)
+	s obj.logFioi=$$GET^IKADRY(LL,"i",DT)
+	s obj.logFioo=$$GET^IKADRY(LL,"o",DT)
+	S U=$O(^DSH(LPU,OT,VR,SP,DT,TM,"u",""))
+	S P=$S(U="":"",1:$$CORCP^IPRICET($P(^DSH(LPU,OT,VR,SP,DT,TM,"u",U),"|",2)))
+	s obj.serviceCode=U
+	s obj.serviceName=$S(P="":"",1:$$NAME^IPRICE(U,P))
+	s obj.datetime=$$DTISO^DTUTL(DT)_" "_$$TM^DTUTL(TM)
+	s obj.cab=$P($G(^DSH(LPU,OT,VR,SP,DT)),"|",2)
+	D send("/agfa/appoint_change?",obj)
+	Q
+SDEL(LPU,OT,VR,SP,DT,TM) ; Delete (call before)
+	N obj,R,NI,X,OID,LL,U,P
+	;Q:'$P($G(^DSH(LPU,OT,VR,SP,DT,TM,"c")),"|",1)  ; пришедшие
+	S R=$G(^DSH(LPU,OT,VR,SP,DT,TM)) Q:R="" 
+	S NI=$P(R,"|",1) Q:'$$EXIST^IPAC(NI)
+	s obj = {"app":"SCMISMER","facility":"AGMEDMER","sysid":"SCMISMER"}
+	s obj.msgid=$$GET^IINKR("agfa","msg")
+	s obj.pid=NI
+	s obj.fiof=$$GET^IPAC(NI,"fiof",DT)
+	s obj.fioi=$$GET^IPAC(NI,"fioi",DT)
+	s obj.fioo=$$GET^IPAC(NI,"fioo",DT)
+	s obj.bdate=$$DTISO^DTUTL($$GET^IPAC(NI,"datar",DT))
+	S X=$$GET^IPAC(NI,"pol",DT)
+	s obj.sex=$S(X=1:"M",X=2:"F",1:"U")
+	S OID=$P(R,"|",8)
+	I OID="" Q 
+	s obj.comm=$P(R,"|",2)
+	s obj.src="DSH_"_OID
+	S LL=$$GETLOG^IRASP2(LPU,OT,VR,SP,DT,TM),LL=$$UKDR^IUSER(LL)
+	s obj.logDtm=$$DTISO^DTUTL(+$P(R,"|",4))_" "_$$TM^DTUTL($P($P(R,"|",4),",",2))
+	s obj.logSid=LL
+	s obj.logFiof=$$GET^IKADRY(LL,"f",DT)
+	s obj.logFioi=$$GET^IKADRY(LL,"i",DT)
+	s obj.logFioo=$$GET^IKADRY(LL,"o",DT)
+	S U=$O(^DSH(LPU,OT,VR,SP,DT,TM,"u",""))
+	S P=$S(U="":"",1:$$CORCP^IPRICET($P(^DSH(LPU,OT,VR,SP,DT,TM,"u",U),"|",2)))
+	s obj.serviceCode=U
+	s obj.serviceName=$S(P="":"",1:$$NAME^IPRICE(U,P))
+	s obj.datetime=$$DTISO^DTUTL(DT)_" "_$$TM^DTUTL(TM)
+	s obj.cab=$P($G(^DSH(LPU,OT,VR,SP,DT)),"|",2)
+	D send("/agfa/appoint_delete?",obj)
+	Q
+PNEW(NI) ; Send new patient
+	N obj,R,X,OID,LL,U,P
+	Q:'$$EXIST^IPAC(NI)
+	S DT=+$H
+	s obj = {"app":"SCMISMER","facility":"AGMEDMER","sysid":"SCMISMER"}
+	s obj.msgid=$$GET^IINKR("agfa","msg")
+	s obj.pid=NI
+	s obj.fiof=$$GET^IPAC(NI,"fiof",DT)
+	s obj.fioi=$$GET^IPAC(NI,"fioi",DT)
+	s obj.fioo=$$GET^IPAC(NI,"fioo",DT)
+	s obj.bdate=$$DTISO^DTUTL($$GET^IPAC(NI,"datar",DT))
+	S X=$$GET^IPAC(NI,"pol",DT)
+	s obj.sex=$S(X=1:"M",X=2:"F",1:"U")
+	S X=$P($$GET^IPAC(NI,"opfio",DT),"|",2)
+	s obj.logDtm=$$DTISO^DTUTL(+X)_" "_$$TM^DTUTL($P(X,",",2))
+	D send("/agfa/patient_new?",obj)
+	Q
+PCNG(NI) ; Send updated patient
+	N obj,R,X,OID,LL,U,P
+	Q:'$$EXIST^IPAC(NI)
+	S DT=+$H
+	s obj = {"app":"SCMISMER","facility":"AGMEDMER","sysid":"SCMISMER"} ; EIMEDMER
+	s obj.msgid=$$GET^IINKR("agfa","msg")
+	s obj.pid=NI
+	s obj.fiof=$$GET^IPAC(NI,"fiof",DT)
+	s obj.fioi=$$GET^IPAC(NI,"fioi",DT)
+	s obj.fioo=$$GET^IPAC(NI,"fioo",DT)
+	s obj.bdate=$$DTISO^DTUTL($$GET^IPAC(NI,"datar",DT))
+	S X=$$GET^IPAC(NI,"pol",DT)
+	s obj.sex=$S(X=1:"M",X=2:"F",1:"U")
+	S X=$P($$GET^IPAC(NI,"opfio",DT),"|",2)
+	s obj.logDtm=$$DTISO^DTUTL(+X)_" "_$$TM^DTUTL($P(X,",",2))
+	D send("/agfa/patient_change?",obj)
+	Q
+send(url,obj)
+	N %SID,PL,R,CM,OK,I,T,J,LN,CM,ADR
+	S ADR=$G(^cfg("agfa","host")) S:ADR="" ADR="127.0.0.1"
+	S %SID=$$OPEN^WWWCLI(ADR,57781)
+	;D SETCONN^WWWCLI(%SID,2)
+	D SETHDR^WWWCLI(%SID,"Content-Type","application/json;charset=UTF-8")
+	D OWBUF^WWWCLI(%SID)
+	D WBUF^WWWCLI(%SID,$$WU8^TXTU((obj).%ToJSON)) ;$toJSON()
+	D CBUF^WWWCLI(%SID)
+	S OK=$$POST^WWWCLI(%SID,url)
+	I OK'=200 D CLOSE^WWWCLI(%SID) Q 
+	;D OBUF^WWWCLI(%SID),OWF^RWU(".bin")
+	;F I=1:1:$$BUFCNT^WWWCLI(%SID) D W^RWU($$RBUF^WWWCLI(%SID))
+	D CLOSE^WWWCLI(%SID)
+	Q
+MKEPR(NI,DTM,NAM,VR,Mod,Sid,File)      ; Создать документ изображений в ЭИБ
+	N TPD,DOC
+	s TPD=$$FNDUID^YIMHS("agfa/dcm") Q:TPD=""
+	s DOC=$$FNDEPRI(NI,Sid) Q:DOC'="" 
+	S DOC=$$MKDOC^IEPR(NI,TPD,NAM,1,+DTM,VR)
+	D SETDT^YIMH(NI,DOC,DTM)
+	D SET^IEPR(NI,DOC,"dcm",Mod)
+	D SET^IEPR(NI,DOC,"sid",Sid)
+	S ^EPRD(NI,DOC)=File
+	D UPD^YIMH(NI,DOC)
+	Q
+FNDEPRI(NI,SID) ; Найти документ изображений в ЭИБ
+	N TPD,ID,R
+	s TPD=$$FNDUID^YIMHS("agfa/dcm") Q:TPD="" ""
+	S R=""
+	S ID="" F  S ID=$O(^EPRI("t",NI,TPD,ID),-1) Q:ID=""  I $G(^EPR(NI,ID,"sid"))=SID Q 
+	Q ID
+MKEPRD(NI,DTM,NAM,VR,Mod,Sid,SBS)      ; Создать документ в ЭИБ
+	N TPD,DOC
+	s TPD=$$FNDUID^YIMHS("diag_reng_agfa") Q:TPD="" ""
+	S DOC=$$MKDOC^IEPR(NI,TPD,NAM,SBS,+DTM,VR)
+	D SETDT^YIMH(NI,DOC,DTM)
+	D SET^IEPR(NI,DOC,"dcm",Mod)
+	D SET^IEPR(NI,DOC,"sid",Sid)
+	S ^EPRD(NI,DOC,"dfio")=$$FIOSH^IKADRY(VR)
+	S ^EPRD(NI,DOC,"age")=$$AGE^YIPACN(NI)
+	S ^EPRD(NI,DOC,"date")=$$DT^DTUTL(+DTM)
+	S ^EPRD(NI,DOC,"time")=$$TM^DTUTL(DTM)
+	S ^EPRD(NI,DOC,"pfio")=$$FIO^IPAC(NI)
+	S ^EPRD(NI,DOC,"pnum")=NI
+	D UPD^YIMH(NI,DOC)
+	Q DOC
+FNDEPRD(NI,SID)
+	N TPD,ID,R
+	s TPD=$$FNDUID^YIMHS("diag_reng_agfa") Q:TPD="" ""
+	S R=""
+	S ID="" F  S ID=$O(^EPRI("t",NI,TPD,ID),-1) Q:ID=""  I $G(^EPR(NI,ID,"sid"))=SID Q 
+	Q ID
+IMGRECV ; Получение изображений
+	N NI,VR,DTM,SID,ID,NM,A,URI,MOD
+	D ORH^RWU
+	;F %J=1:1 S A=$$R^RWU Q:%IFN["Z"
+	S A=$$R^RWU
+	D CR^RWU
+	S A=$$U8W^TXTU(A)
+	k ^KKKA s ^KKKA=A
+	S NI=$P(A,"|",1)
+	S SID=$P(A,"|",2)
+	S DTM=$$DTI^DTUTL($P(A,"|",3))
+	S VR=$P(A,"|",4),MOD=$P(A,"|",5),NM=$P(A,"|",6)
+	S NM=$TR(NM,"/",",")
+	S URI="http://eiws.medmer.local/?PatientID="_NI_"&AccessionNumber="_SID_"&theme=eprDisplay&user=ris&password=P@ssW0rd"
+	D MKEPR(NI,DTM,NM,VR,MOD,SID,URI)
+	Q
+CONRECV ; Получение заключения
+	N NI,VR,DTM,SID,ID,NM,A,URI,MOD,LN,%J,SBS,DOC,FL
+	D ORH^RWU
+	F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  D
+	.S LN(%J)=$$U8W^TXTU(A)
+	D CR^RWU
+	S A=LN(1)
+	S LN(2)=$$TRT^TXTU($G(LN(2)),"\.br\",CR)
+	S LN(3)=$$TRT^TXTU($G(LN(3)),"\.br\",CR)
+	S LN(2)=$$TRT^TXTU($G(LN(2)),"\.br\",CR)
+	S LN(3)=$$TRT^TXTU($G(LN(3)),"\.br\",CR)
+	k ^KKKA m ^KKKA=LN
+	S NI=$P(A,"|",1)
+	S SID=$P(A,"|",2)
+	S DTM=$$DTI^DTUTL($P(A,"|",3))
+	S VR=$P(A,"|",4),MOD=$P(A,"|",5),NM=$P(A,"|",6),SBS=$P(A,"|",7)
+	S NM=$TR(NM,"/",",")
+	S DOC=$$FNDEPRD(NI,SID)
+	S:DOC="" DOC=$$MKEPRD(NI,DTM,NM,VR,MOD,SID,SBS)
+	Q:DOC="" 
+	S $P(^EPR(NI,DOC,"s"),"|",1)=SBS
+	S %J=1 F  S %J=$O(LN(%J)) Q:%J=""  D
+	.S FL=$P(LN(%J),"|",1),A=$P(LN(%J),"|",2) Q:FL="" 
+	.S ^EPRD(NI,DOC,FL)=A
+	Q

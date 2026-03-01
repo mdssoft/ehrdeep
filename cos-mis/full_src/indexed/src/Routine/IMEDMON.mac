@@ -1,0 +1,316 @@
+A ; МОНИТОРИРОВАНИЕ В ИСТОРИЮ [ 08/05/2012  11:24 PM ]
+IO ; Mobile terminal input-output
+ N A,I,TP,R,NI,CRD,IMEI,DB,ID,D,DT,TM,DID,sTP,DBx,UL,F
+ D ORH^RWU
+ K ^XXX2  M ^XXX2=^XXX1
+ K ^XXX1  M ^XXX1=^XXX
+ K ^XXX ; debug
+ ; receive data
+io ;F I=1:1 S A=$G(^XXX(I)) Q:A=""  D
+ S NI=""
+ F I=1:1 S A=$$R^RWU Q:%IFN["Z"  D
+ .S ^XXX(I)=A ; debug
+ .I I=1 D  Q 
+ ..S IMEI=$P(A,"|",1),NI=$P(A,"|",2),CRD=$P(A,"|",3)
+ ..I NI="",IMEI'="" S NI=$G(^IMEI(IMEI)) ; код телефона 
+ ..I CRD'="" S R=$$GETNI^ISCARD(CRD) S:R'="" NI=R ; RFID метка
+ ..S:NI'="" DBx=$$MKDOC(NI,"med_mon/data","Данные телемониторинга")
+ .Q:NI=""  
+ .S TP=$P(A,"=",1),D=$P(A,"=",2,99)
+ .S DT=$$DI^DTUTL($P(D,"|",1)),TM=$$TI^DTUTL($P(D,"|",2))
+ .Q:DT=""!(TM="")  ; если неизвестно дата/время - ничего не пишем
+ .I TP="CHKM" D CHKMESS(NI,DT,TM) Q ; подтв. событий
+ .I TP="NAZ" D CHKNAZ(NI,DT,TM,$P(D,"|",3),$P(D,"|",4),$P(D,"|",5)) Q 
+ .S D=$P(D,"|",3,99),sTP=$S(TP="DB":$P(D,"|",1),1:TP),DID="",DB=DBx
+ .S R=$$TM^DTUTL(TM)
+ .I sTP="BP" S DB=$$GETDBID(NI,"med_mon/bpp",DT_",1") 
+ .I sTP="DM" S DB=$$GETDBID(NI,"med_mon/diabet",DT_",1")
+ .I sTP="DF" S DB=$$GETDBID(NI,"med_mon/bread",DT_",1")
+ .I sTP="WH" S DB=$$GETDBID(NI,"med_mon/weight",DT_",1")
+ .I sTP="CRDS" S DID=$$MKDOC(NI,"med_mon/cardio","Кардиограмма, "_R,DT_","_TM)
+ .I sTP="HRSPO2" S DID=$$MKDOC(NI,"med_mon/oxi","Пульсоксиметрия, "_R,DT_","_TM)
+ .I sTP="DSREC" S DID=$$MKDOC(NI,"med_mon/diary","Дневник, "_R,DT_","_TM)
+ .S:TP'="DB" D=$$NULLY(D)
+ .I sTP="CRDS",DID'="" S R=$P(D,"|",3) S:R'="" ^EPRD(NI,DID,"HR")=R
+ .S F=0
+ .S:$G(^EPRD(NI,DB,DT,TM))'=D ^EPRD(NI,DB,DT,TM)=D,F=1
+ .S:DID'="" ^EPRD(NI,DID)=$P(D,"|",2)
+ .I F L ^TMMON S ^TMMON(NI,DB,DT_","_TM)="" L -^TMMON D MKMSG^IMEDMONS(NI,$S(DID="":DB,1:DID),DT,TM)
+ D CR^RWU
+ g:NI="" ioe
+ ; send data
+ S %L="[events]"_CR ; неделю назад
+ S D=0 F  S D=$O(^MESS(NI,D)) Q:D=""  I D>($H-7) S TM="" F  S TM=$O(^MESS(NI,D,TM)) Q:TM=""  S A=+$P(^(TM),"|",1),%L=%L_$$DT^DTUTL(D)_","_$$TM^DTUTL(TM)_"|"_A_CR
+ S %L=%L_CR_"[messages]"_CR
+ S A="" F  S A=$O(^MESS(NI,0,A)) Q:A=""  S %L=%L_A_"|"_$$DW^TXTU(^(A))_CR
+ioe ;S %L=%L_"[config]"
+ S %B=".txt"
+ Q
+RETYPE(NETTP) ; Recode type
+ Q:NETTP="BP" "med_mon/bpp" 
+ Q:NETTP="DM" "med_mon/diabet"
+ Q:NETTP="DF" "med_mon/bread"
+ Q:NETTP="WH" "med_mon/weight"
+ Q:NETTP="CRDS" "med_mon/cardio"
+ Q:NETTP="HRSPO2" "med_mon/oxi"
+ Q:NETTP="DSREC" "med_mon/diary"
+ Q ""
+REUID(UID) ; Recode UID
+ Q:UID="med_mon/bpp" "BP"
+ Q:UID="med_mon/diabet" "DM"
+ Q:UID="med_mon/bread" "DF"
+ Q:UID="med_mon/weight" "WH"
+ Q:UID="med_mon/cardio" "CRDS"
+ Q:UID="med_mon/oxi" "HRSPO2"
+ Q:UID="med_mon/diary" "DSREC"
+ Q ""
+CHKMESS(NI,DT,TM) 
+ S:$D(^MESS(NI,DT,TM)) $P(^(TM),"|",2)="*"
+ Q
+CHKNAZ(NI,DT,TM,KEY,CARD,REZ) ; Отметить выполнение назначения
+ N R,ID,TP,NZ
+ S R=$$GETSYS^ISCARD(CARD)
+ I R="",KEY="" Q 
+ S TP=$P(R,":",1),ID=$P(R,":",2,99)
+ I TP="RLS" S NZ=$$FNDLEK^INAZLEK(NI,"",ID)
+ Q:NZ="" 
+ D DOLEK^INAZLEK(NZ,DT_","_TM)
+ Q
+NULLY(X) ; remove '-1.0' values
+ N I,A F I=1:1 S A=$P(X,"|",I) Q:A=""  S:A="-1.0" $P(X,"|",I)=""
+ Q X
+CVIEW ; Cardio view databases
+ N NI,TP1,TP2,ID,A
+ S TP1=$$FNDUID^YIMHS("med_mon/cardio")
+ S TP2=$$FNDUID^YIMHS("med_mon/oxi")
+ I TP1="",TP2="" Q 
+ K ^BUF($J)
+ S NI=""
+ D OWF^RWU(".txt")
+ F  S NI=$O(^EPRI("t",NI)) Q:NI=""  D:$S(TP1="":0,1:$D(^(NI,TP1)))!$S(TP2="":0,1:$D(^(NI,TP2)))
+ .; Q:$$CREATED^IPAC(NI)<(+$H-90)  ; за 3 посл месяца
+ .S ^BUF($J,"n",NI)=""
+ .S A=$$GET^IPAC(NI,"fiof")_"|"_$$GET^IPAC(NI,"fioi")_"|"_$$GET^IPAC(NI,"fioo")_"|"_$$GETE^IPAC(NI,"datar")
+ .D WC^RWU("P"_NI_"|"_A_"||"_$$GET^IPAC(NI,"pager")_CR)
+ S NI="" F  S NI=$O(^BUF($J,"n",NI)) Q:NI=""  D
+ .S ID="" F  S ID=$O(^EPRI("t",NI,TP1,ID)) Q:ID=""  D
+ ..S A=$P($G(^EPR(NI,ID,"dt")),"|",1) Q:+A<(+$H-120)  ; за посл. месяц
+ ..S A=$$DT^DTUTL(A)_","_$$TM^DTUTL(A)
+ ..D WC^RWU("C"_NI_"|"_ID_"|"_A_"|"_$G(^EPRD(NI,ID))_CR)
+ .S ID="" F  S ID=$O(^EPRI("t",NI,TP2,ID)) Q:ID=""  D
+ ..S A=$P($G(^EPR(NI,ID,"dt")),"|",1) Q:+A<(+$H-120)  ; за посл. месяц
+ ..S A=$$DT^DTUTL(A)_","_$$TM^DTUTL(A)
+ ..D WC^RWU("C"_NI_"|"_ID_"|"_A_"|"_$G(^EPRD(NI,ID))_CR)
+ D C^RWU
+ K ^BUF($J)
+ Q
+GETDBID(NI,UID,DT) ; Создать основной док. и по дням
+ N TP,A,DB
+ S TP=$G(UL(UID))
+ S DB=$S(TP="":$$FNDUID^IEPR(NI,UID),1:$$FNDTP^IEPR(NI,TP))
+ S:DB="" DB=$$MKDOC(NI,UID,"",+DT)
+ S:TP="" TP=$$FNDUID^YIMHS(UID),UL(UID)=TP
+ Q:$$FNDTMTP^IEPR(NI,DT,TP)'="" DB
+ S A=$$MKDOC(NI,UID,"",DT,1) ; только заголовок док., дубль уникального
+ D KILL^IEPR(NI,A,"bd")
+ Q DB
+ 
+ K ^XXX
+ S %L="[events]"_CR,CDT=$P($H,",",1)-1
+ S DD="" F  S DD=$O(^MESS(NI,DD)) Q:DD=""  I +DD>0,DD>CDT S TT="" F  S TT=$O(^MESS(NI,DD,TT)) Q:TT=""  S KOD=+^(TT),%L=%L_$$DT^DTUTL(DD)_","_$$TM^DTUTL(","_TT)_"|"_KOD_CR
+ S %L=%L_CR_"[messages]"_CR
+ S KOD="" F  S KOD=$O(^MESS(NI,0,KOD)) Q:KOD=""  S L=$$DW^TXTU(^(KOD)),%L=%L_KOD_"|"_L_CR
+ S %L=%L_CR
+ ; todo I $D(^MESS(NI,"insulin")) S R=^("insulin"),R=$J(R,0,1)*10,%L=%L_"[config]"_CR_"InsulinCurent="_R_CR K ^("insulin")
+ S %FN=".txt"
+ Q
+O ; Уровень сахара/инсулин
+ N DTT
+ S DTT=$S($$GET^IEPR(N,ID,"bd"):"",1:+$P($$GET^IEPR(N,ID,"dt"),"|",1))
+ N IT,ITC,IT0,IT1,IT2,IT3,IT4,IT5,NA,nID,I,A,L,X,DT,TM,ID,K
+ N NSG,GLUS,NSI,INUS
+ S IT="<item>",IT0="</item>",ITC=IT0_IT,IT3="<item class=""2"">",IT4="<item class=""1"">",IT1="<item class=""4"">",IT2="<item class=""5"">",IT5="<item class=""3"">"
+ S nID=$$FNDUID^IEPR(N,"med_mon/settings")
+ S ID=$$FNDUID^IEPR(N,"med_mon/diabet") ; всегда первый докум.
+ F I=1:1:4 S NA(I)=0
+ S:nID'="" NA(1)=+$G(^EPRD(N,nID,"glucosemin")),NA(2)=+$G(^("glucosemax")),NA(3)=+$G(^("insulinmin")),NA(4)=+$G(^("insulinmax"))
+ D WC^RWU("<titles>"_IT_"Дата,Время"_ITC_"Хлебные ед."_ITC_"Уровень глюкозы"_ITC_"Инсулин"_IT0_"</titles>")
+ S (NSG,GLUS,NSI,INUS)=0,DT=$S(DTT="":"",1:DTT+1)
+ F  S DT=$O(^EPRD(N,ID,DT),-1) Q:DT=""!((DTT'="")&(DT<DTT))  S TM="" F  S TM=$O(^EPRD(N,ID,DT,TM)) Q:TM=""  D
+ .S L=^(TM),X=$P(L,"|",1) ; Bread
+ .S K="<key>run:CH^IMEDMON@"_N_"~"_ID_"</key>"
+ .S A="<row>"_K_IT_$$DT^DTUTL(DT)_","_$$TM^DTUTL(TM)_ITC_X_IT0
+ .S X=$P(L,"|",2),A=A_$$FSTYLE(X,NA(1),NA(2)) ; Gluсose
+ .S:+X>0 NSG=NSG+1,GLUS=GLUS+X
+ .S X=$P(L,"|",3),A=A_$$FSTYLE(X,NA(3),NA(4)) ; Insulin
+ .S:+X>0 NSI=NSI+1,INUS=INUS+X
+ .D WC^RWU(A_"</row>")
+ S:NSG=0 NSG=0.00001 S:NSI=0 NSI=0.00001
+ D:DTT'="" WC^RWU("<row>"_IT_"Среднее"_IT0_IT_IT0_IT_$FN(GLUS/NSG,"",1)_IT0_IT_$FN(INUS/NSI,"",1)_IT0_"</row>")
+ Q
+E ; Прием пищи
+ N DTT
+ S DTT=$S($$GET^IEPR(N,ID,"bd"):"",1:+$P($$GET^IEPR(N,ID,"dt"),"|",1))
+ N TIT,TIT0,IT,ITC,IT0,ID,NS,I,A,L,X,DT,TM,K
+ S IT="<item>",IT0="</item>",ITC=IT0_IT
+ D WC^RWU("<titles>"_IT_"Дата,Время"_ITC_"Хлебные ед."_ITC_"Калории"_ITC_"Белки"_ITC_"Углеводы"_ITC_"Жиры"_IT0_"</titles>")
+ S ID=$$FNDUID^IEPR(N,"med_mon/bread")
+ S DT=$S(DTT="":"",1:DTT+1)
+ F  S DT=$O(^EPRD(N,ID,DT),-1) Q:DT=""!((DTT'="")&(DT<DTT))  S TM="" F  S TM=$O(^EPRD(N,ID,DT,TM)) Q:TM=""  D
+ .S L=^(TM)
+ .S K="<key>run:CH^IMEDMON@"_N_"~"_ID_"</key>"
+ .S A="<row>"_K_IT_$$DT^DTUTL(DT)_","_$$TM^DTUTL(TM)
+ .F I=3:1:7 S A=A_ITC_$P(L,"|",I) ; H.E.,Kall,Belok,Uglev,Fat
+ .D WC^RWU(A_IT0_"</row>")
+ Q
+P ; Артериальное давление
+ N DTT
+ S DTT=$S($$GET^IEPR(N,ID,"bd"):"",1:+$P($$GET^IEPR(N,ID,"dt"),"|",1))
+ N IT,IT0,IT1,IT2,IT3,IT4,IT5,NA,nID,I,A,L,X,DT,TM,ID,K
+ S IT="<item>",IT0="</item>",IT3="<item class=""2"">",IT4="<item class=""1"">",IT1="<item class=""4"">",IT2="<item class=""5"">",IT5="<item class=""3"">"
+ S nID=$$FNDUID^IEPR(N,"med_mon/settings")
+ S ID=$$FNDUID^IEPR(N,"med_mon/bpp") ; всегда первый докум.
+ F I=1:1:6 S NA(I)=0
+ S:nID'="" NA(1)=+$G(^EPRD(N,nID,"sismax")),NA(2)=+$G(^("sismin")),NA(3)=+$G(^("diamax")),NA(4)=+$G(^("diamin")),NA(5)=+$G(^("pulsemax")),NA(6)=+$G(^("pulsemin"))
+ D WC^RWU("<titles>"_IT_"Дата,Время"_IT0_IT_"Систолическое"_IT0_IT_"Диастолическое"_IT0_IT_"Пульс"_IT0_"</titles>")
+ S DT=$S(DTT="":"",1:DTT+1)
+ F  S DT=$O(^EPRD(N,ID,DT),-1) Q:DT=""!((DTT'="")&(DT<DTT))  S TM="" F  S TM=$O(^EPRD(N,ID,DT,TM)) Q:TM=""  D
+ .S K="<key>run:CH^IMEDMON@"_N_"~"_ID_"</key>"
+ .S L=^(TM),A="<row>"_K_IT_$$DT^DTUTL(DT)_","_$$TM^DTUTL(TM)_IT0
+ .S A=A_$$FSTYLE($P(L,"|",1),NA(2),NA(1))
+ .S A=A_$$FSTYLE($P(L,"|",2),NA(4),NA(3))
+ .S A=A_$$FSTYLE($P(L,"|",3),NA(6),NA(5))
+ .D WC^RWU(A_"</row>")
+ Q
+WH ; Вес+BMI
+ N DTT
+ S DTT=$S($$GET^IEPR(N,ID,"bd"):"",1:+$P($$GET^IEPR(N,ID,"dt"),"|",1))
+ N TIT,TIT0,IT,ITC,IT0,ID,NS,I,A,L,X,DT,TM,K
+ S IT="<item>",IT0="</item>",ITC=IT0_IT
+ D WC^RWU("<titles>"_IT_"Дата,Время"_ITC_"Вес"_ITC_"Индекс массы тела"_IT0_"</titles>")
+ S ID=$$FNDUID^IEPR(N,"med_mon/weight")
+ S DT=$S(DTT="":"",1:DTT+1)
+ F  S DT=$O(^EPRD(N,ID,DT),-1) Q:DT=""!((DTT'="")&(DT<DTT))  S TM="" F  S TM=$O(^EPRD(N,ID,DT,TM)) Q:TM=""  D
+ .S L=^(TM)
+ .S K="<key>run:CH^IMEDMON@"_N_"~"_ID_"</key>"
+ .S A="<row>"_K_IT_$$DT^DTUTL(DT)_","_$$TM^DTUTL(TM)
+ .F I=1,2 S A=A_ITC_($P(L,"|",I)/10)
+ .D WC^RWU(A_IT0_"</row>")
+ Q
+chHH(UID) ; Заголовок графика
+ Q:UID="med_mon/bpp" "Систолическое|Диастолическое|Пульс"
+ Q:UID="med_mon/bread" "Хлебные ед.|Калории|Белки|Углеводы|Жиры"
+ Q:UID="med_mon/diabet" "Хлебные ед.|Уровень глюкозы|Инсулин"
+ Q:UID="med_mon/weight" "Вес|Индекс массы тела"
+ Q ""
+CH(KEY) ; График по параметрам
+ N N,ID,DT,TM,L,A,TP,NM,HH
+ S N=$P(KEY,"~",1),ID=$P(KEY,"~",2),TP=+$G(^EPR(N,ID,"t")),NM=$G(^("n"))
+ S TP=$G(^DTYPE(TP,"uid"))
+ S HH=$$chHH(TP)
+ D OWF^RWU(".xmlb")
+ D WC^RWU(^PP(0,1)_"<nb_console><run>RUN_HREPORT{kchart.frm}</run><kchart><label data="""_NM_"""/>")
+ D WC^RWU("<chart style=""29"" title="""_NM_""">X|"_HH_"")
+ S N=$P(KEY,"~",1),ID=$P(KEY,"~",2),DT=""
+ F  S DT=$O(^EPRD(N,ID,DT),-1) Q:DT=""  S TM="" F  S TM=$O(^EPRD(N,ID,DT,TM)) Q:TM=""  D
+ .S L=^(TM)
+ .S:TP="med_mon/bread" L=$P(L,"|",3,7)
+ .S A=$$DTM2^DTUTL(DT_","_TM)_"|"_L
+ .D WC^RWU(CR_A)
+ D WC^RWU("</chart></kchart><run>RUN_MREPORT{kchart.frm}</run></nb_console>")
+ D C^RWU
+ Q
+FSTYLE(X,Xmin,Xmax) 
+ S X=@("IT"_$S(+X'>0:"",X<Xmin:1,X>Xmax:5,1:3))_X_IT0
+ Q X
+OX ; Пульсоксиметр - todo
+ Q
+UID2NM(UIDL) ; Имя из сокращенного UID
+ Q:UIDL="bpp" "Артериальное давление"
+ Q:UIDL="diabet" "Уровень глюкозы и инсулин"
+ Q:UIDL="bread" "Прием пищи"
+ Q:UIDL="weight" "Измерение веса"
+ Q:UIDL="cardio" "Кардиограмма"
+ Q:UIDL="oxi" "Пульсоксиметрия"
+ Q:UIDL="diary" "Дневник пациента"
+ Q ""
+MKDOC(NI,UID,NAM,DTT,DBL)      ; ФОРМИРОВАНИЕ ДОКУМЕНТА
+ Q:$P(UID,"/",1)'="med_mon" ""
+ N UC,ID,EXT,DIR,NM,BD,FIL,PROG,RI,HH,DT
+ S UC=$P(UID,"/",2,9),ID=$$FNDUID^YIMHS(UID),NAM=$G(NAM),DT=$G(DTT)
+ S:UC="settings"!(UC="data") DT=+$H
+ I ID'="" S BD=$$GET^IMHS(ID,"bdoc") G MKEPR
+ S DIR=$$ADDF^YIMHS("Мониторирование"),EXT="tab"
+ S NM=$$UID2NM(UC)
+ I UC="shedule" D  G MKDend
+ .S NM="Лечебно-охранительный режим"
+ .S EXT="frm",BD=1
+ I UC="bpp" D  G MKDend
+ .S BD=1,PROG="P^IMEDMON",FIL="labs.css",RI="rrr"
+ I UC="diabet" D  G MKDend
+ .S BD=1,PROG="O^IMEDMON",FIL="labs.css",RI="rrr"
+ I UC="bread" D  G MKDend
+ .S BD=1,PROG="E^IMEDMON",RI="rrr"
+ I UC="weight" D  G MKDend
+ .S BD=1,PROG="WH^IMEDMON",RI="rrr"
+ I UC="cardio" D  G MKDend
+ .S EXT="exe",FIL="cardio1k:cds:DBDIR",RI="rrr"
+ I UC="oxi" D  G MKDend
+ .S EXT="exe",FIL="oxiview:mds:DBDIR",RI="rrr"
+ I UC="diary" D  G MKDend
+ .S EXT="amr",RI="rrr",FIL="DBDIR"
+ I UC="settings" D  G MKDend
+ .S NM="Профиль мониторирования"
+ .S EXT="rpt",BD=1
+ I UC="data" D  G MKDend
+ .S NM="Данные мониторирования"
+ .S EXT="nul",BD=1,USE=0,RI="rrr",HH=1
+MKDend 
+ S:NM="" NM=NAM
+ S ID=$$ADDT^YIMHS(NM,$$ADDF^YIMHS("Мониторирование"),EXT,UID)
+ D SET^YIMHS(ID,"rights",$S($D(RI):RI,1:"aaa"))
+ D:$D(FIL) SET^YIMHS(ID,"pfile",FIL)
+ D:$D(PROG) SET^YIMHS(ID,"rproc",PROG)
+ D:$D(BD) SET^YIMHS(ID,"bdoc",1)
+ D:$D(USE) SET^YIMHS(ID,"use",USE)
+ D:$D(HH) SET^YIMHS(ID,"hidden",HH)
+ D MKIDX^IMHS(ID)
+MKEPR 
+ S DT=$G(DT)
+ I +$G(BD),'+$G(DBL) S NM=$$FNDTP^IEPR(NI,ID) Q:NM'="" NM ; уникальные не создаем
+ I DT'="" S NM=$$FNDTMTP^IEPR(NI,DT,ID) Q:NM'="" NM ; уже есть с этой датой
+ S UC=$$MKDOC^IEPR(NI,ID,NAM,1,DT)
+ Q UC
+IsMSGFIL(NI,ID,DT,TM) ; Результат - файл
+ Q:$$UID^IMHS(NI,ID)["cardio" 1
+ Q 0
+REGLCL 
+ K ^LCLI("mhealth")
+ S ^LCLI("mhealth")="Телемониторинг"
+ Q
+INITDB 
+ N I
+ S ^MN("root","mhmev")="Виды событий мониторинга"
+ S ^MN("root","mhmst")="Статусы событий мониторинга"
+ 
+ D:'$D(^MN("mhmev"))
+ .S I=$$NEWIDX^ISPRAV("mhmev")
+ .D ADD^ISPRAV("mhmev","Передано SMS врачу|vrsms|2")
+ .D ADD^ISPRAV("mhmev","Передан email врачу|vrmail|2")
+ .D ADD^ISPRAV("mhmev","Вызван врач|vrcall|2")
+ .D ADD^ISPRAV("mhmev","Вызов СНМП|snmp|4")
+ .D ADD^ISPRAV("mhmev","Передано SMS родственнику|fhsms|1")
+ .D ADD^ISPRAV("mhmev","Передан email родственнику|fhmail|1")
+ .D ADD^ISPRAV("mhmev","Передан email пациенту|pacmail|3")
+ .D ADD^ISPRAV("mhmev","Отправлено в medarhiv.ru|medarh|1")
+ .D ADD^ISPRAV("mhmev","Изменен статус|st||1")
+ .D ADD^ISPRAV("mhmev","Изменен приоритет|pri||1")
+ 
+ D:'$D(^MN("mhmst"))
+ .S I=$$NEWIDX^ISPRAV("mhmst")
+ .D ADD^ISPRAV("mhmst","Обработано")
+ .D ADD^ISPRAV("mhmst","Передано врачу")
+ .D ADD^ISPRAV("mhmst","Пациент оповещен")
+ .D ADD^ISPRAV("mhmst","Передано в СНМП")
+ .D ADD^ISPRAV("mhmst","Ошибочное")
+ Q

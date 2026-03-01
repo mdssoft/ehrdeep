@@ -1,0 +1,61 @@
+INTUTL ; Всяко-разно [ 06/03/2012  2:41 PM ]
+Eload ; Загрузка Е-добавок
+ O 51:("e.txt":"R")
+ U 51
+ k ^BUF("e")
+ S R="",J=1
+ F  U 51 R A#1  Q:$ZC  D 
+ .S R=R_$$WD^TXTU(A)
+ .I $E(R,$L(R)-6,$L(R))'="&E-код:"!($L(R)<8) Q
+ .S R=$E(R,1,$L(R)-7)
+ .F I=1:1:99 S X=$P(R,"}",I) Q:X=""  S P=$$TRIM^TXTU($P(X,":",1)),D=$$TRIM^TXTU($P(X,":",2)) S:P'="&E-код" ^BUF("e",J,P)=D S:P="&E-код" ^BUF("e",J)=D
+ .S R="&E-код:"
+ .S J=J+1
+ K ^BUF("ee")
+ S I="" F  S I=$O(^BUF("e",I)) Q:I=""  s D=^(I),P="" F  S P=$O(^BUF("e",I,P)) Q:P=""  S ^BUF("ee",D,P)=^BUF("e",I,P)
+ C 51
+ Q
+EHload 
+ O 51:("e.htm":"R")
+ U 51
+ S R="",J=1
+ F  U 51 R A#1  Q:$ZC  D
+ .S R=R_$$WD^TXTU(A)
+ .Q:'$F(R,"</tr>")
+ .S R1=$P($P(R,"</tr>",1),"<tr>",2)
+ .F I=1:1:99 S X=$P($P(R1,"</td>",I),">",2,99) Q:X=""  D
+ ..S:X["<span" X=$P($P(X,"</span>",1),">",2,99)
+ ..S X=$$TRIM^TXTU($$DBLSP^TXTU($$GT^TXTU($TR(X,$C(9)," "))))
+ ..Q:X=""
+ ..I I=1 S M=$S(X["**":2,X["*":1,1:0),X=$TR(X,"-*<>/pI()",""),E=X S:M ^BUF("ee",E,"СанПиН")=M u 0 w E_" ;" Q
+ ..Q:E="" 
+ ..S X=$$TRT^TXTU(X,"<br>",";")
+ ..I I=3,'$D(^BUF("ee",E,"Название")) S ^BUF("ee",E,"Название")=X ; u 0 W !,E
+ ..I I=2,'$D(^BUF("ee",E,"Международное название")) s ^BUF("ee",E,"Международное название")=X
+ ..I I=4,'$D(^BUF("ee",E,"Описание")) s ^BUF("ee",E,"Описание")=X
+ ..; u 0 W !,"I="_I_", V="_X
+ .S R=""
+ C 51
+ Q
+EFields 
+ N KKK
+ S I="" F  S I=$O(^BUF("e",I)) Q:I=""  D
+ .S F="" F  S F=$O(^BUF("e",I,F)) Q:F=""  S KKK(F)=""
+ S F="" F  S F=$O(KKK(F)) Q:F=""  W !,F
+ Q
+Ewrite 
+ O 51:("e.sqlite":"W")
+ U 51
+ s E="" F  S E=$O(^BUF("ee",E)) Q:E=""  D
+ .S R=E_"|"_$G(^(E,"Название"))
+ .S R=R_"|"_$G(^("Международное название"))
+ .S R=R_"|"_$G(^("Функция"))
+ .S R=R_"|"_$G(^("СанПиН"))
+ .S R=R_"|"_$G(^("Описание"))
+ .S R=R_"|"_$G(^("Воздействие"))
+ .S R=R_"|"_$G(^("Потенциальные эффекты"))
+ .S R=R_"|"_$G(^("Возможное пищевое использование"))
+ .S R=R_"|"_$G(^("Другие варианты использования"))
+ .W !,$$DW^TXTU(R)
+ C 51
+ Q

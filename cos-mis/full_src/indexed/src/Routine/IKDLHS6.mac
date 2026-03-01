@@ -1,0 +1,42 @@
+IKDLHS6 ; Драйвер Humastar 600 [ 03/09/2018  2:27 PM ]
+IMP ; Import from network file
+ N J,R,NI,ID,DT,DTM,DTR,VAL,NMAX,NMIN,EID,DEV,PRM,I,MOD,SSTI,SBS,LST
+ D ORH^RWU
+ S DEV="HS600"
+ S MOD=$G(^cfg("lab","hs6-idmod")),SSTI=""
+ S SBS=$G(^cfg("lab","hs6-sbs"))
+ K ^KKKH s ^KKKH=$H
+ F J=1:1 S R=$$R^RWU Q:%IFN["Z"  D:R'=""
+ .S ^KKKH(J)=R
+ .S R=$TR(R,"|",";") ; if table import
+ .F I=1:1:$L(R,";") S $P(R,";",I)=$$rekav($P(R,";",I))
+ .S ID="",NI=$P(R,";",2) Q:NI="" 
+ .I MOD S ID=NI,NI=$G(^MLABI("c",ID)) Q:NI="" 
+ .I 'MOD,'$$EXIST^IPAC(NI) Q 
+ .S PRM=$P(R,";",3) Q:PRM="" 
+ .S VAL=$$NNUM^TXTU($P(R,";",5))
+ .S NMIN=$P(R,";",6),NMAX=$P(R,";",7)
+ .S DTM=$$DI^DTUTL($P(R,";",10)),DTR=$$DTI^DTUTL($P(R,";",11))
+ .Q:DTM="" 
+ .Q:'$D(^LABT("DEV",DEV,"t",PRM))  ; TODO - отпр. в ошибки
+ .S PRM=$P(^LABT("DEV",DEV,"t",PRM),"|",1)
+ .S DTM=DTM_",0"
+ .S:'MOD EID="hs6-"_NI_"-"_DTM ; ext unique code
+ .I 'MOD D mkr Q:ID=""
+ .I ID'=SSTI S SSTI=ID D:'$$IsSTATE^IMLAB(NI,ID,3) SETSTAT^IMLAB(NI,ID,3,1)
+ .D SET^IMLAB(ID,PRM,VAL,DEV,"",DTR)
+ .D OKPRM^IMLABW(DEV,ID,PRM)
+ .S LST(ID)=""
+ I SBS S ID="" F  S ID=$O(LST(ID)) Q:ID=""  D SBREZ^NMLABR(ID,1) 
+ D CR^RWU
+ D MSG^RWU("OK")
+ Q
+rekav(R) ; Удалить начальные и конечные кавычки
+ N C
+ F  S C=$E(R,1) Q:C'=""""  S R=$E(R,2,$L(R))
+ F  S C=$E(R,$L(R)) Q:C'=""""  S R=$E(R,1,$L(R)-1)
+ Q R
+mkr ; Make result record
+ S ID=$P($$GETELAB^IMLAB(1,EID),"|",2) Q:ID'="" 
+ S ID=$$MK^IMLAB(NI,DTM,"",1,EID,0,"","",0)
+ Q

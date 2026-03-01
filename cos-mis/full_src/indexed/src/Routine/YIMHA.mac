@@ -1,0 +1,236 @@
+YIMHA ;	Аналитика ЭМК [ 10/08/2018  9:12 PM ]
+FNDAN(STR,DS,DE,VR,OTD) 
+ N CNT,NI,ID,FLL,I,R,F,D,A,FTT
+ K ^BUF($J,"idx")
+ S STR=$$DBLSP^TXTU(STR) Q:STR="" 
+ S STR=$$UL^TXTU($TR(STR,";",",")),CNT=0
+ F I=1:1:$L(STR,",") S R=$$TRIM^TXTU($P(STR,",",I)) I R'=""  D
+ .I $P(R,":",1)="text" S R=$$LU^TXTU($P(R,":",2,99)) S:R'="" FTT(R)="" Q 
+ .S NI="" F  S NI=$O(^EPRI("fl","tags",R,NI)) Q:NI=""  D
+ ..Q:$D(^BUF($J,"idx",NI)) 
+ ..S F=0,ID="" F  S ID=$O(^EPRI("fl","tags",R,NI,ID)) Q:ID=""  D  Q:F 
+ ...S D=+$P($G(^EPR(NI,ID,"dt")),"|",1) Q:'D  Q:D<DS  Q:D>DE 
+ ...S F=1
+ ..S:F ^BUF($J,"idx",NI)="",CNT=CNT+1
+ D:$D(FTT) fndTXT($$KDR^IUSER(),0)
+ D OWF^RWU(".txt")
+ D WC^RWU("№ И.Б.|Фамилия|Имя|Отчество|Оформ.|Договор|Срок")
+ D:CNT WC^RWU(CR_"|Найдено: "_CNT)
+ S NI="" F  S NI=$O(^BUF($J,"idx",NI)) Q:NI=""  D
+ .S R=$$FIO^IPAC(NI)
+ .S A="|"_$$GETE^IPAC(NI,"ofor")_"|"_$$GETE^IPAC(NI,"stc")_"|"_$$GETE^IPAC(NI,"dog_to")
+ .D WC^RWU(CR_NI_"|"_$P(R," ",1)_"|"_$P(R," ",2)_"|"_$P(R," ",3)_A)
+ D C^RWU
+ K ^BUF($J,"idx")
+ Q
+fndTXT(VR,TC) ; Поиск текста
+ ; TC - число совпадений
+ N DT,NI,ID,FL,TX,R,F
+ S TC=+$G(TC)
+ S DT=DS-1 F  S DT=$O(^EPRI("dt",DT)) Q:DT=""!(DT>DE)  D
+ .S NI="",F=0
+ .F  S NI=$O(^EPRI("dt",DT,NI)) Q:NI=""  D:'$D(^BUF($J,"idx",NI))
+ ..S ID="" F  S ID=$O(^EPRI("nd",NI,DT,ID)) Q:ID=""  D
+ ...I VR'="",$P(^(ID),"|",2)'=VR Q 
+ ...S FL="" F  S FL=$O(^EPRD(NI,ID,FL)) Q:FL=""  D  Q:F 
+ ....S R=$G(^(FL)) Q:R=""
+ ....S R=$$LU^TXTU(R),F=0
+ ....S TX="" F  S TX=$O(FTT(TX)) Q:TX=""  I R[TX S F=F+1 Q:'TC 
+ ....I 'TC Q:'F  
+ ....I TC Q:F<TC 
+ ....S:'$D(^BUF($J,"idx",NI)) ^(NI)=ID,CNT=CNT+1
+ Q
+FTAB(DS,DE,STR1,STR2,STR3) ; Вывод таблицы с 3-мя фильтрами 
+ N CNT,NI,ID,FLL,I,R,F,D,A,L2,L3,J,T
+ K ^BUF($J,"idx")
+ S STR1=$$WD^TXTU(STR1),STR2=$$WD^TXTU(STR2),STR3=$$WD^TXTU(STR3)
+ S STR1=$$UL^TXTU($TR($$DBLSP^TXTU(STR1),";",","))
+ I STR1="" D MSG^RWU("Фильтр не задан.") Q 
+ S STR2=$$UL^TXTU($TR($$DBLSP^TXTU(STR2),";",","))
+ S STR3=$$UL^TXTU($TR($$DBLSP^TXTU(STR3),";",","))
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ ; приводим доп. фильтр в нормированный вид
+ I STR2'="" S R=STR2,STR2="",J=1 F I=1:1:$L(R,",") S T=$$TRIM^TXTU($P(R,",",I)) S:T'="" $P(STR2,"|",J)=T,J=J+1
+ I STR3'="" S R=STR3,STR3="",J=1 F I=1:1:$L(R,",") S T=$$TRIM^TXTU($P(R,",",I)) S:T'="" $P(STR3,"|",J)=T,J=J+1
+ S L2=$L(STR2,"|"),L3=$L(STR3,"|"),CNT=0
+ 
+ F I=1:1:$L(STR1,",") S R=$$TRIM^TXTU($P(STR1,",",I)) I R'=""  D
+ .S NI="" F  S NI=$O(^EPRI("fl","tags",R,NI)) Q:NI=""  D
+ ..Q:$D(^BUF($J,"idx",NI)) 
+ ..S F=0,ID="" F  S ID=$O(^EPRI("fl","tags",R,NI,ID)) Q:ID=""  D  Q:F 
+ ...I STR2'="" F J=1:1:L2 S T=$P(STR2,"|",J) I $D(^EPRI("fl","tags",T,NI,ID)) S F=2 Q
+ ...I STR2'="",F'=2 Q
+ ...I STR3'="" F J=1:1:L3 S T=$P(STR3,"|",J) I $D(^EPRI("fl","tags",T,NI,ID)) S F=2 Q
+ ...I STR3'="",F'=2 Q
+ ...S F=0 
+ ...S D=+$P($G(^EPR(NI,ID,"dt")),"|",1) Q:'D  Q:D<DS  Q:D>DE 
+ ...S F=1
+ ..S:F ^BUF($J,"idx",NI)=ID,CNT=CNT+1
+ D OWF^RWU(".txt")
+ D WC^RWU("mhist:env:pac|№ И.Б.|Пациента "_$$TXTP^DTUTL(DS,DE)_"|Возраст|Пол|Диагноз|Теги")
+ D:CNT WC^RWU(CR_"|Найдено: "_CNT)
+ S NI="" F  S NI=$O(^BUF($J,"idx",NI)) Q:NI=""  D
+ .S ID=^(NI)
+ .S A=$$FIO^IPAC(NI)_"|"_$$AGE^IPAC(NI)_"|"_$$GETE^IPAC(NI,"pol")
+ .S D=$P($G(^EPRD(NI,ID,"diag"))," ",1)
+ .S:D="" D=$P($G(^EPRD(NI,ID,"диагноз"))," ",1) ; TODO - from ^ZNF
+ .S A=A_"|"_D_"|"_$G(^EPRD(NI,ID,"tags"))
+ .D WC^RWU(CR_NI_"|"_NI_"|"_A)
+ D C^RWU
+ K ^BUF($J,"idx")
+ Q
+MKIDXT() ; make all
+ N TPL,TP,FL,NI,ID
+ K ^EPRI("fl")
+ S TP="" F  S TP=$O(^DTYPE(TP)) Q:TP=""  D
+ .S FL="" F  S FL=$O(^DTYPE(TP,"fields",FL)) Q:FL=""  D
+ ..S:$D(^FLTYPE(FL)) TPL(TP,FL)=""
+ S NI="" F  S NI=$O(^EPRI("t",NI)) Q:NI=""  D
+ .S TP="" F  S TP=$O(^EPRI("t",NI,TP)) Q:TP=""  D:$D(TPL(TP))
+ ..S ID="" F  S ID=$O(^EPRI("t",NI,TP,ID)) Q:ID=""  D
+ ...S FL=""
+ ...F  S FL=$O(TPL(TP,FL)) Q:FL=""  D:$D(^EPRD(NI,ID,FL)) MKIDX(NI,ID,FL,^(FL))
+ Q
+CNGT(FLNM,FR,TO) ; Изменить текст поля
+ ; FLNM - имя поля 
+ N TPL,TP,FL,NI,ID,R
+ S TP="" F  S TP=$O(^DTYPE(TP)) Q:TP=""  D
+ .S FL="" F  S FL=$O(^DTYPE(TP,"fields",FL)) Q:FL=""  S:FL=FLNM TPL(TP)=""
+ S NI="" F  S NI=$O(^EPRI("t",NI)) Q:NI=""  D
+ .S TP="" F  S TP=$O(^EPRI("t",NI,TP)) Q:TP=""  D:$D(TPL(TP))
+ ..S ID="" F  S ID=$O(^EPRI("t",NI,TP,ID)) Q:ID=""  D
+ ...Q:'$D(^EPRD(NI,ID,FLNM))
+ ...S R=$$UL^TXTU(^(FLNM))
+ ...Q:R'[FR 
+ ...W !,"."_R_">"_$$TRT^TXTU(R,FR,TO)
+ ...S ^EPRD(NI,ID,FLNM)=$$TRT^TXTU(R,FR,TO) 
+ Q
+FTXT(DS,DE,VR,TXT,TXT1,MOD,FLL) ; Поиск по тексту заключения
+ ; TXT - фраза 1
+ ; TXT1 - фраза 2
+ ; MOD - поиск по или (0) / и (1) фраз 
+ ; FLL - список полей, которые выводить
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),FLL=$$WD^TXTU(FLL),MOD=+$G(MOD)
+ S TXT=$$LU^TXTU($$WD^TXTU(TXT)),TXT1=$$LU^TXTU($$WD^TXTU(TXT1))
+ N FTT,NI,ID,IDX,A,I,F,CNT,FC
+ S FC=0
+ S:TXT'="" FTT(TXT)="",FC=1
+ S:TXT1'="" FTT(TXT1)="",FC=FC+1
+ S FLL=$TR(FLL,";/\:",",,,,")
+ K ^BUF($J,"idx")
+ S CNT=0
+ D:$D(FTT) fndTXT(VR,$S(MOD:FC,1:0))
+ D OWF^RWU(".txt")
+ S A="mhist:env:pac|П.п.|№ И.Б.|Пациент "_$$TXTP^DTUTL(DS,DE)_"|Возраст|Пол|Документ|Дата"
+ I FLL'="" F I=1:1:$L(FLL,",") S A=A_"|"_$P(FLL,",",I)
+ D WC^RWU(A)
+ S IDX=1
+ S NI="" F  S NI=$O(^BUF($J,"idx",NI)) Q:NI=""  D
+ .S ID=^(NI)
+ .S A=NI_"|"_IDX_"|"_NI_"|"_$$FIO^IPAC(NI)_"|"
+ .S A=A_$$AGE^IPAC(NI,DE)_"|"_$$GETE^IPAC(NI,"pol",DE)_"|"
+ .S A=A_$G(^EPR(NI,ID,"n"))_"|"_$$DT^DTUTL($G(^EPR(NI,ID,"dt")))
+ .I FLL'="" F I=1:1:$L(FLL,",") S F=$P(FLL,",",I) I F'="" S A=A_"|"_$TR($G(^EPRD(NI,ID,F)),"|"_CR,"   ")
+ .D WC^RWU(CR_A)
+ .S IDX=IDX+1
+ K ^BUF($J,"idx")
+ D C^RWU
+ Q
+FFN(DS,DE,VR,FLSEL,TXT,FLL) ; Поиск по тексту заключения
+ ; VR - автор
+ ; FLSEL - выбранное поле
+ ; TXT - формула
+ ; FLL - список полей, которые выводить
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),FLL=$$WD^TXTU(FLL)
+ S TXT=$$WD^TXTU(TXT)
+ N FTT,NI,ID,IDX,A,I,F,CNT
+ S FLL=$TR(FLL,";/\:",",,,,")
+ K ^BUF($J,"idx")
+ S CNT=0
+ D fndFX(VR,FLSEL,TXT)
+ D OWF^RWU(".txt")
+ S A="mhist:env:pac|П.п.|№ И.Б.|Пациент "_$$TXTP^DTUTL(DS,DE)_"|Возраст|Пол|Документ|Дата"
+ I FLL'="" F I=1:1:$L(FLL,",") S A=A_"|"_$P(FLL,",",I)
+ D WC^RWU(A)
+ S IDX=1
+ S NI="" F  S NI=$O(^BUF($J,"idx",NI)) Q:NI=""  D
+ .S ID=^(NI)
+ .S A=NI_"|"_IDX_"|"_NI_"|"_$$FIO^IPAC(NI)_"|"
+ .S A=A_$$AGE^IPAC(NI,DE)_"|"_$$GETE^IPAC(NI,"pol",DE)_"|"
+ .S A=A_$G(^EPR(NI,ID,"n"))_"|"_$$DT^DTUTL($G(^EPR(NI,ID,"dt")))
+ .I FLL'="" F I=1:1:$L(FLL,",") S F=$P(FLL,",",I) I F'="" S A=A_"|"_$TR($G(^EPRD(NI,ID,F)),"|"_CR,"   ")
+ .D WC^RWU(CR_A)
+ .S IDX=IDX+1
+ K ^BUF($J,"idx")
+ D C^RWU
+ Q
+fndFX(VR,FL,EXE) ;
+ N DT,NI,ID,TX,R,F,PL,val,X,FNX,P1,P2,TEST
+ ; Exec prms.
+ S PL("val")="",EXE="val"_EXE
+ S FNX=$$EQ^IEVAL(EXE,"PL") K PL ; TODO - более понятные формулы
+ S PP1=$P(FNX,"|",1),PP2=$P(FNX,"|",2),FNX=$P(FNX,"|",3,99)
+ 
+ S DT=DS-1 F  S DT=$O(^EPRI("dt",DT)) Q:DT=""!(DT>DE)  D
+ .S NI="",F=0
+ .F  S NI=$O(^EPRI("dt",DT,NI)) Q:NI=""  D:'$D(^BUF($J,"idx",NI))
+ ..S ID="" F  S ID=$O(^EPRI("nd",NI,DT,ID)) Q:ID=""  D
+ ...I VR'="",$P(^(ID),"|",2)'=VR Q 
+ ...Q:'$D(^EPRD(NI,ID,FL))
+ ...S val=^(FL),P1=val,TEST=0
+ ...I @FNX S TEST=1
+ ...Q:'TEST 
+ ...S:'$D(^BUF($J,"idx",NI)) ^(NI)=ID,CNT=CNT+1
+ Q
+FPSTAT(DS,DE,VR,OTD,FLD) ; Статистика по разделу документов
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),FLD=$$WD^TXTU(FLD)
+ K ^BUF($J,"idx")
+ N DT,NI,ID,FL,TX,R,C,T,V
+ I FLD'="" S DT=DS-1 F  S DT=$O(^EPRI("dt",DT)) Q:DT=""!(DT>DE)  D
+ .S NI=""
+ .F  S NI=$O(^EPRI("dt",DT,NI)) Q:NI=""  D
+ ..S ID="" F  S ID=$O(^EPRI("nd",NI,DT,ID)) Q:ID=""  D
+ ...S:VR!OTD V=$P(^(ID),"|",2)
+ ...I VR'="",V'=VR Q 
+ ...I OTD'="",$$OTD^IKADRY(V)'=OTD Q 
+ ...Q:'$D(^EPRD(NI,ID,FLD)) 
+ ...S R=$E($G(^(FLD)),1,128) Q:R=""
+ ...S T=$G(^EPR(NI,ID,"t")) Q:T="" 
+ ...S C=$G(^BUF($J,"idx",T,R))
+ ...S ^(R)=C+1
+ D OWF^RWU(".txt")
+ D WC^RWU("Наименование документа "_$$TXTP^DTUTL(DS,DE)_"|Фраза|Количество")
+ S T="" F  S T=$O(^BUF($J,"idx",T)) Q:T=""  D
+ .S TX=$G(^DTYPE(T,"tname"))
+ .S R="" F  S R=$O(^BUF($J,"idx",T,R)) Q:R=""  D
+ ..S FL=$TR(R,"|"_CR,"   ")
+ ..D WC^RWU(CR_TX_"|"_FL_"|"_^(R))
+ K ^BUF($J,"idx")
+ D C^RWU
+ Q
+FLALL(X) ; Список всех полей
+ N ID,PL,NM,FLL
+ S ID=0 F  S ID=$O(^DTYPE(ID)) Q:ID=""  D
+ .Q:$G(^(ID,"use"))=0   Q:$G(^("h")) 
+ .S PL="" F  S PL=$O(^DTYPE(ID,"fields",PL)) Q:PL=""  D
+ ..S I=+$G(^(PL)) Q:'I 
+ ..S NM=$G(^(PL,"@tit")) Q:$G(^("@tp"))="n"  Q:$G(^("@sw"))=0 
+ ..S FLL(PL)=NM
+ D OWF^RWU(".txt")
+ S ID="" F  S ID=$O(FLL(ID)) Q:ID=""  D WC^RWU(CR_ID_"|"_FLL(ID))
+ D C^RWU
+ Q
+MKIDX(NI,ID,FL,X) 
+ S X=$$DBLSP^TXTU(X) Q:X=""
+ N I,R
+ S X=$$UL^TXTU($TR(X,";",","))
+ F I=1:1:$L(X,",") S R=$$TRIM^TXTU($P(X,",",I)) I R'="",'$D(^EPRI("fl",FL,R,NI,ID)) S ^EPRI("fl",FL,R,NI,ID)=""
+ Q
+REGIPROC 
+ N A,D
+ S A="ЭМК",D="d,Начальная дата,d,Конечная дата"
+ S ^IPROC(A,"Поиск информационных меток")="FTAB_YIMHA,100,5,"_D_",s,Фильтр меток,s,Дополнительный фильтр,s,Дополнительный фильтр"
+ S ^IPROC(A,"Поиск по тексту заключений")="FTXT_YIMHA,100,7,"_D_",te@net:FLST_NVFIND(""""),Автор,s,Фраза 1,s,Фраза 2,t@string:0/любую из фраз#1/все фразы,Искать,s,Отображать разделы"
+ S ^IPROC(A,"Параметрический поиск")="FFN_YIMHA,100,6,"_D_",te@net:FLST_NVFIND(""""),Автор,te@net:FLALL_YIMHA(""""),Поле,s,Формула,s,Отображать разделы"
+ S ^IPROC(A,"Статистика по разделу документов")="FPSTAT_YIMHA,1,5,"_D_",te@net:FLST_NVFIND(""""),Автор,te@storage:otd@1,Отделение,s,Имя раздела"
+ Q

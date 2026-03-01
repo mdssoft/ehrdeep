@@ -1,0 +1,42 @@
+IEVAL ; Интерпретатор - функции и алгоритмы [ 10/15/2021  3:36 PM ]
+EQ(STR,PRMS,isVL) ; Функция сравнения
+ ; STR - строка с 2-мя переменными и оператором
+ ; PRMS - действительные параметры
+ ; isVL - сразу вычислять параметры, в PRMS - значения
+ N P1,P2,OP,F,X,RET,L
+ S L=$L(STR),F=0,isVL=$G(isVL)
+ S X=$F(STR,"=") S:X F=1
+ I 'X S X=$F(STR,"<>") S:X F=2
+ I 'X S X=$F(STR,"??") S:X F=2
+ I 'X S X=$F(STR,"<") S:X F=1
+ I 'X S X=$F(STR,">") S:X F=1
+ I 'X S X=$F(STR,"?") S:X F=1
+ S P1=$E(STR,1,X-F-1),P2=$E(STR,X,L),OP=$E(STR,X-F,X-1)
+ I $E(P1)="#",$E(P1,$L(P1))="#" S P1=$$dtm($E(P1,2,$L(P1)-1))
+ I $E(P2)="#",$E(P2,$L(P2))="#" S P2=$$dtm($E(P2,2,$L(P2)-1))
+ Q:P1="" "" Q:P2="" ""
+ S OP=$S(OP="?":"[",OP="<>":"'=",1:OP)
+ S RET=""
+ G:isVL evd
+ S:$D(@PRMS@(P1)) $P(RET,"|",1)=P1,P1="P1"
+ S:$D(@PRMS@(P2)) $P(RET,"|",2)=P2,P2="P2"
+ S:P1'="P1" P1=$$num(P1)
+ S:P2'="P2" P2=$$num(P2)
+ S:OP="[" P1="$$UL^TXTU("_P1_")",P2="$$UL^TXTU("_P2_")"
+ S $P(RET,"|",3)=$S(OP="??":"$$FLinFL^TXTU("_P1_","_P2_")",1:P1_OP_P2)
+ Q RET ; prm1|prm2|exec string
+evd 
+ ; TODO - разделение переменных и имен полей
+ S:$D(@PRMS@(P1)) P1=@PRMS@(P1)
+ S:$D(@PRMS@(P2)) P2=@PRMS@(P2)
+ S P1=$$num(P1),P2=$$num(P2)
+ S:OP="[" P1="$$UL^TXTU("_P1_")",P2="$$UL^TXTU("_P2_")"
+ X "S RET="_$S(OP="??":"$$FLinFL^TXTU("_P1_","_P2_")",1:P1_OP_P2)
+ Q RET
+dtm(X) 
+ Q $S(X[":":$$TI^DTUTL(X),1:$$DI^DTUTL(X))
+num(X) 
+ Q:X="." """."""
+ I $TR(X,"1234567890.","")'="" Q """"_X_""""
+ N X1
+ S X1=$$NNUM^TXTU(X) Q:X1="" """"_X_"""" Q X1

@@ -1,0 +1,189 @@
+IKDLIMP ; Импорт заявок КДЛ [ 05/07/2019  6:32 PM ]
+THREAD ;
+ D:$D(^$R("WWWSRV")) USRCONN^WWWSRV ; for Cache
+ N I
+ S I=0,^SYNCJ("THREAD^IKDLIN-R")=1,%LOG="sys",%JOB=777
+ S $ZT="ZT^IKDLIN"
+ F  Q:$D(^SYNCJ("THREAD^IKDLIN"))  H 1 S I=I+1 I I>16 S I=0 D CRON
+ K ^SYNCJ("THREAD^IKDLIN")
+ Q
+CRON ; for ^ICRON
+ Q
+INZ ; Импорт заявки из переменных
+ ; PRM - параметры,PAC - пациент,FL - поля заявки
+ ; "bio" - биоматериалы через @
+ Q:'$D(PAC)  Q:'$D(PRM) 
+ N ID,NIB,DTM,X,B,M,I,P,X1,X2
+ S DTM=$G(FL("datetime")) S:DTM="" DTM=$H
+ S:$P(DTM,",",2)="" $P(DTM,",",2)=$P($H,",",2)
+ ; чистка/проверка
+ S (X,I)=""
+ F  S I=$O(PRM(I)) Q:I=""  I '$D(^CN(I)) S ^ERRK(I)="" K PRM(I)
+ Q:'$D(PRM)
+ ; u 0 w "-imp"
+ F X="fiof","fioi","fioo","datar","pol","stc","polis","anib","nib" S PAC(X)=$G(PAC(X))
+ F X="lab","cito","id" S FL(X)=$G(FL(X))
+ S ID=FL("id"),NIB=$G(PAC("nib"))
+ I ID'="",PAC("nib")="" S PAC("nib")=$G(^MLABI("c",ID)) ; если повторно
+ I NIB'="" G INZl  ; TODO
+ S X=PAC("pol")
+ S:'X X=$$SEXF^YIFAM(PAC("fiof"),PAC("fioi"),PAC("fioo"))
+ S NIB=$$ADD^IPAC(PAC("fiof"),PAC("fioi"),PAC("fioo"),$$DI^DTUTL(PAC("datar")),X,PAC("stc"),PAC("anib"),PAC("nib"))
+ S:PAC("stc")'="" FL("stc")=PAC("stc")
+INZl 
+ S ID=$$MK^IMLAB(NIB,DTM,"",FL("lab"),"",FL("cito"),$G(FL("prc")),FL("id"),,,$G(FL("stc")))
+ S X=$G(FL("zname")),X1=""
+ I X'="" S I=$$FIND^ICONTR(X,X) S:I="" I=$$ADD^ICONTR(X,X,+DTM,"cli") S $P(^MLAB(NIB,ID,"zi"),"|",1)=I,X1=I
+ S X=$G(FL("zsotrnm"))
+ I X'="",X1'="" S X=$$FNDADD^NPEOPL(X,X1) S:X'="" FL("zsotr")=X
+ S X=$G(FL("zsotr"))
+ S:X'="" $P(^MLAB(NIB,ID,"zi"),"|",3)=X
+ S X=$G(FL("zid"))
+ S:X'="" $P(^MLAB(NIB,ID,"zi"),"|",4)=X
+ S X=$G(FL("znapr"))
+ S:X'="" $P(^MLAB(NIB,ID,"zi"),"|",5)=X
+ F X="dcl","ndbr","sutdd" S:$D(FL(X)) ^MLAB(NIB,ID,"fl",X)=FL(X)
+ S X=$G(FL("diag"))
+ S:X'="" $P(^MLAB(NIB,ID,"nt"),"|",1)=X
+ S X=$G(FL("comm"))
+ S:X'="" $P(^MLAB(NIB,ID,"nt"),"|",2)=X
+ S X=$G(FL("rcomm"))
+ S:X'="" ^MLAB(NIB,ID,"c")=X
+ S X=$TR($G(FL("icomm")),CR," ")
+ S:X'="" ^MLAB(NIB,ID,"cs")=X
+ S X=$G(FL("bar"))
+ D:X'="" SETBAR^IMLAB(NIB,ID,X)
+ S (X,I)="" F  S I=$O(PRM(I)) Q:I=""  S X=$S(X="":"",1:X_"|")_I
+ S ^MLAB(NIB,ID,"ul")=X
+ S P=$$PRMSFU^IMLAB(X)
+ S ^MLAB(NIB,ID,"pr")=P
+ S B=$$DBLPRMS^IMLAB(P)
+ S:B'="" ^MLABE(NIB,ID,"dmi")=B
+ S B=$$BIOFPRM^IMLAB(P),M=$TR($G(FL("bio")),"@","|"),X2=0
+ I B'="" S X1=$L(B,"|") F I=1:1:X1 D
+ .S X=$P(B,"|",I)
+ .I M'="",'$$FLinFL^TXTU(M,X) Q 
+ .S:X'="" ^MLAB(NIB,ID,"mi",X)=1,X2=X2+1
+ S:X2 ^MLAB(NIB,ID,"mi")=X2
+ D GL^IEXCH("^MLAB",NIB,ID)
+ S:$G(FL("sbsc")) B=$$SBS^IMLAB(ID),FL("sbsrez")=B
+ S FL("id")=ID
+ Q
+FM1Z ; Reference
+ Q
+FM2Z ; Диалаб
+ N J,TG,R,P,X,PRM,PAC,FL
+ D ORH^RWU
+ D OEV^XMLR("FM2Zs^IKDLIMP","","")
+ F J=1:1 S R=$$R^RWU Q:%IFN["Z"  D REV^XMLR(R_$C(13,10))
+ D CEV^XMLR
+ D CR^RWU
+ D INZ
+ Q
+FM2Zs 
+ S TG=%XM(2)
+ I TG="Patient" D  Q
+ .S X=$G(%XM(2,"p","Id")) S PAC("nib")=X
+ .S X=$G(%XM(2,"p","BirthDate")) S PAC("datar")=X
+ .S X=$G(%XM(2,"p","Gender")) S PAC("pol")=X
+ .S X=$G(%XM(2,"p","LastName")) S PAC("fiof")=X
+ .S X=$G(%XM(2,"p","FirstName")) S PAC("fioi")=X
+ .S X=$G(%XM(2,"p","Patronomic")) S PAC("fioo")=X
+ 
+ I TG="Request" D  Q
+ .S X=$G(%XM(2,"p","Id")) S:X'="" FL("id")=X
+ .S X=$G(%XM(2,"p","BarCode")) S:X'="" FL("bar")=X
+ .S X=$G(%XM(2,"p","DateMaterial"))
+ .S:X="01.01.1900" X=""
+ .S:X'="" FL("datetime")=$$DIH^DTUTL(X)
+ .S X=$G(%XM(2,"p","OrgName")) I X'="",X'="-" S FL("zname")=X
+ 
+ I TG="Order" S X=$G(%XM(2,"p","Code")) S:X'="" PRM(X)="" Q
+ Q
+ZT ; Error trap
+ S ^ERLOG("IKDLIN",+$H,$P($H,",",2))=$ZE
+ G THREAD+2
+ Q
+FM3Z ; ini формат Across
+ N PRM,PAC,FL,J,R,RR,F,P,MOD
+ D ORH^RWU
+ S MOD=0,RR=""
+ F  S R=$$RA^RWU Q:%IFN["Z"  I R'="" S RR=RR_$$WD^TXTU(R) F  Q:RR'[$C(10)  S R=$P(RR,$C(10),1),RR=$P(RR,$C(10),2,999) D FM3Zp(R)
+ D:RR'="" FM3Zp(RR)
+ D CR^RWU
+ I $G(FL("id"))'="" M ^TMPKDL(+$H,FL("id"),"FL")=FL,^TMPKDL(+$H,FL("id"),"PRM")=PRM,^TMPKDL(+$H,FL("id"),"PAC")=PAC
+ ;U 0 ZW PAC,FL,PRM
+ D INZ
+ Q
+FM3Zp(R) 
+ S R=$$TRIM^TXTU($TR(R,$C(13),"")) Q:R=""
+ I $E(R)="[" S P=$P($P(R,"[",2),"]",1),MOD=$S(P="relation":1,P="patient":2,P="tests":3,P="results":4,1:0) Q 
+ Q:'MOD
+ S F=$$TRIM^TXTU($P(R,"=",1)),P=$$TRIM^TXTU($P(R,"=",2,99))
+ I $E(P)="""" S P=$E(P,2,$L(P)-1)
+ D:MOD=1
+ .S:F="org_name" FL("zname")=P
+ .S:F="org_code" FL("znameid")=P
+ .S:F="order_id_clinic" FL("znapr")=P
+ .S:F="order_date" $P(FL("datetime"),",",1)=$$DI^DTUTL(P)
+ .S:F="date_realize" $P(FL("datetime"),",",1)=$$DI^DTUTL(P)
+ .S:F="order_time" $P(FL("datetime"),",",2)=$$TI^DTUTL(P)
+ .S:F="order_id_dialab" FL("id")=P
+ .S:F="n_proba" FL("bar")=P
+ D:MOD=2
+ .I F="name" S:P'[" " PAC("fiof")=P S:P[" " PAC("fiof")=$P(P," ",1),PAC("fioi")=$P(P," ",2),PAC("fioo")=$P(P," ",3,9) Q
+ .S:F="lastname" PAC("fioi")=P
+ .S:F="patronomic" PAC("fioo")=P
+ .S:F="birthdate" PAC("datar")=$S(P="01.01.1900":"",1:P)
+ .S:F="gender" PAC("pol")=$S(P=0:2,P=1:1,1:"")
+ .S:F="id" PAC("nib")=P
+ .S:F="insurance" PAC("polis")=P
+ .S:F="pregnancy_duration"&P FL("ndbr")=P
+ .S:F="diagnosis" FL("diag")=P
+ .S:F="coment" FL("comm")=P,FL("icomm")=P
+ .S:F="doctor_code" FL("zid")=P
+ .S:F="doctor_name" FL("zsotrnm")=P
+ D:MOD=3
+ .I P'="",$E(F,1,4)="code" S PRM(P)=""
+ D:MOD=4
+ .I P'="",$E(F,1,4)="code" S PRM(P)=""
+ Q
+INRECV() ; import from INWWW
+ ; TODO - настройка форматов импорта
+ D ITTAB
+ Q
+ITTAB 
+ N %IFN,I,A,NI,ID,FF,FI,FO,TP
+ D ORH^RWU
+ F I=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D
+ .I I=1 D  Q
+ ..S FF=$P(A,"|",1)
+ ..S FI=$P(FF," ",2),FO=$P(FF," ",3),FF=$P(FF," ",1)
+ ..S NI=$$GETNIB^IPACFND(FF,FI,FO,$$DI^DTUTL($P(A,"|",2)),"",1),ID=""
+ ..I NI=""!(NI=-1) Q 
+ ..S TP=$$FNDUID^YIMHS("lab/common-import-tab")
+ ..D:TP="" tptab
+ ..S ID=$$MKDOC^YIMH(NI,TP,$P(A,"|",4),1,$$DTI^DTUTL($P(A,"|",5)),1)
+ ..Q:ID=""
+ .Q:NI=""  Q:ID="" 
+ .S:I=2 ^EPRD(NI,ID)=A
+ .S:I>2 ^EPRD(NI,ID,I-2)=CR_A
+ D CR^RWU
+ Q
+tptab ; Добавить в ЭМК тип табличного импорта
+ S TP=$$ADDF^YIMHS("Лабораторные исследования")
+ S TP=$$ADDT^YIMHS("Данные лабораторной диагностики (импорт)",TP,"tab","lab/common-import-tab")
+ D SET^YIMHS(TP,"rights","aaa")
+ D SET^YIMHS(TP,"pfile","tabgrid.css")
+ D SET^YIMHS(TP,"use",0)
+ D MKIDX^IMHS(TP)
+ Q
+TEST 
+ S %JOB=777 ; c:\msm\in-di.xml
+ S IO=$$OR^FIL("c:\lab\result.ini") Q:IO="" 
+ D OWF^RWU("hpar")
+ U IO F  R R Q:$$ST^FIL()=0  D:R'="" W^RWU(R)
+ C IO
+ D C^RWU
+ D FM3Z
+ Q

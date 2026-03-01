@@ -1,0 +1,45 @@
+IRASPR ; Расчетные параметры расписания [ 09/26/2022  1:20 PM ]
+VRST(DS,DE,VR,SPX,OTX,LPU,VTM,CBX) ; Статистика по времени врача
+ ; LPU - филиал (пусто - по всем)
+ ; VTM - 0/1 - сек/часы
+ ; CBX - кабинет
+ N OT,SP,DT,TM,L,PT,T,K,RR,ZTPL
+ S:SPX'="" SPX="|"_SPX_"|"
+ S RR="",LPU=$G(LPU),VTM=$G(VTM),CBX=$G(CBX)
+ S T=+$G(^MN("raspzt"))
+ S K="" F  S K=$O(^MN(T,K)) Q:K=""  S:$P(^(K),"|",5) ZTPL(K)=""
+ I LPU'="" D VRSTp
+ I LPU="" F  S LPU=$O(^DSH(LPU)) Q:LPU=""  D VRSTp
+ I $G(VTM) F T=1:1:3 S $P(RR,"|",T)=+$J($P(RR,"|",T)/3600,"",2)
+ Q RR ; расписание|запись|факт
+VRSTp 
+ S OT="" F  S OT=$O(^DSH(LPU,OT)) Q:OT=""  D:OTX=""!(OTX=OT)
+ .S SP="" F  S SP=$O(^DSH(LPU,OT,VR,SP)) Q:SP=""  D:SPX=""!(("|"_SP_"|")[SPX)
+ ..S DT=DS-1 F  S DT=$O(^DSH(LPU,OT,VR,SP,DT)) Q:DT=""!(DT>DE)  D
+ ...I CBX'="",$P($G(^DSH(LPU,OT,VR,SP,DT)),"|",2)'=CBX Q 
+ ...S TM="" F  S PT=TM,TM=$O(^DSH(LPU,OT,VR,SP,DT,TM),-1) Q:TM=""  D
+ ....S L=$G(^(TM)) Q:L="*"  Q:PT=""
+ ....S T=$G(^(TM,"c")),K=$G(^("t"))
+ ....S $P(RR,"|",1)=$P(RR,"|",1)+(PT-TM)
+ ....I L="" Q:K=""  Q:'$D(ZTPL($P(K,"|",1)))
+ ....S $P(RR,"|",2)=$P(RR,"|",2)+(PT-TM)
+ ....Q:T=""
+ ....S $P(RR,"|",3)=$P(RR,"|",3)+(PT-TM)
+ Q
+ITERATE(PROC,DS,DE,WW,LPUX) ; Итерация по расписанию
+ ; PROC - процедура
+ ; DS,DE - период дат
+ ; WW - только с записью
+ ; LPUX - фильтр по филиалу
+ N LP,OT,VR,SP,DT,TM,R
+ 
+ S LP="" F  S LP=$O(^DSH(LP)) Q:LP=""  D:$S(LPUX="":1,1:LP=LPUX)
+ .S OT="" F  S OT=$O(^DSH(LP,OT)) Q:OT=""  D
+ ..S VR="" F  S VR=$O(^DSH(LP,OT,VR)) Q:VR=""  D
+ ...S SP="" F  S SP=$O(^DSH(LP,OT,VR,SP)) Q:SP=""  D
+ ....S DT=DS-1 F  S DT=$O(^DSH(LP,OT,VR,SP,DT)) Q:DT=""!(DT>DE)  D
+ .....S TM="" F  S TM=$O(^DSH(LP,OT,VR,SP,DT,TM)) Q:TM=""  D
+ ......S R=$G(^(TM)) Q:R="*" 
+ ......I WW,R="" Q 
+ ......D @PROC
+ Q

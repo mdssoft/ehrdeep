@@ -1,0 +1,11 @@
+NPACMSG ; Сообщения пациентам [ 12/29/2012  2:23 AM ]
+addsms(NI) 
+ N PH
+ S PH=$$GET^IPAC(NI,"pager") 
+ S:PH="" PH=$$GET^IPAC(NI,"tel1") Q:PH="" 
+ S PH=$TR(PH," /-()+","") Q:PH="" 
+ I $E(PH,1,2)'="89",$E(PH,1,2)'="79" Q 
+ S PH=$TR(PH,$TR(PH,1234567890,""),"")
+ Q:$L(PH)'=11
+ S ^BUF("sms",PH)=""
+ Q

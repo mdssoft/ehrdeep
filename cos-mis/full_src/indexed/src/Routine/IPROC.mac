@@ -1,0 +1,52 @@
+IPROC ; Очеты и утилиты для них [ 06/20/2018  3:12 PM ]
+REG ; Регистрация процедур с отчетами
+ N P,X,ID,I,L,%FLLRPT
+ K ^IPROC,^IPROCI,^IMPROC
+ S %FLLRPT=1 ; all procs
+ D reg
+ S I="" F  S I=$O(^IPROC(I)) Q:I=""  D
+ .I $G(^(I))'="" Q  ; proc
+ .S ^IPROCI("dir",ID)=I,^IPROC(I)=ID,ID=ID+1
+ S I="^IPROC" F  S I=$Q(@I) Q:I=""  D
+ .S L=$QL(I),X=$G(@I),P=$P(X,",",1) Q:X'[","  Q:P=""  
+ .S ^IPROCI("lst",P)=$QS(I,L)
+ K ^IPROCFR M ^IPROCFR=^IPROC
+ K %FLLRPT
+ D reg
+ Q
+reg 
+ S P="",ID=1
+ F  S P=$O(^$R(P)) Q:P=""  I P'["." X "S X=$T(REGIPROC^"_P_")" D:X'="" @("REGIPROC^"_P)
+ Q
+LST(ALL,STR) ; Вывод
+ N TTB,I,X,L,PI,K,F,TBB,LCL,LA,UF,NM,FR
+ S TBB=$C(9),PI="^IPROC("""")",LCL=$G(^LOG(%LOG,"lcl","lproc"))
+ S STR=$$UL^TXTU($$TRIM^TXTU($G(STR)))
+ S:$L(LCL) LA=$S($D(^LCL("lproc",LCL,"a")):1,1:0)
+ S UF=$S(ALL:0,1:$D(^IPROCU("-",%LOG))) ; личный список
+ F I=1:1:9 S TBB=TBB_$C(9)
+ S I=$S($$FR^I():"^IPROCFR",1:"^IPROC")
+ F  S I=$Q(@I) Q:I=""  D
+ .S L=$QL(I),X=$G(@I),F=0,K=$P(X,",",1)
+ .I X?1.N Q  ; numeric index
+ .I K'="",$L($G(%LOG)),$D(^LOG(%LOG,"lproc")) Q:$D(^("lproc",K))#2=1 
+ .I K'="",$L(LCL) Q:$S(LA:'$D(^LCL("lproc",LCL,"a",K)),1:$D(^LCL("lproc",LCL,"d",K))) 
+ .I UF,K'="",'$D(^IPROCU("-",%LOG,K)) Q 
+ .S NM=$QS(I,L)
+ .I STR'="",$$UL^TXTU(NM)'[STR Q  
+ .F K=1:1:L-1 S:$QS(PI,K)'=$QS(I,K) F=1 D:F=1 WC^RWU($E(TBB,1,K-1)_$QS(I,K)_"||1"_CR)
+ .D WC^RWU($E(TBB,1,L-1)_NM_"|"_$S(X="":"|1",1:X_"|2")_CR)
+ .S PI=I
+ Q
+REGLCL   ; Register description of available rights
+ K ^LCLI("lproc")
+ S ^LCLI("lproc")="Отчеты"
+ S ^LCLI("lproc","a")="Разрешенный список"
+ S ^LCLI("lproc","a","tp")="L"
+ S ^LCLI("lproc","d")="Запрещенный список"
+ S ^LCLI("lproc","d","tp")="L"
+ S ^LCLI("lproc","mindate")="Минимальная дата для отчетов (число дней от текущей)"
+ Q
+INITDB 
+ S ^MN("frm","spisokt")="Отчеты"
+ Q

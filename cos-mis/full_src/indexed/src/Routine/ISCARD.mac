@@ -1,0 +1,120 @@
+ISCARD ; Смарт-карты [ 12/21/2013  7:07 PM ]
+GETVCARD(TN)     ; Выдать/создать ID карты для сотрудника
+ Q:'$$EXIST^IKADRY(TN) ""
+ N CC
+ S CC=$O(^CARDI("D"_TN,""))
+ Q:CC'="" CC
+ S CC=$$nNUM^YICARDS()
+ D REG(CC,"D",TN)
+ Q CC
+DELNI(NI) ; Удалить по номеру ИБ пациента
+ N R
+ S R="" F  S R=$O(^CARDI(NI,R)) Q:R=""  I ^(R)="P" K ^(R),^CARD(R),^CRDLOG(R) D KGL^IEXCH("^CARD",R),KGL^IEXCH("^CARDI",NI,R),KGL^IEXCH("^CRDLOG",R)
+ Q
+DELVR(VR) ; Удалить по табельному номеру врача
+ N R
+ S R="",VR="D"_VR
+ F  S R=$O(^CARDI(VR,R)) Q:R=""  I ^(R)="D" K ^(R),^CARD(R),^CRDLOG(R) D KGL^IEXCH("^CARD",R),KGL^IEXCH("^CARDI",VR,R),KGL^IEXCH("^CRDLOG",R)
+ Q
+DELCRD(CARD) ; Удалить номер карты
+ Q:'$D(^CARD(CARD)) 
+ N R,R
+ S R=^CARD(CARD),T=$P(R,"|",1),R=$P(R,"|",2)
+ S R=$S(T'="P":T,1:"")_R
+ K ^CARD(CARD),^CRDLOG(CARD),^CARDI(R,CARD)
+ D KGL^IEXCH("^CARD",CARD),KGL^IEXCH("^CRDLOG",CARD)
+ D KGL^IEXCH("^CARDI",R,CARD)
+ Q
+GETNI(CARD) ; Получить № И.Б. по ID карты
+ Q:CARD="" ""
+ N R
+ S R=$G(^CARD(CARD)) Q:R="" ""
+ Q:$P(R,"|",1)'="P" ""
+ Q $P(R,"|",2)
+GETVR(CARD) ; Получить код сотрудника по ID карты
+ Q:CARD="" ""
+ N R
+ S R=$G(^CARD(CARD)) Q:R="" ""
+ Q:$P(R,"|",1)'="D" ""
+ Q $P(R,"|",2)
+FIO(CARD) ; ФИО по карте
+ Q:CARD="" ""
+ N R
+ S R=$G(^CARD(CARD)) Q:R="" ""
+ I $P(R,"|",1)="D" Q $$FIO^IKADRY($P(R,"|",2))
+ I $P(R,"|",1)="P" Q $$FIO^IPAC($P(R,"|",2))
+ Q ""
+CMP(CARD,TP,ID) ; Сравнить реквизиты с существующими
+ Q:$P($G(^CARD(CARD)),"|",1,2)=(TP_"|"_ID) 1
+ Q 0
+GETSYS(CARD) ; Получить данные по системной карте
+ Q:CARD="" ""
+ N R
+ S R=$G(^CARD(CARD)) Q:R="" ""
+ Q:$P(R,"|",1)'="S" ""
+ Q $P(R,"|",2)
+ Q
+IsLOG(CARD) ; Есть события по карте
+ Q:CARD="" 
+ Q $D(^CRDLOG(CARD))
+REG(CARD,TP,KEY) ; Зарегистрировать
+ ; CARD - ID карты
+ ; TP - тип карты P/D/S пац./сотр./системный
+ ; KEY - идентификатор 
+ Q:CARD="" 
+ N II
+ D:$D(^CARD(CARD)) WD^ISSG("^CARD("""_CARD_""")")
+ S ^CARD(CARD)=TP_"|"_KEY_"|"_$H_"|"_$$USR^IUSER()
+ S:TP="D" ^CARD(CARD,"ctype")=TP,^("owner")=KEY
+ D GL^IEXCH("^CARD",CARD)
+ D:TP'="S"
+ .S II=$S(TP="P":"",1:TP)_KEY
+ .S ^CARDI(II,CARD)=TP
+ .D GL^IEXCH("^CARDI",II)
+ Q
+MOVCRD(FROM,TO) ; Переместить с одного номера карты на другой
+ Q:$D(^CARD(TO)) 
+ N TP,KEY
+ M ^CARD(TO)=^CARD(FROM)
+ S KEY=$G(^CARD(FROM)),TP=$P(KEY,"|",1),KEY=$P(KEY,"|",2)
+ S KEY=$S(TP="P":"",1:TP)_KEY
+ S ^CARDI(KEY,TO)=TP
+ K ^CARD(FROM),^CARDI(KEY,FROM)
+ D KGL^IEXCH("^CARD",FROM),KGL^IEXCH("^CARDI",KEY,FROM)
+ D GL^IEXCH("^CARD",TO),GL^IEXCH("^CARDI",KEY,TO)
+ M ^CRDLOG(TO)=^CRDLOG(FROM)
+ D KGL^IEXCH("^CRDLOG",FROM),GL^IEXCH("^CRDLOG",TO)
+ Q
+MOVPAC(FNIB,TNIB) ; Переместить по пациенту (на новый № И.Б.)
+ N K,Y
+ S K="" F  S K=$O(^CARDI(FNIB,K)) Q:K=""  D:^(K)="P"
+ .S Y=$G(^CARD(K)),$P(Y,"|",2)=TNIB,^CARD(K)=Y,^CARDI(TNIB,K)="P"
+ .K ^CARDI(FNIB,K)
+ .D GL^IEXCH("^CARD",K),KGL^IEXCH("^CARDI",FNIB,K),GL^IEXCH("^CARDI",TNIB)
+ Q
+MOVVR(FVR,TVR) ; Переместить по врачу
+ N K,Y
+ S K="" F  S K=$O(^CARDI(FVR,K)) Q:K=""  D:^(K)="D"
+ .S Y=$G(^CARD(K)),$P(Y,"|",2)=TVR,^CARD(K)=Y,^CARDI(TVR,K)="P"
+ .K ^CARDI(FVR,K)
+ .D GL^IEXCH("^CARD",K),KGL^IEXCH("^CARDI",FVR,K),GL^IEXCH("^CARDI",TVR)
+ Q
+SETPL(CARD,PL,VAL) ; Установить значение доп. поля для карты
+ S ^CARD(CARD,PL)=VAL
+ D GL^IEXCH("^CARD",CARD,PL)
+ Q
+GETPL(CARD,PL) ; Получить значение доп. поля для карты
+ Q $G(^CARD(CARD,PL))
+PREFIX() 
+ S RET=$G(^cfg("scard","prefix"))
+ I $E(RET)="=" S RET="S RET="_$E(RET,2,99) X RET
+ Q RET
+REIDX ; Обновление индекса
+ N NN,R,T
+ K ^CARDI
+ S NN="" F  S NN=$O(^CARD(NN)) Q:NN=""  D
+ .S R=^(NN),T=$P(R,"|",1),R=$P(R,"|",2) Q:R=""  
+ .S R=$S(T="P":"",1:T)_R
+ .S ^CARDI(R,NN)=""
+ D REGL^IEXCH("^CARDI")
+ Q

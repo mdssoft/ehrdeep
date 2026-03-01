@@ -1,0 +1,626 @@
+IKDLPSM ; Across-PSM I\O routine
+SETUP
+	S ^cfg("lab","psm",1,"server")="ACLSERV"
+	S ^cfg("lab","psm",1,"user")="host_acl"
+	S ^cfg("lab","psm",1,"passwd")="1234567"
+	S ^cfg("lab","psm",1,"pre")="psm" ; prefix
+	s ^cfg("lab","psm",1,"id")=1
+	S ^cfg("lab","psm",1,"debug")=0
+	S ^cfg("lab","psm",1,"receiver")="psm"
+	Q
+JOB
+	S $ZT="ET^IKDLPSM"
+	D CHKCONN^WWWSRV
+	K ^SYNCJ("JOB^IKDLPSM")
+	F  Q:+$G(^SYNCJ("JOB^IKDLPSM"))  D SQL Q:+$G(^SYNCJ("JOB^IKDLPSM"))  H 200
+	K ^SYNCJ("JOB^IKDLPSM")
+	Q
+ET	; Error trap
+	N A S A=$ZE,^ERLOG("IKDLPSM",+$H,$P($H,",",2))=A,^($P($H,",",2),"EC")=$ECODE
+	Q
+SQL
+	N conn,sc,res,A,I,RI,TC,RZ,NMi,NMa,i,MM,R,UU
+	K ^BUF("kdl")
+	S ^BUF("kdl")=0
+	Set conn=##class(%SQLGatewayConnection).%New()
+	S ^BUF("kdl")="01"
+    Set sc=conn.Connect("ACLSERV","host_acl","1234567") 
+    S ^BUF("kdl")="02"
+    If $System.Status.IsError(sc) S ^BUF("kdl")="021" s sc=conn.Disconnect() D conn.UnloadDLL() Q  S ^BUF("kdl")="022" ; do $System.Status.DisplayError(sc) S ^BUF("kdl")="022" quit
+    S ^BUF("kdl")="03"
+    Set res=##class(%ResultSet).%New("%DynamicQueryGW:SQLGW")
+    S ^BUF("kdl")="04"
+    Set sc=res.Prepare("select record_id,sample_date,sample_type,patient_id,doc_id from acl_out_sample",,conn)
+    S ^BUF("kdl")="05"
+    If $System.Status.IsError(sc) s sc=conn.Disconnect() D conn.UnloadDLL() Q 
+    Set sc=res.Execute()
+    If $System.Status.IsError(sc) D res.Close() s sc=conn.Disconnect() D conn.UnloadDLL() Q 
+    S ^BUF("kdl")="06"
+    S CL=res.GetColumnCount(),i=1,P=""
+    S ^BUF("kdl")=1
+    While res.Next() 
+    {
+	    S A="",P=res.GetData(1)
+	    F I=2:1:CL S RI=$$TRIM^TXTU(res.GetData(I)) S:RI=$C(0) RI="" S A=A_$S(A="":"",1:"|")_RI
+	    S ^BUF("kdl",P)=A
+	    ;s ^KKK=A
+	    S i=i+1
+	    ;u 0 Write !,"= ",A 
+	    Q:i>64 ; чтобы за одну порцию немного было 
+    }
+    I $P($H,",",2)>10000 K:P'="" ^BUF("kdl",P) ; ликвидируем последний (если вдруг недогружены параметры), не ночью !
+    D res.Close()
+    S ^BUF("kdl")=2
+    Set sc=res.Prepare("select sample_out_record_id,test_code,note,result,units,refmin,refmax,mcn_code from acl_out_results_sample_type0",,conn)
+    If $System.Status.IsError(sc) D conn.%Close(),conn.UnloadDLL() Q  do $System.Status.DisplayError(sc) Q 
+    Set sc=res.Execute()
+    If $System.Status.IsError(sc) D res.Close() s sc=conn.Disconnect() D conn.UnloadDLL() Q  
+    S CL=res.GetColumnCount()
+    S ^BUF("kdl")=3
+    F  Q:'res.Next()  D
+    .S RI=$$TRIM^TXTU(res.GetData(1)) S:RI=$C(0) RI="" Q:RI=""  Q:'$D(^BUF("kdl",RI)) 
+    .S TC=$$TRIM^TXTU(res.GetData(2)) S:TC=$C(0) TC="" Q:TC="" 
+    .S A=$$getPL(res,3) ; note
+    .S RZ=$$getPL(res,4) ; result
+    .I $TR(RZ,"1234567890,.","")="" S RZ=$$NNUM^TXTU(RZ)
+    .S MM=$$getPL(res,5) ; units
+    .S NMi=$$getPL(res,6) ; refmin
+    .I $TR(NMi,"1234567890,.","")="" S NMi=$$NNUM^TXTU(NMi)
+    .S NMa=$$getPL(res,7) ; refmax
+    .I $TR(NMa,"1234567890,.","")="" S NMa=$$NNUM^TXTU(NMa)
+    .S UU=$$getPL(res,8) ; mcn_code
+    .S:RZ=""&(A'="") RZ=A,A=""
+    .S R=RZ
+    .S:NMi'="" $P(R,"|",2)=NMi
+    .S:NMa'="" $P(R,"|",3)=NMa
+    .S:MM'="" $P(R,"|",4)=MM
+    .S:A'="" $P(R,"|",5)=A
+    .S ^BUF("kdl",RI,TC)=R
+    .D chkUsl(TC,UU)
+    D res.Close()
+    S ^BUF("kdl")=4
+    D PROCESS
+    S ^BUF("kdl")=5
+    S sc=1
+    I i>1 S I="",i=1 F  S I=$O(^BUF("kdl",I)) Q:I=""  D  ; todo
+    .S sc=res.Prepare("delete from acl_out_sample where record_id='"_I_"'",,conn)
+    .;W !,"delete from acl_out_sample where record_id='"_I_"'"
+    .If $System.Status.IsError(sc) Q  
+    .Set sc=res.Execute()
+    .D res.Close()
+    .S sc=res.Prepare("delete from acl_out_results_sample_type0 where sample_out_record_id='"_I_"'",,conn)
+    .If $System.Status.IsError(sc) Q  ; do $System.Status.DisplayError(sc) Q 
+    .Set sc=res.Execute()
+    .D res.Close()
+    .S i=i+1 I i=10 H 1 S i=1
+    If $System.Status.IsError(sc) D res.Close() s sc=conn.Disconnect() D conn.UnloadDLL() Q  
+    S ^BUF("kdl")=6
+    s sc=conn.Disconnect()
+    D conn.UnloadDLL()
+    K ^BUF("kdl")
+	Q
+uu
+	s ii=0
+	S N="" F  S N=$O(^MLAB(N)) Q:N=""  D
+	.S I="" F  S I=$O(^MLAB(N,I)) Q:I=""  D
+	..S P="" F  S P=$O(^MLAB(N,I,"d",P)) Q:P=""  D
+	...S R=^(P)
+	...I $P(R,"|",1)'[",",$P(R,"|",2)'[",",$P(R,"|",3)'["," Q 
+	...S X=$P(R,"|",1)
+	...I $TR(X,"1234567890,.","")="" S $P(R,"|",1)=$$NNUM^TXTU(X)
+	...S X=$P(R,"|",2)
+	...I $TR(X,"1234567890,.","")="" S $P(R,"|",2)=$$NNUM^TXTU(X)
+	...S X=$P(R,"|",3)
+	...I $TR(X,"1234567890,.","")="" S $P(R,"|",3)=$$NNUM^TXTU(X)
+	...S ^MLAB(N,I,"d",P)=R,ii=ii+1
+	.w " "_ii
+	Q
+getPL(res,ID)
+	Q $$TRIM^TXTU($TR(res.GetData(ID),$C(0),""))
+PROCESS
+	N ID,P,NI,DT,II,G,LST,R,MN,CLAB,CIDX
+	S %LOG="sys",i=1,CLAB=1
+	;	.W !,"MlabID="_ID_", I="_RI
+	S RI="" F  S RI=$O(^BUF("kdl",RI)) Q:RI=""  D
+	.S A=^(RI),NI=+$$TRIM^TXTU($P(A,"|",4)),DT=$$dti($P(A,"|",1))
+	.Q:'NI  Q:'DT
+	.K LST
+	.S P="" F  S P=$O(^BUF("kdl",RI,P)) Q:P=""  D
+	..S G=$G(^LABT("T",P,"r")) S:G="" G="-" ; "i" - было по анализам стало по группам
+	..S LST(G,P)=""
+	.S G="" F  S G=$O(LST(G)) Q:G=""  D
+	..S ID="",CIDX=RI_$S(G="-":"",1:"."_G)
+	..I CLAB'="",CIDX'="" S A=$G(^MLABI("el",CLAB,CIDX)),ID=$P(A,"|",2)
+	..S:ID="" ID=$O(^MLABI("c",""),-1)+1
+	..S i=i+1
+	..S ^MLABI("c",ID)=NI
+	..S ^MLAB(NI,ID)=DT,^(ID,"lab")=CLAB_"|"_CIDX
+	..S ^MLAB(NI,ID,"s1")="1|"_$H_"|sys|"_$$^I("ilpu")
+	..S ^MLAB(NI,ID,"s9")="0|"_$H_"|sys|"_$$^I("ilpu")
+	..S:G'="-" ^MLAB(NI,ID,"tp")=G
+	..S P="" F  S P=$O(LST(G,P)) Q:P=""  D
+	...Q:P=""  Q:P=$C(0) 
+	...S A=^BUF("kdl",RI,P)
+	...S R=$P(A,"|",1,3)_"||"_$P(A,"|",4,5)
+	...S MN=$G(^LABT("T",P,"m"))
+	...S:MN=$P(R,"|",5) $P(R,"|",5)="" ; если единицы измерения = справочным - не пишем
+	...S ^MLAB(NI,ID,"d",P)=R
+	...S ^MLAB(NI,ID,"d",P,"s")="0|"_$H_"|sys"
+	..D MKIDX^IMLAB(NI,ID)
+	..D SBREZ^NMLAB(ID,1) ; subscribe
+	..;W !,NI_","_ID
+	Q
+dti(X)
+	S X=$P(X," ",1)
+	Q $$DI^DTUTL($P(X,"-",3)_"."_$P(X,"-",2)_"."_$P(X,"-",1))
+chkUsl(PRM,USL) ; Check/add usl. code
+	Q:USL="" 
+	Q:$G(^LABT("T",PRM,"u"))=USL
+	S ^("u")=USL
+	D GL^IEXCH("^LABT","T",PRM,"u")
+	N M
+	S M=$O(^LABT("T",PRM,"b",""))
+	S ^LABTI("CT",USL,PRM)=M
+	s ^KKQQ(PRM)=USL
+	Q
+START
+	J JOB^IKDLPSM
+	Q
+STOP
+	S ^SYNCJ("JOB^IKDLPSM")=1
+	Q
+TESTS
+	d fctype
+	
+	Set conn=##class(%SQLGatewayConnection).%New()
+    Set sc=conn.Connect("ACLSERV","host_acl","1234567") ; ACLSERV LABACL
+    If '$P(sc," ",1) do $System.Status.DisplayError(sc) quit
+    Set res=##class(%ResultSet).%New("%DynamicQueryGW:SQLGW")
+    
+    Set sc=res.Prepare("SELECT * FROM acl_in_sample WHERE patient_id=6409",,conn)
+    ;Set sc=res.Prepare("SELECT * FROM acl_Test",,conn)
+    ;Set sc=res.Prepare("SELECT * FROM acl_out_sample",,conn)
+    ;Set sc=res.Prepare("SELECT * FROM acl_out_results_sample_type0",,conn)
+    ;Set sc=res.Prepare("delete from acl_out_sample where record_id='20160412000000284843'",,conn)
+    ;Set sc=res.Prepare("SELECT * from acl_out_sample where record_id='20160412000000284843'",,conn)
+    ;;Set sc=res.Prepare("SELECT * FROM acl_service_codes",,conn)
+    ;Set sc=res.Prepare("SELECT * FROM acl_in_test",,conn)
+    w !,"prepare - OK"
+    If '$P(sc," ",1) do $System.Status.DisplayError(sc) quit
+    Set sc=res.Execute()
+    w !,"execute - OK"
+    If '$P(sc," ",1) do $System.Status.DisplayError(sc) quit
+    S CL=res.GetColumnCount()
+    S A="" F I=1:1:CL S A=A_$S(A="":"",1:"|")_res.GetColumnName(I)_"("_fct(res.GetColumnType(I))_")" ; $C(9)
+    W !,"Columns: "_CL,!,A
+    s i=0
+    While res.Next() 
+    {
+	    S A=""
+	    F I=1:1:CL S A=A_$S(A="":"",1:"|")_$TR(res.GetData(I),$C(0,9),"") ; $C(9)
+	    ;Write:A["пато" !,"= ",A 
+	    ;W:A["00922" !,"=="_A
+	    w !,A,!
+	    s i=i+1
+	    q:i>15 
+    } 
+    W:i>0 !,"Rows="_i
+    Set sc=conn.%Close() 
+	Q
+fctype
+	s fct(0)="UNKN"
+	s fct(1)="BINARY"
+	s fct(2)="DATE"
+	s fct(3)="DOUBLE"
+	s fct(4)="HANDLE"
+	s fct(5)="INTEGER"
+	s fct(6)="LIST"
+	s fct(7)="LONGVARCHAR"
+	s fct(8)="TIME"
+	s fct(9)="TIMESTAMP"
+	s fct(10)="VARCHAR"
+	s fct(11)="STATUS"
+	s fct(12)="BINARYSTREAM"
+	s fct(13)="CHARACTERSTREAM"
+	s fct(14)="NUMERIC"
+	s fct(15)="CURRENCY"
+	s fct(16)="BOOLEAN"
+	s fct(17)="OID"
+	s fct(18)="BIGINT" 
+	s fct(19)="FDATE"
+	s fct(20)="FTIMESTAMP"
+	Q
+ANUPD ; Update test group and names
+	N conn,sc,res,CL,A,I,i,ID,AN,BIO,BI
+	Set conn=##class(%SQLGatewayConnection).%New()
+    Set sc=conn.Connect("ACLSERV","host_acl","1234567")  ; LABACL
+    If '$P(sc," ",1) do $System.Status.DisplayError(sc) quit
+    Set res=##class(%ResultSet).%New("%DynamicQueryGW:SQLGW")
+    Set sc=res.Prepare("SELECT * FROM acl_Test",,conn)
+    If '$P(sc," ",1) do $System.Status.DisplayError(sc) quit
+    Set sc=res.Execute()
+    If '$P(sc," ",1) do $System.Status.DisplayError(sc) quit
+    S CL=res.GetColumnCount()
+	S AN="" F  S AN=$O(^LABT("I",AN)) Q:AN=""  K ^LABT("I",AN,"T")
+    While res.Next() 
+    {
+	    S A=$$getPL(res,12)
+	    S ID=$$getPL(res,1)
+	    w ", "_ID
+	    If A'="",ID'="" {
+	    	S AN=$$FNDAN^NMLABU(A)
+	    	S:AN="" AN=$O(^LABT("I",""),-1)+1
+	    	S ^LABT("I",AN)=A
+	    	S ^LABT("I",AN,"T",ID)=""
+	    	
+	    	S ^LABT("T",ID)=$$getPL(res,2)
+	    	S ^LABT("T",ID,"n")=$$getPL(res,3)
+	    	S ^LABT("T",ID,"r")=AN
+	    	S BIO=$$getPL(res,6)
+	    	I BIO'="" S BI=$$FNDABI^IMLABS(BIO),^LABT("T",ID,"b",BI)=1
+	    }
+    } 
+    Set sc=conn.%Close() 
+    D MKLABTI^NMLABU
+	Q
+FROMNZ(ID) ; Отправка заказа из назначения (TMP)
+	N NIB,DT,VR,I,U,R,A,ERR,EID,BAR,DIA,GLL,GT,G,sql,CR,FN,X
+	S R=$G(^NAZ(ID,"i")),CR=$C(13,10)
+	
+	Q:$P(R,"|",1)'="l"  
+    
+    S NIB=$P(R,"|",2),DT=+$P(R,"|",5),VR=$P(R,"|",3) Q:NIB="" 
+    S EID=$P(ID,".",1)
+    S DIA=$P($G(^NAZ(ID,"a")),"|",2)
+    S SEX=$S($$GET^IPAC(NIB,"pol")=2:"F",1:"M")
+    S BAR=""
+    
+	S I="" F  S I=$O(^NAZ(ID,"a",I)) Q:I=""  D 
+	.S R=^(I) S U=$P(R,"|",5) Q:U="" 
+	.S G=$$GET^IPRICE(U,"grp",1,DT) Q:G="" 
+	.S GLL(G)=""
+	S (G,GT)="" F  S G=$O(GLL(G)) Q:G=""  S GT=$S(GT="":"",1:GT_",")_$$NAME^ISPRAV("gprice",G)
+ 
+    s sql=""
+	
+	s sql=sql_"INSERT INTO acl_in_sample (record_id,send_date,sample_type,lab,sid,patient_id,doc_id,family_name,birth_date,sex,counterpart,subcounterpart,dr_no,social_no,social_name,diag_code,note,priority,reserved4,reserved5) "
+	s sql=sql_"VALUES ('"_EID_"','"_$$dtm(+$H)_"',0,'lab1','"_BAR_"','"_NIB_"','"_NIB_"'"
+	s sql=sql_",'"_$$FIO^IPAC(NIB)_"','"_$$dtm($$GET^IPAC(NIB,"datar"))_"','"_SEX_"'"
+	s sql=sql_",'"_$$OTD^IKADRY(VR)_"','0','"_VR_"','"_$$GET^IPAC(NIB,"polis")_"','"_$$GET^IPAC(NIB,"stc")_"','"_DIA_"','',0"
+	s sql=sql_","_$TR($$ADR^IPAC(NIB),"'","""")_"','"_GT_"');"_CR
+	
+	S I="" F  S I=$O(^NAZ(ID,"a",I)) Q:I=""  D 
+	.S R=^(I)
+	.S U=$P(R,"|",5) Q:U="" 
+	.s sql=sql_"INSERT INTO acl_in_test (sample_in_record_id,test_code,note_text) "
+	.s sql=sql_"VALUES('"_EID_"','"_U_"','"_U_"');"_CR
+	
+	S sql=sql_"GO"_CR_"exit"_CR
+	
+	w !,sql
+	
+	S FN=$$OW^FIL("/home/work/kdlpsm.sql") Q:FN="" 
+ 	U FN W $$WU8^TXTU(sql) C FN U 0
+ 	
+ 	D $zf(-1,"tsql -o fh -S ACLSERV -U host_acl -P 1234567 -D host_acl < /home/work/kdlpsm.sql &> /home/work/kdlpsm.log")
+ 	
+ 	S I=$$OR^FIL("/home/work/kdlpsm.log"),A=""
+ 	U I F  R R#1024 Q:$$ST^FIL()=0  I R'="" S A=A_R
+	C I U 0
+	I A["Msg" w !,"ERR"
+	E  w !,"OK"
+	Q
+FROMNZ1(ID) ; Отправка заказа из назначения (TEST)
+	N NIB,DT,VR,I,U,R,ERR,EID,DIA,sql
+	S R=$G(^NAZ(ID,"i"))
+	
+	Q:$P(R,"|",1)'="l"  
+	
+	Set conn=##class(%SQLGatewayConnection).%New()
+    Set sc=conn.Connect("ACLSERV","host_acl","1234567") ; ACLSERV LABACL
+    If $System.Status.IsError(sc) do $System.Status.DisplayError(sc) quit
+    d conn.SetConnectOption(102,0)
+    
+    S NIB=$P(R,"|",2),DT=+$P(R,"|",5),VR=$P(R,"|",3) Q:NIB="" 
+    S EID=$P(ID,".",1)
+    S DIA=$P($G(^NAZ(ID,"a")),"|",2)
+    
+ 
+	s sql="INSERT INTO acl_in_sample (record_id,send_date,sample_type,lab,sid,patient_id,doc_id,family_name,birth_date,sex,counterpart,subcounterpart,social_name,diag_code) "
+	s sql=sql_"VALUES ("_EID_",#"_$$dtm(+$H)_"#,0,'lab1',"_$P(ID,".",1)_","_NIB_","_(+VR)
+	s sql=sql_",'"_$$FIO^IPAC(NIB)_"',#"_$$dtm($$GET^IPAC(NIB,"datar"))_"#,"_$$GET^IPAC(NIB,"pol")
+	s sql=sql_",1,1)"
+	
+	s sql="INSERT INTO acl_in_sample (record_id,send_date,sample_type,lab,sid,patient_id,doc_id,family_name,birth_date,sex,counterpart,subcounterpart,social_name,diag_code) "
+	s sql=sql_"VALUES ('"_EID_"','"_$$dtm(+$H)_"',0,'lab1','"_$P(ID,".",1)_"','"_NIB_"','"_(+VR)_"'"
+	s sql=sql_",'"_$$FIO^IPAC(NIB)_"','"_$$dtm($$GET^IPAC(NIB,"datar"))_"','"_$$GET^IPAC(NIB,"pol")_"'"
+	s sql=sql_",'1','1','"_$$GET^IPAC(NIB,"stc")_"','"_DIA_"')"
+	
+	s sql="INSERT INTO acl_in_sample (record_id) "
+	s sql=sql_"VALUES ("_EID_")"
+	
+	S U="БХ1308" ;25003
+	s sql="INSERT INTO acl_in_test (sample_in_record_id,test_code,mcn_code,note_text,specimen,reserved1,reserved2,reserved3,reserved4,reserved5,reserved6,mis_id,orderMisDate) "
+	s sql=sql_"VALUES('"_100034_"','"_U_"','"_U_"','K','K','K','K','K','K','K','K','K','K');"
+	
+   	/*
+   	S SQL="INSERT INTO прием ( id_услуги, id_врача, id_вр_вспом, N_истории, стоимость, дата_приема, время_приема, статус )"
+   	S SQL=SQL_" values("_12_","_12_","_12_","_12_","_11_",#"_$TR($$DT^DTUTL(+$H),".","/")_"#,#"_$$TIME^DTUTL($P($H,",",2))_"#, 0);"
+   	S sc=res.Prepare(SQL,,conn)
+	w !,SQL,!   	
+   	If $System.Status.IsError(sc) do $System.Status.DisplayError(sc) s sc=conn.Disconnect() D conn.UnloadDLL() s ERR=1 Q 
+   	*/
+    
+    s sql="INSERT INTO acl_in_test (sample_in_record_id,test_code,note_text) VALUES('100034','ZZ1308','K4');"
+    ;s sql="INSERT INTO acl_in_test (sample_in_record_id,test_code) VALUES('1',?);"
+    w !,sql
+    Set res=##class(%ResultSet).%New("%DynamicQueryGW:SQLGW")
+	S sc=res.Prepare("delete from acl_in_test where note_text='K1'",,conn)
+	;S sc=res.Prepare(sql,,conn)
+	If $System.Status.IsError(sc) do $System.Status.DisplayError(sc) s sc=conn.Disconnect() D conn.UnloadDLL() Q 
+    Set sc=res.Execute()
+	If $System.Status.IsError(sc) do $System.Status.DisplayError(sc) s sc=conn.Disconnect() D conn.UnloadDLL() Q 
+    ;D res.Close()
+    w !,"delete" 
+    Set sc=conn.%Close() Q 
+    
+	s hstmt="",sc=conn.AllocateStatement(.hstmt) If $System.Status.IsError(sc) Do DisplayError^%apiOBJ(sc) w ! quit
+	
+	S SQLString="INSERT INTO acl_in_test (sample_in_record_id,test_code,note_text) VALUES(?,?,?);"
+	
+	
+	;s SQLString="INSERT INTO acl_in_test (sample_in_record_id,test_code,note_text) VALUES('100034','ZZ1308','K1');"
+	S sc=conn.BindParameters(hstmt, $LB(1,1,1), $LB(12,12,12),$LB(16,16,64),$LB(0,0,0),$LB(16,16,64))
+	w !,"BindParameters"
+	If $System.Status.IsError(sc) w "(BindParameters)" do $System.Status.DisplayError(sc) s sc=conn.Disconnect() D conn.UnloadDLL() Q 
+	S sc=conn.SetParameter(hstmt, $LB("100034"), 1)
+	If $System.Status.IsError(sc) w "(1)" do $System.Status.DisplayError(sc) s sc=conn.Disconnect() D conn.UnloadDLL() Q 
+	S sc=conn.SetParameter(hstmt, $LB("БХ1308"), 2)
+	If $System.Status.IsError(sc) w "(2)" do $System.Status.DisplayError(sc) s sc=conn.Disconnect() D conn.UnloadDLL() Q 
+	S sc=conn.SetParameter(hstmt, $LB("K3"), 3)
+	If $System.Status.IsError(sc) w "(3)" do $System.Status.DisplayError(sc) s sc=conn.Disconnect() D conn.UnloadDLL() Q  ;*/
+	w !,"Prepare"
+	S sc=conn.Prepare(hstmt, SQLString)
+	If $System.Status.IsError(sc) do $System.Status.DisplayError(sc) s sc=conn.Disconnect() D conn.UnloadDLL() Q 
+	w !,"Execute="
+	S sc=conn.Execute(hstmt)
+	w sc
+	If $System.Status.IsError(sc) do $System.Status.DisplayError(sc) s sc=conn.Disconnect() D conn.UnloadDLL() Q 
+	Set sc=conn.DropStatement(hstmt)
+	If $System.Status.IsError(sc) do $System.Status.DisplayError(sc) s sc=conn.Disconnect() D conn.UnloadDLL() Q 
+	D conn.Disconnect()
+	D conn.UnloadDLL()
+	
+	D TESTS
+	Q
+	
+	;Set sql="select top 10 * from sample.person "
+	s sc=conn.Prepare(hstmt,sql) If $System.Status.IsError(sc) {Do DisplayError^%apiOBJ(sc) w ! quit}
+	s sc=conn.Execute(hstmt) If $System.Status.IsError(sc) {Do DisplayError^%apiOBJ(sc) w ! quit}
+	s clist="",sc=conn.DescribeColumns(hstmt, .clist) If $System.Status.IsError(sc) Do DisplayError^%apiOBJ(sc) quit
+	Set cc=$ll(clist)
+	For i=2:1:cc Write $lg($lg(clist,i),1),":"
+	Write !
+ 
+    
+	Set sc=res.Prepare(sql,,conn)
+	WRITE !,res.GetStatementType() /* returns 1 (SELECT) */
+ 
+    If $System.Status.IsError(sc) do $System.Status.DisplayError(sc) s sc=conn.Disconnect() D conn.UnloadDLL() s ERR=1 Q 
+    //Set sc=res.Execute(EID,$$dtm(+$H),0,"lab1",$P(ID,".",1),NIB,+VR,$$FIO^IPAC(NIB),$$dtm($$GET^IPAC(NIB,"datar")),$$GET^IPAC(NIB,"pol"),1,1,$$GET^IPAC(NIB,"stc"),DIA)
+    ;Set sc=res.Execute()
+    If $System.Status.IsError(sc) do $System.Status.DisplayError(sc) D res.Close() s sc=conn.Disconnect() D conn.UnloadDLL() s ERR=1 Q 
+    
+	Set sc=res.Prepare("INSERT INTO acl_in_test (sample_in_record_id,test_code) VALUES(?,?)",,conn)
+    If $System.Status.IsError(sc) do $System.Status.DisplayError(sc) s sc=conn.Disconnect() D conn.UnloadDLL() Q 
+	
+	S ERR=0
+	S I="" F  S I=$O(^NAZ(ID,"a",I)) Q:I=""  D  Q:ERR 
+	.S R=^(I)
+	.S U=$P(R,"|",5) Q:U="" 
+	.w !,EID,U
+    .;Set sc=res.Execute(EID,U)
+    .;If $System.Status.IsError(sc) do $System.Status.DisplayError(sc) D res.Close() s sc=conn.Disconnect() D conn.UnloadDLL() s ERR=1 Q 
+	
+	Set sc=conn.%Close() 
+	Q
+dtm(X)
+	;Q $TR($$DT^DTUTL(X),".","/")
+	Q $$DTISO^DTUTL(X)_" 00:00:00.000"
+DORECV(IDX) ; Получение исследований по всем лабораториям
+	; запуск из IMSGHUB
+	D DOSEND
+	Q 
+	N LST,I,LAB,X,MOD
+	S LAB="" F  S LAB=$O(^LABC(LAB)) Q:LAB=""  I $G(^(LAB,"uid"))="eml" D  
+	.S X=$G(^("id"))
+	.S:X'="" LST(LAB,X)=""
+	.S I="" F  S I=$O(^LABC(LAB,"lpu",I)) Q:I=""  S X=$G(^(I,"id")) S:X'="" LST(LAB,X)=""
+	
+	S LAB="" F  S LAB=$O(LST(LAB)) Q:LAB=""  D
+	.S I="" F  S I=$O(LST(LAB,I)) Q:I=""  D GETALL(LAB,I)
+	Q
+DOSEND
+	N DT,NI,ID,S3,CT,LAB,LP,NW
+	S CT=$G(^cfg("lab","noprnbar"))
+	S DT=$H-1 F  S DT=$O(^MLABI("d",DT)) Q:DT=""  D   ; -3 !ADD
+	.S ID="" F  S ID=$O(^MLABI("d",DT,ID)) Q:ID=""  D
+	..S NI=^(ID)
+	..S LAB=$P($G(^MLAB(NI,ID,"lab")),"|",1) Q:'LAB
+	..Q:$G(^LABC(LAB,"uid"))'="psm" 
+	..S S3=$P($G(^MLAB(NI,ID,"s3")),"|",1) Q:'S3  
+	..Q:'$P($G(^("s31")),"|",1) 
+	..I CT,'$P($G(^("s3")),"|",1) Q 
+	..Q:$P($G(^("s4")),"|",1)=2
+	..Q:$P($G(^("s9")),"|",1)
+	..S LP=$P($G(^("s1")),"|",4)
+	..Q:'$$MKSEND(NI,ID)  
+	..D SETSTAT^IMLAB(NI,ID,4,2) ; у контрагента
+	Q
+MKSEND(NI,ID)
+	N LAB,ALAB,I,J,R,C,U,a,req,pac,order,VR,OT,LPU,DT,RV,X,%J,SID,LID,DTT,BIO,rcv,cul,UUL,sql,res
+	S LAB=$P($G(^MLAB(NI,ID,"lab")),"|",1)
+	S:'LAB LAB=1
+	;Q:'LAB 0
+	
+	Set conn=##class(%SQLGatewayConnection).%New()
+    Set sc=conn.Connect("ACLSERV","host_acl","1234567") ; ACLSERV LABACL
+    If $System.Status.IsError(sc) do $System.Status.DisplayError(sc) quit
+    d conn.SetConnectOption(102,0)
+	
+	S cul=$S($G(^LABC(LAB,"CN"))="i":1,1:0) ; по услугам
+	S DTT=+$G(^MLAB(NI,ID))
+	S:'DTT DTT=+$H
+	S R=$G(^MLAB(NI,ID,"s1"))
+	S VR=$P(R,"|",5),LPU=+$P(R,"|",4),OT=$$OTD^IKADRY(VR)
+	S ALAB=$G(^LABC(LAB,"lpu",LPU,"id"))
+	S:ALAB="" ALAB=$G(^LABC(LAB,"id"))
+	S:ALAB="" ALAB=LAB
+	Q:'$D(^cfg("lab","psm",ALAB)) 0
+	S RV=$G(^LABC(LAB,"lpu",LPU,"eid"))
+	S:RV="" RV=$G(^LABC(LAB,"eid"))
+	S DT=$$DTM^DTUTL($H)
+	
+	S sql="INSERT INTO acl_in_sample"
+	S sql=sql_"(record_id,send_date,sample_type,lab,sid,patient_id,doc_id,"
+	S sql=sql_"family_name,birth_date,sex,pregnancy,datecw,climax,counterpart,"
+	S sql=sql_"subcounterpart,dep_no,dr_no,social_no,social_name,diag_code,"
+	S sql=sql_"diag,note,priority,host_id,reserved1,reserved2,reserved3)"
+	S sql=sql_"VALUES ("
+	S sql=sql_"'"_ID_"'," ; уникальный номер записи
+  	;S sql=sql_"#"_$TR($$DT^DTUTL(+$H),".","/")_"#," ; дата отправки заказа в лабораторию
+  	S sql=sql_"'"_$$dtm(+$H)_"'," ; дата отправки заказа в лабораторию
+	S sql=sql_"'1'," ; sample_type по умолчанию = 1
+	S sql=sql_"'lab1'," ; lab по умолчанию = lab1
+  	s sql=sql_"'"_$$GETBAR^IMLAB(NI,ID)_"'," ; ШК
+	S sql=sql_"'"_ID_"'," ; уникальный номер пациента или номер направления или номер истории болезни
+	S sql=sql_"'"_NI_"'," ; номер истории болезни или номер амбулаторной карты 
+	S sql=sql_"'"_$$FIO^IPAC(NI)_"'," ; Фамилия Имя Отчество
+	;S sql=sql_"#"_$TR($$GETE^IPAC(NI,"datar",DTT),".","/")_"#," ; дата рождения 
+	S sql=sql_"'"_$$dtm($$GET^IPAC(NI,"datar",DTT))_"'," ; дата рождения 
+	S sql=sql_"'"_$S($$GET^IPAC(NI,"pol",DTT):"F",1:"M")_"'," ; пол (М,Ж или M,F)
+	S sql=sql_"'"_$G(^MLAB(NI,ID,"fl","ndbr"))_"'," ; неделя беременности (необязательное поле)
+	S sql=sql_"'"_$G(^MLAB(NI,ID,"fl","dcl"))_"'," ; день цикла (необязательное поле)
+	S sql=sql_"'0'," ; постменопауза  0 или 1 (необязательное поле)
+	S sql=sql_"'00001'," ; код внешнего контрагента или собственного основного ЛПУ
+	S X=$$GET^IINSC($$GET^IPAC(NI,"stc",DTT),"dvid",DTT)
+	S X=$S(X=3:"КАССА",X=6:"БЮДЖЕТ",1:"ДМС")
+	S sql=sql_"'"_X_"'," ; код источника финансирования
+	S sql=sql_"'0001'," ; код отделения внешнего контрагента или собственного основного ЛПУ
+	S sql=sql_"'"_VR_"'," ; код врача отделения (табельный номер)
+	S sql=sql_"'"_$$GET^IPAC(NI,"polis",DTT)_"'," ; серия_номер страхового полиса (через пробел)
+	S sql=sql_"'"_$$GET^IPAC(NI,"stc",DTT)_"'," ; код страховой компании
+	S X=$G(^MLAB(NI,ID,"nt"))
+	S sql=sql_"'"_$$HTML^TXTU($P(X,"|",1))_"'," ; код заболевания по МКБ10
+	S sql=sql_"'"_$$HTML^TXTU($$OWF^TXTU($$NAME^YMKB10($P(X,"|",1)),32))_"'," ; диагноз
+	S sql=sql_"'"_$E($$HTML^TXTU($P(X,"|",2)),1,32)_"'," ; Примечание направляющего врача
+	S sql=sql_"''," ; не используется
+	S sql=sql_"'0001'," ; ID МИС
+	S sql=sql_"'Лабораторные исследования'," ; Вид исследования 
+	S sql=sql_"''," ; резервное поле
+	S sql=sql_"''" ; резервное поле
+	S sql=sql_");"
+	
+	w !,sql
+	
+    Set res=##class(%ResultSet).%New("%DynamicQueryGW:SQLGW")
+	S sc=res.Prepare(sql,,conn)
+	If $System.Status.IsError(sc) do $System.Status.DisplayError(sc) s sc=conn.Disconnect() D conn.UnloadDLL() Q 
+    Set sc=res.Execute()
+	If $System.Status.IsError(sc) do $System.Status.DisplayError(sc) s sc=conn.Disconnect() D conn.UnloadDLL() Q 
+ 
+	S BIO="" F  S BIO=$O(^MLAB(NI,ID,"mi",BIO)) Q:BIO=""  D
+	.S R=$S(cul:BIO,1:$$fndBIO^IMLABS(LAB,BIO)) Q:R="" 
+    .;S RR=RR_"<Assay Barcode="""_$$GETBAR^IMLAB(NI,ID,BIO)_""" BiomaterialCode="""_R_""">"
+	.S R=^MLAB(NI,ID,"ul")
+	.F I=1:1:$L(R,"|") d
+	..S U=$P($P(R,"|",I),":",1),C=$P(U,"*",2),U=$P(U,"*",1) Q:U="" 
+	..I cul I '$$UisBIO^IMLABS(U,BIO) q  w !,"NoB "_U_" B="_BIO Q 
+	..S a=$S(cul:U,1:$G(^LABTI("LAB",LAB,"CN",U))) Q:a="" 
+	..Q:$D(UUL(U))  S UUL(U)="" ; уже передано
+	..S:'C C=1
+	..F J=1:1:C D
+	...s sql="INSERT INTO acl_in_test (sample_in_record_id,test_code) VALUES('"_ID_"','"_a_"');"
+	...w !,sql
+    ...Set res=##class(%ResultSet).%New("%DynamicQueryGW:SQLGW")
+	...S sc=res.Prepare(sql,,conn)
+	...If $System.Status.IsError(sc) do $System.Status.DisplayError(sc) s sc=conn.Disconnect() D conn.UnloadDLL() Q 
+    ...Set sc=res.Execute()
+	...If $System.Status.IsError(sc) do $System.Status.DisplayError(sc) s sc=conn.Disconnect() D conn.UnloadDLL() Q 
+	
+	Set sc=conn.%Close() 
+	Q 1
+	; SQL
+	
+	; S LID=$G(XML("Message","Referral",$c(3)_"LisId"))
+	;I LID="" zw XML
+	Q:LID="" 0
+	S $P(^MLAB(NI,ID,"lab"),"|",2)=LID
+	S $P(^MLAB(NI,ID,"lab"),"|",3)=$$DTI^DTUTL(XML("Message",$c(3)_"Date"))
+	D GL^IEXCH("^MLAB",NI,ID,"lab")
+	Q 1
+GETALL(LAB,ALAB)
+	N conn,sc,res,A,I,RI,TC,RZ,NMi,NMa,i,MM,R,UU
+	Set conn=##class(%SQLGatewayConnection).%New()
+    Set sc=conn.Connect(^cfg("lab","psm",ALAB,"server"),^cfg("lab","eml",ALAB,"user"),^cfg("lab","eml",ALAB,"passwd"))
+    If $System.Status.IsError(sc) s sc=conn.Disconnect() D conn.UnloadDLL() Q  S ^BUF("kdl")="022" ; do $System.Status.DisplayError(sc) S ^BUF("kdl")="022" quit
+    Set res=##class(%ResultSet).%New("%DynamicQueryGW:SQLGW")
+    Set sc=res.Prepare("select record_id,sample_date,sample_type,patient_id,doc_id from acl_out_sample",,conn)
+    If $System.Status.IsError(sc) s sc=conn.Disconnect() D conn.UnloadDLL() Q 
+    Set sc=res.Execute()
+    If $System.Status.IsError(sc) D res.Close() s sc=conn.Disconnect() D conn.UnloadDLL() Q 
+    S CL=res.GetColumnCount(),i=1,P=""
+    K ^BUF("kdl")
+    While res.Next() 
+    {
+	    S A="",P=res.GetData(1)
+	    F I=2:1:CL S RI=$$TRIM^TXTU(res.GetData(I)) S:RI=$C(0) RI="" S A=A_$S(A="":"",1:"|")_RI
+	    S ^BUF("kdl",P)=A
+	    ;s ^KKK=A
+	    S i=i+1
+	    ;u 0 Write !,"= ",A 
+	    Q:i>64 ; чтобы за одну порцию немного было 
+    }
+    I $P($H,",",2)>10000 K:P'="" ^BUF("kdl",P) ; ликвидируем последний (если вдруг недогружены параметры), не ночью !
+    D res.Close()
+    Set sc=res.Prepare("select sample_out_record_id,test_code,note,result,units,refmin,refmax,mcn_code from acl_out_results_sample_type0",,conn)
+    If $System.Status.IsError(sc) D conn.%Close(),conn.UnloadDLL() Q  do $System.Status.DisplayError(sc) Q 
+    Set sc=res.Execute()
+    If $System.Status.IsError(sc) D res.Close() s sc=conn.Disconnect() D conn.UnloadDLL() Q  
+    S CL=res.GetColumnCount()
+    F  Q:'res.Next()  D
+    .S RI=$$TRIM^TXTU(res.GetData(1)) S:RI=$C(0) RI="" Q:RI=""  Q:'$D(^BUF("kdl",RI)) 
+    .S TC=$$TRIM^TXTU(res.GetData(2)) S:TC=$C(0) TC="" Q:TC="" 
+    .S A=$$getPL(res,3) ; note
+    .S RZ=$$getPL(res,4) ; result
+    .S MM=$$getPL(res,5) ; units
+    .S NMi=$$getPL(res,6) ; refmin
+    .S NMa=$$getPL(res,7) ; refmax
+    .S UU=$$getPL(res,8) ; mcn_code
+    .S:RZ=""&(A'="") RZ=A,A=""
+    .S R=RZ
+    .S:NMi'="" $P(R,"|",2)=NMi
+    .S:NMa'="" $P(R,"|",3)=NMa
+    .S:MM'="" $P(R,"|",4)=MM
+    .S:A'="" $P(R,"|",5)=A
+    .S ^BUF("kdl",RI,TC)=R
+    .D chkUsl(TC,UU)
+    D res.Close()
+    D PROCESS
+    S sc=1
+    I i>1 S I="",i=1 F  S I=$O(^BUF("kdl",I)) Q:I=""  D  ; todo
+    .S sc=res.Prepare("delete from acl_out_sample where record_id='"_I_"'",,conn)
+    .;W !,"delete from acl_out_sample where record_id='"_I_"'"
+    .If $System.Status.IsError(sc) Q  
+    .Set sc=res.Execute()
+    .D res.Close()
+    .S sc=res.Prepare("delete from acl_out_results_sample_type0 where sample_out_record_id='"_I_"'",,conn)
+    .If $System.Status.IsError(sc) Q  ; do $System.Status.DisplayError(sc) Q 
+    .Set sc=res.Execute()
+    .D res.Close()
+    .S i=i+1 I i=10 H 1 S i=1
+    If $System.Status.IsError(sc) D res.Close() s sc=conn.Disconnect() D conn.UnloadDLL() Q  
+    s sc=conn.Disconnect()
+    D conn.UnloadDLL()
+    K ^BUF("kdl")
+	Q

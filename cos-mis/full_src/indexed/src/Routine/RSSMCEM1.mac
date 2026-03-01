@@ -1,0 +1,208 @@
+RSSMCEM1 ; Шаблонные отчеты по медицине(часть1) [ 12/15/2017  7:57 PM ]
+mku ; По услугам
+ N DGL,DGT,DWI,DGI,DGIR,CLS,CC,XX,ZZ,TT,TT1,TT2
+ N ZPOS,ZFPOS,ZPPL
+ N STOTD,ABO,BTPLS,SPIDX1,SPIDX2,SPIDX3
+ N SIDX1,SIDX2,SIDX3
+ S:$G(^cfg("stom-otd")) STOTD(^("stom-otd"))="" M STOTD=^cfg("stom-otd")
+ M BTPLS=^BTPLS("stc")
+ D filSPI
+ D fillEQ
+ D MKALLPRC^IUSLSC(DS,DE,1,"prc^RSSMCEM1","","","",0,LPUX)
+ Q
+filSPI ; Индексы специальностей 
+ S SPIDX1(47)=6,SPIDX1(28)=7,SPIDX1(32)=7,SPIDX1(37)=8,SPIDX1(38)=8
+ S SPIDX1(35)=9,SPIDX1(84)=10,SPIDX1(42)=11,SPIDX1(9)=12
+ S SPIDX1(33)=13,SPIDX1(31)=14,SPIDX1(75)=15,SPIDX1(79)=15
+ S SPIDX1(101)=16,SPIDX1(102)=16,SPIDX1(103)=16,SPIDX1(104)=16
+ S SPIDX1(105)=16,SPIDX1(106)=16,SPIDX1(1)=17,SPIDX1(5)=17,SPIDX1(2)=17
+ S SPIDX1(29)=17,SPIDX1(3)=17,SPIDX1(13)=18,SPIDX1(15)=19,SPIDX1(12)=19
+ S SPIDX1(16)=19,SPIDX1(14)=19,SPIDX1(50)=20
+ ; отдельные вкладки по спец.
+ S SPIDX2(28)=12,SPIDX2(32)=12,SPIDX2(1)=13,SPIDX2(5)=13,SPIDX2(2)=13
+ S SPIDX2(29)=13,SPIDX2(3)=13,SPIDX2(33)=14,SPIDX2(35)=15,SPIDX2(13)=16
+ S SPIDX2(15)=17,SPIDX2(12)=17,SPIDX2(16)=17,SPIDX2(14)=17
+ S SPIDX2(31)=18,SPIDX2(84)=19
+ S SPIDX2(37)=21,SPIDX2(38)=21,SPIDX2(50)=22
+ ; доплаты
+ S SPIDX3(1)=5
+ S SPIDX3(101)=6,SPIDX3(102)=6,SPIDX3(103)=6,SPIDX3(105)=6,SPIDX3(106)=6
+ S SPIDX3(12)=7
+ S SPIDX3(28)=8,SPIDX3(32)=8
+ S SPIDX3(33)=9
+ S SPIDX3(31)=10
+ S SPIDX3(37)=11,SPIDX3(38)=11
+ S SPIDX3(35)=12
+ S SPIDX3(50)=13
+ Q
+fillEQ ; Оборудование
+ N L,C,R,J,K,I
+ ; единицы оборудования
+ S L="" F  S L=$O(^PLPU(L)) Q:L=""  D:LPUX=""!(LPUX=L)
+ .S X1="" F  S X1=$O(^PLPU(L,X1)) Q:X1=""  D
+ ..S X2="" F  S X2=$O(^PLPU(L,X1,X2)) Q:X2=""  D
+ ...S C="" F  S C=$O(^PLPU(L,X1,X2,"cab",C)) Q:C=""  D
+ ....S I="" F  S I=$O(^PLPU(L,X1,X2,"cab",C,"eq",I)) Q:I=""  D
+ .....S R=^(I),J=$P(R,"|",1),K=$P(R,"|",2) S:K="" K=1
+ .....Q:J=""  ; no dev
+ .....S ^(1)=$G(^BUF($J,"eq",J,0,1))+K
+ ; связанные услуги
+ S I="" F  S I=$O(^EQUIP(I)) Q:I=""  D
+ .S C="" F  S C=$O(^EQUIP(I,"usl",C)) Q:C=""  S ^BUF($J,"tequ",C)=I
+ Q
+prc 
+ I LPUX'="",LPUX'=LPU Q 
+ I $D(STOTD(OTD)) Q  ; no stom !
+ I $P(U,".",1)=36!($P(U,".",1)=37)!($P(U,".",1)="ОМС") Q  ; no stac !
+ I REMI'="",CSTC=REMI Q  ; исключение договора
+ S DGT=$$GETDGT^IRPUSL(CSTC,DT)
+ S ABO=$D(BTPLS(CSTC))
+ S DGI=$S(ABO:4,'DGT:1,DGT=1:2,DGT=3:3,1:0),DGIR=DGI
+ S:STAT=2 DGT=3,DGI=3 ; kss
+ S FLG=$G(FLG) S:FLG'="" FLG="|"_FLG_"|"
+ S DWI=DWKL(DT)
+ S CC=UL(U)
+ S XX=$S($L(SUMM):SUMM,1:$$PRICEH^IPRICE(U,PRC,DT)*KSKD)*CC
+ I NNUL,XX=0 Q 
+ S CLS="|"_$$GET^IPRICE(U,"cls",PRC,DT)_"|"
+ S SIDX1=$G(SPIDX1(SP)) S:'SIDX1 SIDX1=21
+ S SIDX2=$G(SPIDX2(SP)) S:'SIDX2 SIDX2=20
+ S SIDX3=$G(SPIDX3(SP)) S:'SIDX3 SIDX3=14
+ 
+ S ZZ=VR_","_NI_","_DT,ZPOS=0
+ S:'$D(^BUF($J,"tpos",ZZ)) ^(ZZ)="",ZPOS=1
+ S ZFPOS=$$IsFPOS^IUSL(NI,OTD,VR,DT,ID)
+ 
+ S ^("sum")=$G(^BUF($J,"cc",DGI,DWI,"sum"))+XX
+ S:ZPOS ^("pos")=$G(^("pos"))+1
+ S:ZFPOS ^("fpl")=$G(^("fpl"))+1
+ D:DGI ; Только по определенным типам
+ .S ^("cnt")=$G(^("cnt"))+CC
+ 
+ I '$D(^BUF($J,"tccp",DGI,DWI,NI)) S ^(NI)="",^("ppl")=$G(^BUF($J,"cc",DGI,DWI,"ppl"))+1
+ I '$D(^BUF($J,"tccp",DGI,0,NI)) S ^(NI)="",^("ppl")=$G(^BUF($J,"cc",DGI,0,"ppl"))+1 ; общ. по договору
+ I '$D(^BUF($J,"tccp",0,DWI,NI)) S ^(NI)="",^("ppl")=$G(^BUF($J,"cc",0,DWI,"ppl"))+1 ; все договора
+ I '$D(^BUF($J,"tccp",0,0,NI)) S ^(NI)="",^("ppl")=$G(^BUF($J,"cc",0,0,"ppl"))+1 ; все недели все договора
+ I '$D(^BUF($J,"tccp",0,DWI,NI)) S ^(NI)="",^("ppl")=$G(^BUF($J,"cc",0,DWI,"ppl"))+1 ; всего по неделям
+ D:SIDX1
+ .S TT=$S(DGI=1:2,DGI=2:3,DGI=3:4,1:0)
+ .Q:'TT 
+ .S ^(TT)=$G(^BUF($J,"p3",SIDX1,DWI,TT))+XX
+ D:SIDX2&DGI
+ .S TT=$S(DGI=1:1,DGI=2:2,DGI=3:3,DGI=4:4,1:0)
+ .Q:'TT 
+ .S TT1=0,TT2=0
+ .I '$D(^BUF($J,"pxppl",SIDX2,0,NI)) S ^(NI)="",TT1=1 ; total ppl
+ .I '$D(^(NI,TT)) S ^(TT)="",TT2=1
+ .S ^(4)=$G(^BUF($J,"px",SIDX2,DWI,0,4))+XX
+ .S:ZPOS ^(14)=$G(^BUF($J,"px",SIDX2,DWI,0,14))+1
+ .S ^(19)=$G(^BUF($J,"px",SIDX2,DWI,0,19))+CC
+ .S ^(4)=$G(^BUF($J,"px",SIDX2,DWI,TT,4))+XX
+ .S:ZPOS ^(14)=$G(^BUF($J,"px",SIDX2,DWI,TT,14))+1
+ .S ^(19)=$G(^BUF($J,"px",SIDX2,DWI,TT,19))+CC
+ .S:TT1 ^(29)=$G(^BUF($J,"px",SIDX2,0,0,29))+1
+ .S:TT2 ^(29)=$G(^BUF($J,"px",SIDX2,0,TT,29))+1
+ .S TT1=0,TT2=0
+ .I '$D(^BUF($J,"tpx",SIDX2,DWI,NI)) S ^(NI)="",TT1=1
+ .I '$D(^(NI,TT)) S ^(TT)="",TT2=1
+ .S:TT1 ^(29)=$G(^BUF($J,"px",SIDX2,DWI,0,29))+1
+ .S:TT2 ^(29)=$G(^BUF($J,"px",SIDX2,DWI,TT,29))+1
+ .; по врачам
+ .S TT1=0,TT2=0
+ .I '$D(^BUF($J,"pxppl",SIDX2,VR,NI)) S ^(NI)="",TT1=1 ; total ppl
+ .I '$D(^(NI,TT)) S ^(TT)="",TT2=1
+ .S ^(4)=$G(^BUF($J,"pxv",SIDX2,DWI,0,VR,4))+XX
+ .S:ZPOS ^(14)=$G(^BUF($J,"pxv",SIDX2,DWI,0,VR,14))+1
+ .S ^(19)=$G(^BUF($J,"pxv",SIDX2,DWI,0,VR,19))+CC
+ .S ^(4)=$G(^BUF($J,"pxv",SIDX2,DWI,TT,VR,4))+XX
+ .S:ZPOS ^(14)=$G(^BUF($J,"pxv",SIDX2,DWI,TT,VR,14))+1
+ .S ^(19)=$G(^BUF($J,"pxv",SIDX2,DWI,TT,VR,19))+CC
+ .S:TT1 ^(29)=$G(^BUF($J,"pxv",SIDX2,0,0,VR,29))+1
+ .S:TT2 ^(29)=$G(^BUF($J,"pxv",SIDX2,0,TT,VR,29))+1
+ .S TT1=0,TT2=0
+ .I '$D(^BUF($J,"tpxv",SIDX2,DWI,VR,NI)) S ^(NI)="",TT1=1
+ .I '$D(^(NI,TT)) S ^(TT)="",TT2=1
+ .S:TT1 ^(29)=$G(^BUF($J,"pxv",SIDX2,DWI,0,VR,29))+1
+ .S:TT2 ^(29)=$G(^BUF($J,"pxv",SIDX2,DWI,TT,VR,29))+1
+ 
+ I SIDX3,(DGIR=1)!(DGIR=2)!(DGIR=4) D  ; доплаты
+ .S TT=$S(DGIR=2:1,DGIR=1:3,1:2)
+ .S ^(1)=$G(^BUF($J,"dsk",DWI,SIDX3,TT,1))+XX
+ .Q:STAT'=2 
+ .S ^(2)=$G(^BUF($J,"dsk",DWI,SIDX3,TT,2))+XX
+ S:ZPOS ^("pos")=$G(^BUF($J,"np",SP,VR,"pos"))+1
+ S:ZPOS&ZFPOS ^("fpos")=$G(^BUF($J,"np",SP,VR,"fpos"))+1
+ 
+ D:$D(^BUF($J,"tequ",U)) ; оборудование
+ .S TT=^(U)
+ .S ^(2)=$G(^BUF($J,"eq",TT,DWI,2))+CC
+ .S ^(3)=$G(^(3))+XX
+ 
+ I DGI<4,CLS["|lab|" D
+ .S TT1=0,TT2=0
+ .S:'$D(^BUF($J,"tkdl",DGI,NI)) ^(NI)="",TT1=1
+ .S:'$D(^BUF($J,"tkdl",0,NI)) ^(NI)="",TT2=1
+ .S ^(1)=$G(^BUF($J,"kdl",0,DGI,1))+CC
+ .S ^(2)=$G(^BUF($J,"kdl",0,DGI,2))+XX
+ .S:TT1 ^(3)=$G(^BUF($J,"kdl",0,DGI,3))+1
+ .S:TT2 ^(3)=$G(^BUF($J,"kdl",0,0,3))+1
+ Q
+naz 
+ N D,ID,R,ST,VR,OT,I,KEY,VRX,DTX,SS,SN,SP,TP,TX,SPN
+ ; перечень врачей специалистов
+ K ^BUF($J,"tmpsp")
+ s SP="" F  S SP=$$NEXT^ISPRAV("spec",SP) Q:SP=""  I ("|"_$$GETPL^ISPRAV("spec",SP,"flg")_"|")["|cons|" S ^BUF($J,"tmpsp",SP)=""
+ 
+ S D=DS-1 F  S D=$O(^NAZI("d",D)) Q:D=""!(D>DE)  D
+ .S ID="" F  S ID=$O(^NAZI("d",D,ID)) Q:ID=""  D
+ ..I LPUX'="",$RE($P(ID,".",2))'=LPUX Q 
+ ..S TP=$P(^(ID),"|",1)
+ ..S R=$G(^NAZ(ID,"i")) Q:R=""
+ ..S ST=$P($G(^("e")),"|",1)
+ ..Q:289[ST 
+ ..S VR=$P(R,"|",3),SP=$$SPEC^YIKADRY(VR)
+ ..I TP="l" D  Q  ; lab
+ ...S ^("naz")=$G(^BUF($J,"np",SP,VR,"naz"))+1 ; всего
+ ...S ^("lnaz")=$G(^("lnaz"))+1 ; lab
+ ...S S=$$SUMM^INAZN(ID)
+ ...S:S ^("nazps")=$G(^BUF($J,"np",SP,VR,"nazps"))+S
+ ...Q:ST'=1 
+ ...S ^("nazo")=$G(^BUF($J,"np",SP,VR,"nazo"))+1 ; исполнено
+ ...S ^("lnazo")=$G(^("lnazo"))+1
+ ...S:S ^("nazs")=$G(^("nazs"))+S,^("lnazs")=$G(^("lnazs"))+S
+ ..; end lab
+ ..K XLL
+ ..S I="" F  S I=$O(^NAZ(ID,"a",I)) Q:I=""  D
+ ...S R=^(I),U=$P(R,"|",5),P=$P(R,"|",6),KEY=$P(R,"|",11)
+ ...S VRX=$P(KEY,"@",2),DTX=$P(KEY,"@",3)
+ ...I VRX'="",VRX=VR Q  ; сам к себе
+ ...S SPN=$P(R,"|",2)
+ ...S TX=$S(TP="l":"l",$P(U,".",1)=30:"u",TP'="c":"z",SPN="":"z",$D(^BUF($J,"tmpsp",SPN)):"s",1:"z")
+ ...S XLL(TX,"c")=$G(XLL(TX,"c"))+1
+ ...S SN=$$SUMM^INAZN(ID,I)
+ ...S:SN ^("nazps")=$G(^BUF($J,"np",SP,VR,"nazps"))+SN
+ ...Q:KEY="" 
+ ...S XLL(TX,"o")=$G(XLL(TX,"o"))+1
+ ...S SS=$$GETSUM^IUSL(VRX,DTX,$P(KEY,"@",1),$P(KEY,"@",4))
+ ...Q:'SS
+ ...S XLL(TX,"s")=$G(XLL(TX,"s"))+SS
+ ..S TX="" F  S TX=$O(XLL(TX)) Q:TX=""  D
+ ...S SN=$G(XLL(TX,"c")),KEY=$G(XLL(TX,"o")),SS=$G(XLL(TX,"s")) 
+ ...I TX="s" S:SN SN=1 S:KEY KEY=1
+ ...I TX="u" S:SN SN=1 S:KEY KEY=1
+ ...S ^("naz")=$G(^BUF($J,"np",SP,VR,"naz"))+SN ; всего
+ ...S:TX="u" ^("unaz")=$G(^("unaz"))+SN ; УЗИ
+ ...S:TX="s" ^("snaz")=$G(^("snaz"))+SN ; спец.
+ ...S:TX="z" ^("onaz")=$G(^("onaz"))+SN ; прочие
+ ...Q:'KEY
+ ...S ^("nazo")=$G(^("nazo"))+KEY ; исполнено
+ ...S:TX="u" ^("unazo")=$G(^("unazo"))+KEY
+ ...S:TX="s" ^("snazo")=$G(^("snazo"))+KEY
+ ...S:TX="z" ^("onazo")=$G(^("onazo"))+KEY
+ ...Q:'SS 
+ ...S ^("nazs")=$G(^("nazs"))+SS
+ ...S:TX="u" ^("unazs")=$G(^("unazs"))+SS
+ ...S:TX="s" ^("snazs")=$G(^("snazs"))+SS
+ ...S:TX="z" ^("onazs")=$G(^("onazs"))+SS
+ K ^BUF($J,"tmpsp")
+ Q

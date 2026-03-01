@@ -1,0 +1,50 @@
+RSSMCEB ; Отчет по беременным (ССМЦ) [ 03/29/2015  10:19 PM ]
+DO(DS,DE) 
+ N FF,TIT,A,B,I,U,Z,DT,DWI,DWKL,DWKLR,IDX,X1,X2,TABL,LP
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S FF='+$$FR^I()
+ S I=1 F DT=DS:1:DE S DWKL(DT)=I I DT<DE S:$$DWEEK^DTUTL(DT)=7 I=I+1,DWKLR(I)=DT+1
+ S DWKLR(1)=DS ; 1-я дата - 1-я неделя
+ K ^BUF($J)
+ D MKALLPRC^IUSLSC(DS,DE,1,"prc^RSSMCEB","",FF)
+ D polis
+ D OWF^RWU(".txt")
+ S TIT="Лист1:",IDX=0,A="",Z=$O(DWKLR(""),-1)
+ F I=1:1:Z S X1=DWKLR(I),X2=$S(I=Z:DE,1:DWKLR(I+1)),A=A_CR_TIT_$C($A("A")+I)_":4:"_$P($$DT^DTUTL(X1),".",1,2)_"-"_$P($$DT^DTUTL(X2),".",1,2)
+ D WC^RWU(A)
+ S LP="" F  S LP=$O(TABL(LP)) Q:LP=""  D
+ .S IDX=$S(LP=1:5,LP=2:16,LP=3:27,LP=4:38,LP=13:49,LP=20:60,LP=8:71,1:0)
+ .Q:'IDX 
+ .S DWI="" F  S DWI=$O(TABL(LP,DWI)) Q:DWI=""  D
+ ..S B=$C($A("A")+DWI),B=B_":",A=""
+ ..F I=0,1,2,3,6,7 S A=A_CR_TIT_B_(IDX+I)_":"_$TR($G(TABL(LP,DWI,I)),".",",")
+ ..D WC^RWU(A)
+ D C^RWU
+ K ^BUF($J)
+ Q
+prc 
+ S LPU=+$G(LPU)
+ S DWI=DWKL(DT)
+ I U="24.685"!(U="24.685.1")!(U="36.2")!(U="36.3")!(U="36.36.45")!(U="37.51.3")!(U="37.51.61") S TABL(LPU,DWI,3)=$G(TABL(LPU,DWI,3))+1
+ I DIA="Z32.1",'$D(^BUF($J,"zd",NI)) S ^(NI)="",TABL(LPU,DWI,0)=$G(TABL(LPU,DWI,0))+1 
+ Q
+polis 
+ N NI,AB,WP,WTP,LP,TP,SM,C9
+ S C9=$C(9),WP=$G(^BTPL(C9_"t","wdt")),WTP=+$G(^("tp"))
+ S NI="" F  S NI=$O(^BTPL(NI)) Q:NI=""!(NI[C9)  S AB="" F  S AB=$O(^BTPL(NI,AB)) Q:AB=""  D
+ .S A=$O(^(AB,WP,""))
+ .Q:+A<DS  Q:+A>DE
+ .S LP=+$P($G(^(A)),"@",2)
+ .Q:'LP
+ .S TP=+$G(^BTPL(NI,AB,WTP))
+ .S TP=$S(TP<4:1,TP=22:2,TP=25:2,TP=23:1,TP=24:1,TP=26:1,TP=27:1,TP=109:2,TP=110:1,TP=111:1,TP=112:1,TP=113:1,TP=114:1,TP=115:1,TP=116:1,TP=117:1,TP=118:1,TP=119:1,TP=120:1,TP=121:1,TP=125:2,TP=126:1,TP=127:1,TP=128:1,1:0)  
+ .Q:'TP
+ .S SM=$$GET^IPOLIS(NI,AB,"price")
+ .Q:'$$GET^IPOLIS(NI,AB,"summ") 
+ .S DWI=DWKL(+A)
+ .I TP=1 S TABL(LP,DWI,2)=$G(TABL(LP,DWI,2))+1,TABL(LP,DWI,7)=$G(TABL(LP,DWI,7))+SM
+ .I TP=2 S TABL(LP,DWI,1)=$G(TABL(LP,DWI,1))+1,TABL(LP,DWI,6)=$G(TABL(LP,DWI,6))+SM
+ Q
+REGIPROC 
+ S ^IPROC("ССМЦ","Еженедельный отчет по беременным")="DO_RSSMCEB,8,2,d,Дата отчета,d,Дата по,,,,/ssmc/ssmc-ber.xls"
+ Q

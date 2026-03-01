@@ -1,0 +1,326 @@
+NDBLPAC ; Дубли контингента [ 09/21/2023  2:57 PM ]
+FND(TP) ; Найти
+ S %b="^BUF("_$J_")"
+ N N,R,C,A,LSTT,LST,D,P,I,DTR,fF,fFI,fFO,fBD,fBDS,fS,fP,fPH,DT
+ N TRs,TRt
+ S TRs="ёЁйЙ",TRt="еЕиИ"
+ K @%b
+ s fF=$S(TP=8:1,1:0)
+ s fFI=$S(TP=5:0,TP=8:0,TP=9:0,TP=15:0,1:1)
+ s fFO=$S(TP=5:0,TP=6:0,TP=7:0,TP=8:0,TP=9:0,TP=12:0,1:1)
+ s fBD=$S(TP<4:1,TP=5:1,TP=7:1,TP=8:1,TP=11:1,TP=10:1,TP=12:1,TP=15:1,1:0)
+ s fBDS=$S(TP=11:1,TP=12:1,TP=14:1,TP=15:1,1:0)
+ s fS=$S(TP=2:1,1:0)
+ s fP=$S(TP=3:1,TP=9:1,1:0)
+ s fPH=$S(TP=13:1,1:0)
+ S N=0 F  S N=$$NEXT^IPAC(N) Q:N=""  D
+ .I TP=10 D  Q  ; поиск с предисторией
+ ..K LST
+ ..D GETM^IPAC(N,"fiof","LSTT")
+ ..S D="" F  S D=$O(LSTT(D)) Q:D=""  S LST(D,1)=$TR(LSTT(D),TRs,TRt)
+ ..D GETM^IPAC(N,"fioi","LSTT")
+ ..S D="" F  S D=$O(LSTT(D)) Q:D=""  S LST(D,2)=LSTT(D)
+ ..D GETM^IPAC(N,"fioo","LSTT")
+ ..S D="" F  S D=$O(LSTT(D)) Q:D=""  S LST(D,3)=LSTT(D)
+ ..D GETM^IPAC(N,"datar","LSTT")
+ ..S D="" F  S D=$O(LSTT(D)) Q:D=""  S LST(D,4)=LSTT(D)
+ ..S (R,D)="" F  S D=$O(LST(D)) Q:D=""  D
+ ...F I=1:1:4 S:$L($G(LST(D,I))) $P(R,"|",I)=LST(D,I)
+ ...S @%b@(R,N)=""
+ .S R=$$GET^IPAC(N,"fiof"),DT=$H
+ .I R="" S DT=$$CREATED^IPAC(N),R=$$GET^IPAC(N,"fiof",DT)
+ .I fF Q:R=""  S @%b@($$LU^TXTU($TR(R,TRs,TRt)),N)=DT Q 
+ .S:fFI R=R_"|"_$$GET^IPAC(N,"fioi",DT)
+ .S:fFO R=R_"|"_$$GET^IPAC(N,"fioo",DT)
+ .S R=$$LU^TXTU($TR(R,TRs,TRt))
+ .I fBD S DTR=$$GET^IPAC(N,"datar",DT),R=R_"|"_DTR
+ .I TP=14 S DTR=$$GET^IPAC(N,"datar",DT),R=R_"|"_$P(DTR,".",3) ; год р.
+ .I fBDS,DTR="" Q  ; без даты рожд. не счит. 
+ .S:fS R=R_"|"_$$GET^IPAC(N,"stc",DT)
+ .S:fP R=R_"|"_$$RECONV^IPOLIS($$GET^IPAC(N,"polis",DT))
+ .I fPH S D=$$TRIM^TXTU($$GET^IPAC(N,"tel1",DT)),D=$TR(D,$TR(D,"01234567890",""),"") Q:D=""  S R=R_"|"_D
+ .S @%b@(R,N)=DT
+ S R="" F  S R=$O(@%b@(R)) Q:R=""  K:$O(^(R,""))=$O(^(""),-1) @%b@(R)
+ D OWF^RWU(".txt")
+ D WC^RWU("№ И.Б.|Основной|Дубли|Фамилия|Имя|Отчество|Дата рожд.|Записи|Договор|Полис|Срок с|Срок по|Документ|Создан|Внесен")
+ S R="",C=0 F  S R=$O(@%b@(R)) Q:R=""  D
+ .S A=$S(C:CR,1:""),N="" F  S N=$O(@%b@(R,N)) Q:N=""  D
+ ..S D=^(N)
+ ..S A=A_N_"|||"_$$GET^IPAC(N,"fiof",D)_"|"_$$GET^IPAC(N,"fioi",D)
+ ..S A=A_"|"_$$GET^IPAC(N,"fioo",D)_"|"_$$GETE^IPAC(N,"datar",D)
+ ..S A=A_"|"_$S('$$CHKNUL^IPAC(N):"+",1:"")_"|"
+ ..S A=A_$$GETE^IPAC(N,"stc",D)_"|"_$$GET^IPAC(N,"polis",D)
+ ..S A=A_"|"_$$DT^DTUTL($$GET^IPAC(N,"dog_from",D))_"|"
+ ..S A=A_$$DT^DTUTL($$GET^IPAC(N,"dog_to",D))_"|"
+ ..S A=A_$$GET^IPAC(N,"pasp",D)_"|"
+ ..S A=A_$$DT2^DTUTL($$CREATED^IPAC(N))_"|"
+ ..S A=A_$$DT2^DTUTL($$WRITED^IPAC(N))
+ ..D WC^RWU(CR_A)
+ ..S A="",C=1
+ K @%b
+ D C^RWU
+ Q
+MOVCDT ; Только перенести данные
+ N SPL S SPL=2 G SPLIT1
+MOVDT ; Перенести данные+телефоны/адреса
+ N SPL S SPL=1 G SPLIT1
+MOVST ; перенести данные, переместить договора
+ N SPL S SPL=3 G SPLIT1
+SPLIT ; Объединить
+ N SPL S SPL=0
+SPLIT1 S %b="^BUF("_$J_")"
+ N J,A,R,LST,PN,N1,N2,NIB
+ D ORH^RWU
+ ; prepare
+ F J=1:1 S A=$$R^RWU Q:%IFN["Z"  D:J>1
+ .S NIB=$P(A,"|",1),N1=$P(A,"|",2),N2=$P(A,"|",3)
+ .I N1="",N2="" M:$D(PN) @%b@(PN)=LST K LST,PN
+ .I $L(N1) S PN=NIB Q
+ .I $L(N2) S LST(NIB)=""
+ M:$D(PN) @%b@(PN)=LST
+ D CR^RWU,OWF^RWU(".txt")
+ D WC^RWU("№ И.Б.|Ф.И.О. пациента")
+ ; split and write table
+ S N1="" F  S N1=$O(@%b@(N1)) Q:N1=""  D
+ .S A=N1_"|"_$$FIO^IPAC(N1),N2=""
+ .F  S N2=$O(@%b@(N1,N2)) Q:N2=""  D MOVPAC(N2,N1,SPL) S A=A_"|"_N2
+ .D WC^RWU(CR_A)
+ D C^RWU
+ Q
+MOVPAC(FNIB,TNIB,NMP,NCHK) 
+ ; NCHK - not check existing patient
+ ; NMP = 0/1/2/3=Объединить/Перенести данные+телефоны+адреса/Только перенести данные/перенести данные, переместить договора
+ S:'$D(NMP) NMP=0 ; not move patient data mode
+ Q:FNIB=""  Q:TNIB=""  
+ I '$G(NCHK) Q:'$D(^BTN(FNIB))  Q:'$D(^BTN(TNIB)) 
+ Q:FNIB=TNIB 
+ K ^ISLOG("NDBLPA",FNIB,TNIB) ; clear
+ S ^ISLOG("NDBLPA",FNIB,TNIB)=$H_"|"_$$USR^IUSER()
+ ; TODO - резерв только с настройками
+ M ^ISLOG("NDBLPA",FNIB,TNIB,1)=^BTN(FNIB)
+ M ^ISLOG("NDBLPA",FNIB,TNIB,2)=^BTN(TNIB)
+ N X,Y,Z,K,BILL,NI,L,LP,F,K1,K2,K3,OT,VR,DT,ID,TDG,CCST
+ I NMP=3 S TDG=$$gMOVDGN()
+ D:$G(^cfg("movpac","fixusl")) fixusl(FNIB)
+ ; ^NAZ
+ D MOVPAC^INAZN(FNIB,TNIB)
+ ; EPR - 
+ D MOVPAC^IEPR(FNIB,TNIB)
+ ; BILL
+ D MOVPAC^IBILUTL(FNIB,TNIB)
+ ; Netr
+ D MOVPAC^INETR(FNIB,TNIB)
+ ; Polis
+ D:$D(^BTPL(FNIB))  ;W !,"Found - POLIS, not moved !!"
+ .M ^BTPL(TNIB)=^BTPL(FNIB)
+ .S X="" F  S X=$O(^BTPL(FNIB,X)) Q:X=""  D
+ ..S Y=$$RECONV^IPOLIS(X),^BTPLI("p",Y,TNIB)=X
+ ..K ^BTPLI("p",Y,FNIB)
+ ..D KGL^IEXCH("^BTPLI","p",Y,FNIB)
+ ..D GL^IEXCH("^BTPLI","p",Y,TNIB)
+ ..D:$D(^BTPLI("a",1,FNIB,X))
+ ...K ^(X) S ^BTPLI("a",1,TNIB,X)=Y
+ ...D KGL^IEXCH("^BTPLI","a",1,FNIB,X)
+ ...D GL^IEXCH("^BTPLI","a",1,TNIB,X)
+ ; ZNF
+ S X="" F  S X=$O(^PNF(FNIB,X)) Q:X=""  S Y="" F  S Y=$O(^PNF(FNIB,X,Y)) Q:Y=""  D
+ .Q:'$D(^(Y))  
+ .S Z=$G(^(Y)),^PNF(TNIB,X,Y)=Z
+ .K ^PNF(FNIB,X,Y)
+ .D GL^IEXCH("^PNF",TNIB,X,Y)
+ .I '$D(^ZNFI("dn",X,TNIB)) S ^(TNIB)="" D GL^IEXCH("^ZNFI","dn",X,TNIB)
+ .I '$D(^PNF(FNIB,X)),$D(^ZNFI("dn",X,FNIB)) K ^(FNIB) D KGL^IEXCH("^ZNFI","dn",X,FNIB)
+ .S VR=$P(Y,"|",1),OT=$P(Y,"|",2),ID=$P(Y,"|",3)
+ .S K=$G(^ZNF(VR,OT,X,ID,"e"))
+ .I K="" D GL^IEXCH("^PNF",TNIB,X,Y) Q 
+ .S $P(K,"~",2)=TNIB,F1=0
+ .I NMP=3,$P(K,"~",6)="" D 
+ ..S TDG=$$GETTZ^IPAC(FNIB,K1,X) Q:TDG=""  Q:TDG=$$GETTZ^IPAC(TNIB,K1,X) ; меняется индекс дог. - фиксируем договор
+ ..S $P(K,"~",6)=TDG,$P(^PNF(TNIB,X,Y),"|",2)=TDG
+ .I $P(K,"~",1)=3 S CCST(VR_"|"_OT_"|"_X_"|"_ID)=$P(K,"~",6) ; TODO
+ .S ^ZNF(VR,OT,X,ID,"e")=K
+ .D GL^IEXCH("^ZNF",VR,OT,X,ID)
+ .D KGL^IEXCH("^PNF",FNIB,X,Y)
+ ; TODO - изменение счетов из CCST
+ ; ^PROFP
+ D:$D(^PROFP(FNIB))
+ .M ^PROFP(TNIB)=^PROFP(FNIB) K ^PROFP(FNIB)
+ .D KGL^IEXCH("^PROFP",FNIB),GL^IEXCH("^PROFP",TNIB)
+ ; Shedule
+ D:$D(^DSHP(FNIB))
+ .S X="" F  S X=$O(^DSHP(FNIB,X)) Q:X=""  S Y="" F  S Y=$O(^DSHP(FNIB,X,Y)) Q:Y=""  D
+ ..S Z="" F  S Z=$O(^DSHP(FNIB,X,Y,Z)) Q:Z=""  D
+ ...S K=^(Z),K1=$P(K,"|",1),K2=$P(K,"|",2),K3=$P(K,"|",3)
+ ...S K3=$TR(K3,"@","|")
+ ...S L=$G(^DSH(K1,K2,Z,K3,X,Y))
+ ...Q:L=""  S $P(L,"|",1)=TNIB,^(Y)=L
+ ...D GL^IEXCH("^DSH",K1,K2,Z,K3,X,Y)
+ ...M ^DSHP(TNIB,X,Y,Z)=^DSHP(FNIB,X,Y,Z)
+ ...K ^DSHP(FNIB,X,Y,Z)
+ ...D KGL^IEXCH("^DSHP",FNIB,X,Y,Z)
+ .D GL^IEXCH("^DSHP",TNIB)
+ ; VRPOS
+ D MOVPAC^IEVLOG(FNIB,TNIB)
+ ; CME
+ D MOVPAC^ICCME(FNIB,TNIB)
+ ; CMS
+ D MOVPAC^ICMS(FNIB,TNIB)
+ ; CARD
+ D MOVPAC^ISCARD(FNIB,TNIB)
+ ; GRNL - Г,П.
+ D MOVPAC^IGRNL(FNIB,TNIB)
+ ; Personal patient cabinet
+ D MOVPAC^NPPCAB(FNIB,TNIB)
+ ; СНМП
+ D MOVPAC^ISNMP(FNIB,TNIB)
+ ; MLAB - КДЛ
+ D MOVPAC^IMLAB(FNIB,TNIB)
+ ; ПНД
+ D MOVPAC^NPND(FNIB,TNIB)
+ Q:NMP=9 
+ ; BTN
+ S NI=FNIB D RMIDXU^YIPACN
+ I NMP=2 S X=$$CREATED^IPAC(FNIB),Y=$$CREATED^IPAC(TNIB) D:X<Y COPYDT^YIPACN(TNIB,X) ; перемещение на раннюю дату, если надо
+ S K=+$G(^cfg("movpac","fmode")) ; алгоритм - простой/на базе дат прикр.
+ I 'K,'NMP M ^BTN(TNIB)=^BTN(FNIB) ; переместить все
+ I K=1,'NMP D hRDGNDT
+ D:NMP=1 hMOVP ; переместить только сопутств. реквизиты
+ D:NMP=3 hMOVDGN ; перенести различные договора
+ ; NMP=2 - не перемещать реквизиты пациента
+ M ^BTNL(TNIB)=^BTNL(FNIB)
+ K ^BTN(FNIB),^BTNL(FNIB)
+ D KGL^IEXCH("^BTN",FNIB),KGL^IEXCH("^BTNL",FNIB)
+ S NI=TNIB D MKIDX^YIPACN(+$H)
+ D NORM^IPACEX(TNIB)
+ D UPD^IEXCH("IPACEX",TNIB)
+ ; DSCN (after patient)
+ D MOV^IDSCN(FNIB,TNIB)
+ Q
+fixusl(NIB) ; Фиксация договора на услугах
+ N KX,DT,VR,OT,ID,X
+ S DT="" F  S DT=$O(^PNF(NIB,DT)) Q:DT=""  D
+ .S KX="" F  S KX=$O(^PNF(NIB,DT,KX)) Q:KX=""  D 
+ ..S VR=$P(KX,"|",1),OT=$P(KX,"|",2),ID=$P(KX,"|",3)
+ ..S X=$$GETDGN^IUSL(VR,DT,OT,ID) Q:X="" 
+ ..D SETDGN^IUSL(VR,DT,OT,ID,X,1)
+ Q
+MOVUSL(VR,DT,OT,ID,TNIB) ; Переместить услугу
+ N X,K,Z,FNIB,B
+ S X=VR_"|"_OT_"|"_ID
+ S K=$G(^ZNF(VR,OT,DT,ID,"e")) Q:K=""  
+ S B=$G(^ZNF(VR,OT,DT,ID,"p"))
+ S FNIB=$P(K,"~",2) Q:FNIB=TNIB 
+ M ^PNF(TNIB,DT,X)=^PNF(FNIB,DT,X)
+ K ^PNF(FNIB,DT,X)
+ D GL^IEXCH("^PNF",TNIB,DT,X),KGL^IEXCH("^PNF",FNIB,DT,X)
+ I '$D(^ZNFI("dn",DT,TNIB)) S ^(TNIB)="" D GL^IEXCH("^ZNFI","dn",DT,TNIB)
+ I '$D(^PNF(FNIB,DT)),$D(^ZNFI("dn",DT,FNIB)) K ^(FNIB) D KGL^IEXCH("^ZNFI","dn",DT,FNIB)
+ S $P(K,"~",2)=TNIB,^ZNF(VR,OT,DT,ID,"e")=K
+ D GL^IEXCH("^ZNF",VR,OT,DT,ID,"e")
+ I B'="" N %L D BMOV^NPACADM(FNIB,$TR(B,",","@"),TNIB,0,1) ; перемещ. платежа
+ Q
+hMOVP ; Перемещение неосновных реквизитов
+ N LST,X,TMP,PL,I
+ M LST=^BTN(FNIB)
+ S X=$G(^BTN($C(9)_"t","poms")) K:$L(X) LST(X)
+ S X=$G(^BTN($C(9)_"t","skd")) K:$L(X) LST(X)
+ S X=$G(^BTN($C(9)_"t","status")) K:$L(X) LST(X)
+ 
+ F PL="stc","polis","dog_from","dog_to","prog","ofor" D
+ .F I="",1,2 S X=$G(^BTN($C(9)_"t",PL_I)) K:$L(X) LST(X)
+ 
+ M TMP=^BTN(TNIB),^BTN(TNIB)=LST,^BTN(TNIB)=TMP ; оставить все исходные, прибавить новые 
+ Q
+gMOVDGN() ; Получить договор при смещении договоров
+ N X,Y,T,F
+ S Y=$$GET^IPAC(FNIB,"stc"),F=1
+ F T="",1:1:3 S X=$$GET^IPAC(TNIB,"stc"_T) Q:Y=X  I Y'=X,X="" S F=0 Q
+ Q:F ""
+ Q Y
+hMOVDGN ; Переместить непересекающиеся договора
+ N LST,X,X2,TMP,T,F
+ S X2=$$GET^IPAC(FNIB,"stc"),F=1
+ F T="",1:1:3 S X=$$GET^IPAC(TNIB,"stc"_T) Q:X2=X  I X2'=X,X="" S F=0 Q 
+ Q:F 
+ M LST=^BTN(FNIB)
+ S X=$G(^BTN($C(9)_"t","stc"))
+ S X2=$G(^BTN($C(9)_"t","stc"_T))
+ M LST(X2)=LST(X) K:$L(X) LST(X)
+ S X=$G(^BTN($C(9)_"t","polis"))
+ S X2=$G(^BTN($C(9)_"t","polis"_T))
+ M LST(X2)=LST(X) K:$L(X) LST(X)
+ S X=$G(^BTN($C(9)_"t","dog_from"))
+ S X2=$G(^BTN($C(9)_"t","dog_from"_T))
+ M LST(X2)=LST(X) K:$L(X) LST(X)
+ S X=$G(^BTN($C(9)_"t","dog_to"))
+ S X2=$G(^BTN($C(9)_"t","dog_to"_T))
+ M LST(X2)=LST(X) K:$L(X) LST(X)
+ S X=$G(^BTN($C(9)_"t","prog"))
+ S X2=$G(^BTN($C(9)_"t","prog"_T))
+ M LST(X2)=LST(X) K:$L(X) LST(X)
+ M TMP=^BTN(TNIB),^BTN(TNIB)=LST,^BTN(TNIB)=TMP ; оставить все исходные, прибавить новые 
+ D:T'="" SET^IPAC(TNIB,"cntstc",+$H,T+1) ; TODO - убирать
+ Q
+hRDGNDT ; переместить с "правильными" датами
+ N FBTN,TBTN,PL,D,RD,DD,CPL
+ D PRETZR^IPAC
+ M FBTN=^BTN(FNIB)
+ M TBTN=^BTN(TNIB)
+ 
+ S PL=$G(TZRBTN("dog_from"))
+ S D="" F  S D=$O(FBTN(PL,D)) Q:D=""  D
+ .S RD=FBTN(PL,D)
+ .F CPL="stc","dog_from","dog_to","polis" S CPL=$G(TZRBTN(CPL)) I CPL'="" S DD=$O(FBTN(CPL,D+1),-1) I DD'="",RD'="",DD'=RD M FBTN(CPL,RD)=FBTN(CPL,DD)
+ S D="" F  S D=$O(TBTN(PL,D)) Q:D=""  D
+ .S RD=TBTN(PL,D)
+ .F CPL="stc","dog_from","dog_to","polis" S CPL=$G(TZRBTN(CPL)) I CPL'="" S DD=$O(TBTN(CPL,D+1),-1) I DD'="",RD'="",DD'=RD M TBTN(CPL,RD)=TBTN(CPL,DD)
+ 
+ M ^BTN(TNIB)=FBTN,^BTN(TNIB)=TBTN ; "To" не затираем
+ Q
+LSTMOVED ;  Список перемещенных
+ N FNI,TNI,iF,iO,iI,iS,R1,R2,S1,S2,D
+ S iF=^BTN($C(9)_"t","fiof"),iI=^("fioi"),iO=^("fioo"),iS=^("stc")
+ S FNI="" F  S FNI=$O(^ISLOG("NDBLPA",FNI)) Q:FNI=""  D
+ .S TNI="" F  S TNI=$O(^ISLOG("NDBLPA",FNI,TNI)) Q:TNI=""  D
+ ..S (R1,R2,S1,S2)=""
+ ..S D=$O(^ISLOG("NDBLPA",FNI,TNI,1,iF,""),-1) S:D R1=^(D)
+ ..S D=$O(^ISLOG("NDBLPA",FNI,TNI,1,iI,""),-1) S:D R1=R1_" "_^(D)
+ ..S D=$O(^ISLOG("NDBLPA",FNI,TNI,1,iO,""),-1) S:D R1=R1_" "_^(D)
+ ..S D=$O(^ISLOG("NDBLPA",FNI,TNI,1,iS,""),-1) S:D S1=^(D)
+ ..S D=$O(^ISLOG("NDBLPA",FNI,TNI,2,iF,""),-1) S:D R2=^(D)
+ ..S D=$O(^ISLOG("NDBLPA",FNI,TNI,2,iI,""),-1) S:D R2=R2_" "_^(D)
+ ..S D=$O(^ISLOG("NDBLPA",FNI,TNI,2,iO,""),-1) S:D R2=R2_" "_^(D)
+ ..S D=$O(^ISLOG("NDBLPA",FNI,TNI,2,iS,""),-1) S:D S2=^(D)
+ ..S S1=$$NAME^IINSC(S1),S2=$$NAME^IINSC(S2)
+ ..W !,"----------",!,FNI_" "_R1_", "_S1
+ ..W !,TNI_" "_R2_", "_S2
+ Q
+LSTMOV(DS,DE) ; Список перемещенных за период (отчет)
+ N FNI,TNI,iF,iO,iI,iS,R1,R2,S1,S2,D,OP
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S iF=^BTN($C(9)_"t","fiof"),iI=^("fioi"),iO=^("fioo"),iS=^("stc")
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|Исходный пациент|Результирующий пациент|Исходный договор|Результирующий договор|Оператор")
+ S FNI="" F  S FNI=$O(^ISLOG("NDBLPA",FNI)) Q:FNI=""  D
+ .S TNI="" F  S TNI=$O(^ISLOG("NDBLPA",FNI,TNI)) Q:TNI=""  D
+ ..S D=^(TNI)
+ ..S R1=+$P(D,"|",1),OP=$P(D,"|",2)
+ ..Q:R1<DS  Q:R1>DE 
+ ..S (R1,R2,S1,S2)=""
+ ..S D=$O(^ISLOG("NDBLPA",FNI,TNI,1,iF,""),-1) S:D R1=^(D)
+ ..S D=$O(^ISLOG("NDBLPA",FNI,TNI,1,iI,""),-1) S:D R1=R1_" "_^(D)
+ ..S D=$O(^ISLOG("NDBLPA",FNI,TNI,1,iO,""),-1) S:D R1=R1_" "_^(D)
+ ..S D=$O(^ISLOG("NDBLPA",FNI,TNI,1,iS,""),-1) S:D S1=^(D)
+ ..S D=$O(^ISLOG("NDBLPA",FNI,TNI,2,iF,""),-1) S:D R2=^(D)
+ ..S D=$O(^ISLOG("NDBLPA",FNI,TNI,2,iI,""),-1) S:D R2=R2_" "_^(D)
+ ..S D=$O(^ISLOG("NDBLPA",FNI,TNI,2,iO,""),-1) S:D R2=R2_" "_^(D)
+ ..S D=$O(^ISLOG("NDBLPA",FNI,TNI,2,iS,""),-1) S:D S2=^(D)
+ ..S S1=$$NAME^IINSC(S1),S2=$$NAME^IINSC(S2)
+ ..S:R2="" R2=$$FIO^IPAC(TNI)
+ ..S:S2="" S2=$$GETE^IPAC(TNI,"stc")
+ ..D WC^RWU(CR_TNI_"|"_FNI_" "_R1_"|"_TNI_" "_R2_"|"_S1_"|"_S2_"|"_OP_", "_$$FIOSH^NUSER(OP))
+ D C^RWU
+ Q
+REGIPROC 
+ S ^IPROC("Система","Пациенты","Объединенные пациенты")="LSTMOV_NDBLPAC,100,2,d,Начальная дата,d,Конечная дата"
+ Q

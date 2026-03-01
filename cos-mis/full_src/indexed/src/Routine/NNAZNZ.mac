@@ -1,0 +1,725 @@
+NNAZNZ ; Назначения стоматологии [ 03/19/2021  6:49 PM ]
+TPLST(X) 
+ Q:X="c" "Консультивно-диагностическое" ; "Консультация"
+ Q:X="d" "Диагностика"
+ Q:X="l" "Лаборатория"
+ Q:X="p" "Процедурное направление"
+ Q:X="r" "Рецепт"
+ Q:X="w" "План лечения"
+ Q:X="z" "План стом. лечения"
+ Q:X="a" "Комплексное"
+ Q ""
+CURTAB(NIB,VR,DT) ; вывод таблицы назн.
+ N I,R,PRC,U,SP,D,A,E,L,T,K
+ S T="</item><item>"
+ S PRC=+$$GET^IINSC($$GET^IPAC(NIB,"stc",DT),"price",DT)
+ D WC^RWU("<titles><item>Дата"_T_"Специалист"_T_"Услуга"_T_"Рекоменд."_T_"Согласов."_T_"Выполнено</item></titles>")
+ S ID="" F  S ID=$O(^NAZI("n",NIB,ID)) Q:ID=""  D
+ .S E=$G(^NAZ(ID,"e")) I +$P(E,"|",1)'=0 Q 
+ .S A=$G(^("a")),I=$G(^("i"))
+ .Q:$P(I,"|",3)'=VR  Q:+$P(I,"|",5)'=DT 
+ .I $P(I,"|",8)'="",+$H<$P(I,"|",8) Q 
+ .S:$P(I,"|",1)="l" L=$G(^("l"))
+ .S K=$G(^("h")) S:K'="" K=$P(K,",",2)
+ .S SP=$P(A,"|",1),U=$P(A,"|",2),D=+$P(I,"|",5)
+ .S SP=$S($P(I,"|",1)="l":"Лаборатория",$P(I,"|",1)="r":"Назначено",1:$$GSPEC^YISPRAV(SP))
+ .S U=$S($P(I,"|",1)="l":$$NAMEAN^NMLABU($P(L,"|",1)),1:$$NAMEH^IPRICE(U,PRC,D))
+ .S U=$$OWF^TXTU(U,40)
+ .S A=U_T_$P(A,"|",4)_T_$P(A,"|",3)_T_(+$P(E,"|",4))_"</item></row>"
+ .D WC^RWU("<row><key>"_K_"</key><item>"_$$DT^DTUTL(D)_T_SP_T_A)
+ Q
+LNLST(NIB,CUR,SVR) ; Назначения по пациенту (списком)
+ ; CUR - показывать Текущее назначение, SVR - показывать назначившего
+ N ID,R,K,Z,SP,I,X,V
+ S SVR=+$G(SVR)
+ D OWF^RWU(".txt")
+ D:+$G(CUR) WC^RWU("|Текущее назначение")
+ S ID="" F  S ID=$O(^NAZI("n",NIB,ID)) Q:ID=""  S R=^(ID),Z=+$P(R,"|",5) I "z"[$P(R,"|",1) D:Z'=2 
+ .S K=$G(^NAZ(ID,"a")),Z=$P(K,"|",4),K=$P(K,"|",1)
+ .D:K=""
+ ..S (SP,I)=""
+ ..F  S I=$O(^NAZ(ID,"a",I)) Q:I=""  S X=$P(^(I),"|",2) I X'="" S:SP="" SP=X I SP'=X S SP="" Q 
+ ..S:SP'="" K=$$GSPEC^YISPRAV(SP)
+ .I K="",Z'="" S K=$P($G(^NAZM("pt",Z)),"|",1)
+ .S K=$S(K="":$$TPLST($P(R,"|",1)),1:K)
+ .S Z=$$DT2^DTUTL($P(R,"|",3))
+ .S V=$S(SVR=1:$$FIO^YIKADRY($$fromVRI^INAZN(ID)),SVR=2:$$fromVR^INAZN(ID),1:"")
+ .D WC^RWU(CR_ID_"|"_K_$S(Z="":"",1:" ("_Z_")")_$S(V="":"",1:" "_V))
+ D C^RWU
+ Q
+LNFTAB(ID,FRM,TAB) ; Вывод назначения (таблица)
+ N R,U,PRC,NI,VR,DT,I,A,NA,ST,F,FT,P,SS,S,SK,AA,SM
+ N ITS,ITER,ITE,ITSB
+ S ITS="<item",ITER=" class=""1"">",ITE="</item>",ITSB=" class=""4"">"
+ S R=$G(^NAZ(ID,"i")),NI=$P(R,"|",2),VR=$P(R,"|",3),DT=+$P(R,"|",5)
+ S NA=$G(^("a")),R=$G(^("k")),P=+$P(R,"|",3)
+ S NA=$P(NA,"|",4),(F,FT)=""
+ S:NA'="" FT=$G(^NAZM("pt",NA,"f")),NA=$P(FT,"|",5),NA=$S(NA:"yes",1:"no"),F=$O(^("u","")),FT=$P(FT,"|",1)
+ S S=$P(R,"|",1),SS=0
+ S PRC=$$GET^IINSC($$GET^IPAC(NI,"stc",DT),"price",DT)
+ S PRC=$$CORCP^IPRICET(PRC)
+ S AA=$G(^NAZ(ID,"a"))
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<"_FRM_">")
+ D W^RWU("<"_TAB_"><titles><key></key></titles>")
+ S I="" F  S I=$O(^NAZ(ID,"a",I)) Q:I=""  D
+ .S R=^(I),U=$P(R,"|",5),P=$P(R,"|",6),SK=+$P(R,"|",7),SM=$P(R,"|",8)
+ .S:P="" P=PRC
+ .S ST=($P(R,"|",3)=2)
+ .I $P(R,"|",14)'="" S:+$G(^NAZ(ID,"g",$P(R,"|",14)))=0 ST=1 ; по группе
+ .S A="<key>"_I_"</key>"
+ .S A=A_ITS_">"_$$GSPEC^YISPRAV($P(R,"|",2))_ITE
+ .S A=A_ITS_$S($P(R,"|",1)=1:ITSB,1:">")_U
+ .S A=A_" "_$$CNAMEH^IPRICE(U,P,DT)_ITE
+ .S A=A_ITS_">"_$S(ST:"+",1:"")_ITE
+ .S A=A_ITS_">"_$P(AA,"|",2)_ITE
+ .S A=A_ITS_">"_$P(AA,"|",3)_ITE
+ .S A=A_ITS_">"_$$DT2^DTUTL($P(R,"|",4))_ITE
+ .S P=+$FN($S(SM:SM,1:100-SK*$$PRICEH^IPRICE(U,P,DT)/100),"",2)
+ .S SS=SS+P
+ .D WC^RWU(CR_"<row>"_A_"</row>")
+ D W^RWU("</"_TAB_">")
+ D WTAGD^RWU("summ",$FN($S(+S=0:SS,1:S),"",2))
+ D W^RWU("</"_FRM_"></nb_console>"),C^RWU
+ Q
+LNDT(NIB,IsA) ; Назначения по пациенту (для листа назн.)
+ ; IsA - показывать архивные планы
+ N ID,R,K,Z,SP,I,X,E,A
+ S IsA=$G(IsA)
+ D OWF^RWU(".txt")
+ D WC^RWU("|Дата|Создал")
+ S ID="" F  S ID=$O(^NAZI("n",NIB,ID)) Q:ID=""  S R=^(ID),Z=+$P(R,"|",5) I "z"[$P(R,"|",1) D:Z'=2 
+ .I 'IsA,Z=7 Q 
+ .S K=$P($G(^NAZ(ID,"i")),"|",6)
+ .S A=$P($G(^NAZ(ID,"a")),"|",1) S:A'="" A=", "_A
+ .D WC^RWU(CR_ID_"|"_$$DT2^DTUTL($P(R,"|",3))_A_"|"_$S(Z=7:"арх. ",1:"")_$$FIOSH^IKADRY(K))
+ D C^RWU
+ Q
+LNTAB(ID) ; Вывод назначения (для листа назн.)
+ N R,U,PRC,NI,VR,VDT,DT,I,A,NA,ST,F,FT,P,SS,S,SK,SP,Fp,LST,E,UU,FRM,ZZ
+ N ITS,ITER,ITE,ITSB,NM,SM,AGR,FLG,SKD,SKDD,DGN,KS,DV,ITP,VRE,CPL,CK,ZN
+ S FRM="nzstom"
+ S ITS="<item",ITER=" class=""1"">",ITE="</item>",ITSB=" class=""4"">",ITP=" class=""5"">"
+ S R=$G(^NAZ(ID,"i")),NI=$P(R,"|",2),VR=$P(R,"|",3),DT=+$P(R,"|",5),DGN=$P(R,"|",9)
+ S NA=$G(^("a")),R=$G(^("k")),P=$P(R,"|",3)
+ S NM=$P(NA,"|",1),NA=$P(NA,"|",4),(F,FT,Fp)=""
+ S:NA'="" FT=$G(^NAZM("pt",NA,"f")),NA=$P(FT,"|",5),Fp=+$P(FT,"|",6),NA=$S(NA:"yes",1:"no"),F=$O(^("u","")),FT=$P(FT,"|",1) ; по комплексу
+ S S=$P(R,"|",1),(UU,SS)=0
+ S VRE=$S($G(^cfg("ed","env-vrk"))=1:$$KDR^IUSER(),$G(^cfg("ed","env-vrk"))=2:VR,1:"")
+ S:DGN="" DGN=$$GET^IPAC(NI,"stc",DT)
+ S DV=$$GET^IINSC(DGN,"dvid",DT)
+ S SKD=$$GET^IDSCN(NI,DT,DGN) ; базовая скидка
+ S SKDD=$$GET^IINSC(DGN,"skd",DT)
+ S PRC=$$PRC^IINSC(DGN,NI,DT,"",$O(^cfg("stom-otd","")),"")
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<"_FRM_">")
+ D W^RWU("<bt_view visible="""_$S($G(^NAZ(ID,"v"))="":"yes",1:"no")_"""/>")
+ D WTAGDC^RWU("dfio",$$FIOSH^IKADRY(VR))
+ D WTAGD^RWU("pay",$FN($P(R,"|",2),"",2))
+ D WTAGDC^RWU("nm",NM),WTAGD^RWU("comm",$G(^NAZ(ID,"c"))),WTAGDC^RWU("txt",$G(^NAZ(ID,"dc")))
+ M LST=^NAZ(ID,"stg")
+ S I="" F  S I=$O(^NAZ(ID,"a",I)) Q:I=""  D
+ .S R=^(I),U=$P(R,"|",5),P=$P(R,"|",6),SK=+$P(R,"|",7),SP=$P(R,"|",2)
+ .S SM=$P(R,"|",8),FLG=$P(R,"|",9),AGR=$P(R,"|",3)
+ .S A=$P(R,"|",11),VR=$P(A,"@",2),VDT=$P(A,"@",3),E=$P(R,"|",15)
+ .S:30[(+$P(R,"|",1)) UU=UU+1
+ .S:P="" P=PRC
+ .S:FLG'="" FLG="~"_FLG_"~" S KS=FLG["~kss~"
+ .S ST=($P(R,"|",3)=2),ZZ=$G(^NAZ(ID,"a",I,"z"))
+ .I $P(R,"|",14)'="" S:+$G(^NAZ(ID,"g",$P(R,"|",14)))=0 ST=1 ; по группе
+ .S ZN=$P(ZZ,"|",2)
+ .S A="<key>"_I_"</key>"_ITS_">"_$S(AGR=1:"OK",AGR=2:"отм.",1:"")_ITE
+ .S A=A_ITS_">"_ZN_ITE
+ .S A=A_ITS_">"_$$NAME^ISPRAV("wstomstat",$P(ZZ,"|",3))_ITE
+ .S A=A_ITS_">"_$P(ZZ,"|",4)_ITE
+ .S A=A_ITS_$S($P(R,"|",1)=1:ITSB,1:">")_U_" "
+ .S NM=$$CNAMEH^IPRICE(U,P,DT)
+ .S:U'="" A=A_$$TAG^TXTU(NM)
+ .D:'SK
+ ..I SKD,DV=3!KS S SK=$$CALC^IDSCN(NI,"",U,DGN,P,1)
+ ..I SKDD S SK=$$CALCID^IDSCN(SKDD,"",U,DGN,P,1)
+ .S:VRE'="" SK=$$GETVRK^IPRICE(U,VRE,DT,P,FLG,"",SK)
+ .S P=+$FN($S(SM:SM,1:100-SK*$$PRICEH^IPRICE(U,P,DT)/100),"",2)
+ .S A=A_ITS_">"_P_ITE
+ .S A=A_ITE_ITS_$S(KS:ITP,1:">")_$S($P(R,"|",10):"+",1:"")_ITE
+ .S A=A_ITS_">"_$P(ZZ,"|",5)_ITE ; наряд
+ .S A=A_ITS_">"_$S($L(E):$$DT2^DTUTL($P(R,"|",12))_", "_E,VDT="":"",1:$$DT2^DTUTL(VDT)_", "_$$FIOSH^IKADRY(VR))_ITE
+ .S:$L(E)!$L(VDT) UU=UU+1
+ .S SS=SS+P
+ .S LST(+$P(ZZ,"|",1),U_"|"_I)=A
+ .S LST(+$P(ZZ,"|",1),0)=$G(LST(+$P(ZZ,"|",1),0))+P
+ .S CK=U_"|"_$E(NM,1,128)_"|"_ZN
+ .S:$D(CPL(CK)) $P(CPL(CK),"|",4)=$P(CPL(CK),"|",4)+1
+ .S:'$D(CPL(CK)) CPL(CK)="|"_ZN_"|"_NM_"|1|"_P
+ D W^RWU("<table><titles><key></key></titles>")
+ S A=ITS_" class=""7"">"_ITE,E=ITS_" class=""7"">"
+ S ZZ="" F  S ZZ=$O(LST(ZZ)) Q:ZZ=""  D
+ .S R=$G(^NAZ(ID,"stg",ZZ))
+ .D WC^RWU(CR_"<row><key>S"_ZZ_"</key>"_A_A_E_$$DT^DTUTL($P(R,"|",2))_ITE_A_E_$P(R,"|",1)_ITE_E_$G(LST(ZZ,0))_ITE_A_A_A_"</row>")
+ .S I=0
+ .F  S I=$O(LST(ZZ,I)) Q:I=""  D WC^RWU(CR_"<row>"_LST(ZZ,I)_"</row>")
+ D W^RWU("</table>")
+ D W^RWU("<cplan><titles><key></key></titles>")
+ S ZZ="" F  S ZZ=$O(CPL(ZZ)) Q:ZZ=""  D
+ .S R=CPL(ZZ),A="<key>-</key>"
+ .F I=1:1:6 S A=A_ITS_">"_$$TAG^TXTU($P(R,"|",I))_ITE
+ .D WC^RWU("<row>"_A_"</row>")
+ D W^RWU("</cplan>")
+ D WTAGD^RWU("sum",$FN($S(+S=0:SS,1:S),"",2))
+ D W^RWU("</"_FRM_"></nb_console>"),C^RWU
+ Q
+PRNLT(ID) ; Краткий формат для печати
+ ; Услуга|Зубы|Кол-во|Сумма
+ D OWF^RWU(".txt")
+ N R,U,PRC,NI,VR,VDT,DT,I,A,NA,F,FT,P,SS,S,SK,SP,Fp,E,UU,ZZ,ZN,SM,KX,TAB
+ S R=$G(^NAZ(ID,"i")),NI=$P(R,"|",2),VR=$P(R,"|",3),DT=+$P(R,"|",5)
+ S NA=$G(^("a")),R=$G(^("k")),P=$P(R,"|",3)
+ S NA=$P(NA,"|",4),(F,FT,Fp)=""
+ S:NA'="" FT=$G(^NAZM("pt",NA,"f")),NA=$P(FT,"|",5),Fp=+$P(FT,"|",6),NA=$S(NA:"yes",1:"no"),F=$O(^("u","")),FT=$P(FT,"|",1) ; по комплексу
+ S S=$P(R,"|",1),(UU,SS)=0
+ S PRC=$$GET^IINSC($$GET^IPAC(NI,"stc",DT),"price",DT)
+ S PRC=$$CORCP^IPRICET(PRC)
+ S I="" F  S I=$O(^NAZ(ID,"a",I)) Q:I=""  D
+ .S R=^(I),U=$P(R,"|",5),P=$P(R,"|",6),SK=+$P(R,"|",7),SP=$P(R,"|",2)
+ .S SM=$P(R,"|",8)
+ .S A=$P(R,"|",11),VR=$P(A,"@",2),VDT=$P(A,"@",3),E=$P(R,"|",15)
+ .S:30[(+$P(R,"|",1)) UU=UU+1
+ .S:P="" P=PRC
+ .S ZZ=$G(^NAZ(ID,"a",I,"z")),ZN=$P(ZZ,"|",2)
+ .S A=$$CNAMEH^IPRICE(U,P,DT)
+ .S P=+$FN($S(SM:SM,1:100-SK*$$PRICEH^IPRICE(U,P,DT)/100),"",2)
+ .S KX=U_"|"_$E(A,1,128)_"|"_ZN,R=$G(TAB(KX))
+ .S TAB(KX)=A_"|"_ZN_"|"_($P(R,"|",3)+1)_"|"_($P(R,"|",4)+P)
+ S (R,A)=""
+ F  S A=$O(TAB(A)) Q:A=""  D WC^RWU(R_TAB(A)) S R=CR
+ D C^RWU
+ Q
+SETST(ID,KEY,X) ; Этап
+ Q:ID=""  Q:KEY=""  Q:X=""  Q:'$D(^NAZ(ID)) 
+ Q:'$D(^NAZ(ID,"stg",X)) 
+ S $P(^NAZ(ID,"a",KEY,"z"),"|",1)=X
+ D GL^IEXCH("^NAZ",ID,"a",KEY,"z")
+ Q
+SETZ(ID,KEY,X) ; Номер зуба
+ Q:ID=""  Q:KEY=""  Q:'$D(^NAZ(ID))
+ S $P(^NAZ(ID,"a",KEY,"z"),"|",2)=$$WD^TXTU(X)
+ D GL^IEXCH("^NAZ",ID,"a",KEY,"z")
+ Q
+SETSTZ(ID,KEY,X) ; Статус зуба
+ Q:ID=""  Q:KEY=""  Q:'$D(^NAZ(ID)) 
+ S $P(^NAZ(ID,"a",KEY,"z"),"|",3)=$$WD^TXTU(X)
+ D GL^IEXCH("^NAZ",ID,"a",KEY,"z")
+ Q
+SETDI(ID,KEY,X) ; Диагноз на зубы
+ Q:ID=""  Q:KEY=""  Q:'$D(^NAZ(ID))
+ S $P(^NAZ(ID,"a",KEY,"z"),"|",4)=$$RECODE^YMKB10($$WD^TXTU(X))
+ D GL^IEXCH("^NAZ",ID,"a",KEY,"z")
+ Q
+SETAGR(ID,KEY) ; Согласование услуги
+ Q:ID=""  Q:KEY=""  Q:'$D(^NAZ(ID))
+ S $P(^NAZ(ID,"a",KEY),"|",3)=1
+ D GL^IEXCH("^NAZ",ID,"a",KEY)
+ Q
+SETCAN(ID,KEY) ; Отмена услуги пациентом
+ Q:ID=""  Q:KEY=""  Q:'$D(^NAZ(ID)) 
+ S $P(^NAZ(ID,"a",KEY),"|",3)=2
+ D GL^IEXCH("^NAZ",ID,"a",KEY)
+ Q
+CLRSTAT(ID,KEY) ; Очистка статусов
+ Q:ID=""  Q:KEY=""  Q:'$D(^NAZ(ID))
+ S $P(^NAZ(ID,"a",KEY),"|",3)=""
+ D GL^IEXCH("^NAZ",ID,"a",KEY)
+ Q
+SETSK(ID,KEY,X,SYS) ; Присвоить вид оплаты
+ Q:'(+ID)  Q:'$D(^NAZ(ID)) 
+ N NI,R,P,PP,DT,DGN,U,PE,RR
+ S R=$G(^NAZ(ID,"i")),NI=$P(R,"|",2),DT=+$P(R,"|",5)
+ Q:+$P(^NAZ(ID,"a",KEY),"|",1)'=0 
+ S DGN=+$$GET^IPAC(NI,"stc",DT)
+ S P=$$GET^IINSC(DGN,"cprice",DT),PP=$$GET^IINSC(DGN,"price",DT)
+ S P=$S(X="kss":P,1:$$GET^IINSC(DGN,"sprice",DT))
+ S:P="" P=PP
+ S P=$$CORCP^IPRICET(P),PP=$$CORCP^IPRICET(PP)
+ S RR=$G(^NAZ(ID,"a",KEY)),U=$P(RR,"|",5),PE=$P(RR,"|",6)
+ I X="kss" S PE=P,$P(RR,"|",9)=$$STFLG^TXTU($P(RR,"|",9),"kss","~")
+ I X="sk" S PE=PP,$P(RR,"|",9)=$$EXFLG^TXTU($P(RR,"|",9),"kss","~")
+ I '$$CHECKH^IPRICE(U,PE,DT) D LNTAB(ID) Q 
+ S $P(RR,"|",6)=PE,^NAZ(ID,"a",KEY)=RR
+ D GL^IEXCH("^NAZ",ID,"a",KEY)
+ D:'$G(SYS) LNTAB(ID)
+ Q
+SETSKST(ID,KEY,X) ; Присвоить вид оплаты целиком на этап
+ Q:'(+ID)  Q:'$D(^NAZ(ID)) 
+ N I,ST
+ I $E(KEY)'="S" D SETSK(ID,KEY,X) Q
+ S ST=$E(KEY,2,9),I=""
+ F  S I=$O(^NAZ(ID,"a",I)) Q:I=""  I +$P(^(I),"|",1)=0,$P($G(^(I,"z")),"|",1)=ST D SETSK(ID,I,X,1)
+ D LNTAB(ID)
+ Q
+STLST(ID) ; Список этапов в назначении
+ Q:ID="" 
+ N I,A,II
+ S (I,A)="",II=1
+ F  S I=$O(^NAZ(ID,"stg",I)) Q:I=""  S A=$S(A="":"",1:A_CR)_I_"|№"_II_" "_$P(^(I),"|",1),II=II+1
+ D MSG^RWU(A)
+ Q
+STADD(ID,TXT) ; Добавить этап
+ Q:'(+ID)  Q:'$D(^NAZ(ID)) 
+ Q:TXT=""  Q:ID="" 
+ S TXT=$$WD^TXTU(TXT)
+ N I S I=$O(^NAZ(ID,"stg",""),-1)+1,^(I)=TXT
+ D GL^IEXCH("^NAZ",ID,"stg",I)
+ D LNTAB(ID)
+ Q
+STRENM(ID,ST,TXT) ; Установить имя этапа
+ Q:'(+ID)  Q:'$D(^NAZ(ID)) 
+ S TXT=$$WD^TXTU(TXT),ST=$E(ST,2,9)
+ S $P(^NAZ(ID,"stg",ST),"|",1)=TXT
+ D GL^IEXCH("^NAZ",ID,"stg",ST)
+ Q
+STDATE(ID,ST,DT) ; Установить дату этапа
+ Q:'(+ID)  Q:'$D(^NAZ(ID)) 
+ S DT=$$DI^DTUTL(DT),ST=$E(ST,2,9)
+ S $P(^NAZ(ID,"stg",ST),"|",2)=DT
+ D GL^IEXCH("^NAZ",ID,"stg",ST)
+ Q
+STDEL(ID,KEY) ; Удалить этап
+ Q:'(+ID)  Q:'$D(^NAZ(ID)) 
+ N ST,I,F
+ S ST=$S($E(KEY)="S":$E(KEY,2,9),1:$P($G(^NAZ(ID,"a",KEY,"z")),"|",1))
+ Q:ST="" 
+ S (F,I)="" F  S I=$O(^NAZ(ID,"a",I)) Q:I=""  D  Q:F
+ .Q:$P(^NAZ(ID,"a",I,"z"),"|",1)'=ST
+ .S:$P(^NAZ(ID,"a",I),"|",1)=1 F=1
+ I F D MSG^RWU($$^T("В этапе есть подписанные услуги - удаление невозможно.","naz")) Q 
+ S I="" F  S I=$O(^NAZ(ID,"a",I)) Q:I=""  D
+ .Q:$P(^NAZ(ID,"a",I,"z"),"|",1)'=ST 
+ .K ^NAZ(ID,"a",I)
+ .D KGL^IEXCH("^NAZ",ID,"a",I)
+ K ^NAZ(ID,"stg",ST)
+ D KGL^IEXCH("^NAZ",ID,"stg",ST)
+ D LNTAB(ID)
+ Q
+DBL(ID,KEY,CNT) ; Создать копию услуги
+ Q:'(+ID)  Q:'$D(^NAZ(ID)) 
+ N I,II
+ S:'$G(CNT) CNT=1 S:CNT>32 CNT=32
+ F II=1:1:CNT D
+ .S I=$O(^NAZ(ID,"a",""),-1)+1
+ .M ^NAZ(ID,"a",I)=^NAZ(ID,"a",KEY)
+ .D GL^IEXCH("^NAZ",ID,"a",I)
+ D LNTAB(ID)
+ Q
+SETARCH(ID,VAL) ; Установить/снять статус архива
+ Q:'(+ID)  Q:'$D(^NAZ(ID)) 
+ N ST
+ S ST=$P($G(^NAZ(ID,"e")),"|",1)
+ I VAL=1,ST'=7 D SETSTAT^INAZN(ID,7)
+ I VAL=0,ST=7 D SETSTAT^INAZN(ID,0)
+ Q
+MK(NIB,NM) ; Make new
+ ; NM - наименование (опционально)
+ N I,DT,A,VR,X
+ S DT=+$H,VR=$$KDR^IUSER(),X=$$^I("ilpu")
+ S NM=$$WD^TXTU($G(NM))
+ S A="z|"_NIB_"|"_VR_"|"_X_"|"_$H_"|"_VR
+ S I=$$NEW^INAZN(A)
+ S ^NAZ(I,"e")=9 ; in work
+ S:NM'="" ^("a")=NM
+ S ^NAZI("n",NIB,I)="z||"_DT_"|"_$$KDR^IUSER()_"|9"
+ S ^NAZI("d",DT,I)="z|"_NIB
+ D GL^IEXCH("^NAZ",I)
+ D GL^IEXCH("^NAZI","n",NIB,I),GL^IEXCH("^NAZI","d",DT,I)
+ D MSG^RWU(I)
+ Q
+CP(ID) ; Создать копию
+ Q:'(+ID)  Q:'$D(^NAZ(ID)) 
+ N A,I,NIB,F,DT,J
+ S A=$P(^NAZ(ID,"i"),"|",1,6),$P(A,"|",5)=$H,NIB=$P(A,"|",2),DT=+$H
+ S I=$$NEW^INAZN(A)
+ S ^NAZ(I,"e")=9,^("a")="Копия"
+ S J="" F  S J=$O(^NAZ(ID,"a",J)) Q:J=""  D
+ .S A=$P(^(J),"|",1,9),$P(A,"|",3)=""
+ .S ^NAZ(I,"a",J)=A
+ .M ^NAZ(I,"a",J,"z")=^NAZ(ID,"a",J,"z")
+ M ^NAZ(I,"stg")=^NAZ(ID,"stg"),^NAZ(I,"c")=^NAZ(ID,"c")
+ 
+ S ^NAZI("n",NIB,I)="z||"_DT_"|"_$$KDR^IUSER()_"|9"
+ S ^NAZI("d",DT,I)="z|"_NIB
+ D GL^IEXCH("^NAZ",I)
+ D GL^IEXCH("^NAZI","n",NIB,I),GL^IEXCH("^NAZI","d",DT,I)
+ D MSG^RWU(I)
+ Q
+LNSV(ID) 
+ Q:ID=""  Q:'$D(^NAZ(ID))
+ S ^NAZ(ID,"v")=$H_"|"_$$KDR^IUSER()
+ D GL^IEXCH("^NAZ","v")
+ Q
+LNDELCHK(ID) ; Проверка перед удалением
+ Q
+LNDEL(ID) 
+ N NIB,R,I,N,H,P,F,S,X
+ Q:ID=""  Q:'$D(^NAZ(ID))
+ S F=+$$LCL^NUSER("naz","delall")
+ I 'F,$P($G(^NAZ(ID,"k")),"|",3) D MSG^RWU("Удаление невозможно - назначение в оплате") Q 
+ S NIB=$P($G(^NAZ(ID,"i")),"|",2),H=$G(^("h"))
+ S R="" F  S R=$O(^NAZ(ID,"a",R)) Q:R=""  I $P(^(R),"|",1)'=0 Q 
+ ; Пересчитать услуги и преобразовать назначение
+ I R'="",$$LCL^NUSER("naz","resetusl") D RESETNAZ^INAZN(ID,1) Q
+ ; Пересчитать услуги и удалить назначение
+ I R'="",$$LCL^NUSER("naz","anlusl") D RETNAZ^INAZN(ID,1) Q 
+ I R'="" D MSG^RWU("Удалить невозможно - назначение выполняется") Q 
+ D DEL^INAZN(ID,1)
+ Q
+LNIADD(ID,U,CNT,FROM,KFLG,PRC) ; Добавить услугу
+ ; ID - код назначения
+ ; U - код услуги
+ ; CNT - кол-во
+ ; KFLG - касса или страховая kss/stc
+ Q:'(+ID)  Q:'$D(^NAZ(ID))  
+ N P,PP,I,NIB,X,DGN,FD,SK,PT,F,SM,Af,DT
+ S CNT=+$G(CNT,1),PRC=$G(PRC),KFLG=$G(KFLG),DT=+$H
+ S NIB=$P($G(^NAZ(ID,"i")),"|",2)
+ S PT=+$P($G(^NAZ(ID,"a")),"|",4)
+ I FROM'="",$E(FROM)'="S" S FROM=$P($G(^NAZ(ID,"a",+FROM,"z")),"|",1)
+ S:$E(FROM)="S" FROM=$E(FROM,2,99)
+ S:FROM="" FROM=$P($G(^NAZ(ID,"a",+FROM,"z")),"|",1)
+ S:FROM="" FROM=+$O(^NAZ(ID,"stg",""),-1)
+ S DGN=+$$GET^IPAC(NIB,"stc",DT)
+ S P=$$price(NIB,DGN,DT,KFLG="kss",$$KDR^IUSER())
+ S F=$G(^NAZM("pt",PT,"f")),SM=""
+ S:$D(^NAZM("pt",PT,"f",DGN)) FD=^(DGN) S:'$D(^(DGN)) FD=$G(^("-"))
+ S:PT SM=$P($G(^NAZM("pt",PT,"u",U)),"|",3)
+ S SK=$P(FD,"|",3),Af=0
+ I $P(F,"|",1)>4,$P($G(^NAZ(ID,"k")),"|",3)'="" S $P(^NAZ(ID,"k"),"|",3)=2,Af=1 ; доплата
+ ; TODO - to date (days)
+ L +^NAZ(ID)
+ S X=$O(^NAZ(ID,"a",""),-1)
+ F I=1:1:CNT D
+ .S FD="0||0||"_U_"|"_P
+ .S:SK'="" $P(FD,"|",7)=SK ; скидка
+ .S:SM'="" $P(FD,"|",8)=SM ; сумма
+ .S:$P(F,"|",1)>4 $P(FD,"|",9)="nop" ; без доп. оплаты
+ .S:PRC'="" $P(FD,"|",6)=PRC
+ .S:KFLG="kss" $P(FD,"|",9)="kss" ; TODO - multiple flg.
+ .S ^NAZ(ID,"a",X+I)=FD
+ .S ^(X+I,"z")=FROM
+ L -^NAZ(ID)
+ S:21[$P($G(^NAZ(ID,"e")),"|",1) $P(^NAZ(ID,"e"),"|",1)=3 ; выполняется
+ ; коррекция суммы
+ I Af N S S S=0 D LNSBSc(ID,$P(F,"|",5)!$P(F,"|",6)) S:S $P(^NAZ(ID,"k"),"|",1)=S
+ D GL^IEXCH("^NAZ",ID)
+ D LNTAB(ID)
+ Q
+USLCNT(ID,U) ; кол-во услуги в назначении
+ D MSG^RWU($$calcUCNT^INAZN(ID,U,1))
+ Q
+LNIDEL(ID,UId) ; Удалить услугу
+ Q:ID=""!(UId="")  Q:'$D(^NAZ(ID))
+ N NIB,R,PT,U,K,S
+ S R=$G(^NAZ(ID,"a",UId))
+ I $P(R,"|",11)'="" D MSG^RWU("Услуга уже выполнена") Q 
+ S PT=+$P($G(^NAZ(ID,"a")),"|",4),NIB=$P($G(^("i")),"|",2)
+ S U=$P(R,"|",5)
+ I PT,U'="",'+$$LCL^NUSER("naz","retusl"),$$calcUCNT^INAZN(ID,U,1)'>$$UCNT^NNAZPT(PT,U) D MSG^RWU("В назначении присутствует минимально возможное число услуг.") Q 
+ S R=^NAZ(ID,"a",UId),U=$P(R,"|",10)
+ I U,'+$$LCL^NUSER("naz","retusl") D MSG^RWU("Услуга уже оплачена") Q 
+ I U,$P(R,"|",3)=2 D MSG^RWU("Услуга уже отменена") Q
+ ; Возврат за услугу
+ I U S $P(^NAZ(ID,"a",UId),"|",1)=2,$P(^(UId),"|",3)=2,S=$P(R,"|",8) D:S>0 SUB^IBILL(NIB,$H,-S,"NAZ:"_ID) G LNIDELe
+ K ^NAZ(ID,"a",UId)
+ D KGL^IEXCH("^NAZ",ID,"a",UId)
+ S K=$G(^NAZ(ID,"k"))
+ G:$P(K,"|",3)="" LNIDELe
+ ; пересчет суммы - оплата или предоплата
+ S S=0
+ D LNSBSc(ID,1)
+ G:S=$P(K,"|",1) LNIDELe ; на безоплату, если равно
+ S $P(^NAZ(ID,"k"),"|",1)=S
+ D GL^IEXCH("^NAZ",ID,"k")
+ I $D(^NAZ(ID,"kr")) S U=$$SRESID^IBILL(NIB,"NAZ:"_ID,^("kr")-S) S:U'="" ^NAZ(ID,"kr",$P(U,"|",1))=$P(U,"|",2) S ^NAZ(ID,"kr")=S D GL^IEXCH("^NAZ",ID,"kr") ; remove from reserve
+ ; todo "g"
+LNIDELe 
+ ; нет ни услуг ни платежей
+ I $L($D(^NAZ(ID,"a")))=1,'$D(^NAZ(ID,"k")) D DEL^INAZN(ID),LNTAB(ID) Q
+ 
+ S U="",S=1 ; check all sbs.
+ F  S U=$O(^NAZ(ID,"a",U)) Q:U=""  I $P(^(U),"|",10)="" S S=0 Q 
+ I 'S,21[$P($G(^NAZ(ID,"e")),"|",1) S $P(^NAZ(ID,"e"),"|",1)=3 D GL^IEXCH("^NAZ",ID,"e")
+ I S,$P($G(^NAZ(ID,"e")),"|",1)'=1 S $P(^NAZ(ID,"e"),"|",1)=1 D GL^IEXCH("^NAZ",ID,"e")
+ I S S $P(^NAZ(ID,"k"),"|",3)=1 D GL^IEXCH("^NAZ",ID,"k") ; на безоплату
+ D LNTAB(ID)
+ Q
+SCS ; Сохранить комментарии
+ N %J,A,ID,NB,FM,NIB,R
+ S NB="nb_console",FM="nzstom"
+ N @$$NEWVAR^YIXMLRR()
+ D RBUFH^YIXMLRR(1)
+ S ID=$G(XML(NB,FM,"id")),NIB=$G(XML(NB,FM,"nib"))
+ Q:NIB="" 
+ I ID="" D MK(NIB) S ID=$G(%L) K %L,%B
+ S R=$G(XML(NB,FM,"comm"))
+ S:R'="" ^NAZ(ID,"c")=R K:R="" ^NAZ(ID,"c")
+ S R=$G(XML(NB,FM,"txt"))
+ S:R'="" ^NAZ(ID,"dc")=R K:R="" ^NAZ(ID,"dc")
+ D REGL^IEXCH("^NAZ",ID,"c"),REGL^IEXCH("^NAZ",ID,"dc")
+ Q
+LNPAY(ID,SYS) 
+ Q:ID="" 
+ D MKPAY(ID)
+ G LNSBS+1
+LNSBS(ID,SYS) ; Пустить в оплату назначения кассового типа
+ Q:ID=""  Q:'$D(^NAZ(ID)) 
+ N R,F,P,S,NIB,SO,ST,H
+ I $P(^NAZ(ID,"e"),"|",1)=9 S $P(^NAZ(ID,"e"),"|",1)=0,NI=$P($G(^("i")),"|",2) I $L(NI) S $P(^NAZI("n",NI,ID),"|",5)=0 D GL^IEXCH("^NAZI","n",NI,ID)
+ S P=$P($G(^NAZ(ID,"a")),"|",4),NIB=$P($G(^NAZ(ID,"i")),"|",2)
+ S R=$G(^NAZ(ID,"k")),S=$P(R,"|",1),SO=$P(R,"|",2),ST=$P(R,"|",3)
+ I P="",S>0 S F="" G LNSBS1
+ G:P="" LNSBSe
+ S F=$P($G(^NAZM("pt",P,"f")),"|",1)
+ I F'=5,F'=6,F'=7 G LNSBSe
+LNSBS1 G:$P(R,"|",3)=1 LNSBSe
+ D:S="" LNSBSc(ID)
+ G:S=SO LNSBSe ; нечего оплачивать
+ S P="NAZ:"_ID,H=$H
+ I F=6!(F=5) D  G LNSBSe
+ .S ^NAZ(ID,"k")=S_"|"_SO_"|"_$S(+SO=0:0,1:1)
+ .S:+SO=0 SO=$G(^NAZ(ID,"kr"))
+ .S ^NAZ(ID,"kr",H)=S-SO,^NAZ(ID,"kr")=$G(^NAZ(ID,"kr"))+S
+ .S R="" F  S R=$O(^NAZ(ID,"a",R)) Q:R=""  S $P(^(R),"|",10)=0 ; резерв
+ .D ARES^IBILL(NIB,H,S-SO,"ARSUM^NNAZPT("_ID_","_(S-SO)_")",P)
+ .D GL^IEXCH("^NAZ",ID)
+ D SUB^IBILL(NIB,H,S,P)
+ S ^NAZ(ID,"k")=S_"|"_S_"|1",^("k",H)=S-SO
+ S R="" F  S R=$O(^NAZ(ID,"a",R)) Q:R=""  S $P(^(R),"|",10)=1 ; оплата
+ D GL^IEXCH("^NAZ",ID)
+LNSBSe Q:$G(SYS) 
+ ;S ^NAZ(ID,"v")=$H_"|"_$$KDR^IUSER()
+ ;D GL^IEXCH("^NAZ",ID,"v")
+ D LNTAB(ID)
+ Q
+LNSBSc(ID,MNL) ; Подсчет суммы, если точно не указано
+ N R,U,PRC,NI,DT,I,A,P,SS,SK
+ S R=$G(^NAZ(ID,"i")),NI=$P(R,"|",2),DT=+$P(R,"|",5)
+ S R=$G(^("k")),S=$P(R,"|",1),SS=0
+ S PRC=$$GET^IINSC($$GET^IPAC(NI,"stc",DT),"price",DT)
+ S PRC=$$CORCP^IPRICET(PRC)
+ S I="" F  S I=$O(^NAZ(ID,"a",I)) Q:I=""  D
+ .S R=^(I),P=$P(R,"|",8)
+ .I P'="" S SS=SS+P Q  ; уже определена сумма
+ .S U=$P(R,"|",5),P=$P(R,"|",6),SK=+$P(R,"|",7)
+ .S:P="" P=PRC
+ .S P=+$FN(100-SK*$$PRICEH^IPRICE(U,P,DT)/100,"",2)
+ .S $P(R,"|",8)=P,^NAZ(ID,"a",I)=R
+ .S SS=SS+P
+ I $G(MNL) S S=SS Q 
+ S S=$S(+S=0:SS,1:S)
+ Q
+MKPAY(ID) ; Сделать назначение предоплатным
+ Q:ID=""  Q:$P($G(^NAZ(ID,"k")),"|",3) 
+ N S,NIB,H,R,A
+ S S=0
+ D LNSBSc(ID) Q:'S 
+ S H=$H,NIB=$P($G(^NAZ(ID,"i")),"|",2)
+ D SUB^IBILL(NIB,H,S,"NAZ:"_ID)
+ S ^NAZ(ID,"k")=S_"|"_S_"|1",^("k",H)=S
+ S R="" F  S R=$O(^NAZ(ID,"a",R)) Q:R=""  S A=^(R),$P(A,"|",9)="nop",$P(A,"|",10)=1,^(R)=A ; оплата
+ Q
+LNULST(ID) ; Список услуг по шаблону назначения
+ N R,NI,DT,NA,U,P
+ S R=$G(^NAZ(ID,"i")),NI=$P(R,"|",2),DT=+$P(R,"|",5)
+ S NA=$G(^("a")),NA=$P(NA,"|",4),U=""
+ S P=$$GET^IINSC($$GET^IPAC(NI,"stc",DT),"price")
+ S:P="" P=$$CORCP^IPRICET(1)
+ D OWF^RWU(".txt"),WC^RWU("|Наименование услуги|Кол-во")
+ F  S U=$O(^NAZM("pt",NA,"u",U)) Q:U=""  S R=$P(^(U),"|",1) D WC^RWU(CR_U_"@"_R_"|"_$$NAME^IPRICE(U,P)_"|"_R)
+ D C^RWU
+ Q
+PAYLST(ID) ; Pay list
+ S %L="",%B=".txt"
+ Q:ID=""
+ N I,R S I="",R=$$DW^TXTU("руб.")
+ F  S I=$O(^NAZ(ID,"k",I)) Q:I=""  S %L=$S(%L="":"",1:CR_%L)_$$DTM^DTUTL(I)_$C(9)_^(I)_R
+ Q
+LSTTIT(NIB,VR,OT,SP) ; Для SH^YIMH
+ N ID,LST,A,P,G,X,K,Z,Q,Ic,F,KK,I
+ S Ic=+$G(^MN("altspec")) ; альтернативные специальности
+ S:$G(SP)="" SP=$$SPEC^IKADRY(VR)
+ S F="a",A="|"_$$GETPL^ISPRAV("spec",SP,"flg")_"|"
+ S:A["|cons" F=F_"c"
+ S:A["|diag" F=F_"d"
+ S:A["|lab" F=F_"l"
+ S:A["|treat" F=F_"p"
+ ; Без лекарственных назначений
+ S ID="" F  S ID=$O(^NAZI("n",NIB,ID)) Q:ID=""  S R=^(ID) I F[$P(R,"|",1),30[(+$P(R,"|",5)) D
+ .S A=$G(^NAZ(ID,"a")),Z=$P(A,"|",4),K=$P(A,"|",1)
+ .I 30'[(+$P($G(^("e")),"|",1)) Q  ; ожид., выполняется
+ .S KK=$G(^("k"))
+ .I KK'="",+$P(KK,"|",3)=0 Q  ; кассовое, не оплачено
+ .S P="",Q=0 F  S P=$O(^NAZ(ID,"a",P)) Q:P=""!Q  D
+ ..S A=^(P)
+ ..S X=$P(A,"|",2) I X'="",X'=SP,(";"_$G(^MN(Ic,X))_";")'[(";"_SP_";") Q  ; по этой спец.
+ ..I $P(A,"|",4)'="",(+$H)>$P(A,"|",4) Q  ; посещ. до
+ ..S G=$P(A,"|",14)
+ ..I G'="",+$G(^NAZ(ID,"g",G))=0 Q
+ ..S Q=1
+ .Q:'Q 
+ .I K="" S:Z'="" K=$P($G(^NAZM("pt",Z)),"|",1)
+ .S K=$S(K'="":K,1:$$TPLST($P(R,"|",1)))
+ .S LST(ID)=$$DT^DTUTL($$fromDT^INAZN(ID))_" "_K_", "_$$fromVR^INAZN(ID)
+ S %L="",%B=".txt"
+ Q:'$D(LST) 
+ S ID=""
+ F  S ID=$O(LST(ID)) Q:ID=""  S %L=$S($L(%L):%L_CR,1:"")_ID_"|"_LST(ID)
+ D MSG^RWU(%L)
+ Q
+LMH ; Загрузка направления из ЭИБ
+ N NID,DT,NIB,PRC,A,I,TP,K,P,X,Z
+ S NID=$$GET^IEPR(N,ID,"data") Q:'$D(^NAZ(NID)) 
+ S I=$G(^(NID,"i")),A=$G(^("a"))
+ S DT=$P(I,"|",5),NIB=$P(I,"|",2)
+ S PRC=$$GET^IINSC($$GET^IPAC(NIB,"stc",DT),"price",DT)
+ S PRC=$$CORCP^IPRICET(PRC)
+ S TP=$P(I,"|",1),A=$P(NID,".",1) ; NID без ID LPU
+ S A=$S(TP="r":"Назначение N "_A,1:"Направление N "_A_$S(TP="l":CR_"В клиническую лабораторию",1:""))
+ D WC^RWU(A_CR)
+ D WC^RWU("Пациент: "_$$FIO^IPAC(NIB,DT)_CR)
+ G LMHall
+LMH1 S R=$P(A,"|",3) D:R'="" WC^RWU("Повод: "_R_CR)
+ S R=$P(A,"|",2) D:R'="" WC^RWU("Диагноз: "_$$NAME^YMKB10(R)_CR)
+ S R="" I $D(^NAZ(NID,"c")) S R=^("c")
+ D:R'="" WC^RWU("Примечание: "_CR_" "_R_CR)
+ S R=$P(I,"|",7) ; внешний сотр. 
+ I R="" S R=$P(I,"|",3),R=$$FIODT^YIKADRY(R,DT)
+ I R'="" D:TP'="r" WC^RWU("Направивший сотрудник: "_R_CR)
+ Q
+LMHall 
+ N LST
+ S K="" F  S K=$O(^NAZ(NID,"a",K)) Q:K=""  D
+ .S R=^(K)
+ .S Z=$P(R,"|",2) S:Z="" Z="-"
+ .S:$P(R,"|",5)'="" LST(Z,K)=$P(R,"|",5,6) S:$P(R,"|",5)="" LST(Z)=""
+ S K="" F  S K=$O(LST(K)) Q:K=""  D
+ .S Z=$S(K="-":"не указано",1:$$GSPEC^YISPRAV(K)),X=1
+ .D WC^RWU("К врачу специалисту: "_Z_CR)
+ .S Z="" F  S Z=$O(LST(K,Z)) Q:Z=""  D
+ ..I X D WC^RWU($C(9)_"Назначены услуги:"_CR) S X=0
+ ..S R=LST(K,Z),P=$P(R,"|",2) S:P="" P=PRC
+ ..D WC^RWU($C(9)_$$NAMEH^IPRICE($P(R,"|",1),P,DT)_CR)
+ K LST
+ G LMH1
+LSTN ; Лист назначений
+ N I,R,NIB,PRC,U,SP,D,A,E,L,T,K,UI,P,Z
+ S NIB=N,T="</item><item>"
+ S PRC=+$$GET^IINSC($$GET^IPAC(NIB,"stc",+$H),"price",+$H)
+ D WC^RWU("<titles><item>Дата"_T_"Специалист"_T_"Услуга"_T_"Статус"_T_"Выполнено</item></titles>")
+ S ID="" F  S ID=$O(^NAZI("n",NIB,ID)) Q:ID=""  D:$P(^(ID),"|",1)'="w"
+ .S E=$G(^NAZ(ID,"e")) I +$P(E,"|",1)'=0 Q 
+ .S A=$G(^("a")),I=$G(^("i")) S:$P(I,"|",1)="l" L=$G(^("l"))
+ .S K=$G(^("h")) S:K'="" K="doc:"_$P(K,",",2) S D=+$P(I,"|",5)
+ .S UI="" F  S UI=$O(^NAZ(ID,"a",UI)) Q:UI=""  D
+ ..S A=^(UI),SP=$P(A,"|",2),U=$P(A,"|",5),P=$P(A,"|",6)
+ ..S SP=$$GSPEC^YISPRAV(SP) S:P="" P=PRC
+ ..S U=$$OWF^TXTU($$CNAMEH^IPRICE(U,PRC,D),50)
+ ..S E=$P(A,"|",3),E=$S(E=0:"назнач.",E=1:"соглас.",E=2:"отказ")
+ ..S L=$P(A,"|",11),Z=$P(A,"|",12)
+ ..S A=U_T_E_T_$S(L="":"нет",1:$$DT2^DTUTL($S(L["@":$P(L,"@",3),1:Z)))_"</item></row>"
+ ..D WC^RWU("<row><key>"_K_"</key><item>"_$$DT^DTUTL(D)_T_SP_T_A)
+ Q
+LSTNall 
+ Q
+EXS(X,U) ; execute in serv. subscr
+ N A,G,C S A=$G(^NAZ(X,"a",U)),G=$P(A,"|",14),C=0
+ S:G'="" C=+$G(^NAZ(X,"g",G))
+ I G'="",C>0 S ^NAZ(X,"g",G)=C-1 N UU,I S UU="" F  S UU=$O(^NAZ(X,"g",G,UU)) Q:UU=""  S I="" F  S I=$O(^NAZ(X,"a",I)) Q:I=""  I I'=U,$P(^NAZ(X,"a",I),"|",5)=UU S $P(^NAZ(X,"a",I),"|",1)=1 
+ S $P(A,"|",1)=1 ; выполнено
+ S:C=1 $P(A,"|",10)=1
+ S $P(A,"|",11)=OT_"@"_VR_"@"_DT_"@"_ID
+ S $P(A,"|",12)=$H,$P(A,"|",13)=$$KDR^IUSER() ; $G(%LOG)
+ S ^NAZ(X,"a",U)=A
+ D GL^IEXCH("^NAZ",X,"a",U)
+ ; закрытие всего направления ; NI - from GET^IUSL, call in top
+ S G=1,C=""
+ F  S C=$O(^NAZ(X,"a",C)) Q:C=""  I "30"[$P($G(^(C)),"|",1) S G=0 Q
+ Q:'G 
+ S A=$G(^NAZ(X,"e"))
+ S $P(A,"|",1)=1,$P(A,"|",2)=$$KDR^IUSER(),$P(A,"|",5)=$H,^NAZ(X,"e")=A
+ S $P(^NAZI("n",NI,X),"|",5)=1
+ D GL^IEXCH("^NAZ",X,"e"),GL^IEXCH("^NAZI","n",NI,X)
+ Q
+SETFVR(ID,VR) ; Установить создавшего
+ S $P(^NAZ(ID,"i"),"|",3)=VR
+ D GL^IEXCH("^NAZ",ID,"i")
+ D LNTAB(ID)
+ Q
+SCOMM(ID,TXT) ; Установить комм. клиники
+ S TXT=$$DW^TXTU(TXT)
+ Q:'$D(^NAZ(ID)) 
+ S:TXT'="" ^NAZ(ID,"c")=TXT K:TXT="" ^NAZ(ID,"c")
+ d REGL^IEXCH("^NAZ",ID,"c")
+ Q
+SNAME(ID,TXT) ; Установить кратк. наим
+ S TXT=$$DW^TXTU(TXT)
+ Q:'$D(^NAZ(ID)) 
+ S $P(^NAZ(ID,"a"),"|",1)=TXT
+ d REGL^IEXCH("^NAZ",ID,"a")
+ Q
+NZINIT ; Инициализация формы 
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2))
+ D WC^RWU("<script_variable><nzstom_prcmod>"_$G(^cfg("naz","stpaytype"))_"</nzstom_prcmod></script_variable>")
+ D W^RWU("</nb_console>"),C^RWU
+ Q 
+STUINIT(FRM) 
+ S:$G(FRM)="" FRM="stomprm"
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<"_FRM_"><group>")
+ N FLG S FLG=$$C^I("naz","stgrpflg")
+ ;S:FLG="" FLG="stom"
+ D:'$$TREEsys^NPRICEG(0,FLG,,,1) WC^RWU("|Все")
+ D W^RWU("</group></"_FRM_"></nb_console>"),C^RWU
+ Q
+STUPRM(ID,NIB,DGN,NALLU,TXT,SKD,KSS,PRC,TAB) ; Список параметров/услуг
+ N MPR,ORD,labPRC,tG,HH
+ S NALLU=+$G(NALLU),SKD=$P($G(SKD),"|",1),HH=+$H
+ S:DGN="" DGN=$$GET^IPAC(NIB,"stc",HH)
+ S MPR=$$GET^IPAC(NIB,"prog"_$$PIDX^IPAC(NIB,DGN,HH))
+ s ORD=$G(^cfg("naz","stservsort")),TXT=$G(TXT),KSS=$G(KSS)
+ I DGN'="",'KSS,$$GET^IINSC(DGN,"dvid",HH)=3 S KSS=1
+ S:KSS NALLU=0
+ S TAB=$S($G(TAB):"@|1",1:"@")
+ ;TODO - stom
+ D LPSPG^YNPRICE(NIB,"",ID,DGN,TAB,"","$$sprmp^NNAZNZ()",TXT,KSS,ORD,SKD,0,$G(PRC))
+ Q
+sprmp() 
+ Q:$$GET^IPRICE(COD,"sys",VI,DT) 1
+ Q:'NALLU 0
+ Q:'$$CHKUVA^YMPRP(MPR,DT,COD) 1
+ Q:$$CHKUA^YMPRP(MPR,DT,COD)<0 1
+ Q 0
+CHKU(NIB,DGN,USL,TP,FLG)        ; Проверка добавляемой услуги
+ S %L="",%B=".txt",FLG=$G(FLG)
+ N X,Y,CHK
+ I NIB'="",DGN="" S DGN=$$GET^IPAC(NIB,"stc",+$H)
+ I $L(FLG),"|"_FLG_"|"["|grn|",$$GET^IINSC(DGN,"ngrnl",+$H) D MSG^RWU("!Данному пациенту не могут быть оказаны услуги по гарантийному письму") Q
+ N X,Y,CHK
+ S Y=$$CHKPER^NPACSC(NIB,USL),Y=$P(Y,"|",1)
+ S:Y>7 Y="" ; TODO - через настройку
+ S TP="",CHK=0
+ ;S:$L(Y) TP="Услуга была выполнена "_$S('Y:"сегодня",1:Y_" дней назад.")
+ I $$GET^IINSC(DGN,"dvid",+$H)=3 S %L="$"_%L Q
+ D:'$L(FLG) CHKUSLT^YNED(NIB,DGN,USL)
+ I $L(%L),%L["платно" S CHK=1
+ S:$L(TP) %L=$$DW^TXTU("?"_TP)_$S(%L="":"",1:CR_%L)
+ I CHK S %L="$"_%L Q
+ Q
+price(NIB,DGN,DT,KSS,VR) ; Получить прайс (системно)
+ N P,PP
+ I $G(VR)'="" S P=$$GET^IKADRY(VR,"price",DT) Q:P'="" P
+ S P=$$GET^IINSC(DGN,"cprice",DT),PP=$$GET^IINSC(DGN,"price",DT)
+ S P=$S(KSS:P,1:$$GET^IINSC(DGN,"sprice",DT))
+ S:P="" P=PP
+ Q $$CORCP^IPRICET(P)
+PVPRICE(NIB,DGN,DT,KSS) ; Получить прейскурант по пациенту
+ Q:NIB="" ""
+ N PRC
+ S KSS=$G(KSS),DT=$$DIH^DTUTL(DT)
+ S:$G(DGN)="" DGN=$$GET^IPAC(NIB,"stc",DT)
+ D MSG^RWU($$price(NIB,DGN,DT,KSS,$$KDR^IUSER()))
+ Q

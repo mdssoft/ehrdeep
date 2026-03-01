@@ -1,0 +1,78 @@
+A ; ИНФОРМАЦИЯ О ПОЛЬЗОВАТЕЛЕ [ 10/13/2020  4:19 PM ]
+ ; INFO ; (PSID)
+INFO ; Инициализация пользователя
+ N TN,FIO,OT,SP,XX,A,LP,ZLi ; PSID - parent session ID
+ S TN=$G(^LOG(%LOG,"kadry")),OT=$G(^("otd")),LP=+$$^I("ilpu")
+ I '$G(%IIDLCL),$D(^LOG(%LOG,"lcl","i")) S %IIDLCL=^("i")
+ I $G(%IIDLCL),$D(^LCL("i",%IIDLCL,"otdid")) S A=^("otdid") I $$IsOTD^IKADRY(TN,A) S OT=A,A=$$SPbyOTD^IKADRY(TN,OT),^JOB(%JOB,"sel-otd")=OT,^("sel-spec")=A ; autoset by profile
+ I $$LCL^IUSER("login","bylpu"),'$$USEInLPU^IKADRY(TN,+$$^I("ilpu")) D MSG^RWU("Вам запрещена работа в данном ЛПУ."_CR_"^^^") Q
+ I $$LCL^IUSER("login","chkkdr"),'$$USED^IKADRY(TN) D MSG^RWU("Вы сняты с оформления в кадровой службе."_CR_"^^^") Q
+ S XX=$$LCL^NUSER("login","chktbl")
+ I (XX=1)!((XX=2)&$G(^cfg("login","chktbl"))),'$$IsGRAF^NPTBL(LP,TN,+$H) D MSG^RWU("Вы не зарегистрированы в учете рабочего времени"_CR_"^^^") Q
+ S XX=$$LCL^NUSER("login","chkcrd")
+ I (XX=1)!((XX=2)&$G(^cfg("login","chkcrd"))),$O(^CARDI("D"_TN,""),-1)'="",$$LASTEN^ISEC($O(^CARDI("D"_TN,""),-1),1)="" D MSG^RWU("Вы не зарегистрированы в учете рабочего времени"_CR_"^^^") Q 
+ S XX=$$LCL^NUSER("login","allowtm"),A=$P($H,",",2)
+ I $S($P(XX,"-",1)'=""&($$TI^DTUTL($P(XX,"-",1))>A):1,$P(XX,"-",2)'=""&($$TI^DTUTL($P(XX,"-",2))<A):1,1:0) D MSG^RWU("Вы входите в систему в нерабочее время.Доступ запрещен."_CR_"^^^") Q
+ S FIO=$$FIO^IKADRY(TN),SP=$$SPEC^IKADRY(TN)
+ S:OT="" OT=$$OTD^IKADRY(TN)
+ S A=TN_" "_FIO_CR 
+ S A=A_OT_" "_$$GOTD^YISPRAV(OT)_CR
+ S A=A_SP_" "_$$GSPEC^YISPRAV(SP)_CR
+ I $D(^LOG(%LOG,"FIL")) S A=A_"pack="_^("FIL")_CR
+ E  S A=A_"^^"_CR
+ S A=A_"date="_$$DT^DTUTL($H)_CR_"time="_$$TIME^DTUTL($H)
+ D OWF^RWU(".nb-data"),WC^RWU(A)
+ I $D(^LOG(%LOG,"SYNC")) D  ; ,'$D(PSID)
+ .S ZLi=$ZV["UNIX"
+ .S XX=$G(^LOG(%LOG,"SYNC"))
+ .D:XX="user" DIRS(DIR) 
+ .D:XX="group"&$D(^LOG(%LOG,1)) DIRS(^LOG(%LOG,1))
+ D W^RWU(CR_"^^^"_CR),C^RWU
+ S A=$$LCL^IUSER("sec","logintime")
+ I A'=0,A!$G(^cfg("sec","logintime")) D INK^YISEC($$RKDR^IUSER(),1)
+ Q
+DIRS(DIR) 
+ D DIRF("","locfile=",DIR)
+ D DIRT("","sysfile=",DIR_"sysfile/")
+ Q
+DIRT(FM,DOP,DR) ; Directory tree
+ N DRS,ID,I
+ S ID=0
+ F  D  Q:'$D(DRS) 
+ .D DIRF(FM,DOP,DR,1)
+ .S I="" F  S I=$O(DRS(I)) Q:I=""  D DIRF(DRS(I),DOP,DR,1) K DRS(I)
+ Q
+DIRF(FM,DOP,DR,RECU) ; Find in directory
+ ; RECU - recursive
+ N FA,B,Fn
+ S RECU='+$G(RECU),FA=$ZSEARCH(DR_FM_"*.*")
+ Q:FA="" 
+ F  D  S FA=$ZSEARCH("") Q:FA="" 
+ .S B=$ZUTIL(140,1,FA),Fn=$$FNLT(FA)
+ .I B=-5,Fn'=".",Fn'=".." Q:RECU  S ID=ID+1,DRS(ID)=FM_Fn_"/" Q
+ .Q:B<0 
+ .I FA["network.log"!(FA["data.log") Q 
+ .D:$L(FA) WC^RWU(CR_DOP_FM_$$FNLT(FA)_"|"_B_"|"_$$FDTM(FA))
+ Q
+FDTM(FN)
+ N A
+ S A=$ZUTIL(140,2,FN,0) Q:A=-2 ""
+ Q $$DT^DTUTL(+A)_","_$$TM^DTUTL($P(A,",",2))
+FNLT(FN)
+ S FN=$TR(FN,"\","/")
+ Q:ZLi $P(FN,"/",$L(FN,"/")) ; case sensitivity in Linux
+ Q $$UL^TXTU($P(FN,"/",$L(FN,"/")))
+LOGOUT
+ N R
+ S R=$$LCL^IUSER("sec","logintime")
+ I R'=0,R!$G(^cfg("sec","logintime")) D OUTK^YISEC($$RKDR^IUSER(),1)
+ Q
+REGLCL
+ K ^LCLI("login")
+ S ^LCLI("login")="Права на вход в систему"
+ S ^LCLI("login","bylpu")="Проверять на разрешение работы в данном ЛПУ"
+ S ^LCLI("login","chkkdr")="Запрет входа неоформленного сотрудника"
+ S ^LCLI("login","chktbl")="Запрет входа без регистрации в учете времени (=2 только при наличии записи в ^cfg)"
+ S ^LCLI("login","chkcrd")="Запрет входа без любой отметки смарткарты (=2 только при наличии записи в ^cfg)"
+ S ^LCLI("login","allowtm")="Разрешенное время логина с-по"
+ Q

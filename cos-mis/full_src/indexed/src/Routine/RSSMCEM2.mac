@@ -1,0 +1,40 @@
+RSSMCEM2 ; Контингент [ 06/18/2012  10:58 PM ]
+mkkon 
+ N NI,PIDX,DT,Z,IDX,STC,DVID,BTPLS
+ M BTPLS=^BTPLS("stc")
+ 
+ S NI="" F  S NI=$$NEXT^IPAC(NI) Q:NI=""  D
+ .S Z="" F  S Z=$O(DWKLR(Z)) Q:Z=""  D
+ ..S DT=DWKLR(Z)
+ ..S PIDX=$$GET^IPAC(NI,"cntstc",DT)
+ ..I $$CHECKIDX^IPAC(NI,DT,"") D
+ ...S STC=$$GET^IPAC(NI,"stc",DT) Q:STC="" 
+ ...S DVID=$$GET^YNDOG(STC,"dvid",DT)
+ ...S DVID=$S($D(BTPLS(STC)):5,DVID=0:1,DVID=1:2,DVID=3:4,1:0)
+ ...Q:'DVID
+ ...S ^(DVID)=$G(^BUF($J,"kon",Z,DVID))+1
+ ..Q:PIDX<2
+ ..F IDX=1:1:PIDX I $$CHECKIDX^IPAC(NI,DT,IDX) D
+ ...S STC=$$GET^IPAC(NI,"stc",DT) Q:STC="" 
+ ...S DVID=$$GET^YNDOG(STC,"dvid",DT)
+ ...S DVID=$S($D(BTPLS(STC)):5,DVID=0:1,DVID=1:2,DVID=3:4,1:0)
+ ...Q:'DVID
+ ...S ^(DVID)=$G(^BUF($J,"kon",Z,DVID))+1
+ 
+ Q
+mkabon ; Абонементы
+ N C9,TP,DT,AB,NI,SLP,WP,WTP,DWI,SS
+ S C9=$C(9)
+ S WP=$G(^BTPL(C9_"t","wdt")),WTP=+$G(^("tp"))
+ S NI="" F  S NI=$O(^BTPL(NI)) Q:NI=""!(NI[C9)  S AB="" F  S AB=$O(^BTPL(NI,AB)) Q:AB=""  D
+ .S DT=$O(^(AB,WP,""))
+ .Q:+DT<DS  Q:+DT>DE
+ .S SLP=$P($G(^(DT)),"@",2)
+ .I LPUX'="",LPUX'=SLP Q
+ .S TP=+$G(^BTPL(NI,AB,WTP)) Q:'TP 
+ .S DT=+DT
+ .S DWI=DWKL(DT)
+ .S SS=$$GET^IPOLIS(NI,AB,"price")
+ .S ^(1)=$G(^BUF($J,"ab",TP,DWI,1))+1
+ .S ^(2)=$G(^BUF($J,"ab",TP,DWI,2))+SS
+ Q

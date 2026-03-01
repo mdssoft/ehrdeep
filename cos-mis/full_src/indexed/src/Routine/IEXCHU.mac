@@ -1,0 +1,80 @@
+IEXCHU ; Data Exchange utilites [ 03/25/2017  5:09 PM ]
+UPDFILE(FN) ; Update file from root dir
+ Q:FN="" 0
+ N DIR
+ S FN=$TR(FN,"\","/")
+ S:$E(FN)'="/" FN="/"_FN
+ S DIR=$$DEFDIR()
+ Q:'$$CHECK^FIL(DIR_FN) 0
+ D UPD^IEXCH("FILES",FN)
+ Q 1
+UPDRI(FN,SEND) ; Update routines
+ ; SEND - send and update
+ I $G(SEND) Q:'$$UPDFILE(FN) 
+ D UPD^IEXCH("ZEXEC","D ROOTRI^IEXCHU("""_FN_""")")
+ Q
+UPDFI(FN,SEND) ; Update file (zip pack)
+ ; SEND - send and update
+ I $G(SEND) Q:'$$UPDFILE(FN)
+ D UPD^IEXCH("ZEXEC","D ROOTFI^IEXCHU("""_FN_""")")
+ Q
+DEFDIR() ; Get default directory
+ N DIR
+ S DIR=$G(^EXCFG("DISK"))
+ S:DIR="" DIR=$G(^WWW("host","default",9))
+ S DIR=$TR(DIR,"\","/")
+ S:$E(DIR,$L(DIR))'="/" DIR=DIR_"/"
+ Q DIR
+ROOTRI(FN) ; Routine import from root dir
+ Q:$ZV'["Cache" 
+ N DIR
+ S DIR=$$DEFDIR()
+ S FN=DIR_FN ; root dir
+ X "O 2:($J) U 2 D $System.OBJ.Load(FN,""c"") C 2 U 0"
+ Q
+ROOTFI(FN) ; Files import from file to root dir
+ N DIR
+ S DIR=$$DEFDIR()
+ Q:'$$CHECK^FIL(DIR_FN)  
+ D:FN[".zip" UNZIP(DIR_FN,DIR)
+ Q
+BZIP(FROM) 
+ n tmp,deflocation,filename
+ s tmp=$TR($zu(86),"\","/")
+ s deflocation=$P(tmp,"/",1,$L(tmp,"/")-1)
+ s filename=$S($$UL^TXTU($ZV)["unix":"zip",1:deflocation_"/bin/bzip2.exe")
+ X "d $zf(-1,filename_"" -q -z ""_FROM)"
+ Q
+ZIP(FROM,TO) 
+ n tmp,deflocation,filename
+ s tmp=$TR($zu(86),"\","/")
+ s deflocation=$P(tmp,"/",1,$L(tmp,"/")-1)
+ s filename=$S($$UL^TXTU($ZV)["unix":"zip",1:deflocation_"/bin/zip.exe")
+ X "d $zf(-1,filename_"" -q -m ""_TO_"" ""_FROM)"
+ Q
+UNZIP(FROM,TO) 
+ n tmp,deflocation,filename
+ s tmp=$TR($zu(86),"\","/")
+ s deflocation=$P(tmp,"/",1,$L(tmp,"/")-1)
+ s filename=$S($$UL^TXTU($ZV)["unix":"unzip",1:deflocation_"/bin/unzip.exe")
+ X "d $zf(-1,filename_"" -q -o ""_FROM_"" -d ""_TO)"
+ Q
+UPDFNRL(FN) ; Update file in all dirs
+ N RI,DIR,DDIR,DEFDIR,DSK,SV,LST,F,L
+ S DSK=$G(^WWW("host","default",9)),SV=($$UL^TXTU($ZV)["unix")
+ S DEFDIR=$$DEFDIR(),L=$L(DEFDIR)+1
+ S RI="" F  S RI=$O(^WWW("roles",RI)) Q:RI=""  D
+ .S DIR=DSK_$G(^(RI,"log")) Q:DIR="" 
+ .S DIR=$TR(DIR,"\","/"),F=$F(DIR,DEFDIR),DDIR=DIR
+ .I F,F=L S DDIR=$E(DIR,F,999)
+ .Q:DDIR=""
+ .S LST(DDIR)=DIR
+ S RI="" F  S RI=$O(LST(RI)) Q:RI=""  I $$CHECK^FIL(LST(RI)_FN) D UPDFILE(RI_FN)
+ Q
+CPBIN(FN) ; Copy to binary dir
+ n tmp,deflocation,DEFDIR
+ s tmp=$TR($zu(86),"\","/")
+ s deflocation=$P(tmp,"/",1,$L(tmp,"/")-1)_"/bin/"_FN
+ S DEFDIR=$$DEFDIR()_FN
+ D COPY^FIL(DEFDIR,deflocation)
+ Q

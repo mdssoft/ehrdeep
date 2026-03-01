@@ -1,0 +1,152 @@
+IRLS ; Реестр лекарственных средств [ 06/22/2008  8:20 PM ]
+LSLS ; Load SLS
+ N I,R,K,N
+ K ^RLSS,^RLS,^RLSV,^DBF
+ W !,"Load DLS ..."
+ K ^DBF("DLS")
+ S FN="DLS.DBF" D A+2^YLDBF W !,"."
+ S I=0 F  S I=$O(^DBF("DLS",I)) Q:I=""  D
+ .S R=$G(^DBF("DLS",I,2)),K=$$TRIM^TXTU($E(R,1,3))
+ .S R=$$TRIM^TXTU($E(R,4,999))
+ .S ^RLSS("dls",K)=R_"|"_$$TRIM^TXTU($E($G(^DBF("DLS",I,2)),4,999))
+ K ^DBF("DLS")
+ W "OK",!,"Load LF ..."
+ S FN="LF.DBF" D A+2^YLDBF W !,"."
+ S I=0 F  S I=$O(^DBF("LF",I)) Q:I=""  S ^RLSS("lf",$G(^DBF("LF",I,1)))=$G(^DBF("LF",I,2))_"|"_$G(^DBF("LF",I,3))_"|"_$G(^(4))
+ ;K ^DBF("LF")
+ W "OK",!,"Load MNF ..."
+ S FN="MNF.DBF" D A+2^YLDBF W !,"."
+ S I=0 F  S I=$O(^DBF("MNF",I)) Q:I=""  D
+ .S R=$$TRIM^TXTU($G(^DBF("MNF",I,2)))
+ .S K=$P(R,"(",2,99),$E(K,$L(K))="",R=$P(R,"(",1)
+ .S ^RLSS("mnf",$G(^DBF("MNF",I,1)))=R_"|"_K
+ K ^DBF("MNF") Q 
+ W "OK",!,"Load MHH ..."
+ S FN="MNN.DBF" D A+2^YLDBF W !,"."
+ S I=0 F  S I=$O(^DBF("MNN",I)) Q:I=""  D
+ .S R=$G(^DBF("MNN",I,2))_"|"_$G(^(3))
+ .S ^RLSV($G(^DBF("MNN",I,1)))=R
+ K ^DBF("MNN")
+ W "OK",!,"Load LS ..."
+ S FN="LS.DBF" D A+2^YLDBF W !,"."
+ S I=0 F  S I=$O(^DBF("",I)) Q:I=""  D
+ .S K=$G(^DBF("LS",I,1)),R=$G(^(3))
+ .S N=$$LU^TXTU($E($TR(R,"/-\* ",""),1,3))
+ .S ^RLSI("n",N,K)=""
+ .S N=R_"||"_$G(^DBF("LS",I,5))_"|"_$G(^(6))_"|"_$G(^(10))_" "
+ .S N=N_$P($G(^RLSS("dls",+$G(^(9)))),"|",1)_"||"
+ .S N=N_$G(^DBF("LS",I,11))
+ .S ^RLS(K)=N
+ K ^DBF("LS")
+ W !,"OK",!
+ Q
+DBF(X,P) 
+ 
+ Q
+LOADALL 
+ U 0 W !,"LF:"
+ D LLF
+ U 0 W !,"DLS:"
+ D LDLS
+ U 0 W !,"RLS:"
+ D LRLS
+ U 0 W !,"OK"
+ Q
+LLF ; Load LF.txt
+ O 51:("LF.TXT":"R")
+ K ^RLSS("lf")
+ F I=1:1 U 51 R R Q:$ZA=0  D:I>1
+ .Q:R=""  S R=$$WD^TXTU(R)
+ .S ^RLSS("lf",$P(R,$C(9),1))=$TR($P(R,$C(9),2,4),$C(9),"|")
+ .;U 0 W !,R
+ C 51
+ Q
+LDLS ; Load DLS.txt
+ O 51:("DLS.TXT":"R")
+ K ^RLSS("dls")
+ F I=1:1 U 51 R R Q:$ZA=0  D:I>1
+ .Q:R=""  S R=$$WD^TXTU(R)
+ .S ^RLSS("dls",$P(R,$C(9),1))=$P(R,$C(9),3)
+ .;U 0 W !,R
+ C 51
+ Q
+LRLS ; Load RLS
+ N A,I,N,X,R,RL,ID,LF,FP,UP,X1,X2,Z,K
+ O 51:("RLSnomen.txt":"R")
+ K ^RLS,^RLSV
+ K ^RLSS("mnf"),^("mnfp"),^("fgr"),^("mkb"),^("atx"),^("bar"),^("n")
+ F I=1:1 U 51 R R Q:$ZA=0  D:I>2&(R'="")
+ .S R=$TR(R,$C(174),"") ; знак копирайта
+ .S R=$$WD^TXTU(R),RL=$P(R,$C(9),1),A=""
+ .S ID=$$FNDNM($P(R,$C(9),2)) S:ID="" ID=$O(^RLS(""),-1)+1
+ .S $P(A,"|",1)=$P(R,$C(9),2),$P(A,"|",2)=$P(R,$C(9),3) ; names
+ .S N=$P(R,$C(9),4),X=$$FNDMNN(N)
+ .I X="" S X=$O(^RLSV(""),-1)+1,^(X)=N
+ .S $P(A,"|",3)=X ; действующее вещество
+ .S N=$P(R,$C(9),7),X=$$FNDLF(N)
+ .I X="" S X=$O(^RLSS("lf",""),-1)+1 S:X<500 X=500 S ^(X)=N_"|"_N_"|"_N
+ .S LF=X,FP=$P(R,$C(9),9),UP=$P(R,$C(9),10)
+ .S:FP="" FP="-" S:UP="" UP="-"
+ .S ^RLS(ID,LF,FP,UP)="",Z="" ; форма, фасовка, упаковка
+ .S $P(A,"|",4)=$P(R,$C(9),8) ; доза в единице
+ .S X1=$P(R,$C(9),11),X2=$P(R,$C(9),12),X=$$FNDMNF(X1,X2)
+ .I X="" S X=$O(^RLSS("mnf",""),-1)+1,^(X)=X1_"|"_X2
+ .S $P(Z,"|",1)=X ; производитель
+ .S X1=$P(R,$C(9),11),X2=$P(R,$C(9),12),X=$$FNDMNFP(X1,X2)
+ .I X="" S X=$O(^RLSS("mnfp",""),-1)+1,^(X)=X1_"|"_X2
+ .S $P(Z,"|",2)=X ; поставщик
+ .S $P(Z,"|",3)=$P(R,$C(9),23) ; срок годности
+ .S X=$P(R,$C(9),17),$P(Z,"|",4)=X ; bar код
+ .S $P(Z,"|",5)=$P(R,$C(9),22) ; цена
+ .S $P(Z,"|",6)=RL ; RLS id
+ .S ^RLS(ID,LF,FP,UP)=Z
+ .S:X'="" ^RLSS("bar",X,ID,LF,FP,UP)=""
+ .S ^RLS(ID)=A,^RLSS("n",$$LU^TXTU($E($P(R,$C(9),2),1,3)),ID)=""
+ .S A=$P(R,$C(9),24) ; фарм группа
+ .F K=1:1:99 S X=$P(A,";",K) Q:X=""  D
+ ..S X=$$TRIM^TXTU(X),X1=$P(X," ",1),X2=$P(X," ",2,99)
+ ..S:'$D(^RLSS("fgr",X1)) ^(X1)=X2
+ ..S ^(X1,ID)="",^RLS(ID,"f",X1)=""
+ .S A=$P(R,$C(9),25) ; МКБ группа
+ .F K=1:1:99 S X=$P(A,";",K) Q:X=""  D
+ ..S X=$$TRIM^TXTU(X),X1=$P(X," ",1),X2=$P(X," ",2,99),Z=$P(X," ",2)
+ ..Q:Z=""  S:'$D(^RLSS("mkb",Z)) ^(Z)=X1_"|"_X2
+ ..S ^(Z,ID)="",^RLS(ID,"m",Z)=""
+ .S A=$P(R,$C(9),26) ; АТХ группа
+ .F K=1:1:99 S X=$P(A,";",K) Q:X=""  D
+ ..S X=$$TRIM^TXTU(X),X1=$P(X," ",1),X2=$P(X," ",3,99),Z=$P(X," ",2)
+ ..S:'$D(^RLSS("atx",X1)) ^(X1)=Z_"|"_X2
+ ..S ^(X1,ID)="",^RLS(ID,"c",X1)=""
+ C 51
+ K ^RLSS("pvv")
+ S ^RLSS("pvv",1)="перорально"
+ S ^RLSS("pvv",2)="сублингвально"
+ S ^RLSS("pvv",3)="ректально"
+ S ^RLSS("pvv",4)="вагинально"
+ S ^RLSS("pvv",5)="ингалляция"
+ S ^RLSS("pvv",6)="интраназально"
+ S ^RLSS("pvv",8)="трансдермально"
+ S ^RLSS("pvv",10)="парэнтерально"
+ Q
+FNDNM(TXT) ; Поиск по имени
+ N U,I S U=$$LU^TXTU($E(TXT,1,3))
+ S I="" F  S I=$O(^RLSS("n",U,I)) Q:I=""  I $P($G(^RLS(I)),"|",1)=TXT Q 
+ Q I
+FNDLF(TXT) ; Лек. форма (кратко)
+ N I S I="" F  S I=$O(^RLSS("lf",I)) Q:I=""  I $P(^(I),"|",3)=TXT Q 
+ Q I
+FNDMNN(TXT) ; Действующее вещество
+ N I S I="" F  S I=$O(^RLSV(I)) Q:I=""  I $P(^(I),"|",1)=TXT Q 
+ Q I
+FNDMNF(TXT,COUNTRY) ; Производитель
+ N I,R S I=""
+ F  S I=$O(^RLSS("mnf",I)) Q:I=""  S R=^(I) I $P(R,"|",1)=TXT,$P(R,"|",2)=COUNTRY Q
+ Q I
+FNDMNFP(TXT,COUNTRY) ; Поставщик
+ N I,R S I=""
+ F  S I=$O(^RLSS("mnfp",I)) Q:I=""  S R=^(I) I $P(R,"|",1)=TXT,$P(R,"|",2)=COUNTRY Q
+ Q I
+FNDFGR(TXT) 
+ Q
+FNDATX(TXT) 
+ Q

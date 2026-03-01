@@ -1,0 +1,35 @@
+IPEOPL ; Физлица [ 05/22/2015  1:55 PM ]
+FIO(ID) ; Получить ФИО
+ Q:ID="" ""
+ Q $$TRIM^TXTU($TR($P(^PEOPL(ID),"|",1,3),"|"," "))
+FIOSH(ID) ; Краткое ФИО
+ S ID=^PEOPL(ID)
+ Q $$FIOSH^TXTU($P(ID,"|",1),$P(ID,"|",2),$P(ID,"|",3))
+FIONUM(NUM,ORG) ; ФИО по коду сотрудника
+ ; ORG - ограничить по организации TODO
+ Q:NUM="" ""
+ N ID
+ S ID=$O(^PEOPLI("num",NUM,"")) Q:ID="" ""
+ Q $$FIO(ID)
+MKIDX(ID) ; Создать индекс
+ N R,X
+ S R=^PEOPL(ID)
+ S X=$E($P(R,"|",6),1,128)
+ I X'="" S ^PEOPLI("org",X,ID)="" D GL^IEXCH("^PEOPLI","org",X,ID)
+ S X=$E($P(R,"|",7),1,128)
+ I X'="" S ^PEOPLI("num",X,ID)="" D GL^IEXCH("^PEOPLI","num",X,ID)
+ Q
+RMIDX(ID) ; Удалить индекс
+ N R,X
+ S R=^PEOPL(ID)
+ S X=$E($P(R,"|",6),1,128)
+ I X'="" K ^PEOPLI("org",X,ID) D KGL^IEXCH("^PEOPLI","org",X,ID)
+ S X=$E($P(R,"|",7),1,128)
+ I X'="" K ^PEOPLI("num",X,ID) D KGL^IEXCH("^PEOPLI","num",X,ID)
+ Q
+REIDX 
+ N I
+ K ^PEOPLI
+ S I="" F  S I=$O(^PEOPL(I)) Q:I=""  D MKIDX(I)
+ D REGL^IEXCH("^PEOPLI")
+ Q

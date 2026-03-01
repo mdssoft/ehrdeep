@@ -1,0 +1,397 @@
+NMLAB ; Лаборатория [ 07/26/2022  5:32 PM ]
+MKBAR(ID) ; Создать/проверить ширихкод на заявке
+ N NI,A,L,PR,LP,R,LAB
+ Q:'$D(^MLABI("c",ID))
+ S NI=^(ID)
+ S A=$$GETBAR^IMLAB(NI,ID)
+ I A'="" D MSG^RWU(A) Q 
+ S LAB=$P($G(^MLAB(NI,ID,"lab")),"|",1)
+ S LP=+$P($G(^MLAB(NI,ID,"s1")),"|",4),PR=""
+ I LAB S R=$G(^LABC(LAB,"lpu",LP,"bar")),PR=$P(R,"|",1),L=$P(R,"|",2)
+ I LAB,PR="" S R=$G(^LABC(LAB,"bar")),PR=$P(R,"|",1),L=$P(R,"|",2)
+ I L="" S L=$G(^cfg("lab","barlen")) S:L="" L=10
+ S:PR="" PR=$G(^cfg("lab","barprefix"))
+ S A=$$NEWBAR^IMLAB(NI,ID,PR,L,"")
+ D MSG^RWU(A)
+ Q
+CHKID(ID) ; Проверить ID на существование
+ D MSG^RWU($S(ID="":0,$D(^MLABI("c",ID)):1,1:0))
+ Q
+IDTXT(NI,ID) ; Текстовый статус по ID
+ Q $$STXT(^MLAB(NI,ID,"s1"),$G(^("s2")),$G(^("s3")),$G(^("s9")),$G(^("s4")),$G(^("s91")))
+STXT(S1,S2,S3,S9,S4,S91) ; Текстовый статус
+ ; TODO - S5,S8
+ I $P($G(S91),"|",1)=0 Q $$STXTI(91)
+ I $P(S9,"|",1)=1 Q $$STXTI(9)
+ I $P(S9,"|",1)=0 Q "заполнена" ; TODO - move to S8
+ I $P(S9,"|",1)=3 Q "отменена"
+ I $P($G(S4),"|",1)=1 Q $$STXTI(4)
+ I $P(S3,"|",1)=1 Q $$STXTI(3)
+ I $P(S2,"|",1)=1 Q $$STXTI(2)
+ I S1'="" Q $$STXTI(1)
+ Q "создан"
+STXTI(S) ; Статус по ID
+ Q:S=1 "направление"
+ Q:S=2 "материал взят"
+ Q:S=3 "в работе"
+ Q:S=31 "маркирована"
+ Q:S=4 "отправлена"
+ Q:S=5 "принята"
+ Q:S=8 "заполнена"
+ Q:S=9 "готово"
+ Q:S=91 "утверждена"
+ Q "создана"
+STID(S1,S2,S3,S9,S91) ; ID статуса
+ ; TODO - S5,S8
+ I $P(S91,"|",1)=1 Q 91
+ I $P(S9,"|",1)=1 Q 9
+ I $P(S9,"|",1)=0 Q 90
+ I $P(S3,"|",1)=1 Q 3
+ I $P(S2,"|",1)=1 Q 2
+ I $P(S2,"|",1)=0 Q 1
+ I $P(S9,"|",1)=3 Q "cn"
+ I S1'="" Q 1
+ Q 0
+MKPRMUSL(NI,PRMS,DT,DGN) ; Составить список услуг по параметрам
+ ; NI - номер истории
+ ; PRMS - параметры
+ ; DT - дата
+ ; DGN - договор
+ N PL,I,X,PRC,K,J,UL,U
+ S DT=$G(DT) S:DT="" DT=+$H
+ 
+ S X=+$$GET^IINSC($$GET^IPAC(NI,"stc",+$H),"price",+$H)
+ S:X>0 PRC(1)=X
+ S X=$$GET^IINSC($$GET^IPAC(NI,"stc1",+$H),"price",+$H)
+ S:X>0 PRC(2)=X
+ ; только с существующими в прейскурантах услугами:
+ F I=1:1 S R=$P(PRMS,"|",I) Q:R=""  D
+ .S X=$G(^LABT("T",R,"u")) Q:X="" 
+ .I X'["|" S PL(R)=X Q ; одна услуга
+ .S U="" F J=1:1 S K=$P(X,"|",J) Q:K=""  S:$$CHECK^IPRICE($P(K,"@",1),$G(PRC(1)))!$$CHECK^IPRICE($P(K,"@",1),$G(PRC(2))) U=U_$S(U="":U,1:"|")_K
+ .S PL(R)=U
+ ; подсчет кол-ва парам. в каждой услуге, создание нового списка парам.
+ S X="",PRMS="" F  S X=$O(PL(X)) Q:X=""  D
+ .F I=1:1 S K=$P(PL(X),"|",I),U=$P(K,"@",1) Q:U=""  I +$P(K,"@",2)=0!'$D(UL(U))  S UL(U)=$G(UL(U))+1
+ .S PRMS=PRMS_$S(PRMS="":"",1:"|")_X
+ ; удаление услуг, включающих меньше параметров и более дорогие
+ S X="" F  S X=$O(PL(X)) Q:X=""  D
+ .F I=1:1 S U=$P($P(PL(X),"|",I),"@",1) Q:U=""  D
+ ..S K=$$PRICEH^IPRICE(U,PRC(1),DT),J=+$G(UL(U))
+ ..I $D(PL(X,J)) I K>$G(PL(X,J)) Q  ; цена не меньше
+ ..S PL(X,J)=K,PL(X,J,1)=$P(PL(X),"|",I) ; сохр. группировку
+ .S K=+$O(PL(X,""),-1),R=PL(X,K,1),J=PL(X,K) ; максимум парам. по услуге
+ .; вычитаем текущий параметр из списка услуг
+ .;S I="" F  S I=$O(PL(X,I)) Q:I=""  S UL(PL(X,I))=$G(UL(PL(X,I)))-1
+ .K PL(X) Q:K=0  ; никаких услуг
+ .S PL(X)=R
+ ; объединение списка услуг
+ K UL
+ S X="" F  S X=$O(PL(X)) Q:X=""  S R=PL(X),UL($S($P(R,"@",2)=1:X,1:"")_"@"_$P(R,"@",1))=""
+ ; кол-во услуг
+ K PL
+ S X="" F  S X=$O(UL(X)) Q:X=""  S U=$P(X,"@",2),PL(U)=$G(PL(U))+1
+ ; линейный список услуг
+ S (U,X)="" F  S X=$O(PL(X)) Q:X=""  S U=U_$S(U="":U,1:"|")_X_$S(PL(X)=1:"",1:"*"_PL(X))
+ ; todo - выбор прейскуранта
+ Q U
+LFNP(DT,NI,AN,CIT,ISF) ; Поиск исследований 
+ N ID,NIB,DTT,R,CID,S1,S2,S3,S9
+ S DT=$$DI^DTUTL($G(DT))
+ D OWF^RWU(".txt")
+ I AN'="" D LFNPP
+ E  S AN="" F  S AN=$O(^MLABI("t",AN)) Q:AN=""  D LFNPP
+ D C^RWU
+ Q
+LFNPP 
+ S ID="" F  S ID=$O(^MLABI("t",AN,ID)) Q:ID=""  D
+ .S NIB=$G(^MLABI("c",ID)) Q:NIB=""  S DTT=+$G(^MLAB(NIB,ID))
+ .Q:$D(^MLAB(NIB,ID,"s2"))=0  ;Направления не кажем
+ .I DT'="" Q:DTT'=DT 
+ .I NI'="" Q:NIB'=NI 
+ .I CIT Q:+$G(^("ci"))=0  
+ .S S1=$G(^("s1")),S2=$G(^("s2")),S3=$G(^("s3")),S9=$G(^("s9"))
+ .S R=+$P(S9,"|",1) Q:ISF=0&(R'=0)  Q:ISF=1&(R=0) 
+ .D WC^RWU(CR_ID_"|"_$$FIOSH^YIPACN(NIB)_"|"_$$STXT(S1,S2,S3,S9)_"|"_$$DT2^DTUTL(DTT))
+ Q
+LREZ(ID) ; Вывод таблицы результатов
+ N NI,AN,PRMS,CI,DTM,X,R,I,PRL,MAT,S9
+ S NI=$G(^MLABI("c",ID))
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<slab>")
+ S AN=$G(^MLAB(NI,ID,"tp")),PRMS=$G(^("pr")),CI=+$G(^("ci")),DTM=$G(^("s2")),MAT=$G(^("mi")),S9=$G(^("s9"))
+ D WTAGDC^RWU("itypet",$$NAMEAN^NMLABU(AN))
+ D WTAGD^RWU("napr_dt",$$DTM^DTUTL($P(DTM,"|",2)))
+ D WTAGD^RWU("mattid",$P(MAT,"|",2))
+ D WTAGD^RWU("subscr",$P(S9,"|",1))
+ D W^RWU("<cito visible="""_$S(CI=1:"yes",1:"no")_"""/>")
+ D W^RWU("<table_rez>")
+ F I=1:1 S X=$P(PRMS,"|",I) Q:X=""  S PRL(X)="|"_$$NORMPM^IMLAB(AN,X,NI)
+ D:$D(^MLAB(NI,ID,"d")) LREZTB
+ S I="" F  S I=$O(PRL(I)) Q:I=""  D WC^RWU(CR_$$TAG^TXTU(I_"|"_$$NAMEPM^IMLABS(I)_"|"_$P(PRL(I),"|",1)_"|"_$$MEANPM^IMLABS(I)_"|"_$P(PRL(I),"|",2,3)))
+ S R=$TR($G(^MLAB(NI,ID,"c")),"|"_CR,"/ ")
+ D:R'="" WC^RWU(CR_"|Примечание|"_$$TAG^TXTU(R)_"|||")
+ D W^RWU("</table_rez>")
+ D W^RWU("</slab></nb_console>"),C^RWU
+ Q
+LREZTB ; Таблица с результатами
+ S R=""
+ F  S R=$O(^MLAB(NI,ID,"d",R)) Q:R=""  S PRL(R)=$P($G(^(R)),"|",1,3)
+ Q
+SBREZ(ID,SYS) ; Подписать результаты
+ D SBREZ^NMLABR(ID,$G(SYS))
+ Q
+MKTP(AN,NM,MEMO,UID) 
+ ; MEMO - текстовое заключение
+ N ID
+ S:$G(UID)="" UID="lab/"_$TR($$TRANSLIT^TXTU(AN)," ","_")
+ S ID=$$ADDF^YIMHS("Лабораторные исследования")
+ S ID=$$ADDT^YIMHS(NM,ID,"tab",UID)
+ D SET^YIMHS(ID,"rights","aaa")
+ D SET^YIMHS(ID,"pfile","tabgrid.css")
+ D SET^YIMHS(ID,"rproc",$S($G(MEMO):"IMHM^NMLAB",1:"IMH^NMLAB"))
+ D SET^YIMHS(ID,"use",0)
+ D MKIDX^IMHS(ID)
+ Q ID
+IMH ; для ЭМК
+ N R,RR,DTR,NIB,IDA,SB,AN,A,T,X,VV,C,VAL,P,LST,G,OR,MC,AT
+ S IDA=$G(^EPR(N,ID,"data")),NIB=$G(^MLABI("c",IDA))
+ S AN=$G(^MLAB(NIB,IDA,"tp"))
+ S T="</item><item>"
+ D WC^RWU("<titles><item>Показатель"_T_"Значение"_T_"Единицы"_T_"Норма</item></titles>")
+ S R="" F  S R=$O(^MLAB(NIB,IDA,"d",R)) Q:R=""  D
+ .S X=$G(^(R)),SB=$G(^(R,"s")) Q:+$P(SB,"|",1)=0 
+ .S P=$P(R,"@",1)
+ .S SB=$$CHKPM^IMLABS(P) ; текстовый или внешний параметр
+ .S VV=$G(^LABT("T",P,"v")) Q:$P(VV,"|",1)="n" 
+ .S G=+$G(^("r")),OR=$G(^("o"))
+ .I $D(^MLAB(NIB,IDA,"d",R,"mc")) D  Q  ; microbiology
+ ..S LST(G,$P(VV,"|",2)_"|"_OR_"|"_R)=""
+ ..S MC="" F  S MC=$O(^MLAB(NIB,IDA,"d",R,"mc",MC)) Q:MC=""  D
+ ...S AT=""  F  S AT=$O(^MLAB(NIB,IDA,"d",R,"mc",MC,AT)) Q:AT=""  D
+ ....S LST(G,$P(VV,"|",2)_"|"_OR_"|"_R_"|M|"_MC_"|"_AT)=$P(^(AT),"|",1)
+ .S LST(G,$P(VV,"|",2)_"|"_OR_"|"_R)=$$VTXT^IMLABV(NIB,IDA,R)
+ 
+ S G="" F  S G=$O(LST(G)) Q:G=""  D
+ .D:G WC^RWU(CR_"<row><key></key><item>"_$$TAG^TXTU($G(^LABT("G",G)))_T_T_T_"</item></row>")
+ .S R="" F  S R=$O(LST(G,R)) Q:R=""  D
+ ..S P=$P(R,"|",3),OR=$P(R,"|",4)
+ ..S X=LST(G,R),VAL=$P(X,"|",1)
+ ..S SB=$$CHKPM^IMLABS($P(P,"@",1)) ; текстовый или внешний параметр
+ ..S A="<row><key>run:IMHP^NMLAB@"_NIB_"~"_P_"</key><item>"
+ ..S C=+$P(X,"|",5)
+ ..S:OR'="M" A=A_$$TAG^TXTU($$OWF^TXTU($S(SB:$$NAMEPM^IMLABS(P),1:P),64))
+ ..S:OR="M" A=A_$$TAG^TXTU("Микр.: "_$$MCO^IMLABS($P(R,"|",5))),VAL=$$ANT^IMLABS($P(R,"|",6))_$S(VAL="":"",1:"="_VAL)
+ ..S A=A_"</item><item"
+ ..S A=A_$S(C'=0:" class=""17"">",1:">")_$$TAG^TXTU($$OWF^TXTU(VAL,64))_T
+ ..S A=A_$$TAG^TXTU($P(X,"|",2))_T_$$TAG^TXTU($$OWF^TXTU($TR($P(X,"|",3),CR," "),64))
+ ..D WC^RWU(CR_A_"</item></row>")
+ 
+ S X=$TR($G(^MLAB(NIB,IDA,"c")),"|"_CR,"/ ")
+ D:X'="" WC^RWU(CR_"<row><key></key><item>Примечание"_T_$$TAG^TXTU(X)_T_T_"</item></row>")
+ 
+ Q
+IMHM ; для ЭМК - текстовые заключения
+ N R,RR,DTR,NIB,IDA,SB,AN,A,T,X,VV,C,VAL,P,LST,G,OR,MC,AT
+ S NIB=N,IDA=$G(^EPR(N,ID,"data"))
+ S AN=$G(^MLAB(NIB,IDA,"tp"))
+ 
+ D WC^RWU("<streport nm=""Данные лабораторных исследований"">")
+ S R="" F  S R=$O(^MLAB(NIB,IDA,"d",R)) Q:R=""  D
+ .S X=$G(^(R)),SB=$G(^(R,"s")) Q:+$P(SB,"|",1)=0 
+ .S P=$P(R,"@",1)
+ .S SB=$$CHKPM^IMLABS(P) ; текстовый или внешний параметр
+ .S VV=$G(^LABT("T",P,"v")) Q:$P(VV,"|",1)="n" 
+ .S G=+$G(^("r")),OR=$G(^("o"))
+ .I $D(^MLAB(NIB,IDA,"d",R,"mc")) D  Q  ; microbiology
+ ..S LST(G,$P(VV,"|",2)_"|"_OR_"|"_R)=""
+ ..S MC="" F  S MC=$O(^MLAB(NIB,IDA,"d",R,"mc",MC)) Q:MC=""  D
+ ...S AT=""  F  S AT=$O(^MLAB(NIB,IDA,"d",R,"mc",MC,AT)) Q:AT=""  D
+ ....S LST(G,$P(VV,"|",2)_"|"_OR_"|"_R_"|M|"_MC_"|"_AT)=$P(^(AT),"|",1)
+ .S LST(G,$P(VV,"|",2)_"|"_OR_"|"_R)=$$VTXT^IMLABV(NIB,IDA,R)
+ 
+ D W^RWU("<fields>")
+ S G="" F  S G=$O(LST(G)) Q:G=""  D
+ .S R="" F  S R=$O(LST(G,R)) Q:R=""  D
+ ..S P=$P(R,"|",3),OR=$P(R,"|",4)
+ ..S SB=$$CHKPM^IMLABS($P(P,"@",1)) ; текстовый или внешний параметр
+ ..S:OR'="M" A=$$TAG^TXTU($S(SB:$$NAMEPM^IMLABS(P),1:P))
+ ..S:OR="M" A=$$TAG^TXTU("Микр.: "_$$MCO^IMLABS($P(R,"|",5)))
+ ..S T=$G(^LABT("T",P,"t")),T=$S(T="M":"m",1:"s")
+ ..D WC^RWU("<field nm="""_$$trt(P)_""" h=""v"" tit="""_A_""" tp="""_T_"""/>")
+ 
+ D W^RWU("</fields><data>")
+ 
+ S G="" F  S G=$O(LST(G)) Q:G=""  D
+ .S R="" F  S R=$O(LST(G,R)) Q:R=""  D
+ ..S P=$P(R,"|",3),OR=$P(R,"|",4)
+ ..S X=LST(G,R),C=+$P(X,"|",5),VAL=$P(X,"|",1)
+ ..S A=VAL
+ ..S T=$P(X,"|",2) S:T'=""&(A'="") A=A_" " S A=A_T
+ ..S T=$P(X,"|",3) S:T'=""&(A'="") A=A_" Норма: " S A=A_T
+ ..D WTAGC^RWU($$trt(P),A)
+ 
+ D W^RWU("</data></streport>")
+ Q
+trt(TAG) 
+ Q $TR(TAG,"<>@.~`""= ","_________")
+IMHP(KEY) ; График по параметру
+ N NIB,ID,P,D,A,VV
+ S KEY=$$WD^TXTU(KEY)
+ S NIB=$P(KEY,"~",1),P=$P(KEY,"~",2),VV=$G(^LABT("T",P,"v"))
+ S A=$$TAG^TXTU($S($$CHKPM^IMLABS(P):$$NAMEPM^IMLABS(P),1:P))
+ D OWF^RWU(".xmlb")
+ G:VV="c"!(VV="t") IMHPtab
+ D W^RWU(^PP(0,1)_"<nb_console><run>RUN_HREPORT{kchart.frm}</run>")
+ D WC^RWU("<kchart><label data=""График по "_A_"""/>")
+ D WC^RWU("<chart title="""_A_""">")
+ S A="X|"_A
+ S ID="" F  S ID=$O(^MLAB(NIB,ID)) Q:ID=""  S D=$G(^(ID)) S:$D(^(ID,"d",P)) A=A_CR_$$DT2^DTUTL(D)_"|"_$P($G(^MLAB(NIB,ID,"d",P)),"|",1)
+ D WC^RWU($$TAG^TXTU(A))
+ D W^RWU("</chart></kchart><run>RUN_MREPORT{kchart.frm}</run></nb_console>")
+ D C^RWU
+ Q
+IMHPtab 
+ D W^RWU(^PP(0,1)_"<nb_console><run>RUN_HREPORT{ktable.frm}</run>")
+ D WC^RWU("<ktable><label data=""Изменения по "_A_"""/>")
+ D WC^RWU("<table title="""_A_""">Дата|Значение")
+ S (A,ID)=""
+ F  S ID=$O(^MLAB(NIB,ID)) Q:ID=""  S D=$G(^(ID)) S:$D(^(ID,"d",P)) A=A_CR_$$DT^DTUTL(D)_"|"_$P($G(^MLAB(NIB,ID,"d",P)),"|",$S(VV="c":6,1:1))
+ D WC^RWU($$TAG^TXTU(A))
+ D W^RWU("</table></ktable><run>RUN_MREPORT{ktable.frm}</run></nb_console>")
+ D C^RWU
+ Q
+EXPTAB(N,ID,HUB) ; Экспорт в табличном виде
+ ; HUB - через IMSGHUB (ключ)
+ N R,RR,DTR,NIB,IDA,SB,AN,A,T,X,VV,C,VAL,P,LST,G,OR,MC,AT
+ S NIB=N,IDA=$G(^EPR(N,ID,"data"))
+ S AN=$G(^MLAB(NIB,IDA,"tp"))
+ S HUB=$G(HUB) 
+ D:HUB="" OWF^RWU(".txt")
+ D expw("Показатель|Значение|Единицы|Норма")
+ S R="" F  S R=$O(^MLAB(NIB,IDA,"d",R)) Q:R=""  D
+ .S X=$G(^(R)),SB=$G(^(R,"s")) Q:+$P(SB,"|",1)=0 
+ .S P=$P(R,"@",1)
+ .S SB=$$CHKPM^IMLABS(P) ; текстовый или внешний параметр
+ .S VV=$G(^LABT("T",P,"v")) Q:$P(VV,"|",1)="n" 
+ .S G=+$G(^("r")),OR=$G(^("o"))
+ .I $D(^MLAB(NIB,IDA,"d",R,"mc")) D  Q  ; microbiology
+ ..S LST(G,$P(VV,"|",2)_"|"_OR_"|"_R)=""
+ ..S MC="" F  S MC=$O(^MLAB(NIB,IDA,"d",R,"mc",MC)) Q:MC=""  D
+ ...S AT=""  F  S AT=$O(^MLAB(NIB,IDA,"d",R,"mc",MC,AT)) Q:AT=""  D
+ ....S LST(G,$P(VV,"|",2)_"|"_OR_"|"_R_"|M|"_MC_"|"_AT)=$P(^(AT),"|",1)
+ .S LST(G,$P(VV,"|",2)_"|"_OR_"|"_R)=$$VTXT^IMLABV(NIB,IDA,R)
+ 
+ S G="" F  S G=$O(LST(G)) Q:G=""  D
+ .D:G expw(CR_$G(^LABT("G",G))_"|||")
+ .S R="" F  S R=$O(LST(G,R)) Q:R=""  D
+ ..S P=$P(R,"|",3),OR=$P(R,"|",4)
+ ..S X=LST(G,R),VAL=$P(X,"|",1)
+ ..S SB=$$CHKPM^IMLABS($P(P,"@",1)) ; текстовый или внешний параметр
+ ..S A=""
+ ..S C=+$P(X,"|",5)
+ ..S:OR'="M" A=A_$$OWF^TXTU($S(SB:$$NAMEPM^IMLABS(P),1:P),64)
+ ..S:OR="M" A=A_"Микр.: "_$$MCO^IMLABS($P(R,"|",5)),VAL=$$ANT^IMLABS($P(R,"|",6))_$S(VAL="":"",1:"="_VAL)
+ ..S A=A_"|"
+ ..S A=A_$$OWF^TXTU(VAL,64)_"|"
+ ..S A=A_$P(X,"|",2)_"|"_$$OWF^TXTU($P(X,"|",3),64)
+ ..D expw(CR_A)
+ D:HUB="" C^RWU
+ Q
+EXPTXT(N,ID) ; Экспорт в текстовом виде
+ ; HUB - через IMSGHUB (ключ)
+ N R,RR,DTR,NIB,IDA,SB,AN,A,T,X,VV,C,VAL,P,LST,G,OR,MC,AT
+ S NIB=N,IDA=$G(^EPR(N,ID,"data"))
+ S AN=$G(^MLAB(NIB,IDA,"tp"))
+ D OWF^RWU(".txt")
+ D WC^RWU($$DT2^DTUTL(+$P($$GET^IEPR(N,ID,"dt"),"|",1))_", "_$$GET^IEPR(N,ID,"n"))
+ S R="" F  S R=$O(^MLAB(NIB,IDA,"d",R)) Q:R=""  D
+ .S X=$G(^(R)),SB=$G(^(R,"s")) Q:+$P(SB,"|",1)=0 
+ .S P=$P(R,"@",1)
+ .S SB=$$CHKPM^IMLABS(P) ; текстовый или внешний параметр
+ .S VV=$G(^LABT("T",P,"v")) Q:$P(VV,"|",1)="n" 
+ .S G=+$G(^("r")),OR=$G(^("o"))
+ .I $D(^MLAB(NIB,IDA,"d",R,"mc")) D  Q  ; microbiology
+ ..S LST(G,$P(VV,"|",2)_"|"_OR_"|"_R)=""
+ ..S MC="" F  S MC=$O(^MLAB(NIB,IDA,"d",R,"mc",MC)) Q:MC=""  D
+ ...S AT=""  F  S AT=$O(^MLAB(NIB,IDA,"d",R,"mc",MC,AT)) Q:AT=""  D
+ ....S LST(G,$P(VV,"|",2)_"|"_OR_"|"_R_"|M|"_MC_"|"_AT)=$P(^(AT),"|",1)
+ .S LST(G,$P(VV,"|",2)_"|"_OR_"|"_R)=$$VTXT^IMLABV(NIB,IDA,R)
+ 
+ S G="" F  S G=$O(LST(G)) Q:G=""  D
+ .D:G WC^RWU(CR_$G(^LABT("G",G))_":")
+ .S R="" F  S R=$O(LST(G,R)) Q:R=""  D
+ ..S P=$P(R,"|",3),OR=$P(R,"|",4)
+ ..S X=LST(G,R),VAL=$P(X,"|",1)
+ ..S SB=$$CHKPM^IMLABS($P(P,"@",1)) ; текстовый или внешний параметр
+ ..S A=""
+ ..S C=+$P(X,"|",5)
+ ..S:OR'="M" A=A_$$OWF^TXTU($S(SB:$$NAMEPM^IMLABS(P),1:P),64)
+ ..S:OR="M" A=A_"Микр.: "_$$MCO^IMLABS($P(R,"|",5)),VAL=$$ANT^IMLABS($P(R,"|",6))_$S(VAL="":"",1:"="_VAL)
+ ..S A=A_" - "_$$OWF^TXTU(VAL,200)_" "
+ ..S A=A_$P(X,"|",2)_$S($P(X,"|",3)="":"",1:" (норма "_$$OWF^TXTU($P(X,"|",3),64)_")")
+ ..D WC^RWU(CR_A)
+ D WC^RWU(CR_".")
+ D C^RWU
+ Q
+ 
+expw(TXT) 
+ D:HUB'="" WSEND^IMSGHUB(HUB,$$DW^TXTU(TXT))
+ D:HUB="" WC^RWU(TXT) 
+ Q
+REGLCL ;
+ K ^LCLI("lab")
+ S ^LCLI("lab")="Клинико-диагностическая лаборатория"
+ S ^LCLI("lab","sbseditz")="Разрешить редактирование подписанных заявок"
+ S ^LCLI("lab","autosbs")="Автоподпись заявок"
+ S ^LCLI("lab","sbsz")="Подпись заявок"
+ S ^LCLI("lab","sbsr")="Подпись результатов"
+ S ^LCLI("lab","saver")="Изменение результатов"
+ S ^LCLI("lab","dowrk")="Отправка в рабочий список"
+ S ^LCLI("lab","del")="Удаление заявок"
+ S ^LCLI("lab","delall")="Безусловное удаление заявок и результатов"
+ S ^LCLI("lab","delnst")="Удаление при отсутствии указанного статуса"
+ S ^LCLI("lab","deldays")="Число дней от создания когда можно удалить"
+ S ^LCLI("lab","delrprm")="Удаление теста из результата"
+ S ^LCLI("lab","addrprm")="Добавление теста в результат"
+ S ^LCLI("lab","sbsedit")="Редактирование подписанных тестов"
+ S ^LCLI("lab","eowner")="Редактирование только своих заявок"
+ S ^LCLI("lab","vowner")="Просмотр только своих заявок"
+ S ^LCLI("lab","rowner")="Редактирование только своих результатов"
+ S ^LCLI("lab","moveid")="Разрешено перемещение ID заявки"
+ S ^LCLI("lab","reztype")="Вид резерва номеров 0-по пользователю, 1-блокировка номеров"
+ S ^LCLI("lab","zhide")="Перечень скрытых полей в заявке, через |"
+ S ^LCLI("lab","sbsprn")="Печать только подписанных результатов исследований"
+ S ^LCLI("lab","sbspprn")="Печать только подписанных параметров результатов"
+ S ^LCLI("lab","sbsvrez")="Просмотр только подписанных результатов"
+ S ^LCLI("lab","vrdefsign")="Показывать в подписи к документам пользовалетя, если нет подписанта"
+ S ^LCLI("lab","nnfixisl")="Фиксировать в списке параметров лаб. заявки последний выбранный раздел"
+ S ^LCLI("lab","zset")="Поля заявки, устанавливаемые по умолчанию через tab поле=данные"
+ S ^LCLI("lab","prn-z")="ID печатного документа заявки"
+ S ^LCLI("lab","prn-r")="ID печатного документа результата"
+ S ^LCLI("lab","seldgn")="Журнал по фиксированному договору"
+ S ^LCLI("lab","selanl")="Журнал по фиксированному исследованию"
+ S ^LCLI("lab","conzprn")="Печать заявок с разбивкой на контрагентов"
+ S ^LCLI("lab","uslsgr")="Вывод перечня услуг в заявке только по выбранной группе, без подгрупп"
+ S ^LCLI("lab","corrstc")="Разрешить изменение договора заявки на нестандартный"
+ S ^LCLI("lab","noprnbar")="Без автопечати баркода заявки"
+ S ^LCLI("lab","unwork")="Отмена статуса ""в работе"""
+ S ^LCLI("lab","addfile")="Разрешение прикрепления файлов к результатам"
+ S ^LCLI("lab","delfile")="Разрешение удаления файлов из результатов"
+ S ^LCLI("lab","nmfile")="Разрешение переименования файлов в результатах"
+ S ^LCLI("lab","clpu")="Показывать заявки только по текущему филиалу"
+ S ^LCLI("lab","j-con-sw")="Показывать в журнале контрагента исполнителя"
+ S ^LCLI("lab","unsbsr")="Снятие подписи с результата"
+ S ^LCLI("lab","unbio")="Отмена взятия материала"
+ S ^LCLI("lab","def-wlabt")="Тип рабочего списка по умолчанию"
+ S ^LCLI("lab","mkout")="Отправка заявки ""В работу"", 0-запрет"
+ S ^LCLI("lab","nnullz")="Поля с ненулевыми значениями (через |)"
+ S ^LCLI("lab","setrt")="Изменение статусов отправки результата"
+ S ^LCLI("lab","reslog")="Сохранять предыдущие значения результатов"
+ S ^LCLI("lab","movpac")="Изменение пациента у заявки"
+ S ^LCLI("lab","sbseditz-days")="Изменение подписанной заявки не более дней"
+ S ^LCLI("lab","sbseditz-st")="Изменение подписанной заявки при отсутствии указанного статуса"
+ S ^LCLI("lab","z-any-rasp")="Пациент должен присутствовать в расписании ЛПУ"
+ S ^LCLI("lab","confirmr")="Разрешить утверждение результатов"
+ S ^LCLI("lab","zcito-ed")="Изменение поля CITO заявки"
+ S ^LCLI("lab","twlbar")="В работу можно отправить только заявки со штрихкодом"
+ Q

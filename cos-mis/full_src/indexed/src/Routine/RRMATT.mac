@@ -1,0 +1,241 @@
+RRMATT ; Расход материалов [ 12/10/2021  7:33 PM ]
+BYOTD(DS,DE,MOD,OTX,STK,LP) ; Отчет с распределением по отделениям
+ ; OTX - фильтр по отделению
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),LP=$G(LP),OTX=$G(OTX)
+ K ^BUF($J,"rmt")
+ D PREPRC
+ N ID,LST,R,RR,MT,M,K,JJ,cPRC,dPRC,SM,MTK
+ S dPRC=$$CORCP^IPRICET(1)
+ D MKAPPRC^IUSLSC(DS,DE,1,"OTPRC^RRMATT","","","",'+$$FR^I())
+ D OWF^RWU(".txt"),WC^RWU("Отделение "_$$TXTP^DTUTL(DS,DE)_"|Номенклатура|Расход|Единицы"_$S(MOD:"|Сумма",1:""))
+ S ID="" F  S ID=$O(^BUF($J,"rmt",ID)) Q:ID=""  D
+ .D WC^RWU(CR_$$GOTD^YISPRAV(ID))
+ .S MT="" F  S MT=$O(^BUF($J,"rmt",ID,MT)) Q:MT=""  S R=^(MT) D WC^RWU(CR_"|"_$$NAMENM^IWRHS(MT)_"|"_$$FN3($P(R,"|",1))_"|"_$$MEANNM^IWRHS(MT)_$S(MOD:"|"_$$FN($P(R,"|",2)),1:""))
+ D C^RWU
+ K ^BUF($J,"rmt"),^("cnm")
+ Q
+BYVR(DS,DE,MOD,OTX,STK,LP) ; Отчет с распределением по врачам 
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),LP=$G(LP),OTX=$G(OTX)
+ K ^BUF($J,"rmt")
+ D PREPRC
+ N ID,LST,R,RR,MT,M,K,JJ,cPRC,dPRC,SM,MTK
+ S dPRC=$$CORCP^IPRICET(1)
+ D MKAPPRC^IUSLSC(DS,DE,1,"VRPRC^RRMATT","","","",'+$$FR^I())
+ D OWF^RWU(".txt"),WC^RWU("Врач "_$$TXTP^DTUTL(DS,DE)_"|Номенклатура|Расход|Единицы"_$S(MOD:"|Сумма",1:""))
+ S ID="" F  S ID=$O(^BUF($J,"rmt",ID)) Q:ID=""  D
+ .D WC^RWU(CR_$$FIODT^YIKADRY(ID,DE))
+ .S MT="" F  S MT=$O(^BUF($J,"rmt",ID,MT)) Q:MT=""  S R=^(MT) D WC^RWU(CR_"|"_$$NAMENM^IWRHS(MT)_"|"_$$FN3($P(R,"|",1))_"|"_$$MEANNM^IWRHS(MT)_$S(MOD:"|"_$$FN($P(R,"|",2)),1:""))
+ D C^RWU
+ K ^BUF($J,"rmt"),^("cnm")
+ Q
+BYUSL(DS,DE,MOD,STK,LP) ; Расход материалов по услугам	
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),MOD=$G(MOD),LP=$G(LP)
+ K ^BUF($J,"rmt")
+ D PREPRC
+ N ID,LST,R,RR,MT,M,K,JJ,cPRC,dPRC,SM,MTK
+ S dPRC=$$CORCP^IPRICET(1)
+ D MKAPPRC^IUSLSC(DS,DE,1,"ULPRC^RRMATT","","","",'+$$FR^I())
+ D OWF^RWU(".txt"),WC^RWU("Услуги "_$$TXTP^DTUTL(DS,DE)_"|Номенклатура|Расход|Единицы"_$S(MOD:"|Сумма",1:""))
+ S ID="" F  S ID=$O(^BUF($J,"rmt",ID)) Q:ID=""  D
+ .S K=^(ID) ; cur price - не совсем верное объединение усл.
+ .D WC^RWU(CR_$$CNAMEH^IPRICE(ID,K,DE))
+ .S MT="" F  S MT=$O(^BUF($J,"rmt",ID,MT)) Q:MT=""  S R=^(MT) D WC^RWU(CR_"|"_$$NAMENM^IWRHS(MT)_"|"_$$FN3($P(R,"|",1))_"|"_$$MEANNM^IWRHS(MT)_$S(MOD:"|"_$$FN($P(R,"|",2)),1:""))
+ D C^RWU
+ K ^BUF($J,"rmt"),^("cnm")
+ Q
+BYPAC(NIB,DS,DE,MOD,ISL,ISS,NBS,STK,LP) ; Отчет с распределением по отделениям
+ ; ISL - продажа
+ ; ISS - выводить сумму
+ ; NSB - подписано/нет
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),LP=$G(LP),ISL=+$G(ISL)
+ K ^BUF($J,"rmt")
+ 
+ N ID,LST,R,RR,MT,M,K,C,JJ,SM,S1,MTK,KX,VR,OT,DT,@$$NEWVAR^IUSL
+ 
+ I NIB'="" S DT=DS-1 F  S DT=$O(^PNF(NIB,DT)) Q:DT=""!(DT>DE)  D
+ .S KX="" F  S KX=$O(^PNF(NIB,DT,KX)) Q:KX=""  D
+ ..S VR=$P(KX,"|",1),OT=$P(KX,"|",2),ID=$P(KX,"|",3)
+ ..S R=$G(^ZNF(VR,OT,DT,ID,"mt")) Q:R="" 
+ ..I LP'="",$G(^ZNF(VR,OT,DT,ID,"l"))'=LP Q 
+ ..D GET^IUSL(VR,DT,OT,ID)
+ ..I 'NSB Q:STAT="d"!(STAT="w") 
+ ..I NSB Q:STAT'="w" 
+ ..I MOD S MTK=$$GETPLE^IUSL(VR,DT,OT,ID,"mt") Q:STK&(STK'=$P(MTK,",",1))  
+ ..F JJ=1:1:99 S K=$P(R,"|",JJ) Q:K=""  D
+ ...S M=$P(K,"@",1),C=$P(K,"@",2) s:'C C=1
+ ...S S1=$$CENN^IWRHS(M,DT),SM=S1*C
+ ...I ISL Q:'S1   ; TODO
+ ...I MOD S SM=$$mtSUM(MTK,M),S1=SM/C
+ ...S RR=$G(^BUF($J,"rmt",DT,M))
+ ...S $P(RR,"|",1)=$P(RR,"|",1)+C
+ ...S $P(RR,"|",2)=S1
+ ...S $P(RR,"|",3)=$P(RR,"|",3)+SM
+ ...S ^BUF($J,"rmt",DT,M)=RR
+ 
+ D OWF^RWU(".txt")
+ D WC^RWU("Дата|"_$$FIOSH^IPAC(NIB)_$$TXTP^DTUTL(DS,DE)_"|Кол-во|Ед"_$S(ISS:"|Цена|Сумма",1:""))
+ S SM=0
+ S DT="" F  S DT=$O(^BUF($J,"rmt",DT)) Q:DT=""  D
+ .S MT="" F  S MT=$O(^BUF($J,"rmt",DT,MT)) Q:MT=""  D
+ ..S R=^(MT),S1=$P(R,"|",3),SM=SM+S1
+ ..D WC^RWU(CR_$$DT^DTUTL(DT)_"|"_$$NAMENM^IWRHS(MT)_"|"_$$FN3($P(R,"|",1))_"|"_$$MEANNM^IWRHS(MT)_$S(ISS:"|"_$$FN($P(R,"|",2))_"|"_$$FN(S1),1:""))
+ I SM,ISS D WC^RWU(CR_"Итого|||||"_$$FN(SM))
+ D C^RWU
+ K ^BUF($J,"rmt")
+ Q
+ALL(DS,DE,MOD,STK,LP) ; Расход материалов по ЛПУ
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),LP=$G(LP)
+ K ^BUF($J,"rmt")
+ D PREPRC
+ N ID,LST,R,RR,MT,M,K,JJ,cPRC,dPRC,SM,MTK
+ S dPRC=$$CORCP^IPRICET(1)
+ D MKAPPRC^IUSLSC(DS,DE,1,"PRC^RRMATT","","","",'+$$FR^I())
+ D OWF^RWU(".txt"),WC^RWU("Номенклатура "_$$TXTP^DTUTL(DS,DE)_"|Расход|Единицы"_$S(MOD:"|Сумма",1:""))
+ S MT="" F  S MT=$O(^BUF($J,"rmt",MT)) Q:MT=""  S R=^(MT) D WC^RWU(CR_$$NAMENM^IWRHS(MT)_"|"_$$FN3($P(R,"|",1))_"|"_$$MEANNM^IWRHS(MT)_$S(MOD:"|"_$$FN($P(R,"|",2)),1:""))
+ D C^RWU
+ K ^BUF($J,"rmt"),^("cnm")
+ Q
+OTPRC 
+ S TEST=0,cPRC=0
+ I OTX'="",OTD'=OTX Q 
+ S LPU=$G(^ZNF(VR,OTD,DT,ID,"l"))
+ I $G(XLPU)>0,CLPU'=LPU Q 
+ I LP'="",LP'=LPU Q 
+ S R=$G(^ZNF(VR,OTD,DT,ID,"mt"))
+ I MOD,R="" Q 
+ D GETLT^IUSL(VR,DT,OTD,ID)
+ Q:STAT="d"!(STAT="w") 
+ N C
+ G:R="" OTPRC1
+ F JJ=1:1:99 S K=$P(R,"|",JJ) Q:K=""  D
+ .S M=$P(K,"@",1),C=$P(K,"@",2)
+ .I MOD S MTK=$$GETPLE^IUSL(VR,DT,OTD,ID,"mt") Q:STK&(STK'=$P(MTK,",",1))  S SM=$$mtSUM(MTK,M)
+ .S RR=$G(^BUF($J,"rmt",OTD,M))
+ .S $P(RR,"|",1)=$P(RR,"|",1)+$S(C="":1,1:C)
+ .S:MOD $P(RR,"|",2)=$P(RR,"|",2)+SM
+ .S ^(M)=RR
+ Q
+OTPRC1 
+ S U="" F  S U=$O(UL(U)) Q:U=""  D:$D(^BUF($J,"cnm",U))
+ .I +PRC=0 S PRC=+$S(cPRC>0:cPRC,1:$$GET^IINSC($S($G(ISTC):ISTC,1:$$GETTZ^YIPACN(NI,$G(TZRBTN("stc")),DT)),"price",DT)) S:'PRC PRC=dPRC
+ .Q:$$GET^IPRICE(U,"tmat",PRC,DT)>0
+ .S R=$$GET^IPRICE(U,"mat",PRC,DT) Q:R="" 
+ .F ID=1:1:99 S K=$P(R,"|",ID) Q:K=""  S M=$P(K,"@",1),C=$P(K,"@",2),^(M)=$G(^BUF($J,"rmt",OTD,M))+$S(C="":1,1:C)
+ S cPRC=0
+ Q
+VRPRC 
+ S TEST=0,cPRC=0
+ I OTX'="",OTD'=OTX Q 
+ S LPU=$G(^ZNF(VR,OTD,DT,ID,"l"))
+ I $G(XLPU)>0,CLPU'=LPU Q 
+ I LP'="",LP'=LPU Q
+ S R=$G(^ZNF(VR,OTD,DT,ID,"mt"))
+ I MOD,R="" Q 
+ D GETLT^IUSL(VR,DT,OTD,ID)
+ Q:STAT="d"!(STAT="w") 
+ N C
+ G:R="" VPR1
+ F JJ=1:1:99 S K=$P(R,"|",JJ) Q:K=""  D
+ .S M=$P(K,"@",1),C=$P(K,"@",2)
+ .I MOD S MTK=$$GETPLE^IUSL(VR,DT,OTD,ID,"mt") Q:STK&(STK'=$P(MTK,",",1))  S SM=$$mtSUM(MTK,M)
+ .S RR=$G(^BUF($J,"rmt",VR,M))
+ .S $P(RR,"|",1)=$P(RR,"|",1)+$S(C="":1,1:C)
+ .S:MOD $P(RR,"|",2)=$P(RR,"|",2)+SM
+ .S ^(M)=RR
+ Q
+VPR1 
+ S U="" F  S U=$O(UL(U)) Q:U=""  D:$D(^BUF($J,"cnm",U))
+ .I +PRC=0 S PRC=+$S(cPRC>0:cPRC,1:$$GET^IINSC($S($G(ISTC):ISTC,1:$$GETTZ^YIPACN(NI,$G(TZRBTN("stc")),DT)),"price",DT)) S:'PRC PRC=dPRC
+ .Q:$$GET^IPRICE(U,"tmat",PRC,DT)>0
+ .S R=$$GET^IPRICE(U,"mat",PRC,DT) Q:R="" 
+ .F ID=1:1:99 S K=$P(R,"|",ID) Q:K=""  S M=$P(K,"@",1),C=$P(K,"@",2),^(M)=$G(^BUF($J,"rmt",VR,M))+$S(C="":1,1:C)
+ S cPRC=0
+ Q
+ULPRC 
+ S TEST=0,cPRC=0
+ S LPU=$G(^ZNF(VR,OTD,DT,ID,"l"))
+ I $G(XLPU)>0,CLPU'=LPU Q 
+ I LP'="",LP'=LPU Q
+ S R=$G(^ZNF(VR,OTD,DT,ID,"mt"))
+ I MOD,R="" Q 
+ D GETLT^IUSL(VR,DT,OTD,ID)
+ Q:STAT="d"!(STAT="w") 
+ N C
+ G:R="" UPR1
+ I '+PRC,'$D(^BUF($J,"rmt",U)) S PRC=+$S(cPRC>0:cPRC,1:$$GET^IINSC($S($G(ISTC):ISTC,1:$$GETTZ^YIPACN(NI,$G(TZRBTN("stc")),DT)),"price",DT)) S:'PRC PRC=dPRC
+ S U=$O(UL("")) Q:U="" ; только 1-я услуга
+ S:'$D(^BUF($J,"rmt",U)) ^(U)=PRC
+ F JJ=1:1:99 S K=$P(R,"|",JJ) Q:K=""  D
+ .S M=$P(K,"@",1),C=$P(K,"@",2)
+ .I MOD S MTK=$$GETPLE^IUSL(VR,DT,OTD,ID,"mt") Q:STK&(STK'=$P(MTK,",",1))  S SM=$$mtSUM(MTK,M)
+ .S RR=$G(^BUF($J,"rmt",U,M))
+ .S $P(RR,"|",1)=$P(RR,"|",1)+$S(C="":1,1:C)
+ .S:MOD $P(RR,"|",2)=$P(RR,"|",2)+SM
+ .S ^(M)=RR
+ Q
+UPR1 
+ S U="" F  S U=$O(UL(U)) Q:U=""  D:$D(^BUF($J,"cnm",U))
+ .I '+PRC S PRC=+$S(cPRC>0:cPRC,1:$$GET^IINSC($S($G(ISTC):ISTC,1:$$GETTZ^YIPACN(NI,$G(TZRBTN("stc")),DT)),"price",DT)) S:'PRC PRC=dPRC
+ .Q:$$GET^IPRICE(U,"tmat",PRC,DT)>0
+ .S R=$$GET^IPRICE(U,"mat",PRC,DT) Q:R="" 
+ .S:'$D(^BUF($J,"rmt",U)) ^(U)=PRC
+ .F ID=1:1:99 S K=$P(R,"|",ID) Q:K=""  S M=$P(K,"@",1),C=$P(K,"@",2),^(M)=$G(^BUF($J,"rmt",U,M))+$S(C="":1,1:C)
+ S cPRC=0
+ Q
+ 
+PRC 
+ S TEST=0,cPRC=0
+ S LPU=$G(^ZNF(VR,OTD,DT,ID,"l"))
+ I $G(XLPU)>0,CLPU'=LPU Q 
+ I LP'="",LP'=LPU Q
+ S R=$G(^ZNF(VR,OTD,DT,ID,"mt"))
+ I MOD,R="" Q 
+ D GETLT^IUSL(VR,DT,OTD,ID)
+ Q:STAT="d"!(STAT="w") 
+ N C
+ G:R="" PRC1
+ F ID=1:1:99 S K=$P(R,"|",ID) Q:K=""  D
+ .S M=$P(K,"@",1),C=$P(K,"@",2)
+ .I MOD S MTK=$$GETPLE^IUSL(VR,DT,OTD,ID,"mt") Q:STK&(STK'=$P(MTK,",",1))  S SM=$$mtSUM(MTK,M)
+ .S RR=$G(^BUF($J,"rmt",M))
+ .S $P(RR,"|",1)=$P(RR,"|",1)+$S(C="":1,1:C)
+ .S:MOD $P(RR,"|",2)=$P(RR,"|",2)+SM
+ .S ^(M)=RR
+ Q
+PRC1 
+ S U="" F  S U=$O(UL(U)) Q:U=""  D:$D(^BUF($J,"cnm",U))
+ .I +PRC=0 S PRC=+$S(cPRC>0:cPRC,1:$$GET^IINSC($S($G(ISTC):ISTC,1:$$GETTZ^YIPACN(NI,$G(TZRBTN("stc")),DT)),"price",DT)) S:'PRC PRC=dPRC
+ .Q:$$GET^IPRICE(U,"tmat",PRC,DT)>0 
+ .S R=$$GET^IPRICE(U,"mat",PRC,DT) Q:R="" 
+ .F ID=1:1:99 S K=$P(R,"|",ID) Q:K=""  S M=$P(K,"@",1),C=$P(K,"@",2),^(M)=$G(^BUF($J,"rmt",M))+$S(C="":1,1:C)
+ S cPRC=0
+ Q
+PREPRC ; индекс для ускорения
+ K ^BUF($J,"cnm")
+ N C,TP
+ S C="" F  S C=$O(^CN(C)) Q:C=""  S TP="" F  S TP=$O(^CN(C,TP)) Q:TP=""  I $D(^(TP,"mat")) S:'$D(^BUF($J,"cnm",C)) ^(C)=""
+ Q
+mtSUM(K,MT) ; Фактическая стоимость списания
+ ; K - ключ списания на складе
+ ; MT - перечень материалов
+ Q:K="" 0
+ N I,X,S
+ S S=0,MT=$G(MT)
+ F I=1:1:99 S X=$P(K,"|",I) Q:X=""  I $S(MT="":1,1:MT=$P(X,",",2)) S S=S+$$GET^IWRH($P(X,",",1),$P(X,",",2),$P(X,",",3,4),"sum")
+ Q S
+FN(X) 
+ Q $TR(+$J(X,"",2),".",",")
+FN3(X) 
+ Q $TR(+$J(X,"",3),".",",")
+REGIPROC 
+ N D,M,F,X,OX,ST
+ S D="Отчеты ЛПУ",M="Материалы",F=$$FR^I()
+ S X=",d,Период с,d,Период по,t@string:0/по нормам и списаниям#1/по фактическому списанию,Учет расхода"
+ S OX=",te@storage:otd@1,Отделение"
+ S ST=",t@net:STKLSTA_NWRHS(),Склад"
+ S ^IPROC(D,M,"Расход материалов по отделению")="BYOTD_RRMATT,1,"_$S(F:6,1:5)_X_OX_ST_$S(F:",t@storage:lpu,Филиал",1:"")
+ S ^IPROC(D,M,"Расход материалов по врачу")="BYVR_RRMATT,1,"_$S(F:6,1:5)_X_OX_ST_$S(F:",t@storage:lpu,Филиал",1:"")
+ S ^IPROC(D,M,"Расход материалов по услугам")="BYUSL_RRMATT,1,"_$S(F:5,1:4)_X_ST_$S(F:",t@storage:lpu,Филиал",1:"")
+ S ^IPROC(D,M,"Расход материалов по пациенту")="BYPAC_RRMATT,1,"_$S(F:9,1:9)_",e@pac,№ и.б. пациента"_X_",t@string:0/Нет#1/Да,Продажа материалов,t@string:1/Да#0/Нет,Отображать цену,t@string:0/Нет#1/Да,По неподписанным услугам"_ST_$S(F:",t@storage:lpu,Филиал",1:"")
+ S ^IPROC(D,M,"Расход материалов")="ALL_RRMATT,1,"_$S(F:5,1:4)_X_ST_$S(F:",t@storage:lpu,Филиал",1:"")
+ Q

@@ -1,0 +1,1292 @@
+NPROF ; Профвредность [ 11/28/2023  1:36 AM ]
+FPROF(STR) ; Поиск
+ N I,R,X
+ S STR=$$LU^TXTU($$WD^TXTU(STR)),I=""
+ D OWF^RWU(".txt")
+ I STR'="" F  S I=$O(^PROFF(I)) Q:I=""  S R=$P(^(I),"|",1) D:$$LU^TXTU(R)[STR WC^RWU(CR_I_"|"_R)
+ I STR="" S X=0 F  S I=$O(^PROFF(I)) Q:I=""!(X>500)  S X=X+1 D WC^RWU(CR_I_"|"_$P(^(I),"|",1))
+ D C^RWU
+ Q
+S ; Save
+ N @$$NEWVAR^YIXMLRR()
+ D RBUFH^YIXMLRR(1)
+ D W
+ Q
+W ; Write
+ N X,R,NB,PL,NI,DT
+ S NB="nb_console",X="profcard",NI=$G(XML(NB,X,"pid")) Q:NI="" 
+ Q:$$LCL^IUSER("prof","save")=0 
+ S R=$G(XML(NB,X,"dtvreg")) K XML(NB,X,"pid")
+ S:R'="" XML(NB,X,"dtvreg")=$S($L(R)<6:"",1:$$DI^DTUTL(R))
+ S DT=$$DIH^DTUTL($G(XML(NB,X,"sd"))) K XML(NB,X,"sd") 
+ F PL="nation","pcity","pdom","pkorp","pkvart","pregion","pstreet","vcity","vdom","vkorp","vkvart","vregion","vstreet","dtvreg","mnf","mni","mno" D SET^IPAC(NI,PL,DT,$G(XML(NB,X,PL)),0)
+ F PL="vf","vf29","vfcodes" K XML(NB,X,PL)
+ S PL="" F  S PL=$O(XML(NB,X,PL)) Q:PL=""  S R=XML(NB,X,PL) D SET(NI,PL,DT,$S(PL="staj"!(PL="stajv"):$$DI^DTUTL(R),1:R))
+ D updlmk(DT)
+ D UPD^IEXCH("IRPAC",NI)
+ D GL^IEXCH("^PROFP",NI)
+ Q
+L(NI,HH) ; Load
+ Q:NI="" 
+ N PL,R,P,V1,V2,L,U,S,M,SBS,VC,K,X,CAB
+ S HH=$G(HH),HH=$S(HH="":$$LAST^IPROF(NI),1:$$DIH^DTUTL(HH))
+ S:HH="" HH=+$H
+ S SBS=0
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<profcard>")
+ D WTAGC^RWU("pid",NI)
+ D WTAGC^RWU("pfio",NI_" "_$$FIO^IPAC(NI))
+ D WTAGC^RWU("prof",$$GETE^IPAC(NI,"prof",HH))
+ D WTAGC^RWU("workn",$$GETE^IPAC(NI,"work",HH))
+ D WTAGC^RWU("datar",$$GETE^IPAC(NI,"datar",HH))
+ D WTAGC^RWU("address",$$ADR^YIPACN(NI,HH))
+ 
+ S PL="" F  S PL=$O(^PROFP(NI,PL)) Q:PL=""  D
+ .S R=$S(PL="ptp":$G(^PROFP(NI,PL,HH)),1:$$GET(NI,PL,HH))
+ .S:PL="staj"!(PL="stajv") R=$$DT^DTUTL(R)
+ .S:PL="sbs" R=$P(R,"|",1),SBS=+R
+ .D WTAGDC^RWU(PL,R)
+ D WTAGD^RWU("sd",$$DT^DTUTL(HH))
+ D WTAGD^RWU("dtvreg",$$DT^DTUTL($$GET(NI,"dtvreg",HH)))
+ F PL="nation","pcity","pdom","pkorp","pkvart","pregion","pstreet","vcity","vdom","vkorp","vkvart","vregion","vstreet","mnf","mni","mno" S R=$$GET^IPAC(NI,PL,HH) D:R'="" WTAGDC^RWU(PL,R)
+ S P=$$GET^IPAC(NI,"profid",HH),V1=""
+ ; TODO - move to 'set' genarator
+ ;F  S V1=$O(^PROFV("p",P,V1)) Q:V1=""  D
+ ;.S V2="",L(1,V1)="" F  S V2=$O(^PROFV("p",P,V1,V2)) Q:V2=""  D
+ ;..S U="" F  S U=$O(^PROFV("p",P,V1,V2,U)) Q:U=""  S L(2,U)="" ;$G(^(U))
+ 
+ S R=$O(^PROFP(NI,"vf",HH+1),-1)
+ I R'="" K L(1) M L(1)=^PROFP(NI,"vf",R) ; если фиксир. задано
+ ; TODO 29
+ D W^RWU("<vf>")
+ S (V1,U,VC)="" F  S V1=$O(L(1,V1)) Q:V1=""  D
+ .S X=$G(^PROFV("v302",V1))
+ .S K=$P(X,"|",3),X=$P(X,"|",2) S:K="" K=V1
+ .D WC^RWU(U_$$TAG^TXTU(K_" "_X_"|"_V1))
+ .S U=CR,VC=$S(VC="":"",1:VC_"|")_V1
+ .;S U="" F  S U=$O(^PROFV("v302",V1,U)) Q:U=""  S L(2,^(U))=""
+ D W^RWU("</vf>")
+ D WTAG^RWU("vfcodes",VC)
+ D W^RWU("<nzn>")
+ S R=$O(^PROFP(NI,"n",HH+1),-1),S=0
+ I R'="" K L S U="" F  S U=$O(^PROFP(NI,"n",R,U)) Q:U=""  D
+ .S M=$G(^(U)),V1=$G(^PROFV("tp302",U)),V1=$S(V1="p":1,1:2)
+ .S L(2,V1_"|"_U)=$S($P(M,"|",6)'="":1,$P(M,"|",7)'="":2,1:"")
+ S P=+$$GET(NI,"prc",R),DG=$$GET^IPAC(NI,"stc",R)
+ I 'P S P=+$$GET^IINSC(DG,"pprice",R)
+ I 'P S P=+$$GET^IINSC(DG,"price",R)
+ S P=$$CORCP^IPRICET(P)
+ S V1="" F  S V1=$O(L(2,V1)) Q:V1=""  D
+ .S U=$P(V1,"|",2)
+ .S M=$$PRICEH^IPRICE(U,P,R)
+ .D WC^RWU(CR_$$TAG^TXTU(U_"|"_$$NAMEH^IPRICE(U,P,R)_"|"_$G(^PROFP(NI,"n",R,U,"c"))_"|"_M_"|"_$S(L(2,V1)=1:"*",L(2,V1)=2:"+",1:"")))
+ .S S=S+M
+ S M=$$NOW^IBILL(NI)
+ D WC^RWU("</nzn><summ data="""_S_" руб."" userdata="""_S_""" color="""_$S(M>0:"yellow",1:"white")_"""/>")
+ D W^RWU("<sbs_btn visible="""_$S(SBS:"no",1:"yes")_"""/>")
+ D W^RWU("</profcard></nb_console>"),C^RWU
+ Q
+SET(N,PL,DT,R,UPD,TODO) 
+ ; UPD - обновлять данные
+ S:DT="" DT=$H N DTP
+ I PL="uslpat" D SETup Q
+ I PL="vflist" D SETvf("") Q  ; SETvfu
+ I PL="vflist29" D SETvf(29) Q
+ I PL="vflist90" D SETvf(90) Q
+ I PL="pat" D SETpat(N,DT,R) Q  ; TODO - w.log. and update
+ ;I PL="lmk" D SETlmk(N,DT,R) Q
+ S DTP=$O(^PROFP(N,PL,DT),-1),PR=""
+ S:DTP'="" PR=^(DTP)
+ I $D(^(DT)) I R'=$G(^(DT)) D KD^ISSG("^PROFP("""_N_""","""_PL_""","_DT_")") K ^PROFP(N,PL,DT)
+ S:PR'=R ^(DT)=R
+ S DTP=$O(^(DT)) I DTP'="" K:R=^(DTP) ^(DTP)
+ D:$G(UPD) GL^IEXCH("^PROFP",NI)
+ Q
+GET(N,PL,DT) 
+ I '$D(DT) S DT=$H
+ S:DT="" DT=$H
+ S DT=$O(^PROFP(N,PL,DT+1),-1) Q:DT="" "" Q $G(^(DT))
+DEL(KEY) ; Удалить осмотр 
+ N NI,DT
+ S NI=$P(KEY,"@",1),DT=$$DI^DTUTL($P(KEY,"@",2))
+ Q:$$LCL^IUSER("prof","del")=0 
+ D DEL^IPROFVR(NI,DT)
+ Q
+CHKVF(VF) 
+ Q
+ADDVF(N,HH,VF,MOD) ; Добавить фактор
+ N I,R,UU,U,AA,CAB
+ S VF=$TR(VF,",;/ ","|||") Q:VF=""
+ S HH=$$DIH^DTUTL(HH)
+ 
+ S UU="" F  S UU=$O(AA(UU)) Q:UU=""  D 
+ .S U=AA(UU)
+ .I '$D(^PROFP(N,"n",HH,U)) S ^(U)=1
+ .S T=$G(^PROFV("i302",UU,"t"))
+ .S ^PROFP(N,"n",HH,U,"t")=T ; type
+ .S CAB=$G(^PROFV("i302",UU,"cab")) Q:CAB="" 
+ .I '$D(^PROFP(N,"n",HH,U,"c")) S ^("c")=CAB
+ 
+ F I=1:1:$L(VF,"|") S R=$P(VF,"|",I) D:R'=""
+ .Q:'$D(^PROFV("v302",R))
+ .S ^PROFP(N,"vf",HH,R)=""
+ .S UU="" F  S UU=$O(^PROFV("v302",R,UU)) Q:UU=""  S U=$P(^(UU),"|",1) I U'="",$D(^CN(U)),'$D(^PROFP(N,"n",HH,U)) S ^(U)=1
+ ;D VFlist(N,HH)
+ D:'$G(MOD) L(N,$$DT^DTUTL(HH))
+ D:$G(MOD) UPDFV(N,$$DT^DTUTL(HH))
+ Q
+UPDFV(NI,HH) ; Обновить список
+ S HH=$$DI^DTUTL(HH)
+ N R,L,V1,U,VC,P,DT,K,X,M,LLU,T,CAB
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<profcard>")
+ S R=$O(^PROFP(NI,"vf",HH+1),-1),DT=R,(V1,U,VC)=""
+ I R'="" K L(1) M L(1)=^PROFP(NI,"vf",R)
+ D W^RWU("<vf>")
+ F  S V1=$O(L(1,V1)) Q:V1=""  D
+ .S X=$G(^PROFV("v302",V1)),K=$P(X,"|",3),X=$P(X,"|",2)
+ .S:K="" K=V1
+ .D WC^RWU(U_$$TAG^TXTU(K_" "_X_"|"_V1))
+ .S U=CR S VC=$S(VC="":"",1:VC_"|")_V1
+ D W^RWU("</vf>")
+ D WTAG^RWU("vfcodes",VC)
+ 
+ S P=$$PRC^IPROF(NI,"",HH)
+ D W^RWU("<nzn>")
+ S U="" F  S U=$O(^PROFP(NI,"n",HH,U)) Q:U=""  D  
+ .S K=^(U),T=$G(^(U,"t")),T=$S(T="p":1,T="l":2,1:1)
+ .S M=$$PRICEH^IPRICE(U,P,HH)
+ .S CAB=$G(^PROFP(NI,"n",DT,U,"c"))
+ .S LLU(T_"|"_CAB_"|"_U)=U_"|"_M_"|"_CAB 
+ 
+ S K="" F  S K=$O(LLU(K)) Q:K=""  D  
+ .S T=LLU(K),U=$P(K,"|",3)
+ .D WC^RWU(CR_$$TAG^TXTU(U_"|"_$$NAMEH^IPRICE(U,P,HH)_"|"_$P(T,"|",3)_"|"_$P(T,"|",2)_"|"))
+ D W^RWU("</nzn>")
+ D W^RWU("</profcard></nb_console>"),C^RWU
+ Q
+KSSU(X1,X2,X3,X4) ; !ADD - TODO
+ Q
+nzn(NI,HH,CCR,FLGX,NWW) ; 
+ ; NWW- без вывода
+ N P,U,K,M,CAB,LLU,T,C,S
+ S CCR=$G(CCR),C=$S(CCR:"",1:CR),FLGX=$G(FLGX),S=0
+ S P=$$PRC^IPROF(NI,"",HH)
+ S U="" F  S U=$O(^PROFP(NI,"n",HH,U)) Q:U=""  D
+ .S K=^(U),T=$G(^(U,"t")),T=$S(T="p":1,T="l":2,1:1)
+ .I FLGX'="" S M=$G(^("flg")) I M'="",M'[FLGX Q  
+ .S M=$G(^("s"))
+ .S:M="" M=$$PRICEH^IPRICE(U,P,HH)
+ .S S=S+M
+ .S CAB=$G(^PROFP(NI,"n",DT,U,"c"))
+ .S LLU(T_"|"_CAB_"|"_U)=U_"|"_M_"|"_CAB_"|"_P
+ I $G(NWW) M LUUX=LUU Q 
+ S K="" F  S K=$O(LLU(K)) Q:K=""  D
+ .S T=LLU(K),U=$P(K,"|",3)
+ .D WC^RWU(C_$$TAG^TXTU(U_"|"_$$NAMEH^IPRICE(U,P,HH)_"|"_$P(T,"|",3)_"|"_$P(T,"|",2)_"|"))
+ .S C=CR
+ Q S
+DELVF(N,HH,VF) ; Удалить фактор
+ Q:VF="" 
+ S HH=$$DIH^DTUTL(HH)
+ K ^PROFP(N,"vf",HH,VF)
+ K ^PROFP(N,"vf29",HH,VF)
+ ; TODO - refresh "n" !!!
+ ;D VFlist(N,HH)
+ D L(N,$$DT^DTUTL(HH))
+ Q
+VFlist(NI,HH) 
+ N I,R,X
+ S (I,R)="" F  S I=$O(^PROFP(N,"vf",HH,I)) Q:I=""  D
+ .S X=$P($G(^PROFV("v302",I)),"|",2) Q:X="" 
+ .S R=$S(R="":"",1:R_CR)_I_" "_X_"|"_I
+ S I="" F  S I=$O(^PROFP(N,"vf29",HH,I)) Q:I=""  D
+ .S X=$P($G(^PROFV("v29",I)),"|",2) Q:X="" 
+ .S R=$S(R="":"",1:R_CR)_I_" "_X_"|"_I
+ D MSG^RWU(R)
+ Q
+SBS(N,HH) ; Подпись карты
+ Q:N="" 
+ S HH=$$DIH^DTUTL(HH)
+ N UUN,UUL,U,X,P,DG,CL,LST,FL,PRM,PAC
+ S P=+$$GET(N,"prc",HH),DG=$$GET^IPAC(N,"stc",HH)
+ I 'P S P=+$$GET^IINSC(DG,"pprice",HH)
+ I 'P S P=+$$GET^IINSC(DG,"price",HH)
+ S P=$$CORCP^IPRICET(P)
+ S U="" F  S U=$O(^PROFP(N,"n",HH,U)) Q:U=""  D
+ .S X=^(U) Q:$P(X,"|",6)'=""  Q:$P(X,"|",7)'="" 
+ .S CL=$$GET^IPRICE(U,"cls",P,HH)
+ .I CL["lab" S UUL(U)=1
+ .I CL'["lab" S UUN(U)=1 
+ .S $P(^PROFP(N,"n",HH,U),"|",8)=1 ; OK TODO
+ I $D(UUL),$G(^PROFP(N,"li",HH))="" S PAC("nib")=N M PRM=UUL D INZ^IKDLIMP S X=$G(FL("id")) S:X'="" ^PROFP(N,"li",HH)=X ; лаборатория
+ I $D(UUN),$G(^PROFP(N,"naz",HH))="" M LST=UUN S X=$$FARR^NNAZN(N,"","","") S:X'="" ^PROFP(N,"naz",HH)=X ; назначения
+ D L(N,$$DT^DTUTL(HH))
+ Q
+SETup ; присвоить шаблон
+ N P,X,C
+ S R=$$DBLSP^TXTU($$LU^TXTU(R))
+ S P="" F  S P=$O(^PROFM("pat",P)) Q:P=""  S X=$$DBLSP^TXTU($$LU^TXTU($P(^(P),"|",1))) Q:X=R 
+ Q:P="" 
+ ; todo - count
+ S X="",C=0
+ F  S X=$O(^PROFM("pat",P,X)) Q:X=""  S ^PROFP(N,"n",DT,X)="1|",C=C+1 M ^PROFP(N,"n",DT,X,"c")=^PROFM("pat",P,X,1)
+ S:C ^PROFP(N,"n",DT)=C
+ D GL^IEXCH("^PROFP",N,"n",DT)
+ Q
+SETvf(v) 
+ N F,E,X
+ F  S F=$F(R,"("),E=$F(R,")") Q:F=0!(E=0)!(E<F)  S $E(R,F-1,E-1)=""
+ S R=$$LU^TXTU(R),R=$TR(R,%cLU,"") ; без букв
+ S R=$TR(R,",;\/:-()№'""","           "),R=$$DBLSP^TXTU(R)
+ S E=""
+ F F=1:1:99 S X=$P(R," ",F) Q:X=""  D:X'="."
+ .S:$F(X,".")=2 $E(X,1)=""  ; в начале '.'
+ .I X["." Q:$P(X,".",1)>9  ; S:$E(X,$L(X))'="." X=X_"." ; в конце не '.'- наоборот сделать !
+ .;I X?1.N Q:X>99  S X=X_".-2"  ; в прил. 2 3-х значных нет TODO
+ .S ^PROFP(N,"vf"_v,DT,X)=""
+ D REGL^IEXCH("^PROFP",N,"vf"_v,DT)
+ Q
+SETvfu ; 
+ N F,E,X,VF
+ I $G(CLR) K ^PROFP(N,"vf",$$DT^DTUTL(DT))
+ F  S F=$F(R,"("),E=$F(R,")") Q:F=0!(E=0)!(E<F)  S $E(R,F-1,E-1)=""
+ S R=$$LU^TXTU(R),R=$TR(R,%cLU,"") ; без букв
+ S R=$TR(R,",;\/:-()№'""","    "),R=$$DBLSP^TXTU(R)
+ S E="",VF=""
+ F F=1:1:99 S X=$P(R," ",F) Q:X=""  D:X'="."
+ .S:$F(X,".")=2 $E(X,1)=""  ; в начале '.'
+ .I X["." Q:$P(X,".",1)>9  
+ .S VF=$S(VF="":"",1:VF_"|")_X
+ D ADDVF(N,$$DT^DTUTL(DT),VF,2)
+ Q
+ADDU(N,U,CNT,STAT,CAB,DT) ; Добавить услугу в перечень назначаемых
+ Q:N=""!(U="")  ;Q:'$D(^PROFP(N)) 
+ S DT=$$DIH^DTUTL($G(DT)),CAB=$$WD^TXTU(CAB)
+ S ^PROFP(N,"n",DT,U)=+$G(CNT,1)_"|"_$G(STAT)
+ S:$G(CAB)'="" ^(U,"c")=CAB
+ D:$$GET(N,"dto",DT)="" SET(N,"dto",+$H,$H+60)
+ N R,L,P,C,DG
+ADDUs N E,X,M
+ S P=+$$GET(N,"prc",DT),DG=$$GET^IPAC(N,"stc",DT)
+ I 'P S P=+$$GET^IINSC(DG,"pprice",DT)
+ I 'P S P=+$$GET^IINSC(DG,"price",DT)
+ S P=$$CORCP^IPRICET(P)
+ D OWF^RWU(".txt")
+ S R=$O(^PROFP(N,"n",DT+1),-1),C=0
+ S U="" F  S U=$O(^PROFP(N,"n",R,U)) Q:U=""  D
+ .S X=^(U),E=$S($P(X,"|",6)'="":"*",$P(X,"|",7)'="":"+",1:"")
+ .S M=$$PRICEH^IPRICE(U,P,R)
+ .D WC^RWU(CR_U_"|"_$$NAME^IPRICE(U,P)_"|"_$G(^PROFP(N,"n",R,U,"c"))_"|"_M_"|"_E)
+ .S C=C+1
+ S:R'="" ^PROFP(N,"n",R)=C
+ D C^RWU
+ D GL^IEXCH("^PROFP",N,"n")
+ Q
+ADDUC(N,U,CAB,DT) ; Присвоить кабинет
+ Q:N=""!(U="")  Q:'$D(^PROFP(N)) 
+ S DT=$$DIH^DTUTL($G(DT))
+ S ^PROFP(N,"n",DT,U,"c")=$$WD^TXTU(CAB)
+ D GL^IEXCH(N,"n",DT,U,"c")
+ Q
+ADDUS(N,U,VAL,DT) ; Сумма услуги
+ Q:N=""!(U="")  Q:'$D(^PROFP(N)) 
+ S DT=$$DIH^DTUTL($G(DT))
+ S VAL=$$NNUM^TXTU(VAL)
+ K:VAL="" ^PROFP(N,"n",DT,U,"s")
+ S:VAL'="" ^PROFP(N,"n",DT,U,"s")=VAL
+ D REGL^IEXCH(N,"n",DT,U,"s")
+ Q
+ADDUL ; Добавить услуги из отмеченного списка
+ N %J,A,N,R,L,P,C,DT
+ S N="",DT=+$H
+ D ORH^RWU
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  D:%J'=2
+ .I %J=1 S N=$$TRIM^TXTU($P(A,"|",1)),DT=$$DIH^DTUTL($P(A,"|",2)) Q 
+ .S C=$P(A,"|",1) Q:$P(A,"|",2)=""  Q:N=""  Q:C="" 
+ .S ^PROFP(N,"n",DT,C)="1|"
+ .S R=$P(A,"|",4) S:R'="" ^(C,"c")=R
+ D CR^RWU
+ D:$$GET(N,"dto",DT)="" SET(N,"dto",DT,DT+60)
+ D GL^IEXCH("^PROFP",N,"n",DT)
+ Q:N=""  
+ S DG=$$GET^IPAC(N,"stc",DT)
+ G ADDUs
+DELU(N,U,DT) 
+ Q:N=""!(U="") 
+ N R,L,P,C
+ S DT=$$DIH^DTUTL($G(DT)),U=$$WD^TXTU(U)
+ S DG=$$GET^IPAC(N,"stc",DT)
+ S DT=$O(^PROFP(N,"n",DT+1),-1) G:DT="" ADDUs
+ G:'$D(^(DT,U)) ADDUs
+ S P=$P(^(U),"|",3,6)
+ I P="" K ^(U) D GL^IEXCH("^PROFP",N,"n",DT,U)
+ S R="",P=0 F  S R=$O(^PROFP(N,"n",DT,R)) Q:R=""  S P=P+1
+ I P S ^PROFP(N,"n",DT)=P D GL^IEXCH("^PROFP",N,"n",DT)
+ I 'P K ^PROFP(N,"n",DT) D GL^IEXCH("^PROFP",N,"n",DT)
+ G ADDUs
+EXTU(N,U,DT,VAL) 
+ S DT=$$DIH^DTUTL($G(DT)),U=$$WD^TXTU(U)
+ S DG=$$GET^IPAC(N,"stc",DT)
+ S DT=$O(^PROFP(N,"n",DT+1),-1) G:DT="" ADDUs
+ S VAL=$S(VAL="":1,1:"")
+ S $P(^PROFP(N,"n",DT,U),"|",7)=VAL
+ G ADDUs
+CEL(NIB) ; Прейскурант
+ N P ;,U,R
+ S P=+$$GET(NI,"prc",+$H)
+ S:'P P=+$$GET^IINSC($$GET^IPAC(NIB,"stc"),"pprice",+$H) S:P=0 P=1
+ D L^YNPRICE(P,9999,"",$$DT^DTUTL(+$H),1)
+ ;D OWF^RWU(".txt")
+ ;D WC^RWU("Код|Наименование")
+ ;S U="" F  S U=$O(^CN(U)) Q:U=""  D:$D(^(U,P))
+ ;.D WC^RWU(CR_U_"|"_$$NAME^IPRICE(U,P))
+ ;D C^RWU
+ Q
+cel1(NIB,PRC,TXT) ; Прейскурант
+ ; NIB - номер и.б.
+ ; PRC - прейскурант
+ ; TXT - текстовый фильтр
+ N U,R,NM
+ D OWF^RWU(".txt")
+ S U="" F  S U=$O(^CN(U)) Q:U=""  D:$D(^(U,PRC))
+ .Q:'$$CHECK^IPRICE(U,PRC) 
+ .S NM=$$NAME^IPRICE(U,PRC)
+ .I TXT'="",$$UL^TXTU(NM)'[TXT Q 
+ .D WC^RWU(CR_U_"||"_NM)
+ D C^RWU
+ Q
+celPRF(NIB,PRC,TXT) ; Прейскурант по профвредности (302-й приказ)
+ N P,V1,V2,L,R,U,NM
+ S P=$$GET^IPAC(NIB,"profid",+$H),V1=""
+ F  S V1=$O(^PROFV("p",P,V1)) Q:V1=""  D
+ .S V2="",L(1,V1)="" F  S V2=$O(^PROFV("p",P,V1,V2)) Q:V2=""  D
+ ..S U="" F  S U=$O(^PROFV("p",P,V1,V2,U)) Q:U=""  S L(2,U)=$G(^(U))
+ S R=$O(^PROFP(NIB,"vf90",$H+1),-1)
+ ; если фиксир. задано -
+ I R'="" K L S V1="" F  S V1=$O(^PROFP(NIB,"vf90",R,V1)) Q:V1=""  D
+ .S V2="" F  S V2=$O(^PROFV("v302",V1,V2)) Q:V2=""  D
+ ..S U=$G(^(V2)) Q:U=""  S L(2,U)=""
+ D OWF^RWU(".txt")
+ S U="" F  S U=$O(L(2,U)) Q:U=""  D:$$CHECK^IPRICE(U,PRC)
+ .S NM=$$NAME^IPRICE(U,PRC)
+ .I TXT'="",$$UL^TXTU(NM)'[TXT Q 
+ .D WC^RWU(CR_U_"|+|"_NM)
+ D C^RWU
+ Q
+celPRG(NIB,PRC,TXT) ; Прейскурант
+ ; NIB - № и.б.
+ ; PRC - прейскурант
+ ; TXT - фильтр по слову
+ N U,R,PRG,NM
+ S PRG=$$GET^IPAC(NIB,"prog",+$H)
+ D OWF^RWU(".txt")
+ S U="" F  S U=$O(^CN(U)) Q:U=""  D:$D(^(U,PRC))
+ .Q:'$$CHECK^IPRICE(U,PRC) 
+ .Q:$$CHKUA^YMPRP(PRG,+$H,U)'>0 
+ .S NM=$$NAME^IPRICE(U,PRC)
+ .I TXT'="",$$UL^TXTU(NM)'[TXT Q 
+ .D WC^RWU(CR_U_"||"_NM)
+ D C^RWU
+ Q
+CELED(NIB,TN,OTD,SCP) ; Вывод прейскуранта для YNED
+ N DT
+ S DT=$O(^PROFP(NIB,"n",+$H+1),-1) Q:DT=""
+ N X S X=$$GET(NIB,"dto",+$H) I X'="" Q:X<+$H  ; дата осмотра до
+ N PRC,COD,RT
+ S X=$$GET^IPAC(NIB,"stc"),PRC=$$GET^IINSC(X,"pprice",+$H)
+ S:PRC="" PRC=+$$GET^IINSC(X,"price",+$H) S:'PRC PRC=1
+ S COD="" F  S COD=$O(^PROFP(NIB,"n",DT,COD)) Q:COD=""  D
+ .Q:$D(PRI(COD_"."_PRC)) 
+ .S X=$G(^(COD)) Q:$P(X,"|",3,6)'=""  S X=$P(X,"|",2)
+ .Q:'$$CHECK^IPRICE(COD,PRC)  
+ .S RT=$$GET^IPRICE(COD,"rating",PRC,HH) S:RT'="" RT=9-RT S RT=RT_":"
+ .S RT="-"_RT_$E("00000000",1,8-$L(COD))_COD,PRI(COD_"."_PRC)=""
+ .S PRL(RT)=COD_"|"_PRC_"|4|@"_PRC_"@prf@@EXUS^NPROF("_X_")"
+ Q
+CHKU(NIB,TN,OTD,SCP,USL) 
+ Q:USL="" ""
+ N DT S DT=$O(^PROFP(NIB,"n",+$H+1),-1) Q:DT="" ""
+ N X S X=$G(^(DT,USL)) Q:'+$P(X,"|",1) "" Q:$P(X,"|",3,6)'="" ""
+ N C S C=$P(X,"|",1),X=$$GET(NIB,"dto",+$H) I X'="" Q:X<+$H ""
+ N PRC S X=$$GET^IPAC(NIB,"stc"),PRC=$$GET^IINSC(X,"pprice",+$H)
+ Q:'$$CHECK^IPRICE(USL,PRC) ""
+ Q "@"_PRC_"@prf@@EXUS^NPROF("_C_")"
+EXUS(DOP) ; Внутренняя процедура, вызов при подписи услуги
+ N U,D,C,R
+ S D=$O(^PROFP(NIB,"n",DT+1),-1) Q:D=""
+ S U="" F  S U=$O(UL(U)) Q:U=""  D
+ .Q:'$D(^PROFP(NIB,"n",D,U))  S R=$G(^(U)) Q:$P(R,"|",2)'="" 
+ .Q:($G(UL(U))-R)<0  ; todo - если 2 усл. в разных записях
+ .S $P(R,"|",3)=VR_"|"_OT_"|"_DT_"|"_ID,^PROFP(NIB,"n",D,U)=R
+ .D UGL^IEXCH("^PROFP("_NIB_",""n"","_D_","_U_")")
+ .Q:+$G(DOP)  S C=+$G(^PROFP(NIB,"n",D)) Q:'C 
+ .S R=+$$GET(NIB,"cen",DT)/C S:R'=0 ^ZNF(VR,OT,DT,ID,"s")=R
+ ; todo - id DOP - set another flag
+ Q
+DTLST(NIB) ; Даты изменений услуг
+ Q:NIB="" 
+ N LL,X,FL,A
+ F FL="vf","vf29","ptp","lmk","n" S X="" F  S X=$O(^PROFP(NIB,FL,X)) Q:X=""  S LL(X)=""
+ S (A,X)=""
+ F  S X=$O(LL(X)) Q:X=""  S A=$S(A="":"",1:A_CR)_$$DT^DTUTL(X)
+ D MSG^RWU(A)
+ Q
+PATLSTA 
+ D OWF^RWU(".txt")
+ D WC^RWU(CR_"price|По прейскуранту")
+ D WC^RWU(CR_"prg|По программе")
+ D WC^RWU(CR_"p90|По приказу №302Н")
+ D WC^RWU(CR_"p29|По приказу №29")
+ G PATLSTs
+PATLST ; Список шаблонов
+ D OWF^RWU(".txt")
+PATLSTs N ID,R
+ S ID="" F  S ID=$O(^PROFM("pat",ID)) Q:ID=""  S R=^(ID) D:'$P(R,"|",4) WC^RWU(CR_ID_"|"_$P(R,"|",1))
+ D C^RWU
+ Q
+PATLSTF(TXT) ; Поиск по всем с текстом
+ N ID,R,A
+ S TXT=$$UL^TXTU($G(TXT))
+ S (A,ID)="" F  S ID=$O(^PROFM("pat",ID)) Q:ID=""  D
+ .S R=$P(^(ID),"|",1)
+ .I TXT'="",$$UL^TXTU(R)'[TXT Q  
+ .S A=$S(A="":"",1:A_CR)_ID_"|"_$P(R,"|",1)
+ D MSG^RWU(A)
+ Q
+PATADD(NM) ; Добавить шаблон
+ Q:NM=""  
+ N ID S NM=$$WD^TXTU(NM)
+ L ^PROFM("pat")
+ S ID=$O(^PROFM("pat",""),-1)+1,^(ID)=NM
+ L -^PROFM("pat")
+ D GL^IEXCH("^PROFM","pat",ID)
+ D MSG^RWU(ID)
+ Q
+PATDEL(ID) ; Удалить шаблон
+ I ID="" D MSG^RWU("ERR") Q 
+ D K^ISSG("^PROFM(""pat"","_ID_")")
+ K ^PROFM("pat",ID)
+ D KGL^IEXCH("^PROFM"",pat",ID)
+ D MSG^RWU("OK")
+ Q
+PATUSL(ID) ; Услуги по шаблону
+ Q:ID=""  
+ N U,P,L
+ S P=$P($G(^PROFM("pat",ID)),"|",2),L=+$$^I("ilpu")
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<tprofpat>")
+ D WTAGDC^RWU("prg",P)
+ S P=$$GET^YMPRP(P,"price",+$H) S:+P=0 P=1
+ D W^RWU("<usl>")
+ S U="" F  S U=$O(^PROFM("pat",ID,U)) Q:U=""  D WC^RWU(CR_U_"|"_$$NAME^IPRICE(U,P)_"|"_$G(^PROFM("pat",ID,U,L))_"|"_$P($G(^PROFM("pat",ID,U)),"|",4))
+ D W^RWU("</usl></tprofpat></nb_console>"),C^RWU
+ Q
+PATULST(PRG) ; Список по программе
+ S PRG=$$WD^TXTU(PRG)
+ N P S P=$$GET^YMPRP(PRG,"price",+$H) S:+P=0 P=1
+ D L^YNPRICE(P,9999,"",$$DT^DTUTL(+$H),1)
+ Q
+PATAUSL(ID,PRG,USL,CAB) ; Добавить услугу
+ I ID=""!(USL="") D MSG^RWU("ERR") Q 
+ N A S PRG=$$WD^TXTU(PRG),CAB=$$WD^TXTU(CAB),A=$G(^PROFM("pat",ID))
+ I $P(A,"|",2)'=PRG S $P(A,"|",2)=PRG,^(ID)=A D UGL^IEXCH("^PROFM(""pat"","_ID_")")
+ D WD^ISSG("^PROFM(""pat"","_ID_","""_USL_""")")
+ S ^PROFM("pat",ID,USL)="1|0" ; 1 шт., необязат. 
+ S:CAB'="" ^PROFM("pat",ID,USL,+$$^I("ilpu"))=CAB ; todo - right add
+ D UGL^IEXCH("^PROFM(""pat"","_ID_","""_USL_""")")
+ D MSG^RWU("OK")
+ Q
+PATUSUM(ID,USL,SUM) ; Сумма у услуги в шаблоне
+ Q:ID=""  Q:USL="" 
+ S $P(^PROFM("pat",ID,USL),"|",4)=$$NNUM^TXTU(SUM)
+ Q
+PATUCAB(ID,USL,CAB) ; Кабинет у услуги в шаблоне
+ Q:ID=""  Q:USL="" 
+ S ^PROFM("pat",ID,USL,+$$^I("ilpu"))=CAB
+ Q
+PATDUSL(ID,USL) ; Удалить услугу
+ I ID=""!(USL="") D MSG^RWU("ERR") Q
+ D KD^ISSG("^PROFM(""pat"","_ID_","""_USL_""")")
+ K ^PROFM("pat",ID,USL)
+ D UGL^IEXCH("^PROFM(""pat"","_ID_","""_USL_""")")
+ D MSG^RWU("OK")
+ Q
+APP(NI,DT,PP,FLG) ; Добавить профиль
+ ; FLG - флаг добавляемой услуги
+ N DTT
+ S DT=$$DIH^DTUTL(DT),DTT=$$DT^DTUTL(DT)
+ D SETpat(NI,DT,PP,$G(FLG))
+ D L(NI,DTT)
+ Q
+SETpat(NI,DT,PP,FLG) 
+ N U,R
+ S FLG=$G(FLG)
+ S:FLG="" FLG="prof"
+ S ^PROFP(NI,"pat",DT)=PP
+ S U="" F  S U=$O(^PROFM("pat",PP,U)) Q:U=""  D
+ .S R=$G(^PROFM("pat",PP,U))
+ .S ^PROFP(NI,"n",DT,U)=1
+ .M:'$D(^PROFP(NI,"n",DT,U,"c")) ^PROFP(NI,"n",DT,U,"c")=^PROFM("pat",PP,U,1)
+ .S ^PROFP(NI,"n",DT,U,"flg")=$$STFLGS^TXTU($G(^PROFP(NI,"n",DT,U,"flg")),FLG)
+ .S:$P(R,"|",4) ^PROFP(NI,"n",DT,U,"s")=$P(R,"|",4)
+ Q
+SETlmk(NI,DT,PP) 
+ N U,X,R,K
+ ; TODO - lmkp
+ S ^PROFP(NI,"lmk",DT)=PP
+ S U="" F  S U=$O(^PROFM("lmk",PP,U)) Q:U=""  D
+ .S R=$G(^PROFM("lmk",PP,U))
+ .S ^PROFP(NI,"n",DT,U)=1
+ .M:'$D(^PROFP(NI,"n",DT,U,"c")) ^PROFP(NI,"n",DT,U,"c")=^PROFM("lmk",PP,U,1)
+ .S:$P(R,"|",4) ^PROFP(NI,"n",DT,U,"s")=$P(R,"|",4)
+ Q
+updlmk(DT) 
+ N LX,LTP,U,K
+ S LX=$G(^PROFP(NI,"lmk",DT))
+ Q:LX=""
+ S LTP=$G(^PROFP(NI,"lmkp",DT))
+ S U="" F  S U=$O(^PROFM("lmk",LX,U)) Q:U=""  D
+ .;I $D(^PROFM("lmk",LX,U,"m")),'$D(^PROFM("lmk",LX,U,"m",LTP)) Q
+ .Q:$D(^PROFP(NI,"n",DT,U))
+ .S ^PROFP(NI,"n",DT,U)=1
+ .S ^PROFP(NI,"n",DT,U,"s")=+$G(^PROFM("lmk",LX,U,"s"))
+ .M ^PROFP(NI,"n",DT,U,"c")=^PROFM("lmk",LX,U,"c")
+ .M:'$D(^PROFP(NI,"n",DT,U,"c")) ^PROFP(NI,"n",DT,U,"c")=^PROFV("u302",U,"c")
+ .S ^PROFP(NI,"n",DT,U,"flg")=$$STFLGS^TXTU($G(^PROFP(NI,"n",DT,U,"flg")),"lmk")
+ I ($$AGE^IPAC(NI)<35)!$S(LX'=8:0,1:$$AGE^IPAC(NI)<55) S ^PROFP(NI,"n",DT,"00.123")=1,^("00.123","c")=11,^("flg")="lmk"
+ I LTP="1.1" S ^PROFP(NI,"n",DT,"01.01")=1,^("01.01","flg")="lmk"
+ I LTP="1.2" S ^PROFP(NI,"n",DT,"01.02")=1,^("01.02","flg")="lmk"
+ I LTP="2.1" S ^PROFP(NI,"n",DT,"01.03")=1,^("01.03","flg")="lmk"
+ I LTP="2.2" S ^PROFP(NI,"n",DT,"01.04")=1,^("01.04","flg")="lmk"
+ I LTP="6" S ^PROFP(NI,"n",DT,"01.05")=1,^("01.06","flg")="lmk"
+ S VF=$D(^PROFP(NI,"vf",DT)),(UA,UB)=""
+ S:'VF VF=$D(^PROFP(NI,"vf29",DT))
+ S K=$G(^PROFP(NI,"nation",DT))
+ I K'="",$$LU^TXTU(K)'="РФ" S ^PROFP(NI,"n",DT,"01.11")=1,^("01.11","c")=11,^("flg")="lmk"
+ D L(NI,$$DT^DTUTL(DT))
+ Q
+LPR(NI,DT) ; Загрузить результат осмотра
+ N RR,U,UX,R,RC,LL,TP,PRC,VR,KEY,DTX,FLi,FLu
+ S DT=$$DI^DTUTL(DT) Q:NI=""!(DT="") 
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<profres>")
+ D WTAGC^RWU("fio",$$FIO^IPAC(NI)_" ("_NI_")")
+ D WTAGC^RWU("dt",$$DT^DTUTL(DT))
+ S RR=$G(^PROFP(NI,"res",DT)),RC=$G(^PROFP(NI,"rest",DT))
+ D WTAGD^RWU("stat",$P(RR,"|",1))
+ D WTAGD^RWU("gz",$P(RR,"|",2))
+ D WTAGD^RWU("dz",$$DT^DTUTL($P(RR,"|",3)))
+ D WTAGD^RWU("pp",$P(RR,"|",4))
+ D WTAGD^RWU("pn",$P(RR,"|",5))
+ D WTAGC^RWU("comm",RC)
+ D WTAGC^RWU("icomm",$G(^PROFP(NI,"resi",DT)))
+ D W^RWU("<table>")
+ S PRC=$G(^PROFP(NI,"prc",DT))
+ S:PRC PRC=$$PRC^IINSC($$GET^IPAC(NI,"stc",DT),NI,DT)
+ S KEY=NI_","_DT
+ I $D(^PROFP(NI,"vf29",DT)) S FLi="i29",FLu="u29"
+ I '$D(^PROFP(NI,"vf29",DT)) S FLi="i302",FLu="u302" 
+ S U="" F  S U=$O(^PROFP(NI,"n",DT,U)) Q:U=""  D
+ .Q:'$D(^PROFV(FLu,U)) 
+ .S UX=$G(^PROFV(FLu,U))
+ .S TP=$G(^PROFV(FLu,U,"t"))
+ .S:TP="" TP=$S(UX="":"",1:$G(^PROFV(FLi,UX,"t")))
+ .S TP=$S(TP="":1,TP="p":1,TP="i":2,TP="l":3,1:1)
+ .S R=^PROFP(NI,"n",DT,U)
+ .S LL(TP,U)=R
+ .S:$P(R,"|",8)'="" $P(LL(TP),"|",8)=$P(R,"|",8)
+ .S:$P(R,"|",3)'="" LL(TP)=$P(R,"|",3)_"|"_$P(R,"|",5)
+ S TP="" F  S TP=$O(LL(TP)) Q:TP=""  D
+ .S VR=$P($G(LL(TP)),"|",1),U=$P($G(LL(TP)),"|",8)
+ .I TP=2 D WC^RWU(CR_KEY_"@"_TP_"@|Функциональные исследования|"_$$FIOSH^IKADRY(VR)_"|"_$S(U'="":$$NAME^ISPRAV("profvrres",U),VR="":"",1:"Готово")_"|") Q 
+ .I TP=3 D WC^RWU(CR_KEY_"@"_TP_"@|Лабораторные исследования|"_$$FIOSH^IKADRY(VR)_"|"_$S(U'="":$$NAME^ISPRAV("profvrres",U),VR="":"",1:"Готово")_"|") Q 
+ .S U="" F  S U=$O(LL(TP,U)) Q:U=""  D
+ ..S R=LL(TP,U),VR=$P(R,"|",3),DTX=$P(R,"|",5)
+ ..D WC^RWU(CR_$$TAG^TXTU(KEY_"@"_TP_"@"_U_"|"_$$NAME^IPRICE(U,PRC)_$S(DTX="":"",1:", "_$$DT^DTUTL(DTX))_"|"_$$FIOSH^IKADRY(VR)_"|"_$$NAME^ISPRAV("profvrres",$P(R,"|",8))_"|"_$P(R,"|",9)))
+ 
+ D W^RWU("</table>")
+ D W^RWU("</profres></nb_console>"),C^RWU
+ Q
+SETRV(KEY,V) ; Сотрудник
+ N NI,DT,TP,U,T,UX
+ S NI=$P($P(KEY,"@",1),",",1),DT=$P($P(KEY,"@",1),",",2)
+ S TP=$P(KEY,"@",2),U=$P(KEY,"@",3)
+ I U'="" S $P(^PROFP(NI,"n",DT,U),"|",3)=V,$P(^PROFP(NI,"n",DT,U),"|",5)=+$H Q  ; TODO - issls
+ S U="" F  S U=$O(^PROFP(NI,"n",DT,U)) Q:U=""  D
+ .S UX=$G(^PROFV("u302",U))
+ .S T=$S(UX="":"",1:$G(^PROFV("i302",UX,"t")))
+ .S T=$S(T="":1,T="p":1,T="i":2,T="l":3,1:1)
+ .Q:TP'=T 
+ .S $P(^PROFP(NI,"n",DT,U),"|",3)=V,$P(^PROFP(NI,"n",DT,U),"|",5)=+$H
+ Q
+SETRR(KEY,V) ; Результат
+ S V=+V
+ N NI,DT,TP,U,T,UX,VR
+ S NI=$P($P(KEY,"@",1),",",1),DT=$P($P(KEY,"@",1),",",2)
+ S TP=$P(KEY,"@",2),U=$P(KEY,"@",3)
+ I U'="" S $P(^PROFP(NI,"n",DT,U),"|",8)=V Q  ; TODO - issls
+ S U="" F  S U=$O(^PROFP(NI,"n",DT,U)) Q:U=""  D
+ .S UX=$G(^PROFV("u302",U))
+ .S T=$S(UX="":"",1:$G(^PROFV("i302",UX,"t")))
+ .S VR=$S(UX="":"",1:$G(^PROFV("i302",UX,"vr")))
+ .S T=$S(T="":1,T="p":1,T="i":2,T="l":3,1:1)
+ .Q:TP'=T 
+ .S $P(^PROFP(NI,"n",DT,U),"|",8)=V
+ .Q:VR="" 
+ .S $P(^PROFP(NI,"n",DT,U),"|",3)=VR,$P(^PROFP(NI,"n",DT,U),"|",5)=+$H
+ Q
+SETRD(KEY,V) ; Диагноз
+ N NI,DT,TP,U,T,UX
+ S V=$TR(V,":,|/",";;;;")
+ F T=1:1:$L(V,";") S $P(V,";",T)=$$RECODE^YMKB10($P(V,";",T))
+ S NI=$P($P(KEY,"@",1),",",1),DT=$P($P(KEY,"@",1),",",2)
+ S TP=$P(KEY,"@",2),U=$P(KEY,"@",3)
+ I U'="" S $P(^PROFP(NI,"n",DT,U),"|",9)=V D MSG^RWU(V) Q 
+ S U="" F  S U=$O(^PROFP(NI,"n",DT,U)) Q:U=""  D
+ .S UX=$G(^PROFV("u302",U))
+ .S T=$S(UX="":"",1:$G(^PROFV("i302",UX,"t")))
+ .S T=$S(T="":1,T="p":1,T="i":2,T="l":3,1:1)
+ .Q:TP'=T 
+ .S $P(^PROFP(NI,"n",DT,U),"|",9)=V
+ D MSG^RWU(V)
+ Q
+GETUDI(U) ; Получить список диагнозов по услуге п.302
+ N I,R
+ S (I,R)="" F  S I=$O(^PROFV("di302",U,I)) Q:I=""  S R=$S(R="":"",1:R_CR)_I_"|"_I
+ D MSG^RWU(R)
+ Q
+SETDZ(KEY,V) ; Установить дату завершения
+ N NI,DT
+ S NI=$P(KEY,"@",1),DT=$$DI^DTUTL($P(KEY,"@",2))
+ Q:NI=""!(DT="") 
+ S V=$$DI^DTUTL(V)
+ S $P(^PROFP(NI,"res",DT),"|",3)=V
+ Q
+UNSETDZ(KEY) ; Отменить дату завершения и результат
+ N NI,DT
+ S NI=$P(KEY,"@",1),DT=$$DI^DTUTL($P(KEY,"@",2))
+ Q:NI=""!(DT="") 
+ K ^PROFP(NI,"res",DT)
+ Q
+SETLBC(KEY,V) ; Установить штрихкод/номер 
+ N NI,DT
+ S NI=$P(KEY,"@",1),DT=$$DI^DTUTL($P(KEY,"@",2))
+ Q:NI=""!(DT="") 
+ S $P(^PROFP(NI,"li",DT),"|",3)=V
+ Q
+NEXTLBC(PKEY,KEY) ; Установить следующий штрихкод/номер 
+ Q:PKEY=""!(KEY="") 
+ N NI,DT,V,L
+ S NI=$P(PKEY,"@",1),DT=$$DI^DTUTL($P(PKEY,"@",2))
+ Q:NI=""!(DT="") 
+ S V=$P($G(^PROFP(NI,"li",DT)),"|",3)
+ S L=$L(V),V=V+1,V=$TR($J(V,L)," ",0)
+ S NI=$P(KEY,"@",1),DT=$$DI^DTUTL($P(KEY,"@",2))
+ S $P(^PROFP(NI,"li",DT),"|",3)=V
+ D MSG^RWU(V)
+ Q
+SETCRT(KEY,TP,V) ; Установить сертификат 
+ N NI,DT
+ S NI=$P(KEY,"@",1),DT=$$DI^DTUTL($P(KEY,"@",2))
+ Q:NI=""!(DT="") 
+ S ^PROFP(NI,"crt",DT)=TP_"|"_V_"|"_(+$H) ; TODO
+ Q
+NEXTCRT(PKEY,KEY) ; Установить следующий штрихкод/номер 
+ Q:PKEY=""!(KEY="") 
+ N NI,DT,V,T,L
+ S NI=$P(PKEY,"@",1),DT=$$DI^DTUTL($P(PKEY,"@",2))
+ Q:NI=""!(DT="")
+ S L=$G(^PROFP(NI,"crt",DT))
+ S T=$P(L,"|",1),V=$P(L,"|",2)
+ S L=$L(V),V=V+1,V=$TR($J(V,L)," ",0)
+ S NI=$P(KEY,"@",1),DT=$$DI^DTUTL($P(KEY,"@",2))
+ S ^PROFP(NI,"crt",DT)=T_"|"_V_"|"_(+$H)
+ D MSG^RWU(V)
+ Q
+SETPIDX(KEY,V)   ; 
+ N NI,DT
+ S NI=$P(KEY,"@",1),DT=$$DI^DTUTL($P(KEY,"@",2))
+ Q:NI=""!(DT="")
+ D SET^IPAC(NI,"pspisidx",DT,V)
+ Q
+SETSPPL(KEY,VM,VF)   ; 
+ N NI,DT,ID,D,SPI,F
+ S NI=$P(KEY,"@",1),DT=$$DI^DTUTL($P(KEY,"@",2))
+ Q:NI=""!(DT="")
+ S SPI=$$GET^IPAC(NI,"pspisidx",DT) Q:SPI="" 
+ S F=0
+ S D=DT-30 F  S D=$O(^CDOC(D)) Q:D=""  D  Q:F
+ .S ID="" F  S ID=$O(^CDOC(D,ID)) Q:ID=""  Q:F
+ ..Q:$G(^CDOC(D,ID,"spidx"))'=SPI
+ ..S ^CDOC(D,ID,"user.totalcnt")=(VM+VF)_"|"_VM_"|"_VF,F=1
+ Q
+MOVDT(NI,FDT,TDT) ; Перенести осмотр с одной даты на другую
+ N FL,F
+ Q:NI="" 
+ S FDT=$$DIH^DTUTL(FDT),TDT=$$DIH^DTUTL(TDT)
+ Q:FDT=TDT 
+ S F=0,FL="" F  S FL=$O(^PROFP(NI,FL)) Q:FL=""  D:$D(^PROFP(NI,FL,FDT))
+ .I '$D(^PROFP(NI,FL,FDT)) Q 
+ .S F=1
+ .M ^PROFP(NI,FL,TDT)=^PROFP(NI,FL,FDT)
+ .K ^PROFP(NI,FL,FDT)
+ .D KGL^IEXCH("^PROFP",NI,FL,FDT)
+ .D REGL^IEXCH("^PROFP",NI,FL,TDT)
+ D:'F MSG^RWU("В исходной дете нет данных профосмотра")
+ Q
+getpcnt(NI,DT) ; 
+ Q:NI="" ""
+ N ID,D,SPI,F
+ S SPI=$$GET^IPAC(NI,"pspisidx",DT) Q:SPI="" ""
+ S F=""
+ S D=DT-30 F  S D=$O(^CDOC(D)) Q:D=""  D  Q:F'=""
+ .S ID="" F  S ID=$O(^CDOC(D,ID)) Q:ID=""  Q:F'="" 
+ ..Q:$G(^CDOC(D,ID,"spidx"))'=SPI
+ ..S F=$G(^CDOC(D,ID,"user.totalcnt"))
+ Q F
+SETRES(KEY,V) ; Установить результат всего исследования
+ N NI,DT
+ S NI=$P(KEY,"@",1),DT=$$DI^DTUTL($P(KEY,"@",2))
+ Q:NI=""!(DT="") 
+ S $P(^PROFP(NI,"res",DT),"|",6)=V
+ S:$P($G(^PROFP(NI,"res",DT)),"|",3)="" $P(^PROFP(NI,"res",DT),"|",3)=+$H
+ Q
+SPR ; Сохранить результат осмотра
+ N X,R,NB,PL,NI,DT
+ N @$$NEWVAR^YIXMLRR()
+ D RBUFH^YIXMLRR(1)
+ S NB="nb_console",FN="profres"
+ S NI=$G(XML(NB,FN,"nib")),DT=$$DI^DTUTL($G(XML(NB,FN,"dt")))
+ Q:NI=""  Q:DT="" 
+ S R=$G(^PROFP(NI,"res",DT))
+ S $P(R,"|",1)=$G(XML(NB,FN,"stat"))
+ S $P(R,"|",2)=$G(XML(NB,FN,"gz"))
+ S $P(R,"|",3)=$$DIH^DTUTL($G(XML(NB,FN,"dz")))
+ S $P(R,"|",4)=$G(XML(NB,FN,"pp"))
+ S $P(R,"|",5)=$G(XML(NB,FN,"pn"))
+ S ^PROFP(NI,"res",DT)=R
+ S ^PROFP(NI,"rest",DT)=$G(XML(NB,FN,"comm"))
+ S ^PROFP(NI,"resi",DT)=$G(XML(NB,FN,"icomm"))
+ D GL^IEXCH("^PROFP",NI)
+ D updres
+ D LPR(NI,$$DT^DTUTL(DT))
+ Q
+updres ; last 14 days
+ N U,RR,KX,DU,VR,OT,ID
+ S U="" F  S U=$O(^PROFP(NI,"n",DT,U)) Q:U=""  D
+ .S RR=^(U) Q:$P(RR,"|",6)'="" 
+ .S KX=$$FNDUSLA^IUSL(NI,14,U,0,1,0) Q:KX=""  
+ .S DU=$P(KX,"|",1),VR=$P(KX,"|",2),OT=$P(KX,"|",3),ID=$P(KX,"|",4)
+ .S $P(RR,"|",3)=VR
+ .S $P(RR,"|",4)=OT
+ .S:$P(RR,"|",5)="" $P(RR,"|",5)=DU
+ .S $P(RR,"|",6)=ID
+ .S:$P(RR,"|",9)="" $P(RR,"|",9)=$$GETDI^IUSL(VR,DU,OT,ID)
+ .S ^PROFP(NI,"n",DT,U)=RR
+ .D GL^IEXCH("^PROFP",NI,"n",DT,U)
+ Q
+SPRA ; Изменить пакетно результаты осмотров
+ N X,R,RR,NB,I,L,U,NI,DT,KEYS,KEY,ST,DZ,GZ,DI,PP,PN,CM
+ N @$$NEWVAR^YIXMLRR()
+ D RBUFH^YIXMLRR(1)
+ S NB="nb_console",FN="profresa"
+ S KEYS=$G(XML(NB,FN,"list"))
+ S ST=$G(XML(NB,FN,"stat"))
+ S DZ=$$DI^DTUTL($G(XML(NB,FN,"dz")))
+ S GZ=$G(XML(NB,FN,"gz"))
+ S DI=$TR($G(XML(NB,FN,"diag")),":,|/",";;;;")
+ F X=1:1:$L(DI,";") S $P(DI,";",X)=$$RECODE^YMKB10($P(DI,";",X))
+ S PP=$G(XML(NB,FN,"pp"))
+ S PN=$G(XML(NB,FN,"pn"))
+ S CM=$G(XML(NB,FN,"comm"))
+ S L=$L(KEYS,"|")
+ F I=1:1:L S KEY=$P(KEYS,"|",I) D:KEY'=""
+ .S NI=$P(KEY,"@",1),DT=$$DI^DTUTL($P(KEY,"@",2))
+ .Q:NI=""  Q:DT="" 
+ .S R=$G(^PROFP(NI,"res",DT))
+ .I ST'="",$P(R,"|",1)="" S $P(R,"|",1)=ST
+ .I GZ'="",$P(R,"|",2)="" S $P(R,"|",2)=GZ
+ .I DZ'="",$P(R,"|",3)="" S $P(R,"|",3)=DZ
+ .I PP'="",$P(R,"|",4)="" S $P(R,"|",4)=PP
+ .I PN'="",$P(R,"|",5)="" S $P(R,"|",5)=PN
+ .S ^PROFP(NI,"res",DT)=R
+ .I CM'="",$G(^PROFP(NI,"rest",DT))="" S ^PROFP(NI,"rest",DT)=CM
+ .S U="" F  S U=$O(^PROFP(NI,"n",DT,U)) Q:U=""  D
+ ..S RR=$G(^(U))
+ ..I DZ'="",$P(RR,"|",5)="" S $P(RR,"|",5)=DZ
+ ..I ST'="",$P(RR,"|",8)="" S $P(RR,"|",8)=ST
+ ..I DI'="",$P(RR,"|",9)="" S $P(RR,"|",9)=DI
+ .D GL^IEXCH("^PROFP",NI)
+ Q
+PRN(NI,DT,FLGU) ; Данные для печати
+ ; FLGU - флаги услуги
+ N RR,X,I,R,L,U,RP,RI,RL,II,IP,IL,RLST,UX,TP,DIA,VFL
+ S DT=$$DI^DTUTL(DT),FLGU=$G(FLGU)
+ Q:NI=""  Q:DT=""  
+ D OWF^RWU(".xml"),W^RWU(^PP(0,1)_"<streport><data>")
+ D WTAGC^RWU("nib",NI)
+ D WTAGC^RWU("dt",$$DT^DTUTL(DT))
+ D WTAGC^RWU("dti",DT)
+ D WTAGC^RWU("dttext",$$DTEXT^DTUTL(DT))
+ D WTAGC^RWU("fio",$$FIO^IPAC(NI))
+ D WTAGC^RWU("fiof",$TR($$GET^IPAC(NI,X,DT),"_"," "))
+ F X="fioi","fioo","mnf","mni","mno","pasp","pasp_dan","tel1","tel2","pager","poms","polis","snils" D WTAGC^RWU(X,$$GET^IPAC(NI,X,DT))
+ F X="dofor","pol","stc","dog_from","dog_to","prog","ush","work","prof","region","place","street","dom","korp","stroen","kvart","domkod" D WTAGC^RWU(X,$$GETE^IPAC(NI,X,DT))
+ D WTAGC^RWU("polid",$$GET^IPAC(NI,"pol",DT)) ; id
+ D WTAGC^RWU("datar",$$datar(NI))
+ D WTAGC^RWU("address",$$ADR^YIPACN(NI,DT)) ; TODO - profcard
+ D WTAGC^RWU("tels",$$TELS^IPAC(NI,DT))
+ S X=$G(^PROFP(NI,"workn",DT))
+ S:X="" X=$$GETE^IPAC(NI,"work",DT)
+ D WTAGC^RWU("work",X)
+ 
+ F X="vregion","vcity","vstreet","vdom","vkvart","pregion","pcity","pstreet","pdom","pkvart","bplace","pvreg","nation","pp","depart","workd","workn" D wtag(X)
+ 
+ S X=$G(^PROFP(NI,"vkorp",DT)) S:X'="" X="к."_X
+ D WTAGC^RWU("vkorp",X)
+ S X=$G(^PROFP(NI,"pkorp",DT)) S:X'="" X="к."_X
+ D WTAGC^RWU("pkorp",X)
+ 
+ D WTAGC^RWU("vaddress",$$VADDR^IPROF(NI,DT))
+ 
+ F X="dtvreg","staj","stajv" D wtagdt(X)
+ 
+ S X=$G(^PROFP(NI,"lmk",DT))
+ D WTAGDC^RWU("lmk",$$GET^ISPRAV("lmk",X))
+ S X=$G(^PROFP(NI,"lmkp",DT))
+ D WTAGDC^RWU("lmkp",$$GET^ISPRAV("lmktype",X))
+ 
+ S L=$G(^PROFP(NI,"li",DT))
+ D WTAGC^RWU("barid","PRF:"_NI_":I:"_DT)
+ D WTAGC^RWU("bar",$P(L,"|",2))
+ D WTAGC^RWU("barc",$P(L,"|",3))
+ D WTAGC^RWU("crt",$P($G(^PROFP(NI,"crt",DT)),"|",2))
+ 
+ S L=$G(^PROFP(NI,"stajv",DT)) S:L'="" L=$P($$AGE^DTUTL(L,DT),".",1)
+ D WTAGC^RWU("vfstaj",L)
+ 
+ S (I,R,U,VFL)="" F  S I=$O(^PROFP(NI,"vf",DT,I)) Q:I=""  D
+ .S R=$S(R="":"",1:R_CR)_$$VFNAME^IPROFVR(I)_"|"_L
+ .S U=$S(U="":"",1:U_"; ")_$$VFNAME^IPROFVR(I)
+ .S VFL=$S(VFL="":"",1:VFL_"; ")_$$VFSNAME^IPROFVR(I)
+ D WTAGC^RWU("vf",R)
+ D WTAGC^RWU("vfcodes",U)
+ D WTAGC^RWU("vflcodes",VFL)
+ 
+ D W^RWU("<nzn>")
+ S X=$$nzn(NI,DT,,FLGU)
+ D W^RWU("</nzn>")
+ D WTAGD^RWU("summ",X)
+ 
+ S TP=$G(^PROFP(NI,"ptp",DT))
+ D WTAGC^RWU("ptp",$S(TP=1:"Предварительный медицинский осмотр",TP=2:"Периодический медицинский осмотр",1:""))
+ 
+ D W^RWU("</data></streport>"),C^RWU
+ Q
+wtag(PL) 
+ D WTAGC^RWU(PL,$G(^PROFP(NI,PL,DT)))
+ Q
+wtagdt(PL) 
+ D WTAGC^RWU(PL,$$DT^DTUTL($G(^PROFP(NI,PL,DT))))
+ Q
+PRNPR(NI,DT,FN) ; Печать результата осмотра
+ N RR,X,I,R,L,U,RP,RI,RL,II,IP,IL,RLST,UX,TP,DIA,VFL,FLi,FLu
+ S DT=$$DI^DTUTL(DT)
+ Q:NI=""  Q:DT=""  
+ S:$G(FN)'="" ^PROFPL(NI,"prnr",DT,$H)=$$USR^IUSER()_"|"_FN
+ D OWF^RWU(".xml"),W^RWU(^PP(0,1)_"<streport><data>")
+ D WTAGC^RWU("nib",NI)
+ D WTAGC^RWU("dt",$$DT^DTUTL(DT))
+ D WTAGC^RWU("dttext",$$DTEXT^DTUTL(DT))
+ D WTAGC^RWU("fio",$$FIO^IPAC(NI))
+ F X="fiof","fioi","fioo" D WTAGC^RWU(X,$$GET^IPAC(NI,X,DT))
+ F X="mnf","mni","mno" D WTAGC^RWU(X,$$GET^IPAC(NI,X,DT))
+ D WTAGC^RWU("polid",$$GET^IPAC(NI,"pol",DT)) ; id
+ D WTAGC^RWU("datar",$$datar(NI))
+ F X="dofor","pol","stc","dog_from","dog_to","prog","ush" D WTAGC^RWU(X,$$GETE^IPAC(NI,X,DT))
+ D WTAGC^RWU("stc",$$GETE^IPAC(NI,"stc",DT))
+ D WTAGC^RWU("pasp",$$GET^IPAC(NI,"pasp",DT))
+ D WTAGC^RWU("pasp_dan",$$GETE^IPAC(NI,"pasp_dan",DT))
+ D WTAGC^RWU("address",$$ADR^YIPACN(NI,DT)) ; TODO - profcard
+ D WTAGC^RWU("tels",$$TELS^IPAC(NI,DT))
+ F X="tel1","tel2","pager","poms","polis","snils" D WTAGC^RWU(X,$$GET^IPAC(NI,X,DT))
+ F X="region","place","street","dom","korp","stroen","kvart","domkod" D WTAGC^RWU(X,$$GETE^IPAC(NI,X,DT))
+ S X=$G(^PROFP(NI,"workn",DT))
+ S:X="" X=$$GETE^IPAC(NI,"work",DT)
+ D WTAGC^RWU("work",X)
+ D WTAGC^RWU("depart",$G(^PROFP(NI,"depart",DT)))
+ D WTAGC^RWU("prof",$$GETE^IPAC(NI,"prof",DT))
+ D WTAGC^RWU("dtvreg",$$DT^DTUTL($G(^PROFP(NI,"dtvreg",DT))))
+ F X="vregion","vcity","vstreet","vdom","vkvart","bplace","pvreg","nation" D wtag(X)
+ S X=$G(^PROFP(NI,"vkorp",DT)) S:X'="" X="к."_X
+ D WTAGC^RWU("vkorp",X)
+ S L=$G(^PROFP(NI,"li",DT))
+ D WTAGC^RWU("barid","PRF:"_NI_":"_DT)
+ D WTAGC^RWU("bar",$P(L,"|",2))
+ D WTAGC^RWU("barc",$P(L,"|",3))
+ D WTAGC^RWU("crt",$P($G(^PROFP(NI,"crt",DT)),"|",2))
+ 
+ S L=$G(^PROFP(NI,"stajv",DT)) S:L'="" L=$P($$AGE^DTUTL(L,DT),".",1)
+ D WTAGC^RWU("vfstaj",L)
+ S (I,R,U,VFL)="" F  S I=$O(^PROFP(NI,"vf",DT,I)) Q:I=""  D
+ .S R=$S(R="":"",1:R_CR)_$$VFNAME^IPROFVR(I)_"|"_L
+ .S U=$S(U="":"",1:U_"; ")_$$VFNAME^IPROFVR(I)
+ .S VFL=$S(VFL="":"",1:VFL_"; ")_$$VFSNAME^IPROFVR(I)
+ D WTAGC^RWU("vf",R)
+ D WTAGC^RWU("vfcodes",U)
+ D WTAGC^RWU("vflcodes",VFL)
+ 
+ S (RP,RI,RL,DIA,RLST)="",(II,IP,IL)=1
+ S PRC=$$PRC^IINSC($$GET^IPAC(NI,"stc",DT),NI,DT)
+ I $D(^PROFP(NI,"vf29",DT)) S FLi="i29",FLu="u29"
+ I '$D(^PROFP(NI,"vf29",DT)) S FLi="i302",FLu="u302" 
+ S U="" F  S U=$O(^PROFP(NI,"n",DT,U)) Q:U=""  D
+ .S UX=$G(^PROFV(FLu,U))
+ .S TP=$S(UX="":"",1:$G(^PROFV(FLi,UX,"t")))
+ .S R=^PROFP(NI,"n",DT,U) Q:$P(R,"|",5)="" 
+ .S X=$$NAME^IPRICE(U,PRC)
+ .I TP="i"!(TP="l") S RLST=$S(RLST="":"",1:RLST_"; ")_X
+ .I TP="i" S RI=$S(RI="":"",1:RI_CR)_II_"|"_X_"|пройдено",II=II+1 Q 
+ .I TP="l" S RL=$S(RL="":"",1:RL_CR)_IL_"|"_X_"|пройдено",IL=IL+1 Q 
+ .S L=$P(R,"|",9) S:L'="" DIA=L
+ .S RP=$S(RP="":"",1:RP_CR)_IP_"|"_X_"|"_$$DT2^DTUTL($P(R,"|",5))_"|"_$$NAME^ISPRAV("profvrres",$P(R,"|",8)) ;_$S(L="":"",1:", "_L) no dia
+ .S IP=IP+1
+ D WTAGC^RWU("resp",RP)
+ D WTAGC^RWU("resi",RI)
+ D WTAGC^RWU("resl",RL)
+ D WTAGC^RWU("resli",RLST) ; списком
+ D W^RWU("<nzn>")
+ S X=$$nzn(NI,DT)
+ D W^RWU("</nzn>")
+ 
+ S TP=$G(^PROFP(NI,"ptp",DT))
+ D WTAGC^RWU("ptp",$S(TP=1:"Предварительный медицинский осмотр",TP=2:"Периодический медицинский осмотр",1:""))
+ 
+ S RR=$G(^PROFP(NI,"res",DT))
+ S X=$P(RR,"|",1)
+ D WTAGC^RWU("stat",$$NAME^ISPRAV("profres",X))
+ S X=$P(RR,"|",2)
+ D WTAGC^RWU("gz",X)
+ D WTAGC^RWU("gztext",$$GET^ISPRAV("profgz",X))
+ S X=$P(RR,"|",3)
+ D WTAGC^RWU("dz",$$DT^DTUTL(X))
+ D WTAGC^RWU("dztext",$$DTEXT^DTUTL(X))
+ D WTAGC^RWU("dzyy",$P($$DT2^DTUTL(X),".",3)) ; 2 digit YY
+ 
+ D WTAGC^RWU("rest",$G(^PROFP(NI,"rest",DT)))
+ D WTAGC^RWU("diag",DIA)
+ D WTAGC^RWU("diagnm",$$NAME^YMKB10(DIA))
+ D W^RWU("</data></streport>"),C^RWU
+ Q
+PRNPRT(NI,DT,TPL,KEY)        ; Печать результата осмотра из шаблона
+ S DT=$$DI^DTUTL(DT)
+ Q:NI=""  Q:DT="" 
+ N ARR,DGN
+ S DGN=$P($G(KEY),"@",4)
+ I $ZV["MSM" D  Q
+ .N I
+ .K ^BUF($J,"ok")
+ .J mkprJ(NI,DT,TPL,DGN,%LOG,%JOB,$J)
+ .F I=1:1:10 H 1 Q:$G(^BUF($J,"ok"))
+ .S %B=$G(^BUF($J,"%B"))
+ 
+ D mkflPRN(NI,DT,TPL,DGN)
+ D MAKE^IDOCGEN(TPL,"ARR")
+ Q
+mkprJ(NI,DT,TPL,DGN,%LOG,%JOB,JJ) 
+ D mkflPRN(NI,DT,TPL,DGN)
+ D MAKE^IDOCGEN(TPL,"ARR")
+ Q
+mkflPRN(NI,DT,TPL,DGN) 
+ N RR,X,X1,X2,I,R,L,U,RP,RI,RL,II,IP,IL,RLST,UX,TP,DIA,VFL,LUUX,DIAL,II,FL
+ 
+ S ARR("iname")=$$^I("iname")
+ S ARR("iphones")=$$PHONES^I()
+ S ARR("opfio")=$$FIO^IKADRY($$KDR^IUSER())
+ 
+ S ARR("nib")=NI
+ S ARR("dt")=$$DT^DTUTL(DT)
+ S ARR("dttext")=$$DTEXT^DTUTL(DT)
+ S ARR("dtyyyy")=$P($$DT^DTUTL(DT),".",3)
+ S ARR("fio")=$$FIO^IPAC(NI)
+ F X="fiof","fioi","fioo" S ARR(X)=$$GET^IPAC(NI,X,DT)
+ F X="mnf","mni","mno" S ARR(X)=$$GET^IPAC(NI,X,DT)
+ S ARR("polid")=$$GET^IPAC(NI,"pol",DT) ; id
+ S ARR("datar")=$$datar(NI)
+ S ARR("age")=$$AGET^IPAC(NI,DT)
+ F X="dofor","pol","stc","dog_from","dog_to","prog","ush","bloodrh","lekall" S ARR(X)=$$GETE^IPAC(NI,X,DT)
+ S:DGN="" DGN=$$GET^IPAC(NI,"stc",DT) 
+ S ARR("stc")=$$NAME^IINSC(DGN)
+ S ARR("pasp")=$$GET^IPAC(NI,"pasp",DT)
+ S ARR("pasp_dan")=$$GETE^IPAC(NI,"pasp_dan",DT)
+ S ARR("address")=$$ADR^YIPACN(NI,DT) ; TODO - profcard
+ S ARR("tels")=$$TELS^IPAC(NI,DT)
+ F X="tel1","tel2","pager","poms","polis","snils" S ARR(X)=$$GET^IPAC(NI,X,DT)
+ F X="region","place","street","dom","korp","stroen","kvart","domkod" S ARR(X)=$$GETE^IPAC(NI,X,DT)
+ S X=$G(^PROFP(NI,"workn",DT))
+ S:X="" X=$$GETE^IPAC(NI,"work",DT)
+ S ARR("work")=X
+ S ARR("depart")=$G(^PROFP(NI,"depart",DT))
+ S ARR("prof")=$$GETE^IPAC(NI,"prof",DT)
+ S ARR("dtvreg")=$$DT^DTUTL($G(^PROFP(NI,"dtvreg",DT)))
+ F X="vregion","vcity","vstreet","vdom","vkvart","bplace","pvreg" S ARR(X)=$G(^PROFP(NI,X,DT))
+ F X="nation","workd" S ARR(X)=$$GET(NI,X,DT)
+ S X=$G(^PROFP(NI,"vkorp",DT)) S:X'="" X="к."_X
+ S ARR("vkorp")=X
+ S L=$G(^PROFP(NI,"li",DT))
+ S ARR("bar")=$P(L,"|",2)
+ S ARR("barc")=$P(L,"|",3)
+ S ARR("crt")=$P($G(^PROFP(NI,"crt",DT)),"|",2)
+ 
+ S L=$G(^PROFP(NI,"stajv",DT)) S:L'="" L=$P($$AGE^DTUTL(L,DT),".",1)
+ S ARR("vfstaj")=L
+ S (I,R,U,VFL)="" F  S I=$O(^PROFP(NI,"vf",DT,I)) Q:I=""  D
+ .S R=$S(R="":"",1:R_CR)_$$VFNAME^IPROFVR(I)_"|"_L
+ .S U=$S(U="":"",1:U_"; ")_$$VFNAME^IPROFVR(I)
+ .S VFL=$S(VFL="":"",1:VFL_"; ")_$$VFSNAME^IPROFVR(I)
+ S ARR("vf")=R
+ S ARR("vfcodes")=U
+ S ARR("vflcodes")=VFL
+ 
+ S (RP,RI,RL,DIA,RLST)="",(II,IP,IL)=1
+ S PRC=$$PRC^IINSC($$GET^IPAC(NI,"stc",DT),NI,DT)
+ S U="" F  S U=$O(^PROFP(NI,"n",DT,U)) Q:U=""  D
+ .S UX=$G(^PROFV("u302",U))
+ .S TP=$S(UX="":"",1:$G(^PROFV("i302",UX,"t")))
+ .S R=^PROFP(NI,"n",DT,U) Q:$P(R,"|",3)="" 
+ .S X=$$NAME^IPRICE(U,PRC)
+ .I TP="i"!(TP="l") S RLST=$S(RLST="":"",1:RLST_"; ")_X
+ .I TP="i" S RI=$S(RI="":"",1:RI_CR)_II_"|"_X_"|пройдено",II=II+1 Q 
+ .I TP="l" S RL=$S(RL="":"",1:RL_CR)_IL_"|"_X_"|пройдено",IL=IL+1 Q 
+ .S L=$P(R,"|",9)
+ .I L'="" S DIA=L S:$E(L)'="Z" DIAL(L)=""
+ .S RP=$S(RP="":"",1:RP_CR)_IP_"|"_X_"|"_$$DT2^DTUTL($P(R,"|",5))_"|"_$$NAME^ISPRAV("profvrres",$P(R,"|",8)) ;_$S(L="":"",1:", "_L) no dia
+ .I $P(R,"|",5)'="" S X=$TR(U,".,",""),ARR("udz"_X)=$$DT2^DTUTL($P(R,"|",5)),ARR("ures"_X)=$$NAME^ISPRAV("profvrres",$P(R,"|",8)),ARR("uvr"_X)=$$FIOSH^IKADRY($P(R,"|",3))
+ .S IP=IP+1
+ S ARR("resp")=RP
+ S ARR("resi")=RI
+ S ARR("resl")=RL
+ S ARR("resli")=RLST ; списком
+ 
+ 
+ ;D W^RWU("<nzn>")
+ ;S X=$$nzn(NI,DT)
+ ;D W^RWU("</nzn>")
+ 
+ S TP=$G(^PROFP(NI,"ptp",DT))
+ S ARR("ptp")=$S(TP=1:"Предварительный медицинский осмотр",TP=2:"Периодический медицинский осмотр",1:"")
+ 
+ S RR=$G(^PROFP(NI,"res",DT))
+ S X=$P(RR,"|",1)
+ S ARR("stat")=$$GET^ISPRAV("profres",X)
+ S X=$P(RR,"|",2)
+ S ARR("gz")=X
+ S ARR("gztext")=$$GET^ISPRAV("profgz",X)
+ S X=$P(RR,"|",3)
+ S ARR("dz")=$$DT^DTUTL(X)
+ S ARR("dztext")=$$DTEXT^DTUTL(X)
+ S ARR("dzyy")=$P($$DT2^DTUTL(X),".",3) ; 2 digit YY
+ 
+ S L="",II=1 F  S L=$O(DIAL(L)) Q:L=""  D
+ .S ARR("diags",II)=ARR("dz")_"|"_$P($$NAME^YMKB10(L)," ",2,99)_"|"_L
+ .S II=II+1
+ 
+ S ARR("rest")=$G(^PROFP(NI,"rest",DT))
+ S ARR("diag")=DIA
+ S ARR("diagnm")=$$NAME^YMKB10(DIA)
+ 
+ S X1=$$FNDFLD^IEPR(NI,"height",1,1,40,DT) ; TODO
+ S ARR("height")=X1
+ S X2=$$FNDFLD^IEPR(NI,"weight",1,1,40,DT)
+ S ARR("weight")=X2
+ S X1=$$NNUM^TXTU(X1)/100,X2=$$NNUM^TXTU(X2)
+ S X=$S('X1:0,1:+$J(X2/(X1*X1),"",2))
+ S ARR("imt")=X
+ 
+ S ARR("bp")=$$FNDFLD^IEPR(NI,"bp",1,1,40,DT)
+ S ARR("pulse")=$$FNDFLD^IEPR(NI,"pulse",1,1,40,DT)
+ S ARR("prof_psz")=$$FNDFLD^IEPR(NI,"prof_psz",1,1,40,DT)
+ S ARR("heredity")=$$FNDFLD^IEPR(NI,"heredity",1,1,40,DT)
+ S ARR("smoke")=$$FNDFLD^IEPR(NI,"smoke",1,1,40,DT)
+ S ARR("ovweight")=$$FNDFLD^IEPR(NI,"ovweight",1,1,40,DT)
+ S ARR("phinactivity")=$$FNDFLD^IEPR(NI,"phinactivity",1,1,40,DT)
+ S ARR("stress")=$$FNDFLD^IEPR(NI,"stress",1,1,40,DT)
+ S ARR("highbp")=$$FNDFLD^IEPR(NI,"highbp",1,1,40,DT)
+ S ARR("irrfood")=$$FNDFLD^IEPR(NI,"irrfood",1,1,40,DT)
+ S ARR("allergy")=$$FNDFLD^IEPR(NI,"allergy",1,1,40,DT)
+ 
+ S ARR("ecg_res")=$$FNDFLD^IEPR(NI,"ecg_res",1,1,40,DT)
+ S ARR("fluro_res")=$$FNDFLD^IEPR(NI,"fluro_res",1,1,40,DT)
+ S ARR("mammo_res")=$$FNDFLD^IEPR(NI,"mammo_res",1,1,40,DT)
+ 
+ S ARR("prof_conc_ginec")=$$FNDFLD^IEPR(NI,"prof_conc_ginec",1,1,40,DT)
+ S ARR("prof_conc_neuro")=$$FNDFLD^IEPR(NI,"prof_conc_neuro",1,1,40,DT)
+ S ARR("prof_conc_oft")=$$FNDFLD^IEPR(NI,"prof_conc_oft",1,1,40,DT)
+ S ARR("prof_conc_hirurg")=$$FNDFLD^IEPR(NI,"prof_conc_hirurg",1,1,40,DT)
+ S ARR("prof_conc_uro")=$$FNDFLD^IEPR(NI,"prof_conc_uro",1,1,40,DT)
+ S ARR("prof_conc_psycho")=$$FNDFLD^IEPR(NI,"prof_conc_psycho",1,1,40,DT)
+ S ARR("prof_conc_psychon")=$$FNDFLD^IEPR(NI,"prof_conc_psychon",1,1,40,DT)
+ S ARR("prof_conc_therap")=$$FNDFLD^IEPR(NI,"prof_conc_therap",1,1,40,DT)
+ 
+ F I=1:1:20 S ARR("labp"_I)=$$FNDFLD^IEPR(NI,"labp"_I,1,1,30,DT)
+ 
+ S RP="" F  S RP=$O(^PROFM("kdlprm","*",RP)) Q:RP=""  D
+ .S R=$$GETLAST^IMLAB(NI,DT,RP,1,1) Q:R="" 
+ .S ARR("kdl"_RP)=$P(R,"|",2)_"|"_$P(R,"|",3,99)
+ .S ARR("kdldt"_RP)=$$DT2^DTUTL($P(R,"|",1))
+ 
+ S II=+$G(^MN("profprnfl"))
+ I II S FL="" F  S FL=$O(^MN(II,FL)) Q:FL=""  D
+ .S R=^(FL),I=$P(R,"|",1),RP=$P(R,"|",2)
+ .I I="epr" S ARR(FL)=$$FNDFLD^IEPR(NI,RP,1,1,40,DT,$P(R,"|",3)) Q 
+ .I I="kdl" S X=$$GETLAST^IMLAB(NI,DT,RP,1,2),ARR(FL)=$P(X,"|",2),ARR(FL_"dt")=$$DT2^DTUTL($P(X,"|",1)),ARR(FL_"_n")=$P(X,"|",3) Q
+ .I I="pac" S ARR(FL)=$$GETE^IPAC(NI,RP,DT) Q 
+ 
+ Q
+INITL 
+ Q
+TAB(DS,DE,TPX,MOD,TXT,DGN,WRK,SPSX) ; Вывод журнала профосмотров
+ ; TPX - тип (проф/лмк/ФМС/дисп)
+ ; MOD - новые/вработе/заверш
+ ; TXT - fio или nib
+ ; SPSX - номер списка
+ N NI,DT,FIO,PL,R,CRT,BC,W,SL,VMOD,X,DGI,RRES,DTLL,psIp
+ D OWF^RWU(".txt")
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),TXT=$$UL^TXTU($$WD^TXTU(TXT))
+ S VMOD=$$LCL^IUSER("prof","vtab")
+ S psIp=$$PLIDX^IPAC("pspisidx")
+ S NI="" F  S NI=$O(^PROFP(NI)) Q:NI=""  D
+ .I TXT'="",+TXT=TXT,TXT'=NI Q 
+ .S PL=$S(TPX=1:$S($D(^PROFP(NI,"vf29")):"vf29",1:"vf"),TPX=2:"lmk",TPX=3:"pat",TPX>2:"n",$O(^PROFP(NI,"n",DS-1)):"n",$O(^PROFP(NI,"vf",DS-1)):"vf",$O(^PROFP(NI,"lmk",DS-1)):"lmk",1:"log")
+ .I PL="" S DT=0 F R="vf","lmk","pat","n","log" S X=$O(^PROFP(NI,R,DE+1),-1) S:DT<X DT=X,PL=R
+ .Q:PL="" 
+ .K DTLL S DT=DS-1 F  S DT=$O(^PROFP(NI,PL,DT)) Q:DT=""!(DT>DE)  S DTLL(DT)=""
+ .I 'TPX S DT=DS-1 F  S DT=$O(^PROFP(NI,"vf",DT)) Q:DT=""!(DT>DE)  S DTLL(DT)=""
+ .I 'TPX S DT=DS-1 F  S DT=$O(^PROFP(NI,"lmk",DT)) Q:DT=""!(DT>DE)  S DTLL(DT)=""
+ .S DT="" F  S DT=$O(DTLL(DT)) Q:DT=""  D
+ ..S DGI=""
+ ..I MOD=1,'$D(^PROFP(NI,"res",DT)) Q 
+ ..I MOD>1,$D(^PROFP(NI,"res",DT)) Q  ; TODO
+ ..I DGN'="" S DGI=$$PIDXN^IPAC(NI,DGN,DT) Q:DGI=-1 
+ ..I WRK'="",$$GET^IPAC(NI,"work",DT)'=WRK Q 
+ ..S SL=$$GETTZ^IPAC(NI,psIp,DT)
+ ..I SPSX'="",$S(SPSX="-":SL'="",1:SPSX'=SL) Q  
+ ..S FIO=$$FIO^IPAC(NI)
+ ..I TXT'="",+TXT'=TXT,$$UL^TXTU(FIO)'[TXT Q  
+ ..S T=$S($D(^PROFP(NI,"vf",DT)):"p",$D(^PROFP(NI,"lmk",DT)):"l",1234[$G(^PROFP(NI,"pat",DT)):"f",$D(^PROFP(NI,"n",DT)):"d",1:"")
+ ..I TPX=3,T'="f" Q  
+ ..S BC=$P($G(^PROFP(NI,"li",DT)),"|",3) ; TODO - real BC
+ ..S CRT=$P($G(^PROFP(NI,"crt",DT)),"|",2)
+ ..S W=$G(^PROFP(NI,"work",DT))
+ ..S:W="" W=$$GETE^IPAC(NI,"work",DT)
+ ..S:W'="" W=", "_W
+ ..S RRES=$G(^PROFP(NI,"res",DT))
+ ..I T="l",$P(RRES,"|",6)=2 S ICL=3
+ ..S R=NI_"@"_$$DT^DTUTL(DT)_"@"_T_"@"_ICL_"||"_NI
+ ..S R=R_"|"_SL
+ ..S R=R_"|"_$$DT2^DTUTL(DT)_"|"_FIO
+ ..S R=R_"|"_$$GETE^IPAC(NI,"pol",DT)
+ ..S R=R_"|"_$$AGE^IPAC(NI,DT)
+ ..S X=$G(^PROFP(NI,"fmst",DT)),X=$S(X="":"",1:" ("_X_")")
+ ..S R=R_"|"_$$TXTTP^IPROFVR(NI,DT)_X
+ ..S R=R_"|"_$$GETE^IPAC(NI,"stc",DT)_W
+ ..S RM=$P(RRES,"|",1)
+ ..S R=R_"|"_$S(RRES="":"",'RM:"завершен",$D(RRL(RM)):RRL(RM),1:"завершен")
+ ..S R=R_"|"_BC_"|"
+ ..I VMOD=3 S R=R_$$DT2^DTUTL($$GET^IPAC(NI,"datar",DT))_"|"_$$VFLST^IPROFVR(NI,DT)_"|"_$$GET^IPROF(NI,"workd",DT)_"|"_$$GET^IPROF(NI,"depart",DT)_"|"_$G(^PROFP(NI,"resi",DT))
+ ..I VMOD'=3 S R=R_CRT
+ ..D WC^RWU(CR_R)
+ D C^RWU
+ Q
+MKUSL(DS,DE) ; Создать диспансеризацию из услуг
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N VR,OT,DT,ID,R,RR,VT,DG,NI,ISTC,LSTP,@$$NEWVAR^IUSL,DX
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D
+ ..S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ...S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ....S R=$G(^(ID,"e")) Q:R=""  Q:$P(R,"~",1)="w"
+ ....Q:R'["prof"
+ ....D GET^IUSL(VR,DT,OT,ID)
+ ....I '$D(LSTP(NI)) S DX=$O(^PROFP(NI,DT-10),-1) S:DX="" DX=DT S LSTP(NI)=DT
+ ....S DX=LSTP(NI)
+ ....S U=$O(UL("")) Q:U="" 
+ ....S RR=UL(U)_"||"_VR
+ ....S:$G(DIA)'="" $P(RR,"|",9)=DIA
+ ....S ^PROFP(NI,"n",DX,U)=RR
+ Q
+LXPAT ; Load from excel name|prg|usl
+ N %J,A,NM,P,U,R,I
+ S R=""
+ D ORH^RWU
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D:%J>1
+ .Q:A="" 
+ .S NM=$P(A,"|",1),P=$P(A,"|",2),U=$P(A,"|",3) Q:U=""
+ .S I=$$FNDPAT(NM)
+ .S:I="" I=$O(^PROFM("pat",""),-1)+1,^PROFM("pat",I)=NM_"|"_P
+ .S ^PROFM("pat",I,U)="1|0"
+ .D UGL^IEXCH("^PROFM(""pat"","_I)
+ D CR^RWU
+ Q
+FNDPAT(NM) ; find pattern by name
+ N I,K S K="",I=""
+ F  S K=$O(^PROFM("pat",K)) Q:K=""  I $P($G(^(K)),"|",1)=NM S I=K Q 
+ Q I
+PATUSLL(ID,NIB,TXT) ; Пречень услуг в профосмотре
+ Q:ID="" 
+ N U,P,L,DT,NM
+ S DT=+$H
+ D OWF^RWU(".txt")
+ S U=$$PRC^IPROF(NIB,"",DT),TXT=$$UL^TXTU($$WD^TXTU(TXT))
+ I ID="price" D cel1(NIB,U,TXT) G PATUSLl
+ I ID="prg" D celPRG(NIB,U,TXT) G PATUSLl
+ I ID="p90" D celPRF(NIB,U,TXT) G PATUSLl
+ S P=$P($G(^PROFM("pat",ID)),"|",2),L=+$$^I("ilpu")
+ S P=$S(U="":$$GET^YMPRP(P,"price",DT),1:U) ; TODO
+ S U="" F  S U=$O(^PROFM("pat",ID,U)) Q:U=""  D
+ .S NM=$$NAME^IPRICE(U,P)
+ .I TXT'="",$$UL^TXTU(NM)'[TXT Q 
+ .D WC^RWU(CR_U_"|+|"_NM_"|"_$G(^PROFM("pat",ID,U,L)))
+PATUSLl D C^RWU
+ Q
+LABTAB(DS,DE,DGN,WRK,SPSX) 
+ ; TPX - тип (проф/лмк/ФМС/дисп)
+ ; TXT - fio или nib
+ ; SPSX - номер списка
+ N NI,DT,FIO,PL,R,CRT,BC,W,SL,TPX,JJ,MOD
+ S TPX=3,JJ=1,MOD=0
+ D OWF^RWU(".txt")
+ D WC^RWU("№ пациента|Штрих код (ВИЧ № бланка)|Сертификат|Дата исследования|ФИО пациента|ФИО лат.|Пол|Дата рождения|Гражданство|Паспорт (серия номер)|кем выдан|Краткое название работодателя|Адрес регистрации|Кол.мес.|Разр.док.")
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S NI="" F  S NI=$O(^PROFP(NI)) Q:NI=""  D
+ .S PL=$S(TPX=1:"vf",TPX=2:"lmk",TPX=3:"pat",TPX>2:"n",$D(^PROFP(NI,"vf")):"vf",$D(^PROFP(NI,"n")):"n",1:"log")
+ .S DT=DS-1 F  S DT=$O(^PROFP(NI,PL,DT)) Q:DT=""!(DT>DE)  D
+ ..I DGN'="",$$GET^IPAC(NI,"stc",DT)'=DGN Q
+ ..I WRK'="",$$GET^IPAC(NI,"work",DT)'=WRK Q
+ ..S SL=$$GET^IPAC(NI,"pspisidx",DT)
+ ..I SPSX'="",$S(SPSX="-":SL'="",1:SPSX'=SL) Q  
+ ..S FIO=$$FIO^IPAC(NI)
+ ..S T=$S($D(^PROFP(NI,"vf",DT)):"p",$D(^PROFP(NI,"lmk",DT)):"l",1234[$G(^PROFP(NI,"pat",DT)):"f",$D(^PROFP(NI,"n",DT)):"d",1:"")
+ ..I TPX=3,T'="f" Q  
+ ..S BC=$P($G(^PROFP(NI,"li",DT)),"|",3) ; TODO - real BC
+ ..S CRT=$P($G(^PROFP(NI,"crt",DT)),"|",2)
+ ..S W=$G(^PROFP(NI,"work",DT))
+ ..S:W="" W=$$GETE^IPAC(NI,"work",DT)
+ ..S R=JJ_"|"_BC_"|"_CRT_"|"_$$DT^DTUTL(DT)
+ ..S R=R_"|"_FIO_"|"_$$GET^IPAC(NI,"mnf",DE)_" "_$$GET^IPAC(NI,"mni",DE)_" "_$$GET^IPAC(NI,"mno",DE)
+ ..S R=R_"|"_$E($$GETE^IPAC(NI,"pol",DT))_"|"_$$datar(NI)
+ ..S R=R_"|"_$G(^PROFP(NI,"nation",DT))
+ ..S R=R_"|"_$$GET^IPAC(NI,"pasp",DT)_"|"_$$GET^IPAC(NI,"pasp_dan",DT)
+ ..S R=R_"|"_W
+ ..S R=R_"|"_$G(^PROFP(NI,"vregion",DT))_" "_$G(^PROFP(NI,"vcity",DT))_", "_$G(^PROFP(NI,"vstreet",DT))_" д."_$G(^PROFP(NI,"vdom",DT))_" "_$G(^PROFP(NI,"vkorp",DT))_", "_$G(^PROFP(NI,"vkvart",DT))
+ ..S R=R_"|"_$G(^PROFP(NI,"pvreg",DT))
+ ..S R=R_"|"_$$GET^IPAC(NI,"text",DT)
+ ..S JJ=JJ+1
+ ..D WC^RWU(CR_R)
+ D C^RWU
+ Q
+REGIPROC 
+ S ^IPROC("Профмедицина","Список для КДЛ (ФМС)")="LABTAB_NPROF,1,5,d,Дата с,d,Дата по,te@storage:dog,Договор,te@storage:mectorab@1,Место работы,s,Список №"
+ Q
+datar(NI) 
+ N X
+ S X=$$GET^IPAC(NI,"ydatar")
+ Q:X'="" X_"г"
+ Q $$GETE^IPAC(NI,"datar") ; TODO - print in year

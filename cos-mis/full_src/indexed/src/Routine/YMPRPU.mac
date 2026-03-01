@@ -1,0 +1,188 @@
+YMPRPU ; Утилиты программ прикрепления [ 05/24/2020  5:11 PM ]
+LXL ; Загрузить из Excel
+ N NM,DT,LST,X,I1,I2,XL,DTPV,PR,FLG,N,K
+ D ORH^RWU
+ S NM="",DT="" K ^BUF($J,"YMPRPU")
+ F %J=1:1 S A=$$TRIM^TXTU($$R^RWU) Q:%IFN["Z"  D
+ .I %J=1 S A=$P(A,"|",2),NM=$P(A,"@",1),DT=$$DI^DTUTL($P(A,"@",2)) Q 
+ .Q:%J=2  Q:(NM="")!(DT="") 
+ .S X=$$TRIM^TXTU($P(A,"|",1)) S:X'="" ^BUF($J,"YMPRPU","D",X)=""
+ .S X=$$TRIM^TXTU($P(A,"|",2)) S:X'="" ^BUF($J,"YMPRPU","A",X)=""
+ D CR^RWU
+ S N=NM
+ K LST
+ I $D(^BUF($J,"YMPRPU","A"))'=0 S I1="u",I2="a" M LST=^BUF($J,"YMPRPU","A") D SETUAL^YMPRP
+ K LST
+ I $D(^BUF($J,"YMPRPU","D"))'=0 S I1="u",I2="d" M LST=^BUF($J,"YMPRPU","D") D SETIL^YMPRP
+ K ^BUF($J,"YMPRPU")
+ Q 
+LXLP ; from Excel, price format
+ ; COD/Name@DT|Name|K/A - Kill/Allow
+ N A,%J,TP,COD,NM,DT,CN,NBC,OPR,LST,WPRC,N S DT=""
+ D ORH^RWU
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  D
+ .I %J=1 S A=$P(A,"|",1),NN=$P(A,"@",1),DT=$$DI^DTUTL($P(A,"@",2))
+ .S A=$$DBLSP^TXTU(A)
+ .S COD=$P(A,"|",1),NM=$P(A,"|",2),CN=$P(A,"|",3)
+ .S CN=$$LU^TXTU($TR(CN," ",""))
+ .Q:(COD="")!(CN="") 
+ .S LST(COD)=""
+ I $D(LST)&(DT'="") S I1="u",I2="d",N=NN D SETIL^YMPRP
+ D CR^RWU
+ Q 
+LXLP2 
+ N %J,A,R,TP,PR,D,U
+ D ORH^RWU
+ S PR="",D=+$H
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D
+ .I %J=1 S PR=$P(A,"|",1) Q:PR=""  S TP=$$GET^YMPRP(PR,"tp",D)+1
+ .Q:PR=""  Q:%J=2  
+ .Q:$P(A,"|",1)=""!($P(A,"|",2)="") 
+ .S R=$P(A,"|",4),U=$P(A,"|",1)
+ .I +R=R S ^MPRP(PR,"u","a",D,U)=R_"||"_TP Q 
+ .I R="+" S ^MPRP(PR,"u","a",D,U)="||"_TP Q
+ .I $P(A,"|",5)="+" S ^MPRP(PR,"u","d",D,U)=-TP Q 
+ .I $P(A,"|",6)="+" S ^MPRP(PR,"u","s",D,U)=TP Q
+ D CR^RWU
+ Q
+LXLP3 ; 290308
+ ; Header: prog,date|||
+ ; Lines:  COD|Name|Price|Prog.
+ ; Prog:
+ ; -,X - не используется
+ ; + - используется
+ ; N - ограничения по кол-ву
+ ; N:X - ограничения по кол-ву в группе
+ ; S - по согласованию
+ ; V - невидимый
+ N %J,A,R,G,TP,PR,D,U
+ D ORH^RWU
+ S PR="",D=+$H
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D
+ .I %J=1 S PR=$P(A,"|",1) Q:PR=""  S D=$$DIH^DTUTL($P(PR,",",2)),PR=$P(PR,",",1),TP=$$GET^YMPRP(PR,"tp",D)+1
+ .Q:PR=""  Q:%J=1  
+ .S U=$$TRIM^TXTU($P(A,"|",1))
+ .Q:U=""!($P(A,"|",2)="")!($P(A,"|",3)="") 
+ .S R=$$TRIM^TXTU($P(A,"|",4))
+ .Q:R="" 
+ .S G=$P(R,":",2),R=$$LU^TXTU($P(R,":",1))
+ .I $L(R)=1 I "-X"[R S ^MPRP(PR,"u","d",D,U)=-TP Q
+ .I R="S" S ^MPRP(PR,"u","s",D,U)="" Q 
+ .I R="V" S ^MPRP(PR,"u","v",D,U)="" Q 
+ .I R="+" S ^MPRP(PR,"u","a",D,U)="||"_TP Q
+ .Q:R'?1.N 
+ .S ^MPRP(PR,"u","a",D,U)=R_"||"_TP_$S(G="":"",1:"|"_+G)
+ D:PR'="" POSTGEN^IMPRP(PR,D)
+ D CR^RWU
+ Q
+LXLPL ; Линейный формат загрузки
+ ; Header: prog,date|||
+ ; Lines:  COD|OMS|Name|кол-во|скрыть|ГП|согласование|Дата
+ ; Код услуги или код ОМС. Приоритет программы - средний. 
+ N %J,A,R,G,TP,PR,D,P,U,U1,CNT,RE,GP,SG,OMS
+ D ORH^RWU
+ S PR="",D=+$H
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D
+ .I %J=1 S PR=$P(A,"|",1) Q:PR=""  S D=$$DIH^DTUTL($P(PR,",",2)),PR=$P(PR,",",1),TP=$$GET^YMPRP(PR,"tp",D)+1,P=$$PRC^IINSC("","",D) D mkoms(D,P)
+ .Q:PR=""  Q:%J=1  
+ .S U=$$TRIM^TXTU($P(A,"|",1))
+ .S U1=$$TRIM^TXTU($P(A,"|",2))
+ .I U="",U1'="" S U=$G(OMS(U1))
+ .Q:U=""
+ .S CNT=$$TRIM^TXTU($P(A,"|",4))
+ .S RE=$$TRIM^TXTU($P(A,"|",5))
+ .S GP=$$TRIM^TXTU($P(A,"|",6))
+ .S SG=$$TRIM^TXTU($P(A,"|",7))
+ .I CNT="",RE="",GP="",SG="" Q  
+ .S G=$P(CNT,":",2),CD=$P(CNT,":",3),R=$$LU^TXTU($P(CNT,":",1))
+ .I GP S ^MPRP(PR,"u","d",D,U)=-TP Q
+ .I SG S ^MPRP(PR,"u","s",D,U)=SG Q 
+ .I RE S ^MPRP(PR,"u","v",D,U)="" Q 
+ .I CNT="+" S ^MPRP(PR,"u","a",D,U)="||"_TP Q
+ .S:R ^MPRP(PR,"u","a",D,U)=R_"|"_CD_"|"_TP_$S(G="":"",1:"|"_+G)
+ D:PR'="" POSTGEN^IMPRP(PR,D)
+ D CR^RWU
+ Q
+mkoms(DT,P) 
+ S U="" F  S U=$O(^CN(U)) Q:U=""  I $D(^CN(U,P,"oms")) S R=$$GET^IPRICE(U,"oms",P,DT) S:R'="" OMS(R)=U
+ Q
+LXLPRC ; Cod|Usl|Cenn|prg1,prg2... - из формата прейскуранта (ЛДЦ)
+ N %J,A,R,G,TP,PR,D,U,H,I,P
+ D ORH^RWU
+ K ^BUF($J)
+ S H=60996 ; +$H ; 01.01.2008
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D
+ .I %J=1 S H=$$DI^DTUTL($P(A,"|",1)) S:H="" H=+$H Q
+ .S U=$P(A,"|",1),R=$P(A,"|",4)
+ .S R=$TR(R,";. ",",,")
+ .F I=1:1:99 S P=$P(R,",",I) Q:P=""  D
+ ..I P["гарант" F P=1,11,12 S ^BUF($J,1,"d",U)=""  Q  ; во все базовые программы
+ ..I P["ПРОГРАММЫ" D  Q 
+ ...S D="" F  S D=$O(^BUF($J,D)) Q:D=""  S ^BUF($J,D,"a",U)=""
+ ..S P=$$TRMP(P)
+ ..S ^BUF($J,P,"a",U)=""
+ S P="" F  S P=$O(^BUF($J,P)) Q:P=""  D
+ .;S ^MPRP(P,"pname")="Программа "_P,^("cname")=^("pname")
+ .S U="" F  S U=$O(^BUF($J,P,"a",U)) Q:U=""  S ^MPRP(P,"u","a",H,U)=""
+ .S U="" F  S U=$O(^BUF($J,P,"d",U)) Q:U=""  S ^MPRP(P,"u","d",H,U)=""
+ Q
+TRMP(X) 
+ Q:X=16 "b"
+ Q:X=17 "c"
+ Q:X=27 "d"
+ Q:X=12 "e"
+ Q:X="J1" "g"
+ Q:X="J2" "j"
+ Q:X="R5" "r"
+ Q:X=13 "Д"
+ Q:X=25 "Ж"
+ Q:X=10 "И"
+ Q:X=19 "Й"
+ Q:X=14 "М"
+ Q:X=18 "У"
+ Q:X=15 "Ю"
+ Q:X="R3" "а"
+ Q:X="J3" "H"
+ Q:X=11 6
+ Q X
+MKidxC ; Индекс для расчетов - todo
+ N P,U,D
+ K ^MPRPI("u")
+ S P="" F  S P=$O(^MPRP(P)) Q:P=""  D
+ .S D=$O(^MPRP(P,"u","a",""),-1) Q:D=""  
+ .S U="" F  S U=$O(^MPRP(P,"u","a",D,U)) Q:U=""  S ^MPRPI("u",U,P)=""
+ S ^MPRPI=+$H
+ Q
+LFILES(DIR) ; Загрузить описания из текстовых файлов в каталоге DIR
+ N R,CR,FN,A,P
+ S CR=$C(13,10)
+ S P="" F  S P=$O(^MPRP(P)) Q:P=""  D
+ .S FN=DIR_$$NAME^IMPRP(P)_".txt"
+ .I '$$CHECK^FIL(FN) W !,FN," .. NOT!" Q  ; нет файла
+ .O FN U FN
+ .S R="" F  R A Q:'$$ST^FIL()  S R=$S(R="":"",1:R_CR)_A
+ .C FN
+ .S R=$$TRIM^TXTU(R)
+ .D SET^YMPRP(P,"dsc",+$H,R,"")
+ .U 0 W !,$$NAME^IMPRP(P)," .. OK ",$L(R)
+ Q
+USLinPR(USL,PRC) ; Вывести программы где присутствует услуга
+ ; USL - код услуги
+ ; PRC - прейскурант (опционально)
+ N ID,X,F,H
+ S H=+$H,PRC=$G(PRC)
+ S ID="" F  S ID=$O(^MPRP(ID)) Q:ID=""  D
+ .S X=$$GET^YMPRP(ID,"price",H) I X'="",PRC'="",X'=PRC Q
+ .Q:'$$CHECK^IMPRP(ID,H)
+ .S F=0
+ .I $$ISL2^YMPRP(ID,"u","a",H,USL) S F=1 ; ; разр.
+ .I 'F,$$ISL2^YMPRP(ID,"u","d",H,USL) S F=1 ; запрет
+ .I 'F,$$ISL2^YMPRP(ID,"u","s",H,USL) S F=1 ; соглас.
+ .I 'F,$$ISL2^YMPRP(ID,"u","v",H,USL) S F=1 ; видимые
+ .I 'F,$$ISL2^YMPRP(ID,"u","i",H,USL) S F=1 ; в приеме
+ .Q:'F 
+ .W !,ID_" "_$$NAME^IMPRP(ID)
+ Q
+REGIPROC 
+ S ^IMPROC("Программа обслуживания (число, согл,ГП)")="LXLPL_YMPRPU()"
+ Q

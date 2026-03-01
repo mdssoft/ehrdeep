@@ -1,0 +1,168 @@
+NMLABED ; Взаимодействие с Едиными Документами [ 10/27/2021  12:27 PM ]
+CHK(NIB,VR,OT,SP,DT,ALL) ; Проверка наличия лабораторных услуг
+ N ID,U,LP,USL,STAT,F
+ S F=0,LP=+$$^I("ilpu"),ALL=$G(ALL)
+ S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D  Q:F
+ .Q:NIB'=$$GETNIB^IUSL(VR,DT,OT,ID)
+ .I 'ALL,$$ISPL^IUSL(VR,DT,OT,ID,"li") Q  ; lab ID
+ .S STAT=$$GETSTAT^IUSL(VR,DT,OT,ID)
+ .Q:STAT="w"!(STAT="d")  
+ .S USL=$P($$GETUSLS^IUSL(VR,DT,OT,ID),"*",1)
+ .S F=$$LPUCLAB^IMLAB(LP,USL) 
+ Q F ; возврат - код лаб.
+INIT(NIB,VR,OT,DTT) ; Инициализация формы параметров заявки
+ N LP,LAB,R,M,LST,LLST,MLST,KX,DT,ID,U,npB
+ S DT=$$DIH^DTUTL(DTT),LP=+$$^I("ilpu")
+ 
+ Q:'$$CHK^NMLABED(NIB,VR,OT,"",DT,1) 
+ 
+ S npB=$$LCL^IUSER("lab","noprnbar")
+ 
+ D mkLSTU
+ 
+ S U="" F  S U=$O(LST(U)) Q:U=""  D
+ .S LAB="" F  S LAB=$O(^LABTI("LAB",LAB)) Q:LAB=""  D
+ ..S KX=$G(^LABTI("LAB",LAB,"CN",U)) Q:KX="" 
+ ..I $D(^LABC(LAB,"lpu")),'$D(^("lpu",LP)) Q  ; не этот филиал
+ ..S LLST(LAB)="",ID=$P(LST(U),"|",1)
+ ..S M=$O(^MLAB(NIB,ID,"mi",""))
+ ..I M'="" S MLST(M)=ID_"|1" Q  ; другие мат. игнорируем
+ ..S M="" F  S M=$O(^LABC(LAB,"CN",KX,"b",M)) Q:M=""  D
+ ...S R=$P($G(^LABC(LAB,"M",M)),"|",1) Q:R=""  ; код мат. лпу
+ ...S MLST(R)=ID
+ 
+ I '$D(MLST) s MLST(1)=""
+ 
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<mhlabz>")
+ S R=$S($$GET^IPAC(NIB,"pol")=2:"yes",1:"no")
+ D W^RWU("<cycle visible="""_R_"""/><pregd visible="""_R_"""/>")
+ D:$$LCL^IUSER("lab","noprnbar") WC^RWU("<bt_print title=""Заявка""/>")
+ D W^RWU("<labs>")
+ S (LAB,R)="" F  S LAB=$O(LLST(LAB)) Q:LAB=""  D WC^RWU(R_LAB_"|"_$$TAG^TXTU(^LABC(LAB,"nm"))) S R=CR
+ D W^RWU("</labs><bio>")
+ S (M,R)=""
+ F  S M=$O(MLST(M)) Q:M=""  D WC^RWU(R_M_"|"_$$TAG^TXTU(^LABT("M",M))_$S($P(MLST(M),"|",2):" - "_$S(npB=2:"зарегистрирован",npB:"сформировано",1:"отпечатано"),1:"")) S R=CR
+ D W^RWU("</bio>")
+ S R=$G(^cfg("lab","barpprn"))
+ D:R'="" WTAGD^RWU("pprn",R)
+ D WTAGD^RWU("barmode",npB)
+ D W^RWU("</mhlabz></nb_console>"),C^RWU
+ Q
+CONLST(NIB,ZID,BIO) ; Перечень контейнеров
+ Q:ZID=""  Q:BIO=""  
+ S:ZID["@" NIB=$P(ZID,"@",1),ZID=$P(ZID,"@",2)
+ 
+ N A,RR,B,CON,J,CJ,C,R,BB,BX
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<labcbar>")
+ S R=$G(^cfg("lab","barpprn"))
+ D:R'="" WTAGD^RWU("pprn",R)
+ 
+ D WTAGDC^RWU("fio",NIB_" "_$$FIOSH^IPAC(NIB))
+ 
+ D W^RWU("<lst>")
+ S A=""
+ S BB="" F  S BB=$O(^MLAB(NIB,ZID,"mi",BB)) Q:BB=""  D:(BIO="")!(BIO=BB)
+ .S RR=$G(^MLAB(NIB,ZID,"mi",BIO))
+ .S CJ=$P(RR,"|",1),B=$P(RR,"|",2),CON=$P(RR,"|",4)
+ .F J=1:1:CJ D
+ ..S C=$P(CON,"@",J),BX=$P(B,"@",J)
+ ..S A=A_$S(A="":"",1:CR)_$S(BX="":"",1:BX_" - ")_$P($G(^LABT("CONT",C)),"|",1)_$S(BIO="":", "_$$NAMEBI^IMLABS(BB),1:"")_"|"_BX_"@"_$P(C,".",2)
+ 
+ D WC^RWU(A)
+ 
+ D W^RWU("</lst></labcbar></nb_console>"),C^RWU
+ Q
+MK(NIB,VR,OT,DTT,LAB,BIO,CIT,CP,PD,BAR) ; Создать заявку для лаборатории
+ ; LAB - лаборатория
+ ; BIO - биоматериал (1 !)
+ ; CIT - CITO
+ ; CP  - день цикла
+ ; PD  - неделя беременности
+ N LP,KX,ID,U,M,R,A,LID,cLID,LST,LSTR,F,V,O,I,CNT,npB,VI,ML,MSG
+ S DT=$$DIH^DTUTL(DTT),LP=+$$^I("ilpu"),BIO=$$WD^TXTU(BIO),BAR=$G(BAR)
+ S npB=$$LCL^IUSER("lab","noprnbar")
+ S VI=+$G(^LABC(LAB,"virtual")) S:VI npB=1
+ D mkLSTU
+ S F=0,(MSG,LID)=""
+ S U="" F  S U=$O(LST(U)) Q:U=""  D  Q:MSG'="" 
+ .S KX=$G(^LABT("REQF",U))
+ .I KX'="",CP="",$$FLinFL^TXTU(KX,"dcl") S MSG="Не указан день цикла" Q 
+ .I KX'="",PD="",$$FLinFL^TXTU(KX,"ndbr") S MSG="Не указана неделя беременности" Q 
+ .S KX=$G(^LABTI("LAB",LAB,"CN",U)) Q:KX="" 
+ .S M="" F  S M=$O(^LABC(LAB,"CN",KX,"b",M)) Q:M=""  D
+ ..S R=$P($G(^LABC(LAB,"M",M)),"|",1) Q:R=""  ; код мат. лпу
+ ..I BIO'="",R'=BIO Q  ; только для этого биом.
+ ..S ML(R)="" 
+ ..S R=$P(LST(U),"|",1) I R'="" S LID=R Q ; уже есть заявка
+ ..S LSTR(U)=LST(U)
+ 
+ I MSG'="" D MSG^RWU("!|"_MSG) Q 
+ 
+ I LID'="",'$D(ML),$P($G(^MLAB(NIB,LID,"s31")),"|",1) S LID=""
+ 
+ I '$D(LSTR) Q:LID=""  S A=$P($G(^MLAB(NIB,LID,"mi",BIO)),"|",2) G:A'="" MKe Q 
+ ; заявка
+ S R=$G(^LABC(LAB,"lpu",LP,"eid"))
+ S:R="" R=$G(^LABC(LAB,"eid"))
+ S:VI LID="*"
+ S:LID="" LID=$$MK^IMLAB(NIB,$H,"",LAB,R,CIT)
+ S:CP'="" ^MLAB(NIB,LID,"fl","dcl")=CP
+ S:PD'="" ^MLAB(NIB,LID,"fl","ndbr")=PD
+ ; услуги
+ S U="" F  S U=$O(LSTR(U)) Q:U=""  D
+ .S R=LSTR(U),V=$P(R,"|",2),O=$P(R,"|",4),I=$P(R,"|",5)
+ .S CNT=$P($$GETUSLS^IUSL(V,DT,O,I),"*",2)
+ .D:'VI ADDUSL^IMLAB(NIB,LID,U,CNT,1,V,DT,O,I)
+ .S A=$$SETPL^IUSL(V,DT,O,I,"li",LID)
+ G:VI MKe1 ; виртуальная лаб.
+ ; биоматериалы
+ S A=$P($G(^MLAB(NIB,LID,"mi",BIO)),"|",2)
+ G:A'="" MKe ; уже есть
+ I BIO="" S U="" F  S U=$O(ML(U)) Q:U=""  S ^MLAB(NIB,LID,"mi",U)=1
+ D mkbar(NIB,LID,BIO,LP,BAR)
+MKe 
+ D:'npB SETSTAT^IMLAB(NIB,LID,3,1) ; в работе
+ I 'npB,$$GETBAR^IMLAB(NIB,LID,BAR) D SETSTAT^IMLAB(NIB,LID,31,1) ; отпечатан
+ I BAR'="",npB=2 D SETSTAT^IMLAB(NIB,LID,3,1),SETSTAT^IMLAB(NIB,LID,31,1) 
+ D:npB=3 SETSTAT^IMLAB(NIB,LID,3,1) ; в работе, без печати/скана ШК
+ D GL^IEXCH("^MLAB",NIB,LID)
+MKe1 
+ S:npB A=A_"|1" ; not print
+ D MSG^RWU(A)
+ Q
+mkbar(NIB,LID,BIO,LP,BAR) ; Создать штрихкод
+ ; BAR - если есть то присвоить
+ I $G(BAR)'="" D SETBAR^IMLAB(NIB,LID,BAR,BIO) Q 
+ S R=$G(^LABC(LAB,"lpu",LP,"bar"))
+ S:R="" R=$G(^LABC(LAB,"bar"))
+ S:R="" R=$G(^cfg("lab","barprefix"))_"|"_$G(^cfg("lab","barlen"))
+ S A=$$NEWBAR^IMLAB(NIB,LID,$P(R,"|",1),+$P(R,"|",2),BIO)
+ D SETSTAT^IMLAB(NIB,LID,2,1)
+ Q
+mkLSTU ; Создать списки услуг
+ S KX="" F  S KX=$O(^PNF(NIB,DT,KX)) Q:KX=""  D
+ .Q:VR'=$P(KX,"|",1)  Q:OT'=$P(KX,"|",2)
+ .S ID=$P(KX,"|",3)
+ .S U=$P($$GETUSLS^IUSL(VR,DT,OT,ID),"*",1)
+ .Q:'$P($G(^LABTI("CT",U)),"|",3)
+ .S LID=$$GETPL^IUSL(VR,DT,OT,ID,"li")
+ .I LID'="",$P($G(^MLAB(NIB,ID,"s4")),"|",1) Q  
+ .S LST(U)=LID_"|"_VR_"|"_DT_"|"_OT_"|"_ID ; TODO - множественные услуги
+ Q
+BIOUSLS(NIB,VR,OT,DTT,LAB,BIO) ; Список услуг по биоматериалу
+ N LP,LAB,R,M,LST,KX,DT,ID,U,AA,BM,@$$NEWVAR^IUSL
+ S DT=$$DIH^DTUTL(DTT),LP=+$$^I("ilpu"),BIO=$$WD^TXTU(BIO)
+ 
+ D mkLSTU
+ S AA=""
+ S U="" F  S U=$O(LST(U)) Q:U=""  D
+ .S LAB="" F  S LAB=$O(^LABTI("LAB",LAB)) Q:LAB=""  D
+ ..S KX=$G(^LABTI("LAB",LAB,"CN",U)) Q:KX="" 
+ ..I $D(^LABC(LAB,"lpu")),'$D(^("lpu",LP)) Q  ; не этот филиал
+ ..S R=LST(U)
+ ..S BM=$$fndBIO^IMLABS(LAB,BIO) Q:BM="" 
+ ..Q:'$D(^LABC(LAB,"CN",KX,"b",BM))  ; нет этого биомат.
+ ..D GET^IUSL($P(R,"|",2),$P(R,"|",3),$P(R,"|",4),$P(R,"|",5))
+ ..S AA=$S(AA="":"",1:AA_CR)_U_"|"_$$NAME^IPRICE(U,PRC)
+ D MSG^RWU(AA)
+ Q

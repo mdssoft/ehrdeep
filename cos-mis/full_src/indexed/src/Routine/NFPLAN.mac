@@ -1,0 +1,179 @@
+NFPLAN ; Финансовый план ЛПУ [ 11/11/2018  3:08 PM ]
+MK(MM,YY,dFL) ; Make new
+ ; dFL - day flag
+ N L,O,ID,DT
+ S DT=$$DI^DTUTL("01."_MM_"."_YY),L=""
+ F  S L=$O(^FPLN(L)) Q:L=""  D
+ .S O="" F  S O=$O(^FPLN(L,O)) Q:O=""  D
+ ..S ID="" F  S ID=$O(^FPLN(L,O,ID)) Q:ID=""  D
+ ...S R=$O(^FPLN(L,O,ID,DT),-1) Q:R="" 
+ ...S ^(DT)=^(R)
+ ...D GL^IEXCH("^FPLN",L,O,ID,DT)
+ D L(MM,YY)
+ Q
+L(MM,YY) ; Load
+ D OWF^RWU(".txt"),W^RWU(MM_"@"_YY)
+ N L,O,ID,DT,R,DE,ON,DC,IC,CAT
+ S DT=$$DI^DTUTL("01."_MM_"."_YY),L=""
+ S DE=$$AFTERMN^DTUTL(DT)-1
+ S IC=+$G(^MN("fplncat"))
+ S DC=DE-DT+1
+ F  S L=$O(^FPLN(L)) Q:L=""  D
+ .S R=$S($$^I("ilpu")="":$$NAME^ICONTR(L),1:$$^I("iname")),O=-1
+ .D WC^RWU(CR_L_"@-1@-1|"_R_"||"_$$tcnt($G(^FPLN(L,-1,-1,DT)),DC))
+ .S CAT="" F  S CAT=$O(^MN(IC,CAT)) Q:CAT=""  D
+ ..D WC^RWU(CR_L_"@-1@-1@"_CAT_"| - "_$P(^MN(IC,CAT),"|",1)_"||"_$$tcnt($G(^FPLN(L,-1,-1,DT,CAT)),DC))
+ .F  S O=$O(^FPLN(L,O)) Q:O=""  D
+ ..S ON=$$GOTD^YISPRAV(O)
+ ..D:$D(^FPLN(L,O,-1,DT))
+ ...D WC^RWU(CR_L_"@"_O_"@-1|"_ON_"||"_$$tcnt($G(^(DT)),DC))
+ ...S CAT="" F  S CAT=$O(^MN(IC,CAT)) Q:CAT=""  D
+ ....D WC^RWU(CR_L_"@"_O_"@-1@"_CAT_"| - "_$P(^MN(IC,CAT),"|",1)_"||"_$$tcnt($G(^FPLN(L,O,-1,DT,CAT)),DC))
+ ..S ID=-1 F  S ID=$O(^FPLN(L,O,ID)) Q:ID=""  D
+ ...Q:'$D(^FPLN(L,O,ID,DT)) 
+ ...S R=$S(ID=0:"на сотрудника",ID=2:"на кресло",$E(ID,1)="S":$$GSPEC^YISPRAV($E(ID,2,9)),$E(ID,1)="V":$$FIOSH^IKADRY($E(ID,2,99)),1:"")
+ ...D WC^RWU(CR_L_"@"_O_"@"_ID_"|"_ON_"|"_R_"|"_$$tcnt(^FPLN(L,O,ID,DT),DC))
+ ...S CAT="" F  S CAT=$O(^MN(IC,CAT)) Q:CAT=""  D
+ ....D WC^RWU(CR_L_"@"_O_"@"_ID_"@"_CAT_"| - "_$P(^MN(IC,CAT),"|",1)_"|"_R_"|"_$$tcnt($G(^FPLN(L,O,ID,DT,CAT)),DC))
+ D C^RWU
+ Q
+S ; Save
+ N I,R,MM,YY,DT,A,%IFN,DC,CAT,L,O,K
+ D ORH^RWU
+ F I=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D
+ .I I=1 S R=$P(A,"|",1),MM=$P(R,"@",1),YY=$P(R,"@",2),DT=$$DI^DTUTL("01."_MM_"."_YY),DC=$$AFTERMN^DTUTL(DT)-DT Q 
+ .S R=$P(A,"|",1)
+ .S L=$P(R,"@",1),O=$P(R,"@",2),K=$P(R,"@",3)
+ .Q:DT=""!(L="")!(O="")!(K="")
+ .S A=$$fcnt($P(A,"|",4,99),DC),CAT=$P(R,"@",4)
+ .I CAT="" S ^FPLN(L,O,K,DT)=A D GL^IEXCH("^FPLN",L,O,K,DT)
+ .I CAT'="" S ^FPLN(L,O,K,DT,CAT)=A D GL^IEXCH("^FPLN",L,O,K,DT,CAT)
+ D CR^RWU
+ Q
+NVR(MM,YY,LPU,OTD,VR) ; New doctor
+ G:LPU=""!(OTD="")!(OTD="") NVRend
+ N DT S DT=$$DI^DTUTL("01."_MM_"."_YY)
+ S ^FPLN(LPU,OTD,VR,DT)=""
+NVRend D L(MM,YY)
+ Q
+DELVR(MM,YY,KEY) ; delete doctor from month
+ N DT S DT=$$DI^DTUTL("01."_MM_"."_YY)
+ I KEY'["@@" K ^FPLN($P(KEY,"@",1),$P(KEY,"@",2),$P(KEY,"@",3)) D KGL^IEXCH("^FPLN",$P(KEY,"@",1),$P(KEY,"@",2),$P(KEY,"@",3))
+ D L(MM,YY)
+ Q
+INITFP 
+ N C,R,N,X,F,L
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<fplnadd><lpu>")
+ S X=$$^I("ilpu"),L=X,C=""
+ I X="" D WC^RWU("0|"_$$^I("iname")) S L=0
+ E  S N="" F  S N=$O(^CGAI("flg","fi",N)) Q:N=""  D WC^RWU(C_N_"|"_$$NAME^ICONTR(N)) S C=CR S:L="" L=N
+ D WC^RWU("</lpu><otd>-1|по всему ЛПУ")
+ S N=+$G(^MN("otd")),X="",F=""
+ F  S X=$O(^MN(N,X)) Q:X=""  I $G(^(X,"use")) D WC^RWU(CR_X_"|"_$G(^("sname"))) S:F="" F=X
+ D WC^RWU("</otd><st>-1|по всему ЛПУ</st></fplnadd></nb_console>")
+ D C^RWU
+ Q
+STLST(LPU,OTD) 
+ D OWF^RWU(".txt")
+ D STLSTsys(LPU,OTD)
+ D C^RWU
+ Q
+STLSTsys(LPU,OTD) 
+ I OTD=-1 D WC^RWU("-1|по всему ЛПУ") Q
+ N STOTD
+ M STOTD=^cfg("stom-otd")
+ S:$G(^cfg("stom-otd"))'="" STOTD(^cfg("stom-otd"))=""
+ D WC^RWU("-1|по всему отделению"_CR_"0|на сотрудника"_$S($D(STOTD(OTD)):CR_"2|на кресло",1:""))
+ N N,I,R,S
+ S I=+$G(^MN("spec")),N=""
+ F  S N=$O(^MN(I,N)) Q:N=""  I $G(^(N,"use")) D WC^RWU(CR_"S"_N_"|"_$G(^("sname")))
+ S N="" F  S N=$O(^KDR(N)) Q:N=""  D
+ .Q:$$GET^IKADRY(N,"use",+$H)=0
+ .I LPU'="" S R=$$GET^IKADRY(N,"lpu",+$H) I R'="",R'=LPU Q
+ .I OTD'="",'$$IsOTD^IKADRY(N,OTD,+$H) Q 
+ .D WC^RWU(CR_"V"_N_"|"_$$FIOSH^IKADRY(N))
+ Q
+tcnt(X,DC) ; в сумму за месяц
+ N I,K,R
+ S R=""
+ F I=1:1:$L(X,"|") S K=+$J($P(X,"|",I)*DC,"",2),$P(R,"|",I)=K
+ Q R
+fcnt(X,DC) ; из суммы за месяц
+ N I,K,R
+ F I=1:1:$L(X,"|") S K=$$NNUM^TXTU($P(X,"|",I))/DC,$P(R,"|",I)=K
+ Q R
+GET(LP,OT,VR,SP,DT) 
+ N D
+ S D=$O(^FPLN(LP,OT,"V"_VR,DT+1),-1)
+ I D'="" S D=^(D) Q:D'="" D
+ I SP'="" S D=$O(^FPLN(LP,OT,"S"_SP,DT+1),-1) I D'="" S D=^(D) Q:D'="" D
+ I SP="" D  Q:D'="" D
+ .S D=""
+ .S SP=$$SPEC^IKADRY(VR)
+ .S D=$O(^FPLN(LP,OT,"S"_SP,DT+1),-1)
+ .I D'="" S D=^(D) Q:D'=""
+ .S SP=$$GET^IKADRY(VR,"spec2",DT)
+ .S D=$O(^FPLN(LP,OT,"S"_SP,DT+1),-1)
+ .I D'="" S D=^(D) Q:D'=""
+ .S SP=$$GET^IKADRY(VR,"spec3",DT)
+ .S D=$O(^FPLN(LP,OT,"S"_SP,DT+1),-1)
+ .I D'="" S D=^(D) Q:D'=""
+ S D=$O(^FPLN(LP,OT,0,DT+1),-1) ; на сотр.
+ I D'="" S D=^(D) Q:D'="" D
+ Q ""
+GETSP(LP,SP,DT) ; По специальности
+ N OT,D
+ S SP="S"_SP,(D,OT)=""
+ F  S OT=$O(^FPLN(LP,OT)) Q:OT=""  S D=$O(^FPLN(LP,OT,SP,DT+1),-1) S:D'="" D=^(D) Q:D'=""
+ Q D
+GETOT(LP,OT,DT) ; По отделению
+ S DT=$O(^FPLN(LP,OT,-1,DT+1),-1)
+ Q:DT="" ""
+ Q ^(DT)
+GETLP(LP,DT) ; По филиалу
+ S DT=$O(^FPLN(LP,-1,-1,DT+1),-1)
+ Q:DT="" ""
+ Q ^(DT)
+GETPLP(LP,SUB,FL,DS,DE) ; За период по филиалу и параметру
+ N DT
+ S DT=$O(^FPLN(LP,-1,-1,DE+1),-1)
+ Q:DT="" ""
+ S DE=DE-DS+1
+ I SUB'="",$D(^FPLN(LP,-1,-1,DT,SUB)) Q $$DECFL(^(SUB),FL)*DE
+ Q $$DECFL(^FPLN(LP,-1,-1,DT),FL)*DE
+DECFL(X,NM) ; Получить поле по имени
+ Q:NM="sum" $P(X,"|",1) ; сумма услуг
+ Q:NM="bill" $P(X,"|",2) ; нал.выручка
+ Q:NM="kss" $P(X,"|",3) ; усл. по кассе
+ Q:NM="ucnt" $P(X,"|",4) ; кол-во усл.
+ Q:NM="pipl" $P(X,"|",5) ; лиц
+ Q:NM="pos" $P(X,"|",6) ; посещений
+ Q:NM="kpos" $P(X,"|",7) ; посещений по кассе 
+ Q ""
+IMP ; Импорт финплана
+ N A,%J,LP,OT,VR,CAT,RR,DS,DT,DC
+ D ORH^RWU
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  D
+ .S LP=$P($P(A,"|",1)," ",1),OT=$P($P(A,"|",2)," ",1)
+ .S VR=$P($P(A,"|",3)," ",1),CAT=$P($P(A,"|",4)," ",1)
+ .Q:LP="" 
+ .I VR'="",OT="" Q  ; врача без отделения нельзя
+ .S DS=$P(A,"|",5) Q:DS="" 
+ .S DT=$$DI^DTUTL("01."_$P(DS,".",2,3)) Q:DT=""  
+ .Q:'$$EXIST^ICONTR(LP)  
+ .I OT'="",'$$CHECK^ISPRAV("otd",OT) Q 
+ .I VR'="",'$$EXIST^IKADRY(VR) Q 
+ .I CAT'="",'$$CHECK^ISPRAV("fplncat",CAT) Q 
+ .S:VR="" VR=-1 S:OT="" OT=-1
+ .S DC=$$AFTERMN^DTUTL(DT)-DT
+ .S RR=$$fcnt($P(A,"|",6,99),DC)
+ .S:CAT="" ^FPLN(LP,OT,VR,DT)=RR
+ .S:CAT'="" ^FPLN(LP,OT,VR,DT,CAT)=RR
+ .D REGL^IEXCH("^FPLN",LP,OT,VR,DT)
+ D CR^RWU
+ Q
+INITDB 
+ S ^MN("root","fplncat")="Категории финплана"
+ S ^MN("root","fplncat","kname")="UID",^("ktype")="S"
+ S ^IMPROC("Финансовый план ЛПУ")="IMP_NFPLAN()"
+ Q

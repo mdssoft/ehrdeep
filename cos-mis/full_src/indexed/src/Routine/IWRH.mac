@@ -1,0 +1,470 @@
+IWRH ; Склад/аптека [ 12/20/2022  3:02 PM ]
+GET(STK,ID,H,PL) ; Получить данные
+ S H=$G(^WRH(STK,ID,H)) Q:H="" ""
+ I PL="operator" Q $P(H,"|",2)
+ I PL="count" Q $P(H,"|",3)
+ I PL="ndoc" Q $P(H,"|",4)
+ I PL="dtm" Q $P(H,"|",6)
+ I PL="sum" Q $P(H,"|",14)
+ I PL="nds" Q $P(H,"|",15)
+ I PL="from" Q $P(H,"|",7,8)
+ I PL="to" Q $P(H,"|",9,10)
+ I PL="user" Q $P(H,"|",5)
+ I PL="link" Q $P(H,"|",11)
+ Q ""
+SUB(LPU,OT,VR,MTS,STK,CSUM,VAR,SYS,ESUM) ; Списание материала
+ ; MTS - строка материалов
+ ; STK - склад
+ ; CSUM - вычислять сумму
+ ; VAR - записать ID списаний
+ ; SYS - внешние сист. данные (произвольно)
+ ; ESUM - внешняя сумма (розница)
+ Q:MTS="" 
+ N I,X,M,CNT,K,SUM,SK
+ S K="D|"_VR,STK=$G(STK)
+ S CSUM=$G(CSUM),VAR=$G(VAR),SYS=$G(SYS),ESUM=$G(ESUM)
+ F I=1:1:99 S X=$P(MTS,"|",I) Q:X=""  D
+ .S M=$P(X,"@",1),CNT=$S($P(X,"@",2)="":1,1:$P(X,"@",2))
+ .S SUM=$P(X,"@",3),SK=$P(X,"@",4)
+ .I STK'="" D SUBMT(STK,M,CNT,K,SUM,CSUM,VAR,SYS,SK,,,ESUM) Q 
+ .I $D(^WRH(K)) D SUBMT(K,M,CNT,K,SUM,CSUM,VAR,SYS,SK,,,ESUM) Q 
+ .I $D(^WRH("O|"_OT)) D SUBMT("O|"_OT,M,CNT,K,SUM,CSUM,VAR,SYS,SK,,,ESUM) Q
+ .I $D(^WRH("L|"_LPU)) D SUBMT("L|"_LPU,M,CNT,K,SUM,CSUM,VAR,SYS,SK,,,ESUM) Q 
+ .D SUBMT(K,M,CNT,K,SUM,VAR,,,,,ESUM)
+ Q
+SUBMT(WRH,N,CNT,UID,SUM,CSUM,VAR,SYS,SKD,DTM,SN,ESUM) ; Списать номенклатуру на складской ID
+ ; WRH - код склада
+ ; N - код номенклатуры
+ ; CNT - количество
+ ; UID - на кого списывать
+ ; SUM - сумма списания
+ ; CSUM - вычислять сумму
+ ; VAR - переменная результата
+ ; SYS - системные данные
+ ; SKD - значение скидки
+ ; DTM - дата-время списания
+ ; SN - серийный номер
+ ; ESUM - внешняя сумма
+ N A,I,HH,H,NOM,WRI,PKO,LBL,L,R,RR
+ S WRI=WRH S:WRI'["|" WRI="|"_WRI S:UID'["|" UID="|"_UID
+ S SUM=$G(SUM),CSUM=$G(CSUM),VAR=$G(VAR)
+ S SYS=$G(SYS),SKD=$G(SKD),SN=$G(SN)
+ S DTM=$G(DTM) S:DTM="" DTM=$H S H=+DTM
+ S PKO=$$GET^IWRHS(N,"pku") ; предм. учет
+ S A="1|-|"_CNT_"||"_$$USR^IUSER()_"|"_$H_"|"_WRI_"|"_UID
+ S:CSUM SUM=$$RESTWS(WRH,N,CNT,"",$S(PKO:"LBL",1:""),SN)
+ S:SYS'="" $P(A,"|",11)=SYS
+ S:SUM'="" $P(A,"|",14)=SUM
+ S:SKD'="" $P(A,"|",18)=SKD
+ S:SN'="" $P(A,"|",12)=SN
+ S:$G(ESUM)'="" $P(A,"|",22)=ESUM
+ S:'$D(LBL) LBL(0)=""
+ L +^WRH(WRH,N)
+ ; списываем кусками
+ S L="" F  S L=$O(LBL(L)) Q:L=""  D
+ .I L S R=LBL(L),RR=^WRH(WRH,N,L),$P(A,"|",3)=$P(R,"|",1),$P(A,"|",14)=$P(R,"|",2),$P(A,"|",12)=$P(RR,"|",12),$P(A,"|",21)=$P(RR,"|",21),$P(A,"|",20)=L ; отд. кол-во,сумма и код
+ .F I=$P(DTM,",",2):1:999999 Q:'$D(^WRH(WRH,N,H_","_I))
+ .S HH=H_","_I
+ .S ^WRH(WRH,N,HH)=A
+ .D GL^IEXCH("^WRH",WRH,N,HH)
+ .S:VAR'="" @VAR@(WRH_","_N_","_HH)=""
+ .Q:'L
+ .S ^WRH(WRH,N,L,HH)=$P(R,"|",1)
+ .D GL^IEXCH("^WRH",WRH,N,L,HH)
+ .D MKIPART(WRH,N,L)
+ L -^WRH(WRH,N)
+ ; S A=+$G(^cfg("wrh","mode"))
+ ; D:'A MKFIFO(WRH,N,CNT,"NOM") D:A=1 MKLIFO(WRH,N,CNT,"NOM")
+ ; S A="" F  S A=$O(NOM(A)) Q:A=""  S ^WRH(WRH,N,H_","_I,A)=NOM(A),^WRH(WRH,N,A,H_","_I)=NOM(A)
+ ; D GL^IEXCH("^WRH",WRH,N,H_","_I)
+ ; S A="" F  S A=$O(NOM(A)) Q:A=""  D GL^IEXCH("^WRH",WRH,N,A,H_","_I)
+ Q
+ADD(WRH,N,CNT,SUM,NDS,FROM,TO,SUBTP,H,SN) ; Добавить на склад
+ ; WRH - склад
+ ; N - код номенклатуры
+ ; CNT - кол-во
+ ; SUM - сумма общая
+ ; NDS - сумма НДС общая
+ ; FROM - со склада (опция)
+ ; TO - на склад
+ ; SUBTP - тип документа 
+ ; H - дата, время списания
+ ; SN - серийный номер
+ N ID,SI,A,R,OW,HH,X,LP,DOC
+ S:FROM'["|" FROM="|"_FROM ; Контрагент
+ S:$G(TO)="" TO="|"_WRH
+ S:TO'["|" TO="|"_TO
+ S SUBTP=$G(SUBTP),H=$G(H) S:H="" H=$H
+ S SI=$S(CNT>0:"+",1:"-"),LP=$$^I("ilpu")
+ S:CNT<0 CNT=-CNT
+ S X=$$RGID^I(LP)
+ L +^WRHI("n")
+ S ID=$P($O(^WRHI("n",""),-1),".",1)+1_$S(+X:"."_X,1:"")
+ S ^(ID)=$S(SUBTP'="":SUBTP,SI="-":"out",1:"in")
+ L -^WRHI("n")
+ S R=$G(%LOG)_$S(LP="":"",1:"@"_LP)
+ S A="1|"_SI_"|"_CNT_"|"_ID_"|"_R_"||"_FROM_"|"_TO
+ S DOC=$S(SUBTP'="":SUBTP,SI="-":"out",1:"in")_"|||"
+ S DOC=DOC_$P(A,"|",7)_"|"_$P(A,"|",8)_"|"_$P(A,"|",9)_"|"_$P(A,"|",10)
+ S:WRH="" WRH=$$LPUWRH(LP)
+ S:$$GET^IWRHS(N,"pku") $P(A,"|",12)=$$GET^IINKR("wrhd","pku")
+ S:SUM $P(A,"|",14)=SUM
+ S:NDS $P(A,"|",15)=NDS
+ S OW=$S(SI="+":$P(A,"|",7,8),1:$P(A,"|",9,10))
+ S:$G(SN)'="" $P(A,"|",12)=SN
+ L +^WRH(WRH,N)
+ F X=$P(H,",",2):1:99999 S HH=+H_","_X Q:'$D(^WRH(WRH,N,HH))
+ S $P(A,"|",6)=HH
+ S ^WRH(WRH,N,HH)=A,^WRHI("h",HH,N,WRH)=$P(A,"|",1,3)
+ S X=HH_"|"_N_"|"_WRH,^WRHI("n",ID,X)=""
+ ; TODO - FROM/TO
+ L -^WRH(WRH,N)
+ 
+ S ^WRHD(ID)=DOC
+ D GL^IEXCH("^WRH",WRH,N,HH)
+ D GL^IEXCH("^WRHI","h",HH,N,WRH)
+ D GL^IEXCH("^WRHI","n",ID)
+ D GL^IEXCH("^WRHD",ID)
+ Q
+ADDI(WRH,N,CNT,SUM,NDS,FROM,TO,ID,H,SN) ; Добавить на склад
+ ; WRH - рабочий склад
+ ; N - номенклатура
+ ; CNT - кол-во
+ ; SUM - общая сумма
+ ; NDS - общая сумма НДС
+ ; FROM - от контрагента
+ ; TO - на контрагента
+ ; ID - код документа
+ ; H - дата-время
+ ; SN - серийный номер
+ N SI,A,R,OW,HH,X,LP,DOC
+ S:FROM'["|" FROM="|"_FROM ; Контрагент
+ S:TO'["|" TO="|"_TO
+ S SI=$S(CNT>0:"+",1:"-"),H=$G(H),LP=$$^I("ilpu")
+ S:H="" H=$H
+ S:CNT<0 CNT=-CNT
+ S R=$G(%LOG)_$S(LP="":"",1:"@"_LP)
+ S A="1|"_SI_"|"_CNT_"|"_ID_"|"_R_"||"_FROM_"|"_TO
+ S:WRH="" WRH=$$LPUWRH(LP)
+ S:$$GET^IWRHS(N,"pku") $P(A,"|",12)=$$GET^IINKR("wrhd","pku")
+ S:SUM $P(A,"|",14)=SUM
+ S:NDS $P(A,"|",15)=NDS
+ S:$G(SN) $P(A,"|",12)=SN
+ S OW=$S(SI="+":$P(A,"|",7,8),1:$P(A,"|",9,10))
+ L +^WRH(WRH,N)
+ F X=$P(H,",",2):1:99999 S HH=+H_","_X Q:'$D(^WRH(WRH,N,HH))
+ S $P(A,"|",6)=HH
+ S ^WRH(WRH,N,HH)=A,^WRHI("h",HH,N,WRH)=$P(A,"|",1,3)
+ S X=HH_"|"_N_"|"_WRH,^WRHI("n",ID,X)=""
+ L -^WRH(WRH,N)
+ 
+ D GL^IEXCH("^WRH",WRH,N,HH)
+ D GL^IEXCH("^WRHI","h",HH,N,WRH)
+ D GL^IEXCH("^WRHI","n",ID)
+ Q
+ADDDOC(FROM,TO,TP,H) ; Добавить документ склада
+ ; FROM - с
+ ; TO - на
+ ; TP - тип документа
+ ; H - дата-время
+ N ID,SI,X,LP,NN,NDt
+ S FROM=$P(FROM,"|",1,2) S:FROM'["|" FROM="|"_FROM ; Контрагент
+ S TO=$P(TO,"|",1,2) S:TO'["|" TO="|"_TO
+ S TP=$G(TP),H=$G(H),LP=$$^I("ilpu"),X=$$RGID^I(LP),NN=""
+ S:H="" H=$H
+ S NDt=$G(^cfg("wrh","numdoc"))
+ 
+ L +^WRHI("n")
+ S:NDt NN=$$GET^IINKR("wrhd",$S(NDt=2:TP,NDt=3:STE_":"_TP,1:""))
+ S ID=$P($O(^WRHI("n",""),-1),".",1)+1_$S(+X:"."_X,1:"")
+ S ^(ID)=TP_$S(TP="akto_d":"|"_$P(FROM,"|",2),1:"")
+ L -^WRHI("n")
+ 
+ S ^WRHD(ID)=TP_"|"_(+H)_"|"_NN_"|"_FROM_"|"_TO
+ S ^WRHD(ID,"l",$H)=$$USR^IUSER()
+ D GL^IEXCH("^WRHI","n",ID)
+ D GL^IEXCH("^WRHD",ID)
+ Q ID
+FNDDOC(TP,DT,FROM,TO) ; Найти документ
+ N ID,D,ST,I,X,R
+ S:FROM'["|" FROM="|"_FROM
+ S:TO'["|" TO="|"_TO
+ S D=DT_",0",ID="" F  S D=$O(^WRHI("h",D)) Q:D=""!(+D>DT)  D  Q:ID'="" 
+ .S I="" F  S I=$O(^WRHI("h",D,I)) Q:I=""  S ST="" F  S ST=$O(^WRHI("h",D,I,ST)) Q:ST=""  D  Q:ID'="" 
+ ..S X=$P($G(^WRH(ST,I,D)),"|",4) Q:X=""  
+ ..S R=^WRHD(X) Q:R=""  
+ ..I TP'="",$P(R,"|",1)'=TP Q 
+ ..I DT'="",$P(R,"|",2)'=DT Q 
+ ..I FROM'="",$P(R,"|",4,5)'=FROM Q 
+ ..I TO'="",$P(R,"|",6,7)'=TO Q 
+ ..S ID=X
+ Q ID
+LPUWRH(LPU) ; Получить 1-й склад по умолчанию для ЛПУ
+ N I,R
+ S I="" F  S I=$O(^WRHM("stock",I)) Q:I=""  S R=^(I) Q:$P(R,"|",4)=LPU 
+ Q:I="" $O(^WRHM("stock",""))
+ Q I
+MKFIFO(WRH,N,CNT,VAR) ; Создать метки списания по FIFO
+ N H,S,R,OP,C
+ ; TODO - начать считать с конца до недосписанн. подуровней
+ S C=0
+ S H="" F  S H=$O(^WRH(WRH,N,H)) Q:H=""  D  Q:'CNT 
+ .S R=^(H) Q:'+$P(H,"|",1) 
+ .S OP=$P(R,"|",2) Q:OP'="+" 
+ .S C=C+(OP_$P(R,"|",3)),S=""
+ .F  S S=$O(^WRH(WRH,N,H,S)) Q:S=""!(S'[",")  S C=C-$P(^(S),"|",1)
+ .I C>0 S R=$S(C<CNT:C,1:CNT),@VAR@(H)=R,CNT=CNT-R,C=C-R
+ Q
+MKLIFO(WRH,N,CNT,VAR) ; Создать метки списания по LIFO
+ N H,R,OP,C
+ S C=0
+ S H="" F  S H=$O(^WRH(WRH,N,H),-1) Q:H=""  D  Q:'CNT 
+ .S R=^(H) Q:'+$P(H,"|",1) 
+ .S OP=$P(R,"|",2),C=C+(OP_$P(R,"|",3))
+ .I C>0 S R=$S(C<CNT:C,1:CNT),@VAR@(H)=R,CNT=CNT-R,C=C-R
+ Q
+MKlbl(WRH,N,HH,pVAR) ; Создать метки списания
+ N X,R
+ S X="" F  S X=$O(@pVAR@(X)) Q:X=""  S R=@pVAR@(X),^WRH(WRH,N,X,HH)=R D GL^IEXCH("^WRH",WRH,N,X,HH)
+ Q
+SETSYS(ST,ID,H,SYS) ; Изменить системные данные
+ Q:'$D(^WRH(ST,ID,H))
+ S $P(^WRH(ST,ID,H),"|",11)=SYS
+ D GL^IEXCH("^WRH",ST,ID,H)
+ Q
+DEL(ST,ID,H) ; Удалить движение по складу
+ ; ST - склад
+ ; ID - номенклатура
+ ; H - код списания
+ Q:'$D(^WRH(ST,ID,H)) 
+ N R,S,NN,RF,OWS
+ S R=^WRH(ST,ID,H),S=$P(R,"|",1),NN=$P(R,"|",4),RF=$P(R,"|",20)
+ K ^WRH(ST,ID,H)
+ D KGL^IEXCH("^WRH",ST,ID,H)
+ I RF'="" K ^WRH(ST,ID,RF,H) D KGL^IEXCH("^WRH",ST,ID,RF,H),MKIPART(ST,ID,RF)
+ Q:NN="" 
+ 
+ S S=1
+ K ^WRHI("n",NN,H_"|"_ID_"|"_ST)
+ I $O(^WRHI("n",NN,""))="" K ^WRHI("n",NN),^WRHD(NN) D KGL^IEXCH("^WRHI","n",NN),KGL^IEXCH("^WRHD",NN) S S=0
+ D:S KGL^IEXCH("^WRHI","n",NN,H_"|"_ID_"|"_ST)
+ 
+ S OWS=$S($P(R,"|",2)="+":$P(R,"|",7,8),1:$P(R,"|",9,10)) ; владелец
+ S OWS=$S($P(OWS,"|",1)="W":$P(OWS,"|",2),1:OWS) ; приним.склад
+ Q:OWS="|"!(OWS="")  
+ Q:'$D(^WRH(OWS,ID,H)) 
+ K ^WRH(OWS,ID,H)
+ D KGL^IEXCH("^WRH",OWS,ID,H)
+ Q
+CLR(LPU,OT,VR,MTS) ; Отмена списания
+ ; TODO
+ Q
+GETCNN(WRH,N,H,NDS) ; Получить реальную стоимость списанных единиц
+ ; NDS - с учетом НДС
+ N S,K,R,X,C
+ S NDS=+$G(NDS),K="",S=0
+ F  S K=$O(^WRH(WRH,N,H,K)) Q:K=""  I K["," S C=^(K),R=^WRH(WRH,N,K),X=$P(R,"|",14) S:'NDS X=X-$P(R,"|",15) S S=(X/$P(R,"|",15))*C+S
+ Q S
+BASECNN(WRH,N,CNT) ; Базовая цена на партию при списании со склада
+ ;N NLST,
+ ; TODO - на фигню похоже
+ K NLST
+ N H,R,C,S,OP,I,X,XC,XS,CT
+ ; CT - текущее кол-во
+ S H="",I=1,CT=0
+ ; остатки с ценами
+ F  S H=$O(^WRH(WRH,N,H)) Q:H=""  D  
+ .S R=^(H) Q:'+$P(H,"|",1) 
+ .S OP=$P(R,"|",2),S=+$P(R,"|",13),C=+$P(R,"|",3)
+ .I OP="+" S NLST(I)=C_"|"_S,I=I+1 Q 
+ .S CT=CT+C
+ .F  S X=$O(NLST("")) Q:X=""  D  Q:'CT 
+ ..S R=NLST(X),XC=$P(R,"|",1),XS=$P(R,"|",2)
+ ..I XC'>CT K NLST(X) S CT=CT-XC Q  ; пришло<=надо 
+ ..S R=XS/XC,XC=XC-CT,XS=XS-(R*CT)
+ ..S NLST(X)=XC_"|"_XS,CT=0
+ ; усредняем цену
+ S CT=CNT,S=0
+ F  S X=$O(NLST("")) Q:X=""  D  Q:'CT 
+ .S R=NLST(X),XC=$P(R,"|",1),XS=$P(R,"|",2)
+ .I XC'>CT K NLST(X) S CT=CT-XC,S=S+XS Q  ; пришло<=надо 
+ .S R=XS/XC,XC=XC-CT,XS=XS-(R*CT),S=S+(R*CT)
+ .S NLST(X)=XC_"|"_XS,CT=0
+ Q S
+RESTS(STK,ID,SN) ; Остаток на складе, в базовых ед. (скользящая оценка)
+ ; SN - серийный номер
+ N I,R,S
+ S SN=$G(SN),S=0,I="" F  S I=$O(^WRH(STK,ID,I)) Q:I=""  D
+ .S R=^(I) Q:'+$P(R,"|",1)
+ .I SN'="",SN'=$P(R,"|",12) Q 
+ .S OP=$P(R,"|",2)
+ .S:OP="+" S=S+$P(R,"|",3)
+ .S:OP="-" S=S-$P(R,"|",3)
+ Q S
+RESTWS(STK,ID,CNT,TO,SBVAR,SN) ; Сумма по кол-ву: Средневзвешенная оценка
+ ; STK - склад
+ ; ID - код номенклатуры
+ ; CNT - кол-во для списания
+ ; TO - расчет не более позиции ($H)
+ ; SBVAR - метки по списанию
+ ; SN - серийный номер
+ N SS,S,I,C,R,LL,J,K,KC,KS,OP,T1,T2,I1
+ S TO=$G(TO),SBVAR=$G(SBVAR),SN=$G(SN),T1=$P(TO,",",1),T2=$P(TO,",",2)
+ K:SBVAR'="" @SBVAR
+ S I="" F  S I=$O(^WRH(STK,ID,I)) S I1=$P(I,",",1) Q:I=""!$S('T1:0,I1<T1:0,I1>T1:1,1:$P(I,",",2)'<T2)  D
+ .S R=^(I) Q:'+$P(R,"|",1)
+ .S OP=$P(R,"|",2),C=$P(R,"|",3),S=$P(R,"|",14)
+ .Q:'C 
+ .I SN'="",$P(R,"|",12)'=SN Q 
+ .I OP="+" S LL(I)=C_"|"_(S/C) Q
+ .S J="" F  S J=$O(LL(J)) Q:J=""  D  Q:'C 
+ ..S K=LL(J),KC=$P(K,"|",1),SS=KC
+ ..S KC=$S(C>KC:KC,1:C),C=C-KC
+ ..I SS=KC K LL(J) Q 
+ ..S $P(K,"|",1)=SS-KC,LL(J)=K
+ Q:'$D(LL) 0
+ S SS=0
+ S J="" F  S J=$O(LL(J)) Q:J=""  D  Q:'CNT 
+ .S K=LL(J),KC=$P(K,"|",1),KS=$P(K,"|",2)
+ .S KC=$S(CNT>KC:KC,1:CNT),CNT=CNT-KC
+ .S SS=SS+(KC*KS)
+ .I SBVAR'="" S @SBVAR@(J)=KC_"|"_(KC*KS)
+ .I $P(K,"|",1)=KC K LL(J) Q 
+ .S $P(K,"|",1)=$P(K,"|",1)-KC,LL(J)=K
+ Q SS
+RESTBS(STK,ID,VAR,SN) ; Остатки относительно базовой суммы (оптовой)
+ ; STK - склад
+ ; ID - код номенклатуры
+ ; VAR - имя переменной (сумма_за_ед)=остаток
+ ; SN - серийный номер
+ N SS,S,I,C,R,LL,J,K,KC,KS,OP
+ S VAR=$G(VAR),SN=$G(SN)
+ S I="" F  S I=$O(^WRH(STK,ID,I)) Q:I=""  D
+ .S R=^(I) Q:'+$P(R,"|",1)
+ .S OP=$P(R,"|",2),C=$P(R,"|",3),S=$P(R,"|",14)
+ .Q:'C 
+ .I SN'="",$P(R,"|",12)'=SN Q 
+ .I OP="+" S LL(I)=C_"|"_(S/C) Q
+ .S J="" F  S J=$O(LL(J)) Q:J=""  D  Q:'C 
+ ..S K=LL(J),KC=$P(K,"|",1),SS=KC
+ ..S KC=$S(C>KC:KC,1:C),C=C-KC
+ ..I SS=KC K LL(J) Q 
+ ..S $P(K,"|",1)=SS-KC,LL(J)=K
+ S K="" F  S K=$O(LL(K)) Q:K=""  D
+ .S R=LL(K),S=$P(R,"|",2)
+ .S @VAR@(S)=$G(@VAR@(S))+$P(R,"|",1)
+ .S @VAR@(S,K)=$P(R,"|",1)
+ Q
+RESTSUM(STK,ID,CNT) ; Остаток на складе (сумма), в базовых ед. (скользящая оценка)
+ ; STK - склад
+ ; ID - код номенклатуры
+ ; CNT - количество
+ N I,R,S,Z,X,OP
+ S (Z,S,X)=0,I="" F  S I=$O(^WRH(STK,ID,I)) Q:I=""  D
+ .S R=^(I) Q:'+$P(R,"|",1)
+ .S OP=$P(R,"|",2)
+ .S:OP="+" S=S+$P(R,"|",3),Z=Z+$P(R,"|",14),X=X+$P(R,"|",3)
+ .;S:OP="-" S=S-$P(R,"|",3)
+ Q:'Z 0
+ Q $J(CNT*Z/X,"",4)
+KEYSUMM(KEY) ; Сумма из записей по ключам (фактическая сумма)
+ Q:KEY="" 0
+ N S,I,K
+ S S=0
+ F I=1:1:$L(KEY,"|") S K=$P(KEY,"|",I),S=S+$P(^WRH($P(K,",",1),$P(K,",",2),$P(K,",",3,4)),"|",14)
+ Q S
+GETSN(SN,ID,SNTP,ALL) ; Получить серийный номер или номер серии
+ ; SN - серийный номер
+ ; ID - код номенклатуры
+ ; SNTP - тип номенклатуры
+ ; ALL - все виды номеров (1-номер,2-все,3-все+текст)
+ Q:SN="" ""
+ I $G(SNTP)="" S SNTP=+$$PKU^IWRHS(ID)
+ S ALL=$G(ALL)
+ Q $S(SNTP=3&(ALL=3):"№"_SN,SNTP=3:SN,SNTP=2:$S(ALL=3:"серия ",1:"")_$P($G(^WRHE(ID,"ser",SN)),"|",1),(ALL=1)&(SNTP=1):SN,(ALL>1)&(SNTP=1):"парт."_SN,ALL>1:"уч."_SN,1:"")
+GETSG(ID,PKU,LN,SER) ; Получить срок годности из транзакции или серии
+ Q:$P(LN,"|",21)'="" $P(LN,"|",21)
+ S:$G(SER)="" SER=$P(LN,"|",12)
+ I SER'="",PKU=2 Q $P(^WRHE(ID,"ser",SER),"|",4)
+ Q $P(LN,"|",21)
+CHKUSN(ID,SN,DOC) ; Проверить серийный номер на уникальность
+ ; ID - код номенклатуры
+ ; SN - серийный номер
+ ; DOC - документ
+ Q:SN="" 1
+ Q:'$D(^WRHI("sn",ID,SN)) 1
+ Q ^(SN)=$G(DOC)
+MOVDD(DOC,TD) ; Перемещение документа на дату
+ ; DOC - код документа
+ ; TD - новая дата
+ N KX,D,LL,ST,ID,H,NH,I,R,UST
+ S $P(^WRHD(DOC),"|",2)=TD
+ S KX="" F  S KX=$O(^WRHI("n",DOC,KX)) Q:KX=""  D
+ .S ST=$P(KX,"|",3),ID=$P(KX,"|",2),H=$P(KX,"|",1)
+ .S NH=TD_","_$P(H,",",2)
+ .F I=1:1:999 Q:'$D(^WRH(ST,ID,NH))  S NH=TD_","_($P(H,",",2)+I)
+ .S LL(KX)=NH_"|"_ID_"|"_ST
+ .S R=^WRH(ST,ID,H),UST=$P(R,"|",7,8)
+ .M ^WRH(ST,ID,NH)=^WRH(ST,ID,H)
+ .S $P(^WRH(ST,ID,NH),"|",6)=NH
+ .K ^WRH(ST,ID,H)
+ .D KGL^IEXCH("^WRH",ST,ID,H),GL^IEXCH("^WRH",ST,ID,NH)
+ .I UST'="|",UST'="",$D(^WRH(UST,ID,H)) S R=^(H),$P(R,"|",6)=NH,^(NH)=R K ^WRH(UST,ID,H) D KGL^IEXCH("^WRH",UST,ID,H),GL^IEXCH("^WRH",UST,ID,NH) ; референс на проводку
+ .S ^WRHI("h",NH,ID,ST)=^WRHI("h",H,ID,ST)
+ .K ^WRHI("h",H,ID,ST)
+ .D KGL^IEXCH("^WRHI","h",H,ID,ST),GL^IEXCH("^WRHI","h",NH,ID,ST)
+ S KX="" F  S KX=$O(LL(KX)) Q:KX=""  D
+ .S H=LL(KX)
+ .S ^WRHI("n",DOC,H)=^WRHI("n",DOC,KX)
+ .K ^WRHI("n",DOC,KX)
+ .D KGL^IEXCH("^WRHI","n",DOC,KX),GL^IEXCH("^WRHI","n",DOC,H)
+ Q
+MKIPART(ST,N,HH) ; Пересчет осатков по партиям/с.н.
+ N I,S
+ S S=0,I="" F  S I=$O(^WRH(ST,N,HH,I)) Q:I=""  S:I["," S=^(I)+S ; as $H
+ Q:$G(^WRH(ST,N,HH,"r"))=S 
+ S ^("r")=S
+ D GL^IEXCH("^WRH",ST,N,HH,"r")
+ Q
+CONVOLD 
+ N W,N,H,R,PP,PC,DO,K
+ S DO=1
+ S W="" F  S W=$O(^WRH(W)) Q:W=""  S N="" F  S N=$O(^WRH(W,N)) Q:N=""  D
+ .S (I,CT)=0 K NLST
+ .S H="" F  S H=$O(^WRH(W,N,H)) Q:H=""  D
+ ..S R=^(H) Q:'+$P(H,"|",1)  W "."
+ ..S OP=$P(R,"|",2),S=+$P(R,"|",13),C=+$P(R,"|",3)
+ ..I OP="+" S NLST(I)=C_"|"_S_"|"_H,I=I+1 S:DO ^WRH(W,N,H)=$P(R,"|",1,10)_"||"_$P(R,"|",11,16) W !,NLST(I-1) Q 
+ ..S CT=CT+C
+ ..S:DO ^WRH(W,N,H)=$P(R,"|",1,10)_$S($P(R,"|",11,16)'="":"||"_$P(R,"|",11,16),1:"")
+ ..F  S X=$O(NLST("")) Q:X=""  D  Q:'CT
+ ...S K=NLST(X),XC=$P(K,"|",1),XS=$P(K,"|",2)
+ ...I XC'>CT K NLST(X) S CT=CT-XC S:XC&DO ^WRH(W,N,$P(K,"|",3),H)=XC,^WRH(W,N,H,$P(K,"|",3))=XC Q  ; пришло<=надо 
+ ...S R=XS/XC,XC=XC-CT,XS=XS-(R*CT)
+ ...S NLST(X)=XC_"|"_XS_"|"_$P(K,"|",3)
+ ...S:DO&CT ^WRH(W,N,$P(K,"|",3),H)=CT,^WRH(W,N,H,$P(K,"|",3))=CT
+ ...S CT=0
+ Q
+UPDPART ; Обновить индексы списания по партиям (где списано до прихода)
+ N W,N,H,R,PP,PC,DO,K,NLST,I,S,OP,C,CT,XC,XS,X
+ S W="" F  S W=$O(^WRH(W)) Q:W=""  S N="" F  S N=$O(^WRH(W,N)) Q:N=""  D
+ .S (I,CT)=0 K NLST
+ .S H="" F  S H=$O(^WRH(W,N,H)) Q:H=""  D
+ ..S R=^(H) Q:'+$P(H,"|",1)  
+ ..S OP=$P(R,"|",2),S=+$P(R,"|",13),C=+$P(R,"|",3)
+ ..I OP="+" S NLST(I)=C_"|"_S_"|"_H,I=I+1 Q 
+ ..S CT=CT+C
+ ..F  S X=$O(NLST("")) Q:X=""  D  Q:'CT
+ ...S K=NLST(X),XC=$P(K,"|",1),XS=$P(K,"|",2)
+ ...I XC'>CT K NLST(X) S CT=CT-XC S:XC ^WRH(W,N,$P(K,"|",3),H)=XC,^WRH(W,N,H,$P(K,"|",3))=XC Q  ; пришло<=надо 
+ ...S R=XS/XC,XC=XC-CT,XS=XS-(R*CT)
+ ...S NLST(X)=XC_"|"_XS_"|"_$P(K,"|",3)
+ ...S:CT ^WRH(W,N,$P(K,"|",3),H)=CT,^WRH(W,N,H,$P(K,"|",3))=CT
+ ...S CT=0
+ Q
+CHKCONTR(ID,DS) ; Проверить наличие контрагента
+ N W,E,H,F,R,X
+ S F=0,W="",DS=+$G(DS),X="C|"_ID F  S W=$O(^WRH(W)) Q:W=""  D  Q:F
+ .S E="" F  S E=$O(^WRH(W,E)) Q:E=""  D  Q:F
+ ..S H=DS_",0" F  S H=$O(^WRH(W,E,H)) Q:H=""  S R=^(H) I $P(R,"|",7,8)=X!($P(R,"|",9,10)=X) S F=1 Q 
+ Q F

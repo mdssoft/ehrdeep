@@ -1,0 +1,30 @@
+RINSC ; Общие отчеты по СК [ 04/28/2013  11:18 PM ]
+CNHD(DS,DE) ; Изменение параметров по договорам
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N N,FL,D,R,PR,NM,LST
+ D OWF^RWU(".txt")
+ D WC^RWU("Договор "_$$TXTP^DTUTL(DS,DE)_"|Дата|Вид|Прейскурант|Кассовый прейскурант|Стоматологический|Педиатрии|Скидка|Скидка в %|Кассовая скидка")
+ S N="" F  S N=$O(^DGN(N)) Q:N=""  D
+ .K LST
+ .F FL="dvid","price","kprice","sprice","dprice","skd","skid","cskd" D
+ ..S D=DS-1,PR=""
+ ..F  S D=$O(^DGN(N,FL,D)) Q:D=""!(D>DE)  S R=^(D) I R'=PR S PR=R,LST(D,FL)=R
+ .Q:'$D(LST)
+ .S NM=$$NAME^IINSC(N),PR=""
+ .S D="" F  S D=$O(LST(D)) Q:D=""  D
+ ..S PR=$$DT^DTUTL(D)
+ ..F FL="dvid","price","kprice","sprice","dprice","skd","skid","cskd" D
+ ...S R=$G(LST(D,FL))
+ ...S:R="" R=$$GET^IINSC(N,FL,D)
+ ...S:FL="dvid" R=$$NAME^ISPRAV("dvid",R)
+ ...S:FL["price" R=$$NAME^ISPRAV("tprice",R)
+ ...S:FL["skd" R=$$NAME^IDSCN(R)
+ ...S PR=PR_"|"_R
+ ..D WC^RWU(CR_NM_"|"_PR)
+ ..S NM=""
+ D C^RWU
+ Q
+REGIPROC 
+ S ^IPROC("Отчеты по страховым компаниям","История изменений по договорам")="CNHD_RINSC,1,2,d,Начальная дата,d,Конечная дата"
+ Q
+ 

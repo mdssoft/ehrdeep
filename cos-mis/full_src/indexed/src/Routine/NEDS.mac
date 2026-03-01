@@ -1,0 +1,19 @@
+NEDS ; Электронные цифровые подписи [ 09/24/2015  12:43 PM ]
+GETNPKEY(VR) ; Получить новый секретный ключ из списка
+ N I
+ S I="" F  S I=$O(^EDSS(I)) Q:I=""  I '$D(^(I,"iss")) Q 
+ I I="" Q  ; no keys
+ S ^EDSS(I,"iss")=VR_"|"_$$USR^IUSER()_"|"_$H
+ D MSG^RWU(^EDSS(I,"pr")) ; private
+ Q
+LOADKEY ; Загрузить готовые ключи
+ N %J,A,K1,K2,I,BIT,C
+ D ORH^RWU
+ F %J=1:1 S A=$$DW^TXTU($$R^RWU) Q:%IFN["Z"  D:%J>1
+ .S I=$O(^EDSS(""),-1)+1
+ .S K1=$P(A,"|",1),K2=$P(A,"|",2),BIT=$P(A,"|",3),C=$P(A,"|",4)
+ .S:C="" C="RSA"
+ .S:BIT="" BIT=512
+ .S ^EDSS(I,"pb")=K1,^("pr")=K2,^("tp")=BIT_"|"_C
+ D CR^RWU
+ Q

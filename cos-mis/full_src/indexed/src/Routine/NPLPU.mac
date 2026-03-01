@@ -1,0 +1,304 @@
+NPLPU ; План учреждений [ 08/08/2019  2:14 PM ]
+LSTCAB(MODE,VR,SYS,TPX) ; Кабинеты по текущему ЛПУ
+ ; VR - фильтр по врачу
+ ; SYS - вывод "черновых" данных
+ ; TPX - тип кабинета
+ N L,A,B,F,I,C,X,K
+ S L=+$$^I("ilpu"),MODE=+$G(MODE),VR=$G(VR),SYS=$G(SYS),TPX=$G(TPX)
+ S (B,C,A)=""
+ S:VR'="" VR="|"_VR_"|"
+ F  S B=$O(^PLPU(L,B)) Q:B=""  S F="" F  S F=$O(^PLPU(L,B,F)) Q:F=""  D
+ .S I="" F  S I=$O(^PLPU(L,B,F,"cab",I)) Q:I=""  D
+ ..S X=^(I)
+ ..I TPX'="",TPX'=$P(X,"|",1) Q 
+ ..I VR'="" S K=$G(^(I,"k")) I K'="","|"_K_"|"'[VR Q  ; если кадры указаны
+ ..S A=A_C_I_$S(MODE'=2:"@"_$P(X,"|",4),1:"")_"|"_I_$S(MODE=1!(MODE=3):" - "_$P(X,"|",3),1:"")_" ("_$G(^PLPU(L,B,F))_")"
+ ..S C=CR
+ D:'SYS MSG^RWU(A)
+ D:SYS WC^RWU(A)
+ Q
+LSTLTs(iCR,addN,sKEY) ; ; Кабинеты по текущему ЛПУ (возврат строки)
+ ; iCR - предварять пустой строкой
+ ; addN - в начале всегда номер
+ ; sKEY - простой ключ (кабинет)
+ N L,A,B,F,I,C,R
+ S L=+$$^I("ilpu"),(B,A)=""
+ S C=$S($G(iCR):"|"_CR,1:""),addN=+$G(addN),sKEY=+$G(sKEY)
+ F  S B=$O(^PLPU(L,B)) Q:B=""  S F="" F  S F=$O(^PLPU(L,B,F)) Q:F=""  D
+ .S I="" F  S I=$O(^PLPU(L,B,F,"cab",I)) Q:I=""  D
+ ..S R=^(I)
+ ..S A=A_C_$S(sKEY:I,1:"X."_I_"."_L_"."_B_"."_F)
+ ..S A=A_"|"_$S($P(R,"|",3)="":$P(R,"|",2),1:$S(addN:$P(R,"|",2)_" - ",1:"")_$P(R,"|",3))
+ ..S C=CR
+ Q A
+LSTLT ; Кабинеты по текущему ЛПУ
+ D MSG^RWU($$LSTLTs())
+ Q
+LSTLTC ; Кабинеты по текущему ЛПУ (с пустой строкой вначале)
+ D MSG^RWU($$LSTLTs(1,1,1))
+ Q
+TABCAB ; Таблица кабинетов
+ N L,I,R,A
+ S L=+$$^I("ilpu"),(I,A)=""
+ F  S I=$O(^PLPU(L,0,0,"cab",I)) Q:I=""  S R=^(I),A=A_CR_I_"|"_$P(R,"|",3)_"|"_$P(R,"|",2)
+ D MSG^RWU(A)
+ Q
+ADDCAB(CAB) ; Добавить кабинет
+ Q:CAB="" 
+ N L
+ S L=+$$^I("ilpu"),CAB=$$WD^TXTU(CAB),^PLPU(L,0,0,"cab",CAB)=0
+ D GL^IEXCH("^PLPU",L,0,0,"cab",CAB) 
+ D TABCAB
+ Q
+DELCAB(CAB,ID) ; Удалить кабинет
+ I CAB="" D MSG^RWU("Кабинет не выбран") Q 
+ I $$LCL^IUSER("plpu","del")=0 D MSG^RWU("Удаление кабинета запрещено") Q 
+ N L,B,F,X,FL
+ S L=+$$^I("ilpu"),CAB=$$WD^TXTU(CAB)
+ I $D(^DSHI("cab",L,CAB)) D MSG^RWU("Кабинет используется в расписании") Q
+ G:ID'="" DELCABn
+ K ^PLPU(L,0,"cab",CAB)
+ D KGL^IEXCH("^PLPU",L,0,"cab",CAB)
+ Q
+DELCABn ; new version
+ S L=$P(ID,".",1),B=$P(ID,".",2),F=$P(ID,".",3)
+ I '$G(^cfg("plpu","chkafl")) G DELCABe
+ S X=0
+ F FL="lan","phn","k" I $G(^PLPU(L,B,F,"cab",CAB,"eq"))'="" S X=1 Q 
+ I 'X,$D(^PLPU(L,B,F,"cab",CAB,"eq")) S X=1
+ I X D MSG^RWU("По кабинету введена дополнительная информация") Q 
+DELCABe 
+ K ^PLPU(L,B,F,"cab",CAB)
+ D KGL^IEXCH("^PLPU",L,B,F,"cab",CAB)
+ Q
+TXTCAB(CAB,TXT) ; Описание кабинета
+ Q:CAB=""
+ N L
+ S L=+$$^I("ilpu"),CAB=$$WD^TXTU(CAB),TXT=$$WD^TXTU(TXT)
+ S $P(^PLPU(L,0,0,"cab",CAB),"|",2)=TXT
+ D GL^IEXCH("^PLPU",L,0,0,"cab",CAB)
+ D TABCAB
+ Q
+PHNCAB(CAB,TXT) ; Телефон кабинета
+ Q:CAB=""
+ N L
+ S L=+$$^I("ilpu"),CAB=$$WD^TXTU(CAB),TXT=$$WD^TXTU(TXT)
+ S $P(^PLPU(L,0,0,"cab",CAB),"|",3)=TXT
+ D GL^IEXCH("^PLPU",L,0,0,"cab",CAB)
+ D TABCAB
+ Q
+MOVCAB(FROM,TO) ; Переименовать кабинет
+ N L
+ S L=+$$^I("ilpu")
+ M ^PLPU(L,0,"cab",TO)=^PLPU(L,0,"cab",FROM)
+ K ^PLPU(L,0,"cab",FROM)
+ D GL^IEXCH("^PLPU",L,0,"cab",TO)
+ D KGL^IEXCH("^PLPU",L,0,"cab",FROM)
+ D TABCAB
+ Q
+NMLTF(X) ; Имя из свертки кода кабинета ( CAB.LPU.KORP.ET )
+ Q:X=""
+ S:$E(X,1)="X" X=$P(X,".",2,5)
+ Q $P($G(^PLPU(+$P(X,".",2),+$P(X,".",3),+$P(X,".",4),"cab",$P(X,".",1))),"|",3)
+TREE ; Древовидный план ЛПУ
+ N FF,LP,KO,ET,CAB,LPU,R,C,K
+ S FF=+$$FR^I(),LPU=+$$^I("ilpu"),C=""
+ D OWF^RWU(".txt")
+ S LP="" F  S LP=$O(^CGAI("flg","fi",LP)) Q:LP=""  D:$D(^CGA(LP))
+ .I 'FF,LPU,LP'=LPU Q
+ .I '$D(^PLPU(LP)),'$$CHECK^ICONTR(LP) Q 
+ .D WC^RWU(C_$$NAME^ICONTR(LP)_"|"_LP_"|1") S C=CR
+ .S KO="" F  S KO=$O(^PLPU(LP,KO)) Q:KO=""  D
+ ..S R=$P($G(^(KO)),"|",1),R=$S(R="":"Основной корпус",1:R)
+ ..D WC^RWU(C_$C(9)_R_"|"_LP_"."_KO_"|2") S C=CR
+ ..S ET="" F  S ET=$O(^PLPU(LP,KO,ET)) Q:ET=""  D
+ ...S R=$G(^(ET)),R=$S(R="":"Основной этаж",1:R)
+ ...D WC^RWU(C_$C(9,9)_R_"|"_LP_"."_KO_"."_ET_"|3") S C=CR
+ D C^RWU
+ Q
+TAB(ID) ; Таблица кабинетов
+ N CAB,LP,KO,ET,R,K,EK,TL,CTP
+ S LP=$P(ID,".",1),KO=$P(ID,".",2),ET=$P(ID,".",3)
+ S CTP(0)="Кабинет",CTP(2)="Палата",CTP(3)="Адм. помещение",CTP(4)="Служебное",CTP(5)="Складское",CTP(6)="Техническое",CTP(11)="Операционная",CTP(20)="Туалет",CTP(99)="Прочие"
+ M CTP=^MN("cabtype")
+ D OWF^RWU(".txt")
+ D WC^RWU("|Кабинет|Тип|Описание|Телефон")
+ I ET'="" D TABcab
+ I ET="" F  S ET=$O(^PLPU(LP,KO,ET)) Q:ET=""  D TABcab
+ D C^RWU
+ Q
+TABcab 
+ S EK=$P($G(^PLPU(LP,KO,ET)),"|",1)
+ S CAB="" F  S CAB=$O(^PLPU(LP,KO,ET,"cab",CAB)) Q:CAB=""  D
+ .S R=$G(^(CAB))
+ .S K=$P(R,"|",2)_"|"_$G(CTP(+$P(R,"|",1)))_"|"
+ .D WC^RWU(CR_LP_"."_KO_"."_ET_"@"_CAB_"|"_K_$P(R,"|",3,4))
+ Q
+ABUILD(ID,NM) ; Add build (ID-parent)
+ I $$LCL^IUSER("plpu","newb")=0 D TREE Q 
+ N L,B,X
+ S L=$P(ID,".",1),B=$O(^PLPU(L,""),-1)+1
+ S:L="" L=+$$^I("ilpu")
+ D:'$D(^CGA(L))
+ .S X=$$^I("iname")
+ .D ADD^ICONTR(X,X,+$H,"fi",L)
+ S ^PLPU(L,B)=$$WD^TXTU(NM)
+ D GLZ^IEXCH("^PLPU",L,B)
+ D TREE
+ Q
+AFLOOR(ID,NM) ; Add floor (ID-parent)
+ I $$LCL^IUSER("plpu","newb")=0 D TREE Q 
+ N L,B,F
+ S L=$P(ID,".",1),B=$P(ID,".",2)
+ I B="" D TREE Q  
+ S F=$O(^PLPU(L,B,""),-1)+1
+ S ^PLPU(L,B,F)=$$WD^TXTU(NM)
+ D GLZ^IEXCH("^PLPU",L,B,F)
+ D TREE
+ Q
+RENSTR(ID,NM) ; Rename Floor or Build
+ I $$LCL^IUSER("plpu","newb")=0 D TREE Q 
+ N L,B,F
+ S L=$P(ID,".",1),B=$P(ID,".",2),F=$P(ID,".",3)
+ S NM=$$WD^TXTU(NM)
+ I $L(F) S ^PLPU(L,B,F)=NM D GLZ^IEXCH("^PLPU",L,B,F) 
+ I $L(B),'$L(F) S ^PLPU(L,B)=NM D GLZ^IEXCH("^PLPU",L,B)
+ D TREE
+ Q
+DELSTR(ID) ; Delete Floor or Build
+ I $$LCL^IUSER("plpu","delb")=0 D TREE Q 
+ N L,B,F
+ S L=$P(ID,".",1),B=$P(ID,".",2),F=$P(ID,".",3)
+ I $L(F) K ^PLPU(L,B,F) D KGL^IEXCH("^PLPU",L,B,F) 
+ I $L(B),'$L(F) K ^PLPU(L,B) D KGL^IEXCH("^PLPU",L,B)
+ D TREE
+ Q
+SCAB ; Save
+ I $$LCL^IUSER("plpu","save")=0 D MSG^RWU("Нет прав") Q 
+ N @$$NEWVAR^YIXMLRR()
+ D RBUFH^YIXMLRR(1)
+ D WCAB
+ Q
+WCAB ; Write cabinet
+ N L,B,F,ID,NM,R,FLS,OID,I,X,J,rr
+ M FLS=XML("nb_console","plpu")
+ S ID=$G(FLS("place")),L=$P(ID,".",1),B=$P(ID,".",2),F=$P(ID,".",3)
+ Q:L=""!(B="") 
+ S:F="" F=1,^PLPU(L,B,F)="Первый этаж"
+ S ID=$G(FLS("num")),OID=$G(FLS("oid")) Q:ID=""
+ I $$LCL^IUSER("plpu","new")=0,'$D(^PLPU(L,B,F,"cab",ID)) D MSG^RWU("Нет прав на создание новой записи") Q 
+ D rmIDX(L,B,F,ID)
+ I OID'="",OID'=ID K ^PLPU(L,B,F,"cab",OID) D KGL^IEXCH("^PLPU",L,B,F,"cab",OID)
+ S R=$G(FLS("tp"))_"|"_ID_"|"_$G(FLS("nm"))_"|"_$G(FLS("phn"))_"|"
+ S R=R_$G(FLS("stat"))_"|"_$G(FLS("area"))_"|"_$G(FLS("var"))
+ S ^PLPU(L,B,F,"cab",ID)=R
+ S R=$G(FLS("otd"))
+ S:R'="" ^PLPU(L,B,F,"cab",ID,"otd")=R K:R="" ^PLPU(L,B,F,"cab",ID,"otd")
+ S R=$G(FLS("kcnt")),X=$G(FLS("krcnt"))
+ S:X'="" $P(R,"|",2)=X
+ S:R'="" ^PLPU(L,B,F,"cab",ID,"p")=R K:R="" ^PLPU(L,B,F,"cab",ID,"p")
+ F R="cls","lan","phn","dsc" S ^PLPU(L,B,F,"cab",ID,R)=$G(FLS(R))
+ 
+ S:$$LCL^IUSER("plpu","seteq")'=0 ^PLPU(L,B,F,"cab",ID,"k")=$TR($G(FLS("kadry")),$C(13,10),"|")
+ 
+ S R=$G(FLS("equip"))
+ D:$$LCL^IUSER("plpu","seteq")'=0
+ .K ^PLPU(L,B,F,"cab",ID,"eq")
+ .F I=2:1:$L(R,CR) S X=$P(R,CR,I),J=$P(X,"|",1) S:X'=""&(J'="") ^PLPU(L,B,F,"cab",ID,"eq",I-1)=J_"|"_$P(X,"|",3,4)_"||"_$S($P(X,"|",6)'="":1,1:"")
+ D mkIDX(L,B,F,ID)
+ S ^PLPU(L,B,F,"cab",ID,"log")=$$USRH^IUSER()
+ D REGL^IEXCH("^PLPU",L,B,F,"cab",ID)
+ Q
+rmIDX(L,B,F,C) ; remove index
+ Q:'$D(^PLPU(L,B,F,"cab",C)) 
+ N K,I,R
+ S R=$G(^PLPU(L,B,F,"cab",C,"k")) Q:R="" 
+ F I=1:1:$L(R,"|") S K=$P(R,"|",I) D
+ .K ^PLPUI("v",K,L_"."_B_"."_F_"."_C)
+ .D KGL^IEXCH("^PLPUI","v",K,L_"."_B_"."_F_"."_C)
+ K ^PLPUI("cab",C,L_"."_B_"."_F)
+ D KGL^IEXCH("^PLPUI","cab",C,L_"."_B_"."_F)
+ Q
+mkIDX(L,B,F,C) ; make index
+ N K,I,R
+ S ^PLPUI("cab",C,L_"."_B_"."_F)=""
+ D GL^IEXCH("^PLPUI","cab",C,L_"."_B_"."_F)
+ S R=$G(^PLPU(L,B,F,"cab",C,"k")) Q:R="" 
+ F I=1:1:$L(R,"|") S K=$P(R,"|",I) D
+ .S ^PLPUI("v",K,L_"."_B_"."_F_"."_C)=""
+ .D GL^IEXCH("^PLPUI","v",K,L_"."_B_"."_F_"."_C)
+ Q
+LCAB(KEY) ; Load cabinet
+ N L,B,F,R,ID,I,A,K
+ S KEY=$$WD^TXTU(KEY),ID=$P(KEY,"@",2),KEY=$P(KEY,"@",1)
+ S L=$P(KEY,".",1),B=$P(KEY,".",2),F=$P(KEY,".",3)
+ S R=$G(^PLPU(L,B,F,"cab",ID))
+ D OWF^RWU(".xmlb"),W^RWU($G(^PP(0,2))_"<plpu>")
+ D WTAGD^RWU("place",KEY)
+ D WTAGDC^RWU("num",ID)
+ D WTAGDC^RWU("oid",ID)
+ D WTAGDC^RWU("nm",$P(R,"|",3))
+ D WTAGD^RWU("tp",$P(R,"|",1))
+ D WTAGD^RWU("stat",$P(R,"|",5))
+ D WTAGD^RWU("area",$P(R,"|",6))
+ D WTAGD^RWU("var",$P(R,"|",7))
+ D WTAGD^RWU("otd",$G(^PLPU(L,B,F,"cab",ID,"otd")))
+ ; койки/кресла
+ S R=$G(^PLPU(L,B,F,"cab",ID,"p"))
+ D WTAGD^RWU("kcnt",$P(R,"|",1))
+ D WTAGD^RWU("krcnt",$P(R,"|",2))
+ ; оборудование
+ S K=""
+ S I="" F  S I=$O(^PLPU(L,B,F,"cab",ID,"eq",I)) Q:I=""  D
+ .S R=^(I)
+ .S K=K_CR_$P(R,"|",1)_"|"_$$NAME^NEQUIP($P(R,"|",1))_"|"_$P(R,"|",2,3)_"||"_$S($P(X,"|",6):"да",1:"")
+ D WTAGC^RWU("equip",K)
+ 
+ F R="cls","lan","phn","dsc" D WTAGDC^RWU(R,$G(^PLPU(L,B,F,"cab",ID,R)))
+ S R=$G(^PLPU(L,B,F,"cab",ID,"k")),K=""
+ I R'="" F I=1:1:$L(R,"|") S B=$P(R,"|",I),K=$S(K="":"",1:K_CR)_B_"|"_$$FIO^YIKADRY(B)
+ D WTAGC^RWU("kadry",K)
+ D WC^RWU("</plpu></nb_console>"),C^RWU
+ Q
+VARCAB(VAR,FLG) ; Кабинеты  
+ ; VR - фильтр по врачу
+ N L,B,F,I,X,K
+ Q:FLG=""  ; TODO ????
+ S:FLG'="" FLG="|"_FLG_"|"
+ S L="" F  S L=$O(^PLPU(L)) Q:L=""  S B="" F  S B=$O(^PLPU(L,B)) Q:B=""  S F="" F  S F=$O(^PLPU(L,B,F)) Q:F=""  D
+ .S I="" F  S I=$O(^PLPU(L,B,F,"cab",I)) Q:I=""  D
+ ..S X=^(I),K=$G(^(I,"cls")) Q:K="" 
+ ..Q:"|"_K_"|"'[FLG  
+ ..S @VAR@(L,I)=""
+ Q
+VRINCAB(X,VR) ; Такой сотрудник числится в кабинете
+ S:$E(X,1)="X" X=$P(X,".",2,5)
+ S X=$G(^PLPU(+$P(X,".",2),+$P(X,".",3),+$P(X,".",4),"cab",$P(X,".",1),"k"))
+ Q:X="" 0
+ S VR="|"_VR_"|" Q "|"_X_"|"[VR
+AREAS(CABS) ; Общая площадь кабинетов через |
+ N L,B,F,I,R,S
+ S L="",S=0,CABS="|"_CABS_"|"
+ F  S L=$O(^PLPU(L)) Q:L=""  S B="" F  S B=$O(^PLPU(L,B)) Q:B=""  S F="" F  S F=$O(^PLPU(L,B,F)) Q:F=""  D
+ .S I="" F  S I=$O(^PLPU(L,B,F,"cab",I)) Q:I=""  D
+ ..S R=^(I) S:CABS[("|"_$P(R,"|",2)_"|") S=S+$P(R,"|",6)
+ Q S
+CABNAME(LP,KEY) 
+ N R,I,J
+ S R=""
+ S I="" F  S I=$O(^PLPU(LP,I)) Q:I=""!(R'="")  S J="" F  S J=$O(^PLPU(LP,I,J)) Q:J=""!(R'="")  S R=$P($G(^(J,"cab",KEY)),"|",2,3)
+ Q R
+LTAB ; Загрузить кабинеты
+ ; lpu|building|floor|cab|name|phone
+ N %J,A,R,L,B,F,C,NM,PH,CM
+ D ORH^RWU
+ F %J=1:1 S A=$$R^RWU Q:%IFN["Z"  D:%J>1
+ .S L=$P(A,"|",1),B=$P(A,"|",2),F=$P(A,"|",3),C=$P(A,"|",4)
+ .S NM=$$TRIM^TXT($P(A,"|",5)),PH=$$TRIM^TXT($P(A,"|",6))
+ .Q:L=""  Q:B=""  Q:F=""  Q:C="" 
+ .S:'$D(^PLPU(L,B)) ^PLPU(L,F)="Основной корпус"
+ .S:'$D(^PLPU(L,B,F)) ^PLPU(L,B,F)="Этаж "_F
+ .S ^PLPU(L,B,F,"cab",C)="0|"_NM_"|"_NM_"|"_PH
+ .D mkIDX(L,B,F,C)
+ D CR^RWU
+ Q

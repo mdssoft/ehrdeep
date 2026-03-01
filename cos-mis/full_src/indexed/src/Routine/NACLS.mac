@@ -1,0 +1,11 @@
+NACLS ; Аналитические классы [ 10/21/2016  8:48 PM ]
+NAMES(X) 
+ N I,R,A,II
+ S X=$$DBLSP^TXTU($TR(X,",/;:","    ")),X=$TR(X,".","|")
+ S A=""
+ F I=1:1:$L(X,"|") S R=$P(X,"|",I) I R'="" S A=A_$S(A="":"",1:CR)_I_"|"_$$NAME^ISPRAV("priceacu",I)_"="_R_" "_$P($G(^ACU(I,R)),"|",1)
+ D MSG^RWU(A)
+ Q
+INITDB ; 
+ S ^MN("root","priceacu")="Аналитические классы учета"
+ Q

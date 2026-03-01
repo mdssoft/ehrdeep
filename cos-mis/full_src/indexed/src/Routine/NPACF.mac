@@ -1,0 +1,74 @@
+NPACF ; Patient files in DB [ 08/27/2016  4:03 PM ]
+SFOTO ; Save photo file
+ D ORH^RWU
+ K XML,XMLR
+ N %J,N
+ F %J=1:1 S A=$$R13^RWU Q:%IFN["Z"  D XML^YIXMLRR
+ K XMLRR D CR^RWU
+ S N=$G(XML("nb_console","xpacscan","hist")) Q:N="" 
+ Q:$D(XML("nb_console","xpacscan","foto"))=0 
+ S %J=$$OW(N,"foto") Q:%J=0 
+ K XML("nb_console","xpacscan","hist")
+ D WL("XML(""nb_console"",""xpacscan"",""foto"")"),C
+ D DO^ITRIG("patient","foto")
+ Q
+SSCAN(NI,DT,FN) ; Сохранить ссылку на скан паспорта
+ Q:FN=""  Q:NI="" 
+ S DT=$$DIH^DTUTL($G(DT))
+ D SET^IPAC(NI,"imgfile",DT,FN,1) ; w. update
+ Q
+LFOTO(NIB) ; Загрузить фото и скан
+ Q:NIB="" 
+ N A
+ D OWF^RWU(".xmlb")
+ D W^RWU($G(^PP(0,2))_"<xpacscan>")
+ D WTAGDC^RWU("label","Фотодокумент :: "_$$FIO^IPAC(NIB))
+ S A=$$GET^IPAC(NIB,"imgfile") S:A'="" A="net:DISK/"_A
+ D W^RWU("<img file="""_A_"""/>")
+ D W^RWU("<foto>")
+ I $$OR(NIB,"foto") F  D W^RWU($$R()) Q:$$EOF() 
+ D C
+ D W^RWU("</foto></xpacscan></nb_console>"),C^RWU
+ Q
+OW(NIB,FN) ; Open write	
+ Q:NIB=""!(FN="") 0
+ K ^PFIL(NIB,FN),%NPACF
+ S %NPACF(0)=0,%NPACF(1)=NIB,%NPACF(2)=FN
+ Q 1
+OR(NIB,FN) ; Open read
+ Q:NIB=""!(FN="") 0 Q:$D(^PFIL(NIB,FN))=0 0
+ S %NPACF(0)=0,%NPACF(1)=NIB,%NPACF(2)=FN
+ Q 1
+CHECK(NIB,FN) ; Check, if file exists
+ Q:NIB=""!(FN="") 0 Q:$D(^PFIL(NIB,FN))=0 0
+ Q 1
+W(R) 
+ Q:$D(%NPACF)=0 
+ N I
+ S I=$O(^PFIL(%NPACF(1),%NPACF(2),""))
+ I I'="" N K S K=^(I),L=$L(K) I L<4096 S ^(I)=K_$E(R,1,4096-L),$E(R,1,4096-L)=""
+ Q:R="" 
+ F I=I+1:1:999999 S ^PFIL(%NPACF(1),%NPACF(2),I)=$E(R,1,4096),$E(R,1,4096)="" Q:R="" 
+ Q
+WL(R) ; write by link
+ Q:$D(%NPACF)=0  Q:$G(%NPACF(2))="" 
+ N I
+ S I=$O(^PFIL(%NPACF(1),%NPACF(2),""))
+ I I'="" N K S K=^(I),L=$L(K) I L<4096 S ^(I)=K_$E(@R,1,4096-L),$E(@R,1,4096-L)=""
+ Q:@R="" 
+ F I=I+1:1:999999 S ^PFIL(%NPACF(1),%NPACF(2),I)=$E(@R,1,4096),$E(@R,1,4096)="" Q:@R="" 
+ D:$G(%NPACF(2))'="" UGL^IEXCH("^PFIL("_%NPACF(1)_","""_%NPACF(2)_"""")
+ Q
+ 
+R() ; Read data
+ Q:$D(%NPACF)=0 "" Q:%NPACF(0)="Z" ""
+ S %NPACF(0)=%NPACF(0)+1
+ I $D(^PFIL(%NPACF(1),%NPACF(2),%NPACF(0)))=0 S %NPACF(0)="Z" Q ""
+ Q ^(%NPACF(0))
+C ; Close file
+ K %NPACF
+ Q
+EOF() ; End of file
+ Q:%NPACF(0)="Z" 1
+ I $D(^PFIL(%NPACF(1),%NPACF(2),%NPACF(0)))=0 S %NPACF(0)="Z" Q 1
+ Q 0

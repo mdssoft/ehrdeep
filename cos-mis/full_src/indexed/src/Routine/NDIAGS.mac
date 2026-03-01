@@ -1,0 +1,9 @@
+NDIAGS ; Справочник диагнозов [ 07/25/2016  1:50 PM ]
+ND(DI,ERCHK)    ; ПОДТВЕРЖДЕНИЕ ДИАГНОЗА
+ ; ERCHK - выводить, что диагноз ошибочный
+ N A
+ S DI=$$WD^TXTU(DI),ERCHK=+$G(ERCHK),A=""
+ I '$$CHECK^YMKB10(DI) S A=$S(ERCHK:"!",1:"")_"диагноза """_DI_""" не существует."
+ E  S A=$$NAME^YMKB10(DI)
+ D MSG^RWU(A)
+ Q

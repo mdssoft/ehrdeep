@@ -1,0 +1,243 @@
+NSTOMEPR ; Процедуры стоматологии [ 07/10/2020  1:08 PM ]
+DETOOTH(NI) ; Удаленные через |
+ D MSG^RWU($$DETOOTH^ISTOM(NI))
+ Q
+PLNL ; Plan list
+ N R,X,C
+ D OWF^RWU(".txt")
+ S (X,C)=""
+ F  S X=$O(^STOMM("plan",X)) Q:X=""  S R=^(X) D:$G(^(X,"use"))'=0 WC^RWU(C_X_"|"_R) S C=CR
+ D C^RWU
+ Q
+PLNINIT(NI) ; Инициализация стом. плана
+ N H,I,R,X
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<stofcalc>")
+ D W^RWU("<stof half="""_$$NZLINE^ISTOM(NI)_"""/><ptab>")
+ S H=+$H,I="" F  S I=$O(^STOM(NI,"pln",H,I)) Q:I=""  D:+I=I
+ .S R=^(I),X=$P(R,"|",1)
+ .D WC^RWU(CR_X_"|"_$G(^STOMM("plan",X))_"|"_$P(R,"|",2,3))
+ D W^RWU("</ptab></stofcalc></nb_console>"),C^RWU
+ Q
+PLNCN(ID,NZ) ; Сумма по коду этапа+№ зуба
+ N I,X,A
+ S NZ=$TR(NZ,"/;\,","||||"),A=""
+ I NZ="" D MSG^RWU(+$G(^STOMM("plan",ID,0))) Q
+ F I=1:1:$L(NZ,"|") S X=$P(NZ,"|",I),A=A+$G(^STOMM("plan",ID,X))
+ D MSG^RWU(A)
+ Q
+PLNSAVE ; Сохранить план лечения
+ N NI,A,%J,H,NZ,ID,S,F,DOC,TP,DI
+ S H=+$H,F=0
+ D ORH^RWU
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D
+ .I %J=1 S NI=$P(A,"|",1) D:NI'=""  Q  
+ ..Q:'$D(^STOM(NI,"pln",H)) 
+ ..K ^STOM(NI,"pln",H) ; очистка
+ ..D KGL^IEXCH("^STOM",NI,"pln",H)
+ .S ID=$P(A,"|",1) Q:ID="" 
+ .S NZ=$P(A,"|",3),S=+$TR($P(A,"|",4),",",".")
+ .S ^STOM(NI,"pln",H,%J-1)=ID_"|"_NZ_"|"_S,F=1
+ D:F
+ .S ^STOM(NI,"pln",H,"log")=$$USRH^IUSER()
+ .D GL^IEXCH("^STOM",NI,"pln",H)
+ .S TP=$$FNDUID^YIMHS("stom/light-plan")
+ .D:TP=""
+ ..S A=$$ADDF^YIMHS("Сопутствующие документы","addoc")
+ ..S TP=$$ADDT^YIMHS("Предварительный план лечения",A,"tab","stom/light-plan")
+ ..D SET^YIMHS(TP,"rights","rrr")
+ ..D SET^YIMHS(TP,"rproc","PLNMH^NSTOMEPR")
+ ..D SET^YIMHS(TP,"sys",1)
+ ..D MKIDX^IMHS(TP)
+ .S A=$$CHKTPDT^IEPR(NI,TP,H) Q:A'=""  ; Уже есть сегодня
+ .S A=$$MKDOC^IEPR(NI,TP,"",1) Q:A=""  ; subscr
+ .S ^STOM(NI,"pln",H,"epr")=A
+ D CR^RWU
+ Q
+PLNDEL(NI) ; Delete now
+ Q:NI="" 
+ N H,I S H=+$H
+ Q:'$D(^STOM(NI,"pln",H)) 
+ S I=$G(^STOM(NI,"pln",H,"epr"))
+ K ^STOM(NI,"pln",H)
+ D KGL^IEXCH("^STOM",NI,"pln",H)
+ D:I'="" DEL^IEPR(NI,I) ; Удаление связанного документа
+ Q
+PLNMH ; for YIMH
+ N D,I,R,COD
+ S D=+$P($$GET^IEPR(N,ID,"dt"),"|",1)
+ D WC^RWU("Манипуляция|№ зубов|Стоимость")
+ S I="" F  S I=$O(^STOM(N,"pln",D,I)) Q:I=""  D:+I=I
+ .S R=^(I),COD=$P(R,"|",1) Q:COD=""
+ .D WC^RWU(CR_$G(^STOMM("plan",COD))_"|"_$P(R,"|",2,3))
+ Q
+LPLNGL ; Load data 
+ ; code|name|nz|price
+ N A,%J,COD
+ D ORH^RWU
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D:%J>1
+ .S COD=$P(A,"|",1) Q:COD="" 
+ .S ^STOMM("plan",COD)=$P(A,"|",2)
+ .S ^STOMM("plan",COD,$P(A,"|",3))=$P(A,"|",4)
+ D CR^RWU
+ Q
+LRNINIT ; Init stomlrn
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<stomlrn>")
+ D:$$LCL^NUSER("stom","lrn-ndel") W^RWU("<bt_del visible=""yes""/>")
+ D W^RWU("</stomlrn></nb_console>"),C^RWU
+ Q
+LRNUSL(NIB,VRX,IDX) ; Услуги пациента по лаб. наряду
+ N DT,KX,VR,OT,ID,CSTC,CPRC,R,U,EX,CNT,A,K,@$$NEWVAR^IUSL
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<stomlrn>")
+ S IDX=+$G(IDX)
+ D WTAGDC^RWU("pactitle",$$FIO^IPAC(NIB)_", оказанные услуги")
+ D WTAGDC^RWU("pac",$$FIO^IPAC(NIB)_" ("_NIB_")")
+ S R=$S(IDX:"Наряд от "_$$DT^DTUTL($P(^STOM(NIB,"lrn",IDX),"|",2)),$D(^STOM(NIB,"lrn",0)):"Новый наряд",1:"")
+ D WTAGDC^RWU("state",R)
+ S R=$S(IDX&$$LCL^NUSER("stom","lrn-ndel"):"yes",'IDX:"yes",1:"no")
+ S A=$S(IDX:"Удалить",1:"Очистить")
+ D WC^RWU("<bt_clr visible="""_R_""" title="""_A_"""/>")
+ 
+ I $$USE^IBILL(NIB) D 
+ .S A=$$NOW^IBILL(NIB)
+ .D:A<0 WC^RWU("<dep_title data=""Долг:"" visible=""yes""/>")
+ .D:'(A<0) WC^RWU("<dep_title data=""Аванс:"" visible=""yes""/>")
+ .D WC^RWU("<deposit data="""_$S(A<0:0-A,1:A)_""" visible=""yes""/>")
+ E  D W^RWU("<dep_title visible=""no""/><deposit visible=""no""/>")
+ 
+ D W^RWU("<utab>")
+ S DT=$H-365 F  S DT=$O(^PNF(NIB,DT)) Q:DT=""  D
+ .S CSTC=$$GET^IPAC(NIB,"stc",DT)
+ .S CPRC=+$$GET^YNDOG(CSTC,"price",DT)
+ .S KX="" F  S KX=$O(^PNF(NIB,DT,KX)) Q:KX=""  D
+ ..S VR=$P(KX,"|",1),OT=$P(KX,"|",2),ID=$P(KX,"|",3)
+ ..Q:VRX'=VR 
+ ..S K=VR_"@"_OT_"@"_DT_"@"_ID
+ ..Q:$D(^STOM(NIB,"lrn",0,K)) 
+ ..K ERR
+ ..Q:$D(^ZNF(VR,OT,DT,ID,"sln")) 
+ ..D GETLT^IUSL(VR,DT,OT,ID)
+ ..Q:STAT="w"!(STAT="d") 
+ ..S:'$G(PRC) PRC=CPRC
+ ..S U=$O(UL("")) q:U=""  ; TODO - many
+ ..S CNT=+UL(U) S:'CNT CNT=1
+ ..S EX=$$GET2IDX^YNPRICE(U,"con",PRC,DT) q:EX="" 
+ ..S R=$$NAMEH^IPRICE(U,PRC,DT)_"|"_CNT_"|"
+ ..S R=R_$$GETPL^IUSL(VR,DT,OT,ID,"nz")_"|"_$$FIOSH^IKADRY(VR)_"|"
+ ..S R=R_$$SUMM^IUSL(VR,DT,OT,ID)
+ ..D WC^RWU(CR_K_"|"_$$DT2^DTUTL(DT)_"|"_U_"|"_R)
+ D W^RWU("</utab><dates>")
+ D LRNdsys(NIB)
+ D W^RWU("</dates><table>")
+ D LRNtsys(NIB,IDX)
+ D W^RWU("</table></stomlrn></nb_console>"),C^RWU
+ Q
+LRNtsys(NI,ID)  ; usl
+ N KX,U,R
+ S KX="" F  S KX=$O(^STOM(NI,"lrn",ID,KX)) Q:KX=""  D
+ .S R=^(KX),U=$P(R,"|",1)
+ .D WC^RWU(CR_KX_"|"_U_"|"_$$NAMEH^IPRICE(U,$P(R,"|",2),$P(KX,"@",3))_"|"_$P(R,"|",3)_"|"_$P(R,"|",4)_"|"_$$FIOSH^IKADRY($P(KX,"@",1))_"|"_$P(R,"|",6))
+ 
+ Q
+LRNdsys(NIB) ; dates
+ N KX,R,C
+ S C=""
+ I $D(^STOM(NIB,"lrn",0)) D WC^RWU("0|Новый наряд") S C=CR
+ S KX=0 F  S KX=$O(^STOM(NIB,"lrn",KX)) Q:KX=""  D
+ .S R=^(KX)
+ .D W^RWU(C_KX_"|"_$$DT^DTUTL(+$P(R,"|",2))) S C=CR
+ Q
+LRNADD(NIB,VRX,KEY) ; add
+ N DT,KX,VR,OT,ID,CSTC,CPRC,R,U,EX,CNT,A,@$$NEWVAR^IUSL
+ S VR=$P(KEY,"@",1),OT=$P(KEY,"@",2),DT=$P(KEY,"@",3),ID=$P(KEY,"@",4)
+ S CSTC=$$GET^IPAC(NIB,"stc",DT)
+ S CPRC=+$$GET^YNDOG(CSTC,"price",DT)
+ D GETLT^IUSL(VR,DT,OT,ID)
+ S:'$G(PRC) PRC=CPRC
+ S U=$O(UL("")) ; TODO - many
+ S CNT=+UL(U) S:'CNT CNT=1
+ S EX=$$GET2IDX^YNPRICE(U,"con",PRC,DT)
+ S A=$$SUMM^IUSL(VR,DT,OT,ID)
+ S A=U_"|"_PRC_"|"_CNT_"|"_$$GETPL^IUSL(VR,DT,OT,ID,"nz")_"|"_A_"|"_$P($$GET2^IPRICE(U,"con",EX,PRC,DT),"|",1)
+ S ^STOM(NI,"lrn",0)=EX
+ S ^(0,KEY)=A
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<stomlrn>")
+ D WTAGDC^RWU("state","Новый наряд")
+ D WC^RWU("<bt_clr visible=""yes"" title=""Очистить""/>")
+ D W^RWU("<table>")
+ D LRNtsys(NIB,0)
+ D W^RWU("</table></stomlrn></nb_console>"),C^RWU
+ Q
+LRNDEL(NI,VR,KEY,ID) ; Удалить из наряда
+ S ID=+$G(ID)
+ I ID,'$$LCL^NUSER("stom","lrn-dellall") D MSG^RWU("Недостаточно прав.") Q 
+ K ^STOM(NI,"lrn",ID,KEY) ; local and data
+ D:ID KGL^IEXCH("^STOM",NI,"lrn",ID,KEY) ; only data
+ I $D(^STOM(NI,"lrn",ID))=1 K ^STOM(NI,"lrn",ID) D:ID KGL^IEXCH("^STOM",NI,"lrn",ID)
+ S KEY=$$KILPL^IUSL($P(KEY,"@",1),$P(KEY,"@",3),$P(KEY,"@",2),$P(KEY,"@",4),"sln")
+ D LRNUSL(NI,VR,ID) ; TODO - более производительно
+ Q
+LRNCLR(NI,VR,ID) ; Очистить
+ Q:NI=""
+ I ID G:'$$LCL^NUSER("stom","lrn-dellall") LRNCLRe D LRNDELN(NI,VR,ID) Q
+ K ^STOM(NI,"lrn",0)
+LRNCLRe D LRNUSL(NI,VR)
+ Q
+LRNDELN(NI,VR,ID) ; Удалить существующий наряд
+ N KX,A
+ S KX="" F  S KX=$O(^STOM(NI,"lrn",ID,KX)) Q:KX=""  D
+ .S A=$$KILPL^IUSL($P(KX,"@",1),$P(KX,"@",3),$P(KX,"@",2),$P(KX,"@",4),"sln")
+ K ^STOM(NI,"lrn",ID)
+ K ^STOM(NI,"lrni",ID)
+ D KGL^IEXCH("^STOM",NI,"lrn",ID)
+ D KGL^IEXCH("^STOM",NI,"lrni",ID)
+ D LRNUSL(NI,VR)
+ Q
+LRNSAVE(NI,VR) ; Сохранить активный наряд (0)
+ N ID,KX,OT,DT,I,A,LL
+ S ID=$O(^STOM(NI,"lrn",""),-1)+1,LL=""
+ M ^STOM(NI,"lrn",ID)=^STOM(NI,"lrn",0)
+ S LL=$G(^STOM(NI,"lrn",0))
+ K ^STOM(NI,"lrn",0)
+ S KX="" F  S KX=$O(^STOM(NI,"lrn",ID,KX)) Q:KX=""  D
+ .S VR=$P(KX,"@",1),OT=$P(KX,"@",2),DT=$P(KX,"@",3),I=$P(KX,"@",4)
+ .S A=$$SETPL^IUSL(VR,DT,OT,I,"sln",ID)
+ S ^STOM(NI,"lrn",ID)=VR_"|"_$H_"|"_LL
+ S ^STOM(NI,"lrni",ID)=$H
+ 
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<stomlrn>")
+ D WTAGDCU^RWU("state","Наряд от "_$$DT^DTUTL(+$H),ID)
+ D WTAGDC^RWU("lab",$$NAME^ICONTR(LL))
+ D WTAGDC^RWU("pac",$$FIO^IPAC(NI)_" ("_NI_")")
+ S A=$S($$LCL^NUSER("stom","lrn-ndel"):"yes",1:"no")
+ D WC^RWU("<bt_clr visible="""_A_""" title=""Удалить""/>")
+ 
+ D WTAGU^RWU("dates",ID)
+ D W^RWU("<dates>")
+ D LRNdsys(NI)
+ D W^RWU("</dates></stomlrn></nb_console>"),C^RWU
+ D GL^IEXCH("^STOM",NI,"lrn",ID)
+ D GL^IEXCH("^STOM",NI,"lrni",ID)
+ Q
+LRNVIEW(NI,VR,ID) ; view old
+ N X,A
+ S X=$G(^STOM(NI,"lrn",ID))
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<stomlrn>")
+ S A=+$P(X,"|",2)
+ D WTAGDCU^RWU("state",$S(A:"Наряд от "_$$DT^DTUTL(A),1:"Новый наряд"),ID)
+ D WTAGDC^RWU("lab",$$NAME^ICONTR($P(X,"|",3)))
+ D WTAGDC^RWU("pac",$$FIO^IPAC(NI)_" ("_NI_")")
+ S X=$S(ID&$$LCL^NUSER("stom","lrn-ndel"):"yes",'ID:"yes",1:"no")
+ S A=$S(ID:"Удалить",1:"Очистить")
+ D WC^RWU("<bt_clr visible="""_X_""" title="""_A_"""/>")
+ 
+ D W^RWU("<table>")
+ D LRNtsys(NI,ID)
+ D W^RWU("</table></stomlrn></nb_console>"),C^RWU
+ Q
+REGLCL ;
+ K ^LCLI("stom")
+ s ^LCLI("stom")="Стоматология"
+ S ^LCLI("stom","lrn-dellall")="Удаление услуги из всех видов упрощенных нарядов"
+ S ^LCLI("stom","lrn-ndel")="Удаление существующих упрощенных нарядов"
+ S ^LCLI("stom","evepr")="Регистрация события при закрытия документа (mhstomrez)"
+ Q

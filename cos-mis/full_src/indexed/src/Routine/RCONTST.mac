@@ -1,0 +1,99 @@
+RCONTST ; Отчеты по контингенту со статусами [ 05/04/2018  6:59 PM ]
+SVD(DT,OFOR) ; Сводка по договорам
+ S DT=$$DIH^DTUTL(DT)
+ N N,F,I,ST,TABLE,I,DGN,POS,M,S,iO,iST,iSTC,iDGF,iDGT
+ S iO=$$PLIDX^IPAC("ofor"),iST=$$PLIDX^IPAC("status")
+ S N=1 F I="",1,2 S iDGF(N)=$$PLIDX^IPAC("dog_from"_I),iDGT(N)=$$PLIDX^IPAC("dog_to"_I),iSTC(N)=$$PLIDX^IPAC("stc"_I),N=N+1
+ S N="" F  S N=$$NEXT^IPAC(N) Q:N=""  D
+ .I OFOR,$$GETTZ^IPAC(N,iO,DT)'=1 Q 
+ .S ST=$$GETTZ^IPAC(N,iST,DT)
+ .S (M,S)=0
+ .S:$$FLinFL^TXTU(ST,"med") M=1
+ .S:$$FLinFL^TXTU(ST,"stom") S=1
+ .S F=$S($D(^PNF(N)):1,1:0)
+ .F I=1:1:3 D:$$fndg(DT)
+ ..S TABLE(DGN,1)=$G(TABLE(DGN,1))+1
+ ..S:F TABLE(DGN,2)=$G(TABLE(DGN,2))+1
+ ..S:M TABLE(DGN,3)=$G(TABLE(DGN,3))+1
+ ..S:M&F TABLE(DGN,4)=$G(TABLE(DGN,4))+1
+ ..S:S TABLE(DGN,5)=$G(TABLE(DGN,5))+1
+ ..S:S&F TABLE(DGN,6)=$G(TABLE(DGN,6))+1
+ ..S:M&S TABLE(DGN,7)=$G(TABLE(DGN,7))+1
+ ..S:M&S&F TABLE(DGN,8)=$G(TABLE(DGN,8))+1
+ ..S:M&('S) TABLE(DGN,9)=$G(TABLE(DGN,9))+1
+ ..S:('M)&S TABLE(DGN,10)=$G(TABLE(DGN,10))+1
+ D OWF^RWU(".txt")
+ D WC^RWU("Договор "_$$DT^DTUTL(DT)_"|Лиц|Пришедших|Медицина|Мед.пришедших|Стоматология|Стом.пришедших|Мед. и стом.|Мед. и стом. пришедших|Только мед.|Только стом.")
+ S N="" F  S N=$O(TABLE(N)) Q:N=""  D
+ .S F=$$NAME^IINSC(N)
+ .F I=1:1:10 S F=F_"|"_(+$G(TABLE(N,I)))
+ .D WC^RWU(CR_F)
+ D C^RWU
+ Q
+MOV(DS,DE,OFOR) ; Движение
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N N,F,ST,TABLE,I,DGN,POS,M,S,X1,X2,X3,X4,DGL1,DGL2,iDGF,iDGT,iSTC,iOF
+ S iOF=$$PLIDX^IPAC("ofor")
+ S N=1 F I="",1,2 S iDGF(N)=$$PLIDX^IPAC("dog_from"_I),iDGT(N)=$$PLIDX^IPAC("dog_to"_I),iSTC(N)=$$PLIDX^IPAC("stc"_I),N=N+1
+ K ^BUF($J)
+ S N="" F  S N=$$NEXT^IPAC(N) Q:N=""  D
+ .I OFOR,$$GETTZ^IPAC(N,iOF,DS)'=1,$$GETTZ^IPAC(N,iOF,DE)'=1 Q
+ .K DGL1,DGL2
+ .F I=1:1:3 D
+ ..S (X1,X2)=0
+ ..I $$fndg(DS) S X1=1,TABLE(DGN,1)=$G(TABLE(DGN,1))+1,DGL1(DGN)=""
+ ..I $$fndg(DE) S X2=1,TABLE(DGN,2)=$G(TABLE(DGN,2))+1,DGL2(DGN)=""
+ .S DGN="" F  S DGN=$O(DGL1(DGN)) Q:DGN=""  D
+ ..I '$D(DGL2(DGN)) S TABLE(DGN,4)=$G(TABLE(DGN,4))+1
+ .S DGN="" F  S DGN=$O(DGL2(DGN)) Q:DGN=""  D
+ ..I '$D(DGL1(DGN)) S TABLE(DGN,3)=$G(TABLE(DGN,3))+1
+ .Q:$D(DGL1)  Q:$D(DGL2) 
+ .S X3=$O(^PNF(N,DE+1),-1) Q:X3<DS   
+ .S DGN=+$$GETTZ^IPAC(N,iSTC(1),X3),TABLE(DGN,5)=$G(TABLE(DGN,5))+1
+ K ^BUF($J)
+ D OWF^RWU(".txt")
+ D WC^RWU("Договор|Численность на "_$$DT2^DTUTL(DS)_"|Численность на "_$$DT2^DTUTL(DE)_"|Прикрепилось|Открепилось|Лица в периоде")
+ S DGN="" F  S DGN=$O(TABLE(DGN)) Q:DGN=""  D
+ .S S=$$NAME^IINSC(DGN)
+ .F I=1:1:5 S S=S_"|"_(+$G(TABLE(DGN,I)))
+ .D WC^RWU(CR_S)
+ D C^RWU
+ Q
+fndg(DT) 
+ S DGN=$$GETTZ^IPAC(N,iSTC(I),DT) Q:DGN="" 0
+ I OFOR Q:$$GETTZ^IPAC(N,iDGF(I),DT)>DT 0 S K=+$$GETTZ^IPAC(N,iDGT(I),DT) Q:K&(K<DT) 0
+ Q 1
+MOVL(DS,DE,OFOR,DGX,MODX) ; Движение (списком)
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ N N,F,ST,TABLE,I,J,DGN,POS,M,S,X1,X2,X3,DGL1,DGL2,I,mx,iDGF,iDGT,iSTC,iOF
+ S iOF=$$PLIDX^IPAC("ofor")
+ S N=1 F I="",1,2 S iDGF(N)=$$PLIDX^IPAC("dog_from"_I),iDGT(N)=$$PLIDX^IPAC("dog_to"_I),iSTC(N)=$$PLIDX^IPAC("stc"_I),N=N+1
+ K ^BUF($J)
+ S mx=$G(^cfg("pac","mxlist")) S:mx="" mx=10000
+ S N="" F  S N=$$NEXT^IPAC(N,"stc",DGX) Q:N=""  D  
+ .I OFOR,$$GETTZ^IPAC(N,iOF,DS)'=1,$$GETTZ^IPAC(N,iOF,DE)'=1 Q
+ .K DGL1,DGL2
+ .F I=1:1:3 D
+ ..I $$fndg(DS) S DGL1(DGN)="" I DGN=DGX,MODX=1!('MODX) S ^BUF($J,N,1)=1
+ ..I $$fndg(DE) S DGL2(DGN)="" I DGN=DGX,MODX=2!('MODX) S ^BUF($J,N,2)=1
+ .S DGN="" F  S DGN=$O(DGL1(DGN)) Q:DGN=""  D
+ ..I DGN=DGX,MODX=4!('MODX),'$D(DGL2(DGN)) S ^BUF($J,N,4)=1
+ .S DGN="" F  S DGN=$O(DGL2(DGN)) Q:DGN=""  D
+ ..I DGN=DGX,MODX=3!('MODX),'$D(DGL1(DGN)) S ^BUF($J,N,3)=1
+ 
+ D OWF^RWU(".txt")
+ D WC^RWU("xpatient:patient|№ И.Б.|Ф.И.О. по договору "_$$NAME^IINSC(DGX)_"|Тип")
+ S I=0
+ S N="" F  S N=$O(^BUF($J,N)) Q:N=""  D  Q:I>mx
+ .S J="" F  S J=$O(^BUF($J,N,J)) Q:J=""  D  Q:I>mx
+ ..S X1=$S(J=1:"Прикрепление на "_$$DT^DTUTL(DS),J=2:"Прикрепление на "_$$DT^DTUTL(DE),J=3:"Прикрепилось",J=4:"Открепилось",1:"")
+ ..D WC^RWU(CR_N_"|"_N_"|"_$$FIO^IPAC(N)_"|"_X1)
+ ..S I=I+1
+ K ^BUF($J)
+ D C^RWU
+ Q
+REGIPROC 
+ S ^IPROC("Отчеты по пациентам","Контингент","Сводка по договору и видам обслуживания")="SVD_RCONTST,1,2,d,Дата отчета,t@string:0/Нет#1/Да,Учитывать только оформленных пациентов"
+ S ^IPROC("Отчеты по пациентам","Контингент","Движение по договору и видам обслуживания")="MOV_RCONTST,1,3,d,Дата начала,d,Дата окончания,t@string:0/Нет#1/Да,Учитывать только оформленных пациентов"
+ S ^IPROC("Отчеты по пациентам","Контингент","Список движения по договору и видам обслуживания")="MOVL_RCONTST,100,5,d,Дата начала,d,Дата окончания,t@string:0/Нет#1/Да,Учитывать только оформленных пациентов,te@storage:dog,Договор,t@string:0/Весь#1/На начальную дату#2/На конечную дату#3/Прикрепилось#4/Открепилось,Выводить список"
+ Q

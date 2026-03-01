@@ -1,0 +1,277 @@
+NWRHUSL ; Списание материалов на услуги [ 08/22/2023  4:45 PM ]
+INIT ; Form init
+ N ST,I,R
+ S ST=$$VRSTK^IWRHS($$KDR^IUSER())
+ I ST="",$$C1^I("wrhusl","lpust") S ST=$$LPUSTK^IWRHS($$^I("ilpu"))
+ D OWF^RWU(".xmlb")
+ D WC^RWU(^PP(0,2)_"<msmatt><stk>"_ST_"|"_$S(ST="":"Склад не выбран",1:$$NAME^IWRHS("stock",ST)))
+ S I="" F  S I=$O(^WRHM("stock",I)) Q:I=""  D:I'=ST
+ .S R=^(I) Q:'$P(R,"|",6) 
+ .D WC^RWU(CR_I_"|"_$P(R,"|",1))
+ D W^RWU("</stk></msmatt></nb_console>"),C^RWU
+ Q
+FIND(DS,DE,VRX,MOD) ; Вывод списка пациентов, обновление врачей
+ N VR,OT,OTX,DT,DSS,R,VRL,NNL,LP,LPUX,MS,ID,NI,U,Smt,bVR,bOT,bA,Nmt
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),DSS=DS,MOD=$G(MOD)
+ S MS=$$KDR^IUSER(),OTX=$$OTD^IUSER(),LP=$$^I("ilpu")
+ S R=$$LCL^IUSER("wrhusl","mxday")
+ S bVR=$G(^cfg("wrhusl","byvr"))!$$LCL^IUSER("wrhusl","byvr")
+ S bOT=$G(^cfg("wrhusl","byot"))!$$LCL^IUSER("wrhusl","byot")
+ S bA=$G(^cfg("wrhusl","byall"))
+ S XLPU=$S(bOT:LP,1:"")
+ I R,DS<($H-R-1) S DS=$H-R-1
+ S Smt=$$LCL^IUSER("wrhusl","onlyumt")
+ S Nmt=$$LCL^IUSER("wrhusl","nomtprice")
+ S VR="" F  S VR=$O(^ZNF(VR)) Q:VR=""  D:$S(bA:1,bOT:1,bVR:VR=MS,1:VR'=MS)
+ .S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D:$S(bOT:OT=OTX,1:1)
+ ..S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ...I 'bA,'bOT,'bVR,'$$IsMS^IUSLD(VR,DT,OT,MS,LP) Q 
+ ...I XLPU,'$D(^ZNFI("l",XLPU,VR,DT)) Q 
+ ...S VRL(VR)="" ;_"@"_OT)=""
+ ...I VRX'="",VRX'=VR Q 
+ ...S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ....I Smt S U=$P($$GETUSLS^IUSL(VR,DT,OT,ID),"*",1) I 'Nmt,$$GET^IPRICE(U,$$STARTTP^IPRICE(U,DT),"mt",DT)="" Q 
+ ....I MOD S U=$$GETPLE^IUSL(VR,DT,OT,ID,"mt") Q:MOD=1&(U="")  Q:MOD=2&(U'="") 
+ ....S NI=$$GETNIB^IUSL(VR,DT,OT,ID) S:NI'="" NNL(DT_"|"_NI)=DT
+ D OWF^RWU(".xmlb"),W^RWU(^PP(0,2)_"<msmatt><vr>")
+ S (ID,R)="" F  S ID=$O(VRL(ID)) Q:ID=""  D WC^RWU(R_ID_"|"_$$FIOSH^YIKADRY(ID)) S R=CR
+ D WC^RWU("</vr><list>|Пациент"_$S(DS=DE:"",1:"|Дата"))
+ S U="" F  S U=$O(NNL(U)) Q:U=""  S NI=$P(U,"|",2) D WC^RWU(CR_NI_"|"_$$FIOSH^YIPACN(NI)_" ("_NI_")"_$S(DS=DE:"",1:"|"_$$DT2^DTUTL(NNL(U))))
+ D W^RWU("</list>")
+ D:DS'=DSS WTAGD^RWU("df",$$DT2^DTUTL(DS))
+ D W^RWU("</msmatt></nb_console>"),C^RWU
+ Q
+TAB(DS,DE,VR,NIB,MOD) ; Услуги пациента
+ N OT,ID,DT,LP,MS,R,MT,U,A,Ss,bVR,bOT,bA,@$$NEWVAR^IUSL
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE)
+ S MS=$$KDR^IUSER(),LP=$$^I("ilpu"),MOD=+MOD
+ S Ss=$$LCL^IUSER("wrhusl","sbsusl")
+ S Smt=$$LCL^IUSER("wrhusl","onlyumt")
+ S bVR=$G(^cfg("wrhusl","byvr"))!$$LCL^IUSER("wrhusl","byvr")
+ S bOT=$G(^cfg("wrhusl","byot"))!$$LCL^IUSER("wrhusl","byot")
+ S bA=$G(^cfg("wrhusl","byall"))
+ D OWF^RWU(".txt")
+ D WC^RWU("|Материалы|Услуга|Кол-во")
+ S OT="" F  S OT=$O(^ZNF(VR,OT)) Q:OT=""  D
+ .S DT=DS-1 F  S DT=$O(^ZNF(VR,OT,DT)) Q:DT=""!(DT>DE)  D
+ ..I 'bA,'bOT,'bVR,'$$IsMS^IUSLD(VR,DT,OT,MS,LP) Q 
+ ..S ID="" F  S ID=$O(^ZNF(VR,OT,DT,ID)) Q:ID=""  D
+ ...S R=^(ID,"e") Q:$P(R,"~",2)'=NIB 
+ ...S MT=$$GETPLE^IUSL(VR,DT,OT,ID,"mt")
+ ...I MOD=1,MT="" Q 
+ ...I MOD=2,MT'="" Q 
+ ...D GET^IUSL(VR,DT,OT,ID)
+ ...Q:"45d"[STAT 
+ ...I Ss,STAT="w" q 
+ ...S A=VR_"@"_DT_"@"_OT_"@"_ID_"@"_PRC_"|"_$S(MT="":"",1:"Да")
+ ...S U="" F  S U=$O(UL(U)) Q:U=""  D
+ ....I Smt,$$GET^IPRICE(U,PRC,"mt",DT)="" q 
+ ....D WC^RWU(CR_A_"|"_U_" "_$$NAMEH^IPRICE(U,PRC,DT)_"|"_UL(U))
+ D C^RWU
+ Q
+GETMT(KEY,STK) ; Материалы по умолчанию
+ N VR,DT,OT,ID,U,P,I,M,A,C,Fw
+ S VR=$P(KEY,"@",1),DT=$P(KEY,"@",2),OT=$P(KEY,"@",3),ID=$P(KEY,"@",4),P=$P(KEY,"@",5)
+ S U=$$GETPL^IUSL(VR,DT,OT,ID,"mt")
+ I U'="" D  Q  ; уже введено
+ .F I=1:1:$L(U,"|") S R=$P(U,"|",I) Q:R=""  S:R'["@" $P(U,"|",I)=R_"@1"
+ .D MSG^RWU($TR(U,"|@",",#")) 
+ S Fw=$$LCL^IUSER("wrhusl","swinstk")
+ S U=$P($$GETUSLS^IUSL(VR,DT,OT,ID),"*",1)
+ S U=$$GET^IPRICE(U,"mat",P,DT),A=$S(Fw:"",1:U)
+ I Fw F I=1:1:$L(U,"|") S R=$P(U,"|",I) Q:R=""  D
+ .S C=$P(R,"@",2)
+ .q:'$$USE^IWRHS($P(R,"@",1)) 
+ .I $$RESTS^IWRH(STK,$P(R,"@",1))'<C S A=$S(A="":"",1:A_"|")_R
+ D MSG^RWU($TR(A,"|@",",#"))
+ Q
+SETPL(KEY,VAL,STK) 
+ ; KEY - ключ услуги
+ ; VAL - значения материалов
+ ; STK - склад по умолчанию
+ N VR,DT,OT,ID,ST,MS,R,X,XX,WW,LP,VALI,WS,LPU,uAC
+ S VR=$P(KEY,"@",1),DT=$P(KEY,"@",2),OT=$P(KEY,"@",3),ID=$P(KEY,"@",4)
+ S VAL=$$WD^TXTU(VAL),STK=$G(STK),LPU=$$^I("ilpu")
+ I $$GETPL^IUSL(VR,DT,OT,ID,"kv")'="",$$GETPL^IUSL(VR,DT,OT,ID,"kp")'="" D MSG^RWU("Эта услуга уже оплачена.") Q  
+ S cAC=$$C^I("wrh","subuac")
+ S VALI="" F X=1:1:$L(VAL,"|") D  ; ; only values
+ .S XX=$P($P(VAL,"|",X),"@",1,2)
+ .I cAC,'$$USE^IWRHS($P(XX,"@",1)) Q 
+ .S VALI=$S(VALI="":"",1:VALI_"|")_XX
+ S R=$$GETPL^IUSL(VR,DT,OT,ID,"mt")
+ Q:R=VALI 
+ S R=$$SETPL^IUSL(VR,DT,OT,ID,"mt",VALI) ; values
+ S WS=$G(^cfg("wrhusl","nosubwrh"))!$$LCL^IUSER("wrhusl","nosubwrh")
+ S MS=$$KDR^IUSER()
+ S ST=STK
+ S:ST="" ST=$$VRSTK^IWRHS(MS)
+ I ST="" S LP=$$GETPL^IUSL(VR,DT,OT,ID,"l"),ST=$$LPUSTK^IWRHS($S(LP="":LPU,1:LP))
+ N OST S OST=$P($$GETPLE^IUSL(VR,DT,OT,ID,"mt"),",",1)
+ I 'WS,OST'="",OST'=ST D MSG^RWU("Текущий склад не совпадает с ранее проведенным в услуге.") Q 
+ I 'WS,ST'="" S R=$$NMCHK(VAL,ST) I R'="" D MSG^RWU(R) Q 
+ S KEY=$$SETPL^IUSL(VR,DT,OT,ID,"mt",VALI) ; без склада - присваиваем
+ I $D(^ZNF(VR,OT,DT,ID,"s")),'$D(^ZNF(VR,OT,DT,ID,"p")) D 
+ .K ^ZNF(VR,OT,DT,ID,"s")
+ .N SS,AS
+ .S SS=$$GETSUM^IUSL(VR,DT,OT,ID)
+ .S AS=$$CENNALL^IWRHS(VAL,DT)
+ .S R=$$SETPL^IUSL(VR,DT,OT,ID,"s",SS+AS)
+ 
+ Q:ST=""  Q:WS 
+ 
+ S R=$$GETPLE^IUSL(VR,DT,OT,ID,"mt")
+ I R'="" F I=1:1:$L(R,"|") S X=$P(R,"|",I) D:X'="" DEL^IWRH($P(X,",",1),$P(X,",",2),$P(X,",",3,4))
+ 
+ D SUB^IWRH(LPU,OT,VR,VAL,ST,1,"WW","ZNF:"_VR_","_DT_","_OT_","_ID)
+ S (X,R)="" F  S X=$O(WW(X)) Q:X=""  S R=$S(R="":"",1:R_"|")_X
+ I R="",'$$ISPLE^IUSL(VR,DT,OT,ID,"mt") Q
+ S R=$$SETPLE^IUSL(VR,DT,OT,ID,"mt",R) ; references
+ Q
+DELPL(KEY,STK) ; Удалить списание и материалы
+ ; KEY - ключ услуги
+ ; STK - склад по умолчанию
+ I $$LCL^IUSER("wrhusl","delmt") D MSG^RWU("Нет прав на удаление") Q 
+ N VR,DT,OT,ID,R,I,X,LPU,LP,ST,WS
+ S VR=$P(KEY,"@",1),DT=$P(KEY,"@",2),OT=$P(KEY,"@",3),ID=$P(KEY,"@",4)
+ S STK=$G(STK),LPU=$$^I("ilpu")
+ S R=$$GETPL^IUSL(VR,DT,OT,ID,"mt")
+ S:R'="" R=$$KILPL^IUSL(VR,DT,OT,ID,"mt")
+ 
+ S WS=$G(^cfg("wrhusl","nosubwrh"))!$$LCL^IUSER("wrhusl","nosubwrh")
+ S MS=$$KDR^IUSER()
+ S ST=STK
+ S:ST="" ST=$$VRSTK^IWRHS(MS)
+ I ST="" S LP=$$GETPL^IUSL(VR,DT,OT,ID,"l"),ST=$$LPUSTK^IWRHS($S(LP="":LPU,1:LP))
+ 
+ S R=$$GETPLE^IUSL(VR,DT,OT,ID,"mt")
+ Q:R="" 
+ F I=1:1:$L(R,"|") S X=$P(R,"|",I) D:X'="" DEL^IWRH($P(X,",",1),$P(X,",",2),$P(X,",",3,4))
+ S R=$$KILPLE^IUSL(VR,DT,OT,ID,"mt")
+ Q
+SETPLM(VR,OT,SP,DT,NIB,IDX,TXT,NTAB) ; Для вызова из ЭИБ
+ ; NTAB - без вывода таблицы
+ N DTT,K
+ S DTT=$$DIH^DTUTL(DT)
+ S K=VR_"@"_DTT_"@"_OT_"@"_IDX
+ S:IDX["@" K=$P(IDX,"@",2,4)_"@"_$P(IDX,"@",1)
+ D SETPL(K,TXT,"")
+ Q:$$IsMSG^RWU()   
+ D:'$G(NTAB) RRH^YNED(NIB,VR,OT,SP,DT)
+ Q
+SBSPLs(LPU,VR,DT,OT,ID) ; Подпись услуги со списанием
+ N A,STK,WW,X
+ S A=$$GETPL^IUSL(VR,DT,OT,ID,"mt") Q:A="" 
+ Q:$$GETPLE^IUSL(VR,DT,OT,ID,"mt")'=""  ; уже списана
+ S STK=$$VRSTK^IWRHS($$KDR^IUSER())
+ S:STK="" STK=$$LPUSTK^IWRHS(LPU,1)
+ S:STK="" STK=$$LPUSTK^IWRHS(LPU) ; w.o. "pharma" status
+ D SUB^IWRH(LPU,OT,VR,A,STK,1,"WW","ZNF:"_VR_","_DT_","_OT_","_ID)
+ S (X,A)="" F  S X=$O(WW(X)) Q:X=""  S A=$S(A="":"",1:A_"|")_X
+ S:A'="" A=$$SETPLE^IUSL(VR,DT,OT,ID,"mt",A)
+ Q
+NMSEL(X,STK) ; Расшифровка номенклатуры
+ N I,R,F,Z,C,A,Fw
+ S A="",X=$$WD^TXTU(X),STK=$G(STK)
+ S Fw=$$LCL^IUSER("wrhusl","swinstk")
+ S F=$$LCL^IUSER("wrhusl","swcen"),C=0
+ I Fw,STK="" S STK=$$VRSTK^IWRHS($$KDR^IUSER()) ; автоопределение склада
+ F I=1:1:64 S R=$P(X,"|",I) Q:R=""  D
+ .S C=$P(R,"@",2),R=$P(R,"@",1)
+ .I STK S Z=$$RESTS^IWRH(STK,R) I Fw,Z'>0 Q 
+ .I F S Z=$$GET^IWRHS(R,"cenn") S:Z'="" Z=" ("_Z_" руб.)"
+ .S A=A_$S(A="":"",1:CR)_R_"|"_$$NAMENM^IWRHS(R)_", "_$$MEANNM^IWRHS(R)_$S(F:Z,1:"")_$S(C=0:"|",1:"|"_C)
+ D MSG^RWU(A)
+ Q
+NMLSTO(PR,TXT,STK) ; Номенклатура по профилю, с остатками
+ N ID,R,A,NM,RE,Fw,Fc,C,I,Mx
+ S Fw=$$LCL^IUSER("wrhusl","swinstk")
+ S Fc=$$LCL^IUSER("wrhusl","swcen"),(I,C)=0
+ S Mx=+$G(^cfg("wrhusl","mfindcnt")) S:'Mx Mx=50
+ I Fw,STK="" S STK=$$VRSTK^IWRHS($$KDR^IUSER()) ; автоопределение склада
+ S ID="",TXT=$$LU^TXTU($$WD^TXTU(TXT))
+ D OWF^RWU(".txt")
+ D WC^RWU("|Наименование|Ед.изм."_$S(STK:"|Остаток",1:""))
+ F  S ID=$O(^WRHE(ID)) Q:ID=""  S R=$G(^(ID)) D:'$L(PR)!($P(R,"|",3)=PR)  Q:I>Mx
+ .q:+$P(R,"|",15) ; arch
+ .S NM=$P(R,"|",1)
+ .I TXT'="",$$LU^TXTU(NM)'[TXT Q 
+ .S:Fc C=$$GET^IWRHS(ID,"cenn")
+ .S A=ID_"|"_NM_$S(Fc&C:" ("_C_" руб.)",1:"")
+ .S A=A_"|"_$$NAME^IWRHS("means",+$P(R,"|",5))
+ .I STK S RE=$$RESTS^IWRH(STK,ID) I Fw,RE'>0 Q 
+ .D WC^RWU(CR_A_$S(STK:"|"_RE,1:""))
+ .S I=I+1
+ D C^RWU
+ Q
+NMCHK(X,STK) ; Проверка номенклатуры на факт наличия
+ Q:'($$LCL^IUSER("wrhusl","swinstk")!$$LCL^IUSER("wrhusl","sbsrest")) ""
+ N I,R,Z,C,A,PM,LST
+ S A=""
+ I STK="" S STK=$$VRSTK^IWRHS($$KDR^IUSER()) ; автоопределение склада
+ Q:STK="" "" ; ? defstock
+ F I=1:1:64 S R=$P(X,"|",I) Q:R=""  D  Q:A'=""
+ .S C=$P(R,"@",2),R=$P(R,"@",1)
+ .S:C="" C=1
+ .S LST(R)=$G(LST(R))+C
+ 
+ S R="" F  S R=$O(LST(R)) Q:R=""  D
+ .S C=LST(R)
+ .S Z=$$RESTS^IWRH(STK,R)
+ .Q:C'>Z   
+ .S PM=$$MEANNM^IWRHS(R)
+ .S A=$$NAMENM^IWRHS(R)_" ("_C_" "_PM_")"_CR
+ .S A=A_"Превышает фактический остаток на складе ("_Z_" "_PM_")"
+ Q A
+INORM ; Импорт норм
+ ; Код|Услуга|Материал|Кол-во|Ед.изм.|Дата|Тип|Группа
+ N U,PU,P,DT,UN,MN,CNT,MEAN,TP,GRP,%J,A,X,E,T,LL
+ S P=$$CORCP^IPRICET(1),(PU,LL)=""
+ D ORH^RWU
+ K ^BUF($J)
+ F %J=1:1 S A=$$WD^TXTU($$R^RWU) Q:%IFN["Z"  D:%J>1
+ .S U=$P(A,"|",1),UN=$P(A,"|",2)
+ .I U'=""!(UN'=""),PU'="",LL'="" D setnorm
+ .I U'=""!(UN'="") D  S PU=U Q 
+ ..I U'="",'$D(^CN(U)) S U=""
+ ..Q:U'="" 
+ ..S UN=$$UL^TXTU(UN),X=$$CRC32^IHASH(UN)_"|"_$E(UN,1,110)
+ ..I $D(^BUF($J,"u",X)) S U=^(X) Q
+ ..S U="" F  S U=$O(^CN(U)) Q:U=""  S T=$$UL^TXTU($$NAME^IPRICE(U,P)) I T=UN S ^BUF($J,"u",$$CRC32^IHASH(T)_"|"_$E(T,1,110))=U Q 
+ .Q:PU="" 
+ .S MN=$P(A,"|",3),CNT=$$NNUM^TXTU($P(A,"|",4)),MEAN=$P(A,"|",5)
+ .S DT=$$DIH^DTUTL($P(A,"|",6)),TP=$$UL^TXTU($P(A,"|",7))
+ .S GRP=$$NNUM^TXTU($P(A,"|",8))
+ .S TP=$S(TP="нужно":1,TP="количество":2,1:"")
+ .S MN=$$UL^TXTU(MN),X=$$CRC32^IHASH(MN)_"|"_$E(MN,1,110)
+ .S E=$G(^BUF($J,"w",X))
+ .I E="" F  S E=$O(^WRHE(E)) Q:E=""  S T=$$UL^TXTU($P(^(E),"|",1)) I T=MN S ^BUF($J,"w",$$CRC32^IHASH(T)_"|"_$E(T,1,110))=E Q 
+ .Q:E="" 
+ .S T=E
+ .S:CNT $P(T,"@",2)=CNT
+ .S:TP $P(T,"@",3)=TP
+ .S:GRP $P(T,"@",4)=GRP
+ .S LL=$S(LL="":"",1:LL_"|")_T
+ I PU'="",LL'="" D setnorm
+ D CR^RWU
+ K ^BUF($J)
+ Q
+setnorm 
+ D SET^IPRICE(PU,"mat",P,DT,LL)
+ D:'$$GET^IPRICE(PU,"tmat",P,DT) SET^IPRICE(PU,"tmat",P,DT,1)
+ S (LL,PU)=""
+ Q
+REGLCL 
+ K ^LCLI("wrhusl")
+ S ^LCLI("wrhusl")="Списание расходных материалов"
+ S ^LCLI("wrhusl","swinstk")="Показывать материалы только в наличии"
+ S ^LCLI("wrhusl","mxday")="Максимальный период списания в днях"
+ S ^LCLI("wrhusl","onlyumt")="Показывать только услуги с материалами"
+ S ^LCLI("wrhusl","sbsusl")="Показывать только подписанные услуги"
+ S ^LCLI("wrhusl","swcen")="Показывать цены материалов в поиске"
+ S ^LCLI("wrhusl","byvr")="Учет материалов от имени врача"
+ S ^LCLI("wrhusl","byot")="Учет материалов по отделению"
+ S ^LCLI("wrhusl","nomtprice")="По всем услугам из прайса (игнорировать отсутствие списания в прайсе)"
+ S ^LCLI("wrhusl","nosubwrh")="Не списывать номенклатуру со склада"
+ S ^LCLI("wrhusl","delmt")="Удаление уже списанных материалов"
+ S ^LCLI("wrhusl","sbsrest")="Контроль остатка только при списании"
+ Q

@@ -1,0 +1,85 @@
+RKDLZ ; Отчеты по заявкам лаборатории [ 09/04/2019  7:35 PM ]
+LST(DS,DE,LP) ; Список заявок лаборатории
+ N D,I,R,DTM,STC,S1,S,P,B
+ D OWF^RWU(".txt")
+ D WC^RWU("Дата|Время|Заявка|Пациент|Договор|Вид оплаты|Сумма|Платежи|Долг|Оператор")
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),LP=+$G(LP)
+ S:'$$FR^I() LP=$$^I("ilpu")
+ S D=DS-1 F  S D=$O(^MLABI("d",D)) Q:D=""!(D>DE)  S I="" F  S I=$O(^MLABI("d",D,I)) Q:I=""  D
+ .S N=^(I),S1=$G(^MLAB(N,I,"s1")),DTM=$P(S1,"|",2)
+ .I LP,LP'=$P(S1,"|",4) Q 
+ .S R=$$DT2^DTUTL(+DTM)_"|"_$$TM^DTUTL($P(DTM,",",2))_"|"_I_"|"
+ .S STC=$$STC^IMLAB(N,I)
+ .S R=R_$$FIO^IPAC(N)_"|"_$$NAME^IINSC(STC)_"|"
+ .S R=R_$S($$GET^IINSC(STC,"dvid",+DTM)=3:"наличная",1:"безнал")
+ .S S=$$SUMM^IMLAB(N,I,+DTM)
+ .S P=$$PSUMM^IMLAB(N,I,+DTM)
+ .S B=$$NOW^IBILL(N)
+ .S R=R_"|"_$$FN(S)_"||"_$S(B<0:$$FN(B),1:0)
+ .S R=R_"|"_$$FIO^IUSER($P(S1,"|",3))
+ .D WC^RWU(CR_R)
+ D C^RWU
+ Q
+LJT(DS,DE,TTXT,LP) ; Лабораторный журнал по тестам
+ ; DS - начальная дата
+ ; DE - конечная дата
+ ; TTXT - фильтр по тесту (наименование)
+ ; LP - филиал
+ N D,I,R,S1,S,P,B,PR,V,RR,PM,NM
+ D OWF^RWU(".txt")
+ D WC^RWU("Дата|Заявка|№ И.Б.|Пациент|Параметр|Результат|Единицы")
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),LP=+$G(LP)
+ S TTXT=$$UL^TXTU($$WD^TXTU(TTXT))
+ S:'$$FR^I() LP=$$^I("ilpu")
+ S D=DS-1 F  S D=$O(^MLABI("d",D)) Q:D=""!(D>DE)  S I="" F  S I=$O(^MLABI("d",D,I)) Q:I=""  D
+ .S N=^(I),S1=$G(^MLAB(N,I,"s1")),DTM=$P(S1,"|",2)
+ .I LP,LP'=$P(S1,"|",4) Q 
+ .Q:'$D(^MLAB(N,I,"d"))
+ .S R=$$DT2^DTUTL(+DTM)_"|"_I_"|"_N_"|"_$$FIO^IPAC(N)_"|"
+ .S PR="" F  S PR=$O(^MLAB(N,I,"d",PR)) Q:PR=""  D
+ ..Q:$P($G(^(PR,"s")),"|",1)'=1 
+ ..S RR=$G(^MLAB(N,I,"d",PR))
+ ..S V=$TR($P(RR,"|",1),CR," ") Q:V="" 
+ ..S NM=$$NAMEPM^IMLABS(PR,1)
+ ..I TTXT'="",$$UL^TXTU(NM)'[TTXT Q 
+ ..S PM=$P(RR,"|",5) S:PM="" PM=$$MEANPM^IMLABS(PR)
+ ..D WC^RWU(CR_R_NM_"|"_$$OWF^TXTU(V,100)_"|"_PM) ; TODO - текстовые поля 
+ D C^RWU
+ Q
+SST(DS,DE,LP) ; Сводный отчет по тестам
+ ; DS - начальная дата
+ ; DE - конечная дата
+ ; LP - филиал
+ N D,I,R,S1,S,P,B,PR,V,RR,TAB
+ D OWF^RWU(".txt")
+ S DS=$$DIH^DTUTL(DS),DE=$$DIH^DTUTL(DE),LP=+$G(LP)
+ S:'$$FR^I() LP=$$^I("ilpu")
+ K ^BUF($J)
+ S D=DS-1 F  S D=$O(^MLABI("d",D)) Q:D=""!(D>DE)  S I="" F  S I=$O(^MLABI("d",D,I)) Q:I=""  D
+ .S N=^(I),S1=$G(^MLAB(N,I,"s1")),DTM=$P(S1,"|",2)
+ .I LP,LP'=$P(S1,"|",4) Q 
+ .Q:'$D(^MLAB(N,I,"d"))
+ .S R=$$DT2^DTUTL(+DTM)_"|"_I_"|"_N_"|"_$$FIO^IPAC(N)_"|"
+ .S PR="" F  S PR=$O(^MLAB(N,I,"d",PR)) Q:PR=""  D
+ ..Q:$P($G(^(PR,"s")),"|",1)'=1 
+ ..S RR=$G(^MLAB(N,I,"d",PR))
+ ..S V=$TR($P(RR,"|",1),CR," ") Q:V="" 
+ ..S TAB(PR,1)=$G(TAB(PR,1))+1
+ ..S:'$D(^BUF($J,N,PR)) ^(PR)="",TAB(PR,2)=$G(TAB(PR,2))+1
+ K ^BUF($J)
+ 
+ D WC^RWU("Наименование теста "_$$TXTP^DTUTL(DS,DE)_"|Кол-во|Лиц")
+ S PR="" F  S PR=$O(TAB(PR)) Q:PR=""  D
+ .D WC^RWU(CR_$$NAMEPM^IMLABS(PR,1)_"|"_(+$G(TAB(PR,1)))_"|"_(+$G(TAB(PR,2))))
+ D C^RWU
+ Q
+FN(X) 
+ Q $TR(+X,".",",")
+REGIPROC 
+ N FF,FE,DD
+ S FF=+$$FR^I(),FE=$S(FF:",t@storage:lpu,Филиал",1:"")
+ S DD="d,Дата начала периода,d,Дата окончания периода"
+ S ^IPROC("Лаборатория","Список заявок лаборатории")="LST_RKDLZ,1,"_$S(FF:3,1:2)_","_DD_FE
+ S ^IPROC("Лаборатория","Лабораторный журнал по тестам")="LJT_RKDLZ,1,"_$S(FF:4,1:3)_","_DD_",s,Наименование теста"_FE
+ S ^IPROC("Лаборатория","Сводный отчет по тестам")="SST_RKDLZ,1,"_$S(FF:3,1:2)_","_DD_FE
+ Q

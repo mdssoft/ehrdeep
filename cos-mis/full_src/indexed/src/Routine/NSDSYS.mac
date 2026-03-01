@@ -1,0 +1,249 @@
+NSDSYS ; Infodent and Infoclinica
+DSHIP
+	S I="" F  S I=$O(^IFD("DSHP",I)) Q:I=""  D TMPPACI(I) k ^IFD("DSHP",I)
+	Q
+TMPPACI(IDP)
+	N conn,sc,res,CL,A,I,i,ID,last,sql,ID,DB
+	Set CR=$C(13,10),%LOG="sys",%JOB=777
+	S DB=$G(^cfg("infodent","db")) S:DB="" DB="IFD"
+	Set conn=##class(%SQLGatewayConnection).%New()
+	Set sc=conn.Connect(DB,"SYSDBA","masterkey")
+	U 0 If '$P(sc," ",1) do $System.Status.DisplayError(sc) quit
+	Set res=##class(%ResultSet).%New("%DynamicQueryGW:SQLGW")
+	s sql="select CL.PCODE as code, CL.HISTNUM as hist,CL.PCODE as pcode,CL.LASTNAME as fiof,CL.FIRSTNAME as fioi,CL.MIDNAME as fioo, CL.POL as pol,CL.BDATE as born, CL.ADDR as street,CL.PHONE1 as tel1,CL.PHONE2 as tel2, CL.PASPSER as paspser, CL.PASPNUM as paspnum, CL.PASPPLACE as paspplace,CL.PHONE3 as tel3 "
+	s sql=sql_"from CLIENTS CL where CL.PCODE="_IDP_";" 
+ 
+	S stat=res.Prepare(sql,,conn)
+	I 'stat D $System.OBJ.DisplayError(stat) Q 
+	S stat=res.Execute()
+	I 'stat D $System.OBJ.DisplayError(stat) D res.Close() Q
+	S CL=res.GetColumnCount(),i=0
+	K ^IFD("CLIENTS")
+	While res.Next() 
+	{
+		F ri=2:1:CL S $P(R,"|",ri-1)=$$getPL(res,ri)
+		w !,R
+		S ^IFD("CLIENTS",i)=R
+		S i=i+1
+		;Q:i>64 
+	}
+	s sc=conn.Disconnect()
+	If '$P(sc," ",1) do $System.Status.DisplayError(sc)
+	d inCLI
+	;D conn.UnloadDLL()
+	Q
+TMPPAC
+	N conn,sc,res,CL,A,I,i,ID,last,sql,ID,DB
+	Set CR=$C(13,10),%LOG="sys",%JOB=777
+	S DB=$G(^cfg("infodent","db")) S:DB="" DB="IFD"
+	Set conn=##class(%SQLGatewayConnection).%New()
+	Set sc=conn.Connect(DB,"SYSDBA","masterkey")
+	U 0 If '$P(sc," ",1) do $System.Status.DisplayError(sc) quit
+	Set res=##class(%ResultSet).%New("%DynamicQueryGW:SQLGW")
+	s sql="select CL.PCODE as code, CL.HISTNUM as hist,CL.PCODE as pcode,CL.LASTNAME as fiof,CL.FIRSTNAME as fioi,CL.MIDNAME as fioo, CL.POL as pol,CL.BDATE as born, CL.ADDR as street,CL.PHONE1 as tel1,CL.PHONE2 as tel2, CL.PASPSER as paspser, CL.PASPNUM as paspnum, CL.PASPPLACE as paspplace,CL.PHONE3 as tel3 "
+	s sql=sql_"from CLIENTS CL,ETMP_CLIENTS ETMP where CL.PCODE=ETMP.CODE;" 
+	
+	//s sql="select CL.PCODE as code, CL.HISTNUM as hist,CL.PCODE as pcode,CL.LASTNAME as fiof,CL.FIRSTNAME as fioi,CL.MIDNAME as fioo, CL.POL as pol,CL.BDATE as born, CL.ADDR as street,CL.PHONE1 as tel1,CL.PHONE2 as tel2, CL.PASPSER as paspser, CL.PASPNUM as paspnum, CL.PASPPLACE as paspplace,CL.PHONE3 as tel3 "
+	//s sql=sql_"from CLIENTS CL where CL.PCODE=22420;" 
+	// CH.ROWCODE=2 and 
+ 
+	S stat=res.Prepare(sql,,conn)
+	I 'stat D $System.OBJ.DisplayError(stat) Q 
+	S stat=res.Execute()
+	I 'stat D $System.OBJ.DisplayError(stat) D res.Close() Q
+	S CL=res.GetColumnCount(),i=0
+	K ^IFD("CLIENTS")
+	While res.Next() 
+	{
+		F ri=2:1:CL S $P(R,"|",ri-1)=$$getPL(res,ri)
+		w !,R
+		S ^IFD("CLIENTS",i)=R
+		S i=i+1
+		;Q:i>64 
+	}
+	s sc=conn.Disconnect()
+	If '$P(sc," ",1) do $System.Status.DisplayError(sc)
+	d inCLI
+	;D conn.UnloadDLL()
+	Q
+TMPPACD(ID)
+	N conn,sc,res,CL,A,I,i,last,sql,DB
+	Set CR=$C(13,10),%LOG="sys",%JOB=777
+	S DB=$G(^cfg("infodent","db")) S:DB="" DB="IFD"
+	Set conn=##class(%SQLGatewayConnection).%New()
+	Set sc=conn.Connect(DB,"SYSDBA","masterkey")
+	U 0 If '$P(sc," ",1) do $System.Status.DisplayError(sc) quit
+	Set res=##class(%ResultSet).%New("%DynamicQueryGW:SQLGW")
+	s sql="delete from ETMP_CLIENTS where CODE="_ID_";" 
+	S stat=res.Prepare(sql,,conn)
+	I 'stat D $System.OBJ.DisplayError(stat) Q 
+	S stat=res.Execute()
+	I 'stat D $System.OBJ.DisplayError(stat) D res.Close() Q
+	s sc=conn.Disconnect()
+	If '$P(sc," ",1) do $System.Status.DisplayError(sc)
+	Q
+inCLI ;Input clients
+	N I,A,N,NI,ANIB
+	S I="" F  S I=$O(^IFD("CLIENTS",I)) Q:I=""  D  
+	.S A=$G(^IFD("CLIENTS",I)) Q:A="" 
+	.S N=$P(A,"|",1) Q:N="" 
+	.S ANIB=$P(A,"|",2)
+	.I '$D(^BTN(N)) D SET^YIPACN(N,"ofor",+$H,1),SET^YIPACN(N,"dofor",+$H,+$H)
+	.D:ANIB'="" SET^YIPACN(N,"anib",+$H,ANIB)
+	.S X=$P(A,"|",3) D:X'="" SET^YIPACN(N,"fiof",+$H,X) 
+	.S X=$P(A,"|",4) D:X'="" SET^YIPACN(N,"fioi",+$H,X)
+	.S X=$P(A,"|",5) D:X'="" SET^YIPACN(N,"fioo",+$H,X)
+	.S X=$P(A,"|",6) D:X'="" SET^YIPACN(N,"pol",+$H,X)
+	.S X=$P(A,"|",7) D:X'="" SET^YIPACN(N,"datar",+$H,$$DIISO^DTUTL(X))
+	.S X=$P(A,"|",8) D:X'="" SET^YIPACN(N,"street",+$H,X)
+	.S X=$P(A,"|",9) D:X'="" SET^YIPACN(N,"tel1",+$H,X)
+	.S X=$P(A,"|",10) D:X'="" SET^YIPACN(N,"tel2",+$H,X)
+	.S X=$P(A,"|",11) D:X'="" SET^YIPACN(N,"pasp",+$H,X_" "_$P(A,"|",11))
+	.S X=$P(A,"|",12) D:X'="" SET^YIPACN(N,"pasp_dan",+$H,X)
+	.S X=$P(A,"|",14) D:X'="" SET^YIPACN(N,"pager",+$H,X)
+	.S NI=N
+	.w !,N
+	.D MKIDX^YIPACN(+$H)
+	.D TMPPACD(ANIB)
+	.K ^IFD("CLIENTS",I)
+	Q
+TMPDSH(VRI,VR,DT)
+	N conn,sc,res,CL,A,I,i,ID,last,sql,ID,DB,ri
+	Set CR=$C(13,10),%LOG="sys",%JOB=777
+	S DB=$G(^cfg("infodent","db")) S:DB="" DB="IFD"
+	Set conn=##class(%SQLGatewayConnection).%New()
+	Set sc=conn.Connect(DB,"SYSDBA","masterkey")
+	U 0 If '$P(sc," ",1) do $System.Status.DisplayError(sc) quit
+	Set res=##class(%ResultSet).%New("%DynamicQueryGW:SQLGW")
+	
+	S DTV=$$DTISO^DTUTL(DT)
+	s sql="select DSH.DCODE,CL.HISTNUM as PCODE,DSH.WORKDATE,DSH.BHOUR,DSH.BMIN,DSH.FHOUR,DSH.FMIN,DSH.COMMENT,DSH.PCODE "
+	s sql=sql_"from SCHEDULE DSH, CLIENTS CL where DSH.DCODE="_VRI_" and DSH.WORKDATE='"_DTV_"' and DSH.PCODE=CL.PCODE;" 
+	w !,sql
+ 
+	S stat=res.Prepare(sql,,conn)
+	I 'stat D $System.OBJ.DisplayError(stat) Q 
+	S stat=res.Execute()
+	I 'stat D $System.OBJ.DisplayError(stat) D res.Close() Q
+	S CL=res.GetColumnCount(),i=0
+	K ^IFD("DSH")
+	While res.Next() 
+	{
+		F ri=1:1:CL S $P(R,"|",ri)=$$getPL(res,ri)
+		w !,R
+		S ^IFD("DSH",i)=R
+		S i=i+1
+	}
+	s sc=conn.Disconnect()
+	If '$P(sc," ",1) do $System.Status.DisplayError(sc)
+	D inDSH
+	;D conn.UnloadDLL()
+	Q
+inDSH
+	N I,A,SP,OT,NI
+	s %LOG="sys"
+	S I="" F  S I=$O(^IFD("DSH",I)) Q:I=""  D
+	.S A=^(I)
+	.S V=$P(A,"|",1),NI=$P(A,"|",2),DT=$$DIISO^DTUTL($P(A,"|",3)) Q:NI=""  
+	.S TM=$$TI^DTUTL($P(A,"|",4)_":"_$P(A,"|",5)),ANIB=$P(A,"|",9)
+	.S TL=($P(A,"|",7)+($P(A,"|",6)*60))-($P(A,"|",5)+($P(A,"|",4)*60))
+	.S COM=$P(A,"|",8)
+	.S SP=$$SPEC^IKADRY(VR)
+	.S OT=$$OTD^IKADRY(VR)
+	.W !,$$FIO^IKADRY(VR)_" "_NI_" "_$$DT^DTUTL(DT)_", "_$$TM^DTUTL(TM)_" L="_TL_" COM="_COM
+	.S:COM'="" $P(NI,"|",2)=COM
+	.D SETL^IRASP2(OT,VR,SP,DT,TM,TL,NI,2,,,)
+	.S ^IFD("DSHP",ANIB)=""
+	.W !,$G(REZ)
+	Q
+DSH(DS,DE)
+	Q
+NZL(DT) ; Test - незакрытые случаи лечения
+	N conn,sc,res,CL,A,I,i,ID,last,sql,ID,DB,ri,NI,ANIB
+	Set CR=$C(13,10),%LOG="sys",%JOB=777
+	S DB=$G(^cfg("infodent","db")) S:DB="" DB="IFD"
+	Set conn=##class(%SQLGatewayConnection).%New()
+	Set sc=conn.Connect(DB,"SYSDBA","masterkey")
+	U 0 If '$P(sc," ",1) do $System.Status.DisplayError(sc) quit
+	Set res=##class(%ResultSet).%New("%DynamicQueryGW:SQLGW")
+	
+	S DTV=$$DTISO^DTUTL(DT)
+	s sql="select CL.HISTNUM as PCODE,TREAT.PCODE,TREAT.DCODE,TREAT.TREATDATE "
+	s sql=sql_"from TREAT, CLIENTS CL " 
+	s sql=sql_"where TREAT.CONTTREAT=1 and TREAT.TREATDATE='"_DTV_"' and TREAT.PCODE=CL.PCODE;"  ; REFTREAT
+	w !,sql
+ 
+	S stat=res.Prepare(sql,,conn)
+	I 'stat D $System.OBJ.DisplayError(stat) Q 
+	S stat=res.Execute()
+	I 'stat D $System.OBJ.DisplayError(stat) D res.Close() Q
+	S CL=res.GetColumnCount(),i=0
+	K ^IFD("NZL")
+	While res.Next() 
+	{
+		F ri=1:1:CL S $P(R,"|",ri)=$$getPL(res,ri)
+		w !,R
+		S ^IFD("NZL",i)=R
+		S i=i+1
+	}
+	s sc=conn.Disconnect()
+	If '$P(sc," ",1) do $System.Status.DisplayError(sc)
+	D inNZL
+	;D conn.UnloadDLL()
+	Q
+inNZL
+	N IDX,R,II
+	S IDX=70,II=1
+	S ^CCNL(IDX)="Неоконченное лечение|"_$H_"|0|"_$$USR^IUSER()
+	S i="" F  S i=$O(^IFD("NZL",i)) Q:i=""  D
+	.S R=^(i)
+	.S NI=$P(R,"|",1),ANIB=$P(R,"|",2)
+	.S ^CCNL(IDX,II)=NI
+	.S ^IFD("DSHP",ANIB)=""
+	.S II=II+1
+	Q
+TMPUSL
+	N conn,sc,res,CL,A,I,i,ID,last,sql,ID,DB
+	Set CR=$C(13,10),%LOG="sys",%JOB=777
+	S DB=$G(^cfg("infodent","db")) S:DB="" DB="IFD"
+	Set conn=##class(%SQLGatewayConnection).%New()
+	Set sc=conn.Connect(DB,"SYSDBA","masterkey")
+	U 0 If '$P(sc," ",1) do $System.Status.DisplayError(sc) quit
+	Set res=##class(%ResultSet).%New("%DynamicQueryGW:SQLGW")
+	s sql="select * from ETMP_TREAT"
+ 
+	S stat=res.Prepare(sql,,conn)
+	I 'stat D $System.OBJ.DisplayError(stat) Q 
+	S stat=res.Execute()
+	I 'stat D $System.OBJ.DisplayError(stat) D res.Close() Q
+	S CL=res.GetColumnCount(),i=0
+	While res.Next() 
+	{
+		s ID=$$getPL(res,1)
+		w !,ID
+	}
+	s sc=conn.Disconnect()
+	If '$P(sc," ",1) do $System.Status.DisplayError(sc)
+	;D conn.UnloadDLL()
+	Q
+dti(X)
+	S X=$P(X," ",1)
+	Q $$DI^DTUTL($P(X,"-",3)_"."_$P(X,"-",2)_"."_$P(X,"-",1))
+getPL(res,ID)
+	Q $$TRIM^TXTU($TR(res.GetData(ID),$C(0),""))
+FILPAC 
+	N N,R,A,X
+	S N=0 F  S N=$$NEXT^YIPACN(N) Q:N<0  D
+	.S R=$$GET^YIPACN(N,"inib",+$H) Q:R="" 
+	.S A=$G(^IFD("CLIENTS",R)) Q:A="" 
+	.S X=$$UL^TXTU($P(A,"|",2)) Q:X'[$$UL^TXTU($$GET^YIPACN(N,"f",+$H)) 
+	.S X=$P(A,"|",5) D:X'="" SET^YIPACN(N,"pol",+$H,X)
+	.S X=$P(A,"|",6) D:X'="" SET^YIPACN(N,"datar",+$H,$$DI^DTUTL(X))
+	.S X=$P(A,"|",7) D:X'="" SET^YIPACN(N,"street",+$H,X)
+	.S X=$P(A,"|",8) D:X'="" SET^YIPACN(N,"tel1",+$H,X)
+	.S X=$P(A,"|",9) D:X'="" SET^YIPACN(N,"tel2",+$H,X)
+	.S X=$P(A,"|",10) D:X'="" SET^YIPACN(N,"pasp",+$H,X_" "_$P(A,"|",11))
+	.S X=$P(A,"|",12) D:X'="" SET^YIPACN(N,"pasp_dan",+$H,X)
+	.D UPD^IEXCH("IPACEX",N)
+	Q
+
